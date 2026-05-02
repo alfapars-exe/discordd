@@ -1,0 +1,95 @@
+{
+  "auth": {
+    "invalidCredentials": "Invalid username or password",
+    "usernameRequired": "Username is required",
+    "passwordRequired": "Password is required",
+    "usernameTooShort": "Username must be between 3 and 32 characters",
+    "usernameInvalidChars": "Username can only contain letters, numbers, and underscores",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "displayNameTooLong": "Display name must be at most 32 characters",
+    "usernameTaken": "Username already taken",
+    "refreshTokenRequired": "Refresh token is required",
+    "invalidRefreshToken": "Invalid refresh token",
+    "refreshTokenExpired": "Refresh token expired",
+    "invalidToken": "Invalid token",
+    "authRequired": "Authorization required",
+    "invalidAuthFormat": "Invalid authorization format, use: Bearer <token>",
+    "invalidEmail": "Invalid email format",
+    "emailAlreadyExists": "This email is already in use",
+    "emailUpdated": "Email updated successfully",
+    "emailRemoved": "Email removed successfully",
+    "noEmailToRemove": "No email to remove",
+    "tooManyAttempts": "Too many login attempts, please try again later",
+    "resetNotConfigured": "Password reset is not configured on this server",
+    "invalidOrExpiredToken": "Invalid or expired reset token",
+    "tokenExpired": "Reset token has expired",
+    "passwordResetSuccess": "Password has been reset successfully",
+    "accountSuspended": "Your account has been suspended",
+    "emailNotAllowed": "This email is not allowed"
+  },
+  "user": {
+    "notFound": "User not found"
+  },
+  "channel": {
+    "notFound": "Channel not found",
+    "nameRequired": "Channel name is required"
+  },
+  "role": {
+    "notFound": "Role not found"
+  },
+  "common": {
+    "notFound": "Not found",
+    "forbidden": "You don't have permission to do this",
+    "badRequest": "Invalid request",
+    "internalError": "Internal server error"
+  },
+  "p2p": {
+    "notFriends": "You can only call your friends",
+    "userOffline": "User is offline",
+    "userBusy": "User is already in a call",
+    "callNotFound": "Call not found",
+    "notInCall": "You are not in a call",
+    "cannotCallSelf": "You cannot call yourself"
+  },
+  "server": {
+    "muteInvalidDuration": "Invalid mute duration. Valid values: 1h, 8h, 7d, forever"
+  },
+  "admin": {
+    "platformAdminRequired": "Platform admin access required",
+    "instanceNotFound": "LiveKit instance not found",
+    "cannotDeleteWithServers": "Cannot delete instance with active servers without specifying a migration target",
+    "migrationTargetNotFound": "Migration target instance not found",
+    "cannotMigrateToSelf": "Cannot migrate to the same instance",
+    "onlyPlatformManaged": "Only platform-managed instances can be modified via admin API",
+    "cannotBanSelf": "You cannot ban yourself",
+    "cannotBanAdmin": "Cannot ban a platform admin",
+    "userAlreadyBanned": "User is already banned",
+    "userBanned": "User has been banned",
+    "cannotDeleteSelf": "You cannot delete yourself",
+    "cannotDeleteAdmin": "Cannot delete a platform admin",
+    "userDeleted": "User has been deleted",
+    "serverDeletedByAdmin": "Server has been deleted by admin",
+    "serverNotFound": "Server not found",
+    "cannotModifyOwnAdmin": "Cannot modify your own admin status",
+    "adminStatusUpdated": "Admin status updated"
+  },
+  "e2ee": {
+    "deviceIdRequired": "Device ID is required",
+    "identityKeyRequired": "Identity key is required",
+    "signedPrekeyRequired": "Signed prekey is required",
+    "signedPrekeySigRequired": "Signed prekey signature is required",
+    "deviceNotFound": "Device not found",
+    "deviceRegistered": "Device registered successfully",
+    "deviceDeleted": "Device deleted successfully",
+    "prekeyLow": "Prekey pool is running low, please upload more prekeys",
+    "prekeyExhausted": "Prekey pool exhausted",
+    "invalidKey": "Invalid cryptographic key",
+    "backupUploaded": "Key backup uploaded successfully",
+    "backupDeleted": "Key backup deleted successfully",
+    "sessionIdRequired": "Session ID is required",
+    "sessionDataRequired": "Session data is required",
+    "encryptedDataRequired": "Encrypted data is required",
+    "nonceRequired": "Nonce is required",
+    "saltRequired": "Salt is required"
+  }
+}

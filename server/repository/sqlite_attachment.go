@@ -1,0 +1,128 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/akinalp/mqvi/database"
+	"github.com/akinalp/mqvi/models"
+	"github.com/akinalp/mqvi/pkg"
+)
+
+type sqliteAttachmentRepo struct {
+	db database.TxQuerier
+}
+
+func NewSQLiteAttachmentRepo(db database.TxQuerier) AttachmentRepository {
+	return &sqliteAttachmentRepo{db: db}
+}
+
+func (r *sqliteAttachmentRepo) Create(ctx context.Context, attachment *models.Attachment) error {
+	query := `
+		INSERT INTO attachments (id, message_id, filename, file_url, file_size, mime_type)
+		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?)
+		RETURNING id, created_at`
+
+	err := r.db.QueryRowContext(ctx, query,
+		attachment.MessageID,
+		attachment.Filename,
+		attachment.FileURL,
+		attachment.FileSize,
+		attachment.MimeType,
+	).Scan(&attachment.ID, &attachment.CreatedAt)
+
+	if err != nil {
+		return fmt.Errorf("failed to create attachment: %w", err)
+	}
+
+	return nil
+}
+
+func (r *sqliteAttachmentRepo) GetByMessageID(ctx context.Context, messageID string) ([]models.Attachment, error) {
+	query := `
+		SELECT id, message_id, filename, file_url, file_size, mime_type, created_at
+		FROM attachments WHERE message_id = ? ORDER BY created_at ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, messageID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get attachments by message: %w", err)
+	}
+	defer rows.Close()
+
+	var attachments []models.Attachment
+	for rows.Next() {
+		var a models.Attachment
+		if err := rows.Scan(
+			&a.ID, &a.MessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan attachment row: %w", err)
+		}
+		attachments = append(attachments, a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating attachment rows: %w", err)
+	}
+
+	return attachments, nil
+}
+
+// GetByMessageIDs batch-loads attachments for multiple messages (avoids N+1).
+func (r *sqliteAttachmentRepo) GetByMessageIDs(ctx context.Context, messageIDs []string) ([]models.Attachment, error) {
+	if len(messageIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(messageIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	query := fmt.Sprintf(`
+		SELECT id, message_id, filename, file_url, file_size, mime_type, created_at
+		FROM attachments WHERE message_id IN (%s) ORDER BY created_at ASC`, placeholders)
+
+	args := make([]any, len(messageIDs))
+	for i, id := range messageIDs {
+		args[i] = id
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get attachments by message ids: %w", err)
+	}
+	defer rows.Close()
+
+	var attachments []models.Attachment
+	for rows.Next() {
+		var a models.Attachment
+		if err := rows.Scan(
+			&a.ID, &a.MessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan attachment row: %w", err)
+		}
+		attachments = append(attachments, a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating attachment rows: %w", err)
+	}
+
+	return attachments, nil
+}
+
+func (r *sqliteAttachmentRepo) Delete(ctx context.Context, id string) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM attachments WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete attachment: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if affected == 0 {
+		return pkg.ErrNotFound
+	}
+
+	return nil
+}

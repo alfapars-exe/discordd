@@ -1,0 +1,66 @@
+# mqvi Docker Compose
+#
+# Usage:
+#   docker-compose up        → Start all services
+#   docker-compose up -d     → Start in background
+#   docker-compose down      → Stop
+#   docker-compose logs -f   → Follow logs
+
+services:
+  # ─── Go Backend API ───
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "9090:9090"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=9090
+      - DATABASE_PATH=/data/mqvi.db
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - JWT_ACCESS_EXPIRY_MINUTES=15
+      - JWT_REFRESH_EXPIRY_DAYS=7
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-devsecret}
+      - UPLOAD_DIR=/data/uploads
+      - UPLOAD_MAX_SIZE=26214400
+    volumes:
+      - mqvi-data:/data
+    depends_on:
+      - livekit
+    restart: unless-stopped
+
+  # ─── LiveKit SFU (Voice/Video/Screen Share) ───
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"     # WebSocket signaling
+      - "7881:7881"     # WebRTC over TCP
+      - "50000-50030:50000-50030/udp"  # WebRTC UDP media
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    restart: unless-stopped
+
+  # ─── React Frontend (development) ───
+  # In production, build output is served via nginx instead.
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3030:3030"
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+    environment:
+      - VITE_API_URL=http://localhost:9090
+    depends_on:
+      - server
+
+volumes:
+  mqvi-data:
+    driver: local
