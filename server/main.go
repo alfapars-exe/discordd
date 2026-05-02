@@ -23,8 +23,14 @@ import (
 	"github.com/akinalp/mqvi/services"
 	"github.com/akinalp/mqvi/static"
 	"github.com/akinalp/mqvi/ws"
+	"github.com/google/uuid"
 	"github.com/rs/cors"
 )
+
+// startupID is regenerated on every server start. The frontend polls
+// /api/version and compares; a different value means a new deploy and
+// triggers an in-app "update available" banner.
+var startupID = uuid.New().String()
 
 func init() {
 	// Windows registry can return wrong MIME types for some extensions.
@@ -380,6 +386,16 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"ok","service":"hichat"}`)
+	})
+
+	// /api/version — used by the frontend to detect new deploys.
+	// startupID is generated once per process, so a server restart (which
+	// happens on every HF Space rebuild + redeploy) flips the value and the
+	// connected clients show an "update available" banner.
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		fmt.Fprintf(w, `{"version":"%s"}`, startupID)
 	})
 }
 
