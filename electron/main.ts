@@ -798,39 +798,22 @@ function setupIPC(): void {
 
 // ─── Auto Updater ───
 
-/** Configure electron-updater for GitHub Releases auto-updates. */
+/**
+ * setupAutoUpdater — no-op for the HiChat! fork.
+ *
+ * The original Mqvi flow used electron-updater against akinalpfdn/Mqvi's
+ * GitHub releases. We don't have our own release feed yet, and pointing
+ * the updater at the upstream repo would push our users back to Mqvi.
+ *
+ * The IPC handlers (check-update, download-update, install-update) and
+ * the splash-screen prelaunch flow (checkForUpdateBeforeLaunch) still use
+ * autoUpdater directly; they fail gracefully when there's nothing to
+ * fetch, so leaving them in place is harmless. When we have our own
+ * release pipeline, restore the event subscriptions and polling here and
+ * point package.json's publish.repo at the new repo.
+ */
 function setupAutoUpdater(): void {
-  // Auto-update is disabled for the HiChat! fork. The publish config in
-  // package.json still points to the upstream akinalpfdn/Mqvi releases,
-  // which would either fail or push users back to the original app. Once
-  // we publish HiChat! releases under our own GitHub repo we can re-enable
-  // by flipping this guard and updating package.json's "publish.repo".
   return;
-
-  // eslint-disable-next-line @typescript-eslint/no-unreachable
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on("update-available", (info) => {
-    mainWindow?.webContents.send("update-available", info);
-  });
-
-  autoUpdater.on("download-progress", (progress) => {
-    mainWindow?.webContents.send("update-progress", progress);
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    mainWindow?.webContents.send("update-downloaded", info);
-  });
-
-  autoUpdater.on("error", (err) => {
-    mainWindow?.webContents.send("update-error", err.message);
-  });
-
-  autoUpdater.checkForUpdates().catch(() => {});
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 5 * 60 * 1000);
 }
 
 // ─── Single Instance Lock ───
