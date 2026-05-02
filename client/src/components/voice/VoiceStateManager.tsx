@@ -18,6 +18,7 @@ import type {
   RemoteParticipant,
 } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useToastStore } from "../../stores/toastStore";
 import { usePushToTalk } from "../../hooks/usePushToTalk";
 import { RNNoiseProcessor } from "../../audio/RNNoiseProcessor";
 import { VadGateProcessor } from "../../audio/VadGateProcessor";
@@ -28,7 +29,10 @@ import { getScreenShareToken } from "../../api/voice";
 import { useServerStore } from "../../stores/serverStore";
 
 /** Both processors expose setMicSensitivity and setInputVolume */
-type AudioProcessor = RNNoiseProcessor | VadGateProcessor;
+// Krisp returns LiveKit's TrackProcessor<Track.Kind.Audio> at runtime; we
+// don't pin its type here so the @livekit/krisp-noise-filter dependency stays
+// fully lazy (dynamic import — only fetched when the user opts in).
+type AudioProcessor = RNNoiseProcessor | VadGateProcessor | { name: string };
 
 function VoiceStateManager() {
   const room = useRoomContext();
@@ -45,6 +49,9 @@ function VoiceStateManager() {
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
   const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
   const noiseReduction = useVoiceStore((s) => s.noiseReduction);
+  const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
+  const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
+  const addToast = useToastStore((s) => s.addToast);
   const micSensitivity = useVoiceStore((s) => s.micSensitivity);
   const inputVolume = useVoiceStore((s) => s.inputVolume);
   const outputDevice = useVoiceStore((s) => s.outputDevice);
@@ -647,21 +654,29 @@ function VoiceStateManager() {
   const processorRef = useRef<AudioProcessor | null>(null);
   const noiseReductionRef = useRef(noiseReduction);
   noiseReductionRef.current = noiseReduction;
+  const noiseReductionEngineRef = useRef(noiseReductionEngine);
+  noiseReductionEngineRef.current = noiseReductionEngine;
   const micSensitivityRef = useRef(micSensitivity);
   micSensitivityRef.current = micSensitivity;
   const inputVolumeRef = useRef(inputVolume);
   inputVolumeRef.current = inputVolume;
 
-  function getDesiredProcessor(nr: boolean, sens: number): "rnnoise" | "vadgate" | "none" {
-    if (nr) return "rnnoise";
+  function getDesiredProcessor(
+    nr: boolean,
+    engine: "rnnoise" | "krisp",
+    sens: number,
+  ): "krisp" | "rnnoise" | "vadgate" | "none" {
+    if (nr) return engine === "krisp" ? "krisp" : "rnnoise";
     if (sens < 100) return "vadgate";
     return "none";
   }
 
-  function getCurrentProcessorType(): "rnnoise" | "vadgate" | "none" {
-    if (!processorRef.current) return "none";
-    if (processorRef.current instanceof RNNoiseProcessor) return "rnnoise";
-    return "vadgate";
+  function getCurrentProcessorType(): "krisp" | "rnnoise" | "vadgate" | "none" {
+    const ref = processorRef.current;
+    if (!ref) return "none";
+    if (ref instanceof RNNoiseProcessor) return "rnnoise";
+    if (ref instanceof VadGateProcessor) return "vadgate";
+    return "krisp";
   }
 
   // Switch processor when noiseReduction or micSensitivity changes
@@ -672,11 +687,17 @@ function VoiceStateManager() {
     const audioTrack = pub?.track as LocalAudioTrack | undefined;
     if (!audioTrack) return;
 
-    const desired = getDesiredProcessor(noiseReduction, micSensitivity);
+    const desired = getDesiredProcessor(noiseReduction, noiseReductionEngine, micSensitivity);
     const current = getCurrentProcessorType();
 
     if (desired === current) {
-      if (processorRef.current && desired !== "none") {
+      if (
+        processorRef.current &&
+        desired !== "none" &&
+        desired !== "krisp" &&
+        (processorRef.current instanceof RNNoiseProcessor ||
+          processorRef.current instanceof VadGateProcessor)
+      ) {
         processorRef.current.setMicSensitivity(micSensitivity);
         processorRef.current.setInputVolume(inputVolume);
       }
@@ -691,21 +712,46 @@ function VoiceStateManager() {
       if (processorRef.current) {
         await audioTrack!.stopProcessor();
         processorRef.current = null;
-        // Previous processor removed
       }
 
       if (cancelled) return;
+
+      if (desired === "krisp") {
+        // Lazy-import @livekit/krisp-noise-filter so the bundle stays small
+        // for users who don't enable it. Falls back to RNNoise on failure
+        // (most often: the LiveKit Cloud project doesn't have Krisp enabled,
+        // which requires a paid plan).
+        try {
+          const { KrispNoiseFilter, isKrispNoiseFilterSupported } =
+            await import("@livekit/krisp-noise-filter");
+          if (!isKrispNoiseFilterSupported()) {
+            throw new Error("Krisp not supported in this browser");
+          }
+          if (cancelled) return;
+          const processor = KrispNoiseFilter();
+          processorRef.current = processor as unknown as AudioProcessor;
+          await audioTrack!.setProcessor(processor);
+          return;
+        } catch (err) {
+          console.warn("[VoiceStateManager] Krisp init failed, falling back to RNNoise:", err);
+          addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
+          setNoiseReductionEngine("rnnoise");
+          if (cancelled) return;
+          const processor = new RNNoiseProcessor(micSensitivity, inputVolume);
+          processorRef.current = processor;
+          await audioTrack!.setProcessor(processor);
+          return;
+        }
+      }
 
       if (desired === "rnnoise") {
         const processor = new RNNoiseProcessor(micSensitivity, inputVolume);
         processorRef.current = processor;
         await audioTrack!.setProcessor(processor);
-        // RNNoise + VAD gate active
       } else if (desired === "vadgate") {
         const processor = new VadGateProcessor(micSensitivity, inputVolume);
         processorRef.current = processor;
         await audioTrack!.setProcessor(processor);
-        // VAD gate active
       }
     }
 
@@ -716,7 +762,7 @@ function VoiceStateManager() {
     });
 
     return () => { cancelled = true; };
-  }, [noiseReduction, micSensitivity, inputVolume, localParticipant]);
+  }, [noiseReduction, noiseReductionEngine, micSensitivity, inputVolume, localParticipant, addToast, setNoiseReductionEngine]);
 
   // Apply processor when mic track is first published (settings already active on join).
   // The effect above won't catch this since noiseReduction/micSensitivity haven't changed.
@@ -725,11 +771,39 @@ function VoiceStateManager() {
       if (pub.source !== Track.Source.Microphone) return;
       if (processorRef.current) return; // already applied
 
-      const desired = getDesiredProcessor(noiseReductionRef.current, micSensitivityRef.current);
+      const desired = getDesiredProcessor(
+        noiseReductionRef.current,
+        noiseReductionEngineRef.current,
+        micSensitivityRef.current,
+      );
       if (desired === "none") return;
 
       const audioTrack = pub.track as LocalAudioTrack | undefined;
       if (!audioTrack) return;
+
+      if (desired === "krisp") {
+        // Same lazy-import + fallback path as the runtime switch.
+        (async () => {
+          try {
+            const { KrispNoiseFilter, isKrispNoiseFilterSupported } =
+              await import("@livekit/krisp-noise-filter");
+            if (!isKrispNoiseFilterSupported()) throw new Error("unsupported");
+            const processor = KrispNoiseFilter();
+            processorRef.current = processor as unknown as AudioProcessor;
+            await audioTrack.setProcessor(processor);
+          } catch (err) {
+            console.warn("[VoiceStateManager] Krisp init on publish failed, falling back to RNNoise:", err);
+            setNoiseReductionEngine("rnnoise");
+            const fallback = new RNNoiseProcessor(
+              micSensitivityRef.current,
+              inputVolumeRef.current,
+            );
+            processorRef.current = fallback;
+            await audioTrack.setProcessor(fallback);
+          }
+        })();
+        return;
+      }
 
       let processor: AudioProcessor;
       if (desired === "rnnoise") {
@@ -739,7 +813,7 @@ function VoiceStateManager() {
       }
 
       processorRef.current = processor;
-      audioTrack.setProcessor(processor)
+      audioTrack.setProcessor(processor as RNNoiseProcessor | VadGateProcessor)
         .then(() => { /* processor applied */ })
         .catch((err) => console.error("[VoiceStateManager] Failed to apply processor on publish:", err));
     }

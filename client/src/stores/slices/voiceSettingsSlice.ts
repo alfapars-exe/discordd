@@ -25,6 +25,14 @@ export type VoiceSettings = {
   soundsEnabled: boolean;
   localMutedUsers: Record<string, boolean>;
   noiseReduction: boolean;
+  /**
+   * Engine used when noiseReduction is on:
+   *  - "rnnoise" — bundled OSS ML denoiser, free, works on every LiveKit
+   *    plan (default).
+   *  - "krisp"   — LiveKit Cloud's Krisp filter (Discord-grade). Requires
+   *    a paid LiveKit Cloud plan; falls back to RNNoise on init failure.
+   */
+  noiseReductionEngine: "rnnoise" | "krisp";
   screenShareVolumes: Record<string, number>;
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
@@ -44,6 +52,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   soundsEnabled: true,
   localMutedUsers: {},
   noiseReduction: true,
+  noiseReductionEngine: "rnnoise",
   screenShareVolumes: {},
   screenShareAudio: false,
   screenShareQuality: "720p",
@@ -84,6 +93,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     soundsEnabled: s.soundsEnabled,
     localMutedUsers: s.localMutedUsers,
     noiseReduction: s.noiseReduction,
+    noiseReductionEngine: s.noiseReductionEngine,
     screenShareVolumes: s.screenShareVolumes,
     screenShareAudio: s.screenShareAudio,
     screenShareQuality: s.screenShareQuality,
@@ -107,6 +117,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareAudio: (enabled: boolean) => void;
   setScreenShareQuality: (quality: ScreenShareQuality) => void;
   setNoiseReduction: (enabled: boolean) => void;
+  setNoiseReductionEngine: (engine: "rnnoise" | "krisp") => void;
   toggleLocalMute: (userId: string) => void;
   applyFromServer: (settings: Record<string, unknown>) => void;
 };
@@ -131,6 +142,7 @@ export const createVoiceSettingsSlice: StateCreator<
     soundsEnabled: initial.soundsEnabled,
     localMutedUsers: initial.localMutedUsers,
     noiseReduction: initial.noiseReduction,
+    noiseReductionEngine: initial.noiseReductionEngine,
     screenShareVolumes: initial.screenShareVolumes,
     screenShareAudio: initial.screenShareAudio,
     screenShareQuality: initial.screenShareQuality,
@@ -201,6 +213,11 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
+    setNoiseReductionEngine: (engine) => {
+      set({ noiseReductionEngine: engine });
+      saveSettings(currentSettings(get()));
+    },
+
     toggleLocalMute: (userId: string) => {
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
       const isCurrentlyMuted = localMutedUsers[userId] ?? false;
@@ -261,6 +278,7 @@ export const createVoiceSettingsSlice: StateCreator<
         screenShareQuality: merged.screenShareQuality,
         localMutedUsers: merged.localMutedUsers,
         noiseReduction: merged.noiseReduction,
+        noiseReductionEngine: merged.noiseReductionEngine,
         screenShareVolumes: merged.screenShareVolumes,
       });
     },
