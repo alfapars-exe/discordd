@@ -3024,6 +3024,23 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
     font-size: 16px; /* Prevent iOS zoom (triggers below 16px) */
   }
 
+  /* Composer buttons (attach, emoji, GIF, send) — 36px → 44px so they're
+     comfortable to tap and don't get squeezed against the textarea. The
+     send button uses the same .input-box button selector. */
+  .input-box button {
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+  }
+
+  /* Keyboard avoidance: useMobileKeyboardOffset writes the soft-keyboard's
+     height into --keyboard-offset (visualViewport API). Shrink the app
+     container by that amount so the bottom-anchored composer stays above
+     the keyboard instead of being covered by it. */
+  .mqvi-app.mobile {
+    height: calc(100dvh - var(--keyboard-offset, 0px));
+    transition: height 0.15s ease-out;
+  }
+
   /* Voice controls — larger on mobile */
   .vc-btn {
     width: var(--mobile-touch-target);
