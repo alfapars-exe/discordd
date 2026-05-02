@@ -212,8 +212,8 @@ function VoiceSettings() {
       loopbackAudio.pause();
       loopbackAudio.srcObject = null;
     }
-    try { rnnoiseNode?.disconnect(); rnnoiseNode?.destroy(); } catch {}
-    try { vadGateNode?.disconnect(); } catch {}
+    try { rnnoiseNode?.disconnect(); rnnoiseNode?.destroy(); } catch { /* node already destroyed or never initialized */ }
+    try { vadGateNode?.disconnect(); } catch { /* node already destroyed or never initialized */ }
     ctx.close().catch(() => {});
     micTestRef.current = null;
     setMicLevel(0);
@@ -231,7 +231,7 @@ function VoiceSettings() {
           loopbackAudio.pause();
           loopbackAudio.srcObject = null;
         }
-        try { rnnoiseNode?.disconnect(); rnnoiseNode?.destroy(); } catch {}
+        try { rnnoiseNode?.disconnect(); rnnoiseNode?.destroy(); } catch { /* node already destroyed or never initialized */ }
         ctx.close().catch(() => {});
         micTestRef.current = null;
       }
@@ -302,7 +302,7 @@ function VoiceSettings() {
 
         setAudioInputs(inputs);
         setAudioOutputs(outputs);
-      } catch {}
+      } catch { /* node already destroyed or never initialized */ }
     }
 
     loadDevices();

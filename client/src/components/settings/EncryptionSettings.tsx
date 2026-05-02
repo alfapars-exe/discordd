@@ -49,7 +49,7 @@ function EncryptionSettings() {
           .match(/.{1,4}/g)
           ?.join(" ") ?? hex.slice(0, 32);
         setFingerprint(formatted);
-      } catch {}
+      } catch { /* fingerprint format failed; fall through to raw hex */ }
     }
 
     if (initStatus === "ready") {
