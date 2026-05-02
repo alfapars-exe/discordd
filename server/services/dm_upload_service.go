@@ -1,0 +1,93 @@
+package services
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/akinalp/mqvi/models"
+	"github.com/akinalp/mqvi/pkg"
+	"github.com/akinalp/mqvi/repository"
+)
+
+// DMUploadService handles DM file uploads. Parallel to UploadService for channel messages.
+type DMUploadService interface {
+	Upload(ctx context.Context, dmMessageID string, file multipart.File, header *multipart.FileHeader, isEncrypted bool) (*models.DMAttachment, error)
+}
+
+type dmUploadService struct {
+	dmRepo    repository.DMRepository
+	uploadDir string
+	maxSize   int64
+}
+
+func NewDMUploadService(
+	dmRepo repository.DMRepository,
+	uploadDir string,
+	maxSize int64,
+) DMUploadService {
+	return &dmUploadService{
+		dmRepo:    dmRepo,
+		uploadDir: uploadDir,
+		maxSize:   maxSize,
+	}
+}
+
+func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file multipart.File, header *multipart.FileHeader, isEncrypted bool) (*models.DMAttachment, error) {
+	if header.Size > s.maxSize {
+		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	mimeBase := strings.Split(contentType, ";")[0]
+	mimeBase = strings.TrimSpace(mimeBase)
+
+	// E2EE files arrive as application/octet-stream — skip MIME whitelist
+	if !isEncrypted && !allowedMimeTypes[mimeBase] {
+		return nil, fmt.Errorf("%w: file type not allowed: %s", pkg.ErrBadRequest, mimeBase)
+	}
+
+	randomBytes := make([]byte, 8)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate random filename: %w", err)
+	}
+	safeFilename := sanitizeFilename(header.Filename)
+	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
+
+	destPath := filepath.Join(s.uploadDir, diskFilename)
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, file); err != nil {
+		os.Remove(destPath)
+		return nil, fmt.Errorf("failed to save file: %w", err)
+	}
+
+	fileSize := header.Size
+	attachment := &models.DMAttachment{
+		DMMessageID: dmMessageID,
+		Filename:    header.Filename,
+		FileURL:     "/api/uploads/" + diskFilename,
+		FileSize:    &fileSize,
+		MimeType:    &mimeBase,
+	}
+
+	if err := s.dmRepo.CreateAttachment(ctx, attachment); err != nil {
+		os.Remove(destPath)
+		return nil, fmt.Errorf("failed to create DM attachment record: %w", err)
+	}
+
+	return attachment, nil
+}

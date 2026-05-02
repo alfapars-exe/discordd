@@ -1,0 +1,45 @@
+package repository
+
+import (
+	"context"
+
+	"github.com/akinalp/mqvi/models"
+)
+
+// DMRepository defines data access for direct messages.
+type DMRepository interface {
+	// Channel operations
+	GetChannelByUsers(ctx context.Context, user1ID, user2ID string) (*models.DMChannel, error)
+	GetChannelByID(ctx context.Context, id string) (*models.DMChannel, error)
+	ListChannels(ctx context.Context, userID string) ([]models.DMChannelWithUser, error)
+	CreateChannel(ctx context.Context, channel *models.DMChannel) error
+	UpdateChannelStatus(ctx context.Context, channelID, status string) error
+	SetInitiatedBy(ctx context.Context, channelID, userID string) error
+	CountMessagesBySender(ctx context.Context, channelID, userID string) (int, error)
+	DeleteChannel(ctx context.Context, channelID string) error
+	SetE2EEEnabled(ctx context.Context, channelID string, enabled bool) error
+
+	// Message operations
+	GetMessages(ctx context.Context, channelID string, beforeID string, limit int) ([]models.DMMessage, error)
+	GetMessageByID(ctx context.Context, id string) (*models.DMMessage, error)
+	CreateMessage(ctx context.Context, msg *models.DMMessage) error
+	UpdateMessage(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error
+	DeleteMessage(ctx context.Context, id string) error
+
+	// Reaction operations
+	ToggleReaction(ctx context.Context, messageID, userID, emoji string) (added bool, err error)
+	GetReactionsByMessageID(ctx context.Context, messageID string) ([]models.ReactionGroup, error)
+	GetReactionsByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]models.ReactionGroup, error)
+
+	// Pin operations
+	PinMessage(ctx context.Context, messageID string) error
+	UnpinMessage(ctx context.Context, messageID string) error
+	GetPinnedMessages(ctx context.Context, channelID string) ([]models.DMMessage, error)
+
+	// Attachment operations
+	CreateAttachment(ctx context.Context, attachment *models.DMAttachment) error
+	GetAttachmentsByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]models.DMAttachment, error)
+
+	// Search operations (FTS5 full-text search with pagination)
+	SearchMessages(ctx context.Context, channelID string, query string, limit, offset int) ([]models.DMMessage, int, error)
+}

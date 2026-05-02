@@ -1,0 +1,120 @@
+# ========================
+# Go Backend
+# ========================
+server/mqvi
+server/mqvi.exe
+server/tmp/
+server/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ========================
+# Node / Frontend
+# ========================
+client/node_modules/
+client/dist/
+client/.vite/
+client/.tsbuildinfo
+
+# ========================
+# Electron
+# ========================
+dist-electron/
+release/
+
+# ========================
+# Native (WASAPI audio capture)
+# ========================
+native/*.exe
+native/*.obj
+*.obj
+
+# ========================
+# Root node_modules (Electron + build tools)
+# ========================
+/node_modules/
+
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# ========================
+# IDE
+# ========================
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Docker
+# ========================
+data/
+uploads/
+
+# ========================
+# Documents (private)
+# ========================
+documents/
+# ========================
+# MD files (private)
+# ========================
+docs/
+
+# ========================
+# Deploy build output (contains compiled binary + real configs)
+# ========================
+deploy/package/
+deploy/COMMANDS.md
+deploy/REDEPLOY.md
+
+# ========================
+# Deploy scripts with real server IP (use .example versions)
+# ========================
+deploy/redeploy.sh
+deploy/redeploy.ps1
+# ========================
+# Deploy scripts with real server IP (use .example versions)
+# ========================
+deploy/redeploy-prod.sh
+deploy/redeploy-prod.ps1
+
+# ========================
+# Embedded frontend build
+# ========================
+server/static/dist/
+!server/static/dist/.gitkeep
+
+# ========================
+# Misc
+# ========================
+*.log
+*.tmp
+coverage/
+deploy.md
+
+
+# ========================
+# claude
+# ========================
+*.claude
+CLAUDE.md
+DECISIONS.md
+
+server/mqvi-server
+server/server.exe

@@ -1,0 +1,95 @@
+{
+  "auth": {
+    "invalidCredentials": "Geçersiz kullanıcı adı veya şifre",
+    "usernameRequired": "Kullanıcı adı gerekli",
+    "passwordRequired": "Şifre gerekli",
+    "usernameTooShort": "Kullanıcı adı 3 ile 32 karakter arasında olmalı",
+    "usernameInvalidChars": "Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir",
+    "passwordTooShort": "Şifre en az 8 karakter olmalı",
+    "displayNameTooLong": "Görünen ad en fazla 32 karakter olabilir",
+    "usernameTaken": "Bu kullanıcı adı zaten alınmış",
+    "refreshTokenRequired": "Refresh token gerekli",
+    "invalidRefreshToken": "Geçersiz refresh token",
+    "refreshTokenExpired": "Refresh token süresi dolmuş",
+    "invalidToken": "Geçersiz token",
+    "authRequired": "Yetkilendirme gerekli",
+    "invalidAuthFormat": "Geçersiz yetkilendirme formatı, kullanım: Bearer <token>",
+    "invalidEmail": "Geçersiz e-posta formatı",
+    "emailAlreadyExists": "Bu e-posta adresi zaten kullanılıyor",
+    "emailUpdated": "E-posta başarıyla güncellendi",
+    "emailRemoved": "E-posta başarıyla kaldırıldı",
+    "noEmailToRemove": "Kaldırılacak e-posta yok",
+    "tooManyAttempts": "Çok fazla giriş denemesi, lütfen daha sonra tekrar deneyin",
+    "resetNotConfigured": "Bu sunucuda şifre sıfırlama yapılandırılmamış",
+    "invalidOrExpiredToken": "Geçersiz veya süresi dolmuş sıfırlama token'ı",
+    "tokenExpired": "Sıfırlama token'ının süresi dolmuş",
+    "passwordResetSuccess": "Şifre başarıyla sıfırlandı",
+    "accountSuspended": "Hesabınız askıya alınmıştır",
+    "emailNotAllowed": "Bu e-posta adresine izin verilmiyor"
+  },
+  "user": {
+    "notFound": "Kullanıcı bulunamadı"
+  },
+  "channel": {
+    "notFound": "Kanal bulunamadı",
+    "nameRequired": "Kanal adı gerekli"
+  },
+  "role": {
+    "notFound": "Rol bulunamadı"
+  },
+  "common": {
+    "notFound": "Bulunamadı",
+    "forbidden": "Bu işlem için yetkiniz yok",
+    "badRequest": "Geçersiz istek",
+    "internalError": "Sunucu hatası"
+  },
+  "p2p": {
+    "notFriends": "Sadece arkadaşlarınızı arayabilirsiniz",
+    "userOffline": "Kullanıcı çevrimdışı",
+    "userBusy": "Kullanıcı başka bir aramada",
+    "callNotFound": "Arama bulunamadı",
+    "notInCall": "Bir aramada değilsiniz",
+    "cannotCallSelf": "Kendinizi arayamazsınız"
+  },
+  "server": {
+    "muteInvalidDuration": "Geçersiz sessize alma süresi. Geçerli değerler: 1h, 8h, 7d, forever"
+  },
+  "admin": {
+    "platformAdminRequired": "Platform yöneticisi erişimi gerekli",
+    "instanceNotFound": "LiveKit sunucusu bulunamadı",
+    "cannotDeleteWithServers": "Aktif sunucuları olan bir instance, taşıma hedefi belirtilmeden silinemez",
+    "migrationTargetNotFound": "Taşıma hedefi bulunamadı",
+    "cannotMigrateToSelf": "Aynı sunucuya taşıma yapılamaz",
+    "onlyPlatformManaged": "Sadece platform tarafından yönetilen sunucular admin API ile değiştirilebilir",
+    "cannotBanSelf": "Kendinizi yasaklayamazsınız",
+    "cannotBanAdmin": "Platform yöneticisi yasaklanamaz",
+    "userAlreadyBanned": "Kullanıcı zaten yasaklı",
+    "userBanned": "Kullanıcı yasaklandı",
+    "cannotDeleteSelf": "Kendinizi silemezsiniz",
+    "cannotDeleteAdmin": "Platform yöneticisi silinemez",
+    "userDeleted": "Kullanıcı silindi",
+    "serverDeletedByAdmin": "Sunucu admin tarafından silindi",
+    "serverNotFound": "Sunucu bulunamadı",
+    "cannotModifyOwnAdmin": "Kendi admin durumunuzu değiştiremezsiniz",
+    "adminStatusUpdated": "Admin durumu güncellendi"
+  },
+  "e2ee": {
+    "deviceIdRequired": "Cihaz kimliği gerekli",
+    "identityKeyRequired": "Kimlik anahtarı gerekli",
+    "signedPrekeyRequired": "İmzalı ön anahtar gerekli",
+    "signedPrekeySigRequired": "İmzalı ön anahtar imzası gerekli",
+    "deviceNotFound": "Cihaz bulunamadı",
+    "deviceRegistered": "Cihaz başarıyla kaydedildi",
+    "deviceDeleted": "Cihaz başarıyla silindi",
+    "prekeyLow": "Ön anahtar havuzu azalıyor, lütfen yeni anahtarlar yükleyin",
+    "prekeyExhausted": "Ön anahtar havuzu tükendi",
+    "invalidKey": "Geçersiz kriptografik anahtar",
+    "backupUploaded": "Anahtar yedeği başarıyla yüklendi",
+    "backupDeleted": "Anahtar yedeği başarıyla silindi",
+    "sessionIdRequired": "Oturum kimliği gerekli",
+    "sessionDataRequired": "Oturum verisi gerekli",
+    "encryptedDataRequired": "Şifrelenmiş veri gerekli",
+    "nonceRequired": "Nonce değeri gerekli",
+    "saltRequired": "Salt değeri gerekli"
+  }
+}

@@ -1,0 +1,198 @@
+/** ChannelChatProvider — Maps channel stores (message, pin, member) to ChatContext. */
+
+import { useMemo, useCallback, useRef, type ReactNode } from "react";
+import { ChatContext, type ChatContextValue, type ChatMessage } from "../../hooks/useChatContext";
+import { useMessageStore } from "../../stores/messageStore";
+import { usePinStore } from "../../stores/pinStore";
+import { useMemberStore } from "../../stores/memberStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useAuthStore } from "../../stores/authStore";
+import { useChannelPermissions } from "../../hooks/useChannelPermissions";
+import { hasPermission, Permissions } from "../../utils/permissions";
+import type { Message, MemberWithRoles } from "../../types";
+
+const EMPTY_MESSAGES: ChatMessage[] = [];
+const EMPTY_STRINGS: string[] = [];
+const EMPTY_MEMBERS: MemberWithRoles[] = [];
+
+type ChannelChatProviderProps = {
+  channelId: string;
+  channelName: string;
+  serverId?: string;
+  sendTyping: (channelId: string) => void;
+  children: ReactNode;
+};
+
+function ChannelChatProvider({
+  channelId,
+  channelName,
+  serverId: explicitServerId,
+  sendTyping: sendTypingProp,
+  children,
+}: ChannelChatProviderProps) {
+  // ─── Store selectors ───
+  const messages = useMessageStore(
+    (s) => (channelId ? s.messagesByChannel[channelId] : undefined) as ChatMessage[] | undefined
+  ) ?? EMPTY_MESSAGES;
+  const isLoading = useMessageStore((s) => s.isLoading);
+  const isLoadingMore = useMessageStore((s) => s.isLoadingMore);
+  const hasMore = useMessageStore((s) =>
+    channelId ? s.hasMoreByChannel[channelId] ?? false : false
+  );
+  const replyingTo = useMessageStore((s) => s.replyingTo) as ChatMessage | null;
+  const scrollToMessageId = useMessageStore((s) => s.scrollToMessageId);
+  const typingUsers = useMessageStore((s) =>
+    channelId ? s.typingUsers[channelId] ?? EMPTY_STRINGS : EMPTY_STRINGS
+  );
+
+  const storeSetReplyingTo = useMessageStore((s) => s.setReplyingTo);
+  const storeSetScrollToMessageId = useMessageStore((s) => s.setScrollToMessageId);
+  const storeSendMessage = useMessageStore((s) => s.sendMessage);
+  const storeEditMessage = useMessageStore((s) => s.editMessage);
+  const storeDeleteMessage = useMessageStore((s) => s.deleteMessage);
+  const storeToggleReaction = useMessageStore((s) => s.toggleReaction);
+  const storeFetchMessages = useMessageStore((s) => s.fetchMessages);
+  const storeFetchOlderMessages = useMessageStore((s) => s.fetchOlderMessages);
+
+  const pinAction = usePinStore((s) => s.pin);
+  const unpinAction = usePinStore((s) => s.unpin);
+  const channelPins = usePinStore((s) => s.pins[channelId]);
+
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const targetServerId = explicitServerId ?? activeServerId;
+  const membersByServer = useMemberStore((s) => s.membersByServer);
+  const members = targetServerId ? (membersByServer[targetServerId] ?? EMPTY_MEMBERS) : EMPTY_MEMBERS;
+  const currentUser = useAuthStore((s) => s.user);
+  const { hasChannelPerm } = useChannelPermissions(channelId);
+
+  // ─── File drop ref — forwards drag-drop files from ChatArea to MessageInput ───
+  const addFilesRef = useRef<((files: File[]) => void) | null>(null);
+
+  // ─── Permission calculation ───
+  const canSend = hasChannelPerm(Permissions.SendMessages);
+  const currentMember = members.find((m) => m.id === currentUser?.id);
+  const canManageMessages = currentMember
+    ? hasPermission(currentMember.effective_permissions, Permissions.ManageMessages)
+    : false;
+
+  // ─── Actions (stable refs) ───
+  const sendMessage = useCallback(
+    (content: string, files?: File[], replyToId?: string) =>
+      storeSendMessage(channelId, content, files, replyToId, explicitServerId),
+    [channelId, storeSendMessage, explicitServerId]
+  );
+
+  const editMessage = useCallback(
+    (id: string, content: string) => storeEditMessage(id, content, explicitServerId),
+    [storeEditMessage, explicitServerId]
+  );
+
+  const deleteMessage = useCallback(
+    (id: string) => storeDeleteMessage(id, explicitServerId),
+    [storeDeleteMessage, explicitServerId]
+  );
+
+  const fetchMessages = useCallback(
+    () => storeFetchMessages(channelId, explicitServerId),
+    [channelId, storeFetchMessages, explicitServerId]
+  );
+
+  const fetchOlderMessages = useCallback(
+    () => storeFetchOlderMessages(channelId, explicitServerId),
+    [channelId, storeFetchOlderMessages, explicitServerId]
+  );
+
+  const toggleReaction = useCallback(
+    (messageId: string, emoji: string) =>
+      storeToggleReaction(messageId, channelId, emoji, explicitServerId),
+    [channelId, storeToggleReaction, explicitServerId]
+  );
+
+  const setReplyingTo = useCallback(
+    (msg: ChatMessage | null) => {
+      // Safe cast: runtime object is already a Message, just typed as ChatMessage
+      storeSetReplyingTo(msg as Message | null);
+    },
+    [storeSetReplyingTo]
+  );
+
+  const setScrollToMessageId = useCallback(
+    (id: string | null) => storeSetScrollToMessageId(id),
+    [storeSetScrollToMessageId]
+  );
+
+  const sendTyping = useCallback(
+    () => sendTypingProp(channelId),
+    [channelId, sendTypingProp]
+  );
+
+  const pinMessage = useCallback(
+    async (messageId: string) => {
+      await pinAction(channelId, messageId, explicitServerId);
+    },
+    [channelId, pinAction, explicitServerId]
+  );
+
+  const unpinMessage = useCallback(
+    async (messageId: string) => {
+      await unpinAction(channelId, messageId, explicitServerId);
+    },
+    [channelId, unpinAction, explicitServerId]
+  );
+
+  const pinnedIds = useMemo(
+    () => new Set((channelPins ?? []).map((p) => p.message_id)),
+    [channelPins]
+  );
+
+  const isMessagePinned = useCallback(
+    (messageId: string) => pinnedIds.has(messageId),
+    [pinnedIds]
+  );
+
+  // ─── Context Value (memoized) ───
+  const value: ChatContextValue = useMemo(
+    () => ({
+      mode: "channel" as const,
+      channelId,
+      channelName,
+      serverId: explicitServerId,
+      messages,
+      isLoading,
+      isLoadingMore,
+      hasMore,
+      replyingTo,
+      scrollToMessageId,
+      typingUsers,
+      sendMessage,
+      editMessage,
+      deleteMessage,
+      fetchMessages,
+      fetchOlderMessages,
+      toggleReaction,
+      setReplyingTo,
+      setScrollToMessageId,
+      sendTyping,
+      pinMessage,
+      unpinMessage,
+      isMessagePinned,
+      canSend,
+      canManageMessages,
+      showRoleColors: true,
+      members,
+      addFilesRef,
+    }),
+    [
+      channelId, channelName, explicitServerId, messages, isLoading, isLoadingMore, hasMore,
+      replyingTo, scrollToMessageId, typingUsers,
+      sendMessage, editMessage, deleteMessage, fetchMessages, fetchOlderMessages,
+      toggleReaction, setReplyingTo, setScrollToMessageId, sendTyping,
+      pinMessage, unpinMessage, isMessagePinned,
+      canSend, canManageMessages, members, addFilesRef,
+    ]
+  );
+
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+}
+
+export default ChannelChatProvider;
