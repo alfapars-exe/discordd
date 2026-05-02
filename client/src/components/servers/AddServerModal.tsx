@@ -106,15 +106,17 @@ function AddServerModal({ onClose }: AddServerModalProps) {
       req.livekit_secret = livekitSecret.trim();
     }
 
-    const server = await createServer(req);
+    const res = await createServer(req);
     setIsCreating(false);
 
-    if (server) {
+    if (res.success && res.data) {
       addToast("success", t("serverCreated"));
       // createServer sets activeServerId + activeServer atomically; AppLayout handles cascade refetch.
       onClose();
     } else {
-      addToast("error", tCommon("somethingWentWrong"));
+      // Surface the actual API error (e.g. "bad request: server name must be...")
+      // instead of a generic toast, so the user sees what to fix.
+      addToast("error", res.error || tCommon("somethingWentWrong"));
     }
   }
 
