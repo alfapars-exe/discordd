@@ -250,16 +250,36 @@ func (db *DB) execStatements(filename, content string) error {
 	return nil
 }
 
-// splitStatements splits SQL by semicolons, respecting string literals
-// and BEGIN...END blocks (for triggers).
+// splitStatements splits SQL by semicolons, respecting string literals,
+// BEGIN...END blocks (for triggers), and -- line comments. Without comment
+// awareness, a literal ';' inside a "-- ..." comment would cut a statement
+// in half, which broke migration 018 ("...nothing is migrated; the first
+// user to register will...").
 func splitStatements(sql string) []string {
 	var statements []string
 	var current strings.Builder
 	inString := false
+	inLineComment := false
 	beginDepth := 0
 
 	for i := 0; i < len(sql); i++ {
 		ch := sql[i]
+
+		// Line comment ends at the next newline. We still emit the bytes so
+		// migrations keep their inline documentation in error messages.
+		if inLineComment {
+			current.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+
+		if !inString && ch == '-' && i+1 < len(sql) && sql[i+1] == '-' {
+			inLineComment = true
+			current.WriteByte(ch)
+			continue
+		}
 
 		if ch == '\'' {
 			if inString && i+1 < len(sql) && sql[i+1] == '\'' {
