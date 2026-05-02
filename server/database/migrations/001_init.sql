@@ -1,13 +1,11 @@
 -- 001_init.sql
 -- Base database schema: users, channels, messages and related tables.
 -- Every migration must be idempotent: use IF NOT EXISTS so it can be re-run.
-
--- WAL mode: Write-Ahead Logging — improves SQLite concurrent read/write performance.
--- In normal mode the entire DB is locked during writes; in WAL mode reads continue during writes.
-PRAGMA journal_mode=WAL;
-
--- Enable foreign key support — disabled by default in SQLite!
-PRAGMA foreign_keys=ON;
+--
+-- NOTE: connection-level PRAGMAs (journal_mode=WAL, foreign_keys=ON) are
+-- applied via the SQLite DSN in database.go. Remote libSQL/Turso rejects
+-- PRAGMAs because the server manages those settings, so they're not in this
+-- file either.
 
 -- Server (each deployment is one server)
 CREATE TABLE IF NOT EXISTS server (
