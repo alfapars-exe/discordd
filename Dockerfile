@@ -51,19 +51,16 @@ RUN go mod tidy && \
 FROM debian:bookworm-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates tzdata && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd -r tayfa && useradd -r -g tayfa tayfa
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=backend /out/tayfa-server /app/tayfa-server
 
-# /data is the HF Space Storage Bucket mount point. The bucket is created with
-# read/write access so the app can persist uploads here. ChownRecursive on a
-# bucket-mounted dir would be wasteful, so we just ensure the subdir exists.
-RUN mkdir -p /data/uploads /data/landing && \
-    chown -R tayfa:tayfa /data
-
-USER tayfa
+# Run as root inside the container — the HF Storage Bucket mount at /data
+# brings its own ownership (root-owned by default), so a non-root USER like
+# `tayfa` would get "permission denied" on mkdir /data/uploads. HF Spaces
+# isolate the container itself, so root-in-container is the normal pattern.
+# The Go binary will mkdir /data/uploads and /data/landing on first start.
 
 # HF Space defaults to port 7860 (the value of $PORT inside the container).
 ENV SERVER_HOST=0.0.0.0 \
