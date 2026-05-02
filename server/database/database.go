@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	_ "github.com/tursodatabase/go-libsql" // CGO-based libSQL driver for remote Turso (registers "libsql")
 	_ "modernc.org/sqlite"                 // pure-Go SQLite driver for local files (registers "sqlite")
@@ -65,13 +66,27 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 		log.Printf("[database] using local SQLite at %s", dbPath)
 	}
 
-	// Connection pool settings for SQLite WAL mode:
-	// - MaxOpenConns=4 allows concurrent reads (WAL serializes writes internally)
-	// - MaxIdleConns=2 keeps warm connections ready
-	// - ConnMaxLifetime=0 means connections are reused indefinitely
+	// Connection pool settings.
+	//
+	// For local SQLite the old comments still apply: MaxOpenConns=4 allows
+	// concurrent reads (WAL serializes writes internally), MaxIdleConns=2
+	// keeps warm connections ready.
+	//
+	// For remote Turso/libSQL there's an additional constraint: each *sql.Conn
+	// maps to a Hrana stream on the Turso side, and Turso closes idle streams
+	// after ~10 seconds. If we reuse a pooled conn after the stream is gone,
+	// Prepare fails with:
+	//   error code = 3: Hrana: api error: status=404 Not Found,
+	//   body={"error":"stream not found: ..."}
+	// This bit users on mobile where network latency widens the idle window.
+	//
+	// Fix: ConnMaxIdleTime=5s drops idle pool entries before Turso does, and
+	// ConnMaxLifetime=5m bounds total connection age as a safety net. Both
+	// are also harmless for local SQLite.
 	conn.SetMaxOpenConns(4)
 	conn.SetMaxIdleConns(2)
-	conn.SetConnMaxLifetime(0)
+	conn.SetConnMaxIdleTime(5 * time.Second)
+	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
