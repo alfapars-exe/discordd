@@ -18,14 +18,12 @@ RUN npm run build
 # Output: /app/client/dist/
 
 # ─── Stage 2: Go backend (embeds Stage 1 output) ───
-FROM golang:1.25-alpine AS backend
+# Debian/glibc base because go-libsql ships a prebuilt Rust C library that
+# was linked against glibc (uses readdir64, fstat64, __res_init, mmap64,
+# etc.). Those symbols don't exist on Alpine/musl, so the link step fails
+# with "undefined reference to readdir64" if we stay on Alpine.
+FROM golang:1.25-bookworm AS backend
 WORKDIR /app
-
-# go-libsql is a CGO native binding — it links against a prebuilt libsql C
-# library shipped with the module. We need a C toolchain (gcc + musl-dev,
-# pulled in by build-base) at compile time. The runtime image is the same
-# Alpine/musl base so the binary's musl link target matches.
-RUN apk add --no-cache build-base
 
 # Module cache layer: download what's already in go.sum. We don't run
 # `go mod tidy` here because tidy needs the *.go source files to resolve
@@ -48,9 +46,13 @@ RUN go mod tidy && \
     go build -trimpath -ldflags="-s -w" -o /out/tayfa-server .
 
 # ─── Stage 3: Runtime ───
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata && \
-    addgroup -S tayfa && adduser -S -G tayfa tayfa
+# Stay on glibc (debian-slim) to match what go-libsql linked against. The
+# image is ~30MB larger than alpine but the binary actually runs.
+FROM debian:bookworm-slim
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates tzdata && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd -r tayfa && useradd -r -g tayfa tayfa
 
 WORKDIR /app
 COPY --from=backend /out/tayfa-server /app/tayfa-server
