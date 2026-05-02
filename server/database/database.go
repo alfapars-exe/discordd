@@ -200,7 +200,19 @@ func (db *DB) execStatements(filename, content string) error {
 			continue
 		}
 
-		if strings.HasPrefix(strings.ToUpper(stmt), "PRAGMA") {
+		// Detect "is this a PRAGMA?" by peeking past leading "--" comment lines.
+		// We can't just strings.HasPrefix(stmt, "PRAGMA") because the migration
+		// files put descriptive comments before each PRAGMA.
+		core := stmt
+		for strings.HasPrefix(core, "--") {
+			nl := strings.IndexByte(core, '\n')
+			if nl < 0 {
+				core = ""
+				break
+			}
+			core = strings.TrimSpace(core[nl+1:])
+		}
+		if strings.HasPrefix(strings.ToUpper(core), "PRAGMA") {
 			log.Printf("[database] %s: statement %d skipped (PRAGMA — set via DSN / managed by libSQL server)", filename, i+1)
 			continue
 		}
