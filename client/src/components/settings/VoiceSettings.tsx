@@ -81,6 +81,8 @@ function VoiceSettings() {
   const setInputVolume = useVoiceStore((s) => s.setInputVolume);
   const setSoundsEnabled = useVoiceStore((s) => s.setSoundsEnabled);
   const setNoiseReduction = useVoiceStore((s) => s.setNoiseReduction);
+  const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
+  const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
 
 
   // ─── Local state ───
@@ -514,6 +516,37 @@ function VoiceSettings() {
             <span className="vs-switch-slider" />
           </label>
         </div>
+
+        {/* Engine picker — only meaningful while NR is on. Krisp falls back
+            to RNNoise automatically if the LiveKit Cloud project doesn't
+            have it enabled (paid plan feature). */}
+        {noiseReduction && (
+          <div className="vs-toggle-row" style={{ marginTop: 12 }}>
+            <div>
+              <div className="vs-label">{t("noiseReductionEngine")}</div>
+              <div className="vs-desc">{t("noiseReductionEngineDesc")}</div>
+            </div>
+            <select
+              value={noiseReductionEngine}
+              onChange={(e) =>
+                setNoiseReductionEngine(e.target.value as "rnnoise" | "krisp")
+              }
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--t0)",
+                border: "1px solid var(--panel-border)",
+                borderRadius: 6,
+                padding: "6px 10px",
+                minWidth: 160,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+            >
+              <option value="rnnoise">{t("nrEngineRnnoise")}</option>
+              <option value="krisp">{t("nrEngineKrisp")}</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* ─── Join/Leave Sounds ─── */}

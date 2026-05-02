@@ -30,6 +30,7 @@
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@livekit/components-react": "^2.9.19",
+    "@livekit/krisp-noise-filter": "^0.2.16",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
     "@sapphi-red/web-noise-suppressor": "^0.3.5",
