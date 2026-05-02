@@ -28,7 +28,7 @@ setLogLevel(LogLevel.debug);
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useTranslation } from "react-i18next";
-import { useNativeVoice } from "../../utils/nativePlugins";
+import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
 import VoiceStateManager from "./VoiceStateManager";
 
 type VoiceProviderProps = {
@@ -48,7 +48,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
 
   // iOS: native SDK handles voice connection — don't connect JS SDK.
   // JS LiveKitRoom stays mounted (for context) but with connect=false.
-  const isNativeVoice = useNativeVoice();
+  const isNativeVoice = checkIsNativeVoice();
   const isConnected = isInVoice && !isNativeVoice;
 
   // ─── E2EE Key Provider ───

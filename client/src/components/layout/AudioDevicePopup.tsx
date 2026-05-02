@@ -63,7 +63,7 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
             label: d.label || `${kind === "input" ? t("inputDevice") : t("outputDevice")} ${i + 1}`,
           }));
         setDevices(filtered);
-      } catch {}
+      } catch { /* device enumeration failed; show empty list */ }
     }
     load();
   }, [kind, t]);

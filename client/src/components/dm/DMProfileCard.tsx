@@ -48,15 +48,13 @@ function DMProfileCard({ dm, position, onClose }: DMProfileCardProps) {
 
   // Close on click-outside
   useEffect(() => {
-    let frameId: number;
-
     function handleClick(e: MouseEvent) {
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
 
-    frameId = requestAnimationFrame(() => {
+    const frameId = requestAnimationFrame(() => {
       document.addEventListener("mousedown", handleClick);
     });
 

@@ -282,12 +282,8 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   completeRecoverySetup: async (password: string) => {
-    try {
-      await get().setRecoveryPassword(password);
-      set({ showRecoveryPrompt: false });
-    } catch (err) {
-      throw err;
-    }
+    await get().setRecoveryPassword(password);
+    set({ showRecoveryPrompt: false });
   },
 
   checkAndPromptRecovery: () => {

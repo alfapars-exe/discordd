@@ -72,15 +72,13 @@ function RoleEditorPopup({ member, position, onClose }: RoleEditorPopupProps) {
 
   // Close on outside click
   useEffect(() => {
-    let frameId: number;
-
     function handleClick(e: MouseEvent) {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
 
-    frameId = requestAnimationFrame(() => {
+    const frameId = requestAnimationFrame(() => {
       document.addEventListener("mousedown", handleClick);
     });
 

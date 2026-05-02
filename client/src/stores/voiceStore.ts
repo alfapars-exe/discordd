@@ -19,7 +19,7 @@ import type { VoiceState, VoiceStateUpdateData, VoiceTokenResponse } from "../ty
 import * as voiceApi from "../api/voice";
 import {
   startVoiceCallService, stopVoiceCallService,
-  useNativeVoice, nativeVoiceConnect, nativeVoiceDisconnect,
+  isNativeVoice, nativeVoiceConnect, nativeVoiceDisconnect,
   nativeVoiceSetMic, nativeVoiceSetDeafened,
 } from "../utils/nativePlugins";
 import { ensureMicPermission } from "../utils/devicePermissions";
@@ -262,7 +262,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
       // iOS: connect natively (audio works in background)
       // Other platforms: VoiceProvider connects via LiveKitRoom props
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         await nativeVoiceConnect(response.data.url, response.data.token, initialMuted, initialDeafened);
       }
 
@@ -324,7 +324,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     });
 
     // iOS: disconnect native voice
-    if (useNativeVoice()) {
+    if (isNativeVoice()) {
       nativeVoiceDisconnect();
     }
 
@@ -385,13 +385,13 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
     if (isDeafened) {
       set({ isDeafened: false, isMuted: !isMuted });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetDeafened(false);
         nativeVoiceSetMic(isMuted); // was muted, now toggling
       }
     } else {
       set({ isMuted: !isMuted });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetMic(isMuted); // was muted → enable, was unmuted → disable
       }
     }
@@ -404,14 +404,14 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     if (!isDeafened) {
       // Deafen on -> mute also on (Discord behavior)
       set({ isDeafened: true, isMuted: true });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetDeafened(true);
         nativeVoiceSetMic(false);
       }
     } else {
       // Deafen off -> unmute too (Discord behavior)
       set({ isDeafened: false, isMuted: false });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetDeafened(false);
         nativeVoiceSetMic(true);
       }

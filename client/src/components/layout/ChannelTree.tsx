@@ -811,9 +811,11 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         dropPos={dropIndicator?.channelId === ch.id ? dropIndicator.position : null}
                         onClick={() => {
                           if (isVoiceLocked) return;
-                          isText
-                            ? handleTextChannelClick(ch.id, ch.name)
-                            : handleVoiceChannelClick(ch.id, ch.name);
+                          if (isText) {
+                            handleTextChannelClick(ch.id, ch.name);
+                          } else {
+                            handleVoiceChannelClick(ch.id, ch.name);
+                          }
                         }}
                         onContextMenu={(e) => handleChannelContextMenu(e, ch)}
                         onDragStart={() => handleDragStart(ch.id, cg.category.id)}
