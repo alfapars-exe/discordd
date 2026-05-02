@@ -47,9 +47,10 @@ export function isNativeApp(): boolean {
  * Native mode (Electron/Capacitor): absolute URL needed — no proxy available.
  *
  * Resolution order:
- * 1. localStorage("mqvi_server_url")
- * 2. VITE_SERVER_URL env var
- * 3. "https://mqvi.net" (native fallback)
+ * 1. localStorage("mqvi_server_url")  ← runtime override; key kept stable for
+ *    backwards compatibility, value can be any host
+ * 2. VITE_SERVER_URL env var          ← build-time override
+ * 3. "https://argeinfina-discord.hf.space"  ← Tayfa production deployment
  * 4. "" (web mode)
  */
 function resolveServerUrl(): string {
@@ -61,7 +62,7 @@ function resolveServerUrl(): string {
   const envUrl = import.meta.env.VITE_SERVER_URL;
   if (envUrl) return (envUrl as string).replace(/\/$/, "");
 
-  return "https://mqvi.net";
+  return "https://argeinfina-discord.hf.space";
 }
 
 /** Absolute in native mode (Electron/Capacitor), empty in web mode */
@@ -71,7 +72,7 @@ export const API_BASE_URL = `${SERVER_URL}/api`;
 
 /**
  * Generates a public invite URL for sharing outside the app.
- * Result: "https://mqvi.net/invite/{code}"
+ * Result: "https://argeinfina-discord.hf.space/invite/{code}" (or web origin)
  */
 export function getInviteUrl(code: string): string {
   const base = SERVER_URL || window.location.origin;

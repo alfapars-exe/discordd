@@ -800,9 +800,15 @@ function setupIPC(): void {
 
 /** Configure electron-updater for GitHub Releases auto-updates. */
 function setupAutoUpdater(): void {
-  // Auto-download when update is found
+  // Auto-update is disabled for the Tayfa fork. The publish config in
+  // package.json still points to the upstream akinalpfdn/Mqvi releases,
+  // which would either fail or push users back to the original app. Once
+  // we publish Tayfa releases under our own GitHub repo we can re-enable
+  // by flipping this guard and updating package.json's "publish.repo".
+  return;
+
+  // eslint-disable-next-line @typescript-eslint/no-unreachable
   autoUpdater.autoDownload = true;
-  // Install on app quit
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("update-available", (info) => {
@@ -821,7 +827,6 @@ function setupAutoUpdater(): void {
     mainWindow?.webContents.send("update-error", err.message);
   });
 
-  // Check for updates on launch + every 5 minutes
   autoUpdater.checkForUpdates().catch(() => {});
   setInterval(() => {
     autoUpdater.checkForUpdates().catch(() => {});
