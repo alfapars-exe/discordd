@@ -14,10 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/services"
 )
 
 const avatarMaxSize = 8 << 20 // 8MB

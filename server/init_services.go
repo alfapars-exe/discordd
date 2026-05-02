@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/akinalp/mqvi/config"
-	"github.com/akinalp/mqvi/pkg/email"
-	"github.com/akinalp/mqvi/pkg/ratelimit"
-	"github.com/akinalp/mqvi/services"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
+	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // Services holds all service instances.

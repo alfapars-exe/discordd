@@ -14,9 +14,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/akinalp/mqvi/pkg/email"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // AdminServerService handles platform admin server deletion.

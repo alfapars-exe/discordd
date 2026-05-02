@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/services"
 )
 
 // LinkPreviewHandler fetches Open Graph metadata for URLs.

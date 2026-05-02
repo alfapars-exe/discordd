@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/akinalp/mqvi/config"
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // Handlers holds all HTTP handler instances.

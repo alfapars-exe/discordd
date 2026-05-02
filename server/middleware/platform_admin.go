@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
+	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // PlatformAdminMiddleware requires the user to be a platform admin.

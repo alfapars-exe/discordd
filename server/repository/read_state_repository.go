@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // ReadStateRepository defines data access for channel read states.

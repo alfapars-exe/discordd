@@ -14,9 +14,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg/crypto"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/services"
 
 	"github.com/livekit/protocol/auth"
 	livekit "github.com/livekit/protocol/livekit"

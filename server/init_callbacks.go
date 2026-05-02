@@ -4,10 +4,10 @@ import (
 	"context"
 	"log"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // registerHubCallbacks wires Hub events to service layer logic.

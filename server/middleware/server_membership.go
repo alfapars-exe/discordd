@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // ServerMembershipMiddleware verifies the user is a member of the target server.

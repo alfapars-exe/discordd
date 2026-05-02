@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // ChannelMuteService handles per-user channel mute/unmute.

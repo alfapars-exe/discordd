@@ -5,8 +5,8 @@ package testutil
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // ─── UserRepository mock ───

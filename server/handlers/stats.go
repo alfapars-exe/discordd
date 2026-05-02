@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 type StatsResponse struct {

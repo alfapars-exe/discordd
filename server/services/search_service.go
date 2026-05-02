@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // SearchService handles server-scoped message search (FTS5).

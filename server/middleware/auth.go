@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/services"
 )
 
 // AuthMiddleware validates JWT tokens on incoming requests.

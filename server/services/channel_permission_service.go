@@ -19,10 +19,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg/cache"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/cache"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 const (

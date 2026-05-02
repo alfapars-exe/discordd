@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // ─── ISP Interfaces ───

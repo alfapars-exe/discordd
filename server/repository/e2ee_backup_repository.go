@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // E2EEKeyBackupRepository defines data access for encrypted key backups.
