@@ -144,5 +144,7 @@
   "badgeSave": "Değişiklikleri Kaydet",
   "badgeDeleteConfirm": "\"{{name}}\" rozetini silmek istediğinize emin misiniz? Bu rozet tüm kullanıcılardan kaldırılacak.",
   "adminSection": "YÖNETİCİ",
-  "registeredUsers": "Kayıtlı Kullanıcılar"
+  "registeredUsers": "Kayıtlı Kullanıcılar",
+  "updateAvailable": "HiChat!'ın yeni sürümü var.",
+  "updateApp": "Uygulamayı Güncelle"
 }

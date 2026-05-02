@@ -144,5 +144,7 @@
   "badgeSave": "Save Changes",
   "badgeDeleteConfirm": "Are you sure you want to delete the badge \"{{name}}\"? This will remove it from all users.",
   "adminSection": "ADMIN",
-  "registeredUsers": "Registered Users"
+  "registeredUsers": "Registered Users",
+  "updateAvailable": "A new version of HiChat! is available.",
+  "updateApp": "Update"
 }
