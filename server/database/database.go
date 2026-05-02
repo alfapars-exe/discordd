@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	_ "github.com/tursodatabase/libsql-client-go/libsql" // pure-Go libSQL HTTP client for Turso (no CGO)
-	_ "modernc.org/sqlite"                              // pure-Go SQLite driver (no CGO)
+	_ "github.com/tursodatabase/go-libsql" // CGO-based libSQL driver for remote Turso (registers "libsql")
+	_ "modernc.org/sqlite"                 // pure-Go SQLite driver for local files (registers "sqlite")
 )
 
 // recoverableErrors lists error patterns that can be safely skipped
