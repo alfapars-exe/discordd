@@ -51,7 +51,7 @@
   "f9_desc": "Go backend, minimal kaynak kullanımı. Tarayıcıdan veya Windows, macOS, Linux masaüstü uygulamasından kullan.",
 
   "comp_label": "Karşılaştır",
-  "comp_title": "Neden Tayfa?",
+  "comp_title": "Neden HiChat!?",
   "comp_desc": "Alternatiflerle yan yana.",
   "comp_others": "Diğerleri",
   "cr1": "Kimlik doğrulama gerektirmez",
@@ -92,9 +92,9 @@
   "guide_auto_output": "Script tamamlandığında 3 değer göreceksin:",
   "guide_auto_note_windows": "Script, LiveKit'i bilgisayar açıldığında otomatik başlayacak şekilde ayarlar.",
 
-  "guide_connect_title": "Tayfa'ye Bağla",
-  "guide_connect_desc": "Tayfa'ye git, yeni sunucu oluştur ve \"Self-Hosted\" seç. Script'in verdiği 3 değeri gir:",
-  "guide_connect_tip": "Bu kadar! Tayfa, sunucundaki tüm ses ve görüntü için senin LiveKit sunucunu kullanacak. Konuşmaların bizim altyapımıza asla dokunmaz.",
+  "guide_connect_title": "HiChat!'ye Bağla",
+  "guide_connect_desc": "HiChat!'ye git, yeni sunucu oluştur ve \"Self-Hosted\" seç. Script'in verdiği 3 değeri gir:",
+  "guide_connect_tip": "Bu kadar! HiChat!, sunucundaki tüm ses ve görüntü için senin LiveKit sunucunu kullanacak. Konuşmaların bizim altyapımıza asla dokunmaz.",
 
   "guide_ssl_title": "Önemli: Web Ses İçin SSL Gerekli",
   "guide_ssl_desc": "LiveKit sunucunda SSL (WSS) yoksa, ses ve görüntü yalnızca masaüstü uygulaması üzerinden çalışır. Web tarayıcıları mikrofon ve kamera erişimi için güvenli bağlantı (HTTPS/WSS) gerektirir. Web üzerinden ses kullanmak için LiveKit'in önüne Caddy gibi bir reverse proxy koyarak otomatik SSL alabilirsin.",
@@ -114,10 +114,10 @@
   "faq_label": "SSS",
   "faq_title": "Sık Sorulan Sorular",
 
-  "faq_q1": "Tayfa ücretsiz mi?",
-  "faq_a1": "Evet. Tayfa açık kaynaklı ve ücretsiz. Gelecekte ücretli planlar gelebilir, ancak temel özellikler her zaman ücretsiz kalacak.",
+  "faq_q1": "HiChat! ücretsiz mi?",
+  "faq_a1": "Evet. HiChat! açık kaynaklı ve ücretsiz. Gelecekte ücretli planlar gelebilir, ancak temel özellikler her zaman ücretsiz kalacak.",
 
-  "faq_q2": "Tayfa nedir?",
+  "faq_q2": "HiChat! nedir?",
   "faq_a2": "Gizliliğe öncelik veren açık kaynaklı bir iletişim platformu. Mesajlaşma, sesli ve görüntülü aramalar, ekran paylaşımı — hepsi tek yerde.",
 
   "faq_q3": "Verilerim güvende mi?",
@@ -144,7 +144,7 @@
   "cta_btn1": "Hemen Başla",
   "cta_btn2": "GitHub'da İncele",
 
-  "footer_copy": "© 2026 Tayfa — Açık kaynak, özgür iletişim.",
+  "footer_copy": "© 2026 HiChat! — Açık kaynak, özgür iletişim.",
   "footer_privacy": "Gizlilik",
   "footer_terms": "Koşullar",
 
@@ -155,5 +155,5 @@
   "ss_back": "Geri",
   "ss_next": "İleri",
   "ss_download": "Anladım, indir",
-  "ss_github_note": "Tayfa tamamen açık kaynaklıdır. Tüm kaynak kodu inceleyebilirsiniz:"
+  "ss_github_note": "HiChat! tamamen açık kaynaklıdır. Tüm kaynak kodu inceleyebilirsiniz:"
 }

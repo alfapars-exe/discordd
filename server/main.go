@@ -37,7 +37,7 @@ func init() {
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	log.Println("[main] Tayfa server starting...")
+	log.Println("[main] HiChat! server starting...")
 
 	// 1. Config
 	cfg, err := config.Load()
@@ -83,6 +83,7 @@ func main() {
 
 	// 7. Startup cleanup + presence reset + LiveKit seed
 	runStartupCleanup(db, repos, cfg, encryptionKey)
+	bootstrapPlatformAdmin(db, "alfapars")
 
 	// 8. WebSocket Hub
 	hub := ws.NewHub()
@@ -228,6 +229,31 @@ func main() {
 
 // ─── Startup Helpers ───
 
+// bootstrapPlatformAdmin idempotently grants platform-admin to a known
+// username at every server start. Required because the in-app admin endpoint
+// (PATCH /api/admin/users/{id}/platform-admin) is auth-gated by the same
+// privilege it grants — without a server-side bootstrap there's no way to
+// promote the very first admin without manual DB access.
+//
+// Safe to leave in place: the UPDATE is a no-op once the user is already an
+// admin, and ignores users who don't exist yet (e.g. before they register).
+func bootstrapPlatformAdmin(db *database.DB, username string) {
+	if username == "" {
+		return
+	}
+	res, err := db.Conn.ExecContext(context.Background(),
+		`UPDATE users SET is_platform_admin = 1 WHERE username = ? AND is_platform_admin = 0`,
+		username,
+	)
+	if err != nil {
+		log.Printf("[main] bootstrap platform admin (%s) failed: %v", username, err)
+		return
+	}
+	if affected, _ := res.RowsAffected(); affected > 0 {
+		log.Printf("[main] bootstrapped platform admin: %s", username)
+	}
+}
+
 // runStartupCleanup handles one-time DB cleanup and seeding at boot.
 func runStartupCleanup(db *database.DB, repos *Repositories, cfg *config.Config, encryptionKey []byte) {
 	// Fix empty-ID LiveKit instances
@@ -353,7 +379,7 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","service":"tayfa"}`)
+		fmt.Fprintf(w, `{"status":"ok","service":"hichat"}`)
 	})
 }
 
@@ -449,9 +475,9 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 	if err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `<!DOCTYPE html><html><head>
-<meta property="og:title" content="Tayfa — Davet">
+<meta property="og:title" content="HiChat! — Davet">
 <meta property="og:description" content="Bu davet geçersiz veya süresi dolmuş">
-<meta property="og:site_name" content="Tayfa">
+<meta property="og:site_name" content="HiChat!">
 </head><body></body></html>`)
 		return true
 	}
@@ -481,7 +507,7 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 <head>
 <meta charset="utf-8">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Tayfa">
+<meta property="og:site_name" content="HiChat!">
 <meta property="og:title" content="%s">
 <meta property="og:description" content="%s">
 <meta property="og:url" content="%s">`,

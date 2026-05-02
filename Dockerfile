@@ -1,4 +1,4 @@
-# Tayfa — Hugging Face Space (Docker SDK) single-container build
+# HiChat! — Hugging Face Space (Docker SDK) single-container build
 # ----------------------------------------------------------------
 # Stage 1: build the React frontend with Vite into client/dist/
 # Stage 2: copy that dist into server/static/dist/ so go:embed picks it up,
