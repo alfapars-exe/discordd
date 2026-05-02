@@ -10,7 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite driver (no CGO)
+	_ "github.com/tursodatabase/libsql-client-go/libsql" // pure-Go libSQL HTTP client for Turso (no CGO)
+	_ "modernc.org/sqlite"                              // pure-Go SQLite driver (no CGO)
 )
 
 // recoverableErrors lists error patterns that can be safely skipped
@@ -23,18 +24,45 @@ type DB struct {
 	Conn *sql.DB
 }
 
-// New opens a SQLite connection and runs pending migrations.
-func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
-	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
+// isRemoteLibSQL reports whether the DSN points to a remote libSQL/Turso server
+// rather than a local SQLite file. URLs starting with libsql://, http://, https://,
+// ws://, or wss:// are treated as remote.
+func isRemoteLibSQL(dsn string) bool {
+	for _, prefix := range []string{"libsql://", "https://", "http://", "wss://", "ws://"} {
+		if strings.HasPrefix(dsn, prefix) {
+			return true
+		}
 	}
+	return false
+}
 
-	// foreign_keys=on (off by default in SQLite), journal_mode=WAL for concurrent r/w,
-	// busy_timeout=5000ms lets concurrent writers wait instead of returning SQLITE_BUSY immediately.
-	conn, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+// New opens a database connection and runs pending migrations.
+// Supports both local SQLite (file path) and remote Turso/libSQL (libsql://...).
+func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
+	var conn *sql.DB
+	var err error
+
+	if isRemoteLibSQL(dbPath) {
+		// Turso/libSQL remote — connection-level pragmas don't apply (server manages WAL).
+		conn, err = sql.Open("libsql", dbPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open libsql database: %w", err)
+		}
+		log.Printf("[database] using remote libSQL backend")
+	} else {
+		// Local SQLite file — ensure parent directory exists.
+		dir := filepath.Dir(dbPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
+
+		// foreign_keys=on (off by default in SQLite), journal_mode=WAL for concurrent r/w,
+		// busy_timeout=5000ms lets concurrent writers wait instead of returning SQLITE_BUSY immediately.
+		conn, err = sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+		if err != nil {
+			return nil, fmt.Errorf("failed to open sqlite database: %w", err)
+		}
+		log.Printf("[database] using local SQLite at %s", dbPath)
 	}
 
 	// Connection pool settings for SQLite WAL mode:
