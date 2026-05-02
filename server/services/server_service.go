@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/akinalp/mqvi/database"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/pkg/crypto"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // LiveKitSettings exposes non-secret LiveKit info for the settings UI.

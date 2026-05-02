@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg/promparse"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/promparse"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 )
 

@@ -8,9 +8,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/pkg/crypto"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/crypto"
 
 	"github.com/livekit/protocol/auth"
 )

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // MetricsHistoryRepository defines data access for historical LiveKit metrics.

@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/akinalp/mqvi/database"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
+	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 type sqliteFriendshipRepo struct {

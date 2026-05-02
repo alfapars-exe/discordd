@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/pkg/ratelimit"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
+	"github.com/argeinfina/hichat/services"
 )
 
 // MessageHandler handles message endpoints.

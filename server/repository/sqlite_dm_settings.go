@@ -10,7 +10,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/akinalp/mqvi/database"
+	"github.com/argeinfina/hichat/database"
 )
 
 type sqliteDMSettingsRepo struct {

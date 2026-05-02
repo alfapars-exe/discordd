@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // Repositories holds all repository instances.

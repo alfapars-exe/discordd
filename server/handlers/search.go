@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/services"
 )
 
 type SearchHandler struct {

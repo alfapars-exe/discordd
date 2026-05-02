@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // PreferencesService manages user preferences (opaque JSON blob).

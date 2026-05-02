@@ -3,10 +3,10 @@ package main
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/middleware"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/hichat/middleware"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/services"
 )
 
 // initRoutes registers all API endpoints.

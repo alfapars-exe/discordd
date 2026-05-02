@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // DMSettingsService manages per-user DM channel settings (hide, pin, mute).

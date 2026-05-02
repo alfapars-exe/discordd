@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // DownloadPromptHandler handles POST /api/users/me/dismiss-download-prompt.
