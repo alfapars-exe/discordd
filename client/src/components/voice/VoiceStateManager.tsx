@@ -177,7 +177,11 @@ function VoiceStateManager() {
       if (!cancelled) {
         console.error("[VoiceStateManager] Failed to toggle screen share:", err);
         if (isStreaming) {
+          const { _wsSend } = useVoiceStore.getState();
           useVoiceStore.getState().setStreaming(false);
+          if (_wsSend) {
+            _wsSend("voice_state_update_request", { is_streaming: false });
+          }
         }
       }
     });
@@ -192,10 +196,15 @@ function VoiceStateManager() {
     let removeListener: (() => void) | null = null;
 
     onNativeScreenShareStopped(() => {
-      // Sync store state — native screen share was stopped externally
-      const { isStreaming: currentlyStreaming } = useVoiceStore.getState();
+      // Sync store state — native screen share was stopped externally.
+      // Track is already torn down by the native side at this point, so
+      // server notification is safe (no phantom-share window).
+      const { isStreaming: currentlyStreaming, _wsSend } = useVoiceStore.getState();
       if (currentlyStreaming) {
         useVoiceStore.getState().setStreaming(false);
+        if (_wsSend) {
+          _wsSend("voice_state_update_request", { is_streaming: false });
+        }
       }
     }).then((cleanup) => {
       removeListener = cleanup;
@@ -767,6 +776,12 @@ function VoiceStateManager() {
   // Apply processor when mic track is first published (settings already active on join).
   // The effect above won't catch this since noiseReduction/micSensitivity haven't changed.
   useEffect(() => {
+    // Krisp's dynamic import + setProcessor is async. If the user leaves
+    // the voice channel before it finishes, we shouldn't write to
+    // processorRef on a torn-down track. Guard with a cancelled flag,
+    // matching the pattern used by the runtime switch effect.
+    let cancelled = false;
+
     function handleLocalTrackPublished(pub: LocalTrackPublication) {
       if (pub.source !== Track.Source.Microphone) return;
       if (processorRef.current) return; // already applied
@@ -782,22 +797,25 @@ function VoiceStateManager() {
       if (!audioTrack) return;
 
       if (desired === "krisp") {
-        // Same lazy-import + fallback path as the runtime switch.
         (async () => {
           try {
             const { KrispNoiseFilter, isKrispNoiseFilterSupported } =
               await import("@livekit/krisp-noise-filter");
+            if (cancelled) return;
             if (!isKrispNoiseFilterSupported()) throw new Error("unsupported");
             const processor = KrispNoiseFilter();
+            if (cancelled) return;
             processorRef.current = processor as unknown as AudioProcessor;
             await audioTrack.setProcessor(processor);
           } catch (err) {
+            if (cancelled) return;
             console.warn("[VoiceStateManager] Krisp init on publish failed, falling back to RNNoise:", err);
             setNoiseReductionEngine("rnnoise");
             const fallback = new RNNoiseProcessor(
               micSensitivityRef.current,
               inputVolumeRef.current,
             );
+            if (cancelled) return;
             processorRef.current = fallback;
             await audioTrack.setProcessor(fallback);
           }
@@ -820,9 +838,10 @@ function VoiceStateManager() {
 
     room.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
     return () => {
+      cancelled = true;
       room.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
     };
-  }, [room]);
+  }, [room, setNoiseReductionEngine]);
 
   // Screen share subscription control.
   // autoSubscribe stays true (audio tracks auto-subscribe).
@@ -872,15 +891,20 @@ function VoiceStateManager() {
     });
   }, [effectiveDeafened, room]);
 
-  // Sync isStreaming when screen share track is lost (reconnect, SFU drop).
-  // Without this, store stays isStreaming=true but track is gone — user has
-  // to stop+start instead of just clicking start once.
+  // Sync isStreaming when screen share track is lost (reconnect, SFU drop,
+  // user closing the OS-level "Stop sharing" dialog). The track event fires
+  // AFTER the track is actually gone, so this is the right place to notify
+  // the server too — by the time other clients hear is_streaming=false,
+  // their LiveKit subscription is also already torn down. No phantom share.
   useEffect(() => {
     function handleLocalTrackUnpublished(pub: LocalTrackPublication) {
       if (pub.source !== Track.Source.ScreenShare) return;
-      const { isStreaming: streaming } = useVoiceStore.getState();
+      const { isStreaming: streaming, _wsSend } = useVoiceStore.getState();
       if (streaming) {
         useVoiceStore.getState().setStreaming(false);
+        if (_wsSend) {
+          _wsSend("voice_state_update_request", { is_streaming: false });
+        }
       }
     }
 

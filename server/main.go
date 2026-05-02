@@ -89,7 +89,9 @@ func main() {
 
 	// 7. Startup cleanup + presence reset + LiveKit seed
 	runStartupCleanup(db, repos, cfg, encryptionKey)
-	bootstrapPlatformAdmin(db, "alfapars")
+	// PLATFORM_ADMIN_USERNAME is read from env so the "who's admin?"
+	// decision lives in HF Space secrets, not in committed source.
+	bootstrapPlatformAdmin(db, os.Getenv("PLATFORM_ADMIN_USERNAME"))
 
 	// 8. WebSocket Hub
 	hub := ws.NewHub()

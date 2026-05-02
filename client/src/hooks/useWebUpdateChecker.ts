@@ -48,14 +48,23 @@ export function useWebUpdateChecker(): boolean {
 
     function schedule() {
       window.clearTimeout(timer);
+      // Don't even schedule a tick while the tab is hidden — wakeup is
+      // handled by the visibilitychange listener below. This also prevents
+      // a race where the timer fires within milliseconds of an onVisibility
+      // poll and two concurrent check() calls each see baselineRef === null
+      // and overwrite the baseline.
+      if (document.visibilityState !== "visible") return;
       timer = window.setTimeout(() => {
-        if (document.visibilityState === "visible") check();
+        check();
         schedule();
       }, POLL_INTERVAL_MS);
     }
 
     function onVisibility() {
-      if (document.visibilityState === "visible") check();
+      if (document.visibilityState === "visible") {
+        check();
+        schedule();
+      }
     }
 
     check();
