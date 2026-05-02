@@ -32,6 +32,7 @@ import EmojiPicker from "../shared/EmojiPicker";
 import FriendsSection from "./FriendsSection";
 import DMSection from "./DMSection";
 import ServerList from "./ServerList";
+import AdminSection from "./AdminSection";
 import CategoryItem from "./CategoryItem";
 import ChannelItem from "./ChannelItem";
 import VoiceParticipantList from "./VoiceParticipantList";
@@ -721,6 +722,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     <div className="ch-tree">
       <FriendsSection onShowUserCard={handleShowUserCard} />
       <DMSection onShowUserCard={handleShowUserCard} />
+      <AdminSection />
 
       <ServerList
         onAddServer={() => setShowAddServer(true)}

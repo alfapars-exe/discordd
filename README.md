@@ -1,6 +1,6 @@
 ---
-title: Tayfa
-emoji: 🎙️
+title: HiChat
+emoji: 💬
 colorFrom: purple
 colorTo: blue
 sdk: docker
@@ -10,10 +10,10 @@ short_description: Discord-style topluluk — ses kanalları + metin sohbet
 ---
 
 <p align="center">
-  <img src="icons/mqvi-icon-512x512.png" alt="Tayfa" width="80" />
+  <img src="client/public/hichat-icon.svg" alt="HiChat!" width="80" />
 </p>
 
-<h1 align="center">Tayfa</h1>
+<h1 align="center">HiChat!</h1>
 
 <p align="center">
   Topluluğun için sesli kanallar, metin sohbet ve dosya paylaşımı.<br/>

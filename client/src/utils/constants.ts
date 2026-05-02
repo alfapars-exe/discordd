@@ -50,7 +50,7 @@ export function isNativeApp(): boolean {
  * 1. localStorage("mqvi_server_url")  ← runtime override; key kept stable for
  *    backwards compatibility, value can be any host
  * 2. VITE_SERVER_URL env var          ← build-time override
- * 3. "https://argeinfina-discord.hf.space"  ← Tayfa production deployment
+ * 3. "https://argeinfina-discord.hf.space"  ← HiChat! production deployment
  * 4. "" (web mode)
  */
 function resolveServerUrl(): string {

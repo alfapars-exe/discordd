@@ -51,7 +51,7 @@
   "f9_desc": "Go backend, minimal footprint. Works in the browser or as a desktop app on Windows, macOS, and Linux.",
 
   "comp_label": "Compare",
-  "comp_title": "Why Tayfa?",
+  "comp_title": "Why HiChat!?",
   "comp_desc": "How we compare to the alternatives.",
   "comp_others": "Others",
   "cr1": "No identity verification",
@@ -92,9 +92,9 @@
   "guide_auto_output": "When the script finishes, you'll see 3 values:",
   "guide_auto_note_windows": "The script sets up LiveKit to start automatically when your computer boots.",
 
-  "guide_connect_title": "Connect to Tayfa",
-  "guide_connect_desc": "Go to Tayfa, create a new server, and select \"Self-Hosted\". Enter the 3 values the script gave you:",
-  "guide_connect_tip": "That's it! Tayfa will use your LiveKit server for all voice and video. Your conversations never touch our infrastructure.",
+  "guide_connect_title": "Connect to HiChat!",
+  "guide_connect_desc": "Go to HiChat!, create a new server, and select \"Self-Hosted\". Enter the 3 values the script gave you:",
+  "guide_connect_tip": "That's it! HiChat! will use your LiveKit server for all voice and video. Your conversations never touch our infrastructure.",
 
   "guide_ssl_title": "Important: SSL Required for Web Voice",
   "guide_ssl_desc": "If your LiveKit server doesn't have SSL (WSS), voice and video will only work through the desktop app. Web browsers require a secure connection (HTTPS/WSS) for microphone and camera access. To enable web voice, put a reverse proxy like Caddy in front of LiveKit to get automatic SSL.",
@@ -114,10 +114,10 @@
   "faq_label": "FAQ",
   "faq_title": "Frequently Asked Questions",
 
-  "faq_q1": "Is Tayfa free?",
-  "faq_a1": "Yes. Tayfa is open source and free to use. Paid plans may be introduced in the future, but core features will always remain free.",
+  "faq_q1": "Is HiChat! free?",
+  "faq_a1": "Yes. HiChat! is open source and free to use. Paid plans may be introduced in the future, but core features will always remain free.",
 
-  "faq_q2": "What is Tayfa?",
+  "faq_q2": "What is HiChat!?",
   "faq_a2": "An open-source communication platform built with privacy in mind. Messaging, voice & video calls, screen sharing — all in one place.",
 
   "faq_q3": "Is my data safe?",
@@ -144,7 +144,7 @@
   "cta_btn1": "Get Started",
   "cta_btn2": "View on GitHub",
 
-  "footer_copy": "© 2026 Tayfa — Open source, free communication.",
+  "footer_copy": "© 2026 HiChat! — Open source, free communication.",
   "footer_privacy": "Privacy",
   "footer_terms": "Terms",
 
@@ -155,5 +155,5 @@
   "ss_back": "Back",
   "ss_next": "Next",
   "ss_download": "Got it, download",
-  "ss_github_note": "Tayfa is fully open source. You can review every line of code on"
+  "ss_github_note": "HiChat! is fully open source. You can review every line of code on"
 }

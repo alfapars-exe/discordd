@@ -6,7 +6,7 @@
   "serverName": "Server Name",
   "serverNamePlaceholder": "My Awesome Server",
   "hostType": "Hosting Type",
-  "mqviHosted": "Tayfa Hosted",
+  "mqviHosted": "HiChat! Hosted",
   "mqviHostedDesc": "Create with just a click",
   "selfHosted": "Self-Hosted",
   "selfHostedDesc": "Use your own LiveKit server",

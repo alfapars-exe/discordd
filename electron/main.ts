@@ -800,10 +800,10 @@ function setupIPC(): void {
 
 /** Configure electron-updater for GitHub Releases auto-updates. */
 function setupAutoUpdater(): void {
-  // Auto-update is disabled for the Tayfa fork. The publish config in
+  // Auto-update is disabled for the HiChat! fork. The publish config in
   // package.json still points to the upstream akinalpfdn/Mqvi releases,
   // which would either fail or push users back to the original app. Once
-  // we publish Tayfa releases under our own GitHub repo we can re-enable
+  // we publish HiChat! releases under our own GitHub repo we can re-enable
   // by flipping this guard and updating package.json's "publish.repo".
   return;
 
