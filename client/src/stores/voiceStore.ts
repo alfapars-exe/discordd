@@ -420,7 +420,19 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   },
 
   setStreaming: (isStreaming: boolean) => {
+    const prev = get().isStreaming;
     set({ isStreaming });
+    // Notify the server when the screen share state changes — including the
+    // fallback paths in VoiceStateManager (track unpublished, native plugin
+    // stopped, toggle failed). Without this, the server keeps is_streaming
+    // true and other clients keep showing the screen-share icon even after
+    // the user actually stopped sharing.
+    if (prev !== isStreaming) {
+      const { _wsSend } = get();
+      if (_wsSend) {
+        _wsSend("voice_state_update_request", { is_streaming: isStreaming });
+      }
+    }
   },
 
   setRtt: (rtt) => set({ rtt }),
