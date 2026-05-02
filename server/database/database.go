@@ -212,6 +212,17 @@ func (db *DB) execStatements(filename, content string) error {
 			}
 			core = strings.TrimSpace(core[nl+1:])
 		}
+		if core == "" {
+			// All-comment chunk. This happens when splitStatements hits a `;`
+			// that's actually inside a SQL comment (it doesn't track `--`),
+			// e.g. "-- ...returns 0 rows;\n-- ..." in migration 018. We can't
+			// fix the splitter without rewriting it, but we can detect the
+			// resulting empty-statement chunk here. go-libsql rejects empty
+			// statements with "API misuse: no SQL statement provided".
+			log.Printf("[database] %s: statement %d skipped (comment-only)", filename, i+1)
+			continue
+		}
+
 		if strings.HasPrefix(strings.ToUpper(core), "PRAGMA") {
 			log.Printf("[database] %s: statement %d skipped (PRAGMA — set via DSN / managed by libSQL server)", filename, i+1)
 			continue
