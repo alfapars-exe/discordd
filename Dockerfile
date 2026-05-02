@@ -2,9 +2,11 @@
 # ----------------------------------------------------------------
 # Stage 1: build the React frontend with Vite into client/dist/
 # Stage 2: copy that dist into server/static/dist/ so go:embed picks it up,
-#          then build a static Go binary (CGO disabled, so only pure-Go drivers
-#          like modernc.org/sqlite and libsql-client-go work — that's the design).
-# Stage 3: Alpine runtime with just the binary + ca-certificates.
+#          then build the Go binary. CGO is enabled so we can use the
+#          tursodatabase/go-libsql native driver, which is the only one that
+#          handles the current Turso wire protocol correctly. The pure-Go
+#          modernc.org/sqlite driver is still used for the local SQLite path.
+# Stage 3: Alpine runtime with the binary + ca-certificates.
 
 # ─── Stage 1: React (Vite) ───
 FROM node:22-alpine AS frontend
@@ -19,10 +21,15 @@ RUN npm run build
 FROM golang:1.25-alpine AS backend
 WORKDIR /app
 
-# Module cache layer: download what's already in go.sum. We do NOT run `go mod
-# tidy` here because tidy needs the actual *.go source files to resolve newly-
-# added imports (e.g. libsql-client-go). Without source, tidy emits the
-# misleading "warning: all matched no packages" and leaves go.sum incomplete.
+# go-libsql is a CGO native binding — it links against a prebuilt libsql C
+# library shipped with the module. We need a C toolchain (gcc + musl-dev,
+# pulled in by build-base) at compile time. The runtime image is the same
+# Alpine/musl base so the binary's musl link target matches.
+RUN apk add --no-cache build-base
+
+# Module cache layer: download what's already in go.sum. We don't run
+# `go mod tidy` here because tidy needs the *.go source files to resolve
+# imports.
 COPY server/go.mod server/go.sum ./server/
 WORKDIR /app/server
 RUN go mod download
@@ -33,12 +40,11 @@ COPY server ./server
 # Frontend bundle goes where //go:embed all:dist expects it.
 COPY --from=frontend /app/client/dist ./server/static/dist
 
-# Now that source is present, `go mod tidy` can detect new imports
-# (libsql-client-go) and add the missing go.sum entries before `go build`
-# verifies them.
+# After source is present, `go mod tidy` can detect new imports (go-libsql)
+# and add the missing go.sum entries before `go build` verifies them.
 WORKDIR /app/server
 RUN go mod tidy && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" -o /out/tayfa-server .
 
 # ─── Stage 3: Runtime ───
