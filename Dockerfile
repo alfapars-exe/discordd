@@ -19,11 +19,13 @@ RUN npm run build
 FROM golang:1.25-alpine AS backend
 WORKDIR /app
 
-# Module cache layer — only re-downloads when go.mod/go.sum change.
+# Module cache layer: download what's already in go.sum. We do NOT run `go mod
+# tidy` here because tidy needs the actual *.go source files to resolve newly-
+# added imports (e.g. libsql-client-go). Without source, tidy emits the
+# misleading "warning: all matched no packages" and leaves go.sum incomplete.
 COPY server/go.mod server/go.sum ./server/
 WORKDIR /app/server
-# go mod tidy reconciles go.sum with go.mod (needed because we added libsql-client-go).
-RUN go mod tidy && go mod download
+RUN go mod download
 
 # Source code
 WORKDIR /app
@@ -31,8 +33,12 @@ COPY server ./server
 # Frontend bundle goes where //go:embed all:dist expects it.
 COPY --from=frontend /app/client/dist ./server/static/dist
 
+# Now that source is present, `go mod tidy` can detect new imports
+# (libsql-client-go) and add the missing go.sum entries before `go build`
+# verifies them.
 WORKDIR /app/server
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+RUN go mod tidy && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" -o /out/tayfa-server .
 
 # ─── Stage 3: Runtime ───
