@@ -186,12 +186,22 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 
 // execStatements runs each SQL statement individually, skipping recoverable errors
 // (e.g. "duplicate column name" from a partially applied migration).
+//
+// PRAGMA statements are skipped entirely: connection-level settings
+// (foreign_keys, journal_mode, busy_timeout) are already passed via the SQLite
+// DSN, and remote libSQL/Turso rejects PRAGMAs with HTTP 400 because the
+// server manages those settings itself.
 func (db *DB) execStatements(filename, content string) error {
 	statements := splitStatements(content)
 
 	for i, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToUpper(stmt), "PRAGMA") {
+			log.Printf("[database] %s: statement %d skipped (PRAGMA — set via DSN / managed by libSQL server)", filename, i+1)
 			continue
 		}
 
