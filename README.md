@@ -1,12 +1,23 @@
+---
+title: Tayfa
+emoji: 🎙️
+colorFrom: purple
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Discord-style topluluk platformu — sesli kanallar, metin, dosya
+---
+
 <p align="center">
-  <img src="icons/mqvi-icon-512x512.png" alt="mqvi" width="80" />
+  <img src="icons/mqvi-icon-512x512.png" alt="Tayfa" width="80" />
 </p>
 
-<h1 align="center">mqvi</h1>
+<h1 align="center">Tayfa</h1>
 
 <p align="center">
-  Open-source communication platform with voice, video, and text.<br/>
-  No identity verification. No data collection. Self-host ready.
+  Topluluğun için sesli kanallar, metin sohbet ve dosya paylaşımı.<br/>
+  Mqvi tabanlı, Hugging Face Space üzerinde çalışır.
 </p>
 
 <p align="center">

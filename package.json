@@ -1,8 +1,8 @@
 {
   "private": true,
-  "name": "mqvi-desktop",
+  "name": "tayfa-desktop",
   "version": "2.11.9",
-  "description": "mqvi desktop application",
+  "description": "Tayfa desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -22,8 +22,8 @@
     "typescript": "~5.9.3"
   },
   "build": {
-    "appId": "net.mqvi.app",
-    "productName": "mqvi",
+    "appId": "net.tayfa.app",
+    "productName": "Tayfa",
     "directories": {
       "output": "release"
     },
@@ -32,7 +32,7 @@
       "client/dist",
       "icons"
     ],
-    "artifactName": "mqvi-setup.${ext}",
+    "artifactName": "tayfa-setup.${ext}",
     "publish": {
       "provider": "github",
       "owner": "akinalpfdn",

@@ -1,15 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/mqvi-icon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="256x256" href="/mqvi-icon-256.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>mqvi</title>
+    <title>Tayfa</title>
     <!-- Prevent white flash before CSS/JS loads -->
     <style>
-      html, body { margin:0; padding:0; background:#111111; color:#e0e0e0; }
+      html, body { margin:0; padding:0; background:#0f1419; color:#e0e0e0; }
       #app-loader {
         display:flex; flex-direction:column; align-items:center;
         justify-content:center; height:100vh; gap:16px;
@@ -18,7 +18,7 @@
       #app-loader .logo { width:72px; height:72px; }
       #app-loader .spinner {
         width:28px; height:28px; border:3px solid rgba(255,255,255,0.1);
-        border-top-color:#3b82f6; border-radius:50%;
+        border-top-color:#06b6d4; border-radius:50%;
         animation:spin .7s linear infinite;
       }
       @keyframes spin { to { transform:rotate(360deg); } }
@@ -28,7 +28,7 @@
     <div id="root">
       <!-- Loading state shown until React mounts -->
       <div id="app-loader">
-        <img class="logo" src="/mqvi-icon-128.png" alt="mqvi" />
+        <img class="logo" src="/mqvi-icon-128.png" alt="Tayfa" />
         <div class="spinner"></div>
       </div>
     </div>

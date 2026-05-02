@@ -37,7 +37,7 @@ func init() {
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	log.Println("[main] mqvi server starting...")
+	log.Println("[main] Tayfa server starting...")
 
 	// 1. Config
 	cfg, err := config.Load()
@@ -353,7 +353,7 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","service":"mqvi"}`)
+		fmt.Fprintf(w, `{"status":"ok","service":"tayfa"}`)
 	})
 }
 
@@ -383,6 +383,8 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 		"ionic://localhost",      // iOS Capacitor (legacy scheme)
 		"http://localhost",       // Android Capacitor WebView (legacy)
 		"https://localhost",      // Android Capacitor WebView (Capacitor 6+)
+		// Hugging Face Spaces — same-origin requests come from the embed iframe.
+		"https://huggingface.co",
 	}
 	if extra := os.Getenv("CORS_ORIGINS"); extra != "" {
 		for _, origin := range strings.Split(extra, ",") {
@@ -447,9 +449,9 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 	if err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `<!DOCTYPE html><html><head>
-<meta property="og:title" content="mqvi — Invite">
-<meta property="og:description" content="This invite has expired or is invalid">
-<meta property="og:site_name" content="mqvi">
+<meta property="og:title" content="Tayfa — Davet">
+<meta property="og:description" content="Bu davet geçersiz veya süresi dolmuş">
+<meta property="og:site_name" content="Tayfa">
 </head><body></body></html>`)
 		return true
 	}
@@ -479,7 +481,7 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 <head>
 <meta charset="utf-8">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="mqvi">
+<meta property="og:site_name" content="Tayfa">
 <meta property="og:title" content="%s">
 <meta property="og:description" content="%s">
 <meta property="og:url" content="%s">`,
