@@ -17,6 +17,22 @@ interface PickerSource {
   appIcon: string | null;
 }
 
+/**
+ * Normalize the wire shape (where `appIcon` is optional because legacy
+ * IPC paths don't populate it) to the strict picker shape (where it's
+ * always set, possibly to `null`).
+ */
+function normalizeSources(
+  incoming: { id: string; name: string; thumbnail: string; appIcon?: string | null }[],
+): PickerSource[] {
+  return incoming.map((s) => ({
+    id: s.id,
+    name: s.name,
+    thumbnail: s.thumbnail,
+    appIcon: s.appIcon ?? null,
+  }));
+}
+
 function ScreenPicker() {
   const { t } = useTranslation("voice");
   const [sources, setSources] = useState<PickerSource[] | null>(null);
@@ -30,12 +46,12 @@ function ScreenPicker() {
     if (!api) return;
 
     api.onShowScreenPicker((incoming) => {
-      setSources(incoming);
+      setSources(normalizeSources(incoming));
       setIsRefreshing(false);
     });
 
     api.onScreenPickerRefreshResult?.((incoming) => {
-      setSources(incoming);
+      setSources(normalizeSources(incoming));
       setIsRefreshing(false);
     });
 
