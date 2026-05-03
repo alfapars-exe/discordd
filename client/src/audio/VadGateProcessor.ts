@@ -38,10 +38,10 @@ function ensureWorkletRegistered(ctx: AudioContext): Promise<void> {
  *   50  -> 0.01  (moderate)
  *   0   -> 0.04  (very aggressive)
  */
-// levelToThresholds is the canonical level + sensitivity → gate-config mapping.
-// Imported from RNNoiseProcessor so the standalone gate path matches the
-// denoised path's gate behaviour exactly.
-import { levelToThresholds } from "./RNNoiseProcessor";
+// Shared gate-config helper — same level/sensitivity curve and worklet
+// message format as RNNoiseProcessor's gate path so behaviour is identical
+// regardless of whether the denoiser is on.
+import { postGateConfigToWorklet } from "./gateConfig";
 import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice";
 
 class VadGateProcessor
@@ -120,13 +120,7 @@ class VadGateProcessor
   }
 
   private applyGateConfig(): void {
-    if (!this.vadGateNode) return;
-    const cfg = levelToThresholds(this.initialLevel, this.initialSensitivity);
-    if (cfg == null) {
-      this.vadGateNode.port.postMessage({ disabled: true });
-    } else {
-      this.vadGateNode.port.postMessage(cfg);
-    }
+    postGateConfigToWorklet(this.vadGateNode, this.initialLevel, this.initialSensitivity);
   }
 
   async destroy(): Promise<void> {
