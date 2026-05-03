@@ -24,6 +24,7 @@ import GeneralSettings from "./GeneralSettings";
 import FeedbackSettings from "./FeedbackSettings";
 import BlockedUsersSettings from "./BlockedUsersSettings";
 import AdminFeedbackList from "./AdminFeedbackList";
+import { useAuthStore } from "../../stores/authStore";
 
 function SettingsModal() {
   const { t } = useTranslation("settings");
@@ -89,6 +90,11 @@ function SettingsModal() {
 
 /** Renders the active tab's component. */
 function SettingsContent({ activeTab }: { activeTab: string }) {
+  // Platform admins see the full feedback inbox (everyone's tickets) on the
+  // user-settings "Geri Bildirim" tab — they can also create their own from
+  // there. The platform-feedback tab is removed since it would duplicate.
+  const isPlatformAdmin = useAuthStore((s) => s.user?.is_platform_admin ?? false);
+
   switch (activeTab) {
     case "profile":
       return <ProfileSettings />;
@@ -124,7 +130,7 @@ function SettingsContent({ activeTab }: { activeTab: string }) {
       return <EncryptionSettings />;
 
     case "feedback":
-      return <FeedbackSettings />;
+      return isPlatformAdmin ? <AdminFeedbackList /> : <FeedbackSettings />;
 
     case "blocked-users":
       return <BlockedUsersSettings />;
