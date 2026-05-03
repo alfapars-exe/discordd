@@ -2,25 +2,30 @@
  * useAudioProcessor — owns the LiveKit microphone track processor.
  *
  * Responsibility (single): keep the right audio processor attached to the
- * mic track based on the user's current noise-reduction settings. Three
- * engines are supported and switched in response to settings changes:
+ * mic track based on the user's current noise-reduction settings. Two
+ * pipelines are supported:
  *
- *   - "krisp"    — LiveKit Cloud's Krisp filter, lazy-imported. Requires
- *                  a paid Cloud plan; falls back to RNNoise on init
- *                  failure (toast + flips the user's setting).
- *   - "rnnoise"  — bundled OSS ML denoiser (default, free).
- *   - "vadgate"  — energy-gate only (no denoising), used when NR is off
- *                  but micSensitivity < 100.
- *   - "none"     — no processor (NR off, sensitivity at 100).
+ *   Custom-processor pipeline (LiveKit TrackProcessor + AudioWorklet):
+ *     - "krisp"      — LiveKit Cloud's Krisp filter, lazy-imported.
+ *                      Requires a paid plan; falls back to RNNoise.
+ *     - "rnnoise"    — bundled OSS ML denoiser (default, free).
+ *     - "deepfilter" — DeepFilterNet3 WASM. BETA: real WASM integration
+ *                      pending; current build falls back to RNNoise and
+ *                      surfaces a toast so the user knows.
+ *     - "dtln"       — DTLN web port. BETA: same fallback contract.
+ *     - "vadgate"    — energy-gate only, used when NR is off but
+ *                      micSensitivity < 100.
  *
- * Two effects manage the lifecycle: one applies the processor when the
- * mic track is first published (initial join), the other switches it
- * when settings change at runtime. Both share the same applyDesired()
- * helper so the Krisp lazy-import + RNNoise-fallback path lives in one
- * place — no duplicated logic.
+ *   Browser-native pipeline (track constraint):
+ *     - "webrtc"     — getUserMedia({ noiseSuppression: true }) on the
+ *                      mic MediaStreamTrack. No processor, no WASM. We
+ *                      stop any custom processor and flip the constraint.
  *
- * Was previously ~210 lines inline in VoiceStateManager.tsx with the
- * Krisp branch copy-pasted twice.
+ *   - "none"         — no processor, no NS constraint (NR off, sens 100).
+ *
+ * Browser-native NS is also explicitly *disabled* whenever a custom
+ * processor is attached — running both layers can phase-cancel speech
+ * components and over-suppress quiet talkers.
  */
 
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -37,8 +42,25 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { useToastStore } from "../stores/toastStore";
 import { RNNoiseProcessor } from "../audio/RNNoiseProcessor";
 import { VadGateProcessor } from "../audio/VadGateProcessor";
+import type { NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
 
-type ProcessorType = "krisp" | "rnnoise" | "vadgate" | "none";
+type ProcessorType =
+  | "krisp"
+  | "rnnoise"
+  | "deepfilter"
+  | "dtln"
+  | "webrtc"
+  | "vadgate"
+  | "none";
+
+/**
+ * Sentinel object used as the processor ref when WebRTC native NS is
+ * active. WebRTC NS isn't a LiveKit TrackProcessor — it's a constraint
+ * on the underlying MediaStreamTrack — but we still need *something* in
+ * processorRef so the "current processor type" check can detect it and
+ * switch correctly when the user picks a different engine.
+ */
+const WEBRTC_SENTINEL = { name: "webrtc-native" } as const;
 
 /**
  * Krisp returns LiveKit's TrackProcessor<Track.Kind.Audio> at runtime; we
@@ -49,10 +71,19 @@ type AudioProcessor = RNNoiseProcessor | VadGateProcessor | { name: string };
 
 function getDesiredProcessor(
   nr: boolean,
-  engine: "rnnoise" | "krisp",
+  engine: NoiseReductionEngine,
   sens: number,
 ): ProcessorType {
-  if (nr) return engine === "krisp" ? "krisp" : "rnnoise";
+  if (nr) {
+    // BETA engines fall through to RNNoise here so the rest of the hook
+    // doesn't have to know about the "real WASM not wired yet" state.
+    // The toast that informs the user is fired in applyDesiredProcessor.
+    if (engine === "krisp") return "krisp";
+    if (engine === "webrtc") return "webrtc";
+    if (engine === "deepfilter") return "deepfilter";
+    if (engine === "dtln") return "dtln";
+    return "rnnoise";
+  }
   if (sens < 100) return "vadgate";
   return "none";
 }
@@ -61,7 +92,28 @@ function getCurrentProcessorType(processor: AudioProcessor | null): ProcessorTyp
   if (!processor) return "none";
   if (processor instanceof RNNoiseProcessor) return "rnnoise";
   if (processor instanceof VadGateProcessor) return "vadgate";
+  if (processor === WEBRTC_SENTINEL) return "webrtc";
   return "krisp";
+}
+
+/**
+ * Toggle the browser-native noiseSuppression constraint on the underlying
+ * MediaStreamTrack. Used by the "webrtc" branch (turns it on) and by
+ * every custom-processor branch (turns it off, so we never run two NS
+ * layers at once). Errors are non-fatal — some Linux/Wayland builds
+ * reject applyConstraints; we log and move on rather than abort.
+ */
+async function setBrowserNoiseSuppression(
+  audioTrack: LocalAudioTrack,
+  enabled: boolean,
+): Promise<void> {
+  const mst = audioTrack.mediaStreamTrack;
+  if (!mst) return;
+  try {
+    await mst.applyConstraints({ noiseSuppression: enabled });
+  } catch (err) {
+    console.warn("[useAudioProcessor] applyConstraints(noiseSuppression) failed:", err);
+  }
 }
 
 /**
@@ -80,9 +132,12 @@ async function applyDesiredProcessor(
   hooks: {
     isCancelled: () => boolean;
     onKrispFallback: () => void;
+    onBetaFallback: (engine: "deepfilter" | "dtln") => void;
   },
 ): Promise<AudioProcessor | null> {
   if (desired === "krisp") {
+    // Krisp + custom processor → make sure browser NS is off.
+    await setBrowserNoiseSuppression(audioTrack, false);
     try {
       const { KrispNoiseFilter, isKrispNoiseFilterSupported } =
         await import("@livekit/krisp-noise-filter");
@@ -105,18 +160,47 @@ async function applyDesiredProcessor(
   }
 
   if (desired === "rnnoise") {
+    await setBrowserNoiseSuppression(audioTrack, false);
     const proc = new RNNoiseProcessor(sens, vol);
     await audioTrack.setProcessor(proc);
     return proc;
   }
 
+  if (desired === "deepfilter" || desired === "dtln") {
+    // BETA engines: real WASM integration is pending. We keep the user's
+    // engine selection visible in the UI, surface a one-time toast that
+    // explains the fallback, and run RNNoise so audio still gets cleaned
+    // up. Once deepfilter-standalone / @sapphi-red/dtln-web are wired,
+    // these branches become real inits and the fallback hook drops.
+    await setBrowserNoiseSuppression(audioTrack, false);
+    hooks.onBetaFallback(desired);
+    if (hooks.isCancelled()) return null;
+    const proc = new RNNoiseProcessor(sens, vol);
+    await audioTrack.setProcessor(proc);
+    return proc;
+  }
+
+  if (desired === "webrtc") {
+    // Browser-native NS: drop any custom processor and flip the track
+    // constraint. Returns a sentinel so getCurrentProcessorType can
+    // recognise this state and avoid re-applying the constraint on
+    // subsequent settings updates that don't actually change the engine.
+    await audioTrack.stopProcessor();
+    await setBrowserNoiseSuppression(audioTrack, true);
+    return WEBRTC_SENTINEL;
+  }
+
   if (desired === "vadgate") {
+    await setBrowserNoiseSuppression(audioTrack, false);
     const proc = new VadGateProcessor(sens, vol);
     await audioTrack.setProcessor(proc);
     return proc;
   }
 
-  return null; // "none"
+  // "none" — also clear the browser constraint so the user gets raw mic
+  // audio when both NR and the gate are off.
+  await setBrowserNoiseSuppression(audioTrack, false);
+  return null;
 }
 
 export function useAudioProcessor(
@@ -190,6 +274,10 @@ export function useAudioProcessor(
           addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
           setNoiseReductionEngine("rnnoise");
         },
+        onBetaFallback: (engine) => {
+          const label = engine === "deepfilter" ? "DeepFilterNet3" : "DTLN";
+          addToast("info", `${label} (Beta) — şimdilik RNNoise ile çalışıyor.`);
+        },
       });
       if (cancelled) return;
       processorRef.current = proc;
@@ -244,6 +332,10 @@ export function useAudioProcessor(
             onKrispFallback: () => {
               addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
               setNoiseReductionEngine("rnnoise");
+            },
+            onBetaFallback: (engine) => {
+              const label = engine === "deepfilter" ? "DeepFilterNet3" : "DTLN";
+              addToast("info", `${label} (Beta) — şimdilik RNNoise ile çalışıyor.`);
             },
           },
         );
