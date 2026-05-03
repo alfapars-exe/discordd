@@ -237,6 +237,17 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// Clean up E2EE passphrase if room is empty (forward secrecy)
 	s.cleanupRoomPassphraseIfEmpty(channelID)
 
+	// Channel is now humanless if no one else's voice state references it.
+	// The music bot isn't tracked in s.states (it joins LiveKit directly),
+	// so this count reflects real users only.
+	channelEmpty := true
+	for _, st := range s.states {
+		if st.ChannelID == channelID {
+			channelEmpty = false
+			break
+		}
+	}
+
 	s.mu.Unlock()
 
 	// Remove from LiveKit (best-effort, outside lock — involves DB calls)
@@ -244,6 +255,12 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
 	go s.creditUsage(leaveInstanceID, leaveIsCloud, leaveJoinedAt)
+
+	// Channel emptied → kick the music bot (if any) so it doesn't keep
+	// playing to nobody and burning bandwidth/CPU.
+	if channelEmpty && s.musicBotHook != nil {
+		go s.musicBotHook.StopAllForChannel(channelID)
+	}
 
 	log.Printf("[voice] user %s left channel %s", userID, channelID)
 	return nil
