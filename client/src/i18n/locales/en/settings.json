@@ -194,6 +194,8 @@
   "nrEngineDpdfnet": "DPDFNet (Beta)",
   "joinLeaveSounds": "Join/Leave Sounds",
   "joinLeaveSoundsDesc": "Play a sound when someone joins or leaves voice",
+  "screenShareShowCursor": "Show Cursor in Screen Share",
+  "screenShareShowCursorDesc": "When on, the mouse cursor appears in the shared screen. Turn off to hide it from viewers.",
   "screenShareQuality": "Screen Share Quality",
   "screenShareFps": "Frame Rate",
   "screenShareAudio": "Screen Share Audio",

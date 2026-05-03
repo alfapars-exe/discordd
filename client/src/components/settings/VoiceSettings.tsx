@@ -84,6 +84,8 @@ function VoiceSettings() {
   const setNoiseReduction = useVoiceStore((s) => s.setNoiseReduction);
   const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
   const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
+  const screenShareShowCursor = useVoiceStore((s) => s.screenShareShowCursor);
+  const setScreenShareShowCursor = useVoiceStore((s) => s.setScreenShareShowCursor);
 
 
   // ─── Local state ───
@@ -567,6 +569,24 @@ function VoiceSettings() {
               type="checkbox"
               checked={soundsEnabled}
               onChange={(e) => setSoundsEnabled(e.target.checked)}
+            />
+            <span className="vs-switch-slider" />
+          </label>
+        </div>
+      </div>
+
+      {/* ─── Screen Share — Cursor Visibility ─── */}
+      <div className="vs-section">
+        <div className="vs-toggle-row">
+          <div>
+            <div className="vs-label">{t("screenShareShowCursor")}</div>
+            <div className="vs-desc">{t("screenShareShowCursorDesc")}</div>
+          </div>
+          <label className="vs-switch">
+            <input
+              type="checkbox"
+              checked={screenShareShowCursor}
+              onChange={(e) => setScreenShareShowCursor(e.target.checked)}
             />
             <span className="vs-switch-slider" />
           </label>

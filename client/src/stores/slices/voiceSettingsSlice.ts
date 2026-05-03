@@ -67,6 +67,15 @@ export type VoiceSettings = {
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
   screenShareFps: ScreenShareFps;
+  /**
+   * Whether the mouse cursor is captured into the screen-share stream.
+   * true → `getDisplayMedia({ video: { cursor: "always" } })`. Default true
+   * matches Discord/Zoom/Teams behaviour and the browser API default.
+   * Wired through utils/screenShareCursorPatch.ts which monkey-patches
+   * navigator.mediaDevices.getDisplayMedia at boot, so LiveKit's internal
+   * setScreenShareEnabled call honours it without touching the SDK API.
+   */
+  screenShareShowCursor: boolean;
 };
 
 const STORAGE_KEY = "mqvi_voice_settings";
@@ -109,6 +118,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   screenShareAudio: true,
   screenShareQuality: "720p",
   screenShareFps: 30,
+  screenShareShowCursor: true,
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -166,6 +176,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     screenShareAudio: s.screenShareAudio,
     screenShareQuality: s.screenShareQuality,
     screenShareFps: s.screenShareFps,
+    screenShareShowCursor: s.screenShareShowCursor,
   };
 }
 
@@ -186,6 +197,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareAudio: (enabled: boolean) => void;
   setScreenShareQuality: (quality: ScreenShareQuality) => void;
   setScreenShareFps: (fps: ScreenShareFps) => void;
+  setScreenShareShowCursor: (enabled: boolean) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   toggleLocalMute: (userId: string) => void;
@@ -217,6 +229,7 @@ export const createVoiceSettingsSlice: StateCreator<
     screenShareAudio: initial.screenShareAudio,
     screenShareQuality: initial.screenShareQuality,
     screenShareFps: initial.screenShareFps,
+    screenShareShowCursor: initial.screenShareShowCursor,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -281,6 +294,11 @@ export const createVoiceSettingsSlice: StateCreator<
 
     setScreenShareFps: (fps) => {
       set({ screenShareFps: fps });
+      saveSettings(currentSettings(get()));
+    },
+
+    setScreenShareShowCursor: (enabled) => {
+      set({ screenShareShowCursor: enabled });
       saveSettings(currentSettings(get()));
     },
 
@@ -353,6 +371,7 @@ export const createVoiceSettingsSlice: StateCreator<
         screenShareAudio: merged.screenShareAudio,
         screenShareQuality: merged.screenShareQuality,
         screenShareFps: merged.screenShareFps,
+        screenShareShowCursor: merged.screenShareShowCursor,
         localMutedUsers: merged.localMutedUsers,
         noiseReduction: merged.noiseReduction,
         noiseReductionEngine: merged.noiseReductionEngine,
