@@ -311,6 +311,16 @@ func initRoutes(
 	mux.Handle("POST /api/servers/{serverId}/voice/screen-token", authServer(h.Voice.ScreenShareToken))
 	mux.Handle("GET /api/servers/{serverId}/voice/states", authServer(h.Voice.VoiceStates))
 
+	// Music bot — per-channel YouTube → LiveKit. Permission gating happens
+	// inside the handler (PermSpeak for play/skip/pause/resume,
+	// PermManageChannels for stop) since this lives "below" the channel.
+	mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/play", authServer(h.Music.Play))
+	mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/skip", authServer(h.Music.Skip))
+	mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/pause", authServer(h.Music.Pause))
+	mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/resume", authServer(h.Music.Resume))
+	mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/stop", authServer(h.Music.Stop))
+	mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/music/state", authServer(h.Music.State))
+
 	// Soundboard
 	mux.Handle("GET /api/servers/{serverId}/soundboard/sounds", authServer(h.Soundboard.List))
 	mux.Handle("POST /api/servers/{serverId}/soundboard/sounds", authServerPerm(models.PermManageSoundboard, h.Soundboard.Create))

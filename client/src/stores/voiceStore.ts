@@ -43,6 +43,10 @@ import {
   createVoiceScreenShareSlice,
   type VoiceScreenShareSlice,
 } from "./slices/voiceScreenShareSlice";
+import {
+  createMusicBotSlice,
+  type MusicBotSlice,
+} from "./slices/musicBotSlice";
 
 export type { InputMode, ScreenShareQuality, ScreenShareFps };
 
@@ -137,7 +141,8 @@ export type VoiceStore =
   & VoiceCoreActions
   & VoiceSettingsSlice
   & VoiceWsSlice
-  & VoiceScreenShareSlice;
+  & VoiceScreenShareSlice
+  & MusicBotSlice;
 
 // Re-export so legacy direct imports still resolve
 export type { VoiceStateUpdateData };
@@ -147,6 +152,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   ...createVoiceSettingsSlice(set, get, store),
   ...createVoiceWsSlice(set, get, store),
   ...createVoiceScreenShareSlice(set, get, store),
+  ...createMusicBotSlice(set, get, store),
 
   // ─── Core State ───
   voiceStates: {},

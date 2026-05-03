@@ -41,6 +41,7 @@ type Handlers struct {
 	DownloadPrompt    *handlers.DownloadPromptHandler
 	Feedback          *handlers.FeedbackHandler
 	Soundboard        *handlers.SoundboardHandler
+	Music             *handlers.MusicHandler
 	LiveKitWebhook    *handlers.LiveKitWebhookHandler
 	WS                *ws.Handler
 }
@@ -80,6 +81,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		DownloadPrompt:    handlers.NewDownloadPromptHandler(repos.User),
 		Feedback:          handlers.NewFeedbackHandler(svcs.Feedback, svcs.FeedbackUpload, cfg.Upload.MaxSize, limiters.Feedback, svcs.AppLog),
 		Soundboard:        handlers.NewSoundboardHandler(svcs.Soundboard, cfg.Upload.MaxSize),
+		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog),
 		WS:                ws.NewHandler(hub, svcs.Auth, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute),
 	}

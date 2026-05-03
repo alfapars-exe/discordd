@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatContext } from "../../hooks/useChatContext";
+import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH } from "../../utils/constants";
 import EmojiPicker from "../shared/EmojiPicker";
@@ -82,12 +83,32 @@ function MessageInput() {
   }
 
   /** Send message, passing replyToId if replying */
+  const runMusicCommand = useMusicSlashCommand();
+
   const handleSend = useCallback(async () => {
     if (!channelId) return;
     if (!content.trim() && files.length === 0) return;
     if (isSending) return;
 
     setIsSending(true);
+
+    // Slash-commands short-circuit before mention tokenization + chat send.
+    // /play /skip /pause /resume /stop never reach the message stream — they
+    // hit the music bot HTTP API and clear the input.
+    const wasMusicCommand = await runMusicCommand(content);
+    if (wasMusicCommand) {
+      setContent("");
+      setFiles([]);
+      setReplyingTo(null);
+      mentionSelectionsRef.current = [];
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+      setIsSending(false);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+
     const replyToId = replyingTo?.id;
     const tokenized = convertMentionTokens(content.trim());
     const success = await sendMessage(tokenized, files, replyToId);
@@ -106,7 +127,7 @@ function MessageInput() {
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
     });
-  }, [channelId, content, files, isSending, sendMessage, replyingTo, setReplyingTo]);
+  }, [channelId, content, files, isSending, sendMessage, replyingTo, setReplyingTo, runMusicCommand]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {

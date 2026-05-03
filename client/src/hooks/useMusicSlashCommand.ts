@@ -1,0 +1,72 @@
+/**
+ * useMusicSlashCommand — Discord-style slash commands for the music bot.
+ *
+ * Handles `/play <url>`, `/skip`, `/pause`, `/resume`, `/stop` typed in any
+ * channel's chat input. Returns true if the input matched a known music
+ * command (regardless of API success/failure) — caller skips the normal
+ * "send as chat message" flow when true.
+ *
+ * Permissions are enforced server-side; here we just translate text →
+ * HTTP call and toast the outcome.
+ */
+
+import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { useVoiceStore } from "../stores/voiceStore";
+import { useServerStore } from "../stores/serverStore";
+import { useToastStore } from "../stores/toastStore";
+import { playMusic, skipMusic, pauseMusic, resumeMusic, stopMusic } from "../api/music";
+
+const MUSIC_COMMANDS = new Set(["play", "skip", "pause", "resume", "stop"]);
+
+export function useMusicSlashCommand() {
+  const { t } = useTranslation("music");
+  const addToast = useToastStore((s) => s.addToast);
+
+  return useCallback(
+    async (text: string): Promise<boolean> => {
+      const trimmed = text.trim();
+      if (!trimmed.startsWith("/")) return false;
+
+      const space = trimmed.indexOf(" ");
+      const cmd = (space === -1 ? trimmed.slice(1) : trimmed.slice(1, space)).toLowerCase();
+      const arg = space === -1 ? "" : trimmed.slice(space + 1).trim();
+
+      if (!MUSIC_COMMANDS.has(cmd)) return false;
+
+      const voiceChannelId = useVoiceStore.getState().currentVoiceChannelId;
+      const serverId = useServerStore.getState().activeServerId;
+      if (!serverId || !voiceChannelId) {
+        addToast("error", t("notInVoice"));
+        return true;
+      }
+
+      if (cmd === "play") {
+        if (!arg) {
+          addToast("error", t("invalidYouTubeUrl"));
+          return true;
+        }
+        const res = await playMusic(serverId, voiceChannelId, arg);
+        if (res.success && res.data) {
+          const count = res.data.added_tracks.length;
+          addToast("success", t("addedToQueue", { count }));
+        } else {
+          addToast("error", res.error ?? t("playError"));
+        }
+        return true;
+      }
+
+      const fn =
+        cmd === "skip" ? skipMusic :
+        cmd === "pause" ? pauseMusic :
+        cmd === "resume" ? resumeMusic :
+        stopMusic;
+      const res = await fn(serverId, voiceChannelId);
+      if (!res.success) {
+        addToast("error", res.error ?? t("controlError"));
+      }
+      return true;
+    },
+    [addToast, t],
+  );
+}

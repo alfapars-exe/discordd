@@ -9,7 +9,7 @@ import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useUIStore } from "../../stores/uiStore";
 import { playJoinSound, playLeaveSound } from "../../utils/sounds";
-import type { WSMessage, VoiceState, VoiceStateUpdateData } from "../../types";
+import type { WSMessage, VoiceState, VoiceStateUpdateData, MusicBotChannelState } from "../../types";
 import type { WSHandlerContext } from "./types";
 import { isVoiceRecoveryAllowed } from "../../stores/shared/voiceRecovery";
 
@@ -176,6 +176,16 @@ export async function handleVoiceEvent(
       console.warn("[ws] voice_replaced RECEIVED", { timestamp: new Date().toISOString() });
       useVoiceStore.getState().handleVoiceReplaced();
       return true;
+
+    case "music_bot_state": {
+      // Backend pushes the full per-channel state on every queue/track/pause
+      // change. We just overwrite our cache; the panel re-renders.
+      const data = msg.d as { channel_id?: string; state?: MusicBotChannelState };
+      if (data?.channel_id && data.state) {
+        useVoiceStore.getState().setMusicBotState(data.channel_id, data.state);
+      }
+      return true;
+    }
 
     default:
       return false;
