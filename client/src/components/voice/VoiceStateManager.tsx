@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
-import { RoomEvent, ParticipantEvent, ConnectionState, Track, LocalAudioTrack as LKLocalAudioTrack } from "livekit-client";
+import { RoomEvent, ConnectionState, Track, LocalAudioTrack as LKLocalAudioTrack } from "livekit-client";
 import type {
   LocalTrackPublication,
   Participant,
@@ -19,6 +19,7 @@ import type {
 import { useVoiceStore } from "../../stores/voiceStore";
 import { usePushToTalk } from "../../hooks/usePushToTalk";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
+import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useSystemAudioCapture } from "../../hooks/useSystemAudioCapture";
 import { isElectron, isCapacitor, resolveUserId } from "../../utils/constants";
 import { startNativeScreenShare, stopNativeScreenShare, onNativeScreenShareStopped } from "../../utils/nativePlugins";
@@ -46,6 +47,9 @@ function VoiceStateManager() {
 
   // Mic track processor (RNNoise / Krisp / VadGate) — extracted hook.
   useAudioProcessor(room, localParticipant, initialSyncDone);
+
+  // Speaking detection — drives sidebar green-ring indicators.
+  useSpeakingDetection(room, localParticipant);
 
   // PTT: bypass store, toggle mic directly on LiveKit participant
   const setMicEnabled = useCallback(
@@ -382,128 +386,6 @@ function VoiceStateManager() {
     };
   }, [room, room.state]);
 
-  // Speaking detection -> store (for sidebar outside LiveKit context).
-  //
-  // We listen on TWO channels:
-  //  1. ParticipantEvent.IsSpeakingChanged on each participant — driven by
-  //     client-side audio-level analysis on the received track. Fires fast,
-  //     no server round-trip. This is what gives the green ring real-time
-  //     feel.
-  //  2. RoomEvent.ActiveSpeakersChanged as a fallback for cases where
-  //     IsSpeakingChanged hasn't fired yet (e.g. very first audio frames
-  //     or when the client hasn't subscribed to a track).
-  //
-  // 80ms hold timer on OFF prevents flicker on speech pauses while keeping
-  // the indicator feeling tight.
-  useEffect(() => {
-    const HOLD_MS = 80;
-    const setActiveSpeakers = useVoiceStore.getState().setActiveSpeakers;
-
-    const heldSpeakers = new Map<string, boolean>();
-    const holdTimers = new Map<string, number>();
-
-    function updateStore() {
-      const ids: string[] = [];
-      heldSpeakers.forEach((speaking, identity) => {
-        if (speaking) ids.push(identity);
-      });
-      setActiveSpeakers(ids);
-    }
-
-    function setSpeakerRaw(identity: string, speaking: boolean) {
-      if (speaking) {
-        const existing = holdTimers.get(identity);
-        if (existing) {
-          clearTimeout(existing);
-          holdTimers.delete(identity);
-        }
-        if (!heldSpeakers.get(identity)) {
-          heldSpeakers.set(identity, true);
-          updateStore();
-        }
-      } else {
-        if (heldSpeakers.get(identity) && !holdTimers.has(identity)) {
-          const timerId = window.setTimeout(() => {
-            holdTimers.delete(identity);
-            heldSpeakers.delete(identity);
-            updateStore();
-          }, HOLD_MS);
-          holdTimers.set(identity, timerId);
-        }
-      }
-    }
-
-    // Per-participant IsSpeakingChanged — the fast path.
-    const perParticipantHandlers = new Map<string, (s: boolean) => void>();
-    function attachSpeakingListener(p: Participant) {
-      if (perParticipantHandlers.has(p.identity)) return;
-      const handler = (speaking: boolean) => setSpeakerRaw(p.identity, speaking);
-      perParticipantHandlers.set(p.identity, handler);
-      p.on(ParticipantEvent.IsSpeakingChanged, handler);
-    }
-    function detachSpeakingListener(p: Participant) {
-      const handler = perParticipantHandlers.get(p.identity);
-      if (handler) {
-        p.off(ParticipantEvent.IsSpeakingChanged, handler);
-        perParticipantHandlers.delete(p.identity);
-      }
-      // Clear any pending state for the leaving participant
-      const timer = holdTimers.get(p.identity);
-      if (timer) {
-        clearTimeout(timer);
-        holdTimers.delete(p.identity);
-      }
-      if (heldSpeakers.delete(p.identity)) {
-        updateStore();
-      }
-    }
-
-    attachSpeakingListener(localParticipant);
-    room.remoteParticipants.forEach(attachSpeakingListener);
-
-    function handleParticipantConnected(p: Participant) {
-      attachSpeakingListener(p);
-    }
-    function handleParticipantDisconnected(p: Participant) {
-      detachSpeakingListener(p);
-    }
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-
-    // Server-side ActiveSpeakersChanged — fallback / reconciliation.
-    function handleActiveSpeakers(speakers: Participant[]) {
-      const activeSpeakerIds = new Set(speakers.map((s) => s.identity));
-      for (const s of speakers) {
-        setSpeakerRaw(s.identity, true);
-      }
-      heldSpeakers.forEach((_speaking, identity) => {
-        if (!activeSpeakerIds.has(identity)) {
-          // Don't second-guess the per-participant listener if it just said true
-          // — but if the server says they're not in the active set, drop them
-          // through the normal HOLD_MS off path.
-          setSpeakerRaw(identity, false);
-        }
-      });
-    }
-    room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
-
-    return () => {
-      room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      perParticipantHandlers.forEach((handler, identity) => {
-        const p = identity === localParticipant.identity
-          ? localParticipant
-          : room.remoteParticipants.get(identity);
-        p?.off(ParticipantEvent.IsSpeakingChanged, handler);
-      });
-      perParticipantHandlers.clear();
-      holdTimers.forEach((timerId) => clearTimeout(timerId));
-      holdTimers.clear();
-      heldSpeakers.clear();
-      setActiveSpeakers([]);
-    };
-  }, [room, localParticipant]);
 
   // Sync inputMode changes: PTT -> mic off, voice activity -> restore isMuted
   useEffect(() => {
