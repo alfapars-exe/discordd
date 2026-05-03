@@ -49,8 +49,17 @@ RUN go mod tidy && \
 # Stay on glibc (debian-slim) to match what go-libsql linked against. The
 # image is ~30MB larger than alpine but the binary actually runs.
 FROM debian:bookworm-slim
+# yt-dlp + ffmpeg are runtime dependencies for the music bot service —
+# yt-dlp resolves YouTube URLs into audio streams, ffmpeg encodes them as
+# Ogg/Opus that LiveKit's Pion stack can publish. yt-dlp is pulled from
+# the latest GitHub release at build time because Debian's apt-shipped
+# package is months stale and YouTube tightens its protocol regularly.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates tzdata && \
+    apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg python3 curl && \
+    curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+      -o /usr/local/bin/yt-dlp && \
+    chmod +x /usr/local/bin/yt-dlp && \
+    apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

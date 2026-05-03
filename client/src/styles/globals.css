@@ -3864,3 +3864,146 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 }
 .sb-submit-btn:hover { opacity: 0.9; }
 .sb-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Music Bot Panel ─── */
+.music-bot-panel {
+  flex-shrink: 0;
+  margin: 12px 24px 0;
+  padding: 14px 16px;
+  background: var(--bg-3);
+  border: 1px solid var(--b1);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.music-bot-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.music-bot-thumb {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg-5);
+}
+.music-bot-now-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.music-bot-now-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.music-bot-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.music-bot-artist {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.music-bot-progress {
+  margin-top: 4px;
+  height: 4px;
+  background: var(--bg-5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.music-bot-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.5s linear;
+}
+.music-bot-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.music-bot-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.music-bot-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-5);
+  border: 1px solid var(--b1);
+  border-radius: 50%;
+  color: var(--text-1);
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.music-bot-btn:hover { background: var(--bg-4); border-color: var(--primary); }
+.music-bot-btn-danger:hover { background: rgba(239, 68, 68, 0.15); border-color: rgb(239, 68, 68); color: rgb(239, 68, 68); }
+
+.music-bot-queue {
+  border-top: 1px solid var(--b1);
+  padding-top: 10px;
+}
+.music-bot-queue-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.music-bot-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.music-bot-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.music-bot-queue-pos {
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.music-bot-queue-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.music-bot-queue-dur {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.music-bot-queue-more {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 2px;
+}

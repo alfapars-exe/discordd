@@ -52,6 +52,7 @@ type Services struct {
 	Feedback          services.FeedbackService
 	FeedbackUpload    services.FeedbackUploadService
 	Soundboard        services.SoundboardService
+	MusicBot          services.MusicBotService
 }
 
 type RateLimiters struct {
@@ -146,6 +147,12 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	soundboardService := services.NewSoundboardService(
 		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
 	)
+	musicBotService := services.NewMusicBotService(
+		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey,
+	)
+	// Wire the channel-empty hook — when the last human leaves, voice service
+	// asks music bot to stop so it doesn't keep playing to nobody.
+	voiceService.SetMusicBotHook(musicBotService)
 	metricsCollector := services.NewMetricsCollector(
 		repos.LiveKit, repos.MetricsHistory,
 		5*time.Minute,
@@ -201,6 +208,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Feedback:          feedbackService,
 		FeedbackUpload:    feedbackUploadService,
 		Soundboard:        soundboardService,
+		MusicBot:          musicBotService,
 	}
 
 	limiters := &RateLimiters{

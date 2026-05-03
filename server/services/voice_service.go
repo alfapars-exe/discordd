@@ -79,6 +79,14 @@ type VoiceService interface {
 	StartOrphanCleanup()
 	StartAFKChecker()
 	SetAppLogger(logger VoiceAppLogger)
+	SetMusicBotHook(hook MusicBotChannelHook)
+}
+
+// MusicBotChannelHook — narrow interface VoiceService uses to stop a music
+// bot when the last human leaves the voice channel. Implemented by
+// MusicBotService.StopAllForChannel. Nil-safe — feature is optional.
+type MusicBotChannelHook interface {
+	StopAllForChannel(channelID string)
 }
 
 // VoiceAppLogger writes structured logs. ISP interface to avoid importing services.AppLogService.
@@ -113,6 +121,7 @@ type voiceService struct {
 	afkTimeoutGetter AFKTimeoutGetter
 	encryptionKey    []byte // AES-256-GCM for LiveKit credential decryption
 	appLogger        VoiceAppLogger
+	musicBotHook     MusicBotChannelHook
 }
 
 func NewVoiceService(
@@ -138,6 +147,10 @@ func NewVoiceService(
 		afkTimeoutGetter:   afkTimeoutGetter,
 		encryptionKey:      encryptionKey,
 	}
+}
+
+func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
+	s.musicBotHook = hook
 }
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {
