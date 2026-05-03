@@ -37,8 +37,8 @@
     "buildDependenciesFromSource": false,
     "publish": {
       "provider": "github",
-      "owner": "akinalpfdn",
-      "repo": "Mqvi"
+      "owner": "alfapars-exe",
+      "repo": "discordd"
     },
     "win": {
       "target": [
