@@ -29,6 +29,8 @@
   "localUnmute": "Benim İçin Sesi Aç",
   "watchScreenShare": "Yayını İzle",
   "stopWatchingScreenShare": "Yayını İzlemeyi Bırak",
+  "cameraOn": "Kamerayı Aç",
+  "cameraOff": "Kamerayı Kapat",
   "serverMute": "Sunucu Susturma",
   "serverUnmute": "Sunucu Sesini Aç",
   "serverDeafen": "Sunucu Sağırlaştırma",

@@ -96,6 +96,12 @@ type VoiceCoreState = {
   isMuted: boolean;
   isDeafened: boolean;
   isStreaming: boolean;
+  /**
+   * True when the local participant has published a camera (webcam) track to
+   * the LiveKit room. Reflects user-level intent — not the same as whether
+   * the track is currently published successfully (LiveKit handles errors).
+   */
+  isCameraEnabled: boolean;
   /** Server-enforced mute — admin silenced this user's mic */
   isServerMuted: boolean;
   /** Server-enforced deafen — admin silenced all audio for this user */
@@ -130,6 +136,7 @@ type VoiceCoreActions = {
   toggleMute: () => void;
   toggleDeafen: () => void;
   setStreaming: (isStreaming: boolean) => void;
+  setCameraEnabled: (isCameraEnabled: boolean) => void;
   setRtt: (rtt: number) => void;
   setActiveSpeakers: (speakerIds: string[]) => void;
   registerOnLeave: (fn: (() => void) | null) => void;
@@ -161,6 +168,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   isMuted: initialMuteState.isMuted,
   isDeafened: initialMuteState.isDeafened,
   isStreaming: false,
+  isCameraEnabled: false,
   isServerMuted: false,
   isServerDeafened: false,
   livekitUrl: null,
@@ -436,6 +444,14 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     //     send the WS update separately via _wsSend, so by the time the
     //     server sees is_streaming=false the track really is gone — no
     //     "phantom share" window where the icon vanishes before the track.
+  },
+
+  setCameraEnabled: (isCameraEnabled: boolean) => {
+    // Pure intent flag — actual LiveKit publish/unpublish is driven by a
+    // dedicated effect (VoiceStateManager → useCameraToggle) reading this
+    // state, the same pattern as isStreaming → useScreenShareToggle. Keeps
+    // this store free of side effects so it stays trivial to test.
+    set({ isCameraEnabled });
   },
 
   setRtt: (rtt) => set({ rtt }),

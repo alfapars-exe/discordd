@@ -21,6 +21,7 @@
 
 import { useEffect, useRef } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
+import { useVoiceStore } from "../../stores/voiceStore";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
@@ -76,6 +77,31 @@ function VoiceStateManager() {
   // [DEBUG] Trace every LiveKit lifecycle event. Flip enabled=true while
   // investigating sporadic disconnects. Default off to keep prod console clean.
   useLiveKitDebugTracer(room, { enabled: false });
+
+  // Camera publish/unpublish — drives LiveKit from voiceStore.isCameraEnabled.
+  // Mirrors the screen-share pattern but stays inline because there's no
+  // multi-path complexity (no native handler, no separate audio capture).
+  // Errors are toast-free: LiveKit logs its own permission/device failures
+  // and the UI button stays in its previous state if publish fails.
+  const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
+  useEffect(() => {
+    if (!initialSyncDone.current) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await localParticipant.setCameraEnabled(isCameraEnabled);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[VoiceStateManager] camera toggle failed:", err);
+          // Roll the store state back so the UI mirrors reality.
+          useVoiceStore.getState().setCameraEnabled(!isCameraEnabled);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCameraEnabled, localParticipant]);
 
   // Raise EventEmitter limit — we attach many room listeners here + SDK internals
   useEffect(() => {
