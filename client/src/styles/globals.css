@@ -803,10 +803,40 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .status-idle { background:var(--yellow); }
 .status-dnd { background:var(--red); }
 .status-off { background:var(--t3); }
-.member-name { font-size:13px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.member-name { font-size:13px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .12s,text-shadow .12s; }
 .member:hover .member-name { color:var(--t0); }
 .member-activity { font-size:13px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .member.offline { opacity:.75; }
+
+/* Presence-coloured usernames with a soft glow ("ışıklı"). The colour
+   matches the status dot so the row reads at a glance: green = talking,
+   amber = idle, red = do-not-disturb. Offline rows fall back to the
+   muted text colour and skip the glow. .member.offline already drops
+   row opacity to .75 so the chain reads as: bright + glow → dim + dim
+   glow → flat muted. */
+.member.member-online .member-name {
+  color: var(--green);
+  text-shadow: 0 0 6px rgba(34, 197, 94, 0.55), 0 0 1px rgba(34, 197, 94, 0.7);
+}
+.member.member-online:hover .member-name { color: #4ade80; }
+
+.member.member-idle .member-name {
+  color: var(--yellow);
+  text-shadow: 0 0 6px rgba(240, 178, 50, 0.55), 0 0 1px rgba(240, 178, 50, 0.7);
+}
+.member.member-idle:hover .member-name { color: #fbbf24; }
+
+.member.member-dnd .member-name {
+  color: var(--red);
+  text-shadow: 0 0 6px rgba(239, 68, 68, 0.55), 0 0 1px rgba(239, 68, 68, 0.7);
+}
+.member.member-dnd:hover .member-name { color: #f87171; }
+
+.member.member-offline .member-name {
+  color: var(--t3);
+  text-shadow: none;
+}
+.member.member-offline:hover .member-name { color: var(--t2); }
 
 /* Member Card (portal popup) */
 .member-card-backdrop { position:fixed;inset:0;z-index:50; }
