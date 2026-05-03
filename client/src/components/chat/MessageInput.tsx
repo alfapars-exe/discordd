@@ -85,6 +85,19 @@ function MessageInput() {
   /** Send message, passing replyToId if replying */
   const runMusicCommand = useMusicSlashCommand();
 
+  // Single source of truth for "send succeeded — wipe the composer". Both
+  // the slash-command path and the regular-message path call this so future
+  // additions (new state, draft persistence, etc.) only need one update.
+  const resetInputAfterSend = useCallback(() => {
+    setContent("");
+    setFiles([]);
+    setReplyingTo(null);
+    mentionSelectionsRef.current = [];
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }, [setReplyingTo]);
+
   const handleSend = useCallback(async () => {
     if (!channelId) return;
     if (!content.trim() && files.length === 0) return;
@@ -94,22 +107,14 @@ function MessageInput() {
 
     // try/catch/finally bracket the send so a thrown promise — slash-command
     // network failure, sendMessage exception, anything — never leaves the
-    // textarea locked or the user without feedback. The original code
-    // relied on awaited APIs returning {success:false} but exceptions
-    // leak through and freeze the UI silently.
+    // textarea locked or the user without feedback.
     try {
       // Slash-commands short-circuit before mention tokenization + chat send.
       // /play /skip /pause /resume /stop never reach the message stream — they
       // hit the music bot HTTP API and clear the input.
       const wasMusicCommand = await runMusicCommand(content);
       if (wasMusicCommand) {
-        setContent("");
-        setFiles([]);
-        setReplyingTo(null);
-        mentionSelectionsRef.current = [];
-        if (textareaRef.current) {
-          textareaRef.current.style.height = "auto";
-        }
+        resetInputAfterSend();
         return;
       }
 
@@ -124,13 +129,7 @@ function MessageInput() {
       const tokenized = convertMentionTokens(content.trim());
       const success = await sendMessage(tokenized, files, replyToId);
       if (success) {
-        setContent("");
-        setFiles([]);
-        setReplyingTo(null);
-        mentionSelectionsRef.current = [];
-        if (textareaRef.current) {
-          textareaRef.current.style.height = "auto";
-        }
+        resetInputAfterSend();
       }
     } catch (err) {
       console.error("[MessageInput] send failed:", err);
@@ -139,7 +138,7 @@ function MessageInput() {
       // Restore focus after send — disabled={isSending} causes browser to drop focus.
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
-  }, [channelId, content, files, isSending, sendMessage, replyingTo, setReplyingTo, runMusicCommand, canSend]);
+  }, [channelId, content, files, isSending, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
