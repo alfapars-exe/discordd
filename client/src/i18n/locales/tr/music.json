@@ -9,6 +9,7 @@
   "controlError": "İşlem başarısız",
   "addedToQueue_one": "1 şarkı kuyruğa eklendi",
   "addedToQueue_other": "{{count}} şarkı kuyruğa eklendi",
+  "addingTrack": "Şarkı kuyruğa ekleniyor…",
   "playError": "Müzik başlatılamadı",
   "invalidYouTubeUrl": "Geçerli bir YouTube bağlantısı gerekli",
   "queueEmpty": "Kuyruk boş",

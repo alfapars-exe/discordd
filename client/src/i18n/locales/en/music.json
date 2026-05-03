@@ -9,6 +9,7 @@
   "controlError": "Action failed",
   "addedToQueue_one": "1 track added to queue",
   "addedToQueue_other": "{{count}} tracks added to queue",
+  "addingTrack": "Adding track to the queue…",
   "playError": "Could not start playback",
   "invalidYouTubeUrl": "A valid YouTube URL is required",
   "queueEmpty": "Queue is empty",
