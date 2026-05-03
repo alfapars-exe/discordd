@@ -15,6 +15,20 @@ export type ScreenShareQuality = "720p" | "1080p" | "1440p";
 export type ScreenShareFps = 30 | 60;
 
 /**
+ * Noise suppression level — controls the post-RNNoise VAD gate's open/close
+ * dB thresholds + hold time. Layered with the existing micSensitivity slider:
+ * the level sets a base curve, sensitivity offsets it ±6 dB. sensitivity=100
+ * still disables the gate entirely (legacy "off" semantic preserved).
+ *
+ * Mapping (see RNNoiseProcessor.levelToThresholds):
+ *   "low"      — open=-50dB / close=-55dB / hold=400ms (very permissive)
+ *   "medium"   — open=-42dB / close=-48dB / hold=300ms (default — Discord-ish)
+ *   "high"     — open=-36dB / close=-42dB / hold=200ms (tight, kicks more noise)
+ *   "maximum"  — open=-30dB / close=-36dB / hold=150ms (very tight; loud rooms)
+ */
+export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
+
+/**
  * Available noise-reduction engines. See the noiseReductionEngine field
  * docs below for the per-engine pipeline + status notes.
  */
@@ -63,6 +77,7 @@ export type VoiceSettings = {
    *                      every Chromium/Electron build.
    */
   noiseReductionEngine: NoiseReductionEngine;
+  noiseSuppressionLevel: NoiseSuppressionLevel;
   screenShareVolumes: Record<string, number>;
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
@@ -109,6 +124,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   localMutedUsers: {},
   noiseReduction: true,
   noiseReductionEngine: "rnnoise",
+  noiseSuppressionLevel: "medium",
   screenShareVolumes: {},
   // Default true: most users sharing a screen also want to share its audio
   // (gameplay, presentations, video). When the toggle is on, the browser's
@@ -172,6 +188,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     localMutedUsers: s.localMutedUsers,
     noiseReduction: s.noiseReduction,
     noiseReductionEngine: s.noiseReductionEngine,
+    noiseSuppressionLevel: s.noiseSuppressionLevel,
     screenShareVolumes: s.screenShareVolumes,
     screenShareAudio: s.screenShareAudio,
     screenShareQuality: s.screenShareQuality,
@@ -200,6 +217,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareShowCursor: (enabled: boolean) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
+  setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
   toggleLocalMute: (userId: string) => void;
   applyFromServer: (settings: Record<string, unknown>) => void;
 };
@@ -225,6 +243,7 @@ export const createVoiceSettingsSlice: StateCreator<
     localMutedUsers: initial.localMutedUsers,
     noiseReduction: initial.noiseReduction,
     noiseReductionEngine: initial.noiseReductionEngine,
+    noiseSuppressionLevel: initial.noiseSuppressionLevel,
     screenShareVolumes: initial.screenShareVolumes,
     screenShareAudio: initial.screenShareAudio,
     screenShareQuality: initial.screenShareQuality,
@@ -312,6 +331,11 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
+    setNoiseSuppressionLevel: (level) => {
+      set({ noiseSuppressionLevel: level });
+      saveSettings(currentSettings(get()));
+    },
+
     toggleLocalMute: (userId: string) => {
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
       const isCurrentlyMuted = localMutedUsers[userId] ?? false;
@@ -375,6 +399,7 @@ export const createVoiceSettingsSlice: StateCreator<
         localMutedUsers: merged.localMutedUsers,
         noiseReduction: merged.noiseReduction,
         noiseReductionEngine: merged.noiseReductionEngine,
+        noiseSuppressionLevel: merged.noiseSuppressionLevel,
         screenShareVolumes: merged.screenShareVolumes,
       });
     },
