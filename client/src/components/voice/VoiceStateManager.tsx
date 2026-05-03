@@ -6,13 +6,12 @@
  * speaking detection, screen share subscriptions, and RTT polling.
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { RoomEvent, ConnectionState, Track, LocalAudioTrack as LKLocalAudioTrack } from "livekit-client";
 import type {
   LocalTrackPublication,
   Participant,
-  RemoteTrack,
   RemoteTrackPublication,
   RemoteParticipant,
 } from "livekit-client";
@@ -21,6 +20,7 @@ import { usePushToTalk } from "../../hooks/usePushToTalk";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
+import { useVolumeSync } from "../../hooks/useVolumeSync";
 import { useSystemAudioCapture } from "../../hooks/useSystemAudioCapture";
 import { isElectron, isCapacitor, resolveUserId } from "../../utils/constants";
 import { startNativeScreenShare, stopNativeScreenShare, onNativeScreenShareStopped } from "../../utils/nativePlugins";
@@ -35,13 +35,13 @@ function VoiceStateManager() {
   const inputMode = useVoiceStore((s) => s.inputMode);
   const isServerMuted = useVoiceStore((s) => s.isServerMuted);
   const isServerDeafened = useVoiceStore((s) => s.isServerDeafened);
-  const userVolumes = useVoiceStore((s) => s.userVolumes);
-  const screenShareVolumes = useVoiceStore((s) => s.screenShareVolumes);
-  const masterVolume = useVoiceStore((s) => s.masterVolume);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
   const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
   const outputDevice = useVoiceStore((s) => s.outputDevice);
+
+  // Server deafen overrides local — used by the mic-subscription effect.
+  const effectiveDeafened = isDeafened || isServerDeafened;
 
   // Skip effects until initial connection sync is done
   const initialSyncDone = useRef(false);
@@ -54,6 +54,10 @@ function VoiceStateManager() {
 
   // RTT polling — drives the "Ses Bağlı / NN ms" connection indicator.
   useRttPolling(room);
+
+  // Volume sync — per-user, screen share, master, deafen → setVolume() on
+  // every remote participant + retry-on-subscribe + retry-on-reconnect.
+  useVolumeSync(room);
 
   // PTT: bypass store, toggle mic directly on LiveKit participant
   const setMicEnabled = useCallback(
@@ -83,7 +87,9 @@ function VoiceStateManager() {
   // own Electron process tree — prevents screen share echo.
   const systemAudioCapture = useSystemAudioCapture();
   const systemAudioCaptureRef = useRef(systemAudioCapture);
-  systemAudioCaptureRef.current = systemAudioCapture;
+  useLayoutEffect(() => {
+    systemAudioCaptureRef.current = systemAudioCapture;
+  });
 
   const customAudioPubRef = useRef<LocalTrackPublication | null>(null);
 
@@ -360,87 +366,6 @@ function VoiceStateManager() {
       });
     }
   }, [inputMode, localParticipant]);
-
-  // Volume sync: per-user + master + deafen -> RemoteParticipant.setVolume()
-  // Requires webAudioMix: true for >100% amplification via GainNode.
-
-  // Latest-ref for volume state — avoids re-registering TrackSubscribed listener on every change
-  const volumeRef = useRef({ userVolumes, screenShareVolumes, masterVolume, isDeafened, isServerDeafened });
-  volumeRef.current = { userVolumes, screenShareVolumes, masterVolume, isDeafened, isServerDeafened };
-
-  // Server deafen overrides local state — all audio is silenced when server deafened
-  const effectiveDeafened = isDeafened || isServerDeafened;
-
-  useEffect(() => {
-    room.remoteParticipants.forEach((participant) => {
-      const masterFactor = masterVolume / 100;
-
-      const micVol = userVolumes[participant.identity] ?? 100;
-      const effectiveMic = effectiveDeafened ? 0 : (micVol / 100) * masterFactor;
-      participant.setVolume(effectiveMic, Track.Source.Microphone);
-
-      const ssVol = screenShareVolumes[participant.identity] ?? 100;
-      const effectiveSS = effectiveDeafened ? 0 : (ssVol / 100) * masterFactor;
-      participant.setVolume(effectiveSS, Track.Source.ScreenShareAudio);
-    });
-  }, [userVolumes, screenShareVolumes, masterVolume, effectiveDeafened, room]);
-
-  const applyVolumeToParticipant = useCallback(
-    (participant: RemoteParticipant) => {
-      const {
-        userVolumes: vols,
-        screenShareVolumes: ssVols,
-        masterVolume: master,
-        isDeafened: deaf,
-        isServerDeafened: srvDeaf,
-      } = volumeRef.current;
-      const masterFactor = master / 100;
-      const fullyDeaf = deaf || srvDeaf;
-
-      const micVol = vols[participant.identity] ?? 100;
-      const effectiveMic = fullyDeaf ? 0 : (micVol / 100) * masterFactor;
-      participant.setVolume(effectiveMic, Track.Source.Microphone);
-
-      const ssVol = ssVols[participant.identity] ?? 100;
-      const effectiveSS = fullyDeaf ? 0 : (ssVol / 100) * masterFactor;
-      participant.setVolume(effectiveSS, Track.Source.ScreenShareAudio);
-    },
-    []
-  );
-
-  // Apply volume when new tracks are subscribed.
-  // Retry after 300ms — webAudioMix pipeline may not be ready at subscribe time.
-  useEffect(() => {
-    function handleTrackSubscribed(
-      _track: RemoteTrack,
-      _publication: RemoteTrackPublication,
-      participant: RemoteParticipant
-    ): void {
-      if (_track.kind !== Track.Kind.Audio) return;
-
-      applyVolumeToParticipant(participant);
-      setTimeout(() => applyVolumeToParticipant(participant), 300);
-    }
-
-    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-
-    return () => {
-      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-    };
-  }, [room, applyVolumeToParticipant]);
-
-  // Apply volume on participant reconnect (new RemoteParticipant object)
-  useEffect(() => {
-    function handleParticipantConnected(participant: RemoteParticipant) {
-      setTimeout(() => applyVolumeToParticipant(participant), 500);
-    }
-
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-
-    return () => {
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    };
-  }, [room, applyVolumeToParticipant]);
 
   // [DEBUG] Trace every LiveKit connection lifecycle event for disconnect investigation.
   // Remove once root cause of sporadic disconnects is identified.
