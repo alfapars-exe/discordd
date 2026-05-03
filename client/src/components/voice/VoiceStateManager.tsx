@@ -6,11 +6,10 @@
  * speaking detection, screen share subscriptions, and RTT polling.
  */
 
-import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
-import { RoomEvent, ConnectionState, Track, LocalAudioTrack as LKLocalAudioTrack } from "livekit-client";
+import { RoomEvent, ConnectionState, Track } from "livekit-client";
 import type {
-  LocalTrackPublication,
   Participant,
   RemoteTrackPublication,
   RemoteParticipant,
@@ -21,23 +20,18 @@ import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
-import { useSystemAudioCapture } from "../../hooks/useSystemAudioCapture";
-import { isElectron, isCapacitor, resolveUserId } from "../../utils/constants";
-import { startNativeScreenShare, stopNativeScreenShare, onNativeScreenShareStopped } from "../../utils/nativePlugins";
-import { getScreenShareToken } from "../../api/voice";
-import { useServerStore } from "../../stores/serverStore";
+import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
+import { resolveUserId } from "../../utils/constants";
 
 function VoiceStateManager() {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
   const isMuted = useVoiceStore((s) => s.isMuted);
-  const isStreaming = useVoiceStore((s) => s.isStreaming);
   const inputMode = useVoiceStore((s) => s.inputMode);
   const isServerMuted = useVoiceStore((s) => s.isServerMuted);
   const isServerDeafened = useVoiceStore((s) => s.isServerDeafened);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
-  const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
   const outputDevice = useVoiceStore((s) => s.outputDevice);
 
   // Server deafen overrides local — used by the mic-subscription effect.
@@ -58,6 +52,10 @@ function VoiceStateManager() {
   // Volume sync — per-user, screen share, master, deafen → setVolume() on
   // every remote participant + retry-on-subscribe + retry-on-reconnect.
   useVolumeSync(room);
+
+  // Screen share lifecycle — store↔LiveKit forward sync + external-stop
+  // detection (Capacitor native, OS-level "Stop sharing" dialog, SFU drops).
+  useScreenShareToggle(room, localParticipant, initialSyncDone);
 
   // PTT: bypass store, toggle mic directly on LiveKit participant
   const setMicEnabled = useCallback(
@@ -81,141 +79,6 @@ function VoiceStateManager() {
       console.error("[VoiceStateManager] Failed to toggle microphone:", err);
     });
   }, [isMuted, isServerMuted, localParticipant]);
-
-  // Process-exclusive audio capture (Electron only).
-  // Uses native audio-capture.exe to capture system audio excluding our
-  // own Electron process tree — prevents screen share echo.
-  const systemAudioCapture = useSystemAudioCapture();
-  const systemAudioCaptureRef = useRef(systemAudioCapture);
-  useLayoutEffect(() => {
-    systemAudioCaptureRef.current = systemAudioCapture;
-  });
-
-  const customAudioPubRef = useRef<LocalTrackPublication | null>(null);
-
-  // Sync isStreaming -> LiveKit screen share.
-  // Capacitor (iOS/Android): native plugin via separate LiveKit connection.
-  //   iOS: ReplayKit + LiveKit Swift SDK. Android: MediaProjection + LiveKit Android SDK.
-  // Electron: video via getDisplayMedia, audio via native WASAPI capture (echo-free).
-  // Browser: standard getDisplayMedia with optional audio.
-  useEffect(() => {
-    if (!initialSyncDone.current) return;
-
-    let cancelled = false;
-    const useNativeScreenShare = isCapacitor();
-
-    async function toggleScreenShare() {
-      if (cancelled) return;
-
-      if (isStreaming) {
-        if (useNativeScreenShare) {
-          // Capacitor (iOS/Android): native screen share plugin
-          const serverId = useServerStore.getState().activeServerId;
-          const channelId = useVoiceStore.getState().currentVoiceChannelId;
-          if (!serverId || !channelId) return;
-
-          const response = await getScreenShareToken(serverId, channelId);
-          if (cancelled || !response.success || !response.data) {
-            console.error("[VoiceStateManager] Failed to get screen share token:", response.error);
-            return;
-          }
-
-          await startNativeScreenShare(response.data.url, response.data.token);
-        } else if (isElectron() && screenShareAudio) {
-          // Electron: video only via getDisplayMedia, audio via native capture
-          const ssq = useVoiceStore.getState().screenShareQuality;
-          const ssRes = ssq === "720p"
-            ? { width: 1280, height: 720, frameRate: 30 }
-            : { width: 1920, height: 1080, frameRate: 30 };
-          await localParticipant.setScreenShareEnabled(true, {
-            audio: false,
-            resolution: ssRes,
-            contentHint: "motion",
-          });
-
-          if (cancelled) return;
-
-          const audioTrack = await systemAudioCaptureRef.current.start();
-
-          if (cancelled || !audioTrack) return;
-
-          // Wrap in LiveKit's LocalAudioTrack and publish as ScreenShareAudio
-          const lkTrack = new LKLocalAudioTrack(audioTrack, undefined, false);
-          const pub = await localParticipant.publishTrack(lkTrack, {
-            source: Track.Source.ScreenShareAudio,
-          });
-          customAudioPubRef.current = pub;
-        } else {
-          // Browser: standard getDisplayMedia
-          const ssq = useVoiceStore.getState().screenShareQuality;
-          const ssRes = ssq === "720p"
-            ? { width: 1280, height: 720, frameRate: 30 }
-            : { width: 1920, height: 1080, frameRate: 30 };
-          await localParticipant.setScreenShareEnabled(true, {
-            audio: screenShareAudio,
-            resolution: ssRes,
-            contentHint: "motion",
-          });
-        }
-      } else {
-        if (useNativeScreenShare) {
-          // Capacitor: stop native screen share
-          await stopNativeScreenShare();
-        } else {
-          if (customAudioPubRef.current) {
-            await localParticipant.unpublishTrack(
-              customAudioPubRef.current.track!
-            );
-            customAudioPubRef.current = null;
-          }
-
-          systemAudioCaptureRef.current.stop();
-          await localParticipant.setScreenShareEnabled(false);
-        }
-      }
-    }
-
-    toggleScreenShare().catch((err: unknown) => {
-      if (!cancelled) {
-        console.error("[VoiceStateManager] Failed to toggle screen share:", err);
-        if (isStreaming) {
-          const { _wsSend } = useVoiceStore.getState();
-          useVoiceStore.getState().setStreaming(false);
-          if (_wsSend) {
-            _wsSend("voice_state_update_request", { is_streaming: false });
-          }
-        }
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [isStreaming, screenShareAudio, localParticipant]);
-
-  // Capacitor: listen for native screen share stopped (user stops externally)
-  useEffect(() => {
-    if (!isCapacitor()) return;
-
-    let removeListener: (() => void) | null = null;
-
-    onNativeScreenShareStopped(() => {
-      // Sync store state — native screen share was stopped externally.
-      // Track is already torn down by the native side at this point, so
-      // server notification is safe (no phantom-share window).
-      const { isStreaming: currentlyStreaming, _wsSend } = useVoiceStore.getState();
-      if (currentlyStreaming) {
-        useVoiceStore.getState().setStreaming(false);
-        if (_wsSend) {
-          _wsSend("voice_state_update_request", { is_streaming: false });
-        }
-      }
-    }).then((cleanup) => {
-      removeListener = cleanup;
-    });
-
-    return () => {
-      removeListener?.();
-    };
-  }, []);
 
   // Raise EventEmitter limit — we attach many room listeners here + SDK internals
   useEffect(() => {
@@ -460,29 +323,6 @@ function VoiceStateManager() {
       });
     });
   }, [effectiveDeafened, room]);
-
-  // Sync isStreaming when screen share track is lost (reconnect, SFU drop,
-  // user closing the OS-level "Stop sharing" dialog). The track event fires
-  // AFTER the track is actually gone, so this is the right place to notify
-  // the server too — by the time other clients hear is_streaming=false,
-  // their LiveKit subscription is also already torn down. No phantom share.
-  useEffect(() => {
-    function handleLocalTrackUnpublished(pub: LocalTrackPublication) {
-      if (pub.source !== Track.Source.ScreenShare) return;
-      const { isStreaming: streaming, _wsSend } = useVoiceStore.getState();
-      if (streaming) {
-        useVoiceStore.getState().setStreaming(false);
-        if (_wsSend) {
-          _wsSend("voice_state_update_request", { is_streaming: false });
-        }
-      }
-    }
-
-    room.on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
-    return () => {
-      room.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
-    };
-  }, [room]);
 
   // Clear watch state when a remote streamer stops sharing or disconnects.
   // Without this, watchingScreenShares keeps the entry → grid stays in compact
