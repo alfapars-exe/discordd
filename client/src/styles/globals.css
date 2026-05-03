@@ -2692,11 +2692,14 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .sp-audio-toggle { display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none; }
 .sp-audio-label { display:flex;align-items:center;gap:8px;font-size:14px;color:var(--t1); }
 
-/* Mini switch — footer toggle */
-.sp-switch { width:36px;height:20px;border-radius:10px;background:var(--bg-5);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0; }
+/* Mini switch — footer toggle / popup toggle */
+.sp-switch { width:36px;height:20px;border-radius:10px;background:var(--bg-5);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;display:inline-block; }
 .sp-switch-on { background:var(--primary); }
 .sp-switch-thumb { width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s; }
 .sp-switch-on .sp-switch-thumb { transform:translateX(16px); }
+
+/* Submenu toggle row — switch on the right of a label */
+.adp-submenu-toggle { display:flex;align-items:center;justify-content:space-between;gap:8px; }
 
 /* ═══════════════════════════════════════
    GENERAL SETTINGS (Desktop Settings)

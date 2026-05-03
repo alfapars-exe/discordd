@@ -433,11 +433,14 @@ function ScreenShareQualityPopup({
       </div>
       <div className="adp-section">
         <button
-          className={`adp-submenu-item${screenShareAudio ? " selected" : ""}`}
+          className="adp-submenu-item adp-submenu-toggle"
           onClick={() => setScreenShareAudio(!screenShareAudio)}
+          aria-pressed={screenShareAudio}
         >
           <span className="adp-submenu-label">{t("screenShareAudio")}</span>
-          {screenShareAudio && <div className="adp-submenu-check" />}
+          <span className={`sp-switch${screenShareAudio ? " sp-switch-on" : ""}`}>
+            <span className="sp-switch-thumb" />
+          </span>
         </button>
       </div>
     </div>,
