@@ -56,7 +56,12 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   noiseReduction: true,
   noiseReductionEngine: "rnnoise",
   screenShareVolumes: {},
-  screenShareAudio: false,
+  // Default true: most users sharing a screen also want to share its audio
+  // (gameplay, presentations, video). When the toggle is on, the browser's
+  // native picker still shows its own "share audio" checkbox so users who
+  // don't want audio can uncheck it at the OS level. A false default here
+  // would silently strip audio before the browser even asks.
+  screenShareAudio: true,
   screenShareQuality: "720p",
   screenShareFps: 30,
 };
