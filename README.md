@@ -21,9 +21,9 @@ short_description: Discord-style topluluk platformu — sesli kanallar, metin, d
 </p>
 
 <p align="center">
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.exe"><img src="icons/btn-windows.svg" alt="Download for Windows" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.dmg"><img src="icons/btn-macos.svg" alt="Download for macOS" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.AppImage"><img src="icons/btn-linux.svg" alt="Download for Linux" height="48" /></a>
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.exe"><img src="icons/btn-windows.svg" alt="Download for Windows" height="48" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.dmg"><img src="icons/btn-macos.svg" alt="Download for macOS" height="48" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.AppImage"><img src="icons/btn-linux.svg" alt="Download for Linux" height="48" /></a>
 </p>
 
 <p align="center">
@@ -343,7 +343,7 @@ The install script generates sensible defaults. If you need to tweak them, edit 
 
 ```bash
 # Clone
-git clone https://github.com/akinalpfdn/Mqvi.git
+git clone https://github.com/alfapars-exe/discordd.git
 cd Mqvi
 
 # Backend

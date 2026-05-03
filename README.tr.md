@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.exe"><img src="icons/btn-windows.svg" alt="Windows İndir" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.dmg"><img src="icons/btn-macos.svg" alt="macOS İndir" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.AppImage"><img src="icons/btn-linux.svg" alt="Linux İndir" height="48" /></a>
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.exe"><img src="icons/btn-windows.svg" alt="Windows İndir" height="48" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.dmg"><img src="icons/btn-macos.svg" alt="macOS İndir" height="48" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.AppImage"><img src="icons/btn-linux.svg" alt="Linux İndir" height="48" /></a>
 </p>
 
 <p align="center">
@@ -332,7 +332,7 @@ Install scripti makul varsayilanlar uretir. Degistirmek istersen `/opt/mqvi/.env
 
 ```bash
 # Klonla
-git clone https://github.com/akinalpfdn/Mqvi.git
+git clone https://github.com/alfapars-exe/discordd.git
 cd Mqvi
 
 # Backend
