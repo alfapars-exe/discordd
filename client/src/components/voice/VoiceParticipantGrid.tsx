@@ -22,13 +22,36 @@ function VoiceParticipantGrid() {
   const { t } = useTranslation("voice");
   const allParticipants = useParticipants();
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
+  const channelStates = useVoiceStore((s) =>
+    currentVoiceChannelId ? s.voiceStates[currentVoiceChannelId] : undefined,
+  );
 
-  // Filter out iOS native screen share sub-participants (identity ends with "_ss")
-  // and music bot participants (identity prefix `__music_bot__:`). The bot tile
-  // is rendered via the dedicated MusicBotPanel above the grid.
+  // Filters applied in order:
+  //   1. iOS native screen share sub-participants (identity ends with "_ss")
+  //      — separate LiveKit connections that only publish screen-share tracks.
+  //   2. Music bot participants (identity prefix `__music_bot__:`) — rendered
+  //      via the dedicated MusicBotPanel above the grid instead.
+  //   3. Ghost participants — present in LiveKit's room view but NOT in our
+  //      backend voiceStates for this channel. Happens when a user's WS
+  //      drops without a clean leave; backend orphan-cleanup needs ~35 s
+  //      grace before it disconnects them on LiveKit. Cross-checking the
+  //      backend list hides them immediately. localParticipant always passes
+  //      so the user sees themselves before the join broadcast round-trips.
+  const validIdentities = useMemo(() => {
+    if (!channelStates) return null;
+    return new Set(channelStates.map((s) => s.user_id));
+  }, [channelStates]);
+
   const participants = useMemo(
-    () => allParticipants.filter((p) => !isScreenShareIdentity(p.identity) && !isMusicBotIdentity(p.identity)),
-    [allParticipants]
+    () =>
+      allParticipants.filter((p) => {
+        if (isScreenShareIdentity(p.identity)) return false;
+        if (isMusicBotIdentity(p.identity)) return false;
+        if (p.isLocal) return true;
+        if (!validIdentities) return true; // no backend snapshot yet — be permissive
+        return validIdentities.has(p.identity);
+      }),
+    [allParticipants, validIdentities]
   );
 
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
