@@ -10,7 +10,6 @@ import { useEffect, useRef, useCallback } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { RoomEvent, ParticipantEvent, ConnectionState, Track, LocalAudioTrack as LKLocalAudioTrack } from "livekit-client";
 import type {
-  LocalAudioTrack,
   LocalTrackPublication,
   Participant,
   RemoteTrack,
@@ -18,21 +17,13 @@ import type {
   RemoteParticipant,
 } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
-import { useToastStore } from "../../stores/toastStore";
 import { usePushToTalk } from "../../hooks/usePushToTalk";
-import { RNNoiseProcessor } from "../../audio/RNNoiseProcessor";
-import { VadGateProcessor } from "../../audio/VadGateProcessor";
+import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useSystemAudioCapture } from "../../hooks/useSystemAudioCapture";
 import { isElectron, isCapacitor, resolveUserId } from "../../utils/constants";
 import { startNativeScreenShare, stopNativeScreenShare, onNativeScreenShareStopped } from "../../utils/nativePlugins";
 import { getScreenShareToken } from "../../api/voice";
 import { useServerStore } from "../../stores/serverStore";
-
-/** Both processors expose setMicSensitivity and setInputVolume */
-// Krisp returns LiveKit's TrackProcessor<Track.Kind.Audio> at runtime; we
-// don't pin its type here so the @livekit/krisp-noise-filter dependency stays
-// fully lazy (dynamic import — only fetched when the user opts in).
-type AudioProcessor = RNNoiseProcessor | VadGateProcessor | { name: string };
 
 function VoiceStateManager() {
   const room = useRoomContext();
@@ -48,16 +39,13 @@ function VoiceStateManager() {
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
   const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
-  const noiseReduction = useVoiceStore((s) => s.noiseReduction);
-  const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
-  const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
-  const addToast = useToastStore((s) => s.addToast);
-  const micSensitivity = useVoiceStore((s) => s.micSensitivity);
-  const inputVolume = useVoiceStore((s) => s.inputVolume);
   const outputDevice = useVoiceStore((s) => s.outputDevice);
 
   // Skip effects until initial connection sync is done
   const initialSyncDone = useRef(false);
+
+  // Mic track processor (RNNoise / Krisp / VadGate) — extracted hook.
+  useAudioProcessor(room, localParticipant, initialSyncDone);
 
   // PTT: bypass store, toggle mic directly on LiveKit participant
   const setMicEnabled = useCallback(
@@ -659,189 +647,6 @@ function VoiceStateManager() {
     };
   }, [room]);
 
-  // Audio processor management: NR on -> RNNoise, NR off + sens<100 -> VadGate, else none
-  const processorRef = useRef<AudioProcessor | null>(null);
-  const noiseReductionRef = useRef(noiseReduction);
-  noiseReductionRef.current = noiseReduction;
-  const noiseReductionEngineRef = useRef(noiseReductionEngine);
-  noiseReductionEngineRef.current = noiseReductionEngine;
-  const micSensitivityRef = useRef(micSensitivity);
-  micSensitivityRef.current = micSensitivity;
-  const inputVolumeRef = useRef(inputVolume);
-  inputVolumeRef.current = inputVolume;
-
-  function getDesiredProcessor(
-    nr: boolean,
-    engine: "rnnoise" | "krisp",
-    sens: number,
-  ): "krisp" | "rnnoise" | "vadgate" | "none" {
-    if (nr) return engine === "krisp" ? "krisp" : "rnnoise";
-    if (sens < 100) return "vadgate";
-    return "none";
-  }
-
-  function getCurrentProcessorType(): "krisp" | "rnnoise" | "vadgate" | "none" {
-    const ref = processorRef.current;
-    if (!ref) return "none";
-    if (ref instanceof RNNoiseProcessor) return "rnnoise";
-    if (ref instanceof VadGateProcessor) return "vadgate";
-    return "krisp";
-  }
-
-  // Switch processor when noiseReduction or micSensitivity changes
-  useEffect(() => {
-    if (!initialSyncDone.current) return;
-
-    const pub = localParticipant.getTrackPublication(Track.Source.Microphone);
-    const audioTrack = pub?.track as LocalAudioTrack | undefined;
-    if (!audioTrack) return;
-
-    const desired = getDesiredProcessor(noiseReduction, noiseReductionEngine, micSensitivity);
-    const current = getCurrentProcessorType();
-
-    if (desired === current) {
-      if (
-        processorRef.current &&
-        desired !== "none" &&
-        desired !== "krisp" &&
-        (processorRef.current instanceof RNNoiseProcessor ||
-          processorRef.current instanceof VadGateProcessor)
-      ) {
-        processorRef.current.setMicSensitivity(micSensitivity);
-        processorRef.current.setInputVolume(inputVolume);
-      }
-      return;
-    }
-
-    let cancelled = false;
-
-    async function switchProcessor() {
-      if (cancelled) return;
-
-      if (processorRef.current) {
-        await audioTrack!.stopProcessor();
-        processorRef.current = null;
-      }
-
-      if (cancelled) return;
-
-      if (desired === "krisp") {
-        // Lazy-import @livekit/krisp-noise-filter so the bundle stays small
-        // for users who don't enable it. Falls back to RNNoise on failure
-        // (most often: the LiveKit Cloud project doesn't have Krisp enabled,
-        // which requires a paid plan).
-        try {
-          const { KrispNoiseFilter, isKrispNoiseFilterSupported } =
-            await import("@livekit/krisp-noise-filter");
-          if (!isKrispNoiseFilterSupported()) {
-            throw new Error("Krisp not supported in this browser");
-          }
-          if (cancelled) return;
-          const processor = KrispNoiseFilter();
-          processorRef.current = processor as unknown as AudioProcessor;
-          await audioTrack!.setProcessor(processor);
-          return;
-        } catch (err) {
-          console.warn("[VoiceStateManager] Krisp init failed, falling back to RNNoise:", err);
-          addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
-          setNoiseReductionEngine("rnnoise");
-          if (cancelled) return;
-          const processor = new RNNoiseProcessor(micSensitivity, inputVolume);
-          processorRef.current = processor;
-          await audioTrack!.setProcessor(processor);
-          return;
-        }
-      }
-
-      if (desired === "rnnoise") {
-        const processor = new RNNoiseProcessor(micSensitivity, inputVolume);
-        processorRef.current = processor;
-        await audioTrack!.setProcessor(processor);
-      } else if (desired === "vadgate") {
-        const processor = new VadGateProcessor(micSensitivity, inputVolume);
-        processorRef.current = processor;
-        await audioTrack!.setProcessor(processor);
-      }
-    }
-
-    switchProcessor().catch((err) => {
-      if (!cancelled) {
-        console.error("[VoiceStateManager] Failed to switch audio processor:", err);
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [noiseReduction, noiseReductionEngine, micSensitivity, inputVolume, localParticipant, addToast, setNoiseReductionEngine]);
-
-  // Apply processor when mic track is first published (settings already active on join).
-  // The effect above won't catch this since noiseReduction/micSensitivity haven't changed.
-  useEffect(() => {
-    // Krisp's dynamic import + setProcessor is async. If the user leaves
-    // the voice channel before it finishes, we shouldn't write to
-    // processorRef on a torn-down track. Guard with a cancelled flag,
-    // matching the pattern used by the runtime switch effect.
-    let cancelled = false;
-
-    function handleLocalTrackPublished(pub: LocalTrackPublication) {
-      if (pub.source !== Track.Source.Microphone) return;
-      if (processorRef.current) return; // already applied
-
-      const desired = getDesiredProcessor(
-        noiseReductionRef.current,
-        noiseReductionEngineRef.current,
-        micSensitivityRef.current,
-      );
-      if (desired === "none") return;
-
-      const audioTrack = pub.track as LocalAudioTrack | undefined;
-      if (!audioTrack) return;
-
-      if (desired === "krisp") {
-        (async () => {
-          try {
-            const { KrispNoiseFilter, isKrispNoiseFilterSupported } =
-              await import("@livekit/krisp-noise-filter");
-            if (cancelled) return;
-            if (!isKrispNoiseFilterSupported()) throw new Error("unsupported");
-            const processor = KrispNoiseFilter();
-            if (cancelled) return;
-            processorRef.current = processor as unknown as AudioProcessor;
-            await audioTrack.setProcessor(processor);
-          } catch (err) {
-            if (cancelled) return;
-            console.warn("[VoiceStateManager] Krisp init on publish failed, falling back to RNNoise:", err);
-            setNoiseReductionEngine("rnnoise");
-            const fallback = new RNNoiseProcessor(
-              micSensitivityRef.current,
-              inputVolumeRef.current,
-            );
-            if (cancelled) return;
-            processorRef.current = fallback;
-            await audioTrack.setProcessor(fallback);
-          }
-        })();
-        return;
-      }
-
-      let processor: AudioProcessor;
-      if (desired === "rnnoise") {
-        processor = new RNNoiseProcessor(micSensitivityRef.current, inputVolumeRef.current);
-      } else {
-        processor = new VadGateProcessor(micSensitivityRef.current, inputVolumeRef.current);
-      }
-
-      processorRef.current = processor;
-      audioTrack.setProcessor(processor as RNNoiseProcessor | VadGateProcessor)
-        .then(() => { /* processor applied */ })
-        .catch((err) => console.error("[VoiceStateManager] Failed to apply processor on publish:", err));
-    }
-
-    room.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
-    return () => {
-      cancelled = true;
-      room.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
-    };
-  }, [room, setNoiseReductionEngine]);
 
   // Screen share subscription control.
   // autoSubscribe stays true (audio tracks auto-subscribe).
