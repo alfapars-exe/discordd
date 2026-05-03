@@ -373,10 +373,10 @@ function getDefaultDeviceName(): string {
 
   // Electron?
   if ("electronAPI" in window) {
-    if (ua.includes("Windows")) return "mqvi Desktop - Windows";
-    if (ua.includes("Mac")) return "mqvi Desktop - macOS";
-    if (ua.includes("Linux")) return "mqvi Desktop - Linux";
-    return "mqvi Desktop";
+    if (ua.includes("Windows")) return "HiChat! Desktop - Windows";
+    if (ua.includes("Mac")) return "HiChat! Desktop - macOS";
+    if (ua.includes("Linux")) return "HiChat! Desktop - Linux";
+    return "HiChat! Desktop";
   }
 
   // Browser
