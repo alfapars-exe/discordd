@@ -44,7 +44,7 @@ function CollapsedSidebar() {
         onClick={expandSidebar}
         title={t("server")}
       >
-        <img src={publicAsset("hichat-icon.svg")} alt="HiChat!" className="sb-collapsed-icon" />
+        <img src={publicAsset("logodiscord.png")} alt="HiChat!" className="sb-collapsed-icon" />
         {totalChannelUnread > 0 && (
           <span className="sb-collapsed-badge">{totalChannelUnread}</span>
         )}

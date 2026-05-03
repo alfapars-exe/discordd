@@ -67,7 +67,7 @@ export function createMainWindow(): BrowserWindow {
     height: 800,
     minWidth: 940,
     minHeight: 560,
-    icon: path.join(__dirname, "../icons/mqvi-icon.ico"),
+    icon: path.join(__dirname, "../icons/logodiscord.png"),
     transparent: isTransparent,
     ...(isTransparent ? {} : { backgroundColor: "#111111" }),
     frame: false,

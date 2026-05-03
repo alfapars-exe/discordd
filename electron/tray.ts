@@ -13,9 +13,10 @@ import { getMainWindow, setQuitting } from "./window";
 let tray: Tray | null = null;
 
 export function createTray(): void {
-  // macOS menu bar wants a small icon; everywhere else uses a 256x256 png.
-  const iconName = process.platform === "darwin" ? "tray-icon-22.png" : "mqvi-icon-256x256.png";
-  const iconPath = path.join(__dirname, "../icons", iconName);
+  // Single canonical app logo across platforms. Electron resizes the
+  // PNG for the platform's tray density (16/22 on Linux/macOS, 256 on
+  // Windows) so we no longer need separate small/large variants.
+  const iconPath = path.join(__dirname, "../icons", "logodiscord.png");
   tray = new Tray(nativeImage.createFromPath(iconPath));
   tray.setToolTip("HiChat!");
 
