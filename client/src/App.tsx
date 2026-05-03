@@ -12,9 +12,8 @@ import LandingPage from "./components/landing/LandingPage";
 import PrivacyPage from "./components/landing/PrivacyPage";
 import TermsPage from "./components/landing/TermsPage";
 import InviteJoinPage from "./components/servers/InviteJoinPage";
-import UpdateNotification from "./components/shared/UpdateNotification";
 import CustomTitleBar from "./components/layout/CustomTitleBar";
-import { useUpdateChecker } from "./hooks/useUpdateChecker";
+import UpdateBanner from "./components/shared/UpdateBanner";
 import { isElectron, isNativeApp } from "./utils/constants";
 
 /**
@@ -27,7 +26,6 @@ function App() {
   const initialize = useAuthStore((s) => s.initialize);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const user = useAuthStore((s) => s.user);
-  const updater = useUpdateChecker();
   const blurEnabled = useSettingsStore((s) => s.blurEnabled);
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
 
@@ -69,16 +67,9 @@ function App() {
     return spinner;
   }
 
-  const updateBanner =
-    (updater.status === "downloading" || updater.status === "ready") ? (
-      <UpdateNotification
-        status={updater.status}
-        version={updater.update?.version ?? ""}
-        progress={updater.progress}
-        onRestart={updater.restartAndInstall}
-        onDismiss={updater.dismiss}
-      />
-    ) : null;
+  // Update banner (downloading + ready states for Electron, redeploy nudge
+  // for web) is rendered globally inside AppLayout via <UpdateBanner />.
+  // No need for App.tsx to wire it separately — single source of truth.
 
   const routes = (
     <Routes>
@@ -141,13 +132,18 @@ function App() {
     return (
       <div className="electron-app-wrapper">
         <CustomTitleBar />
-        {updateBanner}
+        <UpdateBanner />
         {routes}
       </div>
     );
   }
 
-  return routes;
+  return (
+    <>
+      <UpdateBanner />
+      {routes}
+    </>
+  );
 }
 
 export default App;
