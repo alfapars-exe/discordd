@@ -20,6 +20,7 @@
 
 import { useCallback, useMemo } from "react";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+import { AudioPresets } from "livekit-client";
 import type { AudioCaptureOptions, RoomOptions } from "livekit-client";
 
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -103,7 +104,13 @@ function VoiceProvider({ children }: VoiceProviderProps) {
 
     const base: RoomOptions = {
       audioCaptureDefaults,
-      publishDefaults,
+      publishDefaults: {
+        ...publishDefaults,
+        // Hi-fi audio (64 kbps stereo Opus) — speech default is 20 kbps mono.
+        // Stereo + higher bitrate noticeably cleans up music/game/voice quality
+        // for ~3x the bandwidth, well within self-hosted SFU budgets.
+        audioPreset: AudioPresets.musicHighQuality,
+      },
       webAudioMix: true,
       // adaptiveStream: SFU sends the lower simulcast layer when a
       // subscriber's viewport is small. Without this, full-res is sent
