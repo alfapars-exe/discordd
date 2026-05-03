@@ -2030,7 +2030,10 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 
 /* Participant — full mode */
 .voice-participant { display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px; }
-.voice-participant-avatar { width:128px;height:128px;border-radius:999px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:#fff;transition:box-shadow .15s;position:relative; }
+/* No box-shadow transition: we want the green speaking ring to light up
+   the same instant useSpeakingDetection flips activeSpeakers — a 150ms
+   ease-in adds perceptible lag to the otherwise tight feedback loop. */
+.voice-participant-avatar { width:128px;height:128px;border-radius:999px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:#fff;position:relative; }
 .voice-participant-avatar.speaking { box-shadow:0 0 0 3px var(--bg-2),0 0 0 6px var(--green); }
 .voice-participant-name { font-size:22px;font-weight:500;color:var(--t0);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .voice-participant-overlay { position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;border-radius:999px;background:var(--bg-3);display:flex;align-items:center;justify-content:center; }
