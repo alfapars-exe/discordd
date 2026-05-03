@@ -16,9 +16,16 @@ import { app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
 import { readFileSync } from "fs";
 import path from "path";
+import { getMainWindow } from "./window";
 
 let prelaunchChecked = false;
 let splashWindow: BrowserWindow | null = null;
+let runtimeCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+/** How often we re-poll GitHub Releases for a newer version while the app
+ *  is running. 5 minutes mirrors electron-builder's default cadence — well
+ *  inside GitHub's anonymous rate limit (60 req/hour). */
+const RUNTIME_CHECK_MS = 5 * 60 * 1000;
 
 /** Has the pre-launch splash already run an update check? Used to deduplicate. */
 export function wasPrelaunchChecked(): boolean {
@@ -26,11 +33,43 @@ export function wasPrelaunchChecked(): boolean {
 }
 
 /**
- * Wire up event-driven updates between launches.
- * Currently no-op — see file header for context.
+ * Wire up event-driven update notifications while the app is running.
+ *
+ * autoDownload=true so the .exe streams in the background as soon as a
+ * new release is detected; autoInstallOnAppQuit=true so the installer
+ * fires automatically on next quit if the user never clicks "Restart now".
+ * The renderer-side useUpdateChecker hook listens for the IPC events we
+ * forward here and surfaces an UpdateBanner with a restart button.
+ *
+ * Errors (network down, GitHub rate-limit, transient release-feed parse
+ * failures) are forwarded as `update-error` but the renderer treats them
+ * as silent — no banner, just a console warning. We don't want the app to
+ * pester the user every five minutes about a hiccup.
  */
 export function setupAutoUpdater(): void {
-  return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", (info) => {
+    getMainWindow()?.webContents.send("update-available", info);
+  });
+  autoUpdater.on("download-progress", (progress) => {
+    getMainWindow()?.webContents.send("update-progress", progress);
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    getMainWindow()?.webContents.send("update-downloaded", info);
+  });
+  autoUpdater.on("error", (err) => {
+    getMainWindow()?.webContents.send("update-error", err.message);
+  });
+
+  // Initial check + recurring poll. Both swallow errors so a temporary
+  // network blip doesn't crash the main process.
+  autoUpdater.checkForUpdates().catch(() => undefined);
+  if (runtimeCheckInterval) clearInterval(runtimeCheckInterval);
+  runtimeCheckInterval = setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => undefined);
+  }, RUNTIME_CHECK_MS);
 }
 
 function createSplashWindow(): BrowserWindow {
