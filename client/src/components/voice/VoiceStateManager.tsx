@@ -20,6 +20,7 @@ import { useVoiceStore } from "../../stores/voiceStore";
 import { usePushToTalk } from "../../hooks/usePushToTalk";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
+import { useRttPolling } from "../../hooks/useRttPolling";
 import { useSystemAudioCapture } from "../../hooks/useSystemAudioCapture";
 import { isElectron, isCapacitor, resolveUserId } from "../../utils/constants";
 import { startNativeScreenShare, stopNativeScreenShare, onNativeScreenShareStopped } from "../../utils/nativePlugins";
@@ -50,6 +51,9 @@ function VoiceStateManager() {
 
   // Speaking detection — drives sidebar green-ring indicators.
   useSpeakingDetection(room, localParticipant);
+
+  // RTT polling — drives the "Ses Bağlı / NN ms" connection indicator.
+  useRttPolling(room);
 
   // PTT: bypass store, toggle mic directly on LiveKit participant
   const setMicEnabled = useCallback(
@@ -339,52 +343,6 @@ function VoiceStateManager() {
       room.off(RoomEvent.Reconnected, handleConnected);
     };
   }, [room, outputDevice]);
-
-  // RTT polling: try signaling RTT first, fall back to WebRTC stats ICE candidate-pair
-  useEffect(() => {
-    if (room.state !== ConnectionState.Connected) return;
-    let cancelled = false;
-
-    async function pollRtt() {
-      if (cancelled) return;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const engine = (room as any).engine;
-
-        const signalRtt = engine?.client?.rtt as number | undefined;
-        if (typeof signalRtt === "number" && signalRtt > 0) {
-          useVoiceStore.getState().setRtt(Math.round(signalRtt));
-          return;
-        }
-
-        const pc = engine?.pcManager?.subscriber?.pc as RTCPeerConnection | undefined;
-        if (!pc) return;
-        const stats = await pc.getStats();
-        if (cancelled) return;
-
-        stats.forEach((report: Record<string, unknown>) => {
-          if (
-            report.type === "candidate-pair" &&
-            report.nominated === true &&
-            typeof report.currentRoundTripTime === "number" &&
-            report.currentRoundTripTime > 0
-          ) {
-            useVoiceStore.getState().setRtt(Math.round((report.currentRoundTripTime as number) * 1000));
-          }
-        });
-      } catch {
-        // engine/client not ready yet
-      }
-    }
-
-    pollRtt();
-    const interval = setInterval(pollRtt, 3000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [room, room.state]);
 
 
   // Sync inputMode changes: PTT -> mic off, voice activity -> restore isMuted
