@@ -17,6 +17,15 @@ type VoiceState struct {
 	IsServerMuted    bool      `json:"is_server_muted"`
 	IsServerDeafened bool      `json:"is_server_deafened"`
 	LastActivity     time.Time `json:"-"` // not serialized — server-side AFK tracking only
+
+	// Quota-tracking fields. Populated at JoinChannel time so the leave path
+	// (explicit leave, AFK kick, orphan cleanup, WS disconnect) can compute
+	// the session duration without a second instance lookup, and skip
+	// writing usage rows for self-hosted instances. All json:"-" because
+	// clients have no business seeing this.
+	JoinedAt          time.Time `json:"-"`
+	LiveKitInstanceID string    `json:"-"`
+	LiveKitIsCloud    bool      `json:"-"` // mirrors instance.IsPlatformManaged at join time
 }
 
 type VoiceTokenRequest struct {

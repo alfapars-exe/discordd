@@ -33,6 +33,38 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		return nil, fmt.Errorf("failed to get livekit instance for server %s: %w", channel.ServerID, err)
 	}
 
+	// ─── Auto-switch when this cloud instance is running out of monthly quota.
+	// Self-hosted instances (IsPlatformManaged=false) skip this entirely; they
+	// have no quota and aren't part of the rotation.
+	//
+	// Rule: if (used + threshold*60) >= quota*60, look for the next eligible
+	// cloud instance (lower priority wins, same threshold check applied), and
+	// migrate the server's livekit_instance_id atomically. Fail-open: any
+	// error stays on the current instance — voice still works, we just keep
+	// burning the original budget.
+	if lkInstance.IsPlatformManaged && lkInstance.AutoSwitchEnabled {
+		now := time.Now()
+		year, month, _ := now.Date()
+		used, usageErr := s.livekitGetter.GetMonthlyUsage(ctx, lkInstance.ID, year, int(month))
+		if usageErr == nil {
+			thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
+			quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
+			if used+thresholdSec >= quotaSec {
+				next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
+				if nextErr == nil && next != nil {
+					if migErr := s.livekitGetter.MigrateOneServer(ctx, channel.ServerID, next.ID); migErr == nil {
+						log.Printf("[voice] auto-switch server=%s from instance=%s to instance=%s (used=%ds quota=%ds threshold=%ds)",
+							channel.ServerID, lkInstance.ID, next.ID, used, quotaSec, thresholdSec)
+						lkInstance = next
+					} else {
+						log.Printf("[voice] auto-switch migrate failed server=%s err=%v", channel.ServerID, migErr)
+					}
+				}
+				// nextErr or next==nil: no eligible target — stay put.
+			}
+		}
+	}
+
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit API key decryption failed", map[string]string{

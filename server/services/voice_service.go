@@ -28,9 +28,18 @@ type ChannelGetter interface {
 	GetByID(ctx context.Context, id string) (*models.Channel, error)
 }
 
-// LiveKitInstanceGetter retrieves the LiveKit instance for a server.
+// LiveKitInstanceGetter is the slice of LiveKitRepository the voice service
+// needs: lookup by server, plus the quota-tracking methods that hook the
+// session lifecycle (IncrementMonthlyUsage on leave, GetMonthlyUsage +
+// GetNextAutoSwitchInstance + MigrateOneServer on token request). Keeping
+// this interface in the services package avoids a cyclic import on the
+// repository package while still giving us a narrow contract.
 type LiveKitInstanceGetter interface {
 	GetByServerID(ctx context.Context, serverID string) (*models.LiveKitInstance, error)
+	IncrementMonthlyUsage(ctx context.Context, instanceID string, year, month, seconds int) error
+	GetMonthlyUsage(ctx context.Context, instanceID string, year, month int) (int64, error)
+	GetNextAutoSwitchInstance(ctx context.Context, currentID string, year, month int) (*models.LiveKitInstance, error)
+	MigrateOneServer(ctx context.Context, serverID, newInstanceID string) error
 }
 
 // OnlineUserChecker checks connected users. Used by orphan state cleanup.

@@ -323,6 +323,7 @@
   "platformSettings": "Platform",
   "platformAdmin": "LiveKit Sunucuları",
   "platformLiveKitInstances": "LiveKit Sunucuları",
+  "platformLiveKitQuota": "LiveKit Kota",
   "platformAddInstance": "Sunucu Ekle",
   "platformEditInstance": "Sunucuyu Düzenle",
   "platformDeleteInstance": "Sunucuyu Sil",

@@ -44,6 +44,17 @@ type LiveKitAdminService interface {
 	// GetInstanceMetrics fetches real-time metrics from a LiveKit instance's Prometheus endpoint.
 	// Returns Available=false if /metrics is unreachable (no error returned).
 	GetInstanceMetrics(ctx context.Context, instanceID string) (*models.LiveKitInstanceMetrics, error)
+
+	// GetQuotaReport returns every instance with its current-month usage and
+	// derived fields (RemainingMinutes, DaysUntilReset). Self-hosted instances
+	// are included with UsedMinutes=0; the UI shows them with an "♾️ unlimited"
+	// badge based on IsPlatformManaged.
+	GetQuotaReport(ctx context.Context) ([]models.LiveKitInstanceQuotaView, error)
+
+	// UpdateQuotaSettings applies a partial update of the quota-related fields
+	// (priority, monthly_quota_minutes, quota_reset_day, auto_switch_enabled,
+	// switch_threshold_minutes). Returns the refreshed quota view.
+	UpdateQuotaSettings(ctx context.Context, instanceID string, req *models.UpdateLiveKitQuotaSettingsRequest) (*models.LiveKitInstanceQuotaView, error)
 }
 
 type livekitAdminService struct {
@@ -130,11 +141,19 @@ func (s *livekitAdminService) CreateInstance(ctx context.Context, req *models.Cr
 		return nil, fmt.Errorf("failed to encrypt api secret: %w", err)
 	}
 
+	// Default to platform-managed (LiveKit Cloud, quota-tracked) when the
+	// caller doesn't explicitly opt out. Self-hosted is the alternative
+	// the InstanceForm exposes via the "Self-Hosted" toggle.
+	isPlatformManaged := true
+	if req.IsPlatformManaged != nil {
+		isPlatformManaged = *req.IsPlatformManaged
+	}
+
 	instance := &models.LiveKitInstance{
 		URL:               req.URL,
 		APIKey:            encKey,
 		APISecret:         encSecret,
-		IsPlatformManaged: true,
+		IsPlatformManaged: isPlatformManaged,
 		ServerCount:       0,
 		MaxServers:        req.MaxServers,
 		HetznerServerID:   req.HetznerServerID,
@@ -158,12 +177,16 @@ func (s *livekitAdminService) UpdateInstance(ctx context.Context, instanceID str
 		return nil, err
 	}
 
-	if !inst.IsPlatformManaged {
-		return nil, fmt.Errorf("%w: only platform-managed instances can be updated via admin API", pkg.ErrForbidden)
-	}
+	// Both platform-managed (LiveKit Cloud) and self-hosted instances are
+	// editable through this endpoint. The InstanceForm distinguishes between
+	// the two via the IsPlatformManaged toggle; quota-only fields live on
+	// the dedicated PATCH /quota endpoint.
 
 	if req.URL != nil {
 		inst.URL = *req.URL
+	}
+	if req.IsPlatformManaged != nil {
+		inst.IsPlatformManaged = *req.IsPlatformManaged
 	}
 	if req.APIKey != nil {
 		encKey, encErr := crypto.Encrypt(*req.APIKey, s.encryptionKey)
@@ -488,12 +511,114 @@ func (s *livekitAdminService) fetchHetznerMetricsRT(ctx context.Context, hetzner
 // toAdminView converts a LiveKitInstance to a credential-free admin view.
 func toAdminView(inst *models.LiveKitInstance) models.LiveKitInstanceAdminView {
 	return models.LiveKitInstanceAdminView{
-		ID:                inst.ID,
-		URL:               inst.URL,
-		IsPlatformManaged: inst.IsPlatformManaged,
-		ServerCount:       inst.ServerCount,
-		MaxServers:        inst.MaxServers,
-		HetznerServerID:   inst.HetznerServerID,
-		CreatedAt:         inst.CreatedAt,
+		ID:                     inst.ID,
+		URL:                    inst.URL,
+		IsPlatformManaged:      inst.IsPlatformManaged,
+		ServerCount:            inst.ServerCount,
+		MaxServers:             inst.MaxServers,
+		HetznerServerID:        inst.HetznerServerID,
+		CreatedAt:              inst.CreatedAt,
+		Priority:               inst.Priority,
+		MonthlyQuotaMinutes:    inst.MonthlyQuotaMinutes,
+		QuotaResetDay:          inst.QuotaResetDay,
+		AutoSwitchEnabled:      inst.AutoSwitchEnabled,
+		SwitchThresholdMinutes: inst.SwitchThresholdMinutes,
 	}
+}
+
+// GetQuotaReport assembles the rows the admin "LiveKit Kota" page renders.
+// Pulls all instances in one query (ListInstancesWithQuota), then computes
+// per-row derived fields locally so the SQL stays simple.
+func (s *livekitAdminService) GetQuotaReport(ctx context.Context) ([]models.LiveKitInstanceQuotaView, error) {
+	now := time.Now()
+	year, month, _ := now.Date()
+	instances, usedSeconds, err := s.livekitRepo.ListInstancesWithQuota(ctx, year, int(month))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list instances with quota: %w", err)
+	}
+	out := make([]models.LiveKitInstanceQuotaView, len(instances))
+	for i := range instances {
+		inst := &instances[i]
+		view := models.LiveKitInstanceQuotaView{
+			LiveKitInstanceAdminView: toAdminView(inst),
+		}
+		if inst.IsPlatformManaged {
+			view.UsedMinutes = int(usedSeconds[i] / 60)
+			view.RemainingMinutes = inst.MonthlyQuotaMinutes - view.UsedMinutes
+			if view.RemainingMinutes < 0 {
+				view.RemainingMinutes = 0
+			}
+			view.DaysUntilReset = daysUntilNextReset(now, inst.QuotaResetDay)
+		}
+		// Self-hosted: UsedMinutes=0, RemainingMinutes=0, DaysUntilReset=0;
+		// UI hides those columns for is_platform_managed=false rows.
+		out[i] = view
+	}
+	return out, nil
+}
+
+// UpdateQuotaSettings validates and applies a partial quota-fields update,
+// then re-fetches and returns the refreshed view so the UI doesn't have to
+// race with a follow-up GET.
+func (s *livekitAdminService) UpdateQuotaSettings(
+	ctx context.Context, instanceID string, req *models.UpdateLiveKitQuotaSettingsRequest,
+) (*models.LiveKitInstanceQuotaView, error) {
+	if req == nil {
+		return nil, fmt.Errorf("%w: request is required", pkg.ErrBadRequest)
+	}
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+	}
+	if err := s.livekitRepo.UpdateQuotaSettings(ctx, instanceID, req); err != nil {
+		return nil, err
+	}
+	// Refresh the quota view by reading just this instance back through the
+	// joined query — keeps DaysUntilReset / RemainingMinutes consistent.
+	now := time.Now()
+	year, month, _ := now.Date()
+	instances, usedSeconds, err := s.livekitRepo.ListInstancesWithQuota(ctx, year, int(month))
+	if err != nil {
+		return nil, fmt.Errorf("failed to refresh quota view: %w", err)
+	}
+	for i := range instances {
+		if instances[i].ID != instanceID {
+			continue
+		}
+		inst := &instances[i]
+		view := models.LiveKitInstanceQuotaView{
+			LiveKitInstanceAdminView: toAdminView(inst),
+		}
+		if inst.IsPlatformManaged {
+			view.UsedMinutes = int(usedSeconds[i] / 60)
+			view.RemainingMinutes = inst.MonthlyQuotaMinutes - view.UsedMinutes
+			if view.RemainingMinutes < 0 {
+				view.RemainingMinutes = 0
+			}
+			view.DaysUntilReset = daysUntilNextReset(now, inst.QuotaResetDay)
+		}
+		return &view, nil
+	}
+	return nil, pkg.ErrNotFound
+}
+
+// daysUntilNextReset returns the calendar-day count from `today` to the next
+// occurrence of `resetDay`. Same-day = 0 (will reset at end of today). Wraps
+// to next month when resetDay has already passed this month.
+func daysUntilNextReset(today time.Time, resetDay int) int {
+	if resetDay < 1 {
+		resetDay = 1
+	}
+	if resetDay > 28 {
+		resetDay = 28 // matches the validator cap; never special-case Feb
+	}
+	year, month, day := today.Date()
+	if resetDay >= day {
+		return resetDay - day
+	}
+	// Reset day has passed for this month — count to next month's reset day.
+	nextMonth := today.AddDate(0, 1, 0)
+	ny, nm, _ := nextMonth.Date()
+	target := time.Date(ny, nm, resetDay, 0, 0, 0, 0, today.Location())
+	cur := time.Date(year, month, day, 0, 0, 0, 0, today.Location())
+	return int(target.Sub(cur).Hours() / 24)
 }
