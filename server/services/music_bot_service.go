@@ -125,11 +125,15 @@ func (s *musicBotService) SetAppLogger(logger VoiceAppLogger) {
 // (1 for a single video URL, N for a playlist). Lazy-starts the bot on first
 // call per channel. PermSpeak is enforced by the HTTP handler.
 func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url string) ([]models.MusicTrack, error) {
+	log.Printf("[music] enqueue request: channel=%s user=%s url=%q", channelID, userID, url)
+
 	channel, err := s.channels.GetByID(ctx, channelID)
 	if err != nil {
+		log.Printf("[music] enqueue: channel lookup failed channel=%s err=%v", channelID, err)
 		return nil, fmt.Errorf("channel lookup failed: %w", err)
 	}
 	if channel.Type != models.ChannelTypeVoice {
+		log.Printf("[music] enqueue: not a voice channel channel=%s type=%s", channelID, channel.Type)
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
 	}
 
@@ -142,16 +146,22 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 		}
 	}
 
+	extractStart := time.Now()
 	tracks, err := extractTracks(ctx, url, userID, requesterName)
+	extractMs := time.Since(extractStart).Milliseconds()
 	if err != nil {
+		log.Printf("[music] enqueue: yt-dlp extract failed channel=%s url=%q err=%v duration=%dms",
+			channelID, url, err, extractMs)
 		return nil, fmt.Errorf("yt-dlp extraction failed: %w", err)
 	}
+	log.Printf("[music] enqueue: extracted %d track(s) channel=%s duration=%dms", len(tracks), channelID, extractMs)
 	if len(tracks) == 0 {
 		return nil, fmt.Errorf("%w: no playable tracks found at URL", pkg.ErrBadRequest)
 	}
 
 	bot, err := s.getOrCreateBot(ctx, channel.ServerID, channelID)
 	if err != nil {
+		log.Printf("[music] enqueue: getOrCreateBot failed channel=%s err=%v", channelID, err)
 		return nil, err
 	}
 
@@ -160,7 +170,10 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	bot.queue = append(bot.queue, tracks...)
 	bot.user = &requesterMeta{userID: userID, name: requesterName}
 	bot.cancelIdleTimer()
+	queueLen := len(bot.queue)
 	bot.mu.Unlock()
+
+	log.Printf("[music] enqueue: appended channel=%s queue_len=%d wasIdle=%v", channelID, queueLen, wasIdle)
 
 	if wasIdle {
 		go s.playLoop(bot)

@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"regexp"
 	"strings"
@@ -41,6 +42,25 @@ func init() {
 	mime.AddExtensionType(".css", "text/css")
 }
 
+// logMusicBotDeps — runs `yt-dlp --version` and `ffmpeg -version` at boot.
+// Output goes to the runtime log so a missing/broken install is obvious
+// without having to wait for a /play request to fail. Both are best-effort:
+// failures log a warning but don't abort startup, since the rest of the
+// server still works without the music bot.
+func logMusicBotDeps() {
+	if out, err := exec.Command("yt-dlp", "--version").Output(); err != nil {
+		log.Printf("[main] WARN yt-dlp not available — music bot will fail: %v", err)
+	} else {
+		log.Printf("[main] yt-dlp version: %s", strings.TrimSpace(string(out)))
+	}
+	if out, err := exec.Command("ffmpeg", "-version").Output(); err != nil {
+		log.Printf("[main] WARN ffmpeg not available — music bot will fail: %v", err)
+	} else {
+		first := strings.SplitN(string(out), "\n", 2)[0]
+		log.Printf("[main] ffmpeg version: %s", strings.TrimSpace(first))
+	}
+}
+
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	log.Println("[main] HiChat! server starting...")
@@ -51,6 +71,10 @@ func main() {
 		log.Fatalf("[main] failed to load config: %v", err)
 	}
 	log.Printf("[main] config loaded (port=%d)", cfg.Server.Port)
+
+	// Log music-bot dependency versions so missing binaries are obvious from
+	// the boot log instead of buried inside per-track Enqueue failures.
+	logMusicBotDeps()
 
 	// 2. Database
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")

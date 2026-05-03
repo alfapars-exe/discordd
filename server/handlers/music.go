@@ -66,7 +66,11 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 
 	tracks, err := h.music.Enqueue(r.Context(), user.ID, channelID, req.URL)
 	if err != nil {
-		pkg.Error(w, err)
+		// Surface the real error message instead of letting pkg.Error swallow
+		// it into a generic 500. The user reported "Müzik başlatılamadı" with
+		// no console detail; this puts the actual failure (yt-dlp / livekit /
+		// pipeline) in the HTTP response body so it reaches the toast.
+		pkg.ErrorWithMessage(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	pkg.JSON(w, http.StatusOK, playResponse{AddedTracks: tracks})
