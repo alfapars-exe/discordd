@@ -14,6 +14,17 @@ export type InputMode = "voice_activity" | "push_to_talk";
 export type ScreenShareQuality = "720p" | "1080p" | "1440p";
 export type ScreenShareFps = 30 | 60;
 
+/**
+ * Available noise-reduction engines. See the noiseReductionEngine field
+ * docs below for the per-engine pipeline + status notes.
+ */
+export type NoiseReductionEngine =
+  | "rnnoise"
+  | "krisp"
+  | "deepfilter"
+  | "dtln"
+  | "webrtc";
+
 export type VoiceSettings = {
   inputMode: InputMode;
   pttKey: string;
@@ -27,13 +38,24 @@ export type VoiceSettings = {
   localMutedUsers: Record<string, boolean>;
   noiseReduction: boolean;
   /**
-   * Engine used when noiseReduction is on:
-   *  - "rnnoise" — bundled OSS ML denoiser, free, works on every LiveKit
-   *    plan (default).
-   *  - "krisp"   — LiveKit Cloud's Krisp filter (Discord-grade). Requires
-   *    a paid LiveKit Cloud plan; falls back to RNNoise on init failure.
+   * Engine used when noiseReduction is on. Five values, two pipelines:
+   *
+   *   Custom-processor pipeline (LiveKit TrackProcessor + AudioWorklet):
+   *    - "rnnoise"     — bundled OSS ML denoiser, free, default.
+   *    - "krisp"       — LiveKit Cloud's Krisp filter. Paid plan; falls
+   *                      back to RNNoise on init failure.
+   *    - "deepfilter"  — DeepFilterNet3 WASM (deepfilter-standalone).
+   *                      BETA: currently falls back to RNNoise; full
+   *                      WASM integration will land in a follow-up.
+   *    - "dtln"        — DTLN web port (@sapphi-red/dtln-web). BETA:
+   *                      same fallback contract as deepfilter.
+   *
+   *   Browser-native pipeline (track constraint):
+   *    - "webrtc"      — getUserMedia({ noiseSuppression: true }). No
+   *                      AudioWorklet, no WASM, no model file. Works on
+   *                      every Chromium/Electron build.
    */
-  noiseReductionEngine: "rnnoise" | "krisp";
+  noiseReductionEngine: NoiseReductionEngine;
   screenShareVolumes: Record<string, number>;
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
@@ -158,7 +180,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareQuality: (quality: ScreenShareQuality) => void;
   setScreenShareFps: (fps: ScreenShareFps) => void;
   setNoiseReduction: (enabled: boolean) => void;
-  setNoiseReductionEngine: (engine: "rnnoise" | "krisp") => void;
+  setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   toggleLocalMute: (userId: string) => void;
   applyFromServer: (settings: Record<string, unknown>) => void;
 };
