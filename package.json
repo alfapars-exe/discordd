@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.16",
+  "version": "2.11.17",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
@@ -46,6 +46,8 @@
       ],
       "icon": "icons/logodiscord.png",
       "signAndEditExecutable": false,
+      "executableName": "HiChat",
+      "legalTrademarks": "HiChat!",
       "extraResources": [
         {
           "from": "native/audio-capture.exe",
@@ -53,6 +55,7 @@
         }
       ]
     },
+    "copyright": "© 2026 HiChat!",
     "nsis": {
       "oneClick": true,
       "perMachine": false
