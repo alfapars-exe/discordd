@@ -27,6 +27,18 @@ import { shutdownPTT } from "./push-to-talk";
 import { createTray } from "./tray";
 import { createMainWindow, getMainWindow, setQuitting } from "./window";
 
+// ─── App identity ───
+// Sets every "what's the app called?" surface inside Electron — the about
+// panel, native notification group, %APPDATA% path segment (HiChat!), and
+// (on Windows) the taskbar grouping AppUserModelID. Must run before any
+// app.getPath() / app.requestSingleInstanceLock() / window creation.
+app.setName("HiChat!");
+if (process.platform === "win32") {
+  // Match package.json build.appId so taskbar and Action Center associate
+  // notifications with this app rather than the generic "Electron" host.
+  app.setAppUserModelId("net.hichat.app");
+}
+
 // ─── Single-instance lock ───
 // Second launch of HiChat! brings the existing window forward instead of
 // starting a duplicate process — required for tray + global PTT to work
