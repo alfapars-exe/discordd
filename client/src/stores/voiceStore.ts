@@ -96,15 +96,6 @@ type VoiceCoreState = {
   isMuted: boolean;
   isDeafened: boolean;
   isStreaming: boolean;
-  /**
-   * Internal — true when we auto-muted the mic on screen-share start so we
-   * know to restore it on stop. Not persisted; reset to false on every
-   * boot. Lets users manually toggle mute mid-share without breaking the
-   * "restore on stop" behaviour: setStreaming(false) only flips mute back
-   * if it owns the mute (this flag is true). If the user manually muted
-   * before sharing, we don't touch their state.
-   */
-  _autoMutedForStream: boolean;
   /** Server-enforced mute — admin silenced this user's mic */
   isServerMuted: boolean;
   /** Server-enforced deafen — admin silenced all audio for this user */
@@ -170,7 +161,6 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   isMuted: initialMuteState.isMuted,
   isDeafened: initialMuteState.isDeafened,
   isStreaming: false,
-  _autoMutedForStream: false,
   isServerMuted: false,
   isServerDeafened: false,
   livekitUrl: null,
@@ -401,16 +391,13 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     const { isMuted, isDeafened } = get();
 
     if (isDeafened) {
-      set({ isDeafened: false, isMuted: !isMuted, _autoMutedForStream: false });
+      set({ isDeafened: false, isMuted: !isMuted });
       if (isNativeVoice()) {
         nativeVoiceSetDeafened(false);
         nativeVoiceSetMic(isMuted); // was muted, now toggling
       }
     } else {
-      // Manual toggle yields control back to the user — clear the
-      // auto-mute marker so setStreaming(false) doesn't override their
-      // explicit choice when the share later stops.
-      set({ isMuted: !isMuted, _autoMutedForStream: false });
+      set({ isMuted: !isMuted });
       if (isNativeVoice()) {
         nativeVoiceSetMic(isMuted); // was muted → enable, was unmuted → disable
       }
@@ -440,41 +427,15 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   },
 
   setStreaming: (isStreaming: boolean) => {
-    const state = get();
-
-    // Privacy: when starting a screen share, automatically mute the mic so the
-    // user's voice never accidentally bleeds onto whatever the audience is
-    // watching (gameplay clip, presentation, video). We only auto-mute if the
-    // user wasn't already muted manually. The `_autoMutedForStream` flag is
-    // the "we own this mute" marker so we can restore on stop without
-    // overriding a user-chosen state.
-    if (isStreaming && !state.isMuted && !state.isStreaming) {
-      set({ isStreaming: true, isMuted: true, _autoMutedForStream: true });
-      if (isNativeVoice()) nativeVoiceSetMic(false);
-      saveMuteState({ isMuted: true, isDeafened: state.isDeafened });
-      state._wsSend?.("voice_state_update_request", { is_muted: true });
-      return;
-    }
-
-    // Restore mic on screen-share stop only if WE were the one who muted it.
-    // If the user manually toggled mute mid-share, _autoMutedForStream was
-    // cleared in toggleMute; we leave their choice alone.
-    if (!isStreaming && state._autoMutedForStream) {
-      set({ isStreaming: false, isMuted: false, _autoMutedForStream: false });
-      if (isNativeVoice()) nativeVoiceSetMic(true);
-      saveMuteState({ isMuted: false, isDeafened: state.isDeafened });
-      state._wsSend?.("voice_state_update_request", { is_muted: false });
-      return;
-    }
-
     set({ isStreaming });
-
-    // Server notification for is_streaming itself is intentionally NOT fired
-    // here. useVoice.toggleScreenShare and the VoiceStateManager fallbacks
-    // already send voice_state_update_request after calling setStreaming, so
-    // doing it here too would double-fire. (The mic-state branches above
-    // ARE allowed to fire because they carry an additional is_muted update
-    // that the upper layer doesn't know to send.)
+    // Server notification is intentionally NOT fired here. Two reasons:
+    //  1. useVoice.toggleScreenShare already sends voice_state_update_request
+    //     after calling setStreaming, so doing it here too would double-fire.
+    //  2. The fallback paths in VoiceStateManager (track unpublished, native
+    //     plugin stopped) call setStreaming AFTER the track is gone, and they
+    //     send the WS update separately via _wsSend, so by the time the
+    //     server sees is_streaming=false the track really is gone — no
+    //     "phantom share" window where the icon vanishes before the track.
   },
 
   setRtt: (rtt) => set({ rtt }),
