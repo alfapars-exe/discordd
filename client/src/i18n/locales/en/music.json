@@ -1,0 +1,23 @@
+{
+  "nowPlaying": "Now playing",
+  "upNext": "Up next ({{count}})",
+  "plusMore": "+{{count}} more",
+  "pause": "Pause",
+  "resume": "Resume",
+  "skip": "Skip",
+  "stop": "Stop and kick bot",
+  "controlError": "Action failed",
+  "addedToQueue_one": "1 track added to queue",
+  "addedToQueue_other": "{{count}} tracks added to queue",
+  "playError": "Could not start playback",
+  "invalidYouTubeUrl": "A valid YouTube URL is required",
+  "queueEmpty": "Queue is empty",
+  "queueListTitle": "Up next",
+  "kickBot": "Kick music bot",
+  "botKicked": "Music bot left the channel",
+  "commandHintPlay": "/play <YouTube URL> to play music",
+  "commandHintSkip": "/skip to skip the current track",
+  "commandHintPause": "/pause to pause, /resume to continue",
+  "commandHintStop": "/stop to stop the bot",
+  "notInVoice": "Join a voice channel first"
+}

@@ -14,16 +14,20 @@ import { useParticipants } from "@livekit/components-react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { isScreenShareIdentity } from "../../utils/constants";
+import { isMusicBotIdentity } from "../../types";
 import VoiceParticipant from "./VoiceParticipant";
+import MusicBotPanel from "./MusicBotPanel";
 
 function VoiceParticipantGrid() {
   const { t } = useTranslation("voice");
   const allParticipants = useParticipants();
+  const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
 
-  // Filter out iOS native screen share sub-participants (identity ends with "_ss").
-  // They are separate LiveKit connections that only publish screen share tracks.
+  // Filter out iOS native screen share sub-participants (identity ends with "_ss")
+  // and music bot participants (identity prefix `__music_bot__:`). The bot tile
+  // is rendered via the dedicated MusicBotPanel above the grid.
   const participants = useMemo(
-    () => allParticipants.filter((p) => !isScreenShareIdentity(p.identity)),
+    () => allParticipants.filter((p) => !isScreenShareIdentity(p.identity) && !isMusicBotIdentity(p.identity)),
     [allParticipants]
   );
 
@@ -44,28 +48,34 @@ function VoiceParticipantGrid() {
   // Compact strip below screen share
   if (hasScreenShare) {
     return (
-      <div className="voice-grid-strip">
-        {participants.map((participant) => (
-          <VoiceParticipant
-            key={participant.identity}
-            participant={participant}
-            compact
-          />
-        ))}
-      </div>
+      <>
+        {currentVoiceChannelId && <MusicBotPanel channelId={currentVoiceChannelId} />}
+        <div className="voice-grid-strip">
+          {participants.map((participant) => (
+            <VoiceParticipant
+              key={participant.identity}
+              participant={participant}
+              compact
+            />
+          ))}
+        </div>
+      </>
     );
   }
 
   // Full grid
   return (
-    <div className="voice-room-grid">
-      {participants.map((participant) => (
-        <VoiceParticipant
-          key={participant.identity}
-          participant={participant}
-        />
-      ))}
-    </div>
+    <>
+      {currentVoiceChannelId && <MusicBotPanel channelId={currentVoiceChannelId} />}
+      <div className="voice-room-grid">
+        {participants.map((participant) => (
+          <VoiceParticipant
+            key={participant.identity}
+            participant={participant}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 
