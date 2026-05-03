@@ -48,6 +48,7 @@
   "unknownUser": "Unknown User",
   "noContent": "Click to see attachment",
   "noSendPermission": "You do not have permission to send messages in this channel",
+  "noSendPermissionSlashHint": "No send permission — only music commands like /play /skip work here",
   "attachFile": "Attach file",
   "emoji": "Emoji",
   "welcomeDM": "Welcome to your conversation with {{user}}!",
