@@ -194,6 +194,8 @@
   "nrEngineDpdfnet": "DPDFNet (Beta)",
   "joinLeaveSounds": "Giriş/Çıkış Sesleri",
   "joinLeaveSoundsDesc": "Biri ses kanalına girip çıktığında ses çal",
+  "screenShareShowCursor": "Ekran Paylaşımında Fareyi Göster",
+  "screenShareShowCursorDesc": "Açıkken paylaşılan ekranda fare imleci de görünür. Kapatırsan izleyenler farenin nerede olduğunu görmez.",
   "screenShareQuality": "Ekran Paylaşım Kalitesi",
   "screenShareFps": "Kare Hızı",
   "screenShareAudio": "Ekran Paylaşımı Sesi",
