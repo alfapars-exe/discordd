@@ -237,13 +237,10 @@ func (s *livekitAdminService) DeleteInstance(ctx context.Context, instanceID, ta
 			return fmt.Errorf("%w: cannot migrate to the same instance", pkg.ErrBadRequest)
 		}
 
-		target, targetErr := s.livekitRepo.GetByID(ctx, targetInstanceID)
-		if targetErr != nil {
+		// Verify the target exists. Self-hosted targets are allowed since v2.11.20 —
+		// admins can move servers off a cloud instance onto their own LiveKit.
+		if _, targetErr := s.livekitRepo.GetByID(ctx, targetInstanceID); targetErr != nil {
 			return fmt.Errorf("migration target not found: %w", targetErr)
-		}
-
-		if !target.IsPlatformManaged {
-			return fmt.Errorf("%w: migration target must be a platform-managed instance", pkg.ErrBadRequest)
 		}
 
 		_, migrateErr := s.livekitRepo.MigrateServers(ctx, instanceID, targetInstanceID)
@@ -286,17 +283,9 @@ func (s *livekitAdminService) MigrateServerInstance(ctx context.Context, serverI
 		return err
 	}
 
-	// Guard: orphan (deleted instance) or self-hosted check
-	if server.LiveKitInstanceID != nil && *server.LiveKitInstanceID != "" {
-		if *server.LiveKitInstanceID == newInstanceID {
-			return fmt.Errorf("%w: server is already on this instance", pkg.ErrBadRequest)
-		}
-
-		// If current instance still exists and is self-hosted, block migration
-		currentInstance, currentErr := s.livekitRepo.GetByID(ctx, *server.LiveKitInstanceID)
-		if currentErr == nil && !currentInstance.IsPlatformManaged {
-			return fmt.Errorf("%w: self-hosted servers cannot be migrated via admin API", pkg.ErrForbidden)
-		}
+	// Guard: server already on the requested instance.
+	if server.LiveKitInstanceID != nil && *server.LiveKitInstanceID == newInstanceID {
+		return fmt.Errorf("%w: server is already on this instance", pkg.ErrBadRequest)
 	}
 
 	targetInstance, err := s.livekitRepo.GetByID(ctx, newInstanceID)
@@ -304,9 +293,9 @@ func (s *livekitAdminService) MigrateServerInstance(ctx context.Context, serverI
 		return fmt.Errorf("target instance not found: %w", err)
 	}
 
-	if !targetInstance.IsPlatformManaged {
-		return fmt.Errorf("%w: target must be a platform-managed instance", pkg.ErrBadRequest)
-	}
+	// Self-hosted (is_platform_managed=false) is a valid target since v2.11.20 —
+	// admins can manually pin a server to their own LiveKit. Quota tracking and
+	// auto-switch automatically skip self-hosted instances elsewhere.
 
 	if targetInstance.MaxServers > 0 && targetInstance.ServerCount >= targetInstance.MaxServers {
 		return fmt.Errorf("%w: target instance is at capacity (%d/%d)", pkg.ErrBadRequest,
