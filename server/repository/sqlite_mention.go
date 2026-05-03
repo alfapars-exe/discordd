@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/akinalp/mqvi/database"
+	"github.com/argeinfina/tayfa/database"
 )
 
 type sqliteMentionRepo struct {

@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // PasswordResetRepository defines data access for password reset tokens.

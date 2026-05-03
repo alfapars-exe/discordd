@@ -149,38 +149,38 @@ interface NativeVoicePluginInterface {
 const NativeVoice = registerPlugin<NativeVoicePluginInterface>("NativeVoice");
 
 /** Whether native voice should be used (iOS Capacitor only) */
-export function useNativeVoice(): boolean {
+export function isNativeVoice(): boolean {
   return isCapacitor() && getCapacitorPlatform() === "ios";
 }
 
 /** Connect to LiveKit room natively (iOS). Audio works in background. */
 export async function nativeVoiceConnect(url: string, token: string, isMuted: boolean, isDeafened: boolean): Promise<boolean> {
-  if (!useNativeVoice()) return false;
+  if (!isNativeVoice()) return false;
   const result = await NativeVoice.connect({ url, token, isMuted, isDeafened });
   return result.connected;
 }
 
 /** Disconnect native voice. */
 export async function nativeVoiceDisconnect(): Promise<void> {
-  if (!useNativeVoice()) return;
+  if (!isNativeVoice()) return;
   await NativeVoice.disconnect();
 }
 
 /** Set mic enabled/disabled on native voice. */
 export async function nativeVoiceSetMic(enabled: boolean): Promise<void> {
-  if (!useNativeVoice()) return;
+  if (!isNativeVoice()) return;
   await NativeVoice.setMicEnabled({ enabled });
 }
 
 /** Set deafened state on native voice. */
 export async function nativeVoiceSetDeafened(deafened: boolean): Promise<void> {
-  if (!useNativeVoice()) return;
+  if (!isNativeVoice()) return;
   await NativeVoice.setDeafened({ deafened });
 }
 
 /** Listen for unexpected native voice disconnect. */
 export async function onNativeVoiceDisconnected(handler: (error: string) => void): Promise<() => void> {
-  if (!useNativeVoice()) return () => {};
+  if (!isNativeVoice()) return () => {};
   const listener = await NativeVoice.addListener("nativeVoiceDisconnected", (data) => handler(data.error));
   return () => listener.remove();
 }
@@ -201,5 +201,5 @@ export async function configureMobileUI(): Promise<void> {
 
   try {
     await StatusBar.setStyle({ style: Style.Dark });
-  } catch {}
+  } catch { /* StatusBar plugin not available on this platform */ }
 }

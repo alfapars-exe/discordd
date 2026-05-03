@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/services"
 )
 
 type SearchHandler struct {

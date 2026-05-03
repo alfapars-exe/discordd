@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/akinalp/mqvi/database"
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/database"
+	"github.com/argeinfina/tayfa/models"
 )
 
 type sqliteFeedbackRepo struct {

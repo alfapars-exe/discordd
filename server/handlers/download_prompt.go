@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/repository"
 )
 
 // DownloadPromptHandler handles POST /api/users/me/dismiss-download-prompt.

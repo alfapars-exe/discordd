@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/akinalp/mqvi/config"
-	"github.com/akinalp/mqvi/pkg/email"
-	"github.com/akinalp/mqvi/pkg/ratelimit"
-	"github.com/akinalp/mqvi/services"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/config"
+	"github.com/argeinfina/tayfa/pkg/email"
+	"github.com/argeinfina/tayfa/pkg/ratelimit"
+	"github.com/argeinfina/tayfa/services"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // Services holds all service instances.

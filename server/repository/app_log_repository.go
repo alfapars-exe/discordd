@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // AppLogRepository defines data access for structured app logs.

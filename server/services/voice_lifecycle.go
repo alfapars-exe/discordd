@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg/crypto"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg/crypto"
+	"github.com/argeinfina/tayfa/ws"
 
 	livekit "github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"

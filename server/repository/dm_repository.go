@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // DMRepository defines data access for direct messages.

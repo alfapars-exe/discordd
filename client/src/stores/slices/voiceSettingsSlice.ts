@@ -11,7 +11,8 @@ import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
 export type InputMode = "voice_activity" | "push_to_talk";
-export type ScreenShareQuality = "720p" | "1080p";
+export type ScreenShareQuality = "720p" | "1080p" | "1440p";
+export type ScreenShareFps = 30 | 60;
 
 export type VoiceSettings = {
   inputMode: InputMode;
@@ -25,12 +26,37 @@ export type VoiceSettings = {
   soundsEnabled: boolean;
   localMutedUsers: Record<string, boolean>;
   noiseReduction: boolean;
+  /**
+   * Engine used when noiseReduction is on:
+   *  - "rnnoise" — bundled OSS ML denoiser, free, works on every LiveKit
+   *    plan (default).
+   *  - "krisp"   — LiveKit Cloud's Krisp filter (Discord-grade). Requires
+   *    a paid LiveKit Cloud plan; falls back to RNNoise on init failure.
+   */
+  noiseReductionEngine: "rnnoise" | "krisp";
   screenShareVolumes: Record<string, number>;
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
+  screenShareFps: ScreenShareFps;
 };
 
 const STORAGE_KEY = "mqvi_voice_settings";
+
+/**
+ * Migration sentinel for the screenShareAudio default flip (false -> true).
+ *
+ * The previous default was false, so existing users had `screenShareAudio:
+ * false` saved in localStorage. After flipping the default, the merge
+ * `{...DEFAULT_SETTINGS, ...parsed}` still gave them false because their
+ * stored value wins. That left screen-share audio silently disabled even
+ * after the fix shipped.
+ *
+ * This one-time migration flips their stored value to true and sets this
+ * sentinel so we never re-apply. Trade-off: a user who *deliberately*
+ * disabled audio sharing before the migration ran will see it re-enabled
+ * once. They can toggle it back off and that choice persists.
+ */
+const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudio";
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
   inputMode: "voice_activity",
@@ -44,18 +70,40 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   soundsEnabled: true,
   localMutedUsers: {},
   noiseReduction: true,
+  noiseReductionEngine: "rnnoise",
   screenShareVolumes: {},
-  screenShareAudio: false,
+  // Default true: most users sharing a screen also want to share its audio
+  // (gameplay, presentations, video). When the toggle is on, the browser's
+  // native picker still shows its own "share audio" checkbox so users who
+  // don't want audio can uncheck it at the OS level. A false default here
+  // would silently strip audio before the browser even asks.
+  screenShareAudio: true,
   screenShareQuality: "720p",
+  screenShareFps: 30,
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
 export function loadSettings(): VoiceSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) {
+      // No saved settings — treat as already migrated; mark to skip on first save.
+      try { localStorage.setItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY, "1"); } catch { /* ignore */ }
+      return { ...DEFAULT_SETTINGS };
+    }
     const parsed = JSON.parse(raw) as Partial<VoiceSettings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...parsed };
+
+    // One-time migration: previous default was false; users had it saved as
+    // false from before the default flipped. Override once to true.
+    try {
+      if (!localStorage.getItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY)) {
+        merged.screenShareAudio = true;
+        localStorage.setItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY, "1");
+      }
+    } catch { /* localStorage unavailable */ }
+
+    return merged;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -84,9 +132,11 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     soundsEnabled: s.soundsEnabled,
     localMutedUsers: s.localMutedUsers,
     noiseReduction: s.noiseReduction,
+    noiseReductionEngine: s.noiseReductionEngine,
     screenShareVolumes: s.screenShareVolumes,
     screenShareAudio: s.screenShareAudio,
     screenShareQuality: s.screenShareQuality,
+    screenShareFps: s.screenShareFps,
   };
 }
 
@@ -106,7 +156,9 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setSoundsEnabled: (enabled: boolean) => void;
   setScreenShareAudio: (enabled: boolean) => void;
   setScreenShareQuality: (quality: ScreenShareQuality) => void;
+  setScreenShareFps: (fps: ScreenShareFps) => void;
   setNoiseReduction: (enabled: boolean) => void;
+  setNoiseReductionEngine: (engine: "rnnoise" | "krisp") => void;
   toggleLocalMute: (userId: string) => void;
   applyFromServer: (settings: Record<string, unknown>) => void;
 };
@@ -131,9 +183,11 @@ export const createVoiceSettingsSlice: StateCreator<
     soundsEnabled: initial.soundsEnabled,
     localMutedUsers: initial.localMutedUsers,
     noiseReduction: initial.noiseReduction,
+    noiseReductionEngine: initial.noiseReductionEngine,
     screenShareVolumes: initial.screenShareVolumes,
     screenShareAudio: initial.screenShareAudio,
     screenShareQuality: initial.screenShareQuality,
+    screenShareFps: initial.screenShareFps,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -196,8 +250,18 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
+    setScreenShareFps: (fps) => {
+      set({ screenShareFps: fps });
+      saveSettings(currentSettings(get()));
+    },
+
     setNoiseReduction: (enabled) => {
       set({ noiseReduction: enabled });
+      saveSettings(currentSettings(get()));
+    },
+
+    setNoiseReductionEngine: (engine) => {
+      set({ noiseReductionEngine: engine });
       saveSettings(currentSettings(get()));
     },
 
@@ -259,8 +323,10 @@ export const createVoiceSettingsSlice: StateCreator<
         soundsEnabled: merged.soundsEnabled,
         screenShareAudio: merged.screenShareAudio,
         screenShareQuality: merged.screenShareQuality,
+        screenShareFps: merged.screenShareFps,
         localMutedUsers: merged.localMutedUsers,
         noiseReduction: merged.noiseReduction,
+        noiseReductionEngine: merged.noiseReductionEngine,
         screenShareVolumes: merged.screenShareVolumes,
       });
     },

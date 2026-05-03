@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // ─── Interface Segregation ───

@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
 )
 
 const klipyBaseURL = "https://api.klipy.com"

@@ -15,7 +15,7 @@ import MemberCard from "../members/MemberCard";
 import AudioDevicePopup from "./AudioDevicePopup";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import SoundboardPanel from "../soundboard/SoundboardPanel";
-import type { ScreenShareQuality } from "../../stores/voiceStore";
+import type { ScreenShareQuality, ScreenShareFps } from "../../stores/voiceStore";
 import { createPortal } from "react-dom";
 
 type UserBarProps = {
@@ -340,7 +340,15 @@ function UserBar({
   );
 }
 
-/** Minimal popup for screen share quality selection. */
+/**
+ * Pre-share options popup: resolution, frame rate, and audio toggle.
+ *
+ * Surfaced from the chevron next to the screen-share button. Settings are
+ * applied live: changing resolution/fps mid-share is honored on the next
+ * publish (i.e. user re-shares to see new ceiling). The audio toggle takes
+ * effect on next share start — flipping mid-share doesn't add/remove the
+ * audio track without a restart.
+ */
 function ScreenShareQualityPopup({
   anchorEl,
   onClose,
@@ -351,18 +359,27 @@ function ScreenShareQualityPopup({
   const { t } = useTranslation("settings");
   const quality = useVoiceStore((s) => s.screenShareQuality);
   const setQuality = useVoiceStore((s) => s.setScreenShareQuality);
+  const fps = useVoiceStore((s) => s.screenShareFps);
+  const setFps = useVoiceStore((s) => s.setScreenShareFps);
+  const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
+  const setScreenShareAudio = useVoiceStore((s) => s.setScreenShareAudio);
   const popupRef = useRef<HTMLDivElement>(null);
 
   const rect = anchorEl.getBoundingClientRect();
   const top = rect.top - 6;
   const left = rect.left;
 
-  const options: { value: ScreenShareQuality; label: string }[] = [
-    { value: "720p", label: "720p 30fps" },
-    { value: "1080p", label: "1080p 30fps" },
+  const qualityOptions: { value: ScreenShareQuality; label: string }[] = [
+    { value: "720p", label: "720p" },
+    { value: "1080p", label: "1080p" },
+    { value: "1440p", label: "1440p" },
   ];
 
-  // Close on outside click (ignore anchor — chevron toggles itself)
+  const fpsOptions: { value: ScreenShareFps; label: string }[] = [
+    { value: 30, label: "30 fps" },
+    { value: 60, label: "60 fps" },
+  ];
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       const target = e.target as Node;
@@ -374,7 +391,6 @@ function ScreenShareQualityPopup({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [onClose, anchorEl]);
 
-  // Close on Escape
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -391,16 +407,41 @@ function ScreenShareQualityPopup({
     >
       <div className="adp-section">
         <div className="adp-label">{t("screenShareQuality")}</div>
-        {options.map((opt) => (
+        {qualityOptions.map((opt) => (
           <button
             key={opt.value}
             className={`adp-submenu-item${quality === opt.value ? " selected" : ""}`}
-            onClick={() => { setQuality(opt.value); onClose(); }}
+            onClick={() => setQuality(opt.value)}
           >
             <span className="adp-submenu-label">{opt.label}</span>
             {quality === opt.value && <div className="adp-submenu-check" />}
           </button>
         ))}
+      </div>
+      <div className="adp-section">
+        <div className="adp-label">{t("screenShareFps")}</div>
+        {fpsOptions.map((opt) => (
+          <button
+            key={opt.value}
+            className={`adp-submenu-item${fps === opt.value ? " selected" : ""}`}
+            onClick={() => setFps(opt.value)}
+          >
+            <span className="adp-submenu-label">{opt.label}</span>
+            {fps === opt.value && <div className="adp-submenu-check" />}
+          </button>
+        ))}
+      </div>
+      <div className="adp-section">
+        <button
+          className="adp-submenu-item adp-submenu-toggle"
+          onClick={() => setScreenShareAudio(!screenShareAudio)}
+          aria-pressed={screenShareAudio}
+        >
+          <span className="adp-submenu-label">{t("screenShareAudio")}</span>
+          <span className={`sp-switch${screenShareAudio ? " sp-switch-on" : ""}`}>
+            <span className="sp-switch-thumb" />
+          </span>
+        </button>
       </div>
     </div>,
     document.body

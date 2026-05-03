@@ -142,5 +142,9 @@
   "badgeColorEnd": "Bitiş Rengi",
   "badgeEditTitle": "Rozeti Düzenle",
   "badgeSave": "Değişiklikleri Kaydet",
-  "badgeDeleteConfirm": "\"{{name}}\" rozetini silmek istediğinize emin misiniz? Bu rozet tüm kullanıcılardan kaldırılacak."
+  "badgeDeleteConfirm": "\"{{name}}\" rozetini silmek istediğinize emin misiniz? Bu rozet tüm kullanıcılardan kaldırılacak.",
+  "adminSection": "YÖNETİCİ",
+  "registeredUsers": "Kayıtlı Kullanıcılar",
+  "updateAvailable": "Tayfa'ın yeni sürümü var.",
+  "updateApp": "Uygulamayı Güncelle"
 }

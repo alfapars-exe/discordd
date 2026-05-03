@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/testutil"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/testutil"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 func newTestMessageService(

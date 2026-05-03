@@ -15,6 +15,7 @@
 import { useUIStore } from "../../stores/uiStore";
 import { useMobileStore } from "../../stores/mobileStore";
 import { useSwipeGesture } from "../../hooks/useSwipeGesture";
+import { useMobileKeyboardOffset } from "../../hooks/useMobileKeyboardOffset";
 import { getCapacitorPlatform } from "../../utils/constants";
 import MobileHeader from "./MobileHeader";
 import MobileDrawer from "./MobileDrawer";
@@ -35,6 +36,9 @@ type MobileAppLayoutProps = {
 
 function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLayoutProps) {
   const layout = useUIStore((s) => s.layout);
+
+  // Keep the message composer above the on-screen keyboard.
+  useMobileKeyboardOffset();
 
   const leftDrawerOpen = useMobileStore((s) => s.leftDrawerOpen);
   const rightDrawerOpen = useMobileStore((s) => s.rightDrawerOpen);

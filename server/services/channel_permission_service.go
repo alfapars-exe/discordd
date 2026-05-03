@@ -19,10 +19,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg/cache"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg/cache"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 const (

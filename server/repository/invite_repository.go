@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // InviteRepository defines data access for invite codes. All list operations are server-scoped.

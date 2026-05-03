@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
+	"github.com/argeinfina/tayfa/handlers"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
 )
 
 // PlatformAdminMiddleware requires the user to be a platform admin.

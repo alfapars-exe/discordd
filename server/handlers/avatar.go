@@ -14,10 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/services"
 )
 
 const avatarMaxSize = 8 << 20 // 8MB

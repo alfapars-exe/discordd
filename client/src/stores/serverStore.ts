@@ -9,7 +9,7 @@ import { useReadStateStore } from "./readStateStore";
 import { useE2EEStore } from "./e2eeStore";
 import { useVoiceStore } from "./voiceStore";
 import { useUIStore } from "./uiStore";
-import type { Server, ServerListItem, CreateServerRequest } from "../types";
+import type { Server, ServerListItem, CreateServerRequest, APIResponse } from "../types";
 
 /** Persist last active server across page reloads */
 const LAST_SERVER_KEY = "mqvi_last_server";
@@ -29,7 +29,7 @@ type ServerState = {
   /** Cascade refetch is done by the caller (AppLayout) to avoid circular deps. */
   setActiveServer: (serverId: string) => void;
   fetchActiveServer: () => Promise<void>;
-  createServer: (req: CreateServerRequest) => Promise<Server | null>;
+  createServer: (req: CreateServerRequest) => Promise<APIResponse<Server>>;
   joinServer: (inviteCode: string) => Promise<Server | null>;
   leaveServer: (serverId: string) => Promise<boolean>;
   deleteServer: (serverId: string) => Promise<boolean>;
@@ -127,9 +127,10 @@ export const useServerStore = create<ServerState>((set, get) => ({
         };
       });
       localStorage.setItem(LAST_SERVER_KEY, server.id);
-      return server;
     }
-    return null;
+    // Return the full response so callers can surface res.error in the UI
+    // instead of a generic "something went wrong" toast.
+    return res;
   },
 
   joinServer: async (inviteCode) => {

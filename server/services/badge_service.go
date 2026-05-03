@@ -8,10 +8,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // BadgeAdminUserID is the only user allowed to manage badges.

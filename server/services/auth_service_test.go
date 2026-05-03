@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/testutil"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/testutil"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )

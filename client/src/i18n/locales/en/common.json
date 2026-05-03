@@ -142,5 +142,9 @@
   "badgeColorEnd": "End Color",
   "badgeEditTitle": "Edit Badge",
   "badgeSave": "Save Changes",
-  "badgeDeleteConfirm": "Are you sure you want to delete the badge \"{{name}}\"? This will remove it from all users."
+  "badgeDeleteConfirm": "Are you sure you want to delete the badge \"{{name}}\"? This will remove it from all users.",
+  "adminSection": "ADMIN",
+  "registeredUsers": "Registered Users",
+  "updateAvailable": "A new version of Tayfa is available.",
+  "updateApp": "Update"
 }

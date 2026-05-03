@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // ChannelRepository defines data access for channels. All list operations are server-scoped.

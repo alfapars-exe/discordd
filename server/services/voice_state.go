@@ -9,9 +9,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // broadcastToServer publishes a voice-related event to all members of serverID.

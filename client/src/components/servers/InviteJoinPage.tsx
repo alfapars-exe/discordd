@@ -82,7 +82,7 @@ function InviteJoinPage() {
       <div className="invite-join-header">
         <img
           src={publicAsset("mqvi-icon.svg")}
-          alt="mqvi"
+          alt="Tayfa"
           className="invite-join-logo"
         />
         <h1 className="invite-join-title">{t("inviteJoinTitle")}</h1>

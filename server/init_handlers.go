@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/akinalp/mqvi/config"
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/config"
+	"github.com/argeinfina/tayfa/handlers"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // Handlers holds all HTTP handler instances.

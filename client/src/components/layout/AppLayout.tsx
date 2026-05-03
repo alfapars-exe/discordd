@@ -24,6 +24,7 @@ import ToastContainer from "../shared/ToastContainer";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import DownloadPromptModal from "../shared/DownloadPromptModal";
 import WelcomeModal from "../shared/WelcomeModal";
+import UpdateBanner from "../shared/UpdateBanner";
 import SettingsModal from "../settings/SettingsModal";
 import VoiceProvider from "../voice/VoiceProvider";
 import { useWebSocket } from "../../hooks/useWebSocket";
@@ -271,6 +272,9 @@ function AppLayout() {
   // Shared overlays rendered in both mobile and desktop layouts
   const overlays = (
     <>
+      {/* "New version available" banner — polls /api/version */}
+      <UpdateBanner />
+
       {/* Connection status banner */}
       <ConnectionBanner status={connectionStatus} reconnectAttempt={reconnectAttempt} />
 
