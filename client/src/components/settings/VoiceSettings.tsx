@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import type { InputMode } from "../../stores/voiceStore";
-import type { NoiseReductionEngine } from "../../stores/slices/voiceSettingsSlice";
+import type { NoiseReductionEngine, NoiseSuppressionLevel } from "../../stores/slices/voiceSettingsSlice";
 import { isElectron } from "../../utils/constants";
 import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
 import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url";
@@ -84,6 +84,8 @@ function VoiceSettings() {
   const setNoiseReduction = useVoiceStore((s) => s.setNoiseReduction);
   const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
   const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
+  const noiseSuppressionLevel = useVoiceStore((s) => s.noiseSuppressionLevel);
+  const setNoiseSuppressionLevel = useVoiceStore((s) => s.setNoiseSuppressionLevel);
   const screenShareShowCursor = useVoiceStore((s) => s.screenShareShowCursor);
   const setScreenShareShowCursor = useVoiceStore((s) => s.setScreenShareShowCursor);
 
@@ -552,6 +554,40 @@ function VoiceSettings() {
               <option value="dtln">{t("nrEngineDtln")}</option>
               <option value="speex">{t("nrEngineSpeex")}</option>
               <option value="dpdfnet">{t("nrEngineDpdfnet")}</option>
+            </select>
+          </div>
+        )}
+
+        {/* Gürültü engelleme seviyesi — VAD gate'in dB threshold + hold time
+            curve'ünü 4 preset arasında seçtirir. Slider'la birlikte çalışır
+            (slider sensitivity offset olur). Slider 100 = gate kapalı, level
+            etkisiz; diğer durumlarda level base'i belirler. */}
+        {noiseReduction && (
+          <div className="vs-toggle-row" style={{ marginTop: 12 }}>
+            <div>
+              <div className="vs-label">{t("noiseSuppressionLevel")}</div>
+              <div className="vs-desc">{t("noiseSuppressionLevelDesc")}</div>
+            </div>
+            <select
+              value={noiseSuppressionLevel}
+              onChange={(e) =>
+                setNoiseSuppressionLevel(e.target.value as NoiseSuppressionLevel)
+              }
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--t0)",
+                border: "1px solid var(--panel-border)",
+                borderRadius: 6,
+                padding: "6px 10px",
+                minWidth: 200,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+            >
+              <option value="low">{t("nrLevelLow")}</option>
+              <option value="medium">{t("nrLevelMedium")}</option>
+              <option value="high">{t("nrLevelHigh")}</option>
+              <option value="maximum">{t("nrLevelMaximum")}</option>
             </select>
           </div>
         )}

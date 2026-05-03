@@ -26,6 +26,7 @@
 import { Track } from "livekit-client";
 import type { TrackProcessor, AudioProcessorOptions } from "livekit-client";
 import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
+import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice";
 
 // Vite ?url imports — resolved at build time for AudioWorklet.addModule() and fetch()
 import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url";
@@ -69,19 +70,46 @@ function ensureWorkletRegistered(ctx: AudioContext, name: string, url: string): 
 
 /**
  * Converts micSensitivity (0-100) to RMS threshold using a quadratic curve.
- *
- *   100 -> 0      (gate disabled)
- *   75  -> 0.0025 (very light gate)
- *   50  -> 0.01   (moderate)
- *   25  -> 0.0225 (aggressive)
- *   0   -> 0.04   (very aggressive)
- *
- * Quadratic because human hearing is logarithmic — low sensitivity needs finer control.
+ * Kept for the legacy single-threshold path; the live pipeline uses
+ * levelToThresholds() below for hysteresis-aware dB-based gating.
  */
 export function sensitivityToThreshold(sensitivity: number): number {
   const clamped = Math.max(0, Math.min(100, sensitivity));
   const inverted = (100 - clamped) / 100;
   return 0.04 * inverted * inverted;
+}
+
+/**
+ * Per-level base thresholds in dB. Higher numbers (closer to 0) mean louder
+ * sound is needed to open the gate — i.e. tighter noise rejection. closeThreshold
+ * sits below openThreshold to give hysteresis (signal must dip below close
+ * AND stay there `holdMs` before the gate fully closes), preventing flicker.
+ */
+const LEVEL_BASE: Record<NoiseSuppressionLevel, { open: number; close: number; hold: number }> = {
+  low:     { open: -50, close: -55, hold: 400 },
+  medium:  { open: -42, close: -48, hold: 300 },
+  high:    { open: -36, close: -42, hold: 200 },
+  maximum: { open: -30, close: -36, hold: 150 },
+};
+
+/**
+ * Combine level + sensitivity slider into final gate parameters.
+ * sensitivity=100 disables the gate entirely (legacy "off" semantic).
+ * Other sensitivity values offset the level's base by ±6 dB — slider toward
+ * 0 makes the gate tighter, toward 100 makes it more permissive.
+ */
+export function levelToThresholds(
+  level: NoiseSuppressionLevel,
+  sensitivity: number,
+): { openThresholdDb: number; closeThresholdDb: number; holdMs: number } | null {
+  if (sensitivity >= 100) return null; // gate disabled
+  const base = LEVEL_BASE[level];
+  const offsetDb = ((50 - sensitivity) / 50) * 6; // -6 .. +6 dB
+  return {
+    openThresholdDb: base.open + offsetDb,
+    closeThresholdDb: base.close + offsetDb,
+    holdMs: base.hold,
+  };
 }
 
 class RNNoiseProcessor
@@ -98,10 +126,16 @@ class RNNoiseProcessor
 
   private initialSensitivity: number;
   private initialInputVolume: number;
+  private initialLevel: NoiseSuppressionLevel;
 
-  constructor(micSensitivity = 50, inputVolume = 100) {
+  constructor(
+    micSensitivity = 50,
+    inputVolume = 100,
+    level: NoiseSuppressionLevel = "medium",
+  ) {
     this.initialSensitivity = micSensitivity;
     this.initialInputVolume = inputVolume;
+    this.initialLevel = level;
   }
 
   /**
@@ -134,7 +168,10 @@ class RNNoiseProcessor
     });
 
     this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
-    this.setMicSensitivity(this.initialSensitivity);
+    // Send hysteresis thresholds based on the chosen level + sensitivity slider.
+    // Level dictates the base curve, sensitivity offsets it ±6 dB; the worklet
+    // honours sensitivity=100 as "gate disabled" via a null payload.
+    this.applyGateConfig();
 
     this.destinationNode = audioContext.createMediaStreamDestination();
 
@@ -156,10 +193,13 @@ class RNNoiseProcessor
   /** Updates the VAD gate threshold. Safe to call when processor is inactive. */
   setMicSensitivity(sensitivity: number): void {
     this.initialSensitivity = sensitivity;
-    if (this.vadGateNode) {
-      const threshold = sensitivityToThreshold(sensitivity);
-      this.vadGateNode.port.postMessage({ threshold });
-    }
+    this.applyGateConfig();
+  }
+
+  /** Updates the noise-suppression level (recomputes gate thresholds). */
+  setNoiseSuppressionLevel(level: NoiseSuppressionLevel): void {
+    this.initialLevel = level;
+    this.applyGateConfig();
   }
 
   /** Updates input volume gain. 100 = unity, 200 = 2x amplification. */
@@ -167,6 +207,17 @@ class RNNoiseProcessor
     this.initialInputVolume = volume;
     if (this.gainNode) {
       this.gainNode.gain.value = volume / 100;
+    }
+  }
+
+  /** Compute gate config from current level + sensitivity and post to worklet. */
+  private applyGateConfig(): void {
+    if (!this.vadGateNode) return;
+    const cfg = levelToThresholds(this.initialLevel, this.initialSensitivity);
+    if (cfg == null) {
+      this.vadGateNode.port.postMessage({ disabled: true });
+    } else {
+      this.vadGateNode.port.postMessage(cfg);
     }
   }
 

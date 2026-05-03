@@ -42,7 +42,7 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { useToastStore } from "../stores/toastStore";
 import { RNNoiseProcessor } from "../audio/RNNoiseProcessor";
 import { VadGateProcessor } from "../audio/VadGateProcessor";
-import type { NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
+import type { NoiseSuppressionLevel, NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
 
 type ProcessorType =
   | "krisp"
@@ -147,6 +147,7 @@ async function applyDesiredProcessor(
   desired: ProcessorType,
   sens: number,
   vol: number,
+  level: NoiseSuppressionLevel,
   hooks: {
     isCancelled: () => boolean;
     onKrispFallback: () => void;
@@ -171,7 +172,7 @@ async function applyDesiredProcessor(
       console.warn("[useAudioProcessor] Krisp init failed, falling back to RNNoise:", err);
       hooks.onKrispFallback();
       if (hooks.isCancelled()) return null;
-      const fallback = new RNNoiseProcessor(sens, vol);
+      const fallback = new RNNoiseProcessor(sens, vol, level);
       await audioTrack.setProcessor(fallback);
       return fallback;
     }
@@ -179,7 +180,7 @@ async function applyDesiredProcessor(
 
   if (desired === "rnnoise") {
     await setBrowserNoiseSuppression(audioTrack, false);
-    const proc = new RNNoiseProcessor(sens, vol);
+    const proc = new RNNoiseProcessor(sens, vol, level);
     await audioTrack.setProcessor(proc);
     return proc;
   }
@@ -194,7 +195,7 @@ async function applyDesiredProcessor(
     await setBrowserNoiseSuppression(audioTrack, false);
     hooks.onBetaFallback(desired as BetaEngine);
     if (hooks.isCancelled()) return null;
-    const proc = new RNNoiseProcessor(sens, vol);
+    const proc = new RNNoiseProcessor(sens, vol, level);
     await audioTrack.setProcessor(proc);
     return proc;
   }
@@ -211,7 +212,7 @@ async function applyDesiredProcessor(
 
   if (desired === "vadgate") {
     await setBrowserNoiseSuppression(audioTrack, false);
-    const proc = new VadGateProcessor(sens, vol);
+    const proc = new VadGateProcessor(sens, vol, level);
     await audioTrack.setProcessor(proc);
     return proc;
   }
@@ -232,6 +233,7 @@ export function useAudioProcessor(
   const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
   const micSensitivity = useVoiceStore((s) => s.micSensitivity);
   const inputVolume = useVoiceStore((s) => s.inputVolume);
+  const noiseSuppressionLevel = useVoiceStore((s) => s.noiseSuppressionLevel);
   const addToast = useToastStore((s) => s.addToast);
 
   // The currently attached processor, or null if "none".
@@ -245,11 +247,13 @@ export function useAudioProcessor(
   const noiseReductionEngineRef = useRef(noiseReductionEngine);
   const micSensitivityRef = useRef(micSensitivity);
   const inputVolumeRef = useRef(inputVolume);
+  const noiseSuppressionLevelRef = useRef(noiseSuppressionLevel);
   useLayoutEffect(() => {
     noiseReductionRef.current = noiseReduction;
     noiseReductionEngineRef.current = noiseReductionEngine;
     micSensitivityRef.current = micSensitivity;
     inputVolumeRef.current = inputVolume;
+    noiseSuppressionLevelRef.current = noiseSuppressionLevel;
   });
 
   // Effect A: switch processor when settings change at runtime.
@@ -264,8 +268,8 @@ export function useAudioProcessor(
     const current = getCurrentProcessorType(processorRef.current);
 
     if (desired === current) {
-      // Same processor type — just push the new sensitivity / volume into
-      // the live processor instance (the JS-bound ones support it).
+      // Same processor type — just push the new sensitivity / volume / level
+      // into the live processor instance (the JS-bound ones support it).
       const ref = processorRef.current;
       if (
         desired !== "none" &&
@@ -274,6 +278,7 @@ export function useAudioProcessor(
       ) {
         ref.setMicSensitivity(micSensitivity);
         ref.setInputVolume(inputVolume);
+        ref.setNoiseSuppressionLevel(noiseSuppressionLevel);
       }
       return;
     }
@@ -287,7 +292,7 @@ export function useAudioProcessor(
       }
       if (cancelled) return;
 
-      const proc = await applyDesiredProcessor(audioTrack, desired, micSensitivity, inputVolume, {
+      const proc = await applyDesiredProcessor(audioTrack, desired, micSensitivity, inputVolume, noiseSuppressionLevel, {
         isCancelled: () => cancelled,
         onKrispFallback: () => {
           addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
@@ -314,6 +319,7 @@ export function useAudioProcessor(
     noiseReductionEngine,
     micSensitivity,
     inputVolume,
+    noiseSuppressionLevel,
     localParticipant,
     addToast,
     setNoiseReductionEngine,
@@ -346,13 +352,14 @@ export function useAudioProcessor(
           desired,
           micSensitivityRef.current,
           inputVolumeRef.current,
+          noiseSuppressionLevelRef.current,
           {
             isCancelled: () => cancelled,
             onKrispFallback: () => {
               addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
               setNoiseReductionEngine("rnnoise");
             },
-            onBetaFallback: (engine) => {
+            onBetaFallback: (engine: BetaEngine) => {
               addToast("info", `${BETA_LABELS[engine]} (Beta) — şimdilik RNNoise ile çalışıyor.`);
             },
           },
