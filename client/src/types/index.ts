@@ -399,6 +399,20 @@ export type LiveKitInstanceAdmin = {
   max_servers: number;
   hetzner_server_id: string;
   created_at: string;
+  // Quota fields. Cloud instances (is_platform_managed=true) honour these;
+  // self-hosted (false) ignore them — UI renders an "♾️ Sınırsız" badge.
+  priority: number;
+  monthly_quota_minutes: number;
+  quota_reset_day: number;
+  auto_switch_enabled: boolean;
+  switch_threshold_minutes: number;
+};
+
+/** Quota panel row — admin view + current-month usage + computed fields. */
+export type LiveKitInstanceQuotaView = LiveKitInstanceAdmin & {
+  used_minutes: number;
+  remaining_minutes: number;
+  days_until_reset: number;
 };
 
 export type CreateLiveKitInstanceRequest = {
@@ -407,6 +421,7 @@ export type CreateLiveKitInstanceRequest = {
   api_secret: string;
   max_servers: number;
   hetzner_server_id?: string;
+  is_platform_managed?: boolean; // omit = LiveKit Cloud; false = self-hosted
 };
 
 export type UpdateLiveKitInstanceRequest = {
@@ -415,6 +430,15 @@ export type UpdateLiveKitInstanceRequest = {
   api_secret?: string;
   max_servers?: number;
   hetzner_server_id?: string;
+  is_platform_managed?: boolean;
+};
+
+export type UpdateLiveKitQuotaSettingsRequest = {
+  priority?: number;
+  monthly_quota_minutes?: number;
+  quota_reset_day?: number;
+  auto_switch_enabled?: boolean;
+  switch_threshold_minutes?: number;
 };
 
 /** Parsed Prometheus metrics from LiveKit instance. */

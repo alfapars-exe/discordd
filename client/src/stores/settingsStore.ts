@@ -78,6 +78,7 @@ type SettingsTab =
   | "members"
   | "invites"
   | "platform"
+  | "platform-quota"
   | "platform-servers"
   | "platform-users"
   | "platform-reports"

@@ -208,6 +208,45 @@ func (h *AdminHandler) MigrateServerInstance(w http.ResponseWriter, r *http.Requ
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "server instance updated"})
 }
 
+// GetLiveKitQuotaReport -- GET /api/admin/livekit/quota
+// Returns every instance with current-month usage + computed RemainingMinutes
+// and DaysUntilReset. Self-hosted instances are included with usage=0; the UI
+// renders an "♾️ Sınırsız" badge for them based on is_platform_managed.
+func (h *AdminHandler) GetLiveKitQuotaReport(w http.ResponseWriter, r *http.Request) {
+	report, err := h.livekitAdminService.GetQuotaReport(r.Context())
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, report)
+}
+
+// UpdateLiveKitQuotaSettings -- PATCH /api/admin/livekit-instances/{id}/quota
+// Partial update of the quota-only fields (priority, monthly_quota_minutes,
+// quota_reset_day, auto_switch_enabled, switch_threshold_minutes). Kept on a
+// separate endpoint from UpdateLiveKitInstance so credential-touching paths
+// stay narrow.
+func (h *AdminHandler) UpdateLiveKitQuotaSettings(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "instance id is required")
+		return
+	}
+
+	var req models.UpdateLiveKitQuotaSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	view, err := h.livekitAdminService.UpdateQuotaSettings(r.Context(), id, &req)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, view)
+}
+
 // GetLiveKitInstanceMetrics -- GET /api/admin/livekit-instances/{id}/metrics
 // Fetches live metrics from the instance's Prometheus endpoint.
 func (h *AdminHandler) GetLiveKitInstanceMetrics(w http.ResponseWriter, r *http.Request) {

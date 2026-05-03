@@ -323,6 +323,7 @@
   "platformSettings": "Platform",
   "platformAdmin": "LiveKit Instances",
   "platformLiveKitInstances": "LiveKit Instances",
+  "platformLiveKitQuota": "LiveKit Quota",
   "platformAddInstance": "Add Instance",
   "platformEditInstance": "Edit Instance",
   "platformDeleteInstance": "Delete Instance",

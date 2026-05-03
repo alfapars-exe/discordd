@@ -170,10 +170,12 @@ func initRoutes(
 	mux.Handle("DELETE /api/friends/{userId}", auth(h.Friendship.RemoveFriend))
 
 	// Platform Admin — LiveKit
+	mux.Handle("GET /api/admin/livekit/quota", authAdmin(h.Admin.GetLiveKitQuotaReport))
 	mux.Handle("GET /api/admin/livekit-instances", authAdmin(h.Admin.ListLiveKitInstances))
 	mux.Handle("GET /api/admin/livekit-instances/{id}/metrics/timeseries", authAdmin(h.Admin.GetLiveKitInstanceMetricsTimeSeries))
 	mux.Handle("GET /api/admin/livekit-instances/{id}/metrics/history", authAdmin(h.Admin.GetLiveKitInstanceMetricsHistory))
 	mux.Handle("GET /api/admin/livekit-instances/{id}/metrics", authAdmin(h.Admin.GetLiveKitInstanceMetrics))
+	mux.Handle("PATCH /api/admin/livekit-instances/{id}/quota", authAdmin(h.Admin.UpdateLiveKitQuotaSettings))
 	mux.Handle("GET /api/admin/livekit-instances/{id}", authAdmin(h.Admin.GetLiveKitInstance))
 	mux.Handle("POST /api/admin/livekit-instances", authAdmin(h.Admin.CreateLiveKitInstance))
 	mux.Handle("PATCH /api/admin/livekit-instances/{id}", authAdmin(h.Admin.UpdateLiveKitInstance))

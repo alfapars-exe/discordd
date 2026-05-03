@@ -14,6 +14,7 @@ import ChannelSettings from "./ChannelSettings";
 import MembersSettings from "./MembersSettings";
 import SecuritySettings from "./SecuritySettings";
 import PlatformSettings from "./PlatformSettings";
+import LiveKitQuotaPanel from "./LiveKitQuotaPanel";
 import AdminServerList from "./AdminServerList";
 import AdminUserList from "./AdminUserList";
 import AdminReportList from "./AdminReportList";
@@ -131,6 +132,9 @@ function SettingsContent({ activeTab }: { activeTab: string }) {
 
     case "platform":
       return <PlatformSettings />;
+
+    case "platform-quota":
+      return <LiveKitQuotaPanel />;
 
     case "platform-servers":
       return <AdminServerList />;
