@@ -33,6 +33,8 @@
       "icons"
     ],
     "artifactName": "tayfa-setup.${ext}",
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
     "publish": {
       "provider": "github",
       "owner": "akinalpfdn",

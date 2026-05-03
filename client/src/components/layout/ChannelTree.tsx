@@ -32,11 +32,13 @@ import EmojiPicker from "../shared/EmojiPicker";
 import FriendsSection from "./FriendsSection";
 import DMSection from "./DMSection";
 import ServerList from "./ServerList";
+import AdminSection from "./AdminSection";
 import CategoryItem from "./CategoryItem";
 import ChannelItem from "./ChannelItem";
 import VoiceParticipantList from "./VoiceParticipantList";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useChannelTreeDragDrop } from "../../hooks/useChannelTreeDragDrop";
 import * as channelApi from "../../api/channels";
 import type { Channel, User } from "../../types";
 
@@ -182,9 +184,6 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     [currentMember, overridesByChannel]
   );
 
-  // WS send for voice user drag & drop
-  const wsSend = useVoiceStore((s) => s._wsSend);
-
   // ─── Voice User Context Menu State ───
   const [voiceCtxMenu, setVoiceCtxMenu] = useState<{
     userId: string;
@@ -200,361 +199,29 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   const [createModalMode, setCreateModalMode] = useState<"category" | "channel" | undefined>(undefined);
   const [createModalCategoryId, setCreateModalCategoryId] = useState<string | undefined>(undefined);
 
-  // ─── Channel Drag & Drop State ───
-
-  const reorderChannels = useChannelStore((s) => s.reorderChannels);
-
-  /** Dragged channel ID */
-  const dragChannelIdRef = useRef<string | null>(null);
-  /** Source category ID of dragged channel */
-  const dragCategoryIdRef = useRef<string | null>(null);
-  /** Drop indicator position */
-  const [dropIndicator, setDropIndicator] = useState<{
-    channelId: string;
-    position: "above" | "below";
-  } | null>(null);
-
-  // ─── Voice User Drag & Drop State ───
-
-  /** Dragged voice user ID */
-  const dragVoiceUserIdRef = useRef<string | null>(null);
-  /** Source channel ID of dragged voice user */
-  const dragVoiceSourceChannelRef = useRef<string | null>(null);
-  /** Dragging user ID (state for CSS class — ref doesn't trigger render) */
-  const [draggingVoiceUserId, setDraggingVoiceUserId] = useState<string | null>(null);
-  /** Hovered voice channel drop target ID */
-  const [voiceDropTargetId, setVoiceDropTargetId] = useState<string | null>(null);
-
-  // ─── Category Drag & Drop State ───
-
-  const reorderCategories = useChannelStore((s) => s.reorderCategories);
-
-  /** Dragged category ID */
-  const dragCatReorderIdRef = useRef<string | null>(null);
-  /** Category drop indicator position */
-  const [catDropIndicator, setCatDropIndicator] = useState<{
-    categoryId: string;
-    position: "above" | "below";
-  } | null>(null);
-
-  function handleCatDragStart(e: React.DragEvent, categoryId: string) {
-    e.stopPropagation();
-    dragCatReorderIdRef.current = categoryId;
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/category", categoryId);
-  }
-
-  function handleCatDragOver(e: React.DragEvent, categoryId: string) {
-    // Only handle if a category is being dragged (not a channel)
-    if (!dragCatReorderIdRef.current) return;
-    if (dragCatReorderIdRef.current === categoryId) {
-      e.preventDefault();
-      setCatDropIndicator(null);
-      return;
-    }
-
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const pos: "above" | "below" = e.clientY < midY ? "above" : "below";
-    setCatDropIndicator({ categoryId, position: pos });
-  }
-
-  function handleCatDragLeave() {
-    setCatDropIndicator(null);
-  }
-
-  function handleCatDrop(e: React.DragEvent, targetCategoryId: string) {
-    e.preventDefault();
-    setCatDropIndicator(null);
-
-    const dragId = dragCatReorderIdRef.current;
-    dragCatReorderIdRef.current = null;
-
-    if (!dragId || dragId === targetCategoryId) return;
-
-    // Filter out uncategorized — only named categories are reorderable
-    const namedCategories = categories.filter((cg) => cg.category.id !== "");
-    const dragIdx = namedCategories.findIndex((cg) => cg.category.id === dragId);
-    const targetIdx = namedCategories.findIndex((cg) => cg.category.id === targetCategoryId);
-    if (dragIdx === -1 || targetIdx === -1) return;
-
-    const ordered = [...namedCategories];
-    const [dragged] = ordered.splice(dragIdx, 1);
-
-    let insertIdx = ordered.findIndex((cg) => cg.category.id === targetCategoryId);
-    if (insertIdx === -1) insertIdx = ordered.length;
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    if (e.clientY >= midY) insertIdx += 1;
-
-    ordered.splice(insertIdx, 0, dragged);
-
-    const items = ordered.map((cg, idx) => ({ id: cg.category.id, position: idx }));
-    reorderCategories(items).then((ok) => {
-      if (!ok) addToast("error", tCh("reorderError"));
-    });
-  }
-
-  function handleCatDragEnd() {
-    dragCatReorderIdRef.current = null;
-    setCatDropIndicator(null);
-  }
-
-  function handleCatRowDragOver(e: React.DragEvent, categoryId: string) {
-    if (dragCatReorderIdRef.current) {
-      handleCatDragOver(e, categoryId);
-    } else {
-      handleCategoryHeaderDragOver(e);
-    }
-  }
-
-  function handleCatRowDrop(e: React.DragEvent, categoryId: string) {
-    if (dragCatReorderIdRef.current) {
-      handleCatDrop(e, categoryId);
-    } else {
-      handleCategoryHeaderDrop(e, categoryId);
-    }
-  }
-
-  function handleDragStart(channelId: string, categoryId: string) {
-    dragChannelIdRef.current = channelId;
-    dragCategoryIdRef.current = categoryId;
-  }
-
-  function handleDragOver(e: React.DragEvent, channelId: string, _categoryId: string) {
-    // Ignore self-drag
-    if (dragChannelIdRef.current === channelId) {
-      e.preventDefault();
-      setDropIndicator(null);
-      return;
-    }
-
-    e.preventDefault();
-
-    // Determine above/below based on mouse position
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const pos: "above" | "below" = e.clientY < midY ? "above" : "below";
-
-    setDropIndicator({ channelId, position: pos });
-  }
-
-  function handleDragLeave() {
-    setDropIndicator(null);
-  }
-
-  /** Channel dragged onto a category header — move channel to that category. */
-  function handleCategoryHeaderDragOver(e: React.DragEvent) {
-    if (!dragChannelIdRef.current) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }
-
-  /** Drop channel onto category header — append to end of that category. */
-  function handleCategoryHeaderDrop(e: React.DragEvent, targetCategoryId: string) {
-    e.preventDefault();
-    setDropIndicator(null);
-
-    const dragId = dragChannelIdRef.current;
-    const dragCatId = dragCategoryIdRef.current;
-    dragChannelIdRef.current = null;
-    dragCategoryIdRef.current = null;
-
-    if (!dragId) return;
-    // Same category — no-op
-    if (dragCatId === targetCategoryId) return;
-
-    // Find source category and channel
-    const sourceCat = categories.find((c) => c.category.id === dragCatId);
-    if (!sourceCat) return;
-
-    const draggedChannel = sourceCat.channels.find((ch) => ch.id === dragId);
-    if (!draggedChannel) return;
-
-    // Target category (may not exist for uncategorized id="")
-    const targetCat = categories.find((c) => c.category.id === targetCategoryId);
-
-    // Build reorder items: source minus dragged + dragged appended to target
-    const items: { id: string; position: number; category_id?: string }[] = [];
-
-    const sourceRemaining = sourceCat.channels.filter((ch) => ch.id !== dragId);
-    sourceRemaining.forEach((ch, idx) => {
-      items.push({ id: ch.id, position: idx });
-    });
-
-    const targetChannels = targetCat?.channels ?? [];
-    targetChannels.forEach((ch, idx) => {
-      items.push({ id: ch.id, position: idx });
-    });
-    items.push({
-      id: dragId,
-      position: targetChannels.length,
-      category_id: targetCategoryId,
-    });
-
-    reorderChannels(items).then((ok) => {
-      if (!ok) addToast("error", tCh("reorderError"));
-    });
-  }
-
-  function handleDrop(e: React.DragEvent, targetChannelId: string, categoryId: string) {
-    e.preventDefault();
-    setDropIndicator(null);
-
-    const dragId = dragChannelIdRef.current;
-    const dragCatId = dragCategoryIdRef.current;
-    dragChannelIdRef.current = null;
-    dragCategoryIdRef.current = null;
-
-    if (!dragId || dragId === targetChannelId) return;
-
-    const isCrossCategory = dragCatId !== categoryId;
-
-    if (isCrossCategory) {
-      // Cross-category drag-and-drop
-      const sourceCat = categories.find((c) => c.category.id === dragCatId);
-      const targetCat = categories.find((c) => c.category.id === categoryId);
-      if (!sourceCat || !targetCat) return;
-
-      const draggedChannel = sourceCat.channels.find((ch) => ch.id === dragId);
-      if (!draggedChannel) return;
-
-      // Calculate insertion point in target category
-      const targetOrdered = [...targetCat.channels];
-      let insertIdx = targetOrdered.findIndex((ch) => ch.id === targetChannelId);
-      if (insertIdx === -1) insertIdx = targetOrdered.length;
-
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      if (e.clientY >= midY) insertIdx += 1;
-
-      // Insert dragged channel at target position
-      targetOrdered.splice(insertIdx, 0, draggedChannel);
-
-      // Build reorder items for both source and target categories
-      const items: { id: string; position: number; category_id?: string }[] = [];
-
-      const sourceRemaining = sourceCat.channels.filter((ch) => ch.id !== dragId);
-      sourceRemaining.forEach((ch, idx) => {
-        items.push({ id: ch.id, position: idx });
-      });
-
-      targetOrdered.forEach((ch, idx) => {
-        if (ch.id === dragId) {
-          // Moved channel — update category_id
-          items.push({ id: ch.id, position: idx, category_id: categoryId });
-        } else {
-          items.push({ id: ch.id, position: idx });
-        }
-      });
-
-      reorderChannels(items).then((ok) => {
-        if (!ok) addToast("error", tCh("reorderError"));
-      });
-    } else {
-      // Same-category reorder
-      const cat = categories.find((c) => c.category.id === categoryId);
-      if (!cat) return;
-
-      const ordered = [...cat.channels];
-      const dragIdx = ordered.findIndex((ch) => ch.id === dragId);
-      const targetIdx = ordered.findIndex((ch) => ch.id === targetChannelId);
-      if (dragIdx === -1 || targetIdx === -1) return;
-
-      const [dragged] = ordered.splice(dragIdx, 1);
-
-      let insertIdx = ordered.findIndex((ch) => ch.id === targetChannelId);
-      if (insertIdx === -1) insertIdx = ordered.length;
-
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      if (e.clientY >= midY) insertIdx += 1;
-
-      ordered.splice(insertIdx, 0, dragged);
-
-      const items = ordered.map((ch, idx) => ({ id: ch.id, position: idx }));
-      reorderChannels(items).then((ok) => {
-        if (!ok) addToast("error", tCh("reorderError"));
-      });
-    }
-  }
-
-  function handleDragEnd() {
-    dragChannelIdRef.current = null;
-    dragCategoryIdRef.current = null;
-    setDropIndicator(null);
-  }
-
-  // ─── Voice User Drag Handlers ───
-
-  // stopPropagation prevents conflict with channel reorder drag
-  function handleVoiceUserDragStart(e: React.DragEvent, userId: string, channelId: string) {
-    e.stopPropagation();
-    dragVoiceUserIdRef.current = userId;
-    dragVoiceSourceChannelRef.current = channelId;
-    setDraggingVoiceUserId(userId);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/voice-user", userId);
-  }
-
-  /** Clear all voice drag state on drop or cancel. */
-  function handleVoiceUserDragEnd() {
-    dragVoiceUserIdRef.current = null;
-    dragVoiceSourceChannelRef.current = null;
-    setDraggingVoiceUserId(null);
-    setVoiceDropTargetId(null);
-  }
-
-  /** Unified DragOver — handles both channel reorder and voice user move on the same element. */
-  function handleChannelDragOver(
-    e: React.DragEvent,
-    channelId: string,
-    channelType: string,
-    categoryId: string
-  ) {
-    if (dragVoiceUserIdRef.current) {
-      // Block drop on non-voice, same channel, or channel where mover lacks ConnectVoice
-      if (channelType !== "voice" || dragVoiceSourceChannelRef.current === channelId || !canConnectVoice(channelId)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setVoiceDropTargetId(channelId);
-      return;
-    }
-    handleDragOver(e, channelId, categoryId);
-  }
-
-  // Filter out false leave events when cursor moves between child elements
-  function handleChannelDragLeave(e: React.DragEvent) {
-    if (dragVoiceUserIdRef.current) {
-      const related = e.relatedTarget as Node | null;
-      if (related && e.currentTarget.contains(related)) return;
-      setVoiceDropTargetId(null);
-      return;
-    }
-    handleDragLeave();
-  }
-
-  /** Unified Drop — voice user move (via WS) or channel reorder. */
-  function handleChannelDrop(e: React.DragEvent, targetChannelId: string, categoryId: string) {
-    if (dragVoiceUserIdRef.current) {
-      e.preventDefault();
-      const targetUserId = dragVoiceUserIdRef.current;
-      dragVoiceUserIdRef.current = null;
-      dragVoiceSourceChannelRef.current = null;
-      setDraggingVoiceUserId(null);
-      setVoiceDropTargetId(null);
-      wsSend?.("voice_move_user", {
-        target_user_id: targetUserId,
-        target_channel_id: targetChannelId,
-      });
-      return;
-    }
-    handleDrop(e, targetChannelId, categoryId);
-  }
+  // ─── Drag & Drop ───
+  // All three DnD concerns (channel reorder, category reorder, voice user
+  // move) live in one hook because they share drop targets and need to be
+  // dispatched off shared refs.
+  const {
+    dropIndicator,
+    catDropIndicator,
+    draggingVoiceUserId,
+    voiceDropTargetId,
+    isChannelDragging,
+    handleCatDragStart,
+    handleCatDragEnd,
+    handleCatRowDragOver,
+    handleCatRowDrop,
+    handleCatDragLeave,
+    handleChannelDragStart,
+    handleChannelDragEnd,
+    handleChannelDragOver,
+    handleChannelDragLeave,
+    handleChannelDrop,
+    handleVoiceUserDragStart,
+    handleVoiceUserDragEnd,
+  } = useChannelTreeDragDrop({ canConnectVoice });
 
   // ─── Handlers ───
 
@@ -721,6 +388,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     <div className="ch-tree">
       <FriendsSection onShowUserCard={handleShowUserCard} />
       <DMSection onShowUserCard={handleShowUserCard} />
+      <AdminSection />
 
       <ServerList
         onAddServer={() => setShowAddServer(true)}
@@ -737,8 +405,8 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
               categories.length > 0 && !categories.some((c) => c.category.id === "") && (
               <div
                 className="ch-tree-uncat-drop"
-                onDragOver={handleCategoryHeaderDragOver}
-                onDrop={(e) => handleCategoryHeaderDrop(e, "")}
+                onDragOver={(e) => handleCatRowDragOver(e, "")}
+                onDrop={(e) => handleCatRowDrop(e, "")}
               />
             )}
 
@@ -772,8 +440,8 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         onCatDragLeave={handleCatDragLeave}
                         onCatRowDrop={(e) => handleCatRowDrop(e, catId)}
                         onCatDragEnd={handleCatDragEnd}
-                        onUncatDragOver={handleCategoryHeaderDragOver}
-                        onUncatDrop={(e) => handleCategoryHeaderDrop(e, "")}
+                        onUncatDragOver={(e) => handleCatRowDragOver(e, "")}
+                        onUncatDrop={(e) => handleCatRowDrop(e, "")}
                         isRenaming={renamingCategoryId === catId}
                         renameValue={renameValue}
                         onRenameChange={setRenameValue}
@@ -805,20 +473,22 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         isVoiceLocked={isVoiceLocked}
                         voiceDropTarget={voiceDropTargetId === ch.id}
                         canManageChannels={canManageChannels}
-                        isDragging={dragChannelIdRef.current === ch.id}
+                        isDragging={isChannelDragging(ch.id)}
                         dropPos={dropIndicator?.channelId === ch.id ? dropIndicator.position : null}
                         onClick={() => {
                           if (isVoiceLocked) return;
-                          isText
-                            ? handleTextChannelClick(ch.id, ch.name)
-                            : handleVoiceChannelClick(ch.id, ch.name);
+                          if (isText) {
+                            handleTextChannelClick(ch.id, ch.name);
+                          } else {
+                            handleVoiceChannelClick(ch.id, ch.name);
+                          }
                         }}
                         onContextMenu={(e) => handleChannelContextMenu(e, ch)}
-                        onDragStart={() => handleDragStart(ch.id, cg.category.id)}
+                        onDragStart={() => handleChannelDragStart(ch.id, cg.category.id)}
                         onDragOver={(e) => handleChannelDragOver(e, ch.id, ch.type, cg.category.id)}
                         onDragLeave={handleChannelDragLeave}
                         onDrop={(e) => handleChannelDrop(e, ch.id, cg.category.id)}
-                        onDragEnd={handleDragEnd}
+                        onDragEnd={handleChannelDragEnd}
                         isRenaming={renamingChannelId === ch.id}
                         renameValue={renameValue}
                         onRenameChange={setRenameValue}

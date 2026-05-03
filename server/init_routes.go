@@ -3,10 +3,10 @@ package main
 import (
 	"net/http"
 
-	"github.com/akinalp/mqvi/middleware"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/tayfa/middleware"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/services"
 )
 
 // initRoutes registers all API endpoints.

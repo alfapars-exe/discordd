@@ -4,10 +4,10 @@ import (
 	"context"
 	"log"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/services"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // registerHubCallbacks wires Hub events to service layer logic.

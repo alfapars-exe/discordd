@@ -19,7 +19,7 @@ import type { VoiceState, VoiceStateUpdateData, VoiceTokenResponse } from "../ty
 import * as voiceApi from "../api/voice";
 import {
   startVoiceCallService, stopVoiceCallService,
-  useNativeVoice, nativeVoiceConnect, nativeVoiceDisconnect,
+  isNativeVoice, nativeVoiceConnect, nativeVoiceDisconnect,
   nativeVoiceSetMic, nativeVoiceSetDeafened,
 } from "../utils/nativePlugins";
 import { ensureMicPermission } from "../utils/devicePermissions";
@@ -33,6 +33,7 @@ import {
   type VoiceSettingsSlice,
   type InputMode,
   type ScreenShareQuality,
+  type ScreenShareFps,
 } from "./slices/voiceSettingsSlice";
 import {
   createVoiceWsSlice,
@@ -43,7 +44,7 @@ import {
   type VoiceScreenShareSlice,
 } from "./slices/voiceScreenShareSlice";
 
-export type { InputMode, ScreenShareQuality };
+export type { InputMode, ScreenShareQuality, ScreenShareFps };
 
 // Lazy getter for the current user's id. Used to scrub our own voice entry
 // on leave — circular import avoided via getState().
@@ -262,7 +263,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
       // iOS: connect natively (audio works in background)
       // Other platforms: VoiceProvider connects via LiveKitRoom props
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         await nativeVoiceConnect(response.data.url, response.data.token, initialMuted, initialDeafened);
       }
 
@@ -324,7 +325,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     });
 
     // iOS: disconnect native voice
-    if (useNativeVoice()) {
+    if (isNativeVoice()) {
       nativeVoiceDisconnect();
     }
 
@@ -385,13 +386,13 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
     if (isDeafened) {
       set({ isDeafened: false, isMuted: !isMuted });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetDeafened(false);
         nativeVoiceSetMic(isMuted); // was muted, now toggling
       }
     } else {
       set({ isMuted: !isMuted });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetMic(isMuted); // was muted → enable, was unmuted → disable
       }
     }
@@ -404,14 +405,14 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     if (!isDeafened) {
       // Deafen on -> mute also on (Discord behavior)
       set({ isDeafened: true, isMuted: true });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetDeafened(true);
         nativeVoiceSetMic(false);
       }
     } else {
       // Deafen off -> unmute too (Discord behavior)
       set({ isDeafened: false, isMuted: false });
-      if (useNativeVoice()) {
+      if (isNativeVoice()) {
         nativeVoiceSetDeafened(false);
         nativeVoiceSetMic(true);
       }
@@ -421,6 +422,14 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
   setStreaming: (isStreaming: boolean) => {
     set({ isStreaming });
+    // Server notification is intentionally NOT fired here. Two reasons:
+    //  1. useVoice.toggleScreenShare already sends voice_state_update_request
+    //     after calling setStreaming, so doing it here too would double-fire.
+    //  2. The fallback paths in VoiceStateManager (track unpublished, native
+    //     plugin stopped) call setStreaming AFTER the track is gone, and they
+    //     send the WS update separately via _wsSend, so by the time the
+    //     server sees is_streaming=false the track really is gone — no
+    //     "phantom share" window where the icon vanishes before the track.
   },
 
   setRtt: (rtt) => set({ rtt }),

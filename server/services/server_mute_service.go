@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/repository"
 )
 
 // ServerMuteService handles per-user server mute/unmute.

@@ -2652,8 +2652,13 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* Header */
 .sp-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--b1); }
 .sp-title { font-size:18px;font-weight:700;color:var(--t0);margin:0; }
+.sp-header-actions { display:flex;align-items:center;gap:4px; }
+.sp-icon-btn,
 .sp-close { width:32px;height:32px;border:none;background:transparent;color:var(--t2);cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:background .1s,color .1s; }
+.sp-icon-btn:hover,
 .sp-close:hover { background:var(--bg-h);color:var(--t0); }
+.sp-icon-btn:disabled { cursor:default;opacity:0.5; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
 
 /* Tab bar — Screens / Windows */
 .sp-tabs { display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b1); }
@@ -2675,19 +2680,26 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .sp-thumbnail-wrap { width:100%;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--bg-0); }
 .sp-thumbnail { width:100%;height:100%;object-fit:contain; }
 
-/* Source name — single line, truncated */
-.sp-source-name { font-size:13px;color:var(--t1);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px; }
+/* Source name — single line, truncated, optional leading app icon */
+.sp-source-name { display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;min-width:0; }
+.sp-app-icon { width:14px;height:14px;flex-shrink:0;border-radius:2px; }
+
+/* Hint line at bottom of grid */
+.sp-hint { padding:8px 20px 0;font-size:12px;color:var(--t3);line-height:1.4; }
 
 /* Footer — audio toggle */
 .sp-footer { padding:12px 20px;border-top:1px solid var(--b1); }
 .sp-audio-toggle { display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none; }
 .sp-audio-label { display:flex;align-items:center;gap:8px;font-size:14px;color:var(--t1); }
 
-/* Mini switch — footer toggle */
-.sp-switch { width:36px;height:20px;border-radius:10px;background:var(--bg-5);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0; }
+/* Mini switch — footer toggle / popup toggle */
+.sp-switch { width:36px;height:20px;border-radius:10px;background:var(--bg-5);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;display:inline-block; }
 .sp-switch-on { background:var(--primary); }
 .sp-switch-thumb { width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s; }
 .sp-switch-on .sp-switch-thumb { transform:translateX(16px); }
+
+/* Submenu toggle row — switch on the right of a label */
+.adp-submenu-toggle { display:flex;align-items:center;justify-content:space-between;gap:8px; }
 
 /* ═══════════════════════════════════════
    GENERAL SETTINGS (Desktop Settings)
@@ -3022,6 +3034,23 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
   /* Message input — larger */
   .input-area textarea {
     font-size: 16px; /* Prevent iOS zoom (triggers below 16px) */
+  }
+
+  /* Composer buttons (attach, emoji, GIF, send) — 36px → 44px so they're
+     comfortable to tap and don't get squeezed against the textarea. The
+     send button uses the same .input-box button selector. */
+  .input-box button {
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+  }
+
+  /* Keyboard avoidance: useMobileKeyboardOffset writes the soft-keyboard's
+     height into --keyboard-offset (visualViewport API). Shrink the app
+     container by that amount so the bottom-anchored composer stays above
+     the keyboard instead of being covered by it. */
+  .mqvi-app.mobile {
+    height: calc(100dvh - var(--keyboard-offset, 0px));
+    transition: height 0.15s ease-out;
   }
 
   /* Voice controls — larger on mobile */

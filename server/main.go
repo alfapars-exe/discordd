@@ -15,16 +15,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/akinalp/mqvi/config"
-	"github.com/akinalp/mqvi/database"
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg/crypto"
-	"github.com/akinalp/mqvi/pkg/i18n"
-	"github.com/akinalp/mqvi/services"
-	"github.com/akinalp/mqvi/static"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/config"
+	"github.com/argeinfina/tayfa/database"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg/crypto"
+	"github.com/argeinfina/tayfa/pkg/i18n"
+	"github.com/argeinfina/tayfa/services"
+	"github.com/argeinfina/tayfa/static"
+	"github.com/argeinfina/tayfa/ws"
+	"github.com/google/uuid"
 	"github.com/rs/cors"
 )
+
+// startupID is regenerated on every server start. The frontend polls
+// /api/version and compares; a different value means a new deploy and
+// triggers an in-app "update available" banner.
+var startupID = uuid.New().String()
 
 func init() {
 	// Windows registry can return wrong MIME types for some extensions.
@@ -81,8 +87,15 @@ func main() {
 		log.Fatalf("[main] invalid ENCRYPTION_KEY: %v", err)
 	}
 
-	// 7. Startup cleanup + presence reset + LiveKit seed
-	runStartupCleanup(db, repos, cfg, encryptionKey)
+	// 7. Startup hooks — each is independently testable and has a single
+	// reason to change. Run order matters: ID repair has to happen before
+	// LiveKit seeding so an orphan empty-ID instance isn't seeded over.
+	repairCorruptIDs(db)
+	resetStalePresence(db)
+	seedPlatformLiveKit(db, repos, cfg, encryptionKey)
+	// PLATFORM_ADMIN_USERNAME is read from env so the "who's admin?"
+	// decision lives in HF Space secrets, not in committed source.
+	bootstrapPlatformAdmin(db, os.Getenv("PLATFORM_ADMIN_USERNAME"))
 
 	// 8. WebSocket Hub
 	hub := ws.NewHub()
@@ -228,102 +241,147 @@ func main() {
 
 // ─── Startup Helpers ───
 
-// runStartupCleanup handles one-time DB cleanup and seeding at boot.
-func runStartupCleanup(db *database.DB, repos *Repositories, cfg *config.Config, encryptionKey []byte) {
-	// Fix empty-ID LiveKit instances
-	{
-		var emptyLK int
-		if err := db.Conn.QueryRowContext(context.Background(),
-			`SELECT COUNT(*) FROM livekit_instances WHERE id = ''`).Scan(&emptyLK); err != nil {
-			log.Printf("[main] warning: failed to check empty-ID livekit instances: %v", err)
-		}
-		if emptyLK > 0 {
-			var newLKID string
-			if err := db.Conn.QueryRowContext(context.Background(),
-				`SELECT lower(hex(randomblob(8)))`).Scan(&newLKID); err != nil {
-				log.Printf("[main] warning: failed to generate new livekit ID: %v", err)
-			} else {
-				if _, err := db.Conn.ExecContext(context.Background(),
-					`UPDATE livekit_instances SET id = ? WHERE id = ''`, newLKID); err != nil {
-					log.Printf("[main] warning: failed to update empty-ID livekit instance: %v", err)
-				}
-				res, fixErr := db.Conn.ExecContext(context.Background(),
-					`UPDATE servers SET livekit_instance_id = ? WHERE livekit_instance_id = ''`, newLKID)
-				if fixErr != nil {
-					log.Printf("[main] warning: failed to update server livekit refs: %v", fixErr)
-				} else if aff, _ := res.RowsAffected(); aff > 0 {
-					log.Printf("[main] fixed empty-ID livekit instance → %s (%d server refs updated)", newLKID, aff)
-				}
-			}
-		}
+// bootstrapPlatformAdmin idempotently grants platform-admin to a known
+// username at every server start. Required because the in-app admin endpoint
+// (PATCH /api/admin/users/{id}/platform-admin) is auth-gated by the same
+// privilege it grants — without a server-side bootstrap there's no way to
+// promote the very first admin without manual DB access.
+//
+// Safe to leave in place: the UPDATE is a no-op once the user is already an
+// admin, and ignores users who don't exist yet (e.g. before they register).
+func bootstrapPlatformAdmin(db *database.DB, username string) {
+	if username == "" {
+		return
+	}
+	res, err := db.Conn.ExecContext(context.Background(),
+		`UPDATE users SET is_platform_admin = 1 WHERE username = ? AND is_platform_admin = 0`,
+		username,
+	)
+	if err != nil {
+		log.Printf("[main] bootstrap platform admin (%s) failed: %v", username, err)
+		return
+	}
+	if affected, _ := res.RowsAffected(); affected > 0 {
+		log.Printf("[main] bootstrapped platform admin: %s", username)
+	}
+}
 
-		// Fix empty-ID servers
-		var emptySrv int
-		if err := db.Conn.QueryRowContext(context.Background(),
-			`SELECT COUNT(*) FROM servers WHERE id = ''`).Scan(&emptySrv); err != nil {
-			log.Printf("[main] warning: failed to check empty-ID servers: %v", err)
-		}
-		if emptySrv > 0 {
-			cleanupTables := []string{"channels", "categories", "roles", "user_roles", "invites", "bans", "server_members"}
-			for _, table := range cleanupTables {
-				if _, err := db.Conn.ExecContext(context.Background(),
-					fmt.Sprintf(`DELETE FROM %s WHERE server_id = ''`, table)); err != nil {
-					log.Printf("[main] warning: failed to clean empty-ID from %s: %v", table, err)
-				}
+// repairCorruptIDs fixes empty-string ID rows left by an old bug. The
+// invariant "every row has a non-empty ID" is enforced by the application
+// today, but historical rows from earlier code paths may still violate it.
+// Best-effort: every step logs and continues on error.
+func repairCorruptIDs(db *database.DB) {
+	ctx := context.Background()
+
+	// LiveKit instances: rename empty-ID rows to a fresh hex id and rewrite
+	// the foreign key on `servers` to match.
+	var emptyLK int
+	if err := db.Conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM livekit_instances WHERE id = ''`).Scan(&emptyLK); err != nil {
+		log.Printf("[main] warning: failed to check empty-ID livekit instances: %v", err)
+	}
+	if emptyLK > 0 {
+		var newLKID string
+		if err := db.Conn.QueryRowContext(ctx,
+			`SELECT lower(hex(randomblob(8)))`).Scan(&newLKID); err != nil {
+			log.Printf("[main] warning: failed to generate new livekit ID: %v", err)
+		} else {
+			if _, err := db.Conn.ExecContext(ctx,
+				`UPDATE livekit_instances SET id = ? WHERE id = ''`, newLKID); err != nil {
+				log.Printf("[main] warning: failed to update empty-ID livekit instance: %v", err)
 			}
-			if _, err := db.Conn.ExecContext(context.Background(), `DELETE FROM servers WHERE id = ''`); err != nil {
-				log.Printf("[main] warning: failed to delete empty-ID servers: %v", err)
+			res, fixErr := db.Conn.ExecContext(ctx,
+				`UPDATE servers SET livekit_instance_id = ? WHERE livekit_instance_id = ''`, newLKID)
+			if fixErr != nil {
+				log.Printf("[main] warning: failed to update server livekit refs: %v", fixErr)
+			} else if aff, _ := res.RowsAffected(); aff > 0 {
+				log.Printf("[main] fixed empty-ID livekit instance → %s (%d server refs updated)", newLKID, aff)
 			}
-			log.Printf("[main] cleaned up %d empty-ID server(s) and related data", emptySrv)
 		}
 	}
 
-	// Reset stale presence to offline
-	{
-		result, resetErr := db.Conn.ExecContext(context.Background(),
-			`UPDATE users SET status = 'offline' WHERE status IN ('online', 'idle')`)
-		if resetErr != nil {
-			log.Printf("[main] warning: failed to reset stale presence: %v", resetErr)
-		} else if affected, _ := result.RowsAffected(); affected > 0 {
-			log.Printf("[main] reset %d stale user status(es) to offline", affected)
+	// Servers with empty IDs are unreachable — drop their cascade rows
+	// from related tables, then the server row itself.
+	var emptySrv int
+	if err := db.Conn.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM servers WHERE id = ''`).Scan(&emptySrv); err != nil {
+		log.Printf("[main] warning: failed to check empty-ID servers: %v", err)
+	}
+	if emptySrv > 0 {
+		cleanupTables := []string{"channels", "categories", "roles", "user_roles", "invites", "bans", "server_members"}
+		for _, table := range cleanupTables {
+			if _, err := db.Conn.ExecContext(ctx,
+				fmt.Sprintf(`DELETE FROM %s WHERE server_id = ''`, table)); err != nil {
+				log.Printf("[main] warning: failed to clean empty-ID from %s: %v", table, err)
+			}
 		}
+		if _, err := db.Conn.ExecContext(ctx, `DELETE FROM servers WHERE id = ''`); err != nil {
+			log.Printf("[main] warning: failed to delete empty-ID servers: %v", err)
+		}
+		log.Printf("[main] cleaned up %d empty-ID server(s) and related data", emptySrv)
+	}
+}
+
+// resetStalePresence flips any user marked as online/idle back to offline.
+// Required because the WebSocket disconnect handler is the source of truth
+// for presence transitions, and it doesn't run if the process was killed.
+// Callers' first WS connect after this will set them online again normally.
+func resetStalePresence(db *database.DB) {
+	result, err := db.Conn.ExecContext(context.Background(),
+		`UPDATE users SET status = 'offline' WHERE status IN ('online', 'idle')`)
+	if err != nil {
+		log.Printf("[main] warning: failed to reset stale presence: %v", err)
+		return
+	}
+	if affected, _ := result.RowsAffected(); affected > 0 {
+		log.Printf("[main] reset %d stale user status(es) to offline", affected)
+	}
+}
+
+// seedPlatformLiveKit ensures a platform-managed LiveKit instance exists in
+// the DB whenever the LIVEKIT_URL/KEY/SECRET env triplet is configured. The
+// API key and secret are AES-encrypted with the project encryption key
+// before insertion. If the instance already exists, we just back-fill any
+// servers whose livekit_instance_id is NULL so they pick up the platform
+// SFU on next voice connect.
+func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Config, encryptionKey []byte) {
+	if cfg.LiveKit.URL == "" || cfg.LiveKit.APIKey == "" || cfg.LiveKit.APISecret == "" {
+		return
+	}
+	ctx := context.Background()
+
+	platformInstance, seedErr := repos.LiveKit.GetLeastLoadedPlatformInstance(ctx)
+	if seedErr != nil {
+		encKey, encErr := crypto.Encrypt(cfg.LiveKit.APIKey, encryptionKey)
+		if encErr != nil {
+			log.Fatalf("[main] failed to encrypt platform livekit key: %v", encErr)
+		}
+		encSecret, encErr := crypto.Encrypt(cfg.LiveKit.APISecret, encryptionKey)
+		if encErr != nil {
+			log.Fatalf("[main] failed to encrypt platform livekit secret: %v", encErr)
+		}
+
+		platformInstance = &models.LiveKitInstance{
+			URL:               cfg.LiveKit.URL,
+			APIKey:            encKey,
+			APISecret:         encSecret,
+			IsPlatformManaged: true,
+			ServerCount:       0,
+		}
+		if createErr := repos.LiveKit.Create(ctx, platformInstance); createErr != nil {
+			log.Fatalf("[main] failed to seed platform livekit instance: %v", createErr)
+		}
+		log.Printf("[main] seeded platform LiveKit instance (url=%s, id=%s)", cfg.LiveKit.URL, platformInstance.ID)
 	}
 
-	// Seed platform LiveKit instance
-	if cfg.LiveKit.URL != "" && cfg.LiveKit.APIKey != "" && cfg.LiveKit.APISecret != "" {
-		platformInstance, seedErr := repos.LiveKit.GetLeastLoadedPlatformInstance(context.Background())
-		if seedErr != nil {
-			encKey, encErr := crypto.Encrypt(cfg.LiveKit.APIKey, encryptionKey)
-			if encErr != nil {
-				log.Fatalf("[main] failed to encrypt platform livekit key: %v", encErr)
-			}
-			encSecret, encErr := crypto.Encrypt(cfg.LiveKit.APISecret, encryptionKey)
-			if encErr != nil {
-				log.Fatalf("[main] failed to encrypt platform livekit secret: %v", encErr)
-			}
-
-			platformInstance = &models.LiveKitInstance{
-				URL:               cfg.LiveKit.URL,
-				APIKey:            encKey,
-				APISecret:         encSecret,
-				IsPlatformManaged: true,
-				ServerCount:       0,
-			}
-			if createErr := repos.LiveKit.Create(context.Background(), platformInstance); createErr != nil {
-				log.Fatalf("[main] failed to seed platform livekit instance: %v", createErr)
-			}
-			log.Printf("[main] seeded platform LiveKit instance (url=%s, id=%s)", cfg.LiveKit.URL, platformInstance.ID)
-		}
-
-		result, linkErr := db.Conn.ExecContext(context.Background(),
-			`UPDATE servers SET livekit_instance_id = ? WHERE livekit_instance_id IS NULL`,
-			platformInstance.ID,
-		)
-		if linkErr != nil {
-			log.Printf("[main] warning: failed to link orphan servers to platform livekit: %v", linkErr)
-		} else if affected, _ := result.RowsAffected(); affected > 0 {
-			log.Printf("[main] linked %d orphan server(s) to platform LiveKit instance", affected)
-		}
+	result, linkErr := db.Conn.ExecContext(ctx,
+		`UPDATE servers SET livekit_instance_id = ? WHERE livekit_instance_id IS NULL`,
+		platformInstance.ID,
+	)
+	if linkErr != nil {
+		log.Printf("[main] warning: failed to link orphan servers to platform livekit: %v", linkErr)
+	} else if affected, _ := result.RowsAffected(); affected > 0 {
+		log.Printf("[main] linked %d orphan server(s) to platform LiveKit instance", affected)
 	}
 }
 
@@ -354,6 +412,16 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"ok","service":"tayfa"}`)
+	})
+
+	// /api/version — used by the frontend to detect new deploys.
+	// startupID is generated once per process, so a server restart (which
+	// happens on every HF Space rebuild + redeploy) flips the value and the
+	// connected clients show an "update available" banner.
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		fmt.Fprintf(w, `{"version":"%s"}`, startupID)
 	})
 }
 

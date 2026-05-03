@@ -1,4 +1,4 @@
-module github.com/akinalp/mqvi
+module github.com/argeinfina/tayfa
 
 go 1.25.0
 
@@ -12,7 +12,7 @@ require (
 	github.com/livekit/server-sdk-go/v2 v2.15.0
 	github.com/resend/resend-go/v3 v3.1.1
 	github.com/rs/cors v1.11.1
-	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
+	github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.50.0
 	modernc.org/sqlite v1.45.0

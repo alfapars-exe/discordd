@@ -397,56 +397,85 @@ function setupPermissions(): void {
   // Sources are sent to renderer via IPC, user picks, result comes back.
   // VIDEO ONLY — audio is handled by audio-capture.exe (WASAPI process loopback)
   // to exclude our own voice chat audio from capture.
+  //
+  // Source visibility caveats: desktopCapturer can't see windows running in
+  // elevated (admin) processes when our app isn't elevated, and may miss
+  // fullscreen DXGI/protected-content surfaces. The user can re-trigger the
+  // picker via the refresh button if their target window appeared after the
+  // picker opened.
   session.defaultSession.setDisplayMediaRequestHandler(
     async (_request, callback) => {
       try {
-        const sources = await desktopCapturer.getSources({
-          types: ["screen", "window"],
-          thumbnailSize: { width: 320, height: 180 },
-        });
+        async function querySources() {
+          const sources = await desktopCapturer.getSources({
+            types: ["screen", "window"],
+            thumbnailSize: { width: 480, height: 270 },
+            fetchWindowIcons: true,
+          });
+          return sources;
+        }
+
+        let sources = await querySources();
 
         if (sources.length === 0) {
           callback({});
           return;
         }
 
-        // Serialize sources with thumbnails as DataURLs
-        const serialized = sources.map((s) => ({
-          id: s.id,
-          name: s.name,
-          thumbnail: s.thumbnail.toDataURL(),
-        }));
+        function serialize(s: Awaited<ReturnType<typeof querySources>>[number]) {
+          return {
+            id: s.id,
+            name: s.name,
+            thumbnail: s.thumbnail.toDataURL(),
+            appIcon: s.appIcon ? s.appIcon.toDataURL() : null,
+          };
+        }
 
-        // Send sources to renderer to display picker
-        mainWindow?.webContents.send("show-screen-picker", serialized);
+        // Send initial source list to renderer.
+        mainWindow?.webContents.send("show-screen-picker", sources.map(serialize));
 
-        // Wait for selection result from renderer (one-time listener)
-        const sourceId = await new Promise<string | null>((resolve) => {
-          ipcMain.once("screen-picker-result", (_event, id: string | null) => {
-            resolve(id);
+        // Refresh handler — re-queries while picker is open. Renderer sends
+        // "screen-picker-refresh"; we reply with updated source list. The
+        // listener stays attached for the lifetime of this getDisplayMedia
+        // call and is removed in the finally block below.
+        const refreshHandler = async () => {
+          try {
+            sources = await querySources();
+            mainWindow?.webContents.send(
+              "screen-picker-refresh-result",
+              sources.map(serialize),
+            );
+          } catch (err) {
+            console.error("[main] Screen picker refresh error:", err);
+          }
+        };
+        ipcMain.on("screen-picker-refresh", refreshHandler);
+
+        try {
+          const sourceId = await new Promise<string | null>((resolve) => {
+            ipcMain.once("screen-picker-result", (_event, id: string | null) => {
+              resolve(id);
+            });
           });
-        });
 
-        if (sourceId) {
-          // Find the selected source from original list
-          const selected = sources.find((s) => s.id === sourceId);
-          if (selected) {
-            // Video only — no "loopback" audio.
-            // Audio capture is handled by audio-capture.exe (process-exclusive)
-            // which is started/stopped by the renderer via IPC.
-            callback({ video: selected });
+          if (sourceId) {
+            const selected = sources.find((s) => s.id === sourceId);
+            if (selected) {
+              callback({ video: selected });
+            } else {
+              callback({});
+            }
           } else {
             callback({});
           }
-        } else {
-          // User cancelled
-          callback({});
+        } finally {
+          ipcMain.off("screen-picker-refresh", refreshHandler);
         }
       } catch (err) {
         console.error("[main] Screen picker error:", err);
         callback({});
       }
-    }
+    },
   );
 }
 
@@ -798,34 +827,22 @@ function setupIPC(): void {
 
 // ─── Auto Updater ───
 
-/** Configure electron-updater for GitHub Releases auto-updates. */
+/**
+ * setupAutoUpdater — no-op for the Tayfa fork.
+ *
+ * The original Mqvi flow used electron-updater against akinalpfdn/Mqvi's
+ * GitHub releases. We don't have our own release feed yet, and pointing
+ * the updater at the upstream repo would push our users back to Mqvi.
+ *
+ * The IPC handlers (check-update, download-update, install-update) and
+ * the splash-screen prelaunch flow (checkForUpdateBeforeLaunch) still use
+ * autoUpdater directly; they fail gracefully when there's nothing to
+ * fetch, so leaving them in place is harmless. When we have our own
+ * release pipeline, restore the event subscriptions and polling here and
+ * point package.json's publish.repo at the new repo.
+ */
 function setupAutoUpdater(): void {
-  // Auto-download when update is found
-  autoUpdater.autoDownload = true;
-  // Install on app quit
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on("update-available", (info) => {
-    mainWindow?.webContents.send("update-available", info);
-  });
-
-  autoUpdater.on("download-progress", (progress) => {
-    mainWindow?.webContents.send("update-progress", progress);
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    mainWindow?.webContents.send("update-downloaded", info);
-  });
-
-  autoUpdater.on("error", (err) => {
-    mainWindow?.webContents.send("update-error", err.message);
-  });
-
-  // Check for updates on launch + every 5 minutes
-  autoUpdater.checkForUpdates().catch(() => {});
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 5 * 60 * 1000);
+  return;
 }
 
 // ─── Single Instance Lock ───

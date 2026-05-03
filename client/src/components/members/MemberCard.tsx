@@ -126,8 +126,6 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   }, [position]);
 
   useEffect(() => {
-    let frameId: number;
-
     function handleClick(e: MouseEvent) {
       if (childModalOpenRef.current) return;
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
@@ -135,7 +133,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
       }
     }
 
-    frameId = requestAnimationFrame(() => {
+    const frameId = requestAnimationFrame(() => {
       document.addEventListener("mousedown", handleClick);
     });
 

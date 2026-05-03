@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
+	"github.com/argeinfina/tayfa/models"
 )
 
 // LinkPreviewRepository defines data access for link preview cache.

@@ -9,9 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
-	_ "github.com/tursodatabase/libsql-client-go/libsql" // pure-Go libSQL HTTP client for Turso (no CGO)
-	_ "modernc.org/sqlite"                              // pure-Go SQLite driver (no CGO)
+	_ "github.com/tursodatabase/go-libsql" // CGO-based libSQL driver for remote Turso (registers "libsql")
+	_ "modernc.org/sqlite"                 // pure-Go SQLite driver for local files (registers "sqlite")
 )
 
 // recoverableErrors lists error patterns that can be safely skipped
@@ -65,13 +66,27 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 		log.Printf("[database] using local SQLite at %s", dbPath)
 	}
 
-	// Connection pool settings for SQLite WAL mode:
-	// - MaxOpenConns=4 allows concurrent reads (WAL serializes writes internally)
-	// - MaxIdleConns=2 keeps warm connections ready
-	// - ConnMaxLifetime=0 means connections are reused indefinitely
+	// Connection pool settings.
+	//
+	// For local SQLite the old comments still apply: MaxOpenConns=4 allows
+	// concurrent reads (WAL serializes writes internally), MaxIdleConns=2
+	// keeps warm connections ready.
+	//
+	// For remote Turso/libSQL there's an additional constraint: each *sql.Conn
+	// maps to a Hrana stream on the Turso side, and Turso closes idle streams
+	// after ~10 seconds. If we reuse a pooled conn after the stream is gone,
+	// Prepare fails with:
+	//   error code = 3: Hrana: api error: status=404 Not Found,
+	//   body={"error":"stream not found: ..."}
+	// This bit users on mobile where network latency widens the idle window.
+	//
+	// Fix: ConnMaxIdleTime=5s drops idle pool entries before Turso does, and
+	// ConnMaxLifetime=5m bounds total connection age as a safety net. Both
+	// are also harmless for local SQLite.
 	conn.SetMaxOpenConns(4)
 	conn.SetMaxIdleConns(2)
-	conn.SetConnMaxLifetime(0)
+	conn.SetConnMaxIdleTime(5 * time.Second)
+	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
@@ -186,12 +201,45 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 
 // execStatements runs each SQL statement individually, skipping recoverable errors
 // (e.g. "duplicate column name" from a partially applied migration).
+//
+// PRAGMA statements are skipped entirely: connection-level settings
+// (foreign_keys, journal_mode, busy_timeout) are already passed via the SQLite
+// DSN, and remote libSQL/Turso rejects PRAGMAs with HTTP 400 because the
+// server manages those settings itself.
 func (db *DB) execStatements(filename, content string) error {
 	statements := splitStatements(content)
 
 	for i, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
+			continue
+		}
+
+		// Detect "is this a PRAGMA?" by peeking past leading "--" comment lines.
+		// We can't just strings.HasPrefix(stmt, "PRAGMA") because the migration
+		// files put descriptive comments before each PRAGMA.
+		core := stmt
+		for strings.HasPrefix(core, "--") {
+			nl := strings.IndexByte(core, '\n')
+			if nl < 0 {
+				core = ""
+				break
+			}
+			core = strings.TrimSpace(core[nl+1:])
+		}
+		if core == "" {
+			// All-comment chunk. This happens when splitStatements hits a `;`
+			// that's actually inside a SQL comment (it doesn't track `--`),
+			// e.g. "-- ...returns 0 rows;\n-- ..." in migration 018. We can't
+			// fix the splitter without rewriting it, but we can detect the
+			// resulting empty-statement chunk here. go-libsql rejects empty
+			// statements with "API misuse: no SQL statement provided".
+			log.Printf("[database] %s: statement %d skipped (comment-only)", filename, i+1)
+			continue
+		}
+
+		if strings.HasPrefix(strings.ToUpper(core), "PRAGMA") {
+			log.Printf("[database] %s: statement %d skipped (PRAGMA — set via DSN / managed by libSQL server)", filename, i+1)
 			continue
 		}
 
@@ -217,16 +265,36 @@ func (db *DB) execStatements(filename, content string) error {
 	return nil
 }
 
-// splitStatements splits SQL by semicolons, respecting string literals
-// and BEGIN...END blocks (for triggers).
+// splitStatements splits SQL by semicolons, respecting string literals,
+// BEGIN...END blocks (for triggers), and -- line comments. Without comment
+// awareness, a literal ';' inside a "-- ..." comment would cut a statement
+// in half, which broke migration 018 ("...nothing is migrated; the first
+// user to register will...").
 func splitStatements(sql string) []string {
 	var statements []string
 	var current strings.Builder
 	inString := false
+	inLineComment := false
 	beginDepth := 0
 
 	for i := 0; i < len(sql); i++ {
 		ch := sql[i]
+
+		// Line comment ends at the next newline. We still emit the bytes so
+		// migrations keep their inline documentation in error messages.
+		if inLineComment {
+			current.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+
+		if !inString && ch == '-' && i+1 < len(sql) && sql[i+1] == '-' {
+			inLineComment = true
+			current.WriteByte(ch)
+			continue
+		}
 
 		if ch == '\'' {
 			if inString && i+1 < len(sql) && sql[i+1] == '\'' {

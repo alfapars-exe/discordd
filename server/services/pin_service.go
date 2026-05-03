@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // MaxPinsPerChannel is the max number of pins per channel (same as Discord: 50).

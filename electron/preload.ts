@@ -35,11 +35,50 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ─── Screen Picker IPC ───
 
-  /** Main process requests screen picker — receives sources */
+  /**
+   * Main process requests screen picker — receives sources. `appIcon` is the
+   * window's owner-app icon as a DataURL (or null if not available — e.g.
+   * for "screen" sources or apps without an icon resource).
+   */
   onShowScreenPicker: (
-    cb: (sources: Array<{ id: string; name: string; thumbnail: string }>) => void
+    cb: (
+      sources: Array<{
+        id: string;
+        name: string;
+        thumbnail: string;
+        appIcon: string | null;
+      }>,
+    ) => void,
   ): void => {
     ipcRenderer.on("show-screen-picker", (_e, sources) => cb(sources));
+  },
+
+  /**
+   * Re-query desktop sources while the picker is open. Lets the user pick up
+   * a window that started or became visible after the picker first appeared
+   * (the most common reason a target window is "missing" from the list).
+   */
+  refreshScreenPickerSources: (): void => {
+    ipcRenderer.send("screen-picker-refresh");
+  },
+
+  /** Result from a refreshScreenPickerSources() call. */
+  onScreenPickerRefreshResult: (
+    cb: (
+      sources: Array<{
+        id: string;
+        name: string;
+        thumbnail: string;
+        appIcon: string | null;
+      }>,
+    ) => void,
+  ): void => {
+    ipcRenderer.on("screen-picker-refresh-result", (_e, sources) => cb(sources));
+  },
+
+  /** Remove the refresh-result listener (on picker close). */
+  removeScreenPickerRefreshListener: (): void => {
+    ipcRenderer.removeAllListeners("screen-picker-refresh-result");
   },
 
   /** Send user's selection to main process (null = cancelled) */

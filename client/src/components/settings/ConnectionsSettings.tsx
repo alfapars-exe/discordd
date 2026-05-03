@@ -37,14 +37,14 @@ function loadConnections(): SavedConnection[] {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
-  } catch {}
+  } catch { /* localStorage unavailable or corrupt; treat as empty */ }
   return [];
 }
 
 function saveConnections(connections: SavedConnection[]): void {
   try {
     localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
-  } catch {}
+  } catch { /* localStorage unavailable or corrupt; treat as empty */ }
 }
 
 /** Check if the given URL is the currently active connection. */

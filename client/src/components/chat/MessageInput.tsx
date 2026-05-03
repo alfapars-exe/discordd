@@ -399,6 +399,22 @@ function MessageInput() {
             </div>
           )}
         </div>
+
+        {/* Send button — explicit click target for users who don't use Enter
+            (touch devices, accessibility). Disabled when there's no content
+            and no attachments, or while a previous send is in flight. */}
+        <button
+          className="input-action-btn input-send-btn"
+          title={t("sendMessage")}
+          onClick={handleSend}
+          disabled={isSending || (content.trim().length === 0 && files.length === 0)}
+          aria-label={t("sendMessage")}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        </button>
       </div>
 
       {/* Character counter — visible when within 100 chars of limit */}

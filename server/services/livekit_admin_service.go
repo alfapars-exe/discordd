@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/pkg/crypto"
-	"github.com/akinalp/mqvi/pkg/promparse"
-	"github.com/akinalp/mqvi/repository"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/pkg/crypto"
+	"github.com/argeinfina/tayfa/pkg/promparse"
+	"github.com/argeinfina/tayfa/repository"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 )
 

@@ -44,7 +44,7 @@ function CollapsedSidebar() {
         onClick={expandSidebar}
         title={t("server")}
       >
-        <img src={publicAsset("mqvi-icon.svg")} alt="mqvi" className="sb-collapsed-icon" />
+        <img src={publicAsset("mqvi-icon.svg")} alt="Tayfa" className="sb-collapsed-icon" />
         {totalChannelUnread > 0 && (
           <span className="sb-collapsed-badge">{totalChannelUnread}</span>
         )}

@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/akinalp/mqvi/models"
-	"github.com/akinalp/mqvi/ws"
+	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/tayfa/ws"
 )
 
 // ─── ISP Interfaces ───

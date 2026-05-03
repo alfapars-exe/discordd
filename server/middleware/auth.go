@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/akinalp/mqvi/handlers"
-	"github.com/akinalp/mqvi/pkg"
-	"github.com/akinalp/mqvi/repository"
-	"github.com/akinalp/mqvi/services"
+	"github.com/argeinfina/tayfa/handlers"
+	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/tayfa/services"
 )
 
 // AuthMiddleware validates JWT tokens on incoming requests.
