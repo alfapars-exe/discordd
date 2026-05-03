@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 	"github.com/gorilla/websocket"
 )
 

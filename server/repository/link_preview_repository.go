@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // LinkPreviewRepository defines data access for link preview cache.

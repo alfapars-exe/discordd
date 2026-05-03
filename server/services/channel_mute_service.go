@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // ChannelMuteService handles per-user channel mute/unmute.

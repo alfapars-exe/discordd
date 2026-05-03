@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/argeinfina/tayfa/database"
+	"github.com/argeinfina/hichat/database"
 )
 
 type sqliteServerMuteRepo struct {

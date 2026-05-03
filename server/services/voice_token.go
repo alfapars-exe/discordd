@@ -8,9 +8,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/pkg/crypto"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/crypto"
 
 	"github.com/livekit/protocol/auth"
 )

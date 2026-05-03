@@ -26,8 +26,8 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // LinkPreviewService fetches and caches URL metadata.

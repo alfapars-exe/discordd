@@ -8,7 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // TokenValidator validates JWT tokens for WS connections.

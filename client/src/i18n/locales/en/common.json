@@ -1,5 +1,5 @@
 {
-  "appName": "Tayfa",
+  "appName": "HiChat!",
   "loading": "Loading...",
   "save": "Save",
   "cancel": "Cancel",
@@ -145,6 +145,6 @@
   "badgeDeleteConfirm": "Are you sure you want to delete the badge \"{{name}}\"? This will remove it from all users.",
   "adminSection": "ADMIN",
   "registeredUsers": "Registered Users",
-  "updateAvailable": "A new version of Tayfa is available.",
+  "updateAvailable": "A new version of HiChat! is available.",
   "updateApp": "Update"
 }

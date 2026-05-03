@@ -1,8 +1,8 @@
 {
   "private": true,
-  "name": "tayfa-desktop",
+  "name": "hichat-desktop",
   "version": "2.11.9",
-  "description": "Tayfa desktop application",
+  "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -22,8 +22,8 @@
     "typescript": "~5.9.3"
   },
   "build": {
-    "appId": "net.tayfa.app",
-    "productName": "Tayfa",
+    "appId": "net.hichat.app",
+    "productName": "HiChat!",
     "directories": {
       "output": "release"
     },
@@ -32,7 +32,7 @@
       "client/dist",
       "icons"
     ],
-    "artifactName": "tayfa-setup.${ext}",
+    "artifactName": "hichat-setup.${ext}",
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
     "publish": {

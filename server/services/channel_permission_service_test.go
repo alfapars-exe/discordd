@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/testutil"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/testutil"
 )
 
 // helper to create the service with mocks wired up.

@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 type StatsResponse struct {

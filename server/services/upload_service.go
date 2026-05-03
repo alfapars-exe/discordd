@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // UploadService handles file upload validation, storage, and DB record creation.

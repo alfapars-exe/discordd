@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // InviteRepository defines data access for invite codes. All list operations are server-scoped.

@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/argeinfina/tayfa/database"
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/models"
 )
 
 type sqliteE2EEBackupRepo struct {

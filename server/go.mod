@@ -1,4 +1,4 @@
-module github.com/argeinfina/tayfa
+module github.com/argeinfina/hichat
 
 go 1.25.0
 

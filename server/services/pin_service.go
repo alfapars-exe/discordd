@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/repository"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // MaxPinsPerChannel is the max number of pins per channel (same as Discord: 50).

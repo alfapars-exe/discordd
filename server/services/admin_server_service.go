@@ -14,9 +14,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/argeinfina/tayfa/pkg/email"
-	"github.com/argeinfina/tayfa/repository"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // AdminServerService handles platform admin server deletion.

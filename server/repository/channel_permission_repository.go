@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // ChannelPermissionRepository defines data access for per-channel role permission overrides.

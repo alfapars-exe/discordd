@@ -5,8 +5,8 @@ package testutil
 import (
 	"context"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // ─── UserRepository mock ───

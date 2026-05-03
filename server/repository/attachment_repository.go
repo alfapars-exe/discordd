@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // AttachmentRepository defines data access for file attachments.

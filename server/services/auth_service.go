@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/pkg/email"
-	"github.com/argeinfina/tayfa/repository"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )

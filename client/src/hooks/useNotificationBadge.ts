@@ -17,7 +17,7 @@ const BADGE_COLOR = "#ED4245";
 const BADGE_TEXT_COLOR = "#FFFFFF";
 const OVERLAY_ICON_SIZE = 16;
 const FAVICON_SIZE = 32;
-const BASE_TITLE = "Tayfa";
+const BASE_TITLE = "HiChat!";
 
 // ─── Electron Overlay Badge ───
 

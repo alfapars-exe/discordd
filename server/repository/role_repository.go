@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/argeinfina/tayfa/models"
+	"github.com/argeinfina/hichat/models"
 )
 
 // RoleRepository defines data access for roles. All list operations are server-scoped.
