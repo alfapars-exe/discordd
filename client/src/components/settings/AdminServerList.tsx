@@ -280,10 +280,15 @@ function AdminServerList() {
     });
 
     if (res.success) {
+      // Reflect the target instance's actual cloud/self-hosted flag — hardcoding
+      // `true` here would desync the row badge whenever the user picks a
+      // self-hosted instance.
+      const target = instances.find((i) => i.id === newInstanceId);
+      const targetIsManaged = target?.is_platform_managed ?? true;
       setServers((prev) =>
         prev.map((s) =>
           s.id === serverId
-            ? { ...s, livekit_instance_id: newInstanceId, is_platform_managed: true }
+            ? { ...s, livekit_instance_id: newInstanceId, is_platform_managed: targetIsManaged }
             : s,
         ),
       );
@@ -462,14 +467,6 @@ function AdminServerList() {
         return formatRelativeTime(srv.last_activity);
 
       case "instance": {
-        if (!srv.is_platform_managed) {
-          return (
-            <span className="admin-server-type-badge self">
-              {t("platformServerTypeSelf")}
-            </span>
-          );
-        }
-
         const hasPending = pendingChanges[srv.id] !== undefined;
         const isSavingThis = savingServers.has(srv.id);
         const currentInstanceId = hasPending
@@ -487,6 +484,7 @@ function AdminServerList() {
               {instances.map((inst) => (
                 <option key={inst.id} value={inst.id}>
                   {instanceLabel(inst.id)}
+                  {inst.is_platform_managed ? "" : ` — ${t("platformServerTypeSelf")}`}
                 </option>
               ))}
             </select>
