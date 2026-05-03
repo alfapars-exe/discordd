@@ -57,8 +57,8 @@ function LandingPage() {
 
         {/* ═══ NAVBAR ═══ */}
         <nav className="lp-nav">
-          <img src="/hichat-icon.svg" alt="HiChat!" className="lp-nav-logo-img" />
-          <span className="lp-nav-brand">HiChat!</span>
+          <img src="/logodiscord.png" alt="HiChat!" className="lp-nav-logo-img" />
+          <span className="lp-nav-brand">mqvi</span>
 
           <div className="lp-nav-links">
             {[
@@ -130,7 +130,7 @@ function LandingPage() {
             </a>
           )}
 
-          {/* Demo Video — hidden if asset is missing (Space deploy may not bundle landing media). */}
+          {/* Demo Video */}
           <div className="lp-hero-video-wrap">
             <video
               className="lp-hero-video"
@@ -139,10 +139,6 @@ function LandingPage() {
               muted
               loop
               playsInline
-              onError={(e) => {
-                const wrap = (e.currentTarget as HTMLVideoElement).parentElement;
-                if (wrap) wrap.style.display = "none";
-              }}
             />
           </div>
         </section>
@@ -161,10 +157,6 @@ function LandingPage() {
                   src={`${LANDING_ASSETS}/${item.img}-${lang}.png`}
                   alt={t(`${item.key}_title`)}
                   loading="lazy"
-                  onError={(e) => {
-                    // Hide broken image rather than show the broken-image icon.
-                    (e.currentTarget as HTMLImageElement).style.display = "none";
-                  }}
                 />
                 <div className="lp-showcase-text">
                   <h3>{t(`${item.key}_title`)}</h3>
@@ -213,7 +205,7 @@ function LandingPage() {
             <div className="lp-comparison-table">
               <div className="lp-comp-header">
                 <div className="lp-comp-cell" />
-                <div className="lp-comp-cell lp-comp-cell--header lp-comp-cell--mqvi">HiChat!</div>
+                <div className="lp-comp-cell lp-comp-cell--header lp-comp-cell--mqvi">mqvi</div>
                 <div className="lp-comp-cell lp-comp-cell--header lp-comp-cell--other">{t("comp_others")}</div>
               </div>
 
@@ -454,7 +446,7 @@ function LandingPage() {
         {/* ═══ FOOTER ═══ */}
         <footer className="lp-footer">
           <div className="lp-footer-left">
-            <img src="/hichat-icon.svg" alt="HiChat!" className="lp-footer-logo-img" />
+            <img src="/logodiscord.png" alt="HiChat!" className="lp-footer-logo-img" />
             <span className="lp-footer-copy">{t("footer_copy")}</span>
           </div>
           <div className="lp-footer-links">

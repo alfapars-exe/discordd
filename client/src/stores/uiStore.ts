@@ -1,11 +1,25 @@
 /**
  * uiStore — VS Code-style tab management + split pane layout state.
+ *
+ * Single responsibility (post-refactor): coordinate tab + panel state.
+ * The pure layout-tree algebra lives in utils/layoutTree.ts so that this
+ * store stays focused on orchestration: which tabs exist in which panels,
+ * what's active, and which side effects fire when something closes.
  */
 
 import { create } from "zustand";
 import { useVoiceStore } from "./voiceStore";
 import { useMessageStore } from "./messageStore";
 import { useReadStateStore } from "./readStateStore";
+import {
+  insertSplit,
+  type LayoutNode,
+  removeLeafFromLayout,
+  type SplitDirection,
+  updateRatioAtPath,
+} from "../utils/layoutTree";
+// Re-export so existing imports of these types from "stores/uiStore" still work.
+export type { LayoutNode, SplitDirection } from "../utils/layoutTree";
 
 // ──────────────────────────────────
 // Types
@@ -35,17 +49,6 @@ export type Panel = {
   tabs: Tab[];
   activeTabId: string | null;
 };
-
-export type SplitDirection = "horizontal" | "vertical";
-
-export type LayoutNode =
-  | { type: "leaf"; panelId: string }
-  | {
-      type: "split";
-      direction: SplitDirection;
-      children: [LayoutNode, LayoutNode];
-      ratio: number;
-    };
 
 // ──────────────────────────────────
 // Store interface
@@ -119,45 +122,6 @@ function findTabAcrossPanels(
     if (tab) return { panelId, tabId: tab.id };
   }
   return null;
-}
-
-/** Remove a leaf from layout tree; sibling promotes up when parent split becomes unnecessary. */
-function removeLeafFromLayout(
-  node: LayoutNode,
-  panelId: string
-): LayoutNode | null {
-  if (node.type === "leaf") {
-    return node.panelId === panelId ? null : node;
-  }
-
-  const left = removeLeafFromLayout(node.children[0], panelId);
-  const right = removeLeafFromLayout(node.children[1], panelId);
-
-  if (left === null && right === null) return null;
-  if (left === null) return right;
-  if (right === null) return left;
-
-  return { ...node, children: [left, right] };
-}
-
-/** Update split ratio at a given tree path. */
-function updateRatioAtPath(
-  node: LayoutNode,
-  path: number[],
-  ratio: number
-): LayoutNode {
-  if (path.length === 0 && node.type === "split") {
-    return { ...node, ratio };
-  }
-
-  if (node.type === "split" && path.length > 0) {
-    const [head, ...rest] = path;
-    const newChildren: [LayoutNode, LayoutNode] = [...node.children];
-    newChildren[head] = updateRatioAtPath(newChildren[head], rest, ratio);
-    return { ...node, children: newChildren };
-  }
-
-  return node;
 }
 
 /**
@@ -385,36 +349,8 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeTabId: tab.id,
     };
 
-    // Replace target leaf with split node
-    function insertSplit(node: LayoutNode): LayoutNode {
-      if (node.type === "leaf" && node.panelId === panelId) {
-        const first: LayoutNode = position === "before"
-          ? { type: "leaf", panelId: newPanelId }
-          : { type: "leaf", panelId };
-        const second: LayoutNode = position === "before"
-          ? { type: "leaf", panelId }
-          : { type: "leaf", panelId: newPanelId };
-        return {
-          type: "split",
-          direction,
-          children: [first, second],
-          ratio: 0.5,
-        };
-      }
-      if (node.type === "split") {
-        return {
-          ...node,
-          children: [
-            insertSplit(node.children[0]),
-            insertSplit(node.children[1]),
-          ],
-        };
-      }
-      return node;
-    }
-
     const newPanels = { ...state.panels };
-    let newLayout = insertSplit(state.layout);
+    let newLayout = insertSplit(state.layout, panelId, newPanelId, direction, position);
 
     // Source panel: remove tab (or remove entire panel if empty)
     if (remainingTabs.length === 0 && actualFromId !== panelId) {

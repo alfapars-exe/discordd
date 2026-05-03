@@ -1,5 +1,6 @@
 /** Settings sidebar navigation. Server Settings visible only to authorized users. */
 
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -45,6 +46,7 @@ const SERVER_ITEMS: NavItem[] = [
  */
 const PLATFORM_ITEMS: NavItem[] = [
   { id: "platform", labelKey: "platformLiveKitInstances" },
+  { id: "platform-quota", labelKey: "platformLiveKitQuota" },
   { id: "platform-servers", labelKey: "platformServersTab" },
   { id: "platform-users", labelKey: "platformUsersTab" },
   { id: "platform-reports", labelKey: "platformReportsTab" },
@@ -63,6 +65,12 @@ function SettingsNav() {
   const members = useActiveMembers();
   const currentMember = members.find((m) => m.id === user?.id);
   const perms = currentMember?.effective_permissions ?? 0;
+
+  // Live app version — read once from electron main (bundled package.json).
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  useEffect(() => {
+    window.electronAPI?.getVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   const isPlatformAdmin = user?.is_platform_admin ?? false;
 
@@ -141,9 +149,9 @@ function SettingsNav() {
         {t("logOut")}
       </button>
 
-      {/* App Version — desktop only */}
-      {!isMobile && (
-        <p className="settings-nav-version">HiChat! v2.11.9</p>
+      {/* App Version — desktop only, read from electron main at mount */}
+      {!isMobile && appVersion && (
+        <p className="settings-nav-version">HiChat! v{appVersion}</p>
       )}
     </nav>
   );

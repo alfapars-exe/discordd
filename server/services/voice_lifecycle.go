@@ -26,8 +26,11 @@ import (
 const orphanGracePeriod = 35 * time.Second
 
 type orphanEntry struct {
-	userID    string
-	channelID string
+	userID            string
+	channelID         string
+	joinedAt          time.Time
+	livekitInstanceID string
+	livekitIsCloud    bool
 }
 
 type afkEntry struct {
@@ -109,6 +112,9 @@ func (s *voiceService) sweepOrphanStates() {
 		username := state.Username
 		displayName := state.DisplayName
 		avatarURL := state.AvatarURL
+		joinedAt := state.JoinedAt
+		instanceID := state.LiveKitInstanceID
+		isCloud := state.LiveKitIsCloud
 		delete(s.states, userID)
 		delete(s.offlineSince, userID)
 
@@ -125,7 +131,13 @@ func (s *voiceService) sweepOrphanStates() {
 		})
 
 		s.cleanupRoomPassphraseIfEmpty(channelID)
-		orphans = append(orphans, orphanEntry{userID: userID, channelID: channelID})
+		orphans = append(orphans, orphanEntry{
+			userID:            userID,
+			channelID:         channelID,
+			joinedAt:          joinedAt,
+			livekitInstanceID: instanceID,
+			livekitIsCloud:    isCloud,
+		})
 		log.Printf("[voice] orphan cleanup: removed user %s from channel %s (offline for %s)", userID, channelID, now.Sub(offlineTime).Round(time.Second))
 		s.logWarn(models.LogCategoryVoice, &userID, "orphan cleanup: stale voice state removed", map[string]string{
 			"channel_id":      channelID,
@@ -145,6 +157,10 @@ func (s *voiceService) sweepOrphanStates() {
 	// LiveKit cleanup outside lock (involves DB calls)
 	for _, o := range orphans {
 		s.removeParticipantFromLiveKit(o.channelID, o.userID)
+		// Credit the abandoned session — duration counts up to the moment
+		// of cleanup, which is approximately when the user actually
+		// disconnected (within `orphanGracePeriod` of it).
+		s.creditUsage(o.livekitInstanceID, o.livekitIsCloud, o.joinedAt)
 	}
 }
 

@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.9",
+  "version": "2.11.22",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "net.hichat.app",
-    "productName": "HiChat",
+    "productName": "HiChat!",
     "directories": {
       "output": "release"
     },
@@ -37,15 +37,17 @@
     "buildDependenciesFromSource": false,
     "publish": {
       "provider": "github",
-      "owner": "akinalpfdn",
-      "repo": "Mqvi"
+      "owner": "alfapars-exe",
+      "repo": "discordd"
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "icons/mqvi-icon.ico",
+      "icon": "icons/logodiscord.png",
       "signAndEditExecutable": false,
+      "executableName": "HiChat",
+      "legalTrademarks": "HiChat!",
       "extraResources": [
         {
           "from": "native/audio-capture.exe",
@@ -53,6 +55,7 @@
         }
       ]
     },
+    "copyright": "© 2026 HiChat!",
     "nsis": {
       "oneClick": true,
       "perMachine": false
@@ -104,7 +107,7 @@
       "target": [
         "AppImage"
       ],
-      "icon": "icons/mqvi-icon-512x512.png",
+      "icon": "icons/logodiscord.png",
       "category": "Network;Chat"
     }
   }

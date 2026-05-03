@@ -41,6 +41,14 @@ export function isNativeApp(): boolean {
 // ─── Server URL Resolution ───
 
 /**
+ * Canonical HiChat! production backend (Hugging Face Space).
+ * Single source of truth — ConnectionsSettings reads this too, so we
+ * can never drift between "what resolveServerUrl falls back to" and
+ * "what the Settings → Connections list shows as the Default row."
+ */
+export const DEFAULT_SERVER_URL = "https://argeinfina-discord.hf.space";
+
+/**
  * Resolves the server base URL based on runtime environment.
  *
  * Web mode: "" (same-origin, relative paths work via Vite proxy or nginx).
@@ -50,7 +58,7 @@ export function isNativeApp(): boolean {
  * 1. localStorage("mqvi_server_url")  ← runtime override; key kept stable for
  *    backwards compatibility, value can be any host
  * 2. VITE_SERVER_URL env var          ← build-time override
- * 3. "https://argeinfina-discord.hf.space"  ← HiChat! production deployment
+ * 3. DEFAULT_SERVER_URL               ← HiChat! production deployment
  * 4. "" (web mode)
  */
 function resolveServerUrl(): string {
@@ -62,7 +70,7 @@ function resolveServerUrl(): string {
   const envUrl = import.meta.env.VITE_SERVER_URL;
   if (envUrl) return (envUrl as string).replace(/\/$/, "");
 
-  return "https://argeinfina-discord.hf.space";
+  return DEFAULT_SERVER_URL;
 }
 
 /** Absolute in native mode (Electron/Capacitor), empty in web mode */

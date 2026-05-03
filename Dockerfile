@@ -43,7 +43,7 @@ COPY --from=frontend /app/client/dist ./server/static/dist
 WORKDIR /app/server
 RUN go mod tidy && \
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-    go build -trimpath -ldflags="-s -w" -o /out/tayfa-server .
+    go build -trimpath -ldflags="-s -w" -o /out/hichat-server .
 
 # ─── Stage 3: Runtime ───
 # Stay on glibc (debian-slim) to match what go-libsql linked against. The
@@ -54,11 +54,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=backend /out/tayfa-server /app/tayfa-server
+COPY --from=backend /out/hichat-server /app/hichat-server
 
 # Run as root inside the container — the HF Storage Bucket mount at /data
 # brings its own ownership (root-owned by default), so a non-root USER like
-# `tayfa` would get "permission denied" on mkdir /data/uploads. HF Spaces
+# `hichat` would get "permission denied" on mkdir /data/uploads. HF Spaces
 # isolate the container itself, so root-in-container is the normal pattern.
 # The Go binary will mkdir /data/uploads and /data/landing on first start.
 
@@ -66,7 +66,7 @@ COPY --from=backend /out/tayfa-server /app/tayfa-server
 ENV SERVER_HOST=0.0.0.0 \
     SERVER_PORT=7860 \
     UPLOAD_DIR=/data/uploads \
-    DATABASE_PATH=/data/tayfa.db
+    DATABASE_PATH=/data/hichat.db
 
 EXPOSE 7860
-ENTRYPOINT ["/app/tayfa-server"]
+ENTRYPOINT ["/app/hichat-server"]

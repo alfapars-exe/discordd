@@ -26,14 +26,30 @@ func (s *voiceService) broadcastToServer(serverID string, event ws.Event) {
 
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
 	// Resolve channel's parent server before locking — all voice broadcasts are server-scoped.
-	channel, err := s.channelGetter.GetByID(context.Background(), channelID)
+	ctx := context.Background()
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
 	if err != nil {
 		return fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
 	}
 	serverID := channel.ServerID
 
+	// Resolve LiveKit instance for quota tracking. Failure here is non-fatal —
+	// the join still happens, we just won't be able to attribute the session
+	// duration to an instance. Logged for visibility.
+	var lkInstanceID string
+	var lkIsCloud bool
+	if lkInst, lkErr := s.livekitGetter.GetByServerID(ctx, serverID); lkErr == nil && lkInst != nil {
+		lkInstanceID = lkInst.ID
+		lkIsCloud = lkInst.IsPlatformManaged
+	} else if lkErr != nil {
+		log.Printf("[voice] join: livekit instance lookup failed for server=%s: %v", serverID, lkErr)
+	}
+
 	var oldChannelID string
 	var oldServerID string
+	var oldJoinedAt time.Time
+	var oldInstanceID string
+	var oldIsCloud bool
 
 	s.mu.Lock()
 
@@ -41,9 +57,15 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	if existing, ok := s.states[userID]; ok {
 		oldChannelID = existing.ChannelID
 		oldServerID = existing.ServerID
+		oldJoinedAt = existing.JoinedAt
+		oldInstanceID = existing.LiveKitInstanceID
+		oldIsCloud = existing.LiveKitIsCloud
 
 		// Same-channel rejoin (WS reconnect) — silently refresh state, no broadcast.
 		// This prevents false leave/join sounds for everyone in the channel.
+		// Quota fields (JoinedAt / LiveKitInstanceID / LiveKitIsCloud) are
+		// preserved so the eventual leave still attributes the full session
+		// duration, not just the time since the last reconnect.
 		if oldChannelID == channelID {
 			existing.Username = username
 			existing.DisplayName = displayName
@@ -73,16 +95,20 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		s.cleanupRoomPassphraseIfEmpty(oldChannelID)
 	}
 
+	now := time.Now()
 	s.states[userID] = &models.VoiceState{
-		UserID:       userID,
-		ChannelID:    channelID,
-		ServerID:     serverID,
-		Username:     username,
-		DisplayName:  displayName,
-		AvatarURL:    avatarURL,
-		IsMuted:      isMuted,
-		IsDeafened:   isDeafened,
-		LastActivity: time.Now(),
+		UserID:            userID,
+		ChannelID:         channelID,
+		ServerID:          serverID,
+		Username:          username,
+		DisplayName:       displayName,
+		AvatarURL:         avatarURL,
+		IsMuted:           isMuted,
+		IsDeafened:        isDeafened,
+		LastActivity:      now,
+		JoinedAt:          now,
+		LiveKitInstanceID: lkInstanceID,
+		LiveKitIsCloud:    lkIsCloud,
 	}
 
 	s.broadcastToServer(serverID, ws.Event{
@@ -104,10 +130,35 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// Remove phantom participant from old LiveKit room (best-effort, outside lock)
 	if oldChannelID != "" && oldChannelID != channelID {
 		go s.removeParticipantFromLiveKit(oldChannelID, userID)
+		// Cross-channel switch — credit the old session's duration to the
+		// instance it ran on. Self-hosted instances are skipped.
+		go s.creditUsage(oldInstanceID, oldIsCloud, oldJoinedAt)
 	}
 
 	log.Printf("[voice] user %s joined channel %s", userID, channelID)
 	return nil
+}
+
+// creditUsage writes a completed voice session's duration to its instance's
+// monthly bucket. Skips self-hosted (we don't track those) and zero-duration
+// or unset cases (e.g. lookup failed at join time). Async-safe — runs in a
+// goroutine from the leave/cleanup paths.
+func (s *voiceService) creditUsage(instanceID string, isCloud bool, joinedAt time.Time) {
+	if !isCloud || instanceID == "" || joinedAt.IsZero() {
+		return
+	}
+	seconds := int(time.Since(joinedAt).Seconds())
+	if seconds <= 0 {
+		return
+	}
+	now := time.Now()
+	year, month, _ := now.Date()
+	if err := s.livekitGetter.IncrementMonthlyUsage(
+		context.Background(), instanceID, year, int(month), seconds,
+	); err != nil {
+		log.Printf("[voice] credit usage failed instance=%s seconds=%d err=%v",
+			instanceID, seconds, err)
+	}
 }
 
 func (s *voiceService) LeaveChannel(userID string) error {
@@ -125,6 +176,11 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	displayName := state.DisplayName
 	avatarURL := state.AvatarURL
 	wasStreaming := state.IsStreaming
+	// Capture quota fields before delete — used after lock release to credit
+	// session duration to the instance it ran on.
+	leaveJoinedAt := state.JoinedAt
+	leaveInstanceID := state.LiveKitInstanceID
+	leaveIsCloud := state.LiveKitIsCloud
 	delete(s.states, userID)
 
 	s.broadcastToServer(serverID, ws.Event{
@@ -185,6 +241,9 @@ func (s *voiceService) LeaveChannel(userID string) error {
 
 	// Remove from LiveKit (best-effort, outside lock — involves DB calls)
 	go s.removeParticipantFromLiveKit(channelID, userID)
+	// Credit the completed session's duration to the cloud instance bucket.
+	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
+	go s.creditUsage(leaveInstanceID, leaveIsCloud, leaveJoinedAt)
 
 	log.Printf("[voice] user %s left channel %s", userID, channelID)
 	return nil

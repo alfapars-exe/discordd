@@ -9,10 +9,12 @@ import { apiClient } from "./client";
 import type {
   LiveKitInstanceAdmin,
   LiveKitInstanceMetrics,
+  LiveKitInstanceQuotaView,
   MetricsHistorySummary,
   MetricsTimeSeriesPoint,
   CreateLiveKitInstanceRequest,
   UpdateLiveKitInstanceRequest,
+  UpdateLiveKitQuotaSettingsRequest,
   AdminServerListItem,
   AdminUserListItem,
   AdminReportListItem,
@@ -55,6 +57,32 @@ export async function deleteLiveKitInstance(
     ? `/admin/livekit-instances/${id}?migrate_to=${migrateToId}`
     : `/admin/livekit-instances/${id}`;
   return apiClient<{ message: string }>(url, { method: "DELETE" });
+}
+
+// ─── Quota tracking ──────────────────────────────────────────────────────
+
+/**
+ * Returns every LiveKit instance with its current-month usage and
+ * computed RemainingMinutes / DaysUntilReset. Self-hosted instances
+ * come back with used_minutes=0 — callers gate quota math by
+ * is_platform_managed when rendering rows.
+ */
+export async function getLiveKitQuota() {
+  return apiClient<LiveKitInstanceQuotaView[]>("/admin/livekit/quota");
+}
+
+/**
+ * Partial update of the quota-only fields. Returns the refreshed quota
+ * view so the table doesn't have to race a follow-up GET.
+ */
+export async function updateLiveKitQuotaSettings(
+  id: string,
+  data: UpdateLiveKitQuotaSettingsRequest
+) {
+  return apiClient<LiveKitInstanceQuotaView>(
+    `/admin/livekit-instances/${id}/quota`,
+    { method: "PATCH", body: data }
+  );
 }
 
 export async function getLiveKitInstanceMetrics(id: string) {

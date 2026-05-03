@@ -46,7 +46,12 @@ export const SUPPORTED_LANGUAGES = {
 
 export type Language = keyof typeof SUPPORTED_LANGUAGES;
 
-export const DEFAULT_LANGUAGE: Language = "en";
+/**
+ * Default language for fresh installs (no language stored in localStorage yet).
+ * Türkçe — the app's primary user base. Existing users who previously picked a
+ * language keep their choice via localStorage detection.
+ */
+export const DEFAULT_LANGUAGE: Language = "tr";
 
 i18n
   .use(LanguageDetector)
@@ -97,7 +102,11 @@ i18n
     },
 
     detection: {
-      order: ["localStorage", "navigator"],
+      // Only localStorage — we deliberately do NOT fall through to the
+      // browser's navigator language. A fresh install always lands on
+      // DEFAULT_LANGUAGE (Türkçe) regardless of OS/browser locale; users
+      // can switch via Settings → Language and that choice is persisted.
+      order: ["localStorage"],
       lookupLocalStorage: "language",
       caches: ["localStorage"],
     },
