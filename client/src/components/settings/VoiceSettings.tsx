@@ -548,6 +548,8 @@ function VoiceSettings() {
               <option value="webrtc">{t("nrEngineWebrtc")}</option>
               <option value="deepfilter">{t("nrEngineDeepfilter")}</option>
               <option value="dtln">{t("nrEngineDtln")}</option>
+              <option value="speex">{t("nrEngineSpeex")}</option>
+              <option value="dpdfnet">{t("nrEngineDpdfnet")}</option>
             </select>
           </div>
         )}

@@ -23,7 +23,9 @@ export type NoiseReductionEngine =
   | "krisp"
   | "deepfilter"
   | "dtln"
-  | "webrtc";
+  | "webrtc"
+  | "speex"
+  | "dpdfnet";
 
 export type VoiceSettings = {
   inputMode: InputMode;
@@ -38,7 +40,7 @@ export type VoiceSettings = {
   localMutedUsers: Record<string, boolean>;
   noiseReduction: boolean;
   /**
-   * Engine used when noiseReduction is on. Five values, two pipelines:
+   * Engine used when noiseReduction is on. Seven values, two pipelines:
    *
    *   Custom-processor pipeline (LiveKit TrackProcessor + AudioWorklet):
    *    - "rnnoise"     — bundled OSS ML denoiser, free, default.
@@ -49,6 +51,11 @@ export type VoiceSettings = {
    *                      WASM integration will land in a follow-up.
    *    - "dtln"        — DTLN web port (@sapphi-red/dtln-web). BETA:
    *                      same fallback contract as deepfilter.
+   *    - "speex"       — SpeexDSP via SpeexWorkletNode (classical DSP
+   *                      preprocessor; light, no ML model). BETA: real
+   *                      WASM integration pending; falls back to RNNoise.
+   *    - "dpdfnet"     — DPDFNet (a DeepFilterNet variant). BETA: same
+   *                      fallback contract.
    *
    *   Browser-native pipeline (track constraint):
    *    - "webrtc"      — getUserMedia({ noiseSuppression: true }). No

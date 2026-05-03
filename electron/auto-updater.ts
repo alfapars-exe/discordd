@@ -22,10 +22,23 @@ let prelaunchChecked = false;
 let splashWindow: BrowserWindow | null = null;
 let runtimeCheckInterval: ReturnType<typeof setInterval> | null = null;
 
-/** How often we re-poll GitHub Releases for a newer version while the app
- *  is running. 5 minutes mirrors electron-builder's default cadence — well
- *  inside GitHub's anonymous rate limit (60 req/hour). */
-const RUNTIME_CHECK_MS = 5 * 60 * 1000;
+/**
+ * How often we re-poll GitHub Releases for a newer version while the app
+ * is running. 1 minute is aggressive — users see a new release within
+ * 60s of publish, in line with the "always-latest" expectation.
+ *
+ * Rate-limit math: GitHub's anonymous API budget is 60 requests/hour from
+ * a single IP. One client polling once per minute uses exactly that
+ * budget. A user with two clients open (laptop + desktop, say) will
+ * occasionally hit a 60s window where the request is rejected; the
+ * `.catch(() => undefined)` in setupAutoUpdater swallows that — they
+ * just miss one cycle and notice the update on the next.
+ *
+ * If we ever ship a public-facing instance with thousands of clients,
+ * bump this back to 5 minutes (the original cadence) or move the
+ * release-check upstream to a server endpoint that fans out.
+ */
+const RUNTIME_CHECK_MS = 60 * 1000;
 
 /** Has the pre-launch splash already run an update check? Used to deduplicate. */
 export function wasPrelaunchChecked(): boolean {
