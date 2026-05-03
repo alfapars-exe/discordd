@@ -31,7 +31,7 @@ type AuthService interface {
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateAccessToken(tokenString string) (*models.TokenClaims, error)
-	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
+	ChangePassword(ctx context.Context, userID, newPassword string) error
 	ChangeEmail(ctx context.Context, userID, password, newEmail string) error
 
 	// ForgotPassword sends a password reset email.
@@ -254,22 +254,15 @@ func (s *authService) ValidateAccessToken(tokenString string) (*models.TokenClai
 	return claims, nil
 }
 
-func (s *authService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+// ChangePassword sets a new password for the authenticated user. The session
+// is the proof-of-identity; we don't re-verify the current password.
+func (s *authService) ChangePassword(ctx context.Context, userID, newPassword string) error {
 	if len(newPassword) < 6 {
 		return fmt.Errorf("%w: password must be at least 6 characters", pkg.ErrBadRequest)
 	}
 
-	user, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
+	if _, err := s.userRepo.GetByID(ctx, userID); err != nil {
 		return err
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
-		return fmt.Errorf("%w: current password is incorrect", pkg.ErrUnauthorized)
-	}
-
-	if currentPassword == newPassword {
-		return fmt.Errorf("%w: new password must be different from current password", pkg.ErrBadRequest)
 	}
 
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
