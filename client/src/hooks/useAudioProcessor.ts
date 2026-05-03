@@ -49,9 +49,25 @@ type ProcessorType =
   | "rnnoise"
   | "deepfilter"
   | "dtln"
+  | "speex"
+  | "dpdfnet"
   | "webrtc"
   | "vadgate"
   | "none";
+
+/** Engines whose real WASM/AudioWorklet integration is pending — they all
+ *  share the "RNNoise fallback + toast" path inside applyDesiredProcessor. */
+type BetaEngine = "deepfilter" | "dtln" | "speex" | "dpdfnet";
+
+const BETA_ENGINES: readonly BetaEngine[] = ["deepfilter", "dtln", "speex", "dpdfnet"];
+
+/** Pretty label for the beta-fallback toast. */
+const BETA_LABELS: Record<BetaEngine, string> = {
+  deepfilter: "DeepFilterNet3",
+  dtln: "DTLN",
+  speex: "SpeexDSP",
+  dpdfnet: "DPDFNet",
+};
 
 /**
  * Sentinel object used as the processor ref when WebRTC native NS is
@@ -75,13 +91,15 @@ function getDesiredProcessor(
   sens: number,
 ): ProcessorType {
   if (nr) {
-    // BETA engines fall through to RNNoise here so the rest of the hook
-    // doesn't have to know about the "real WASM not wired yet" state.
-    // The toast that informs the user is fired in applyDesiredProcessor.
+    // Direct engines map 1:1 to a ProcessorType. BETA engines also map 1:1
+    // (so the engine selection survives in processorRef and the user's
+    // pick stays visible in Settings) — applyDesiredProcessor recognises
+    // them and runs the RNNoise fallback while toasting.
     if (engine === "krisp") return "krisp";
     if (engine === "webrtc") return "webrtc";
-    if (engine === "deepfilter") return "deepfilter";
-    if (engine === "dtln") return "dtln";
+    if ((BETA_ENGINES as readonly NoiseReductionEngine[]).includes(engine)) {
+      return engine as BetaEngine;
+    }
     return "rnnoise";
   }
   if (sens < 100) return "vadgate";
@@ -132,7 +150,7 @@ async function applyDesiredProcessor(
   hooks: {
     isCancelled: () => boolean;
     onKrispFallback: () => void;
-    onBetaFallback: (engine: "deepfilter" | "dtln") => void;
+    onBetaFallback: (engine: BetaEngine) => void;
   },
 ): Promise<AudioProcessor | null> {
   if (desired === "krisp") {
@@ -166,14 +184,15 @@ async function applyDesiredProcessor(
     return proc;
   }
 
-  if (desired === "deepfilter" || desired === "dtln") {
-    // BETA engines: real WASM integration is pending. We keep the user's
-    // engine selection visible in the UI, surface a one-time toast that
-    // explains the fallback, and run RNNoise so audio still gets cleaned
-    // up. Once deepfilter-standalone / @sapphi-red/dtln-web are wired,
-    // these branches become real inits and the fallback hook drops.
+  if ((BETA_ENGINES as readonly ProcessorType[]).includes(desired)) {
+    // BETA engines: real WASM integration is pending for all four
+    // (deepfilter, dtln, speex, dpdfnet). We keep the user's engine
+    // selection visible in the UI, surface a one-time toast that
+    // explains the fallback, and run RNNoise so audio still gets
+    // cleaned up. Once each engine's WASM/AudioWorklet is wired, its
+    // branch lights up and gets removed from BETA_ENGINES.
     await setBrowserNoiseSuppression(audioTrack, false);
-    hooks.onBetaFallback(desired);
+    hooks.onBetaFallback(desired as BetaEngine);
     if (hooks.isCancelled()) return null;
     const proc = new RNNoiseProcessor(sens, vol);
     await audioTrack.setProcessor(proc);
@@ -334,8 +353,7 @@ export function useAudioProcessor(
               setNoiseReductionEngine("rnnoise");
             },
             onBetaFallback: (engine) => {
-              const label = engine === "deepfilter" ? "DeepFilterNet3" : "DTLN";
-              addToast("info", `${label} (Beta) — şimdilik RNNoise ile çalışıyor.`);
+              addToast("info", `${BETA_LABELS[engine]} (Beta) — şimdilik RNNoise ile çalışıyor.`);
             },
           },
         );

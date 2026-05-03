@@ -190,6 +190,8 @@
   "nrEngineWebrtc": "WebRTC (browser native)",
   "nrEngineDeepfilter": "DeepFilterNet3 (Beta)",
   "nrEngineDtln": "DTLN — DataDog (Beta)",
+  "nrEngineSpeex": "SpeexDSP (Beta)",
+  "nrEngineDpdfnet": "DPDFNet (Beta)",
   "joinLeaveSounds": "Join/Leave Sounds",
   "joinLeaveSoundsDesc": "Play a sound when someone joins or leaves voice",
   "screenShareQuality": "Screen Share Quality",

@@ -190,6 +190,8 @@
   "nrEngineWebrtc": "WebRTC (tarayıcı yerleşik)",
   "nrEngineDeepfilter": "DeepFilterNet3 (Beta)",
   "nrEngineDtln": "DTLN — DataDog (Beta)",
+  "nrEngineSpeex": "SpeexDSP (Beta)",
+  "nrEngineDpdfnet": "DPDFNet (Beta)",
   "joinLeaveSounds": "Giriş/Çıkış Sesleri",
   "joinLeaveSoundsDesc": "Biri ses kanalına girip çıktığında ses çal",
   "screenShareQuality": "Ekran Paylaşım Kalitesi",
