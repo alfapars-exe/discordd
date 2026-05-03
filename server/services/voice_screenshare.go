@@ -4,7 +4,7 @@
 package services
 
 import (
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/ws"
 )
 
 func (s *voiceService) WatchScreenShare(viewerUserID, streamerUserID string, watching bool) {

@@ -9,9 +9,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // AdminUpdateState applies server-level mute/deafen to a user.

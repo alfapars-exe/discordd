@@ -373,10 +373,10 @@ function getDefaultDeviceName(): string {
 
   // Electron?
   if ("electronAPI" in window) {
-    if (ua.includes("Windows")) return "Tayfa Desktop - Windows";
-    if (ua.includes("Mac")) return "Tayfa Desktop - macOS";
-    if (ua.includes("Linux")) return "Tayfa Desktop - Linux";
-    return "Tayfa Desktop";
+    if (ua.includes("Windows")) return "HiChat! Desktop - Windows";
+    if (ua.includes("Mac")) return "HiChat! Desktop - macOS";
+    if (ua.includes("Linux")) return "HiChat! Desktop - Linux";
+    return "HiChat! Desktop";
   }
 
   // Browser

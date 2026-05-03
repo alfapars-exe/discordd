@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/pkg/email"
-	"github.com/argeinfina/tayfa/repository"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // AdminUserService handles platform-level user ban and deletion.

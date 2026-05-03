@@ -1,5 +1,5 @@
 {
-  "appName": "Tayfa",
+  "appName": "HiChat!",
   "loading": "Yükleniyor...",
   "save": "Kaydet",
   "cancel": "İptal",
@@ -145,6 +145,6 @@
   "badgeDeleteConfirm": "\"{{name}}\" rozetini silmek istediğinize emin misiniz? Bu rozet tüm kullanıcılardan kaldırılacak.",
   "adminSection": "YÖNETİCİ",
   "registeredUsers": "Kayıtlı Kullanıcılar",
-  "updateAvailable": "Tayfa'ın yeni sürümü var.",
+  "updateAvailable": "HiChat!'ın yeni sürümü var.",
   "updateApp": "Uygulamayı Güncelle"
 }

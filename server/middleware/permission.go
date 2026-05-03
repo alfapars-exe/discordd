@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/argeinfina/tayfa/handlers"
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // PermissionMiddleware checks user permissions within a server context.

@@ -6,7 +6,7 @@
   "serverName": "Sunucu Adı",
   "serverNamePlaceholder": "Harika Sunucum",
   "hostType": "Barındırma Tipi",
-  "mqviHosted": "Tayfa Üzerinden",
+  "mqviHosted": "HiChat! Üzerinden",
   "mqviHostedDesc": "Tek tık ile sunucun hazır",
   "selfHosted": "Kendi Sunucun",
   "selfHostedDesc": "Kendi LiveKit sunucunuzu kullanın",

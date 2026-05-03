@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/repository"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/repository"
 )
 
 // PreferencesService manages user preferences (opaque JSON blob).

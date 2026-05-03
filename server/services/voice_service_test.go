@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/testutil"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // mockLiveKitGetter returns error so removeParticipantFromLiveKit goroutine exits early.

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/argeinfina/tayfa/pkg"
-	"github.com/argeinfina/tayfa/repository"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // DMSettingsService manages per-user DM channel settings (hide, pin, mute).

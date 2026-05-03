@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // ─── Reactions ───

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/argeinfina/tayfa/database"
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg"
+	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 type sqliteAttachmentRepo struct {

@@ -828,7 +828,7 @@ function setupIPC(): void {
 // ─── Auto Updater ───
 
 /**
- * setupAutoUpdater — no-op for the Tayfa fork.
+ * setupAutoUpdater — no-op for the HiChat! fork.
  *
  * The original Mqvi flow used electron-updater against akinalpfdn/Mqvi's
  * GitHub releases. We don't have our own release feed yet, and pointing
@@ -925,7 +925,7 @@ function createUpdateWindow(): BrowserWindow {
     window.setLogo = (dataUrl) => {
       const c = document.getElementById('logo-container');
       if (dataUrl) {
-        c.innerHTML = '<img class="logo" src="' + dataUrl + '" alt="mqvi" />';
+        c.innerHTML = '<img class="logo" src="' + dataUrl + '" alt="HiChat!" />';
       } else {
         c.innerHTML = '<div class="logo-text">mqvi</div>';
       }

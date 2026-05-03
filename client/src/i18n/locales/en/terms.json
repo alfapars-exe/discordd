@@ -3,19 +3,19 @@
   "lastUpdated": "Last updated: April 2, 2026",
 
   "acceptanceTitle": "Acceptance of Terms",
-  "acceptanceDesc": "By accessing or using Tayfa, you agree to be bound by these Terms of Service. If you do not agree, do not use the service. You must be at least 13 years old (or 16 in the European Union) to use Tayfa.",
+  "acceptanceDesc": "By accessing or using HiChat!, you agree to be bound by these Terms of Service. If you do not agree, do not use the service. You must be at least 13 years old (or 16 in the European Union) to use HiChat!.",
 
   "serviceTitle": "Service Description",
-  "serviceDesc": "Tayfa is an open-source communication platform providing messaging, voice and video calls, and file sharing. These terms apply only to the official instance hosted at argeinfina-discord.hf.space. Self-hosted instances of the open-source software are the sole responsibility of their operators.",
+  "serviceDesc": "HiChat! is an open-source communication platform providing messaging, voice and video calls, and file sharing. These terms apply only to the official instance hosted at argeinfina-discord.hf.space. Self-hosted instances of the open-source software are the sole responsibility of their operators.",
 
   "accountTitle": "Account Responsibilities",
   "accountDesc": "You are responsible for maintaining the security of your account credentials and for all activity that occurs under your account. You agree to provide accurate information during registration and to notify us immediately of any unauthorized use.",
 
   "contentTitle": "User Content",
-  "contentDesc": "You retain ownership of the content you create and share on Tayfa. By using the service, you grant us a limited license to store, transmit, and display your content solely for the purpose of operating the service. We may remove content that violates these terms.",
+  "contentDesc": "You retain ownership of the content you create and share on HiChat!. By using the service, you grant us a limited license to store, transmit, and display your content solely for the purpose of operating the service. We may remove content that violates these terms.",
 
   "conductTitle": "Acceptable Use",
-  "conductDesc": "You agree not to use Tayfa to:",
+  "conductDesc": "You agree not to use HiChat! to:",
   "conductItem1": "Upload or share illegal content, including but not limited to child exploitation material.",
   "conductItem2": "Harass, threaten, or abuse other users.",
   "conductItem3": "Distribute malware, spam, or engage in phishing.",
@@ -23,25 +23,25 @@
   "conductItem5": "Use the service for any activity that violates applicable laws.",
 
   "ipTitle": "Intellectual Property",
-  "ipDesc": "The Tayfa software is open source and licensed under its respective open-source license. These terms govern your use of the hosted service, not the software itself. The Tayfa name and logo are our property.",
+  "ipDesc": "The HiChat! software is open source and licensed under its respective open-source license. These terms govern your use of the hosted service, not the software itself. The HiChat! name and logo are our property.",
 
   "disclaimerTitle": "Disclaimer of Warranties",
-  "disclaimerDesc": "Tayfa is provided \"AS IS\" and \"AS AVAILABLE\" without warranties of any kind, whether express or implied. We do not guarantee that the service will be uninterrupted, secure, or error-free. We make no warranties regarding the reliability, accuracy, or availability of the service.",
+  "disclaimerDesc": "HiChat! is provided \"AS IS\" and \"AS AVAILABLE\" without warranties of any kind, whether express or implied. We do not guarantee that the service will be uninterrupted, secure, or error-free. We make no warranties regarding the reliability, accuracy, or availability of the service.",
 
   "liabilityTitle": "Limitation of Liability",
-  "liabilityDesc": "To the maximum extent permitted by law, Tayfa and its operator shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of data, use, or profits. Our total liability for any claim arising from your use of the service is limited to $100 USD.",
+  "liabilityDesc": "To the maximum extent permitted by law, HiChat! and its operator shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of data, use, or profits. Our total liability for any claim arising from your use of the service is limited to $100 USD.",
 
   "indemnityTitle": "Indemnification",
-  "indemnityDesc": "You agree to indemnify and hold harmless the operator of Tayfa from any claims, damages, or expenses arising from your use of the service, your content, or your violation of these terms.",
+  "indemnityDesc": "You agree to indemnify and hold harmless the operator of HiChat! from any claims, damages, or expenses arising from your use of the service, your content, or your violation of these terms.",
 
   "terminationTitle": "Termination",
   "terminationDesc": "We may suspend or terminate your account at our discretion for violation of these terms. You may delete your account at any time through the app settings. Upon termination, your right to use the service ceases immediately. Provisions that by their nature should survive termination will remain in effect.",
 
   "copyrightTitle": "Copyright & Takedowns",
-  "copyrightDesc": "If you believe content on Tayfa infringes your copyright, please open an issue on our GitHub repository with the relevant details. We will review and take appropriate action.",
+  "copyrightDesc": "If you believe content on HiChat! infringes your copyright, please open an issue on our GitHub repository with the relevant details. We will review and take appropriate action.",
 
   "selfHostTitle": "Self-Hosted Instances",
-  "selfHostDesc": "The Tayfa software is available for self-hosting under its open-source license. These Terms of Service apply exclusively to the official argeinfina-discord.hf.space instance. We bear no responsibility for self-hosted instances operated by third parties, including their data handling, availability, or compliance with applicable laws.",
+  "selfHostDesc": "The HiChat! software is available for self-hosting under its open-source license. These Terms of Service apply exclusively to the official argeinfina-discord.hf.space instance. We bear no responsibility for self-hosted instances operated by third parties, including their data handling, availability, or compliance with applicable laws.",
 
   "voiceTitle": "Voice & Video",
   "voiceDesc": "Voice and video features are provided through LiveKit infrastructure. We do not guarantee availability or quality of real-time communication. You are responsible for complying with local laws regarding recording of conversations.",
@@ -55,5 +55,5 @@
   "contactTitle": "Contact",
   "contactDesc": "For questions about these terms, open an issue on our GitHub repository or reach out via the app.",
 
-  "footerCopy": "© 2026 Tayfa — Open source, free communication."
+  "footerCopy": "© 2026 HiChat! — Open source, free communication."
 }

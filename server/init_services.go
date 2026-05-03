@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/argeinfina/tayfa/config"
-	"github.com/argeinfina/tayfa/pkg/email"
-	"github.com/argeinfina/tayfa/pkg/ratelimit"
-	"github.com/argeinfina/tayfa/services"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
+	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // Services holds all service instances.

@@ -15,14 +15,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/argeinfina/tayfa/config"
-	"github.com/argeinfina/tayfa/database"
-	"github.com/argeinfina/tayfa/models"
-	"github.com/argeinfina/tayfa/pkg/crypto"
-	"github.com/argeinfina/tayfa/pkg/i18n"
-	"github.com/argeinfina/tayfa/services"
-	"github.com/argeinfina/tayfa/static"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/i18n"
+	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/static"
+	"github.com/argeinfina/hichat/ws"
 	"github.com/google/uuid"
 	"github.com/rs/cors"
 )
@@ -43,7 +43,7 @@ func init() {
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	log.Println("[main] Tayfa server starting...")
+	log.Println("[main] HiChat! server starting...")
 
 	// 1. Config
 	cfg, err := config.Load()
@@ -411,7 +411,7 @@ func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
 
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","service":"tayfa"}`)
+		fmt.Fprintf(w, `{"status":"ok","service":"hichat"}`)
 	})
 
 	// /api/version — used by the frontend to detect new deploys.
@@ -517,9 +517,9 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 	if err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `<!DOCTYPE html><html><head>
-<meta property="og:title" content="Tayfa — Davet">
+<meta property="og:title" content="HiChat! — Davet">
 <meta property="og:description" content="Bu davet geçersiz veya süresi dolmuş">
-<meta property="og:site_name" content="Tayfa">
+<meta property="og:site_name" content="HiChat!">
 </head><body></body></html>`)
 		return true
 	}
@@ -549,7 +549,7 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 <head>
 <meta charset="utf-8">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Tayfa">
+<meta property="og:site_name" content="HiChat!">
 <meta property="og:title" content="%s">
 <meta property="og:description" content="%s">
 <meta property="og:url" content="%s">`,

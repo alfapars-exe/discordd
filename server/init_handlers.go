@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/argeinfina/tayfa/config"
-	"github.com/argeinfina/tayfa/handlers"
-	"github.com/argeinfina/tayfa/ws"
+	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/ws"
 )
 
 // Handlers holds all HTTP handler instances.
