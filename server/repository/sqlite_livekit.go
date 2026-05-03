@@ -23,8 +23,11 @@ func NewSQLiteLiveKitRepo(db database.TxQuerier) LiveKitRepository {
 // row. Centralised here so adding a new column is a one-line change instead
 // of edits to every SELECT in this file. server_count is computed from the
 // servers table for accuracy (denormalised counter can drift on bugs).
+//
+// `id` is qualified with `livekit_instances.` so this list works under JOINs
+// against `servers` (which also has an `id` column) — see GetByServerID.
 const instanceColumns = `
-	id, url, api_key, api_secret, is_platform_managed,
+	livekit_instances.id, url, api_key, api_secret, is_platform_managed,
 	(SELECT COUNT(*) FROM servers WHERE livekit_instance_id = livekit_instances.id) AS server_count,
 	max_servers, hetzner_server_id, created_at,
 	priority, monthly_quota_minutes, quota_reset_day, auto_switch_enabled, switch_threshold_minutes`
