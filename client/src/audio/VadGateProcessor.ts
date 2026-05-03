@@ -38,11 +38,11 @@ function ensureWorkletRegistered(ctx: AudioContext): Promise<void> {
  *   50  -> 0.01  (moderate)
  *   0   -> 0.04  (very aggressive)
  */
-function sensitivityToThreshold(sensitivity: number): number {
-  const clamped = Math.max(0, Math.min(100, sensitivity));
-  const inverted = (100 - clamped) / 100;
-  return 0.04 * inverted * inverted;
-}
+// levelToThresholds is the canonical level + sensitivity → gate-config mapping.
+// Imported from RNNoiseProcessor so the standalone gate path matches the
+// denoised path's gate behaviour exactly.
+import { levelToThresholds } from "./RNNoiseProcessor";
+import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice";
 
 class VadGateProcessor
   implements TrackProcessor<Track.Kind.Audio, AudioProcessorOptions>
@@ -57,10 +57,16 @@ class VadGateProcessor
 
   private initialSensitivity: number;
   private initialInputVolume: number;
+  private initialLevel: NoiseSuppressionLevel;
 
-  constructor(micSensitivity = 50, inputVolume = 100) {
+  constructor(
+    micSensitivity = 50,
+    inputVolume = 100,
+    level: NoiseSuppressionLevel = "medium",
+  ) {
     this.initialSensitivity = micSensitivity;
     this.initialInputVolume = inputVolume;
+    this.initialLevel = level;
   }
 
   /** Builds the audio graph (VAD gate only, no ML denoising — much lighter than RNNoiseProcessor). */
@@ -77,7 +83,7 @@ class VadGateProcessor
     this.gainNode.gain.value = this.initialInputVolume / 100;
 
     this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
-    this.setMicSensitivity(this.initialSensitivity);
+    this.applyGateConfig();
 
     this.destinationNode = audioContext.createMediaStreamDestination();
 
@@ -96,10 +102,13 @@ class VadGateProcessor
   /** Updates VAD gate threshold. Same API as RNNoiseProcessor for uniform usage. */
   setMicSensitivity(sensitivity: number): void {
     this.initialSensitivity = sensitivity;
-    if (this.vadGateNode) {
-      const threshold = sensitivityToThreshold(sensitivity);
-      this.vadGateNode.port.postMessage({ threshold });
-    }
+    this.applyGateConfig();
+  }
+
+  /** Updates noise-suppression level (recomputes hysteresis dB thresholds). */
+  setNoiseSuppressionLevel(level: NoiseSuppressionLevel): void {
+    this.initialLevel = level;
+    this.applyGateConfig();
   }
 
   /** Updates input volume gain. 100 = unity, 200 = 2x amplification. */
@@ -107,6 +116,16 @@ class VadGateProcessor
     this.initialInputVolume = volume;
     if (this.gainNode) {
       this.gainNode.gain.value = volume / 100;
+    }
+  }
+
+  private applyGateConfig(): void {
+    if (!this.vadGateNode) return;
+    const cfg = levelToThresholds(this.initialLevel, this.initialSensitivity);
+    if (cfg == null) {
+      this.vadGateNode.port.postMessage({ disabled: true });
+    } else {
+      this.vadGateNode.port.postMessage(cfg);
     }
   }
 
