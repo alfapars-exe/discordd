@@ -81,8 +81,8 @@ function InviteJoinPage() {
       {/* Logo + Title */}
       <div className="invite-join-header">
         <img
-          src={publicAsset("mqvi-icon.svg")}
-          alt="mqvi"
+          src={publicAsset("hichat-icon.svg")}
+          alt="HiChat!"
           className="invite-join-logo"
         />
         <h1 className="invite-join-title">{t("inviteJoinTitle")}</h1>

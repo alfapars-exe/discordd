@@ -20,8 +20,8 @@ function PrivacyPage() {
         {/* Nav */}
         <nav className="lp-nav">
           <div className="lp-nav-left" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
-            <img src="/mqvi-icon.svg" alt="mqvi" className="lp-nav-logo-img" />
-            <span className="lp-nav-brand">mqvi</span>
+            <img src="/hichat-icon.svg" alt="HiChat!" className="lp-nav-logo-img" />
+            <span className="lp-nav-brand">HiChat!</span>
           </div>
           <div className="lp-nav-right">
             <button className="lp-lang-toggle" onClick={toggleLang}>
@@ -89,7 +89,7 @@ function PrivacyPage() {
         {/* Footer */}
         <footer className="lp-footer">
           <div className="lp-footer-left">
-            <img src="/mqvi-icon.svg" alt="mqvi" className="lp-footer-logo-img" />
+            <img src="/hichat-icon.svg" alt="HiChat!" className="lp-footer-logo-img" />
             <span className="lp-footer-copy">{t("footerCopy")}</span>
           </div>
           <div className="lp-footer-links">

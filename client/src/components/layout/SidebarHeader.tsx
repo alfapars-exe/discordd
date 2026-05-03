@@ -19,7 +19,7 @@ function SidebarHeader() {
   return (
     <div className="sb-header">
       <div className="sb-header-brand">
-        <img src={publicAsset("mqvi-icon.svg")} alt="mqvi" className="sb-logo" />
+        <img src={publicAsset("hichat-icon.svg")} alt="HiChat!" className="sb-logo" />
         <span className="sb-brand-name">{t("appName")}</span>
       </div>
 
