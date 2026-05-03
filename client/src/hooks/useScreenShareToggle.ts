@@ -62,10 +62,15 @@ type ScreenShareResolution = {
   frameRate: number;
 };
 
-function resolutionFor(quality: string): ScreenShareResolution {
-  return quality === "720p"
-    ? { width: 1280, height: 720, frameRate: 30 }
-    : { width: 1920, height: 1080, frameRate: 30 };
+/**
+ * Map (quality, fps) to a getDisplayMedia constraint set. The browser/Electron
+ * side honors this as a hint — the browser may downsample if the source can't
+ * deliver the requested rate.
+ */
+function resolutionFor(quality: string, fps: number): ScreenShareResolution {
+  if (quality === "1440p") return { width: 2560, height: 1440, frameRate: fps };
+  if (quality === "1080p") return { width: 1920, height: 1080, frameRate: fps };
+  return { width: 1280, height: 720, frameRate: fps };
 }
 
 function notifyServerStopped() {
@@ -121,10 +126,11 @@ export function useScreenShareToggle(
 
           await startNativeScreenShare(response.data.url, response.data.token);
         } else if (isElectron() && screenShareAudio) {
-          const ssq = useVoiceStore.getState().screenShareQuality;
+          const { screenShareQuality: ssq, screenShareFps: ssFps } =
+            useVoiceStore.getState();
           await localParticipant.setScreenShareEnabled(true, {
             audio: false,
-            resolution: resolutionFor(ssq),
+            resolution: resolutionFor(ssq, ssFps),
             contentHint: "motion",
           });
 
@@ -139,10 +145,11 @@ export function useScreenShareToggle(
           });
           customAudioPubRef.current = pub;
         } else {
-          const ssq = useVoiceStore.getState().screenShareQuality;
+          const { screenShareQuality: ssq, screenShareFps: ssFps } =
+            useVoiceStore.getState();
           await localParticipant.setScreenShareEnabled(true, {
             audio: screenShareAudio,
-            resolution: resolutionFor(ssq),
+            resolution: resolutionFor(ssq, ssFps),
             contentHint: "motion",
           });
         }

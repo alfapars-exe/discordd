@@ -33,6 +33,7 @@ import {
   type VoiceSettingsSlice,
   type InputMode,
   type ScreenShareQuality,
+  type ScreenShareFps,
 } from "./slices/voiceSettingsSlice";
 import {
   createVoiceWsSlice,
@@ -43,7 +44,7 @@ import {
   type VoiceScreenShareSlice,
 } from "./slices/voiceScreenShareSlice";
 
-export type { InputMode, ScreenShareQuality };
+export type { InputMode, ScreenShareQuality, ScreenShareFps };
 
 // Lazy getter for the current user's id. Used to scrub our own voice entry
 // on leave — circular import avoided via getState().

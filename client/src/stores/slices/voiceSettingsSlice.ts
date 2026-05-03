@@ -11,7 +11,8 @@ import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
 export type InputMode = "voice_activity" | "push_to_talk";
-export type ScreenShareQuality = "720p" | "1080p";
+export type ScreenShareQuality = "720p" | "1080p" | "1440p";
+export type ScreenShareFps = 30 | 60;
 
 export type VoiceSettings = {
   inputMode: InputMode;
@@ -36,6 +37,7 @@ export type VoiceSettings = {
   screenShareVolumes: Record<string, number>;
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
+  screenShareFps: ScreenShareFps;
 };
 
 const STORAGE_KEY = "mqvi_voice_settings";
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   screenShareVolumes: {},
   screenShareAudio: false,
   screenShareQuality: "720p",
+  screenShareFps: 30,
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -97,6 +100,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     screenShareVolumes: s.screenShareVolumes,
     screenShareAudio: s.screenShareAudio,
     screenShareQuality: s.screenShareQuality,
+    screenShareFps: s.screenShareFps,
   };
 }
 
@@ -116,6 +120,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setSoundsEnabled: (enabled: boolean) => void;
   setScreenShareAudio: (enabled: boolean) => void;
   setScreenShareQuality: (quality: ScreenShareQuality) => void;
+  setScreenShareFps: (fps: ScreenShareFps) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: "rnnoise" | "krisp") => void;
   toggleLocalMute: (userId: string) => void;
@@ -146,6 +151,7 @@ export const createVoiceSettingsSlice: StateCreator<
     screenShareVolumes: initial.screenShareVolumes,
     screenShareAudio: initial.screenShareAudio,
     screenShareQuality: initial.screenShareQuality,
+    screenShareFps: initial.screenShareFps,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -205,6 +211,11 @@ export const createVoiceSettingsSlice: StateCreator<
 
     setScreenShareQuality: (quality) => {
       set({ screenShareQuality: quality });
+      saveSettings(currentSettings(get()));
+    },
+
+    setScreenShareFps: (fps) => {
+      set({ screenShareFps: fps });
       saveSettings(currentSettings(get()));
     },
 
@@ -276,6 +287,7 @@ export const createVoiceSettingsSlice: StateCreator<
         soundsEnabled: merged.soundsEnabled,
         screenShareAudio: merged.screenShareAudio,
         screenShareQuality: merged.screenShareQuality,
+        screenShareFps: merged.screenShareFps,
         localMutedUsers: merged.localMutedUsers,
         noiseReduction: merged.noiseReduction,
         noiseReductionEngine: merged.noiseReductionEngine,
