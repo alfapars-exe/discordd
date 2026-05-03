@@ -48,6 +48,8 @@
   "screenPickerNoSources": "Kullanılabilir kaynak yok",
   "screenPickerHint": "Paylaşmak için bir ekran veya pencere seçin",
   "screenPickerShareAudio": "Sesi paylaş",
+  "screenPickerRefresh": "Kaynakları yenile",
+  "screenPickerWindowHint": "Uygulamanız listede yok mu? Açın ve yenile butonuna basın. Yönetici olarak çalışan uygulamalar ve bazı tam ekran oyunlar görünmeyebilir.",
   "pingMeasuring": "Ölçülüyor...",
   "pingGood": "İyi bağlantı",
   "pingMedium": "Orta bağlantı",

@@ -258,26 +258,66 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   );
 
   const screenShareQuality = useVoiceStore((s) => s.screenShareQuality);
+  const screenShareFps = useVoiceStore((s) => s.screenShareFps);
 
-  /** Screen share publish defaults — adapts to quality setting. */
+  /**
+   * Screen share publish defaults — adapts to quality + fps setting.
+   *
+   * Bitrate ladder (motion content, VP9):
+   *   720p30:  1.5 Mbps   720p60:  2.5 Mbps
+   *   1080p30: 5 Mbps     1080p60: 8 Mbps
+   *   1440p30: 8 Mbps     1440p60: 12 Mbps
+   *
+   * The 1080p value was bumped from 3 → 5 Mbps because the previous ceiling
+   * was visibly soft on motion-heavy content (gameplay, video). 1440p added
+   * for users on high-DPI displays who want sharp text.
+   *
+   * Lower simulcast layers exist so subscribers on small viewports get a
+   * cheaper stream — adaptiveStream + dynacast pick the right one.
+   */
   const publishDefaults = useMemo(
     () => {
-      const is720 = screenShareQuality === "720p";
+      const fps = screenShareFps;
+      const lowerLayer = new VideoPreset(1280, 720, 800_000, 15);
+
+      if (screenShareQuality === "1440p") {
+        return {
+          screenShareEncoding: {
+            maxBitrate: fps === 60 ? 12_000_000 : 8_000_000,
+            maxFramerate: fps,
+          },
+          screenShareSimulcastLayers: [
+            new VideoPreset(1920, 1080, fps === 60 ? 6_000_000 : 4_000_000, fps),
+            lowerLayer,
+          ],
+          videoCodec: "vp9" as const,
+        };
+      }
+
+      if (screenShareQuality === "1080p") {
+        return {
+          screenShareEncoding: {
+            maxBitrate: fps === 60 ? 8_000_000 : 5_000_000,
+            maxFramerate: fps,
+          },
+          screenShareSimulcastLayers: [
+            new VideoPreset(1280, 720, fps === 60 ? 2_500_000 : 1_500_000, fps),
+            lowerLayer,
+          ],
+          videoCodec: "vp9" as const,
+        };
+      }
+
       return {
         screenShareEncoding: {
-          maxBitrate: is720 ? 1_500_000 : 3_000_000,
-          maxFramerate: 30,
+          maxBitrate: fps === 60 ? 2_500_000 : 1_500_000,
+          maxFramerate: fps,
         },
-        screenShareSimulcastLayers: is720
-          ? [new VideoPreset(1280, 720, 800_000, 15)]
-          : [
-              new VideoPreset(1280, 720, 1_500_000, 30),
-              new VideoPreset(1280, 720, 800_000, 15),
-            ],
+        screenShareSimulcastLayers: [lowerLayer],
         videoCodec: "vp9" as const,
       };
     },
-    [screenShareQuality]
+    [screenShareQuality, screenShareFps]
   );
 
   // Attach E2EE config when passphrase + worker are available

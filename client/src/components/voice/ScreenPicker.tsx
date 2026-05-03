@@ -14,12 +14,14 @@ interface PickerSource {
   id: string;
   name: string;
   thumbnail: string;
+  appIcon: string | null;
 }
 
 function ScreenPicker() {
   const { t } = useTranslation("voice");
   const [sources, setSources] = useState<PickerSource[] | null>(null);
   const [activeTab, setActiveTab] = useState<"screens" | "windows">("screens");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
   const setScreenShareAudio = useVoiceStore((s) => s.setScreenShareAudio);
 
@@ -29,7 +31,17 @@ function ScreenPicker() {
 
     api.onShowScreenPicker((incoming) => {
       setSources(incoming);
+      setIsRefreshing(false);
     });
+
+    api.onScreenPickerRefreshResult?.((incoming) => {
+      setSources(incoming);
+      setIsRefreshing(false);
+    });
+
+    return () => {
+      api.removeScreenPickerRefreshListener?.();
+    };
   }, []);
 
   const handleSelect = useCallback((sourceId: string) => {
@@ -40,6 +52,11 @@ function ScreenPicker() {
   const handleCancel = useCallback(() => {
     window.electronAPI?.sendScreenPickerResult(null);
     setSources(null);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    window.electronAPI?.refreshScreenPickerSources?.();
   }, []);
 
   useEffect(() => {
@@ -68,12 +85,37 @@ function ScreenPicker() {
       <div className="sp-card" onClick={(e) => e.stopPropagation()}>
         <div className="sp-header">
           <h2 className="sp-title">{t("screenPickerTitle")}</h2>
-          <button className="sp-close" onClick={handleCancel}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <div className="sp-header-actions">
+            <button
+              className="sp-icon-btn"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title={t("screenPickerRefresh")}
+              aria-label={t("screenPickerRefresh")}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={isRefreshing ? { animation: "sp-spin 0.8s linear infinite" } : undefined}
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+            </button>
+            <button className="sp-close" onClick={handleCancel}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="sp-tabs">
@@ -121,11 +163,24 @@ function ScreenPicker() {
                     draggable={false}
                   />
                 </div>
-                <span className="sp-source-name">{source.name}</span>
+                <span className="sp-source-name">
+                  {source.appIcon && (
+                    <img
+                      src={source.appIcon}
+                      alt=""
+                      className="sp-app-icon"
+                      draggable={false}
+                    />
+                  )}
+                  {source.name}
+                </span>
               </button>
             ))
           )}
         </div>
+        {activeTab === "windows" && (
+          <div className="sp-hint">{t("screenPickerWindowHint")}</div>
+        )}
 
         <div className="sp-footer">
           <label className="sp-audio-toggle">

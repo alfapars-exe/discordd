@@ -190,6 +190,7 @@
   "joinLeaveSounds": "Join/Leave Sounds",
   "joinLeaveSoundsDesc": "Play a sound when someone joins or leaves voice",
   "screenShareQuality": "Screen Share Quality",
+  "screenShareFps": "Frame Rate",
   "screenShareAudio": "Screen Share Audio",
   "screenShareAudioDesc": "Share system audio when screen sharing (game, music). Voice chat audio is automatically excluded.",
   "screenShareAudioDescBrowser": "Share system audio when screen sharing. May cause echo in voice chat.",

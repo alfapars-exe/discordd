@@ -22,6 +22,12 @@ interface ElectronDesktopSource {
   id: string;
   name: string;
   thumbnail: string;
+  /**
+   * App icon as a data URL — null for "screen" sources or apps without an
+   * icon resource. Optional because the legacy `getDesktopSources` IPC
+   * path doesn't populate it.
+   */
+  appIcon?: string | null;
 }
 
 /** Audio capture header — format info from native audio-capture.exe */
@@ -45,6 +51,17 @@ interface ElectronAPI {
   getDesktopSources: () => Promise<ElectronDesktopSource[]>;
   /** Main process requests screen picker — delivers sources */
   onShowScreenPicker: (cb: (sources: ElectronDesktopSource[]) => void) => void;
+  /**
+   * Re-query desktop sources while the picker is open. Useful when the
+   * target window appeared after the picker first opened.
+   */
+  refreshScreenPickerSources?: () => void;
+  /** Result delivered after refreshScreenPickerSources(). */
+  onScreenPickerRefreshResult?: (
+    cb: (sources: ElectronDesktopSource[]) => void,
+  ) => void;
+  /** Detach the refresh-result listener (on picker close). */
+  removeScreenPickerRefreshListener?: () => void;
   /** Send user's selection back to main process (null = cancelled) */
   sendScreenPickerResult: (sourceId: string | null) => void;
 

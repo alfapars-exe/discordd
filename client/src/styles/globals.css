@@ -2652,8 +2652,13 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* Header */
 .sp-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--b1); }
 .sp-title { font-size:18px;font-weight:700;color:var(--t0);margin:0; }
+.sp-header-actions { display:flex;align-items:center;gap:4px; }
+.sp-icon-btn,
 .sp-close { width:32px;height:32px;border:none;background:transparent;color:var(--t2);cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:background .1s,color .1s; }
+.sp-icon-btn:hover,
 .sp-close:hover { background:var(--bg-h);color:var(--t0); }
+.sp-icon-btn:disabled { cursor:default;opacity:0.5; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
 
 /* Tab bar — Screens / Windows */
 .sp-tabs { display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b1); }
@@ -2675,8 +2680,12 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .sp-thumbnail-wrap { width:100%;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--bg-0); }
 .sp-thumbnail { width:100%;height:100%;object-fit:contain; }
 
-/* Source name — single line, truncated */
-.sp-source-name { font-size:13px;color:var(--t1);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px; }
+/* Source name — single line, truncated, optional leading app icon */
+.sp-source-name { display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;min-width:0; }
+.sp-app-icon { width:14px;height:14px;flex-shrink:0;border-radius:2px; }
+
+/* Hint line at bottom of grid */
+.sp-hint { padding:8px 20px 0;font-size:12px;color:var(--t3);line-height:1.4; }
 
 /* Footer — audio toggle */
 .sp-footer { padding:12px 20px;border-top:1px solid var(--b1); }

@@ -48,6 +48,8 @@
   "screenPickerNoSources": "No sources available",
   "screenPickerHint": "Select a screen or window to share",
   "screenPickerShareAudio": "Share audio",
+  "screenPickerRefresh": "Refresh sources",
+  "screenPickerWindowHint": "Don't see your app? Open it, then click refresh. Apps running as administrator and some fullscreen games may not appear.",
   "pingMeasuring": "Measuring...",
   "pingGood": "Good connection",
   "pingMedium": "Average connection",
