@@ -258,14 +258,17 @@ func (s *musicBotService) Stop(channelID string) error {
 
 	// Broadcast a final state with IsActive=false so the frontend can hide
 	// the panel without waiting for the next state push.
-	s.hub.BroadcastToServer(bot.serverID, "music_bot_state", map[string]any{
-		"channel_id": channelID,
-		"server_id":  bot.serverID,
-		"state": models.MusicBotChannelState{
-			ChannelID: channelID,
-			ServerID:  bot.serverID,
-			IsActive:  false,
-			Queue:     []models.MusicTrack{},
+	s.hub.BroadcastToServer(bot.serverID, ws.Event{
+		Op: "music_bot_state",
+		Data: map[string]any{
+			"channel_id": channelID,
+			"server_id":  bot.serverID,
+			"state": models.MusicBotChannelState{
+				ChannelID: channelID,
+				ServerID:  bot.serverID,
+				IsActive:  false,
+				Queue:     []models.MusicTrack{},
+			},
 		},
 	})
 	log.Printf("[music] bot stopped channel=%s", channelID)
@@ -354,10 +357,13 @@ func (s *musicBotService) broadcastState(bot *botInstance) {
 	state := bot.snapshotLocked()
 	bot.mu.Unlock()
 
-	s.hub.BroadcastToServer(bot.serverID, "music_bot_state", map[string]any{
-		"channel_id": bot.channelID,
-		"server_id":  bot.serverID,
-		"state":      state,
+	s.hub.BroadcastToServer(bot.serverID, ws.Event{
+		Op: "music_bot_state",
+		Data: map[string]any{
+			"channel_id": bot.channelID,
+			"server_id":  bot.serverID,
+			"state":      state,
+		},
 	})
 }
 
