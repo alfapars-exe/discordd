@@ -473,19 +473,17 @@ func TestChangePassword(t *testing.T) {
 	hashedPassword := preHashPassword(t, "currentpass1")
 
 	tests := []struct {
-		name        string
-		userID      string
-		currentPass string
-		newPass     string
-		setupRepo   func(*testutil.MockUserRepo)
-		wantErr     bool
-		errIs       error
+		name      string
+		userID    string
+		newPass   string
+		setupRepo func(*testutil.MockUserRepo)
+		wantErr   bool
+		errIs     error
 	}{
 		{
-			name:        "should change password successfully",
-			userID:      "user-1",
-			currentPass: "currentpass1",
-			newPass:     "newpassword1",
+			name:    "should change password successfully",
+			userID:  "user-1",
+			newPass: "newpassword1",
 			setupRepo: func(ur *testutil.MockUserRepo) {
 				ur.GetByIDFn = func(ctx context.Context, id string) (*models.User, error) {
 					return &models.User{
@@ -503,44 +501,11 @@ func TestChangePassword(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:        "should fail when current password is wrong",
-			userID:      "user-1",
-			currentPass: "wrongpassword",
-			newPass:     "newpassword1",
-			setupRepo: func(ur *testutil.MockUserRepo) {
-				ur.GetByIDFn = func(ctx context.Context, id string) (*models.User, error) {
-					return &models.User{
-						ID:           "user-1",
-						PasswordHash: hashedPassword,
-					}, nil
-				}
-			},
-			wantErr: true,
-			errIs:   pkg.ErrUnauthorized,
-		},
-		{
-			name:        "should fail when new password is the same as current",
-			userID:      "user-1",
-			currentPass: "currentpass1",
-			newPass:     "currentpass1",
-			setupRepo: func(ur *testutil.MockUserRepo) {
-				ur.GetByIDFn = func(ctx context.Context, id string) (*models.User, error) {
-					return &models.User{
-						ID:           "user-1",
-						PasswordHash: hashedPassword,
-					}, nil
-				}
-			},
+			name:    "should fail when new password is too short",
+			userID:  "user-1",
+			newPass: "short",
 			wantErr: true,
 			errIs:   pkg.ErrBadRequest,
-		},
-		{
-			name:        "should fail when new password is too short",
-			userID:      "user-1",
-			currentPass: "currentpass1",
-			newPass:     "short",
-			wantErr:     true,
-			errIs:       pkg.ErrBadRequest,
 		},
 	}
 
@@ -552,7 +517,7 @@ func TestChangePassword(t *testing.T) {
 			}
 
 			svc := newTestAuthService(userRepo, &testutil.MockSessionRepo{})
-			err := svc.ChangePassword(context.Background(), tc.userID, tc.currentPass, tc.newPass)
+			err := svc.ChangePassword(context.Background(), tc.userID, tc.newPass)
 
 			if tc.wantErr {
 				if err == nil {

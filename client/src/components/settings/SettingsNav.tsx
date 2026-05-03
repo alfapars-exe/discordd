@@ -37,14 +37,19 @@ const SERVER_ITEMS: NavItem[] = [
   { id: "invites", labelKey: "invites" },
 ];
 
-/** Platform Settings — platform admin only */
+/**
+ * Platform Settings — platform admin only.
+ *
+ * Note: there is no "platform-feedback" entry here. The user-settings
+ * "Geri Bildirim" tab routes to the admin feedback inbox when the user is
+ * a platform admin, so a separate platform entry would be redundant.
+ */
 const PLATFORM_ITEMS: NavItem[] = [
   { id: "platform", labelKey: "platformLiveKitInstances" },
   { id: "platform-quota", labelKey: "platformLiveKitQuota" },
   { id: "platform-servers", labelKey: "platformServersTab" },
   { id: "platform-users", labelKey: "platformUsersTab" },
   { id: "platform-reports", labelKey: "platformReportsTab" },
-  { id: "platform-feedback", labelKey: "platformFeedbackTab" },
   { id: "platform-logs", labelKey: "platformLogsTab" },
   { id: "platform-connections", labelKey: "platformConnections" },
 ];

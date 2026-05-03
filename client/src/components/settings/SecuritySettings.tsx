@@ -18,7 +18,8 @@ function SecuritySettings() {
   const [isEmailSaving, setIsEmailSaving] = useState(false);
 
   // ─── Password State ───
-  const [currentPassword, setCurrentPassword] = useState("");
+  // Current password is intentionally not asked: the session JWT is the
+  // proof-of-identity here and re-asking was friction users disliked.
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -66,10 +67,7 @@ function SecuritySettings() {
 
   // ─── Password Handlers ───
   const canSubmitPassword =
-    currentPassword.length > 0 &&
-    newPassword.length > 0 &&
-    confirmPassword.length > 0 &&
-    !isSaving;
+    newPassword.length > 0 && confirmPassword.length > 0 && !isSaving;
 
   async function handlePasswordSubmit() {
     if (!canSubmitPassword) return;
@@ -84,27 +82,17 @@ function SecuritySettings() {
       return;
     }
 
-    if (currentPassword === newPassword) {
-      addToast("error", t("passwordSameAsOld"));
-      return;
-    }
-
     setIsSaving(true);
     try {
-      const res = await authApi.changePassword(currentPassword, newPassword);
+      const res = await authApi.changePassword(newPassword);
       if (res.success) {
         addToast("success", t("passwordChanged"));
-        setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
         const errMsg = res.error ?? "";
-        if (errMsg.includes("incorrect") || errMsg.includes("unauthorized")) {
-          addToast("error", t("wrongCurrentPassword"));
-        } else if (errMsg.includes("at least 6")) {
+        if (errMsg.includes("at least 6")) {
           addToast("error", t("passwordTooShort"));
-        } else if (errMsg.includes("different")) {
-          addToast("error", t("passwordSameAsOld"));
         } else {
           addToast("error", t("passwordChangeError"));
         }
@@ -194,24 +182,6 @@ function SecuritySettings() {
 
       {/* ═══ Password Section ═══ */}
       <h3 className="settings-section-subtitle">{t("changePassword")}</h3>
-
-      {/* Current Password */}
-      <div className="settings-field">
-        <label htmlFor="currentPassword" className="settings-label">
-          {t("currentPassword")}
-        </label>
-        <input
-          id="currentPassword"
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          placeholder={t("currentPasswordPlaceholder")}
-          className="settings-input"
-          autoComplete="off"
-          data-1p-ignore
-          data-lpignore="true"
-        />
-      </div>
 
       {/* New Password */}
       <div className="settings-field">
