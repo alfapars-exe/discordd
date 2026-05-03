@@ -27,6 +27,8 @@
   "userVolume": "Kullanıcı Sesi",
   "localMute": "Benim İçin Sustur",
   "localUnmute": "Benim İçin Sesi Aç",
+  "watchScreenShare": "Yayını İzle",
+  "stopWatchingScreenShare": "Yayını İzlemeyi Bırak",
   "serverMute": "Sunucu Susturma",
   "serverUnmute": "Sunucu Sesini Aç",
   "serverDeafen": "Sunucu Sağırlaştırma",

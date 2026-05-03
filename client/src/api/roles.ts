@@ -26,7 +26,7 @@ export async function createRole(serverId: string, data: {
 export async function updateRole(
   serverId: string,
   id: string,
-  data: { name?: string; color?: string; permissions?: number }
+  data: { name?: string; color?: string; permissions?: number; mentionable?: boolean }
 ) {
   return apiClient<Role>(`/servers/${serverId}/roles/${id}`, {
     method: "PATCH",

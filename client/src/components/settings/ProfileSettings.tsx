@@ -78,7 +78,14 @@ function ProfileSettings() {
       if (pendingAvatarFile) {
         const avatarRes = await profileApi.uploadAvatar(pendingAvatarFile);
         if (avatarRes.success && avatarRes.data) {
-          updateUser({ avatar_url: avatarRes.data.avatar_url });
+          // Cache-bust: server reuses the same path on overwrite, so the
+          // <img src=...> reference stays identical and the browser keeps
+          // serving the stale image from disk cache. Append a timestamp
+          // query string so every upload yields a fresh URL — the auth
+          // store + WS member_update broadcast carry this version forward
+          // to every other UI consumer (sidebar, voice tile, member list).
+          const cacheBustedUrl = `${avatarRes.data.avatar_url}?t=${Date.now()}`;
+          updateUser({ avatar_url: cacheBustedUrl });
         } else {
           addToast("error", avatarRes.error ?? t("avatarUploadError"));
           setIsSaving(false);

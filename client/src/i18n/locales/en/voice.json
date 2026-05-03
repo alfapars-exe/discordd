@@ -27,6 +27,8 @@
   "userVolume": "User Volume",
   "localMute": "Mute For Me",
   "localUnmute": "Unmute For Me",
+  "watchScreenShare": "Watch screen share",
+  "stopWatchingScreenShare": "Stop watching screen share",
   "serverMute": "Server Mute",
   "serverUnmute": "Server Unmute",
   "serverDeafen": "Server Deafen",

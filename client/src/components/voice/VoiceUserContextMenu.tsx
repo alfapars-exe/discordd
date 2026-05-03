@@ -41,6 +41,8 @@ function VoiceUserContextMenu({
   const toggleLocalMute = useVoiceStore((s) => s.toggleLocalMute);
   const voiceStates = useVoiceStore((s) => s.voiceStates);
   const wsSend = useVoiceStore((s) => s._wsSend);
+  const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
+  const toggleWatchScreenShare = useVoiceStore((s) => s.toggleWatchScreenShare);
 
   // Channel-level permission resolution
   const currentUser = useAuthStore((s) => s.user);
@@ -93,6 +95,13 @@ function VoiceUserContextMenu({
   const [preMuteVolume, setPreMuteVolume] = useState(currentVolume || 100);
   const isServerMuted = targetVoiceState?.is_server_muted ?? false;
   const isServerDeafened = targetVoiceState?.is_server_deafened ?? false;
+  const isTargetStreaming = targetVoiceState?.is_streaming ?? false;
+  const isWatchingThisStream = watchingScreenShares[userId] ?? false;
+
+  function handleToggleWatch() {
+    toggleWatchScreenShare(userId);
+    onClose();
+  }
 
   const name = displayName || username;
 
@@ -243,6 +252,20 @@ function VoiceUserContextMenu({
           {isLocallyMuted ? <IconSpeakerMuted /> : <IconSpeaker />}
           {isLocallyMuted ? t("localUnmute") : t("localMute")}
         </button>
+
+        {/* Watch / Stop Watching Screen Share — visible only when the target is currently streaming */}
+        {isTargetStreaming && (
+          <button
+            className={`voice-ctx-item${isWatchingThisStream ? " active" : ""}`}
+            onClick={handleToggleWatch}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            {isWatchingThisStream ? t("stopWatchingScreenShare") : t("watchScreenShare")}
+          </button>
+        )}
 
         {/* Moderation Actions — channel-level granular permission checks */}
         {hasAnyModPerm && (
