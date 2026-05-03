@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -154,7 +154,13 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusOK, user)
 }
 
-// ChangePassword handles POST /api/users/me/password
+// ChangePassword handles POST /api/users/me/password.
+//
+// The session JWT is the proof-of-identity here — re-asking for the current
+// password on top of an authenticated session was friction users explicitly
+// disliked, and didn't add real security: an attacker with a stolen JWT can
+// already impersonate the user. CurrentPassword is still accepted for
+// backward compatibility but ignored.
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
@@ -163,7 +169,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		CurrentPassword string `json:"current_password"`
+		CurrentPassword string `json:"current_password"` // ignored, kept for client compat
 		NewPassword     string `json:"new_password"`
 	}
 
@@ -172,12 +178,12 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.CurrentPassword == "" || req.NewPassword == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "current_password and new_password are required")
+	if req.NewPassword == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "new_password is required")
 		return
 	}
 
-	if err := h.authService.ChangePassword(r.Context(), user.ID, req.CurrentPassword, req.NewPassword); err != nil {
+	if err := h.authService.ChangePassword(r.Context(), user.ID, req.NewPassword); err != nil {
 		pkg.Error(w, err)
 		return
 	}
