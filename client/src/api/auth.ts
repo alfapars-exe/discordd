@@ -41,13 +41,10 @@ export async function getMe() {
   return apiClient<User>("/users/me");
 }
 
-export async function changePassword(
-  currentPassword: string,
-  newPassword: string,
-) {
+export async function changePassword(newPassword: string) {
   return apiClient<{ message: string }>("/users/me/password", {
     method: "POST",
-    body: { current_password: currentPassword, new_password: newPassword },
+    body: { new_password: newPassword },
   });
 }
 

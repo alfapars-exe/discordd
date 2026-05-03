@@ -13,6 +13,7 @@ import {
 import type { FeedbackTicket, FeedbackReply, FeedbackStatus, FeedbackType } from "../../types";
 import { resolveAssetUrl } from "../../utils/constants";
 import FilePreview from "../chat/FilePreview";
+import FeedbackCreateForm from "./FeedbackCreateForm";
 
 const STATUS_OPTIONS: Array<FeedbackStatus | ""> = ["", "open", "in_progress", "resolved", "closed"];
 const TYPE_OPTIONS: Array<FeedbackType | ""> = ["", "bug", "suggestion", "question", "other"];
@@ -26,6 +27,7 @@ function AdminFeedbackList() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<FeedbackStatus | "">("");
   const [typeFilter, setTypeFilter] = useState<FeedbackType | "">("");
+  const [isCreating, setIsCreating] = useState(false);
 
   // Detail view
   const [activeTicket, setActiveTicket] = useState<FeedbackTicket | null>(null);
@@ -226,10 +228,38 @@ function AdminFeedbackList() {
     );
   }
 
+  // ─── Create View ───
+  // Admin can also file their own feedback from this page (e.g. an internal
+  // bug report). Re-uses the same form as regular users.
+  if (isCreating) {
+    return (
+      <div className="settings-section">
+        <FeedbackCreateForm
+          onSubmitted={() => {
+            setIsCreating(false);
+            fetchTickets();
+          }}
+          onClose={() => setIsCreating(false)}
+        />
+      </div>
+    );
+  }
+
   // ─── List View ───
   return (
     <div className="settings-section">
-      <h2 className="settings-section-title">{t("adminFeedbackTitle")}</h2>
+      <div
+        className="settings-section-header"
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+      >
+        <h2 className="settings-section-title">{t("adminFeedbackTitle")}</h2>
+        <button
+          className="settings-btn settings-btn-primary"
+          onClick={() => setIsCreating(true)}
+        >
+          {t("feedbackNewTicket")}
+        </button>
+      </div>
 
       <div className="admin-report-toolbar">
         <select
