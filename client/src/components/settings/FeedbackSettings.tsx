@@ -4,16 +4,15 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import {
-  createFeedbackTicket,
   listMyFeedbackTickets,
   getFeedbackTicket,
   addFeedbackReply,
   deleteFeedbackTicket,
 } from "../../api/feedback";
-import type { FeedbackTicket, FeedbackReply, FeedbackType } from "../../types";
+import type { FeedbackTicket, FeedbackReply } from "../../types";
 import { resolveAssetUrl } from "../../utils/constants";
-import { useFileDrop } from "../../hooks/useFileDrop";
 import FilePreview from "../chat/FilePreview";
+import FeedbackCreateForm from "./FeedbackCreateForm";
 
 type View = "list" | "create" | "detail";
 
@@ -34,45 +33,8 @@ function FeedbackSettings() {
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
 
-  // Create form state
-  const [formType, setFormType] = useState<FeedbackType>("bug");
-  const [formSubject, setFormSubject] = useState("");
-  const [formContent, setFormContent] = useState("");
-  const [formFiles, setFormFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const MAX_FILES = 4;
   const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-
-  const addFiles = useCallback((newFiles: File[]) => {
-    const images = newFiles.filter((f) => ALLOWED_TYPES.includes(f.type));
-    if (images.length === 0) return;
-    setFormFiles((prev) => {
-      const remaining = MAX_FILES - prev.length;
-      if (remaining <= 0) {
-        addToast("warning", t("feedbackMaxFiles"));
-        return prev;
-      }
-      if (images.length > remaining) addToast("warning", t("feedbackMaxFiles"));
-      return [...prev, ...images.slice(0, remaining)];
-    });
-  }, [addToast, t]);
-
-  const { isDragging, dragHandlers } = useFileDrop(addFiles);
-
-  function handlePaste(e: React.ClipboardEvent) {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    const pasted: File[] = [];
-    for (const item of Array.from(items)) {
-      if (item.kind === "file") {
-        const f = item.getAsFile();
-        if (f) pasted.push(f);
-      }
-    }
-    if (pasted.length > 0) addFiles(pasted);
-  }
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -92,34 +54,6 @@ function FeedbackSettings() {
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
-
-  const handleSubmit = async () => {
-    if (!formSubject.trim() || !formContent.trim()) return;
-    try {
-      setIsSubmitting(true);
-      const res = await createFeedbackTicket({
-        type: formType,
-        subject: formSubject.trim(),
-        content: formContent.trim(),
-        files: formFiles.length > 0 ? formFiles : undefined,
-      });
-      if (res.success) {
-        addToast("success", t("feedbackSubmitSuccess"));
-        setFormSubject("");
-        setFormContent("");
-        setFormType("bug");
-        setFormFiles([]);
-        setView("list");
-        fetchTickets();
-      } else {
-        addToast("error", res.error ?? t("feedbackSubmitError"));
-      }
-    } catch {
-      addToast("error", t("feedbackSubmitError"));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const openTicket = async (ticketId: string) => {
     try {
@@ -169,29 +103,32 @@ function FeedbackSettings() {
 
   return (
     <div className="settings-section">
-      <div className="settings-section-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 className="settings-section-title">
-          {view === "list" && t("feedback")}
-          {view === "create" && t("feedbackNewTicket")}
-          {view === "detail" && activeTicket?.subject}
-        </h2>
-        {view === "list" && (
-          <button
-            className="settings-btn settings-btn-primary"
-            onClick={() => setView("create")}
-          >
-            {t("feedbackNewTicket")}
-          </button>
-        )}
-        {view !== "list" && (
-          <button
-            className="settings-btn settings-btn-secondary"
-            onClick={() => { setView("list"); setActiveTicket(null); }}
-          >
-            {t("feedbackBackToList")}
-          </button>
-        )}
-      </div>
+      {/* Header for list and detail views — create view has its own header
+          inside FeedbackCreateForm. */}
+      {view !== "create" && (
+        <div className="settings-section-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 className="settings-section-title">
+            {view === "list" && t("feedback")}
+            {view === "detail" && activeTicket?.subject}
+          </h2>
+          {view === "list" && (
+            <button
+              className="settings-btn settings-btn-primary"
+              onClick={() => setView("create")}
+            >
+              {t("feedbackNewTicket")}
+            </button>
+          )}
+          {view === "detail" && (
+            <button
+              className="settings-btn settings-btn-secondary"
+              onClick={() => { setView("list"); setActiveTicket(null); }}
+            >
+              {t("feedbackBackToList")}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ─── List View ─── */}
       {view === "list" && (
@@ -235,82 +172,10 @@ function FeedbackSettings() {
 
       {/* ─── Create View ─── */}
       {view === "create" && (
-        <div className="feedback-create-form" {...dragHandlers} onPaste={handlePaste}>
-          {isDragging && (
-            <div className="file-drop-overlay">
-              <span className="file-drop-text">{t("feedbackEvidenceHint")}</span>
-            </div>
-          )}
-          <label className="settings-label">{t("feedbackTypeLabel")}</label>
-          <select
-            className="settings-input"
-            value={formType}
-            onChange={(e) => setFormType(e.target.value as FeedbackType)}
-          >
-            <option value="bug">{t("feedbackType_bug")}</option>
-            <option value="suggestion">{t("feedbackType_suggestion")}</option>
-            <option value="question">{t("feedbackType_question")}</option>
-            <option value="other">{t("feedbackType_other")}</option>
-          </select>
-
-          <label className="settings-label">{t("feedbackSubjectLabel")}</label>
-          <input
-            className="settings-input"
-            type="text"
-            value={formSubject}
-            onChange={(e) => setFormSubject(e.target.value)}
-            placeholder={t("feedbackSubjectPlaceholder")}
-            maxLength={200}
-          />
-
-          <label className="settings-label">{t("feedbackContentLabel")}</label>
-          <textarea
-            className="settings-input feedback-textarea"
-            value={formContent}
-            onChange={(e) => setFormContent(e.target.value)}
-            placeholder={t("feedbackContentPlaceholder")}
-            rows={6}
-            maxLength={5000}
-          />
-
-          <div className="report-field">
-            <label className="settings-label">{t("feedbackAttachmentsLabel")}</label>
-
-            {formFiles.length > 0 && (
-              <FilePreview files={formFiles} onRemove={(i) => setFormFiles((prev) => prev.filter((_, j) => j !== i))} />
-            )}
-
-            {formFiles.length < MAX_FILES && (
-              <button
-                type="button"
-                className="report-evidence-drop"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <span className="report-evidence-hint">{t("feedbackEvidenceHint")}</span>
-              </button>
-            )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              multiple
-              style={{ display: "none" }}
-              onChange={(e) => {
-                if (e.target.files) addFiles(Array.from(e.target.files));
-                e.target.value = "";
-              }}
-            />
-          </div>
-
-          <button
-            className="settings-btn settings-btn-primary"
-            onClick={handleSubmit}
-            disabled={isSubmitting || !formSubject.trim() || formContent.trim().length < 10}
-          >
-            {isSubmitting ? t("feedbackSubmitting") : t("feedbackSubmit")}
-          </button>
-        </div>
+        <FeedbackCreateForm
+          onSubmitted={() => { setView("list"); fetchTickets(); }}
+          onClose={() => setView("list")}
+        />
       )}
 
       {/* ─── Detail View ─── */}
