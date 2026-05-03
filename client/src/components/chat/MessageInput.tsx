@@ -92,42 +92,54 @@ function MessageInput() {
 
     setIsSending(true);
 
-    // Slash-commands short-circuit before mention tokenization + chat send.
-    // /play /skip /pause /resume /stop never reach the message stream — they
-    // hit the music bot HTTP API and clear the input.
-    const wasMusicCommand = await runMusicCommand(content);
-    if (wasMusicCommand) {
-      setContent("");
-      setFiles([]);
-      setReplyingTo(null);
-      mentionSelectionsRef.current = [];
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
+    // try/catch/finally bracket the send so a thrown promise — slash-command
+    // network failure, sendMessage exception, anything — never leaves the
+    // textarea locked or the user without feedback. The original code
+    // relied on awaited APIs returning {success:false} but exceptions
+    // leak through and freeze the UI silently.
+    try {
+      // Slash-commands short-circuit before mention tokenization + chat send.
+      // /play /skip /pause /resume /stop never reach the message stream — they
+      // hit the music bot HTTP API and clear the input.
+      const wasMusicCommand = await runMusicCommand(content);
+      if (wasMusicCommand) {
+        setContent("");
+        setFiles([]);
+        setReplyingTo(null);
+        mentionSelectionsRef.current = [];
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+        return;
       }
+
+      // Regular message send is gated on canSend (text-channel send perm).
+      // Slash commands intentionally bypass this gate above — they target
+      // voice state, not the message stream.
+      if (!canSend) {
+        return;
+      }
+
+      const replyToId = replyingTo?.id;
+      const tokenized = convertMentionTokens(content.trim());
+      const success = await sendMessage(tokenized, files, replyToId);
+      if (success) {
+        setContent("");
+        setFiles([]);
+        setReplyingTo(null);
+        mentionSelectionsRef.current = [];
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+      }
+    } catch (err) {
+      console.error("[MessageInput] send failed:", err);
+    } finally {
       setIsSending(false);
+      // Restore focus after send — disabled={isSending} causes browser to drop focus.
       requestAnimationFrame(() => textareaRef.current?.focus());
-      return;
     }
-
-    const replyToId = replyingTo?.id;
-    const tokenized = convertMentionTokens(content.trim());
-    const success = await sendMessage(tokenized, files, replyToId);
-    if (success) {
-      setContent("");
-      setFiles([]);
-      setReplyingTo(null);
-      mentionSelectionsRef.current = [];
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-    }
-    setIsSending(false);
-
-    // Restore focus after send — disabled={isSending} causes browser to drop focus
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
-  }, [channelId, content, files, isSending, sendMessage, replyingTo, setReplyingTo, runMusicCommand]);
+  }, [channelId, content, files, isSending, sendMessage, replyingTo, setReplyingTo, runMusicCommand, canSend]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -297,21 +309,20 @@ function MessageInput() {
 
   if (!channelId) return null;
 
-  // No send permission — show disabled state
-  if (!canSend) {
-    return (
-      <div className="input-area">
-        <div className="input-box input-box-disabled">
-          <span className="input-no-perm">{t("noSendPermission")}</span>
-        </div>
-      </div>
-    );
-  }
+  // Slash commands (/play /skip ...) target voice state and bypass the
+  // text-channel send permission. So the input must always render — even
+  // when canSend=false — otherwise users without text-send perm can't
+  // invoke the music bot at all.
+  const isSlashCommand = content.trimStart().startsWith("/");
 
-  // Placeholder: "#channel" in channel mode, "@user" in DM mode
-  const placeholder = mode === "dm"
-    ? t("dmPlaceholder", { user: channelName })
-    : t("messagePlaceholder", { channel: channelName });
+  // Placeholder: "#channel" in channel mode, "@user" in DM mode.
+  // When canSend is false the user gets a hint that only slash commands
+  // will go through; the textarea stays editable.
+  const placeholder = !canSend
+    ? t("noSendPermissionSlashHint")
+    : mode === "dm"
+      ? t("dmPlaceholder", { user: channelName })
+      : t("messagePlaceholder", { channel: channelName });
 
   return (
     <div className="input-area">
@@ -428,7 +439,13 @@ function MessageInput() {
           className="input-action-btn input-send-btn"
           title={t("sendMessage")}
           onClick={handleSend}
-          disabled={isSending || (content.trim().length === 0 && files.length === 0)}
+          disabled={
+            isSending ||
+            (content.trim().length === 0 && files.length === 0) ||
+            // canSend=false locks regular sends; slash commands bypass the
+            // text-channel send permission and stay tappable.
+            (!canSend && !isSlashCommand)
+          }
           aria-label={t("sendMessage")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
