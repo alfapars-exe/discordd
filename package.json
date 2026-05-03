@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.12",
+  "version": "2.11.13",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
@@ -44,7 +44,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "icons/mqvi-icon.ico",
+      "icon": "icons/logodiscord.png",
       "signAndEditExecutable": false,
       "extraResources": [
         {
@@ -104,7 +104,7 @@
       "target": [
         "AppImage"
       ],
-      "icon": "icons/mqvi-icon-512x512.png",
+      "icon": "icons/logodiscord.png",
       "category": "Network;Chat"
     }
   }

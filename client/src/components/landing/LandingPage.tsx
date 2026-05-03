@@ -57,7 +57,7 @@ function LandingPage() {
 
         {/* ═══ NAVBAR ═══ */}
         <nav className="lp-nav">
-          <img src="/hichat-icon.svg" alt="HiChat!" className="lp-nav-logo-img" />
+          <img src="/logodiscord.png" alt="HiChat!" className="lp-nav-logo-img" />
           <span className="lp-nav-brand">mqvi</span>
 
           <div className="lp-nav-links">
@@ -446,7 +446,7 @@ function LandingPage() {
         {/* ═══ FOOTER ═══ */}
         <footer className="lp-footer">
           <div className="lp-footer-left">
-            <img src="/hichat-icon.svg" alt="HiChat!" className="lp-footer-logo-img" />
+            <img src="/logodiscord.png" alt="HiChat!" className="lp-footer-logo-img" />
             <span className="lp-footer-copy">{t("footer_copy")}</span>
           </div>
           <div className="lp-footer-links">
