@@ -16,6 +16,9 @@ type InstanceFormProps = {
   setFormMaxServers: (v: number) => void;
   formHetznerServerID: string;
   setFormHetznerServerID: (v: string) => void;
+  /** Self-hosted toggle. true = LiveKit Cloud (quota-tracked), false = self-hosted (unlimited). */
+  formIsPlatformManaged: boolean;
+  setFormIsPlatformManaged: (v: boolean) => void;
   isSaving: boolean;
   onSave: () => void;
   onCancel?: () => void;
@@ -38,6 +41,8 @@ function InstanceForm({
   setFormMaxServers,
   formHetznerServerID,
   setFormHetznerServerID,
+  formIsPlatformManaged,
+  setFormIsPlatformManaged,
   isSaving,
   onSave,
   onCancel,
@@ -56,7 +61,8 @@ function InstanceForm({
         formApiKey !== "" ||
         formApiSecret !== "" ||
         formMaxServers !== instance.max_servers ||
-        formHetznerServerID !== (instance.hetzner_server_id ?? "")
+        formHetznerServerID !== (instance.hetzner_server_id ?? "") ||
+        formIsPlatformManaged !== instance.is_platform_managed
       : false;
 
   return (
@@ -73,6 +79,36 @@ function InstanceForm({
           onChange={(e) => setFormUrl(e.target.value)}
           placeholder={t("platformInstanceUrlPlaceholder")}
         />
+      </div>
+
+      {/* Cloud (quota-tracked) vs self-hosted (unlimited, skipped by auto-switch) */}
+      <div className="settings-field">
+        <label className="settings-label">
+          {t("platformInstanceType", { defaultValue: "Sunucu Türü" })}
+        </label>
+        <select
+          className="settings-select"
+          value={formIsPlatformManaged ? "cloud" : "self-hosted"}
+          onChange={(e) => setFormIsPlatformManaged(e.target.value === "cloud")}
+        >
+          <option value="cloud">
+            {t("platformInstanceTypeCloud", { defaultValue: "LiveKit Cloud (kotalı)" })}
+          </option>
+          <option value="self-hosted">
+            {t("platformInstanceTypeSelfHosted", { defaultValue: "Self-Hosted (sınırsız)" })}
+          </option>
+        </select>
+        <span className="settings-hint">
+          {formIsPlatformManaged
+            ? t("platformInstanceTypeCloudHint", {
+                defaultValue:
+                  "LiveKit Cloud sunucuları aylık kota ile takip edilir ve dolarken otomatik olarak bir sonraki sunucuya geçilir.",
+              })
+            : t("platformInstanceTypeSelfHostedHint", {
+                defaultValue:
+                  "Self-hosted sunucular kotaya tabi değildir ve otomatik geçiş havuzunun dışındadır.",
+              })}
+        </span>
       </div>
 
       <div className="settings-field">

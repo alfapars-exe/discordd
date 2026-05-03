@@ -8,7 +8,7 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useConfirm } from "../../hooks/useConfirm";
-import { SERVER_URL } from "../../utils/constants";
+import { DEFAULT_SERVER_URL, SERVER_URL } from "../../utils/constants";
 
 // ─── Types ───
 
@@ -23,11 +23,16 @@ type SavedConnection = {
 const CONNECTIONS_STORAGE_KEY = "mqvi_connections";
 const ACTIVE_URL_KEY = "mqvi_server_url";
 
-/** Default connection URL from env or hardcoded fallback (skips localStorage). */
+/**
+ * Default connection URL — env override or the canonical production URL
+ * exported from constants.ts. We deliberately skip the localStorage
+ * runtime-override here; this function answers the question "what would
+ * the Default row show?" not "what is currently active?".
+ */
 function getDefaultUrl(): string {
   const envUrl = import.meta.env.VITE_SERVER_URL;
   if (envUrl) return (envUrl as string).replace(/\/$/, "");
-  return "https://mqvi.net";
+  return DEFAULT_SERVER_URL;
 }
 
 function loadConnections(): SavedConnection[] {

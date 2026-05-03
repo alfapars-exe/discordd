@@ -81,7 +81,7 @@ function InviteJoinPage() {
       {/* Logo + Title */}
       <div className="invite-join-header">
         <img
-          src={publicAsset("hichat-icon.svg")}
+          src={publicAsset("logodiscord.png")}
           alt="HiChat!"
           className="invite-join-logo"
         />

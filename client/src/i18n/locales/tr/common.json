@@ -146,5 +146,9 @@
   "adminSection": "YÖNETİCİ",
   "registeredUsers": "Kayıtlı Kullanıcılar",
   "updateAvailable": "HiChat!'ın yeni sürümü var.",
-  "updateApp": "Uygulamayı Güncelle"
+  "updateApp": "Uygulamayı Güncelle",
+  "updateDownloading": "Güncelleme indiriliyor",
+  "updateReadyToInstall": "Yeni sürüm hazır",
+  "updateRestartAndInstall": "Yeniden Başlat ve Yükle",
+  "dismiss": "Kapat"
 }

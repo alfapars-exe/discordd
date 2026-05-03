@@ -40,6 +40,9 @@ function LiveKitTab() {
   const [formApiSecret, setFormApiSecret] = useState("");
   const [formMaxServers, setFormMaxServers] = useState(0);
   const [formHetznerServerID, setFormHetznerServerID] = useState("");
+  // Cloud (true) vs self-hosted (false). Defaults to cloud since that's the
+  // billed path users are most likely to add through this admin panel.
+  const [formIsPlatformManaged, setFormIsPlatformManaged] = useState(true);
 
   // Delete migration target
   const [migrateTargetId, setMigrateTargetId] = useState("");
@@ -77,6 +80,7 @@ function LiveKitTab() {
       setFormApiSecret("");
       setFormMaxServers(0);
       setFormHetznerServerID("");
+      setFormIsPlatformManaged(true); // new entries default to LiveKit Cloud
     } else {
       const inst = instances.find((i) => i.id === selectedId);
       if (inst) {
@@ -85,6 +89,7 @@ function LiveKitTab() {
         setFormApiSecret("");
         setFormMaxServers(inst.max_servers);
         setFormHetznerServerID(inst.hetzner_server_id ?? "");
+        setFormIsPlatformManaged(inst.is_platform_managed);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,6 +106,7 @@ function LiveKitTab() {
         api_secret: formApiSecret,
         max_servers: formMaxServers,
         hetzner_server_id: formHetznerServerID || undefined,
+        is_platform_managed: formIsPlatformManaged,
       });
       if (res.success && res.data) {
         setInstances((prev) => [...prev, res.data!]);
@@ -130,7 +136,7 @@ function LiveKitTab() {
       return;
     }
 
-    const body: Record<string, string | number> = {};
+    const body: Record<string, string | number | boolean> = {};
     if (formUrl !== current.url) body.url = formUrl;
     if (formApiKey) body.api_key = formApiKey;
     if (formApiSecret) body.api_secret = formApiSecret;
@@ -138,6 +144,8 @@ function LiveKitTab() {
       body.max_servers = formMaxServers;
     if (formHetznerServerID !== (current.hetzner_server_id ?? ""))
       body.hetzner_server_id = formHetznerServerID;
+    if (formIsPlatformManaged !== current.is_platform_managed)
+      body.is_platform_managed = formIsPlatformManaged;
 
     if (Object.keys(body).length === 0) {
       addToast("info", t("platformNoChanges"));
@@ -223,6 +231,8 @@ function LiveKitTab() {
     setFormMaxServers,
     formHetznerServerID,
     setFormHetznerServerID,
+    formIsPlatformManaged,
+    setFormIsPlatformManaged,
     isSaving,
   };
 

@@ -1,7 +1,7 @@
 import { isNativeApp } from "./constants";
 
-const RELEASE_BASE = "https://github.com/akinalpfdn/Mqvi/releases/latest/download";
-const RELEASES_PAGE = "https://github.com/akinalpfdn/Mqvi/releases/latest";
+const RELEASE_BASE = "https://github.com/alfapars-exe/discordd/releases/latest/download";
+const RELEASES_PAGE = "https://github.com/alfapars-exe/discordd/releases/latest";
 
 export type OSInfo = {
   os: "windows" | "macos" | "linux" | "mobile";
@@ -15,12 +15,12 @@ export function detectOS(): OSInfo {
     return { os: "mobile", url: RELEASES_PAGE, i18nKey: "hero_download_desktop" };
   }
   if (ua.includes("mac")) {
-    return { os: "macos", url: `${RELEASE_BASE}/mqvi-setup.dmg`, i18nKey: "hero_download_macos" };
+    return { os: "macos", url: `${RELEASE_BASE}/hichat-setup.dmg`, i18nKey: "hero_download_macos" };
   }
   if (ua.includes("linux")) {
-    return { os: "linux", url: `${RELEASE_BASE}/mqvi-setup.AppImage`, i18nKey: "hero_download_linux" };
+    return { os: "linux", url: `${RELEASE_BASE}/hichat-setup.AppImage`, i18nKey: "hero_download_linux" };
   }
-  return { os: "windows", url: `${RELEASE_BASE}/mqvi-setup.exe`, i18nKey: "hero_download_windows" };
+  return { os: "windows", url: `${RELEASE_BASE}/hichat-setup.exe`, i18nKey: "hero_download_windows" };
 }
 
 /** Returns true if running on desktop OS in a web browser (not Electron/Capacitor, not mobile) */

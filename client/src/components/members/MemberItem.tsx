@@ -61,6 +61,25 @@ function getStatusClass(status: string): string {
   }
 }
 
+/**
+ * Top-level row class derived from presence status.
+ * CSS uses this to colour and glow the username (.member-online .member-name etc.)
+ * so the whole row reads at a glance: green = online, amber = idle, red = DnD.
+ */
+function getRowStatusClass(status: string, isOnline: boolean): string {
+  if (!isOnline) return "member-offline";
+  switch (status) {
+    case "online":
+      return "member-online";
+    case "idle":
+      return "member-idle";
+    case "dnd":
+      return "member-dnd";
+    default:
+      return "member-offline";
+  }
+}
+
 function MemberItem({ member, isOnline }: MemberItemProps) {
   const { t } = useTranslation("common");
   const { menuState, openMenu, closeMenu } = useContextMenu();
@@ -77,10 +96,7 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
   const [roleEditorPos, setRoleEditorPos] = useState({ top: 0, left: 0 });
   const [showBadgeAssign, setShowBadgeAssign] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
-  const highestRole = getHighestRole(member);
   const roleType = getRoleType(member);
-
-  const nameColor = highestRole?.color || undefined;
   const displayName = member.display_name ?? member.username;
 
   /** Right-click context menu */
@@ -271,7 +287,7 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
         ref={itemRef}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
-        className={`member${!isOnline ? " offline" : ""}`}
+        className={`member ${getRowStatusClass(member.status, isOnline)}${!isOnline ? " offline" : ""}`}
       >
         {/* Avatar + status dot */}
         <div className="member-av-wrap">
@@ -284,14 +300,13 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
           <span className={`member-status ${getStatusClass(member.status)}`} />
         </div>
 
-        {/* Name + Activity */}
+        {/* Name + Activity. Username colour comes from the row's status
+            class (.member-online → green, .member-idle → amber, etc.) so
+            we no longer apply role colour inline — presence is a more
+            useful at-a-glance signal in the member list, and CSS classes
+            cleanly carry the glow/shadow that goes with each colour. */}
         <div className="member-info">
-          <span
-            className="member-name"
-            style={nameColor ? { color: nameColor } : undefined}
-          >
-            {displayName}
-          </span>
+          <span className="member-name">{displayName}</span>
 
           {member.custom_status && (
             <span className="member-activity">

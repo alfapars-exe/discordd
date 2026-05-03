@@ -3,7 +3,7 @@
  * Friends and DM sections are extracted into their own components.
  */
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useSidebarStore } from "../../stores/sidebarStore";
@@ -38,6 +38,7 @@ import ChannelItem from "./ChannelItem";
 import VoiceParticipantList from "./VoiceParticipantList";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useChannelInlineRename } from "../../hooks/useChannelInlineRename";
 import { useChannelTreeDragDrop } from "../../hooks/useChannelTreeDragDrop";
 import * as channelApi from "../../api/channels";
 import type { Channel, User } from "../../types";
@@ -96,34 +97,16 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     y: number;
   } | null>(null);
 
-  // Inline rename state
-  const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null);
-  const [renamingChannelId, setRenamingChannelId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [showRenameEmoji, setShowRenameEmoji] = useState(false);
-  const renameEmojiBtnRef = useRef<HTMLButtonElement>(null);
-  const [emojiPickerPos, setEmojiPickerPos] = useState<{ top: number; left: number } | null>(null);
-
-  // Recalculate portal picker position when opened
-  const openRenameEmojiPicker = useCallback(() => {
-    setShowRenameEmoji((prev) => {
-      const next = !prev;
-      if (next && renameEmojiBtnRef.current) {
-        const rect = renameEmojiBtnRef.current.getBoundingClientRect();
-        setEmojiPickerPos({ top: rect.top, left: rect.right + 6 });
-      }
-      return next;
-    });
-  }, []);
-
-  // Close portal picker on scroll (sidebar scroll changes position)
-  useEffect(() => {
-    if (!showRenameEmoji) return;
-    function handleScroll() { setShowRenameEmoji(false); }
-    const tree = document.querySelector(".ch-tree");
-    tree?.addEventListener("scroll", handleScroll);
-    return () => tree?.removeEventListener("scroll", handleScroll);
-  }, [showRenameEmoji]);
+  // Inline rename state machine — hook owns ids, value, and emoji picker portal.
+  const rename = useChannelInlineRename({
+    serverId: activeServerId,
+    saveCategory: (id, name) => channelApi.updateCategory(activeServerId!, id, { name }),
+    saveChannel: (id, name) => channelApi.updateChannel(activeServerId!, id, { name }),
+    onCategoryResult: (ok) =>
+      ok ? addToast("success", tCh("categoryUpdated")) : addToast("error", tCh("categoryUpdateError")),
+    onChannelResult: (ok) =>
+      ok ? addToast("success", tCh("channelUpdated")) : addToast("error", tCh("channelUpdateError")),
+  });
 
   // Channel permission modal state
   const [permModalChannel, setPermModalChannel] = useState<Channel | null>(null);
@@ -258,12 +241,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     const items: ContextMenuItem[] = [
       {
         label: tCh("renameCategory"),
-        onClick: () => {
-          setShowRenameEmoji(false);
-          setRenamingChannelId(null);
-          setRenamingCategoryId(categoryId);
-          setRenameValue(categoryName);
-        },
+        onClick: () => rename.startCategoryRename(categoryId, categoryName),
       },
       {
         label: tCh("deleteCategory"),
@@ -298,12 +276,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     if (canManageChannels) {
       items.push({
         label: tCh("renameChannel"),
-        onClick: () => {
-          setShowRenameEmoji(false);
-          setRenamingCategoryId(null);
-          setRenamingChannelId(ch.id);
-          setRenameValue(ch.name);
-        },
+        onClick: () => rename.startChannelRename(ch.id, ch.name),
       });
       items.push({
         label: tCh("channelPermissions"),
@@ -350,38 +323,6 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
 
     if (items.length === 0) return;
     openChMenu(e, items);
-  }
-
-  // ─── Inline Rename Handlers ───
-
-  async function handleCategoryRenameSubmit() {
-    const id = renamingCategoryId;
-    const name = renameValue.trim();
-    setRenamingCategoryId(null);
-
-    if (!id || !name || !activeServerId) return;
-
-    const res = await channelApi.updateCategory(activeServerId, id, { name });
-    if (res.success) {
-      addToast("success", tCh("categoryUpdated"));
-    } else {
-      addToast("error", tCh("categoryUpdateError"));
-    }
-  }
-
-  async function handleChannelRenameSubmit() {
-    const id = renamingChannelId;
-    const name = renameValue.trim();
-    setRenamingChannelId(null);
-
-    if (!id || !name || !activeServerId) return;
-
-    const res = await channelApi.updateChannel(activeServerId, id, { name });
-    if (res.success) {
-      addToast("success", tCh("channelUpdated"));
-    } else {
-      addToast("error", tCh("channelUpdateError"));
-    }
   }
 
   return (
@@ -442,14 +383,14 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         onCatDragEnd={handleCatDragEnd}
                         onUncatDragOver={(e) => handleCatRowDragOver(e, "")}
                         onUncatDrop={(e) => handleCatRowDrop(e, "")}
-                        isRenaming={renamingCategoryId === catId}
-                        renameValue={renameValue}
-                        onRenameChange={setRenameValue}
-                        onRenameSubmit={() => { setShowRenameEmoji(false); handleCategoryRenameSubmit(); }}
-                        onRenameCancel={() => { setShowRenameEmoji(false); setRenamingCategoryId(null); }}
-                        showRenameEmoji={showRenameEmoji}
-                        renameEmojiBtnRef={renameEmojiBtnRef}
-                        onOpenRenameEmoji={openRenameEmojiPicker}
+                        isRenaming={rename.renamingCategoryId === catId}
+                        renameValue={rename.renameValue}
+                        onRenameChange={rename.setRenameValue}
+                        onRenameSubmit={rename.submitCategory}
+                        onRenameCancel={rename.cancel}
+                        showRenameEmoji={rename.showRenameEmoji}
+                        renameEmojiBtnRef={rename.renameEmojiBtnRef}
+                        onOpenRenameEmoji={rename.toggleEmojiPicker}
                       >
                         {cg.channels.map((ch) => {
                     const isText = ch.type === "text";
@@ -489,14 +430,14 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         onDragLeave={handleChannelDragLeave}
                         onDrop={(e) => handleChannelDrop(e, ch.id, cg.category.id)}
                         onDragEnd={handleChannelDragEnd}
-                        isRenaming={renamingChannelId === ch.id}
-                        renameValue={renameValue}
-                        onRenameChange={setRenameValue}
-                        onRenameSubmit={() => { setShowRenameEmoji(false); handleChannelRenameSubmit(); }}
-                        onRenameCancel={() => { setShowRenameEmoji(false); setRenamingChannelId(null); }}
-                        showRenameEmoji={showRenameEmoji}
-                        renameEmojiBtnRef={renameEmojiBtnRef}
-                        onOpenRenameEmoji={openRenameEmojiPicker}
+                        isRenaming={rename.renamingChannelId === ch.id}
+                        renameValue={rename.renameValue}
+                        onRenameChange={rename.setRenameValue}
+                        onRenameSubmit={rename.submitChannel}
+                        onRenameCancel={rename.cancel}
+                        showRenameEmoji={rename.showRenameEmoji}
+                        renameEmojiBtnRef={rename.renameEmojiBtnRef}
+                        onOpenRenameEmoji={rename.toggleEmojiPicker}
                       >
                         {!isText && participants.length > 0 && (
                           <VoiceParticipantList
@@ -606,20 +547,14 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
       )}
 
       {/* Emoji picker — portaled to body to escape sidebar overflow:hidden */}
-      {showRenameEmoji && emojiPickerPos && createPortal(
+      {rename.showRenameEmoji && rename.emojiPickerPos && createPortal(
         <div
           className="ch-tree-rename-picker-portal"
-          style={{ position: "fixed", top: emojiPickerPos.top, left: emojiPickerPos.left, zIndex: 9999 }}
+          style={{ position: "fixed", top: rename.emojiPickerPos.top, left: rename.emojiPickerPos.left, zIndex: 9999 }}
         >
           <EmojiPicker
-            onSelect={(emoji) => {
-              setRenameValue((prev) => {
-                const next = prev + emoji;
-                return [...next].length <= 50 ? next : prev;
-              });
-              setShowRenameEmoji(false);
-            }}
-            onClose={() => setShowRenameEmoji(false)}
+            onSelect={rename.insertEmoji}
+            onClose={rename.closeEmojiPicker}
           />
         </div>,
         document.body

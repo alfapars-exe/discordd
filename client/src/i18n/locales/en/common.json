@@ -146,5 +146,9 @@
   "adminSection": "ADMIN",
   "registeredUsers": "Registered Users",
   "updateAvailable": "A new version of HiChat! is available.",
-  "updateApp": "Update"
+  "updateApp": "Update",
+  "updateDownloading": "Downloading update",
+  "updateReadyToInstall": "Update ready",
+  "updateRestartAndInstall": "Restart & Install",
+  "dismiss": "Dismiss"
 }

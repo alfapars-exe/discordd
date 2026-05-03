@@ -1,16 +1,16 @@
 ---
-title: HiChat
-emoji: 💬
+title: HiChat!
+emoji: 🎙️
 colorFrom: purple
 colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Discord-style topluluk — ses kanalları + metin sohbet
+short_description: Discord-style topluluk platformu — sesli kanallar + metin
 ---
 
 <p align="center">
-  <img src="client/public/hichat-icon.svg" alt="HiChat!" width="80" />
+  <img src="icons/logodiscord.png" alt="HiChat!" width="80" />
 </p>
 
 <h1 align="center">HiChat!</h1>
@@ -21,9 +21,9 @@ short_description: Discord-style topluluk — ses kanalları + metin sohbet
 </p>
 
 <p align="center">
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.exe"><img src="icons/btn-windows.svg" alt="Download for Windows" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.dmg"><img src="icons/btn-macos.svg" alt="Download for macOS" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/akinalpfdn/Mqvi/releases/latest/download/mqvi-setup.AppImage"><img src="icons/btn-linux.svg" alt="Download for Linux" height="48" /></a>
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.exe"><img src="icons/btn-windows.svg" alt="Download for Windows" height="48" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.dmg"><img src="icons/btn-macos.svg" alt="Download for macOS" height="48" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.AppImage"><img src="icons/btn-linux.svg" alt="Download for Linux" height="48" /></a>
 </p>
 
 <p align="center">
@@ -343,7 +343,7 @@ The install script generates sensible defaults. If you need to tweak them, edit 
 
 ```bash
 # Clone
-git clone https://github.com/akinalpfdn/Mqvi.git
+git clone https://github.com/alfapars-exe/discordd.git
 cd Mqvi
 
 # Backend

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import type { InputMode } from "../../stores/voiceStore";
+import type { NoiseReductionEngine } from "../../stores/slices/voiceSettingsSlice";
 import { isElectron } from "../../utils/constants";
 import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
 import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url";
@@ -529,7 +530,7 @@ function VoiceSettings() {
             <select
               value={noiseReductionEngine}
               onChange={(e) =>
-                setNoiseReductionEngine(e.target.value as "rnnoise" | "krisp")
+                setNoiseReductionEngine(e.target.value as NoiseReductionEngine)
               }
               style={{
                 background: "var(--input-bg)",
@@ -537,13 +538,18 @@ function VoiceSettings() {
                 border: "1px solid var(--panel-border)",
                 borderRadius: 6,
                 padding: "6px 10px",
-                minWidth: 160,
+                minWidth: 200,
                 fontSize: 14,
                 cursor: "pointer",
               }}
             >
               <option value="rnnoise">{t("nrEngineRnnoise")}</option>
               <option value="krisp">{t("nrEngineKrisp")}</option>
+              <option value="webrtc">{t("nrEngineWebrtc")}</option>
+              <option value="deepfilter">{t("nrEngineDeepfilter")}</option>
+              <option value="dtln">{t("nrEngineDtln")}</option>
+              <option value="speex">{t("nrEngineSpeex")}</option>
+              <option value="dpdfnet">{t("nrEngineDpdfnet")}</option>
             </select>
           </div>
         )}

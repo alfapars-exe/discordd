@@ -1,0 +1,159 @@
+/**
+ * electron/audio-capture.ts — Process-exclusive system audio capture.
+ *
+ * Single responsibility: spawn audio-capture.exe (WASAPI loopback that
+ * EXCLUDES our process tree), parse its 12-byte PCM header from stdout,
+ * and forward header + raw PCM data to the renderer via IPC. Solves the
+ * screen-share echo problem (remote voice played by us doesn't get
+ * re-captured).
+ *
+ * Lifecycle:
+ *   start() spawns the .exe → header parsed → data streamed → stop() kills
+ *
+ * Generation IDs: each start() bumps a generation. Stale exit/error events
+ * from a previously killed process (still draining its handlers) check the
+ * generation and skip cleanup so they don't interfere with a newer session.
+ */
+
+import { app } from "electron";
+import { ChildProcess, spawn } from "child_process";
+import path from "path";
+import { getMainWindow } from "./window";
+
+let captureProcess: ChildProcess | null = null;
+let captureGeneration = 0;
+let headerParsed = false;
+let headerBuffer = Buffer.alloc(0);
+
+function exePath(): string {
+  // Dev: native/audio-capture.exe (project root)
+  // Prod: resources/native/audio-capture.exe (extraResources)
+  const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+  return isDev
+    ? path.join(app.getAppPath(), "native", "audio-capture.exe")
+    : path.join(process.resourcesPath, "native", "audio-capture.exe");
+}
+
+/**
+ * Start system audio capture, excluding our own process tree.
+ * Windows-only — silently no-ops on macOS/Linux.
+ */
+export function startCapture(): void {
+  if (process.platform !== "win32") {
+    console.log("[audio-capture] not available on this platform");
+    return;
+  }
+
+  // If a previous capture is still running, kill it first (handles rapid
+  // stop→start cycles where the old process hasn't exited yet).
+  if (captureProcess) {
+    console.log("[audio-capture] killing previous process before restart");
+    captureProcess.kill();
+    captureProcess = null;
+  }
+
+  // Bump generation — old handlers will see the change and skip cleanup.
+  const thisGen = ++captureGeneration;
+  headerParsed = false;
+  headerBuffer = Buffer.alloc(0);
+
+  const exe = exePath();
+  console.log(`[audio-capture] starting gen=${thisGen}: ${exe} (exclude PID ${process.pid})`);
+
+  captureProcess = spawn(exe, [process.pid.toString()], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  captureProcess.stdout?.on("data", (chunk: Buffer) => {
+    if (thisGen !== captureGeneration) return;
+    const win = getMainWindow();
+    if (!headerParsed) {
+      // Accumulate until full 12-byte header
+      headerBuffer = Buffer.concat([headerBuffer, chunk]);
+      if (headerBuffer.length >= 12) {
+        const sampleRate = headerBuffer.readUInt32LE(0);
+        const channels = headerBuffer.readUInt16LE(4);
+        const bitsPerSample = headerBuffer.readUInt16LE(6);
+        const formatTag = headerBuffer.readUInt32LE(8);
+        console.log(
+          `[audio-capture] format gen=${thisGen}: ${sampleRate}Hz ${channels}ch ${bitsPerSample}bit tag=${formatTag}`,
+        );
+        win?.webContents.send("capture-audio-header", { sampleRate, channels, bitsPerSample, formatTag });
+        headerParsed = true;
+        const remaining = headerBuffer.subarray(12);
+        if (remaining.length > 0) win?.webContents.send("capture-audio-data", remaining);
+        headerBuffer = Buffer.alloc(0);
+      }
+    } else {
+      win?.webContents.send("capture-audio-data", chunk);
+    }
+  });
+
+  captureProcess.stderr?.on("data", (data: Buffer) => {
+    if (thisGen !== captureGeneration) return;
+    const msg = data.toString().trim();
+    console.log(`[audio-capture] stderr: ${msg}`);
+    getMainWindow()?.webContents.send("capture-audio-error", msg);
+  });
+
+  captureProcess.on("exit", (code) => {
+    console.log(`[audio-capture] gen=${thisGen} exited code=${code}`);
+    if (thisGen !== captureGeneration) {
+      console.log(`[audio-capture] ignoring stale exit (current=${captureGeneration})`);
+      return;
+    }
+    const win = getMainWindow();
+    win?.webContents.send("capture-audio-error", `EXIT code=${code}`);
+    captureProcess = null;
+    headerParsed = false;
+    win?.webContents.send("capture-audio-stopped");
+  });
+
+  captureProcess.on("error", (err) => {
+    if (thisGen !== captureGeneration) return;
+    console.error("[audio-capture] spawn error:", err);
+    const win = getMainWindow();
+    win?.webContents.send("capture-audio-error", `SPAWN ERROR: ${err.message}`);
+    captureProcess = null;
+    win?.webContents.send("capture-audio-stopped");
+  });
+}
+
+/** Stop the running capture and prevent its exit handler from firing. */
+export function stopCapture(): void {
+  if (process.platform !== "win32") return;
+  if (!captureProcess) return;
+  console.log(`[audio-capture] stopping gen=${captureGeneration}`);
+  captureProcess.kill();
+  captureProcess = null;
+  headerParsed = false;
+  // Bump generation so stale exit handler skips renderer notifications
+  captureGeneration++;
+}
+
+/**
+ * Block app quit until the capture process has actually exited (or 2s timeout).
+ * Prevents Windows from force-killing it mid-cleanup which causes a visible
+ * STATUS_BREAKPOINT crash dialog.
+ *
+ * Returns null if no process is running (caller can quit immediately).
+ * Otherwise returns a promise that resolves when the process is gone.
+ */
+export function shutdownCapture(): Promise<void> | null {
+  if (!captureProcess) return null;
+  const proc = captureProcess;
+  captureGeneration++;
+  captureProcess = null;
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      proc.removeAllListeners("exit");
+      resolve();
+    };
+    proc.on("exit", finish);
+    setTimeout(finish, 2000);
+    proc.kill();
+  });
+}
