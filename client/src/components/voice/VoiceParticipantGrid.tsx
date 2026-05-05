@@ -84,12 +84,13 @@ function VoiceParticipantGrid() {
     return (
       <>
         {currentVoiceChannelId && <MusicBotPanel channelId={currentVoiceChannelId} />}
-        <div className="voice-grid-strip" role="list">
+        <div className="voice-grid-strip">
           {participants.map((participant) => (
             <VoiceParticipant
               key={participant.identity}
               participant={participant}
               compact
+              videoInAvatar={hasScreenShare}
             />
           ))}
         </div>
@@ -101,7 +102,7 @@ function VoiceParticipantGrid() {
   return (
     <>
       {currentVoiceChannelId && <MusicBotPanel channelId={currentVoiceChannelId} />}
-      <div className="voice-room-grid" role="list">
+      <div className="voice-room-grid">
         {participants.map((participant) => (
           <VoiceParticipant
             key={participant.identity}
