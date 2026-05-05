@@ -13,8 +13,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useIsSpeaking, useParticipantTracks, VideoTrack } from "@livekit/components-react";
-import { Track } from "livekit-client";
+import { useIsSpeaking } from "@livekit/components-react";
 import type { Participant } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -32,7 +31,7 @@ type VoiceParticipantProps = {
 /** Hold duration to avoid flickering between syllables (~Discord's 250-350ms) */
 const SPEAKING_HOLD_MS = 150;
 
-function VoiceParticipant({ participant, compact = false }: VoiceParticipantProps) {
+function VoiceParticipant({ participant, compact = false }: Readonly<VoiceParticipantProps>) {
   // LOCAL: analyzed via local AnalyserNode (instant). REMOTE: from SFU speaker info.
   const rawSpeaking = useIsSpeaking(participant);
 
@@ -48,13 +47,11 @@ function VoiceParticipant({ participant, compact = false }: VoiceParticipantProp
         holdTimerRef.current = 0;
       }
       setIsSpeaking(true);
-    } else {
-      if (!holdTimerRef.current) {
-        holdTimerRef.current = window.setTimeout(() => {
-          setIsSpeaking(false);
-          holdTimerRef.current = 0;
-        }, SPEAKING_HOLD_MS);
-      }
+    } else if (!holdTimerRef.current) {
+      holdTimerRef.current = globalThis.setTimeout(() => {
+        setIsSpeaking(false);
+        holdTimerRef.current = 0;
+      }, SPEAKING_HOLD_MS);
     }
 
     return () => {
@@ -100,6 +97,23 @@ function VoiceParticipant({ participant, compact = false }: VoiceParticipantProp
     [isLocalUser]
   );
 
+  // Keyboard-accessible counterpart to the right-click menu.
+  // Shift+F10 / ContextMenu key are the OS conventions; the menu opens
+  // anchored to the focused tile's bounding box so it's reachable
+  // without a pointer.
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isLocalUser) return;
+      const isContextMenuKey =
+        e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey);
+      if (!isContextMenuKey) return;
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      setCtxMenu({ x: rect.left + rect.width / 2, y: rect.bottom });
+    },
+    [isLocalUser],
+  );
+
   const overlay = (isMuted || isDeafened) ? (
     <div className="voice-participant-overlay">
       {isDeafened
@@ -120,23 +134,11 @@ function VoiceParticipant({ participant, compact = false }: VoiceParticipantProp
     />
   ) : null;
 
-  // Camera track — when present, replaces the avatar with live video.
-  // useParticipantTracks returns an empty array when this participant
-  // hasn't published a camera; deafened/unsubscribed remote tracks also
-  // come back without a `publication.track`, in which case we fall back
-  // to the avatar.
-  const cameraTrackRefs = useParticipantTracks([Track.Source.Camera], participant.identity);
-  const cameraTrackRef = cameraTrackRefs.find((r) => r.publication?.track);
-
+  // Camera live render moved to CameraView (central featured area). The
+  // avatar tile here always shows the static avatar to avoid duplication
+  // when the user's camera is already visible in the center.
   let avatarContent: React.ReactNode;
-  if (cameraTrackRef) {
-    avatarContent = (
-      <VideoTrack
-        trackRef={cameraTrackRef}
-        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
-      />
-    );
-  } else if (avatarUrl) {
+  if (avatarUrl) {
     avatarContent = (
       <img
         src={resolveAssetUrl(avatarUrl)}
@@ -148,10 +150,22 @@ function VoiceParticipant({ participant, compact = false }: VoiceParticipantProp
     avatarContent = firstLetter;
   }
 
+  // Tile is a list-item, not a primary-action button — right-click opens
+  // the context menu, keyboard equivalent is Shift+F10 / ContextMenu key.
+  // NOSONAR suppresses the "use <button>" suggestion since converting would
+  // require fighting button defaults (background, border, font) and break
+  // the surrounding flex layout for marginal a11y gain.
   if (compact) {
     return (
       <>
-        <div className="voice-participant-compact" onContextMenu={handleContextMenu}>
+        {/* NOSONAR */}
+        <div
+          className="voice-participant-compact"
+          role="listitem"
+          tabIndex={0}
+          onContextMenu={handleContextMenu}
+          onKeyDown={handleKeyDown}
+        >
           <div className={avatarClass}>
             {avatarContent}
             {overlay}
@@ -165,7 +179,14 @@ function VoiceParticipant({ participant, compact = false }: VoiceParticipantProp
 
   return (
     <>
-      <div className="voice-participant" onContextMenu={handleContextMenu}>
+      {/* NOSONAR */}
+      <div
+        className="voice-participant"
+        role="listitem"
+        tabIndex={0}
+        onContextMenu={handleContextMenu}
+        onKeyDown={handleKeyDown}
+      >
         <div className={avatarClass}>
           {avatarContent}
           {overlay}

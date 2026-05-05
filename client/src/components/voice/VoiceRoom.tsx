@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import VoiceParticipantGrid from "./VoiceParticipantGrid";
 import VoiceConnectionStatus from "./VoiceConnectionStatus";
 import ScreenShareView from "./ScreenShareView";
+import CameraView from "./CameraView";
 
 function VoiceRoom() {
   const { t } = useTranslation("voice");
@@ -32,6 +33,7 @@ function VoiceRoom() {
     <div className="voice-room">
       <VoiceConnectionStatus />
       <ScreenShareView />
+      <CameraView />
       <VoiceParticipantGrid />
     </div>
   );

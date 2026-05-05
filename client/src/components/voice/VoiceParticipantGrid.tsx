@@ -10,7 +10,8 @@
  */
 
 import { useMemo } from "react";
-import { useParticipants } from "@livekit/components-react";
+import { useParticipants, useTracks } from "@livekit/components-react";
+import { Track } from "livekit-client";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { isScreenShareIdentity } from "../../utils/constants";
@@ -57,9 +58,19 @@ function VoiceParticipantGrid() {
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
   const hasScreenShare = Object.values(watchingScreenShares).some(Boolean);
 
+  // Cameras switch the grid to compact-strip mode the same way screen shares
+  // do, so the central area can host CameraView (rendered above this grid in
+  // VoiceRoom). Auto-show — no watching opt-in.
+  const cameraTracks = useTracks(
+    [{ source: Track.Source.Camera, withPlaceholder: false }],
+    { onlySubscribed: false },
+  );
+  const hasCamera = cameraTracks.length > 0;
+  const hasFeatured = hasScreenShare || hasCamera;
+
   if (participants.length === 0) {
-    // Don't show empty message when screen share is active
-    if (hasScreenShare) return null;
+    // Don't show empty message when a featured tile is occupying the center
+    if (hasFeatured) return null;
 
     return (
       <div className="voice-room-loading">
@@ -68,12 +79,12 @@ function VoiceParticipantGrid() {
     );
   }
 
-  // Compact strip below screen share
-  if (hasScreenShare) {
+  // Compact strip below screen share or camera view
+  if (hasFeatured) {
     return (
       <>
         {currentVoiceChannelId && <MusicBotPanel channelId={currentVoiceChannelId} />}
-        <div className="voice-grid-strip">
+        <div className="voice-grid-strip" role="list">
           {participants.map((participant) => (
             <VoiceParticipant
               key={participant.identity}
@@ -90,7 +101,7 @@ function VoiceParticipantGrid() {
   return (
     <>
       {currentVoiceChannelId && <MusicBotPanel channelId={currentVoiceChannelId} />}
-      <div className="voice-room-grid">
+      <div className="voice-room-grid" role="list">
         {participants.map((participant) => (
           <VoiceParticipant
             key={participant.identity}

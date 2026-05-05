@@ -86,8 +86,26 @@ export function useTrackSubscriptions(room: Room): void {
         const { isDeafened: deaf, isServerDeafened: srvDeaf } =
           useVoiceStore.getState();
         publication.setSubscribed(!(deaf || srvDeaf));
+        return;
+      }
+
+      // Cameras are auto-subscribed: any participant publishing a camera
+      // appears in the central CameraView for everyone, no opt-in.
+      if (publication.source === Track.Source.Camera) {
+        publication.setSubscribed(true);
       }
     }
+
+    // Subscribe to existing camera publications on (re)mount — TrackPublished
+    // only fires for NEW tracks, so participants who joined with cameras
+    // already on need explicit subscription here.
+    room.remoteParticipants.forEach((participant) => {
+      participant.trackPublications.forEach((pub) => {
+        if (pub.source === Track.Source.Camera) {
+          (pub as RemoteTrackPublication).setSubscribed(true);
+        }
+      });
+    });
 
     room.on(RoomEvent.TrackPublished, handleTrackPublished);
     return () => {
