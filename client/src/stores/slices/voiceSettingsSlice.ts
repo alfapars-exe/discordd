@@ -12,7 +12,7 @@ import type { VoiceStore } from "../voiceStore";
 
 export type InputMode = "voice_activity" | "push_to_talk";
 export type ScreenShareQuality = "720p" | "1080p" | "1440p";
-export type ScreenShareFps = 30 | 60;
+export type ScreenShareFps = 30 | 60 | 120;
 
 /**
  * Noise suppression level — controls the post-RNNoise VAD gate's open/close

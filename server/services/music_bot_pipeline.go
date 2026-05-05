@@ -32,17 +32,23 @@ import (
 // fast (sub-second) so the user sees the bot appear in the participant
 // list immediately after /play.
 func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance) error {
+	log.Printf("[music] connectBotToRoom: starting channel=%s server=%s", bot.channelID, bot.serverID)
 	lkInstance, err := s.livekit.GetByServerID(ctx, bot.serverID)
 	if err != nil {
+		log.Printf("[music] connectBotToRoom: livekit instance lookup failed server=%s err=%v", bot.serverID, err)
 		return fmt.Errorf("livekit instance lookup: %w", err)
 	}
+	log.Printf("[music] connectBotToRoom: livekit instance resolved url=%s self_hosted=%v",
+		lkInstance.URL, !lkInstance.IsPlatformManaged)
 
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
 	if err != nil {
+		log.Printf("[music] connectBotToRoom: api key decrypt failed instance=%s err=%v", lkInstance.ID, err)
 		return fmt.Errorf("api key decrypt: %w", err)
 	}
 	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
 	if err != nil {
+		log.Printf("[music] connectBotToRoom: api secret decrypt failed instance=%s err=%v", lkInstance.ID, err)
 		return fmt.Errorf("api secret decrypt: %w", err)
 	}
 
@@ -67,14 +73,17 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 		return fmt.Errorf("jwt: %w", err)
 	}
 
+	log.Printf("[music] connectBotToRoom: dialing livekit url=%s room=%s", lkInstance.URL, bot.roomName)
 	room, err := lksdk.ConnectToRoomWithToken(lkInstance.URL, token, &lksdk.RoomCallback{
 		OnDisconnected: func() {
 			log.Printf("[music] bot disconnected channel=%s", bot.channelID)
 		},
 	})
 	if err != nil {
+		log.Printf("[music] connectBotToRoom: livekit dial failed url=%s err=%v", lkInstance.URL, err)
 		return fmt.Errorf("livekit connect: %w", err)
 	}
+	log.Printf("[music] connectBotToRoom: livekit connected room=%s", bot.roomName)
 
 	track, err := lksdk.NewLocalSampleTrack(webrtc.RTPCodecCapability{
 		MimeType:  webrtc.MimeTypeOpus,
@@ -83,20 +92,24 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	})
 	if err != nil {
 		room.Disconnect()
+		log.Printf("[music] connectBotToRoom: track create failed err=%v", err)
 		return fmt.Errorf("track create: %w", err)
 	}
 
-	if _, err := room.LocalParticipant.PublishTrack(track, &lksdk.TrackPublicationOptions{
+	pub, err := room.LocalParticipant.PublishTrack(track, &lksdk.TrackPublicationOptions{
 		Name:   "music",
 		Source: livekitproto.TrackSource_MICROPHONE,
-	}); err != nil {
+	})
+	if err != nil {
 		room.Disconnect()
+		log.Printf("[music] connectBotToRoom: publish track failed err=%v", err)
 		return fmt.Errorf("publish track: %w", err)
 	}
 
 	bot.lkRoom = room
 	bot.audioTrack = track
-	log.Printf("[music] bot joined room=%s identity=%s:%s", bot.roomName, models.MusicBotUserID, bot.channelID)
+	log.Printf("[music] bot joined room=%s identity=%s:%s pub_sid=%s",
+		bot.roomName, models.MusicBotUserID, bot.channelID, pub.SID())
 	return nil
 }
 
@@ -147,6 +160,9 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 // each Opus page into the LiveKit audio track. Returns when the track ends
 // (subprocess EOF), is skipped (Skip() killed the cmd), or errors.
 func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) error {
+	log.Printf("[music] playTrack start: channel=%s video=%s title=%q",
+		bot.channelID, track.VideoID, track.Title)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -181,22 +197,28 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 
 	ytOut, err := yt.StdoutPipe()
 	if err != nil {
+		log.Printf("[music] playTrack: yt-dlp stdout pipe failed err=%v", err)
 		return fmt.Errorf("yt-dlp pipe: %w", err)
 	}
 	ff.Stdin = ytOut
 
 	ffOut, err := ff.StdoutPipe()
 	if err != nil {
+		log.Printf("[music] playTrack: ffmpeg stdout pipe failed err=%v", err)
 		return fmt.Errorf("ffmpeg pipe: %w", err)
 	}
 
 	if err := ff.Start(); err != nil {
+		log.Printf("[music] playTrack: ffmpeg start failed (binary missing in PATH?) err=%v", err)
 		return fmt.Errorf("ffmpeg start: %w", err)
 	}
 	if err := yt.Start(); err != nil {
+		log.Printf("[music] playTrack: yt-dlp start failed (binary missing in PATH?) err=%v", err)
 		_ = ff.Process.Kill()
 		return fmt.Errorf("yt-dlp start: %w", err)
 	}
+	log.Printf("[music] playTrack: pipeline started ytdlp_pid=%d ffmpeg_pid=%d",
+		yt.Process.Pid, ff.Process.Pid)
 
 	bot.mu.Lock()
 	bot.cmd = ff // ffmpeg holds the pipeline; killing it cascades to yt-dlp via EOF
@@ -235,22 +257,33 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 func pumpOggToTrack(reader io.Reader, track *lksdk.LocalSampleTrack) error {
 	ogg, _, err := oggreader.NewWith(reader)
 	if err != nil {
+		log.Printf("[music] pumpOggToTrack: oggreader init failed err=%v", err)
 		return fmt.Errorf("oggreader init: %w", err)
 	}
 	const frameDuration = 20 * time.Millisecond
+	samplesWritten := 0
 	for {
 		page, _, perr := ogg.ParseNextPage()
 		if errors.Is(perr, io.EOF) {
+			log.Printf("[music] pumpOggToTrack: clean EOF after %d sample(s)", samplesWritten)
 			return nil
 		}
 		if perr != nil {
+			log.Printf("[music] pumpOggToTrack: ogg parse err after %d sample(s): %v", samplesWritten, perr)
 			return fmt.Errorf("ogg parse: %w", perr)
 		}
 		if len(page) == 0 {
 			continue
 		}
 		if werr := track.WriteSample(media.Sample{Data: page, Duration: frameDuration}, nil); werr != nil {
+			log.Printf("[music] pumpOggToTrack: WriteSample failed after %d sample(s): %v", samplesWritten, werr)
 			return fmt.Errorf("write sample: %w", werr)
+		}
+		samplesWritten++
+		if samplesWritten == 1 {
+			// One-shot log so we know the audio path actually started — silence
+			// here = pipeline broken between ffmpeg stdout and the LK track.
+			log.Printf("[music] pumpOggToTrack: first sample written successfully")
 		}
 	}
 }

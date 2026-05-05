@@ -62,6 +62,11 @@ RUN apt-get update && \
     apt-get purge -y --auto-remove curl && \
     rm -rf /var/lib/apt/lists/*
 
+# Sanity check — fail the image build immediately if yt-dlp / ffmpeg /
+# python3 aren't actually executable. Prevents shipping a Space where the
+# music bot silently fails at runtime due to a missing PATH entry.
+RUN yt-dlp --version && ffmpeg -version | head -1 && python3 --version
+
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server
 

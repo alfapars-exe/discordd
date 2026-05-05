@@ -13,7 +13,8 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useIsSpeaking } from "@livekit/components-react";
+import { useIsSpeaking, useParticipantTracks, VideoTrack } from "@livekit/components-react";
+import { Track } from "livekit-client";
 import type { Participant } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -119,15 +120,33 @@ function VoiceParticipant({ participant, compact = false }: VoiceParticipantProp
     />
   ) : null;
 
-  const avatarContent = avatarUrl ? (
-    <img
-      src={resolveAssetUrl(avatarUrl)}
-      alt={displayName}
-      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
-    />
-  ) : (
-    firstLetter
-  );
+  // Camera track — when present, replaces the avatar with live video.
+  // useParticipantTracks returns an empty array when this participant
+  // hasn't published a camera; deafened/unsubscribed remote tracks also
+  // come back without a `publication.track`, in which case we fall back
+  // to the avatar.
+  const cameraTrackRefs = useParticipantTracks([Track.Source.Camera], participant.identity);
+  const cameraTrackRef = cameraTrackRefs.find((r) => r.publication?.track);
+
+  let avatarContent: React.ReactNode;
+  if (cameraTrackRef) {
+    avatarContent = (
+      <VideoTrack
+        trackRef={cameraTrackRef}
+        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+      />
+    );
+  } else if (avatarUrl) {
+    avatarContent = (
+      <img
+        src={resolveAssetUrl(avatarUrl)}
+        alt={displayName}
+        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+      />
+    );
+  } else {
+    avatarContent = firstLetter;
+  }
 
   if (compact) {
     return (

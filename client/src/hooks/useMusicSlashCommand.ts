@@ -62,6 +62,9 @@ export function useMusicSlashCommand() {
           // cpu-basic HF tier; keep the user informed.
           addToast("info", t("addingTrack"));
           const res = await playMusic(serverId, voiceChannelId, arg);
+          // Log full response so silent failures (network glitch, server
+          // panic, success:false with empty error) leave a paper trail.
+          console.warn("[music] playMusic response:", res);
           if (res.success && res.data) {
             const count = res.data.added_tracks.length;
             addToast("success", t("addedToQueue", { count }));
