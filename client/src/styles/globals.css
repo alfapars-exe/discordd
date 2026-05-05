@@ -2058,8 +2058,10 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .voice-room-grid { flex:1;display:flex;flex-wrap:wrap;gap:16px;padding:24px;align-content:center;justify-content:center;overflow-y:auto; }
 .voice-grid-strip { flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:16px;padding:12px 16px;border-top:1px solid var(--b1); }
 
-/* Participant — full mode */
-.voice-participant { display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px; }
+/* Participant — full mode (rendered as <button> for native a11y; the resets
+   below strip the default user-agent button styling so the tile matches the
+   previous div appearance). */
+.voice-participant { display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;background:none;border:none;color:inherit;font:inherit;cursor:default;text-align:inherit; }
 /* No box-shadow transition: we want the green speaking ring to light up
    the same instant useSpeakingDetection flips activeSpeakers — a 150ms
    ease-in adds perceptible lag to the otherwise tight feedback loop. */
@@ -2069,8 +2071,8 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .voice-participant-overlay { position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;border-radius:999px;background:var(--bg-3);display:flex;align-items:center;justify-content:center; }
 .voice-participant-overlay svg { width:13px;height:13px;color:var(--red); }
 
-/* Participant — compact mode */
-.voice-participant-compact { display:flex;align-items:center;gap:8px; }
+/* Participant — compact mode (also a <button>; same reset as above). */
+.voice-participant-compact { display:flex;align-items:center;gap:8px;background:none;border:none;color:inherit;font:inherit;cursor:default;text-align:inherit;padding:0; }
 .voice-participant-compact .voice-participant-avatar { width:40px;height:40px;font-size:14px; }
 .voice-participant-compact .voice-participant-avatar.speaking { box-shadow:0 0 0 1.5px var(--bg-2),0 0 0 3px var(--green); }
 .voice-participant-compact .voice-participant-name { font-size:13px;color:var(--t1);max-width:120px;margin-top:0; }

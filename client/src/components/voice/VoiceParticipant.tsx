@@ -13,7 +13,8 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useIsSpeaking } from "@livekit/components-react";
+import { useIsSpeaking, useParticipantTracks, VideoTrack } from "@livekit/components-react";
+import { Track } from "livekit-client";
 import type { Participant } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -26,12 +27,20 @@ type VoiceParticipantProps = {
   participant: Participant;
   /** Compact mode for screen share strip */
   compact?: boolean;
+  /** Render the participant's camera in the avatar circle when their camera
+   *  is on. Used by the strip below a screen share so users still see faces;
+   *  off when CameraView is the central tile (would double-render the camera). */
+  videoInAvatar?: boolean;
 };
 
 /** Hold duration to avoid flickering between syllables (~Discord's 250-350ms) */
 const SPEAKING_HOLD_MS = 150;
 
-function VoiceParticipant({ participant, compact = false }: Readonly<VoiceParticipantProps>) {
+function VoiceParticipant({
+  participant,
+  compact = false,
+  videoInAvatar = false,
+}: Readonly<VoiceParticipantProps>) {
   // LOCAL: analyzed via local AnalyserNode (instant). REMOTE: from SFU speaker info.
   const rawSpeaking = useIsSpeaking(participant);
 
@@ -102,7 +111,7 @@ function VoiceParticipant({ participant, compact = false }: Readonly<VoicePartic
   // anchored to the focused tile's bounding box so it's reachable
   // without a pointer.
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
       if (isLocalUser) return;
       const isContextMenuKey =
         e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey);
@@ -134,11 +143,20 @@ function VoiceParticipant({ participant, compact = false }: Readonly<VoicePartic
     />
   ) : null;
 
-  // Camera live render moved to CameraView (central featured area). The
-  // avatar tile here always shows the static avatar to avoid duplication
-  // when the user's camera is already visible in the center.
+  // Camera in avatar — only when explicitly requested by the parent (strip
+  // below a screen share) so we don't double-render with CameraView.
+  const cameraTrackRefs = useParticipantTracks([Track.Source.Camera], participant.identity);
+  const cameraTrackRef = cameraTrackRefs.find((r) => r.publication?.track);
+
   let avatarContent: React.ReactNode;
-  if (avatarUrl) {
+  if (videoInAvatar && cameraTrackRef) {
+    avatarContent = (
+      <VideoTrack
+        trackRef={cameraTrackRef}
+        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+      />
+    );
+  } else if (avatarUrl) {
     avatarContent = (
       <img
         src={resolveAssetUrl(avatarUrl)}
@@ -150,40 +168,14 @@ function VoiceParticipant({ participant, compact = false }: Readonly<VoicePartic
     avatarContent = firstLetter;
   }
 
-  // Tile is a list-item, not a primary-action button — right-click opens
-  // the context menu, keyboard equivalent is Shift+F10 / ContextMenu key.
-  // NOSONAR suppresses the "use <button>" suggestion since converting would
-  // require fighting button defaults (background, border, font) and break
-  // the surrounding flex layout for marginal a11y gain.
-  if (compact) {
-    return (
-      <>
-        {/* NOSONAR */}
-        <div
-          className="voice-participant-compact"
-          role="listitem"
-          tabIndex={0}
-          onContextMenu={handleContextMenu}
-          onKeyDown={handleKeyDown}
-        >
-          <div className={avatarClass}>
-            {avatarContent}
-            {overlay}
-          </div>
-          <span className="voice-participant-name">{displayName}</span>
-        </div>
-        {contextMenu}
-      </>
-    );
-  }
-
+  // Native <button> with class-driven CSS reset — SonarQube wants real
+  // interactive elements rather than role="button"/"listitem" on a div.
+  const tileClass = compact ? "voice-participant-compact" : "voice-participant";
   return (
     <>
-      {/* NOSONAR */}
-      <div
-        className="voice-participant"
-        role="listitem"
-        tabIndex={0}
+      <button
+        type="button"
+        className={tileClass}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
       >
@@ -192,7 +184,7 @@ function VoiceParticipant({ participant, compact = false }: Readonly<VoicePartic
           {overlay}
         </div>
         <span className="voice-participant-name">{displayName}</span>
-      </div>
+      </button>
       {contextMenu}
     </>
   );
