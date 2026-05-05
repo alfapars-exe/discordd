@@ -46,14 +46,20 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
     const fps = screenShareFps;
     const lowerLayer = new VideoPreset(1280, 720, 800_000, 15);
 
+    // 120-fps tier roughly doubles 60-fps bitrate at the same resolution
+    // because high-frame-rate motion content benefits from extra headroom
+    // (less compression artefacts on fast pans). 30 → 60 → 120 ladder.
+    const bitrate = (sixty: number, thirty: number, oneTwenty: number) =>
+      fps === 120 ? oneTwenty : fps === 60 ? sixty : thirty;
+
     if (screenShareQuality === "1440p") {
       return {
         screenShareEncoding: {
-          maxBitrate: fps === 60 ? 12_000_000 : 8_000_000,
+          maxBitrate: bitrate(12_000_000, 8_000_000, 18_000_000),
           maxFramerate: fps,
         },
         screenShareSimulcastLayers: [
-          new VideoPreset(1920, 1080, fps === 60 ? 6_000_000 : 4_000_000, fps),
+          new VideoPreset(1920, 1080, bitrate(6_000_000, 4_000_000, 9_000_000), fps),
           lowerLayer,
         ],
         videoCodec: "vp9",
@@ -63,11 +69,11 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
     if (screenShareQuality === "1080p") {
       return {
         screenShareEncoding: {
-          maxBitrate: fps === 60 ? 8_000_000 : 5_000_000,
+          maxBitrate: bitrate(8_000_000, 5_000_000, 12_000_000),
           maxFramerate: fps,
         },
         screenShareSimulcastLayers: [
-          new VideoPreset(1280, 720, fps === 60 ? 2_500_000 : 1_500_000, fps),
+          new VideoPreset(1280, 720, bitrate(2_500_000, 1_500_000, 4_000_000), fps),
           lowerLayer,
         ],
         videoCodec: "vp9",
@@ -76,7 +82,7 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
 
     return {
       screenShareEncoding: {
-        maxBitrate: fps === 60 ? 2_500_000 : 1_500_000,
+        maxBitrate: bitrate(2_500_000, 1_500_000, 4_000_000),
         maxFramerate: fps,
       },
       screenShareSimulcastLayers: [lowerLayer],

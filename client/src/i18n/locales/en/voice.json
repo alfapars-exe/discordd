@@ -29,6 +29,8 @@
   "localUnmute": "Unmute For Me",
   "watchScreenShare": "Watch screen share",
   "stopWatchingScreenShare": "Stop watching screen share",
+  "cameraOn": "Turn camera on",
+  "cameraOff": "Turn camera off",
   "serverMute": "Server Mute",
   "serverUnmute": "Server Unmute",
   "serverDeafen": "Server Deafen",

@@ -39,6 +39,8 @@ function UserBar({
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const isStreaming = useVoiceStore((s) => s.isStreaming);
+  const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
+  const setCameraEnabled = useVoiceStore((s) => s.setCameraEnabled);
   const openSettings = useSettingsStore((s) => s.openSettings);
 
   const noiseReduction = useVoiceStore((s) => s.noiseReduction);
@@ -280,6 +282,34 @@ function UserBar({
           </button>
         </div>
 
+        {/* Camera toggle — only meaningful when in a voice channel. We render
+            it always (consistent with mute/deafen) but only flip the store
+            flag; VoiceStateManager picks up isCameraEnabled and publishes /
+            unpublishes the LiveKit camera track. */}
+        {isInVoice && (
+          <div className="ub-ctrl-group">
+            <button
+              className={`ub-ctrl${isCameraEnabled ? " active" : ""}`}
+              onClick={() => setCameraEnabled(!isCameraEnabled)}
+              title={isCameraEnabled ? t("cameraOff") : t("cameraOn")}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                {isCameraEnabled ? (
+                  <>
+                    <path d="M23 7l-7 5 7 5V7z" />
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Settings button */}
         <button
           className="ub-ctrl ub-settings"
@@ -378,6 +408,7 @@ function ScreenShareQualityPopup({
   const fpsOptions: { value: ScreenShareFps; label: string }[] = [
     { value: 30, label: "30 fps" },
     { value: 60, label: "60 fps" },
+    { value: 120, label: "120 fps" },
   ];
 
   useEffect(() => {
