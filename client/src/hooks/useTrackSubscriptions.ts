@@ -141,6 +141,38 @@ export function useTrackSubscriptions(room: Room): void {
     });
   }, [watchingScreenShares, room]);
 
+  // Effect 3.5: when a remote participant is discovered after our useEffects
+  // have mounted (slow iOS Safari, network re-stabilization, etc.), the SDK
+  // surfaces them via ParticipantConnected with their existing publications
+  // already in trackPublications — but it does NOT re-fire TrackPublished
+  // for those pre-existing tracks. Walk them here so cameras and mics get
+  // subscribed without waiting for a new publish.
+  useEffect(() => {
+    function handleParticipantConnected(participant: RemoteParticipant) {
+      const { isDeafened: deaf, isServerDeafened: srvDeaf, watchingScreenShares: ws } =
+        useVoiceStore.getState();
+      const watching = ws[resolveUserId(participant.identity)] ?? false;
+
+      participant.trackPublications.forEach((pub) => {
+        if (pub.source === Track.Source.Camera) {
+          pub.setSubscribed(true);
+        } else if (pub.source === Track.Source.Microphone) {
+          pub.setSubscribed(!(deaf || srvDeaf));
+        } else if (
+          pub.source === Track.Source.ScreenShare ||
+          pub.source === Track.Source.ScreenShareAudio
+        ) {
+          pub.setSubscribed(watching);
+        }
+      });
+    }
+
+    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    };
+  }, [room]);
+
   // Effect 4: clean up watch state when a remote stops sharing or leaves.
   useEffect(() => {
     function handleRemoteTrackUnpublished(
