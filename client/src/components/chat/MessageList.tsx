@@ -35,7 +35,18 @@ function MessageList() {
   const members = useActiveMembers();
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
+  const contentRef = useRef<HTMLDivElement>(null);
+  /**
+   * "Should we stay pinned to the bottom?" — intent flag updated by user
+   * scrolling. Replaces the older `stickToBottomRef` which mixed "current
+   * position" with "user's intent" and missed the case where async
+   * content (images, embeds, GIFs) expanded after we'd already scrolled
+   * to bottom, pushing the last message out of view without us catching
+   * up via a ResizeObserver.
+   */
+  const stickToBottomRef = useRef(true);
+  /** Last observed scrollTop — used to detect direction in handleScroll. */
+  const prevScrollTopRef = useRef(0);
   const prevMessageCountRef = useRef(0);
 
   // ─── Mention Navigation State ───
@@ -87,7 +98,7 @@ function MessageList() {
 
   // Fetch messages on channel change, disable auto-scroll during transition
   useEffect(() => {
-    isAtBottomRef.current = false;
+    stickToBottomRef.current = false;
 
     if (channelId) {
       fetchMessages();
@@ -96,11 +107,33 @@ function MessageList() {
 
   // Auto-scroll on new message (only when already at bottom)
   useEffect(() => {
-    if (messages.length > prevMessageCountRef.current && isAtBottomRef.current) {
+    if (messages.length > prevMessageCountRef.current && stickToBottomRef.current) {
       scrollToBottom();
     }
     prevMessageCountRef.current = messages.length;
   }, [messages.length]);
+
+  // Pin-to-bottom on async content load. Without this, images / embeds /
+  // GIFs that resolve AFTER initial render grow the message list height
+  // and push the latest message off-screen — even though we WERE at the
+  // bottom when the message arrived. ResizeObserver fires on every
+  // content size change; if the user hasn't scrolled away, re-snap to
+  // the bottom.
+  //
+  // Using stickToBottomRef as the trigger (intent) instead of measuring
+  // current position avoids a feedback loop where the auto-scroll
+  // changes scrollTop and the observer re-fires.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
 
   /** Restore scroll position — runs before paint via useLayoutEffect. */
   useLayoutEffect(() => {
@@ -108,12 +141,19 @@ function MessageList() {
       const savedPos = scrollPositions.get(channelId);
       if (savedPos !== undefined) {
         scrollRef.current.scrollTop = savedPos;
+        // Stick-to-bottom intent matches whatever position we restored to:
+        // if the user was within ~20px of the floor when they left this
+        // channel, keep them pinned as new messages arrive.
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+        stickToBottomRef.current = scrollHeight - scrollTop - clientHeight < 20;
+        prevScrollTopRef.current = scrollTop;
       } else {
         scrollToBottom();
+        // No saved position → user just opened the channel → keep them pinned.
+        stickToBottomRef.current = true;
+        prevScrollTopRef.current = scrollRef.current.scrollTop;
       }
       prevMessageCountRef.current = messages.length;
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 20;
     }
   }, [isLoading, channelId]);
 
@@ -141,13 +181,26 @@ function MessageList() {
     }
   }
 
-  /** Scroll handler — save position + check if at bottom + trigger infinite scroll */
+  /** Scroll handler — save position + update stick-to-bottom intent + trigger infinite scroll */
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
 
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const prev = prevScrollTopRef.current;
 
-    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 20;
+    // Direction-aware sticky update. The old `< 20px from bottom` check
+    // was correct for the FALLING edge (user-scrolled-up-from-bottom)
+    // but flipped sticky=true back on every programmatic scroll-to-
+    // bottom, which fought the ResizeObserver. Now: a user-initiated
+    // scroll UP by 5+ pixels turns sticky OFF, returning to within
+    // 20px of the floor turns it back ON.
+    const nearBottom = scrollHeight - scrollTop - clientHeight < 20;
+    if (scrollTop < prev - 5) {
+      stickToBottomRef.current = false;
+    } else if (nearBottom) {
+      stickToBottomRef.current = true;
+    }
+    prevScrollTopRef.current = scrollTop;
 
     if (channelId) {
       scrollPositions.set(channelId, scrollTop);
@@ -204,6 +257,10 @@ function MessageList() {
         onScroll={handleScroll}
         className="messages-scroll"
       >
+        {/* Inner content wrapper observed by ResizeObserver — fires when
+            async media (images / embeds / GIFs) expand the message list
+            after initial render so we can re-pin to the bottom. */}
+        <div ref={contentRef}>
         {/* Loading more indicator */}
         {isLoadingMore && (
           <div style={{ display: "flex", justifyContent: "center", padding: "16px 0" }}>
@@ -240,6 +297,7 @@ function MessageList() {
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* Mention Navigation FAB */}

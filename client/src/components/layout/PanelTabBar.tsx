@@ -73,7 +73,10 @@ function PanelTabBar({ panelId }: PanelTabBarProps) {
   if (!panel) return null;
   // Hide empty tab bar when nothing is selected — still mount briefly while
   // a tab is being dragged over (dropHover keeps it visible for drop feedback).
-  if (panel.tabs.length === 0 && !dropHover) return null;
+  // Exception: on mobile the bar hosts the nav buttons (sidebar / members
+  // drawer toggles), so it has to stay mounted even with zero tabs so the
+  // user has a way to open the drawers when no channel is selected.
+  if (panel.tabs.length === 0 && !dropHover && !isMobile) return null;
 
   const isActivePanel = activePanelId === panelId;
   let barClass = "panel-tab-bar";
