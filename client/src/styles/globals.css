@@ -48,7 +48,68 @@
   --input-bg:rgba(255,255,255,0.05);
   --input-border:rgba(255,255,255,0.10);
   --wallpaper:none;
+
+  /* ─── Accessibility tokens (Track S) ─────────────────────────────────
+   * Defaults match DEFAULT_ACCESSIBILITY in styles/accessibility.ts.
+   * styles/accessibility.ts:applyAccessibility() overwrites these on
+   * boot + on every setter call, so the values you see here only apply
+   * while the accessibility store is hydrating (one frame at most). */
+  --chat-font-size:16px;
+  --link-decoration:none;
+  --density-scale:1.0;
+  --msg-group-gap:16px;
+  --saturation:100%;
+  --motion-duration:200ms;
+  --motion-scale:1.05;
 }
+
+/* Saturation applies to the whole app via the root filter chain. Custom
+ * role colors normally bypass it (server admin picked them deliberately)
+ * unless the user opted into desaturating those too. */
+body { filter:saturate(var(--saturation)); }
+
+/* Reduced motion — explicit class so the cascade wins over any
+ * component-level animation duration set inline. */
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after {
+  transition-duration:var(--motion-duration) !important;
+  animation-duration:var(--motion-duration) !important;
+}
+
+/* Chat readability — message body inherits the user-chosen font size. */
+.chat-message-content,
+.audit-meta,
+.dm-message-content { font-size:var(--chat-font-size); }
+
+/* Link underline override. */
+a:not(.button):not(.btn) { text-decoration:var(--link-decoration); }
+
+/* Vertical breathing room between adjacent message groups. */
+.message-group + .message-group { margin-top:var(--msg-group-gap); }
+
+/* Density classes — applied to <body> by applyAccessibility().
+ * We only tweak paddings/margins so click targets keep their min-height. */
+body.density-compact .channel-item { padding-top:4px; padding-bottom:4px; }
+body.density-compact .ch-tree-cat-header { padding-top:3px; padding-bottom:3px; }
+body.density-compact .chat-message-row { padding-top:2px; padding-bottom:2px; }
+body.density-cozy .channel-item { padding-top:10px; padding-bottom:10px; }
+body.density-cozy .ch-tree-cat-header { padding-top:8px; padding-bottom:8px; }
+body.density-cozy .chat-message-row { padding-top:6px; padding-bottom:6px; }
+
+/* Compact message style collapses the avatar+author row onto the message line. */
+body.msg-style-compact .chat-message-row .msg-avatar { display:none; }
+body.msg-style-compact .chat-message-row .msg-author { display:inline; margin-right:6px; font-size:0.9em; }
+
+/* Display-name plain mode strips per-user color / font effects. */
+body.display-name-plain .msg-author { color:var(--t0) !important; font-family:var(--f-ui) !important; }
+
+/* Animated emoji opt-out — pauses CSS animations on emoji elements.
+ * GIF autoplay opt-out is enforced in the React layer by reading
+ * useAccessibilityStore.autoplayGifs (CSS can't override the HTML
+ * autoplay attribute after the element mounts). */
+body.no-animated-emoji img.emoji-animated,
+body.no-animated-emoji .emoji-animated { animation-play-state:paused; }
 
 /* Blur on: translucent gradient + backdrop-filter */
 body.blur-enabled {
@@ -1206,6 +1267,48 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* Select dropdown */
 .vs-select { width:100%;height:40px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:0 12px;color:var(--t0);font-size:13px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23949BA4' stroke-width='2'%3E%3Cpath d='M3 5l3 3 3-3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center; }
 .vs-select:focus { border-color:var(--primary); }
+
+/* ─── Accessibility settings panel (Track S) ──────────────────────────
+ * Adds three layout primitives on top of the existing vs-* shell:
+ *   - .vs-section-header — top-of-section H3 for the five named groups.
+ *   - .acc-slider-track  — wraps the vs-range with a row of tick labels
+ *                          (Discord shows 12px / 14px / 15px / 16px etc).
+ *   - .acc-radio-group   — horizontal radio strip (UI Density, Message Style).
+ *   - .acc-preview       — live sample-message block at the top of the
+ *                          panel; values flow through CSS vars so it
+ *                          mirrors the real chat without imperative wiring.
+ */
+.vs-section-header { font-size:14px;font-weight:700;color:var(--t0);margin-bottom:14px;letter-spacing:.02em; }
+.vs-slider-row, .vs-radio-row { display:block;margin-bottom:18px; }
+.vs-slider-row .vs-label, .vs-radio-row .vs-label { display:block; }
+.vs-slider-row .vs-desc, .vs-radio-row .vs-desc { display:block;margin-bottom:10px; }
+
+.acc-slider-track { padding:8px 0 4px; }
+.acc-slider-ticks { display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-bottom:8px;padding:0 4px; }
+.acc-slider-tick { font-variant-numeric:tabular-nums; }
+.acc-slider-track .vs-range { width:100%; }
+
+.acc-radio-group { display:flex;gap:18px;flex-wrap:wrap;margin-top:4px; }
+.acc-radio-option { display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--t1);font-size:14px; }
+.acc-radio-option input[type="radio"] { width:18px;height:18px;accent-color:var(--primary); }
+.acc-radio-option:hover { color:var(--t0); }
+
+.acc-preview-section { background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;padding:18px;margin-bottom:32px; }
+.acc-preview { display:flex;flex-direction:column;gap:var(--msg-group-gap); }
+.acc-preview-msg { display:flex;gap:12px; }
+.acc-preview-avatar { width:40px;height:40px;border-radius:999px;background:linear-gradient(135deg, var(--primary), var(--secondary));flex-shrink:0; }
+.acc-preview-body { flex:1;min-width:0; }
+.acc-preview-head { display:flex;align-items:baseline;gap:8px;margin-bottom:4px; }
+.acc-preview-author { font-weight:600;color:var(--primary);font-size:14px; }
+.acc-preview-time { font-size:11px;color:var(--t3); }
+.acc-preview-text { font-size:var(--chat-font-size);color:var(--t0);line-height:1.4; }
+.acc-preview-text a { color:var(--primary);text-decoration:var(--link-decoration); }
+.acc-preview-reactions { display:flex;gap:6px;margin-top:6px; }
+.acc-preview-react { background:var(--bg-3);border:1px solid var(--b1);border-radius:8px;padding:2px 8px;font-size:12px;color:var(--t1); }
+.acc-preview-button { background:var(--primary);border:none;color:#fff;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;margin-top:8px;transition:filter var(--motion-duration); }
+.acc-preview-button:hover { filter:brightness(1.1); }
+
+.acc-screen-reader-note { margin-bottom:14px;padding:10px 12px;background:var(--input-bg);border-left:3px solid var(--primary);border-radius:0 6px 6px 0; }
 
 /* Keybind button — PTT key */
 .vs-keybind { display:inline-flex;align-items:center;justify-content:center;min-width:120px;height:38px;padding:0 20px;background:var(--input-bg);border:2px solid var(--input-border);border-radius:6px;color:var(--t0);font-size:14px;font-weight:500;font-family:var(--f-m);cursor:pointer;transition:border-color .15s,color .15s; }

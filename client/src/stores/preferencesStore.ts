@@ -80,6 +80,17 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           data.voice_settings as Record<string, unknown>,
         );
       }
+
+      // Accessibility (Track S) — server stores everything under one key.
+      // Lazy-imported like the others so this module doesn't pull the
+      // accessibility store into hotter import chains (settings is opened
+      // rarely; preferences sync runs once per session at login).
+      if (data.accessibility && typeof data.accessibility === "object") {
+        const { useAccessibilityStore } = await import("./accessibilityStore");
+        useAccessibilityStore.getState().applyFromServer(
+          data.accessibility as Record<string, unknown>,
+        );
+      }
     } catch {
       // First login — no preferences yet, use defaults
       set({ isLoaded: true });

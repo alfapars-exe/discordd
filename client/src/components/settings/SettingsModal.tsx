@@ -16,6 +16,7 @@ import SettingsNav from "./SettingsNav";
 const RoleSettings = lazy(() => import("./RoleSettings"));
 const ProfileSettings = lazy(() => import("./ProfileSettings"));
 const AppearanceSettings = lazy(() => import("./AppearanceSettings"));
+const AccessibilitySettings = lazy(() => import("./AccessibilitySettings"));
 const ServerGeneralSettings = lazy(() => import("./ServerGeneralSettings"));
 const InviteSettings = lazy(() => import("./InviteSettings"));
 const VoiceSettings = lazy(() => import("./VoiceSettings"));
@@ -139,6 +140,9 @@ function SettingsContent({ activeTab }: { activeTab: string }) {
 
     case "appearance":
       return <AppearanceSettings />;
+
+    case "accessibility":
+      return <AccessibilitySettings />;
 
     case "general":
       return <GeneralSettings />;
