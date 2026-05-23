@@ -40,6 +40,7 @@ import QuickSwitcher from "../shared/QuickSwitcher";
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
 import ConnectionBanner from "../shared/ConnectionBanner";
+import LightningOverlay from "../shared/LightningOverlay";
 import { useAuthStore } from "../../stores/authStore";
 import { resolveAssetUrl } from "../../utils/constants";
 import { resolveWallpaperBlobUrl } from "../../utils/wallpaperCache";
@@ -347,6 +348,11 @@ function AppLayout() {
         <div className="app-body">
           {/* Main content area */}
           <div className="main-area">
+            {/* Decorative neon lightning bolts — purely visual, pointer-events
+                none, drawn behind content via z-index. See globals.css for
+                timing + LightningOverlay.tsx for path/colour config. */}
+            <LightningOverlay />
+
             {/* Split pane container */}
             <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />
 
