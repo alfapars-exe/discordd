@@ -29,22 +29,39 @@ import { VideoPreset } from "livekit-client";
 
 import { useVoiceStore } from "../stores/voiceStore";
 
+/**
+ * VP9 is the default codec — ~30% more efficient than H.264 for the
+ * large flat regions + text typical of screen shares. H.264 is offered
+ * via the `screenShareLowLatency` toggle: hardware-encoded on every
+ * platform, encoder pipeline latency is ~50-150ms lower, at the cost
+ * of bigger bitrate for the same perceived quality.
+ *
+ * `degradationPreference: "maintain-framerate"` (set at room level via
+ * publishDefaults) tells the encoder to drop resolution before
+ * dropping frame rate when bandwidth tightens. For screen content
+ * that's the right trade: stuttering UI is more disruptive than a
+ * slightly soft frame.
+ */
 export type ScreenSharePublishDefaults = {
   screenShareEncoding: {
     maxBitrate: number;
     maxFramerate: number;
   };
   screenShareSimulcastLayers: VideoPreset[];
-  videoCodec: "vp9";
+  videoCodec: "vp9" | "h264";
+  degradationPreference: "maintain-framerate";
 };
 
 export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
   const screenShareQuality = useVoiceStore((s) => s.screenShareQuality);
   const screenShareFps = useVoiceStore((s) => s.screenShareFps);
+  const lowLatency = useVoiceStore((s) => s.screenShareLowLatency);
 
   return useMemo(() => {
     const fps = screenShareFps;
     const lowerLayer = new VideoPreset(1280, 720, 800_000, 15);
+    const codec: "vp9" | "h264" = lowLatency ? "h264" : "vp9";
+    const degradationPreference = "maintain-framerate" as const;
 
     // 120-fps tier roughly doubles 60-fps bitrate at the same resolution
     // because high-frame-rate motion content benefits from extra headroom
@@ -62,7 +79,8 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
           new VideoPreset(1920, 1080, bitrate(6_000_000, 4_000_000, 9_000_000), fps),
           lowerLayer,
         ],
-        videoCodec: "vp9",
+        videoCodec: codec,
+        degradationPreference,
       };
     }
 
@@ -76,7 +94,8 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
           new VideoPreset(1280, 720, bitrate(2_500_000, 1_500_000, 4_000_000), fps),
           lowerLayer,
         ],
-        videoCodec: "vp9",
+        videoCodec: codec,
+        degradationPreference,
       };
     }
 
@@ -86,7 +105,8 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
         maxFramerate: fps,
       },
       screenShareSimulcastLayers: [lowerLayer],
-      videoCodec: "vp9",
+      videoCodec: codec,
+      degradationPreference,
     };
-  }, [screenShareQuality, screenShareFps]);
+  }, [screenShareQuality, screenShareFps, lowLatency]);
 }

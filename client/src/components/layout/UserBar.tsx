@@ -393,6 +393,8 @@ function ScreenShareQualityPopup({
   const setFps = useVoiceStore((s) => s.setScreenShareFps);
   const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
   const setScreenShareAudio = useVoiceStore((s) => s.setScreenShareAudio);
+  const lowLatency = useVoiceStore((s) => s.screenShareLowLatency);
+  const setLowLatency = useVoiceStore((s) => s.setScreenShareLowLatency);
   const popupRef = useRef<HTMLDivElement>(null);
 
   const rect = anchorEl.getBoundingClientRect();
@@ -470,6 +472,17 @@ function ScreenShareQualityPopup({
         >
           <span className="adp-submenu-label">{t("screenShareAudio")}</span>
           <span className={`sp-switch${screenShareAudio ? " sp-switch-on" : ""}`}>
+            <span className="sp-switch-thumb" />
+          </span>
+        </button>
+        <button
+          className="adp-submenu-item adp-submenu-toggle"
+          onClick={() => setLowLatency(!lowLatency)}
+          aria-pressed={lowLatency}
+          title={t("screenShareLowLatencyHint")}
+        >
+          <span className="adp-submenu-label">{t("screenShareLowLatency")}</span>
+          <span className={`sp-switch${lowLatency ? " sp-switch-on" : ""}`}>
             <span className="sp-switch-thumb" />
           </span>
         </button>
