@@ -81,24 +81,24 @@ function SettingsModal() {
       {/* Nav sidebar */}
       <SettingsNav />
 
-      {/* Content area — Suspense wraps the active panel so each lazy
-          chunk's load time shows a quick spinner instead of a blank
-          right-pane. Re-mounted per tab so the fallback fires once
-          per tab switch (cached after first load). */}
-      <div className="settings-content">
-        <Suspense fallback={<SettingsPanelFallback />}>
-          <SettingsContent activeTab={activeTab} />
-        </Suspense>
+      {/* Content + close wrapper — close button is anchored to the content
+          panel (not the viewport) so it doesn't overlap with members panel
+          on wide screens. The wrap is position:relative so the absolute
+          close stays pinned to its top-right corner. */}
+      <div className="settings-content-wrap">
+        <button
+          onClick={closeSettings}
+          className="settings-close"
+          title={t("title") + " — ESC"}
+        >
+          ✕
+        </button>
+        <div className="settings-content">
+          <Suspense fallback={<SettingsPanelFallback />}>
+            <SettingsContent activeTab={activeTab} />
+          </Suspense>
+        </div>
       </div>
-
-      {/* Close button */}
-      <button
-        onClick={closeSettings}
-        className="settings-close"
-        title={t("title") + " — ESC"}
-      >
-        ✕
-      </button>
     </div>
   );
 }
