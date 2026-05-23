@@ -393,16 +393,20 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         onOpenRenameEmoji={rename.toggleEmojiPicker}
                       >
                         {cg.channels.map((ch) => {
-                    const isText = ch.type === "text";
-                    const chActive = isText
-                      ? ch.id === selectedChannelId
-                      : ch.id === currentVoiceChannelId;
+                    // Chat-like = text OR audit; both render chat-style content
+                    // and use `selectedChannelId` for active state. Only the
+                    // literal "voice" type tracks `currentVoiceChannelId` and
+                    // gates on canConnectVoice.
+                    const isVoice = ch.type === "voice";
+                    const chActive = isVoice
+                      ? ch.id === currentVoiceChannelId
+                      : ch.id === selectedChannelId;
                     const unread = unreadCounts[ch.id] ?? 0;
                     const participants = voiceStates[ch.id] ?? [];
                     const isServerMuted = mutedServerIds.has(srvId);
                     const isChannelMuted = mutedChannelIds.has(ch.id);
                     const isEffectivelyMuted = isServerMuted || isChannelMuted;
-                    const isVoiceLocked = !isText && !canConnectVoice(ch.id);
+                    const isVoiceLocked = isVoice && !canConnectVoice(ch.id);
 
                     return (
                       <ChannelItem
@@ -418,10 +422,13 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         dropPos={dropIndicator?.channelId === ch.id ? dropIndicator.position : null}
                         onClick={() => {
                           if (isVoiceLocked) return;
-                          if (isText) {
-                            handleTextChannelClick(ch.id, ch.name);
-                          } else {
+                          if (isVoice) {
                             handleVoiceChannelClick(ch.id, ch.name);
+                          } else {
+                            // text + audit both open as a chat-style tab via
+                            // the same path. AppLayout's openTab mapping
+                            // picks the right TabType from channel.type.
+                            handleTextChannelClick(ch.id, ch.name);
                           }
                         }}
                         onContextMenu={(e) => handleChannelContextMenu(e, ch)}
@@ -439,7 +446,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         renameEmojiBtnRef={rename.renameEmojiBtnRef}
                         onOpenRenameEmoji={rename.toggleEmojiPicker}
                       >
-                        {!isText && participants.length > 0 && (
+                        {isVoice && participants.length > 0 && (
                           <VoiceParticipantList
                             participants={participants}
                             channelId={ch.id}
