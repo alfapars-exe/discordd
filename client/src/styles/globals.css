@@ -4395,3 +4395,72 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .ch-tree-server-icon-fallback { width: 28px; height: 28px; border-radius: 7px; }
 .ch-tree-item { padding: 7px 8px 7px 28px; font-size: 15px; }
 .ch-tree-cat-header { padding: 8px 8px 8px 14px; }
+
+/* ═══════════════════════════════════════
+   NEON EDGE HALO (Track V)
+
+   Animated inward glow ring around the entire desktop window — gives
+   the app a "live cyberpunk" vibe without affecting layout or input.
+   The reference the user provided was a stylized lightning image; we
+   distill that into a layered inset box-shadow that pulses through
+   blue → purple → cyan on a 14-second cycle.
+
+   Implementation notes:
+   - Lives on .electron-app-wrapper so it wraps the custom titlebar too
+     (the user said "4 yanı" — all four edges).
+   - pointer-events:none — never blocks clicks.
+   - z-index:5 — sits above the app body but BELOW modals/popups
+     (settings-overlay z-50, ctx-menu z-70). Full-screen overlays cover
+     it cleanly; smaller popovers near the center don't interfere since
+     the glow only reaches ~140px inward from the edges.
+   - Layered shadows: sharp ring at the edge + soft middle + very wide
+     diffuse halo. Each layer keeps a low spread so the glow stays at
+     the frame, never washing out the center.
+   - Animation respects body.reduce-motion (accessibility) — stops
+     entirely instead of just shortening duration.
+   - 12px border-radius matches the frameless Electron window's
+     OS-level rounded corners on Windows 11; on older Windows the
+     window is square and the radius just visually clips the glow,
+     no other harm.
+   ═══════════════════════════════════════ */
+.electron-app-wrapper {
+  position: relative;
+}
+.electron-app-wrapper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 24px 2px rgba(59, 130, 246, 0.55),
+    inset 0 0 60px 8px rgba(168, 85, 247, 0.30),
+    inset 0 0 120px 20px rgba(59, 130, 246, 0.15);
+  animation: neon-edge-cycle 14s ease-in-out infinite;
+}
+
+@keyframes neon-edge-cycle {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 24px 2px rgba(59, 130, 246, 0.55),
+      inset 0 0 60px 8px rgba(168, 85, 247, 0.30),
+      inset 0 0 120px 20px rgba(59, 130, 246, 0.15);
+  }
+  33% {
+    box-shadow:
+      inset 0 0 24px 2px rgba(168, 85, 247, 0.55),
+      inset 0 0 60px 8px rgba(236, 72, 153, 0.30),
+      inset 0 0 120px 20px rgba(168, 85, 247, 0.15);
+  }
+  66% {
+    box-shadow:
+      inset 0 0 24px 2px rgba(34, 211, 238, 0.55),
+      inset 0 0 60px 8px rgba(59, 130, 246, 0.30),
+      inset 0 0 120px 20px rgba(34, 211, 238, 0.15);
+  }
+}
+
+body.reduce-motion .electron-app-wrapper::after {
+  animation: none;
+}
