@@ -31,15 +31,28 @@ export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
 /**
  * Available noise-reduction engines. See the noiseReductionEngine field
  * docs below for the per-engine pipeline + status notes.
+ *
+ * NOTE on werman/noise-suppression-for-voice:
+ * That popular project is a native VST/LV2/AU plugin (C++), not a
+ * browser library — it wraps Xiph's RNNoise for DAW + OS-level audio
+ * pipelines (OBS, Equalizer APO, PipeWire). We deliver the SAME
+ * underlying RNNoise model via WASM through @sapphi-red/web-noise-
+ * suppressor, so there's no functional benefit to adding werman as an
+ * "engine" — the model is identical, only the host platform differs.
+ *
+ * Earlier revisions of this file exposed four extra engines
+ * (`deepfilter`, `dtln`, `speex`, `dpdfnet`) as "BETA placeholders"
+ * that silently fell back to RNNoise. They've been removed because:
+ *  - The UI lied: users picking "DeepFilterNet3" got plain RNNoise.
+ *  - The fallback toast disclosed the lie on every selection — a
+ *    smell that the option shouldn't have been there at all.
+ *  - Wiring those engines for real means adding ~5-10 MB of WASM +
+ *    model weights per engine, plus an integration audit. That's its
+ *    own project, not a settings dropdown.
+ * Picking one of the removed engines from a stale localStorage entry
+ * now migrates to "rnnoise" (see loadSettings).
  */
-export type NoiseReductionEngine =
-  | "rnnoise"
-  | "krisp"
-  | "deepfilter"
-  | "dtln"
-  | "webrtc"
-  | "speex"
-  | "dpdfnet";
+export type NoiseReductionEngine = "rnnoise" | "krisp" | "webrtc";
 
 export type VoiceSettings = {
   inputMode: InputMode;
@@ -54,22 +67,15 @@ export type VoiceSettings = {
   localMutedUsers: Record<string, boolean>;
   noiseReduction: boolean;
   /**
-   * Engine used when noiseReduction is on. Seven values, two pipelines:
+   * Engine used when noiseReduction is on. Three real options:
    *
    *   Custom-processor pipeline (LiveKit TrackProcessor + AudioWorklet):
    *    - "rnnoise"     — bundled OSS ML denoiser, free, default.
+   *                      Uses Xiph's RNNoise via @sapphi-red/web-noise-
+   *                      suppressor (the same model that werman's
+   *                      native VST/LV2 plugin wraps).
    *    - "krisp"       — LiveKit Cloud's Krisp filter. Paid plan; falls
    *                      back to RNNoise on init failure.
-   *    - "deepfilter"  — DeepFilterNet3 WASM (deepfilter-standalone).
-   *                      BETA: currently falls back to RNNoise; full
-   *                      WASM integration will land in a follow-up.
-   *    - "dtln"        — DTLN web port (@sapphi-red/dtln-web). BETA:
-   *                      same fallback contract as deepfilter.
-   *    - "speex"       — SpeexDSP via SpeexWorkletNode (classical DSP
-   *                      preprocessor; light, no ML model). BETA: real
-   *                      WASM integration pending; falls back to RNNoise.
-   *    - "dpdfnet"     — DPDFNet (a DeepFilterNet variant). BETA: same
-   *                      fallback contract.
    *
    *   Browser-native pipeline (track constraint):
    *    - "webrtc"      — getUserMedia({ noiseSuppression: true }). No
@@ -123,6 +129,15 @@ const STORAGE_KEY = "mqvi_voice_settings";
  */
 const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudio";
 
+/**
+ * Engines that used to appear in the picker but never actually worked
+ * (BETA placeholders that always fell back to RNNoise). Any user with
+ * one of these in their persisted settings gets quietly migrated to
+ * "rnnoise" on load — same audio they were already getting, just with
+ * an honest label in Settings → Voice.
+ */
+const REMOVED_ENGINES = new Set(["deepfilter", "dtln", "speex", "dpdfnet"]);
+
 export const DEFAULT_SETTINGS: VoiceSettings = {
   inputMode: "voice_activity",
   pttKey: "Space",
@@ -170,6 +185,13 @@ export function loadSettings(): VoiceSettings {
         localStorage.setItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY, "1");
       }
     } catch { /* localStorage unavailable */ }
+
+    // Engine cleanup: if the persisted engine is one of the removed BETA
+    // placeholders, snap to "rnnoise". Audio behaviour is unchanged
+    // (those engines were already falling back to RNNoise at runtime).
+    if (REMOVED_ENGINES.has(merged.noiseReductionEngine as string)) {
+      merged.noiseReductionEngine = "rnnoise";
+    }
 
     return merged;
   } catch {

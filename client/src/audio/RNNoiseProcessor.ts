@@ -5,6 +5,12 @@
  * Uses @sapphi-red/web-noise-suppressor for RNNoise WASM + AudioWorklet
  * to suppress mic noise (breath, keyboard, fan, AC).
  *
+ * Model lineage: Xiph.Org's RNNoise (https://github.com/xiph/rnnoise).
+ * The popular werman/noise-suppression-for-voice project wraps the same
+ * model as a native VST/LV2/AU plugin for DAW + OS-level audio routing;
+ * we use the WASM port of the same network so we can run it in the
+ * browser. Functionally equivalent denoising — different host.
+ *
  * Audio pipeline:
  *   Mic Track -> MediaStreamSource -> RnnoiseWorkletNode -> VadGateNode -> MediaStreamDestination
  *                                          |                    |
