@@ -9,6 +9,7 @@
   "channelType": "Channel Type",
   "text": "Text",
   "voice": "Voice",
+  "audit": "Audit",
   "deleteConfirm": "Are you sure you want to delete #{{name}}?",
   "noChannels": "No channels yet",
   "reorderSuccess": "Channel order updated",

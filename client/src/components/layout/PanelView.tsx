@@ -19,6 +19,7 @@ import VoiceRoom from "../voice/VoiceRoom";
 import DMChat from "../dm/DMChat";
 import FriendsView from "../friends/FriendsView";
 import P2PCallScreen from "../p2p/P2PCallScreen";
+import AuditChannel from "../audit/AuditChannel";
 import DropZoneOverlay, { calculateZone } from "./DropZoneOverlay";
 import type { DropZone } from "./DropZoneOverlay";
 
@@ -184,6 +185,11 @@ function PanelView({ panelId, sendTyping, sendDMTyping }: PanelViewProps) {
         <FriendsView />
       ) : activeTab.type === "p2p" ? (
         <P2PCallScreen />
+      ) : activeTab.type === "audit" ? (
+        <AuditChannel
+          channelId={activeTab.channelId}
+          serverId={activeTab.serverInfo?.serverId}
+        />
       ) : (
         <div className="voice-room">
           {channel && (

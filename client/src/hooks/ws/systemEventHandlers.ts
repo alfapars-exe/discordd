@@ -18,6 +18,7 @@ import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useBadgeStore } from "../../stores/badgeStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
+import { useAuditStore } from "../../stores/auditStore";
 import type {
   WSMessage,
   MemberWithRoles,
@@ -28,6 +29,7 @@ import type {
   FriendshipWithUser,
   P2PCall,
   P2PSignalPayload,
+  AuditLog,
   SoundboardSound,
   SoundboardPlayEvent,
 } from "../../types";
@@ -114,6 +116,16 @@ export async function handleSystemEvent(
     case "member_join": {
       const serverId = msg.server_id;
       if (serverId) useMemberStore.getState().handleMemberJoin(serverId, msg.d as MemberWithRoles);
+      return true;
+    }
+
+    case "audit_event": {
+      // Server only broadcasts this to users with audit-view permission,
+      // so we can hand it straight to the store without filtering.
+      // Skipped silently if we haven't fetched the server's audit yet —
+      // the store handles that case (avoids showing a lone live event in
+      // an otherwise empty panel).
+      useAuditStore.getState().handleAuditEvent(msg.d as AuditLog);
       return true;
     }
     case "member_leave": {

@@ -28,7 +28,11 @@ export type User = {
 // ──────────────────────────────────
 // Channel
 // ──────────────────────────────────
-export type ChannelType = "text" | "voice";
+// "audit" is the moderation event feed — read-only, gated by Admin or
+// any of Kick/Ban/Mute/Deafen perms server-side. Auto-created per server
+// in server_service.CreateServer (and backfilled into existing servers
+// by migration 061). UI hides the composer when type === "audit".
+export type ChannelType = "text" | "voice" | "audit";
 
 export type Channel = {
   id: string;
@@ -627,6 +631,63 @@ export type AppLog = {
   created_at: string;
   username: string | null;
   display_name: string | null;
+};
+
+// ──────────────────────────────────
+// Audit log (moderation event feed for audit channels)
+// ──────────────────────────────────
+
+/**
+ * Stable identifier for each kind of moderation event. The server emits
+ * one of these strings per `audit_logs` row; the client maps it to a
+ * localized template at render time in AuditEntry. DON'T rename values
+ * here without coordinating the server enum + i18n keys.
+ */
+export type AuditEventType =
+  | "server_mute"
+  | "server_unmute"
+  | "server_deafen"
+  | "server_undeafen"
+  | "voice_kick"
+  | "voice_move"
+  | "member_join"
+  | "member_leave"
+  | "member_kick"
+  | "member_ban"
+  | "member_unban"
+  | "role_create"
+  | "role_delete"
+  | "role_assign"
+  | "role_remove"
+  | "channel_create"
+  | "channel_delete"
+  | "channel_rename"
+  | "message_delete";
+
+/**
+ * Frozen-in-time snapshot of an actor or target user — the server stores
+ * this with each audit row so entries stay readable after the user is
+ * deleted or renames themselves. Optional fields mirror the Go side
+ * which uses `omitempty`.
+ */
+export type AuditUserSnapshot = {
+  id: string;
+  username: string;
+  display_name?: string;
+  avatar_url?: string;
+};
+
+export type AuditLog = {
+  id: string;
+  server_id: string;
+  actor_user_id: string | null;
+  target_user_id: string | null;
+  event_type: AuditEventType;
+  /** Raw JSON string — caller parses if needed. */
+  metadata: string;
+  actor?: AuditUserSnapshot;
+  target?: AuditUserSnapshot;
+  created_at: string;
 };
 
 // ──────────────────────────────────

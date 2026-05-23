@@ -4042,3 +4042,81 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
   font-style: italic;
   margin-top: 2px;
 }
+
+/* ═══════════════════════════════════════
+   AUDIT CHANNEL
+   Read-only system log; no composer; rows are denser than chat messages.
+   ═══════════════════════════════════════ */
+.audit-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow-x: hidden;
+}
+.audit-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-5) transparent;
+}
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 12px;
+}
+.audit-entry {
+  display: flex;
+  gap: 10px;
+  padding: 4px 14px;
+  align-items: center;
+}
+.audit-entry:hover {
+  background: var(--bg-h);
+}
+.audit-entry-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.audit-entry-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.audit-entry-text {
+  font-size: 13px;
+  color: var(--t1);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.audit-entry-time {
+  font-size: 11px;
+  color: var(--t3);
+  font-family: var(--f-m);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.audit-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  color: var(--t3);
+  font-size: 14px;
+  padding: 24px;
+  text-align: center;
+}
+.audit-loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}

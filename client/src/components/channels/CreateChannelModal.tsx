@@ -38,7 +38,10 @@ function CreateChannelModal({
   );
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
-  const [channelType, setChannelType] = useState<"text" | "voice">("text");
+  // "audit" is selectable here too — the server enforces "one audit
+  // channel per server" so a duplicate submission gets a friendly toast
+  // ("this server already has an audit channel") instead of two rows.
+  const [channelType, setChannelType] = useState<"text" | "voice" | "audit">("text");
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? "");
   const [createdChannel, setCreatedChannel] = useState<Channel | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -276,6 +279,21 @@ function CreateChannelModal({
                         </span>
                         <span className="create-ch-type-label">
                           {t("voice")}
+                        </span>
+                      </div>
+                      <div
+                        className={`create-ch-type-option${channelType === "audit" ? " selected" : ""}`}
+                        onClick={() => setChannelType("audit")}
+                      >
+                        <div className="create-ch-type-radio">
+                          <div className="create-ch-type-radio-dot" />
+                        </div>
+                        {/* \u2696\uFE0F scale \u2014 connotes moderation / record-keeping. */}
+                        <span className="create-ch-type-icon">
+                          {"\u2696\uFE0F"}
+                        </span>
+                        <span className="create-ch-type-label">
+                          {t("audit")}
                         </span>
                       </div>
                     </div>

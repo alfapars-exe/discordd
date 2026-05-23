@@ -1,0 +1,30 @@
+{
+  "title": "Audit",
+  "empty": "No events yet.",
+  "loading": "Loading…",
+  "loadMore": "Load older",
+  "unknownActor": "Unknown user",
+  "unknownTarget": "unknown user",
+
+  "events": {
+    "server_mute": "{{actor}} muted {{target}}",
+    "server_unmute": "{{actor}} unmuted {{target}}",
+    "server_deafen": "{{actor}} deafened {{target}}",
+    "server_undeafen": "{{actor}} undeafened {{target}}",
+    "voice_kick": "{{actor}} disconnected {{target}} from voice",
+    "voice_move": "{{actor}} moved {{target}} between voice channels",
+    "member_join": "{{target}} joined the server",
+    "member_leave": "{{target}} left the server",
+    "member_kick": "{{actor}} kicked {{target}}",
+    "member_ban": "{{actor}} banned {{target}}",
+    "member_unban": "{{actor}} unbanned {{target}}",
+    "role_create": "{{actor}} created the \"{{roleName}}\" role",
+    "role_delete": "{{actor}} deleted the \"{{roleName}}\" role",
+    "role_assign": "{{actor}} gave {{target}} the \"{{roleName}}\" role",
+    "role_remove": "{{actor}} removed the \"{{roleName}}\" role from {{target}}",
+    "channel_create": "{{actor}} created channel \"{{channelName}}\"",
+    "channel_delete": "{{actor}} deleted channel \"{{channelName}}\"",
+    "channel_rename": "{{actor}} renamed channel \"{{oldName}}\" → \"{{newName}}\"",
+    "message_delete": "{{actor}} deleted {{target}}'s message"
+  }
+}
