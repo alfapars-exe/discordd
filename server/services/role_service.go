@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -31,10 +32,17 @@ func (s *roleService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
 }
 
+// audit emits an audit log event if an audit logger is wired. Nil-safe.
+// Same observability pattern as voiceService.audit and memberService.audit:
+// both branches log so "I created/deleted a role / assigned it but audit
+// channel stayed empty" reports can be diagnosed from runtime logs.
 func (s *roleService) audit(entry models.AuditLog) {
-	if s.auditLogger != nil {
-		s.auditLogger.Write(entry)
+	if s.auditLogger == nil {
+		log.Printf("[role/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		return
 	}
+	log.Printf("[role/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	s.auditLogger.Write(entry)
 }
 
 func NewRoleService(
