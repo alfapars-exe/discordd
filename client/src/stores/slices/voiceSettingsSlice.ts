@@ -91,6 +91,18 @@ export type VoiceSettings = {
    * setScreenShareEnabled call honours it without touching the SDK API.
    */
   screenShareShowCursor: boolean;
+  /**
+   * Low-latency screen share mode. When true:
+   *   - codec switches VP9 → H264 (hardware-encoded on most platforms,
+   *     50-150ms lower encoder latency at the cost of ~30% bandwidth
+   *     efficiency).
+   *   - encoder degradation pref biases toward maintaining framerate over
+   *     resolution (applied at room level — see useScreenSharePublishDefaults).
+   *
+   * Default false (better quality). Power-user toggle in the screen share
+   * options popup. Trade-off documented in user-visible tooltip.
+   */
+  screenShareLowLatency: boolean;
 };
 
 const STORAGE_KEY = "mqvi_voice_settings";
@@ -135,6 +147,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   screenShareQuality: "720p",
   screenShareFps: 30,
   screenShareShowCursor: true,
+  screenShareLowLatency: false,
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -194,6 +207,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     screenShareQuality: s.screenShareQuality,
     screenShareFps: s.screenShareFps,
     screenShareShowCursor: s.screenShareShowCursor,
+    screenShareLowLatency: s.screenShareLowLatency,
   };
 }
 
@@ -215,6 +229,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareQuality: (quality: ScreenShareQuality) => void;
   setScreenShareFps: (fps: ScreenShareFps) => void;
   setScreenShareShowCursor: (enabled: boolean) => void;
+  setScreenShareLowLatency: (enabled: boolean) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
@@ -249,6 +264,7 @@ export const createVoiceSettingsSlice: StateCreator<
     screenShareQuality: initial.screenShareQuality,
     screenShareFps: initial.screenShareFps,
     screenShareShowCursor: initial.screenShareShowCursor,
+    screenShareLowLatency: initial.screenShareLowLatency,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -318,6 +334,11 @@ export const createVoiceSettingsSlice: StateCreator<
 
     setScreenShareShowCursor: (enabled) => {
       set({ screenShareShowCursor: enabled });
+      saveSettings(currentSettings(get()));
+    },
+
+    setScreenShareLowLatency: (enabled) => {
+      set({ screenShareLowLatency: enabled });
       saveSettings(currentSettings(get()));
     },
 

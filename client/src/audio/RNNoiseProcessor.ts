@@ -39,7 +39,6 @@ import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 
 import vadGateWorkletPath from "./vadGateWorklet.js?url";
-import { sensitivityToThreshold } from "./sensitivity";
 
 /** WASM binary cache — shared across all processor instances (stateless). */
 let wasmBinaryPromise: Promise<ArrayBuffer> | null = null;

@@ -17,7 +17,6 @@ import { Track } from "livekit-client";
 import type { TrackProcessor, AudioProcessorOptions } from "livekit-client";
 
 import vadGateWorkletPath from "./vadGateWorklet.js?url";
-import { sensitivityToThreshold } from "./sensitivity";
 
 /** AudioWorklet registration cache — prevents duplicate addModule() calls per AudioContext. */
 const registeredContexts = new WeakMap<AudioContext, Promise<void>>();
