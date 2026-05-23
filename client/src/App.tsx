@@ -1,20 +1,27 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./stores/authStore";
 import { useSettingsStore } from "./stores/settingsStore";
-import LoginPage from "./components/auth/LoginPage";
-import RegisterPage from "./components/auth/RegisterPage";
-import ForgotPasswordPage from "./components/auth/ForgotPasswordPage";
-import ResetPasswordPage from "./components/auth/ResetPasswordPage";
-import AppLayout from "./components/layout/AppLayout";
-import LandingPage from "./components/landing/LandingPage";
-import PrivacyPage from "./components/landing/PrivacyPage";
-import TermsPage from "./components/landing/TermsPage";
-import InviteJoinPage from "./components/servers/InviteJoinPage";
 import CustomTitleBar from "./components/layout/CustomTitleBar";
 import UpdateBanner from "./components/shared/UpdateBanner";
 import { isElectron, isNativeApp } from "./utils/constants";
+
+// Lazy-load route components so each path bundles separately. The
+// initial JS that has to ship before the first paint is just App.tsx +
+// the auth-stores + the title bar / update banner — everything else
+// arrives only when its route is matched. Trade-off: a 50-150ms
+// loading flash on first route entry (mitigated by the shared
+// spinner fallback below) in exchange for ~40% smaller first paint.
+const LandingPage = lazy(() => import("./components/landing/LandingPage"));
+const PrivacyPage = lazy(() => import("./components/landing/PrivacyPage"));
+const TermsPage = lazy(() => import("./components/landing/TermsPage"));
+const LoginPage = lazy(() => import("./components/auth/LoginPage"));
+const RegisterPage = lazy(() => import("./components/auth/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./components/auth/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./components/auth/ResetPasswordPage"));
+const InviteJoinPage = lazy(() => import("./components/servers/InviteJoinPage"));
+const AppLayout = lazy(() => import("./components/layout/AppLayout"));
 
 /**
  * App — Root component. Handles routing and auth initialization.
@@ -128,12 +135,26 @@ function App() {
     </Routes>
   );
 
+  // Shared Suspense fallback — the same spinner shown during auth init.
+  // Re-using it keeps the perceived transition consistent regardless of
+  // whether the lazy chunk arrives in 5ms (cached) or 500ms (cold load).
+  const lazyFallback = (
+    <div className="flex h-full items-center justify-center bg-background" style={{ flex: 1, minHeight: 0 }}>
+      <div className="text-center">
+        <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-surface border-t-brand" />
+        <p className="text-base text-text-muted">{t("loading")}</p>
+      </div>
+    </div>
+  );
+
+  const wrappedRoutes = <Suspense fallback={lazyFallback}>{routes}</Suspense>;
+
   if (isElectron()) {
     return (
       <div className="electron-app-wrapper">
         <CustomTitleBar />
         <UpdateBanner />
-        {routes}
+        {wrappedRoutes}
       </div>
     );
   }
@@ -141,7 +162,7 @@ function App() {
   return (
     <>
       <UpdateBanner />
-      {routes}
+      {wrappedRoutes}
     </>
   );
 }

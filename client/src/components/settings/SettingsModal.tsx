@@ -1,31 +1,39 @@
 /** Full-screen settings overlay. Layout: left SettingsNav + right content area. */
 
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
-import SettingsNav from "./SettingsNav";
-import RoleSettings from "./RoleSettings";
-import ProfileSettings from "./ProfileSettings";
-import AppearanceSettings from "./AppearanceSettings";
-import ServerGeneralSettings from "./ServerGeneralSettings";
-import InviteSettings from "./InviteSettings";
-import VoiceSettings from "./VoiceSettings";
-import ChannelSettings from "./ChannelSettings";
-import MembersSettings from "./MembersSettings";
-import SecuritySettings from "./SecuritySettings";
-import PlatformSettings from "./PlatformSettings";
-import LiveKitQuotaPanel from "./LiveKitQuotaPanel";
-import AdminServerList from "./AdminServerList";
-import AdminUserList from "./AdminUserList";
-import AdminReportList from "./AdminReportList";
-import AdminLogsPanel from "./AdminLogsPanel";
-import ConnectionsSettings from "./ConnectionsSettings";
-import EncryptionSettings from "./EncryptionSettings";
-import GeneralSettings from "./GeneralSettings";
-import FeedbackSettings from "./FeedbackSettings";
-import BlockedUsersSettings from "./BlockedUsersSettings";
-import AdminFeedbackList from "./AdminFeedbackList";
 import { useAuthStore } from "../../stores/authStore";
+// SettingsNav stays eager — it's the always-visible left rail.
+import SettingsNav from "./SettingsNav";
+
+// Lazy-load each settings panel. The settings modal is rarely opened
+// and users typically visit a single tab per session, so loading
+// every panel up-front (the 21 panels here total ~4-5k lines of
+// admin-heavy code, the biggest being AdminUserList 681 / AdminReportList
+// 677 / VoiceSettings 633) is pure waste. With lazy + Suspense, only
+// the active tab's chunk arrives — usually <50 KB each.
+const RoleSettings = lazy(() => import("./RoleSettings"));
+const ProfileSettings = lazy(() => import("./ProfileSettings"));
+const AppearanceSettings = lazy(() => import("./AppearanceSettings"));
+const ServerGeneralSettings = lazy(() => import("./ServerGeneralSettings"));
+const InviteSettings = lazy(() => import("./InviteSettings"));
+const VoiceSettings = lazy(() => import("./VoiceSettings"));
+const ChannelSettings = lazy(() => import("./ChannelSettings"));
+const MembersSettings = lazy(() => import("./MembersSettings"));
+const SecuritySettings = lazy(() => import("./SecuritySettings"));
+const PlatformSettings = lazy(() => import("./PlatformSettings"));
+const LiveKitQuotaPanel = lazy(() => import("./LiveKitQuotaPanel"));
+const AdminServerList = lazy(() => import("./AdminServerList"));
+const AdminUserList = lazy(() => import("./AdminUserList"));
+const AdminReportList = lazy(() => import("./AdminReportList"));
+const AdminLogsPanel = lazy(() => import("./AdminLogsPanel"));
+const ConnectionsSettings = lazy(() => import("./ConnectionsSettings"));
+const EncryptionSettings = lazy(() => import("./EncryptionSettings"));
+const GeneralSettings = lazy(() => import("./GeneralSettings"));
+const FeedbackSettings = lazy(() => import("./FeedbackSettings"));
+const BlockedUsersSettings = lazy(() => import("./BlockedUsersSettings"));
+const AdminFeedbackList = lazy(() => import("./AdminFeedbackList"));
 
 function SettingsModal() {
   const { t } = useTranslation("settings");
@@ -72,9 +80,14 @@ function SettingsModal() {
       {/* Nav sidebar */}
       <SettingsNav />
 
-      {/* Content area */}
+      {/* Content area — Suspense wraps the active panel so each lazy
+          chunk's load time shows a quick spinner instead of a blank
+          right-pane. Re-mounted per tab so the fallback fires once
+          per tab switch (cached after first load). */}
       <div className="settings-content">
-        <SettingsContent activeTab={activeTab} />
+        <Suspense fallback={<SettingsPanelFallback />}>
+          <SettingsContent activeTab={activeTab} />
+        </Suspense>
       </div>
 
       {/* Close button */}
@@ -85,6 +98,15 @@ function SettingsModal() {
       >
         ✕
       </button>
+    </div>
+  );
+}
+
+/** Compact spinner shown while a settings panel chunk downloads. */
+function SettingsPanelFallback() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 200 }}>
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-surface border-t-brand" />
     </div>
   );
 }
