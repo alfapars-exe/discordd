@@ -56,4 +56,18 @@ export type Ban = {
   reason: string;
   banned_by: string;
   created_at: string;
+  /** RFC3339 timestamp; absent = permanent ban. Set by the server when
+   *  the moderator picked a duration via the temp-ban dialog. */
+  expires_at?: string;
+};
+
+/** Active moderator-imposed timeout on a member. Server enforces — this
+ *  type only mirrors what the WS event delivers and what the member list
+ *  needs to draw the clock badge. */
+export type MemberTimeout = {
+  server_id: string;
+  user_id: string;
+  expires_at: string;
+  applied_by?: string;
+  reason?: string;
 };

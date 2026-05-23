@@ -4564,6 +4564,45 @@ body.reduce-motion .main-area::before,
 body.reduce-motion .main-area::after {
   animation: none;
 }
+
+/* ─── ModDurationPicker (timeout / temp ban duration picker) ──────── */
+.mod-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.mod-picker {
+  width: 360px;
+  max-width: 100%;
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-backdrop);
+  -webkit-backdrop-filter: var(--panel-backdrop);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-inset), 0 12px 40px rgba(0, 0, 0, 0.55);
+  padding: 18px 20px 14px;
+}
+.mod-picker-title { font-size: 15px; font-weight: 700; color: var(--t0); margin-bottom: 2px; }
+.mod-picker-subtitle { font-size: 13px; color: var(--t2); margin-bottom: 12px; }
+.mod-picker-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.mod-picker-btn {
+  background: var(--bg-3); color: var(--t0); border: 1px solid var(--b1);
+  border-radius: 6px; padding: 8px 0; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background .1s, border-color .1s;
+}
+.mod-picker-btn:hover { background: var(--bg-4); border-color: var(--primary); }
+.mod-picker-btn-danger:hover { background: var(--red-s); border-color: var(--red); color: var(--red); }
+.mod-picker-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
+.mod-picker-cancel {
+  background: transparent; border: none; color: var(--t2); font-size: 13px;
+  padding: 6px 12px; cursor: pointer; border-radius: 5px;
+}
+.mod-picker-cancel:hover { color: var(--t0); background: var(--bg-h); }
 .lightning-bolt {
   position: absolute;
   top: 0;

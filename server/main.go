@@ -143,6 +143,12 @@ func main() {
 	svcs.Server.SetAuditLogger(svcs.AuditLog)
 	svcs.Message.SetAuditLogger(svcs.AuditLog)
 
+	// 9d. Wire the member-timeout checker into voice. messageService
+	// gets the timeout repo via its constructor; voiceService uses a
+	// setter so existing voice tests don't need to pass the repo to
+	// every voice fixture.
+	svcs.Voice.SetMemberTimeoutChecker(repos.MemberTimeout)
+
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
 

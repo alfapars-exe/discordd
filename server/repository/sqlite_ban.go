@@ -19,14 +19,17 @@ func NewSQLiteBanRepo(db database.TxQuerier) BanRepository {
 	return &sqliteBanRepo{db: db}
 }
 
+// Create — INSERT OR REPLACE so re-banning an already-banned user (e.g.
+// extending an existing temp ban) refreshes the row instead of failing
+// on the PRIMARY KEY (server_id, user_id) conflict.
 func (r *sqliteBanRepo) Create(ctx context.Context, ban *models.Ban) error {
 	query := `
-		INSERT INTO bans (server_id, user_id, username, reason, banned_by)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT OR REPLACE INTO bans (server_id, user_id, username, reason, banned_by, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		RETURNING created_at`
 
 	err := r.db.QueryRowContext(ctx, query,
-		ban.ServerID, ban.UserID, ban.Username, ban.Reason, ban.BannedBy,
+		ban.ServerID, ban.UserID, ban.Username, ban.Reason, ban.BannedBy, ban.ExpiresAt,
 	).Scan(&ban.CreatedAt)
 
 	if err != nil {
@@ -36,14 +39,20 @@ func (r *sqliteBanRepo) Create(ctx context.Context, ban *models.Ban) error {
 	return nil
 }
 
+// GetByUserID returns the active ban row for (server, user), or
+// ErrNotFound if the user is not banned OR the ban already expired.
+// Filtering expired bans here means the caller never has to check the
+// timestamp itself — the row is invisible the moment it lapses.
 func (r *sqliteBanRepo) GetByUserID(ctx context.Context, serverID, userID string) (*models.Ban, error) {
 	query := `
-		SELECT server_id, user_id, username, reason, banned_by, created_at
-		FROM bans WHERE server_id = ? AND user_id = ?`
+		SELECT server_id, user_id, username, reason, banned_by, created_at, expires_at
+		FROM bans
+		WHERE server_id = ? AND user_id = ?
+		  AND (expires_at IS NULL OR expires_at > datetime('now'))`
 
 	ban := &models.Ban{}
 	err := r.db.QueryRowContext(ctx, query, serverID, userID).Scan(
-		&ban.ServerID, &ban.UserID, &ban.Username, &ban.Reason, &ban.BannedBy, &ban.CreatedAt,
+		&ban.ServerID, &ban.UserID, &ban.Username, &ban.Reason, &ban.BannedBy, &ban.CreatedAt, &ban.ExpiresAt,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -57,9 +66,14 @@ func (r *sqliteBanRepo) GetByUserID(ctx context.Context, serverID, userID string
 }
 
 func (r *sqliteBanRepo) GetAllByServer(ctx context.Context, serverID string) ([]models.Ban, error) {
+	// Lists only the bans still in effect — expired temp bans drop off
+	// the management UI automatically.
 	query := `
-		SELECT server_id, user_id, username, reason, banned_by, created_at
-		FROM bans WHERE server_id = ? ORDER BY created_at DESC`
+		SELECT server_id, user_id, username, reason, banned_by, created_at, expires_at
+		FROM bans
+		WHERE server_id = ?
+		  AND (expires_at IS NULL OR expires_at > datetime('now'))
+		ORDER BY created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, query, serverID)
 	if err != nil {
@@ -71,7 +85,7 @@ func (r *sqliteBanRepo) GetAllByServer(ctx context.Context, serverID string) ([]
 	for rows.Next() {
 		var ban models.Ban
 		if err := rows.Scan(
-			&ban.ServerID, &ban.UserID, &ban.Username, &ban.Reason, &ban.BannedBy, &ban.CreatedAt,
+			&ban.ServerID, &ban.UserID, &ban.Username, &ban.Reason, &ban.BannedBy, &ban.CreatedAt, &ban.ExpiresAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan ban row: %w", err)
 		}
@@ -104,8 +118,16 @@ func (r *sqliteBanRepo) Delete(ctx context.Context, serverID, userID string) err
 	return nil
 }
 
+// Exists — true only when the user has an ACTIVE ban (permanent or a
+// temp ban whose expires_at hasn't passed). Expired rows are ignored
+// so login / WS-connect / channel-rejoin checks pass without needing
+// a separate cleanup step.
 func (r *sqliteBanRepo) Exists(ctx context.Context, serverID, userID string) (bool, error) {
-	query := `SELECT 1 FROM bans WHERE server_id = ? AND user_id = ? LIMIT 1`
+	query := `
+		SELECT 1 FROM bans
+		WHERE server_id = ? AND user_id = ?
+		  AND (expires_at IS NULL OR expires_at > datetime('now'))
+		LIMIT 1`
 
 	var dummy int
 	err := r.db.QueryRowContext(ctx, query, serverID, userID).Scan(&dummy)

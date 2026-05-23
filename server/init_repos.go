@@ -16,6 +16,7 @@ type Repositories struct {
 	Message           repository.MessageRepository
 	Attachment        repository.AttachmentRepository
 	Ban               repository.BanRepository
+	MemberTimeout     repository.MemberTimeoutRepository
 	Server            repository.ServerRepository
 	Invite            repository.InviteRepository
 	Pin               repository.PinRepository
@@ -57,6 +58,7 @@ func initRepositories(conn *sql.DB) *Repositories {
 		Message:           repository.NewSQLiteMessageRepo(conn),
 		Attachment:        repository.NewSQLiteAttachmentRepo(conn),
 		Ban:               repository.NewSQLiteBanRepo(conn),
+		MemberTimeout:     repository.NewSQLiteMemberTimeoutRepo(conn),
 		Server:            repository.NewSQLiteServerRepo(conn),
 		Invite:            repository.NewSQLiteInviteRepo(conn),
 		Pin:               repository.NewSQLitePinRepo(conn),
