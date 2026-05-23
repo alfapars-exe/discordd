@@ -20,6 +20,7 @@
 
 import { useCallback, useMemo } from "react";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+import StreamerPipPreview from "./StreamerPipPreview";
 import { AudioPresets } from "livekit-client";
 import type { AudioCaptureOptions, RoomOptions } from "livekit-client";
 
@@ -154,6 +155,10 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     >
       {isConnected && !isNativeVoice && <RoomAudioRenderer />}
       {isConnected && !isNativeVoice && <VoiceStateManager />}
+      {/* Floating broadcaster-self mini-preview. Lives inside LiveKitRoom
+          so it can use useRoomContext / useLocalParticipant; renders only
+          while isStreaming is true. Self-gated internally. */}
+      {isConnected && !isNativeVoice && <StreamerPipPreview />}
       {children}
     </LiveKitRoom>
   );

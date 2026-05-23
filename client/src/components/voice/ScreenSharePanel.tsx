@@ -84,9 +84,29 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
 
   return (
     <div ref={containerRef} className="screen-share-panel" onContextMenu={handleContextMenu} onDoubleClick={handleDoubleClick}>
-      {/* Narrow TrackReferenceOrPlaceholder to TrackReference when publication exists */}
-      {trackRef.publication && (
+      {/* Broadcaster self-view: showing the video here would feed it back
+          into the capture, creating an infinite mirror tunnel. Discord
+          (and Zoom, Teams, etc.) substitute a "preview paused, your
+          stream is still live" card. The actual video track keeps
+          publishing — we just refuse to render it on the publisher's
+          own screen. Everyone else still sees the live stream. */}
+      {trackRef.publication && !isLocalUser && (
         <VideoTrack trackRef={trackRef as TrackReference} />
+      )}
+      {isLocalUser && trackRef.publication && (
+        <div className="screen-share-self-pause">
+          <div className="screen-share-self-pause-card">
+            <div className="screen-share-self-pause-title">
+              {t("selfPauseTitle", { defaultValue: "Yayının halen devam ediyor" })}
+            </div>
+            <div className="screen-share-self-pause-desc">
+              {t("selfPauseDesc", {
+                defaultValue:
+                  "Kaynaklarından tasarruf etmek için bu önizlemeyi duraklattık.",
+              })}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Viewer chip — only on the broadcaster's own panel. Persistent
