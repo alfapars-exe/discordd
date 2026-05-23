@@ -62,17 +62,14 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
 
       const allVisible = res.data.flatMap((cg) => cg.channels);
 
-      if (selectedChannelId) {
-        const stillVisible = allVisible.some((ch) => ch.id === selectedChannelId);
-        if (!stillVisible) {
-          const firstText = allVisible.find((ch) => ch.type === "text");
-          selectedChannelId = firstText?.id ?? null;
-        }
-      } else {
-        const firstText = allVisible.find((ch) => ch.type === "text");
-        if (firstText) {
-          selectedChannelId = firstText.id;
-        }
+      // Drop the selection if the channel is no longer visible (deleted,
+      // permission revoked, etc.). DO NOT auto-pick a "first text channel"
+      // — that was disorienting on server switch because users found
+      // themselves looking at a channel they didn't choose, sometimes
+      // marking it read by accident. The empty state is fine: users land
+      // on the welcome panel and pick a channel deliberately.
+      if (selectedChannelId && !allVisible.some((ch) => ch.id === selectedChannelId)) {
+        selectedChannelId = null;
       }
 
       set({ categories: res.data, isLoading: false, selectedChannelId });
