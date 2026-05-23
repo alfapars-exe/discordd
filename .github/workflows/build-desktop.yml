@@ -129,9 +129,9 @@ jobs:
         run: |
           @"
           provider: github
-          owner: akinalpfdn
-          repo: Mqvi
-          updaterCacheDirName: mqvi-desktop-updater
+          owner: alfapars-exe
+          repo: discordd
+          updaterCacheDirName: hichat-desktop-updater
           "@ | Set-Content -Path "release/win-unpacked/resources/app-update.yml" -Encoding UTF8
         shell: pwsh
 
