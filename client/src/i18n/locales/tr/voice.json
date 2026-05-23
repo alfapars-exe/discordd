@@ -18,6 +18,8 @@
   "joinVoicePrompt": "Bu ses kanalına katılmak için tıklayın",
   "fullscreen": "Tam Ekran",
   "exitFullscreen": "Tam Ekrandan Çık",
+  "viewerListTooltip": "{{count}} kişi izliyor",
+  "viewerListTitle": "İzleyiciler ({{count}})",
   "toggleLayout": "Düzen Değiştir",
   "endCall": "Aramayı Bitir",
   "minimize": "Küçült",
