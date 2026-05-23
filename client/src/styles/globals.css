@@ -4518,17 +4518,20 @@ body.reduce-motion .electron-app-wrapper::after {
   animation-duration: inherit;
 }
 @keyframes lightning-strike {
-  0%, 96%, 100% { opacity: 0; }
-  /* Two-step flash: a brief jolt, a second brighter jolt, then fade. */
-  96.5%   { opacity: 0.95; }
-  97%     { opacity: 0.5; }
-  97.4%   { opacity: 0.9; }
-  98.5%   { opacity: 0.6; }
-  99.5%   { opacity: 0; }
+  /* Visible flash window is 90 %–100 % of the cycle so the strike
+   * stays ~400–800 ms long even when the per-bolt cycle is short
+   * (5–10 s after the frequency bump). At the previous 3 % window
+   * a 5 s cycle gave only ~150 ms flashes, which felt subliminal. */
+  0%, 90%, 100% { opacity: 0; }
+  91%   { opacity: 0.95; }   /* first jolt */
+  92%   { opacity: 0.5; }
+  93%   { opacity: 0.9; }    /* second brighter jolt */
+  95%   { opacity: 0.6; }
+  98%   { opacity: 0; }      /* fade tail */
 }
 @keyframes bolt-draw {
-  0%, 96%, 100% { stroke-dashoffset: 150; }
-  96.5%, 99% { stroke-dashoffset: 0; }
+  0%, 90%, 100% { stroke-dashoffset: 150; }
+  91%, 97% { stroke-dashoffset: 0; }
 }
 
 body.reduce-motion .lightning-overlay { display: none; }
