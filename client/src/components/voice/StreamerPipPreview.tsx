@@ -18,12 +18,10 @@
  * purely a UI mirror.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { useRoomContext, useLocalParticipant, VideoTrack } from "@livekit/components-react";
-import { Track } from "livekit-client";
-import type { TrackReference } from "@livekit/components-react";
 
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useChannelStore } from "../../stores/channelStore";
@@ -32,12 +30,29 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useServerStore } from "../../stores/serverStore";
 
+/**
+ * PipErrorBoundary — isolates render errors from this floating widget so a
+ * regression here can't trigger the app-wide ErrorBoundary (which reloads
+ * the whole renderer after 2s). The pip is non-essential; if it crashes we
+ * just hide it.
+ */
+class PipErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[StreamerPipPreview] crashed:", error, info);
+  }
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
 function StreamerPipPreviewInner() {
   const { t } = useTranslation("voice");
-  const room = useRoomContext();
-  const { localParticipant } = useLocalParticipant();
 
-  const isStreaming = useVoiceStore((s) => s.isStreaming);
   const setStreaming = useVoiceStore((s) => s.setStreaming);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const viewers = useVoiceStore((s) => {
@@ -58,22 +73,6 @@ function StreamerPipPreviewInner() {
   const [gearOpen, setGearOpen] = useState(false);
   const gearRef = useRef<HTMLButtonElement>(null);
 
-  // The broadcaster's own screen-share publication, narrowed to a
-  // TrackReference so <VideoTrack> can mount it. LiveKit indexes tracks
-  // by source; ScreenShare is the canonical "the thing the user picked
-  // in the screen picker". If the publication isn't ready yet (toggle
-  // pending) we just hide the thumbnail area, not the whole widget.
-  const trackRef = useMemo<TrackReference | null>(() => {
-    if (!localParticipant) return null;
-    const pub = localParticipant.getTrackPublication(Track.Source.ScreenShare);
-    if (!pub) return null;
-    return {
-      participant: localParticipant,
-      publication: pub,
-      source: Track.Source.ScreenShare,
-    } as TrackReference;
-  }, [localParticipant, isStreaming]);
-
   useEffect(() => {
     if (!gearOpen) return;
     function handleOutside(e: MouseEvent) {
@@ -88,9 +87,8 @@ function StreamerPipPreviewInner() {
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [gearOpen]);
 
-  if (!isStreaming || !currentVoiceChannelId) {
-    return null;
-  }
+  // Outer <StreamerPipPreview> already gates on isStreaming +
+  // currentVoiceChannelId, so no redundant check needed here.
 
   function goBackToChannel() {
     // Navigate the active panel to the voice-channel tab so the broadcaster
@@ -153,11 +151,16 @@ function StreamerPipPreviewInner() {
         </button>
 
         <div className="pip-thumb" onClick={goBackToChannel} role="button" tabIndex={0}>
-          {trackRef && room ? (
-            <VideoTrack trackRef={trackRef} />
-          ) : (
-            <div className="pip-thumb-placeholder">{t("streaming", { defaultValue: "Yayındasın!" })}</div>
-          )}
+          {/* Why no <VideoTrack> here: rendering the broadcaster's own
+              screen-share track inside their own UI creates a frame-by-frame
+              capture/display feedback loop. Same trap the self-pause card in
+              ScreenSharePanel already documents. Discord uses a static badge
+              for the PiP thumb for exactly this reason — and crucially,
+              <VideoTrack> mounting with an in-flight LocalTrackPublication
+              has been observed to crash the renderer (caught by ErrorBoundary,
+              shows "Reloading..."). A static placeholder eliminates both
+              the visual tunnel and the crash risk. */}
+          <div className="pip-thumb-placeholder">{t("streaming", { defaultValue: "Yayındasın!" })}</div>
           <div className="pip-thumb-badge">{t("streaming", { defaultValue: "Yayındasın!" })}</div>
         </div>
 
@@ -222,15 +225,20 @@ function StreamerPipPreviewInner() {
 }
 
 /**
- * Outer guard: useRoomContext() throws when there is no LiveKit Room
- * provider above (i.e. the user isn't in voice yet). We gate the inner
- * component on a sentinel so we never render the hook in a dead context.
+ * Outer guard + error boundary: the inner component reads from voiceStore,
+ * channelStore, and (when re-enabled in the future) LiveKit hooks. Any
+ * regression here is contained by PipErrorBoundary so it never reaches the
+ * app-wide ErrorBoundary, which would reload the whole renderer.
  */
 function StreamerPipPreview() {
   const isStreaming = useVoiceStore((s) => s.isStreaming);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   if (!isStreaming || !currentVoiceChannelId) return null;
-  return <StreamerPipPreviewInner />;
+  return (
+    <PipErrorBoundary>
+      <StreamerPipPreviewInner />
+    </PipErrorBoundary>
+  );
 }
 
 export default StreamerPipPreview;
