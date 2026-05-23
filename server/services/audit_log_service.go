@@ -224,25 +224,25 @@ func (s *auditLogService) persistAndBroadcast(entry models.AuditLog) {
 		log.Printf("[audit_log] failed to insert: %v event=%s server=%s", err, entry.EventType, entry.ServerID)
 		return
 	}
-	// The repo populates the row's id + created_at from SQLite defaults but
-	// doesn't reflect them back into our local copy. Stamp CreatedAt here
-	// so the broadcast payload has a timestamp clients can use for ordering
-	// even before their initial /audit fetch completes. ID stays empty in
-	// the broadcast; clients dedupe with the fetched canonical row on next
-	// reload (rare, low-impact for audit history).
+	// After Track R the repo populates entry.ID + entry.CreatedAt via
+	// INSERT ... RETURNING, so the broadcast carries the canonical row id.
+	// Keep the timestamp fallback for paranoia — on a legacy SQLite < 3.35
+	// (which doesn't support RETURNING) the Scan would error and we'd
+	// never reach this point, but if a future repo implementation silently
+	// no-ops the populate, this stamp at least keeps client ordering sane.
 	if entry.CreatedAt.IsZero() {
 		entry.CreatedAt = time.Now().UTC()
 	}
 
 	viewers := s.allowedViewers(entry.ServerID)
-	// Observability: log every persisted audit row + viewer count. Helps
-	// diagnose "I did X but the audit channel didn't update" reports —
-	// no log means s.audit() never reached the buffer (auditLogger nil
-	// or Write dropped); 0 viewers means broadcast skipped (clients see
-	// it on next fetchInitial DB read). One line per event is cheap; this
-	// is the only place every successful audit emission converges.
-	log.Printf("[audit_log] persisted event=%s server=%s actor=%v target=%v viewers=%d",
-		entry.EventType, entry.ServerID, entry.ActorUserID, entry.TargetUserID, len(viewers))
+	// Observability: log every persisted audit row + viewer count. The id is
+	// included so we can verify Track R's RETURNING fix at a glance — if we
+	// ever see id="" again, the repo regressed. Helps diagnose "I did X but
+	// the audit channel didn't update" reports — no log means s.audit()
+	// never reached the buffer (auditLogger nil or Write dropped); 0 viewers
+	// means broadcast skipped (clients see it on next fetchInitial DB read).
+	log.Printf("[audit_log] persisted id=%s event=%s server=%s actor=%v target=%v viewers=%d",
+		entry.ID, entry.EventType, entry.ServerID, entry.ActorUserID, entry.TargetUserID, len(viewers))
 	if len(viewers) > 0 {
 		s.hub.BroadcastToUsers(viewers, ws.Event{
 			Op:   ws.OpAuditEvent,
