@@ -260,7 +260,13 @@ button { font-family:inherit; }
 /* Expanded sidebar — width set via inline style (useResizeHandle) */
 .sidebar { display:flex;flex-direction:column;flex-shrink:0;overflow:visible;position:relative;gap:var(--panel-gap);background:transparent; }
 .sb-main { flex:1;min-height:0;display:flex;flex-direction:column; }
-.sb-dock { flex-shrink:0;min-height:var(--app-panels-height); }
+/* No min-height: dock sizes to UserBar content. The previous 159px floor
+ * (--app-panels-height) was set to keep height stable across voice
+ * connect/disconnect, but had an ugly side effect — when the user is NOT
+ * in voice, .ub-voice-row is unmounted and only .ub-main (~52px) remains,
+ * leaving ~100px of empty space above the avatar row. PiP overlay
+ * (.streamer-pip) is position:fixed so it doesn't depend on this. */
+.sb-dock { flex-shrink:0; }
 
 /* Sidebar Header */
 .sb-header { height:36px;padding:0 8px 0 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--b1);flex-shrink:0; }
