@@ -1,12 +1,13 @@
 // Package services — VoiceService interface, struct, and construction.
 //
 // Method implementations are split across concern-based files in this package:
-//   voice_token.go       — LiveKit token generation (voice + screen share)
-//   voice_state.go       — join/leave/update channel + state queries
-//   voice_admin.go       — server mute/deafen, move, force-disconnect
-//   voice_screenshare.go — screen share viewer tracking
-//   voice_lifecycle.go   — orphan/AFK sweeps + LiveKit participant removal
-//   voice_e2ee.go        — per-room SFrame passphrase helpers
+//
+//	voice_token.go       — LiveKit token generation (voice + screen share)
+//	voice_state.go       — join/leave/update channel + state queries
+//	voice_admin.go       — server mute/deafen, move, force-disconnect
+//	voice_screenshare.go — screen share viewer tracking
+//	voice_lifecycle.go   — orphan/AFK sweeps + LiveKit participant removal
+//	voice_e2ee.go        — per-room SFrame passphrase helpers
 //
 // All files share the single `voiceService` struct and its single `sync.RWMutex`,
 // so the concerns can cross-read each other's state without lock-ordering risk.
@@ -14,6 +15,7 @@ package services
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -176,10 +178,19 @@ func (s *voiceService) SetAuditLogger(logger AuditWriter) {
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
 // Keeps call sites to one line and avoids repeating the nil check.
+//
+// Logs both branches so a "I did X but audit channel is empty" report
+// can tell us exactly where the pipeline dropped: nil logger means
+// main.go wiring regressed; otherwise look at [audit_log] downstream
+// logs from audit_log_service.persistAndBroadcast for Insert/broadcast
+// outcomes.
 func (s *voiceService) audit(entry models.AuditLog) {
-	if s.auditLogger != nil {
-		s.auditLogger.Write(entry)
+	if s.auditLogger == nil {
+		log.Printf("[voice/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		return
 	}
+	log.Printf("[voice/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	s.auditLogger.Write(entry)
 }
 
 // logError writes a structured error log if appLogger is set.
