@@ -23,8 +23,12 @@ type BanChecker interface {
 }
 
 // VoiceStatesProvider returns all active voice states for the ready event.
+// Includes screen-share viewer maps so a client joining mid-session sees
+// "who is already watching X" instead of having to wait for the next
+// join/leave delta.
 type VoiceStatesProvider interface {
 	GetAllVoiceStates() []models.VoiceState
+	GetAllScreenShareViewers() map[string][]string
 }
 
 // UserInfoProvider fetches user profile from DB for Hub cache.
@@ -277,12 +281,16 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		allStates := h.voiceStatesProvider.GetAllVoiceStates()
+		// Snapshot the viewer map once — broadcasters only, others omit it.
+		// One map lookup per streamer keeps the wire shape stable for callers
+		// that don't care about screen share at all.
+		viewersByStreamer := h.voiceStatesProvider.GetAllScreenShareViewers()
 		items := make([]VoiceStateItem, 0, len(allStates))
 		for _, s := range allStates {
 			if !userServers[s.ServerID] {
 				continue
 			}
-			items = append(items, VoiceStateItem{
+			item := VoiceStateItem{
 				UserID:           s.UserID,
 				ChannelID:        s.ChannelID,
 				ServerID:         s.ServerID,
@@ -294,7 +302,13 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 				IsStreaming:      s.IsStreaming,
 				IsServerMuted:    s.IsServerMuted,
 				IsServerDeafened: s.IsServerDeafened,
-			})
+			}
+			if s.IsStreaming {
+				if viewers, ok := viewersByStreamer[s.UserID]; ok && len(viewers) > 0 {
+					item.ScreenShareViewers = viewers
+				}
+			}
+			items = append(items, item)
 		}
 		client.sendEvent(Event{
 			Op:   OpVoiceStatesSync,

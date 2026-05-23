@@ -110,15 +110,23 @@ export const createVoiceWsSlice: StateCreator<
 
   handleVoiceStatesSync: (states: VoiceState[]) => {
     const grouped: Record<string, VoiceState[]> = {};
+    // Seed the viewer map from the sync payload so a freshly-connected
+    // client doesn't have to wait for a join/leave delta before it can
+    // render "who's already watching this streamer". Server only populates
+    // screen_share_viewers when IsStreaming, so the check is implicit.
+    const viewerSeed: Record<string, string[]> = {};
 
     for (const state of states) {
       if (!grouped[state.channel_id]) {
         grouped[state.channel_id] = [];
       }
       grouped[state.channel_id].push(state);
+      if (state.screen_share_viewers && state.screen_share_viewers.length > 0) {
+        viewerSeed[state.user_id] = state.screen_share_viewers;
+      }
     }
 
-    set({ voiceStates: grouped });
+    set({ voiceStates: grouped, screenShareViewers: viewerSeed });
   },
 
   updateUserInfo: (userId, displayName, avatarUrl) => {
@@ -204,8 +212,22 @@ export const createVoiceWsSlice: StateCreator<
   handleScreenShareViewerUpdate: (data) => {
     set((state) => {
       const next = { ...state.screenShareViewers };
-      if (data.viewer_count > 0) {
-        next[data.streamer_user_id] = data.viewer_count;
+      // Incrementally rebuild the viewer set from each join/leave delta.
+      // The viewer_count carried by the event is a server-authoritative
+      // fallback: when it drops to 0 we hard-clear the entry (covers the
+      // "streamer stopped sharing" case where action is "leave" but no
+      // single viewer_user_id meaningfully represents the global drop).
+      const current = new Set<string>(next[data.streamer_user_id] ?? []);
+      if (data.action === "join" && data.viewer_user_id) {
+        current.add(data.viewer_user_id);
+      } else if (data.action === "leave" && data.viewer_user_id) {
+        current.delete(data.viewer_user_id);
+      }
+      // Server-driven cleanup wins when count says 0 (streamer left, etc.)
+      if (data.viewer_count <= 0) {
+        delete next[data.streamer_user_id];
+      } else if (current.size > 0) {
+        next[data.streamer_user_id] = Array.from(current);
       } else {
         delete next[data.streamer_user_id];
       }

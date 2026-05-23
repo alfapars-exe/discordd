@@ -202,25 +202,58 @@ describe("voiceStore", () => {
   // ─── Screen Share Viewer Updates ───
 
   describe("handleScreenShareViewerUpdate", () => {
-    it("should set viewer count", () => {
+    it("should track viewer IDs on join", () => {
       useVoiceStore.getState().handleScreenShareViewerUpdate({
         streamer_user_id: "u1",
         channel_id: "ch1",
-        viewer_count: 3,
+        viewer_count: 1,
         viewer_user_id: "u2",
-        action: "watch",
+        action: "join",
       });
-      expect(useVoiceStore.getState().screenShareViewers["u1"]).toBe(3);
+      expect(useVoiceStore.getState().screenShareViewers["u1"]).toEqual(["u2"]);
     });
 
-    it("should remove entry when viewer count is 0", () => {
-      useVoiceStore.setState({ screenShareViewers: { u1: 2 } });
+    it("should accumulate multiple viewers", () => {
+      useVoiceStore.getState().handleScreenShareViewerUpdate({
+        streamer_user_id: "u1",
+        channel_id: "ch1",
+        viewer_count: 1,
+        viewer_user_id: "u2",
+        action: "join",
+      });
+      useVoiceStore.getState().handleScreenShareViewerUpdate({
+        streamer_user_id: "u1",
+        channel_id: "ch1",
+        viewer_count: 2,
+        viewer_user_id: "u3",
+        action: "join",
+      });
+      expect(useVoiceStore.getState().screenShareViewers["u1"]?.sort()).toEqual([
+        "u2",
+        "u3",
+      ]);
+    });
+
+    it("should remove a single viewer on leave", () => {
+      useVoiceStore.setState({ screenShareViewers: { u1: ["u2", "u3"] } });
+      useVoiceStore.getState().handleScreenShareViewerUpdate({
+        streamer_user_id: "u1",
+        channel_id: "ch1",
+        viewer_count: 1,
+        viewer_user_id: "u2",
+        action: "leave",
+      });
+      expect(useVoiceStore.getState().screenShareViewers["u1"]).toEqual(["u3"]);
+    });
+
+    it("should clear entry when viewer_count drops to 0", () => {
+      useVoiceStore.setState({ screenShareViewers: { u1: ["u2"] } });
       useVoiceStore.getState().handleScreenShareViewerUpdate({
         streamer_user_id: "u1",
         channel_id: "ch1",
         viewer_count: 0,
         viewer_user_id: "u2",
-        action: "unwatch",
+        action: "leave",
       });
       expect(useVoiceStore.getState().screenShareViewers["u1"]).toBeUndefined();
     });
@@ -353,7 +386,7 @@ describe("voiceStore", () => {
         isStreaming: true,
         activeSpeakers: { u1: true },
         watchingScreenShares: { u2: true },
-        screenShareViewers: { u2: 3 },
+        screenShareViewers: { u2: ["u3", "u4", "u5"] },
         rtt: 50,
       });
       useVoiceStore.getState().leaveVoiceChannel();

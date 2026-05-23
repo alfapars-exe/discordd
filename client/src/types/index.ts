@@ -248,6 +248,13 @@ export type VoiceState = {
   is_server_muted: boolean;
   /** Server-wide deafen by admin */
   is_server_deafened: boolean;
+  /**
+   * Active viewers of this user's screen share — only set when streaming.
+   * Server populates this in voice_states_sync so a client joining
+   * mid-session knows who's already watching whom. Optional because the
+   * field is omitted when empty (matches Go's omitempty wire shape).
+   */
+  screen_share_viewers?: string[];
 };
 
 /** LiveKit token response from POST /api/voice/token. */

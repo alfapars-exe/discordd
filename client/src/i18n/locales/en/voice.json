@@ -18,6 +18,8 @@
   "joinVoicePrompt": "Click to join this voice channel",
   "fullscreen": "Fullscreen",
   "exitFullscreen": "Exit Fullscreen",
+  "viewerListTooltip": "{{count}} watching",
+  "viewerListTitle": "Viewers ({{count}})",
   "toggleLayout": "Toggle Layout",
   "endCall": "End Call",
   "minimize": "Minimize",

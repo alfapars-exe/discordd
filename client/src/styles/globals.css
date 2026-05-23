@@ -2157,6 +2157,39 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .screen-share-panel-btn:hover { background:var(--bg-h);color:var(--t0); }
 .screen-share-panel-btn svg { width:16px;height:16px; }
 
+/* Viewer chip — broadcaster's own panel, persistent top-right.
+   Stays visible (not hover-gated) so the broadcaster always knows
+   how many people are watching. */
+.screen-share-viewer-chip {
+  position:absolute;top:8px;right:8px;z-index:2;
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(0,0,0,0.65);color:var(--t0);
+  border:none;border-radius:14px;padding:4px 10px;
+  font-size:12px;font-weight:600;cursor:pointer;
+  transition:background .15s;backdrop-filter:blur(6px);
+}
+.screen-share-viewer-chip:hover,
+.screen-share-viewer-chip.is-open { background:var(--primary); }
+.screen-share-viewer-chip svg { display:block; }
+
+.screen-share-viewer-popover {
+  position:fixed;z-index:9999;min-width:200px;max-width:260px;
+  background:var(--bg-2);border:1px solid var(--b1);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);padding:0;overflow:hidden;
+  animation:vpIn .12s ease-out;
+}
+.screen-share-viewer-popover-header {
+  padding:8px 12px;font-size:12px;font-weight:600;color:var(--t1);
+  border-bottom:1px solid var(--b1);background:var(--bg-1);
+}
+.screen-share-viewer-list { margin:0;padding:4px 0;list-style:none;max-height:240px;overflow-y:auto; }
+.screen-share-viewer-item {
+  display:flex;align-items:center;gap:8px;padding:6px 12px;
+}
+.screen-share-viewer-name {
+  font-size:13px;color:var(--t0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
 /* Layout toggle button (top-right) */
 .screen-share-toggle { position:absolute;top:12px;right:12px;z-index:10;width:32px;height:32px;border:none;border-radius:6px;background:rgba(0,0,0,0.6);color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s; }
 .screen-share-toggle:hover { background:var(--bg-h);color:var(--t0); }

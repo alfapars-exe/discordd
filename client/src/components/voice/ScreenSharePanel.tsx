@@ -14,6 +14,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { resolveUserId } from "../../utils/constants";
 import ScreenShareContextMenu from "./ScreenShareContextMenu";
+import ScreenShareViewerChip from "./ScreenShareViewerChip";
 
 type ScreenSharePanelProps = {
   trackRef: TrackReferenceOrPlaceholder;
@@ -86,6 +87,16 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
       {/* Narrow TrackReferenceOrPlaceholder to TrackReference when publication exists */}
       {trackRef.publication && (
         <VideoTrack trackRef={trackRef as TrackReference} />
+      )}
+
+      {/* Viewer chip — only on the broadcaster's own panel. Persistent
+          (no hover gate) so the broadcaster sees "N watching" at a glance
+          even when the hover overlay is hidden. */}
+      {isLocalUser && (
+        <ScreenShareViewerChip
+          broadcasterUserId={realUserId}
+          fullscreenContainerRef={containerRef}
+        />
       )}
 
       {/* Hover overlay with CSS opacity transition */}

@@ -12,8 +12,16 @@ import type { VoiceStore } from "../voiceStore";
 export type VoiceScreenShareSlice = {
   /** streamer user IDs we're actively subscribed to */
   watchingScreenShares: Record<string, boolean>;
-  /** streamerUserID -> viewer count (maintained via WS events) */
-  screenShareViewers: Record<string, number>;
+  /**
+   * streamerUserID -> list of viewer user IDs (maintained via WS events).
+   *
+   * Previously this was a count only (`Record<string, number>`). The server
+   * already broadcasts each viewer's identity in `screen_share_viewer_update`
+   * (with `viewer_user_id` + `action: "join" | "leave"`), so storing the full
+   * set lets the broadcaster's UI render "who is watching me" — and a count
+   * is still trivially `viewers.length` for the existing sidebar badge.
+   */
+  screenShareViewers: Record<string, string[]>;
 
   toggleWatchScreenShare: (userId: string) => void;
   focusScreenShare: (userId: string) => void;

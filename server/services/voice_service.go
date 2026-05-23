@@ -73,6 +73,9 @@ type VoiceService interface {
 	GetUserVoiceChannelID(userID string) string
 	WatchScreenShare(viewerUserID, streamerUserID string, watching bool)
 	GetScreenShareViewerCount(streamerUserID string) int
+	// GetAllScreenShareViewers returns streamerUserID -> list of viewer user IDs.
+	// Used in voice-state sync so a client joining mid-session sees existing viewers.
+	GetAllScreenShareViewers() map[string][]string
 	GetScreenShareStats() (streamers int, viewers int)
 	CleanupViewersForStreamer(streamerUserID string)
 	UpdateActivity(userID string)

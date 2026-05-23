@@ -20,11 +20,11 @@ const (
 
 // Server -> Client
 const (
-	OpReady         = "ready"
-	OpHeartbeatAck  = "heartbeat_ack"
-	OpMessageCreate = "message_create"
-	OpMessageUpdate = "message_update"
-	OpMessageDelete = "message_delete"
+	OpReady          = "ready"
+	OpHeartbeatAck   = "heartbeat_ack"
+	OpMessageCreate  = "message_create"
+	OpMessageUpdate  = "message_update"
+	OpMessageDelete  = "message_delete"
 	OpChannelCreate  = "channel_create"
 	OpChannelUpdate  = "channel_update"
 	OpChannelDelete  = "channel_delete"
@@ -32,17 +32,17 @@ const (
 	OpCategoryUpdate = "category_update"
 	OpCategoryDelete = "category_delete"
 	OpTypingStart    = "typing_start"
-	OpPresence      = "presence_update"
-	OpMemberJoin    = "member_join"
-	OpMemberLeave   = "member_leave"
-	OpMemberUpdate  = "member_update"
-	OpRoleCreate    = "role_create"
-	OpRoleUpdate    = "role_update"
-	OpRoleDelete    = "role_delete"
-	OpRolesReorder  = "roles_reorder"
-	OpServerUpdate = "server_update"
-	OpServerCreate = "server_create"
-	OpServerDelete = "server_delete"
+	OpPresence       = "presence_update"
+	OpMemberJoin     = "member_join"
+	OpMemberLeave    = "member_leave"
+	OpMemberUpdate   = "member_update"
+	OpRoleCreate     = "role_create"
+	OpRoleUpdate     = "role_update"
+	OpRoleDelete     = "role_delete"
+	OpRolesReorder   = "roles_reorder"
+	OpServerUpdate   = "server_update"
+	OpServerCreate   = "server_create"
+	OpServerDelete   = "server_delete"
 
 	OpMessagePin   = "message_pin"
 	OpMessageUnpin = "message_unpin"
@@ -56,17 +56,17 @@ const (
 	OpCategoryReorder = "category_reorder"
 
 	// DM operations
-	OpDMChannelCreate  = "dm_channel_create"
-	OpDMMessageCreate  = "dm_message_create"
-	OpDMMessageUpdate  = "dm_message_update"
-	OpDMMessageDelete  = "dm_message_delete"
-	OpDMReactionUpdate = "dm_reaction_update"
-	OpDMTypingStart    = "dm_typing_start"
-	OpDMMessagePin     = "dm_message_pin"
-	OpDMMessageUnpin   = "dm_message_unpin"
-	OpDMSettingsUpdate  = "dm_settings_update"
-	OpDMRequestAccept      = "dm_request_accept"
-	OpDMRequestDecline     = "dm_request_decline"
+	OpDMChannelCreate       = "dm_channel_create"
+	OpDMMessageCreate       = "dm_message_create"
+	OpDMMessageUpdate       = "dm_message_update"
+	OpDMMessageDelete       = "dm_message_delete"
+	OpDMReactionUpdate      = "dm_reaction_update"
+	OpDMTypingStart         = "dm_typing_start"
+	OpDMMessagePin          = "dm_message_pin"
+	OpDMMessageUnpin        = "dm_message_unpin"
+	OpDMSettingsUpdate      = "dm_settings_update"
+	OpDMRequestAccept       = "dm_request_accept"
+	OpDMRequestDecline      = "dm_request_decline"
 	OpDMChannelStatusChange = "dm_channel_status_change"
 
 	// Block operations
@@ -74,8 +74,8 @@ const (
 	OpUserUnblock = "user_unblock"
 
 	// Voice operations
-	OpVoiceStateUpdate       = "voice_state_update"
-	OpVoiceStatesSync        = "voice_states_sync"
+	OpVoiceStateUpdate        = "voice_state_update"
+	OpVoiceStatesSync         = "voice_states_sync"
 	OpScreenShareViewerUpdate = "screen_share_viewer_update"
 
 	// Friend operations
@@ -91,10 +91,10 @@ const (
 	OpVoiceLeave            = "voice_leave"
 	OpVoiceStateUpdateReq   = "voice_state_update_request"
 	OpVoiceAdminStateUpdate = "voice_admin_state_update"
-	OpVoiceMoveUser        = "voice_move_user"
-	OpVoiceDisconnectUser  = "voice_disconnect_user"
-	OpScreenShareWatch     = "screen_share_watch"
-	OpVoiceActivity        = "voice_activity" // client reports mouse/keyboard/VAD/screen share activity
+	OpVoiceMoveUser         = "voice_move_user"
+	OpVoiceDisconnectUser   = "voice_disconnect_user"
+	OpScreenShareWatch      = "screen_share_watch"
+	OpVoiceActivity         = "voice_activity" // client reports mouse/keyboard/VAD/screen share activity
 )
 
 // Server -> Client voice moderation
@@ -189,8 +189,8 @@ type VoiceJoinData struct {
 
 // VoiceStateUpdateRequestData — nil pointer = no change (partial update).
 type VoiceStateUpdateRequestData struct {
-	IsMuted    *bool `json:"is_muted,omitempty"`
-	IsDeafened *bool `json:"is_deafened,omitempty"`
+	IsMuted     *bool `json:"is_muted,omitempty"`
+	IsDeafened  *bool `json:"is_deafened,omitempty"`
 	IsStreaming *bool `json:"is_streaming,omitempty"`
 }
 
@@ -248,6 +248,11 @@ type VoiceStateItem struct {
 	IsStreaming      bool   `json:"is_streaming"`
 	IsServerMuted    bool   `json:"is_server_muted"`
 	IsServerDeafened bool   `json:"is_server_deafened"`
+	// ScreenShareViewers — user IDs currently watching this user's screen
+	// share. Only populated for streamers (IsStreaming=true) and only when
+	// the requester's client has access to those identities. Omitted from
+	// the wire when empty so older clients that don't read it are unaffected.
+	ScreenShareViewers []string `json:"screen_share_viewers,omitempty"`
 }
 
 // ScreenShareWatchData — client tells server they started/stopped watching a screen share.
@@ -262,7 +267,7 @@ type ScreenShareViewerUpdateData struct {
 	ChannelID      string `json:"channel_id"`
 	ViewerCount    int    `json:"viewer_count"`
 	ViewerUserID   string `json:"viewer_user_id"` // who joined/left
-	Action         string `json:"action"`          // "join" or "leave"
+	Action         string `json:"action"`         // "join" or "leave"
 }
 
 // VoiceAFKKickData — sent to user before AFK disconnect.
@@ -290,7 +295,7 @@ type P2PCallDeclineData struct {
 // P2PSignalData carries WebRTC SDP/ICE data. Server relays without inspecting.
 type P2PSignalData struct {
 	CallID    string `json:"call_id"`
-	Type      string `json:"type"`                // "offer", "answer", "ice-candidate"
+	Type      string `json:"type"` // "offer", "answer", "ice-candidate"
 	SDP       string `json:"sdp,omitempty"`
 	Candidate any    `json:"candidate,omitempty"`
 }

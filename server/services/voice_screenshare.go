@@ -59,6 +59,25 @@ func (s *voiceService) GetScreenShareViewerCount(streamerUserID string) int {
 	return len(s.screenShareViewers[streamerUserID])
 }
 
+// GetAllScreenShareViewers returns a snapshot of the viewer map keyed by
+// streamer user ID. Each value is the slice of viewer user IDs currently
+// watching that streamer's share. Used by the ws handler to seed state-sync
+// for newly connecting clients so they see existing viewers without
+// waiting for the next join/leave delta.
+func (s *voiceService) GetAllScreenShareViewers() map[string][]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string][]string, len(s.screenShareViewers))
+	for streamerID, viewers := range s.screenShareViewers {
+		ids := make([]string, 0, len(viewers))
+		for viewerID := range viewers {
+			ids = append(ids, viewerID)
+		}
+		out[streamerID] = ids
+	}
+	return out
+}
+
 // GetScreenShareStats returns the total number of active streamers and total viewers.
 func (s *voiceService) GetScreenShareStats() (streamers int, viewers int) {
 	s.mu.RLock()
