@@ -68,6 +68,7 @@ function loadPersistedTransparent(): boolean {
 type SettingsTab =
   | "profile"
   | "appearance"
+  | "accessibility"
   | "general"
   | "voice"
   | "security"

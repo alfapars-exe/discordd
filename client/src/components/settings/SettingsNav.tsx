@@ -20,6 +20,7 @@ type NavItem = {
 const USER_ITEMS: NavItem[] = [
   { id: "profile", labelKey: "profile" },
   { id: "appearance", labelKey: "appearance" },
+  { id: "accessibility", labelKey: "accessibility" },
   { id: "voice", labelKey: "voiceSettings" },
   { id: "security", labelKey: "security" },
   { id: "encryption", labelKey: "encryption" },

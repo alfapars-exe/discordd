@@ -4,6 +4,7 @@ import { BrowserRouter, HashRouter } from "react-router-dom";
 import "./i18n"; // Must be imported before App for i18n initialization
 import "./styles/globals.css";
 import "./utils/screenShareCursorPatch"; // Wire user's cursor preference into getDisplayMedia
+import "./stores/accessibilityStore"; // Side-effect: applyAccessibility(initial) on module load
 import App from "./App";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { isNativeApp } from "./utils/constants";
