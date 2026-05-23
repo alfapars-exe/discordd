@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -44,10 +45,11 @@ func (f *ChannelVisibilityFilter) CanSee(channelID string) bool {
 // ChannelService handles channel CRUD. All list operations are server-scoped.
 type ChannelService interface {
 	GetAllGrouped(ctx context.Context, serverID, userID string) ([]models.CategoryWithChannels, error)
-	Create(ctx context.Context, serverID string, req *models.CreateChannelRequest) (*models.Channel, error)
-	Update(ctx context.Context, id string, req *models.UpdateChannelRequest) (*models.Channel, error)
-	Delete(ctx context.Context, id string) error
+	Create(ctx context.Context, serverID, actorID string, req *models.CreateChannelRequest) (*models.Channel, error)
+	Update(ctx context.Context, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error)
+	Delete(ctx context.Context, actorID, id string) error
 	ReorderChannels(ctx context.Context, serverID string, req *models.ReorderChannelsRequest, userID string) ([]models.CategoryWithChannels, error)
+	SetAuditLogger(logger AuditWriter)
 }
 
 type channelService struct {
@@ -56,6 +58,24 @@ type channelService struct {
 	hub           ws.Broadcaster
 	visChecker    ChannelVisibilityChecker
 	voiceProvider UserVoiceChannelProvider
+	auditLogger   AuditWriter
+}
+
+func (s *channelService) SetAuditLogger(logger AuditWriter) {
+	s.auditLogger = logger
+}
+
+// audit emits an audit log event if an audit logger is wired. Nil-safe.
+// Same observability pattern as member/role/voice: both branches log so a
+// "I created/renamed/deleted a channel but audit channel stayed empty"
+// report tells us exactly where the pipeline dropped.
+func (s *channelService) audit(entry models.AuditLog) {
+	if s.auditLogger == nil {
+		log.Printf("[channel/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		return
+	}
+	log.Printf("[channel/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	s.auditLogger.Write(entry)
 }
 
 func NewChannelService(
@@ -140,7 +160,7 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 	return result, nil
 }
 
-func (s *channelService) Create(ctx context.Context, serverID string, req *models.CreateChannelRequest) (*models.Channel, error) {
+func (s *channelService) Create(ctx context.Context, serverID, actorID string, req *models.CreateChannelRequest) (*models.Channel, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
@@ -199,10 +219,23 @@ func (s *channelService) Create(ctx context.Context, serverID string, req *model
 		Data: nil,
 	})
 
+	// Skip audit for the server's own auto-created denetim channel — that
+	// path goes through server_service during initial setup and audit_logs
+	// for a non-existent server pollute history. Real user-initiated audit
+	// channel creation is blocked above (one per server), so the only call
+	// reaching this point is a normal text/voice channel anyway.
+	actor := actorID
+	s.audit(models.AuditLog{
+		ServerID:    serverID,
+		ActorUserID: &actor,
+		EventType:   models.AuditEventChannelCreate,
+		Metadata:    fmt.Sprintf(`{"channel_name":%q,"channel_type":%q}`, channel.Name, string(channel.Type)),
+	})
+
 	return channel, nil
 }
 
-func (s *channelService) Update(ctx context.Context, id string, req *models.UpdateChannelRequest) (*models.Channel, error) {
+func (s *channelService) Update(ctx context.Context, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
@@ -218,6 +251,9 @@ func (s *channelService) Update(ctx context.Context, id string, req *models.Upda
 	if channel.Type == models.ChannelTypeAudit && req.Name != nil && *req.Name != channel.Name {
 		return nil, fmt.Errorf("%w: audit channel cannot be renamed", pkg.ErrForbidden)
 	}
+
+	// Capture old name BEFORE mutation — needed for rename audit metadata.
+	oldName := channel.Name
 
 	if req.Name != nil {
 		channel.Name = *req.Name
@@ -236,6 +272,16 @@ func (s *channelService) Update(ctx context.Context, id string, req *models.Upda
 		}
 	}
 
+	// Track T1 — voice-only fields. Silently ignore when sent to a text/audit
+	// channel rather than erroring. Model-level Validate() already clamped
+	// both to the legal range (8000-384000 bps / 0-99 users).
+	if req.Bitrate != nil && channel.Type == models.ChannelTypeVoice {
+		channel.Bitrate = *req.Bitrate
+	}
+	if req.UserLimit != nil && channel.Type == models.ChannelTypeVoice {
+		channel.UserLimit = *req.UserLimit
+	}
+
 	if err := s.channelRepo.Update(ctx, channel); err != nil {
 		return nil, err
 	}
@@ -245,10 +291,23 @@ func (s *channelService) Update(ctx context.Context, id string, req *models.Upda
 		Data: channel,
 	})
 
+	// Only the rename branch is auditable here. Topic and category-move
+	// edits are too noisy (every drag-drop reorder would log) and there's
+	// no i18n template for them yet — see locales/{tr,en}/audit.json.
+	if oldName != channel.Name {
+		actor := actorID
+		s.audit(models.AuditLog{
+			ServerID:    channel.ServerID,
+			ActorUserID: &actor,
+			EventType:   models.AuditEventChannelRename,
+			Metadata:    fmt.Sprintf(`{"old_name":%q,"new_name":%q}`, oldName, channel.Name),
+		})
+	}
+
 	return channel, nil
 }
 
-func (s *channelService) Delete(ctx context.Context, id string) error {
+func (s *channelService) Delete(ctx context.Context, actorID, id string) error {
 	// Audit channels are non-deletable — they hold the server's moderation
 	// history and removing them would orphan audit_logs rows (FK CASCADE
 	// keeps DB consistent, but UI-side users would lose access to the
@@ -267,6 +326,18 @@ func (s *channelService) Delete(ctx context.Context, id string) error {
 		Op:   ws.OpChannelDelete,
 		Data: map[string]string{"id": id},
 	})
+
+	// Use the existing pre-delete snapshot for audit metadata — the row is
+	// already gone from the DB, so re-fetching would fail.
+	if existing != nil {
+		actor := actorID
+		s.audit(models.AuditLog{
+			ServerID:    existing.ServerID,
+			ActorUserID: &actor,
+			EventType:   models.AuditEventChannelDelete,
+			Metadata:    fmt.Sprintf(`{"channel_name":%q}`, existing.Name),
+		})
+	}
 
 	return nil
 }

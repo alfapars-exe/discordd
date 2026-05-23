@@ -42,6 +42,18 @@ function AvatarUpload({
 
     if (file.size > MAX_FILE_SIZE) return;
 
+    // Track T2 — animated GIF / WebP shortcut. Cropping these on a 2D canvas
+    // would flatten them to a single static PNG frame, killing the animation
+    // (canvas.toBlob() returns one frame). For animated avatars we skip the
+    // crop UI entirely and upload the original file as-is. The Go backend
+    // accepts image/gif + image/webp in allowedImageMimes, so the file path
+    // works end-to-end. Users see a one-shot upload instead of the crop modal.
+    if (file.type === "image/gif" || file.type === "image/webp") {
+      onUpload(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     // Read as data URL and open crop modal
     const reader = new FileReader();
     reader.onload = () => {

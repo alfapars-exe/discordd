@@ -82,10 +82,18 @@ func (r *CreateChannelRequest) Validate() error {
 
 // UpdateChannelRequest uses pointers for partial update — nil means "don't change".
 // CategoryID: empty string = remove from category, non-nil = move to target category.
+//
+// Bitrate (voice only, Track T): 8000–384000 bps. The 384 kbps ceiling matches
+// what the user asked for ("Ses kalitesi 384 kbps olsun") and what the Opus
+// codec used by LiveKit publishes cleanly at; below 8 kbps Opus produces
+// audible artefacts, above 384 kbps wastes bandwidth without quality gain.
+// UserLimit: 0 = unlimited, otherwise 1–99 (Discord's cap).
 type UpdateChannelRequest struct {
 	Name       *string `json:"name"`
 	Topic      *string `json:"topic"`
 	CategoryID *string `json:"category_id"`
+	Bitrate    *int    `json:"bitrate"`
+	UserLimit  *int    `json:"user_limit"`
 }
 
 func (r *UpdateChannelRequest) Validate() error {
@@ -101,6 +109,18 @@ func (r *UpdateChannelRequest) Validate() error {
 		*r.Topic = strings.TrimSpace(*r.Topic)
 		if utf8.RuneCountInString(*r.Topic) > 1024 {
 			return fmt.Errorf("channel topic must be at most 1024 characters")
+		}
+	}
+
+	if r.Bitrate != nil {
+		if *r.Bitrate < 8000 || *r.Bitrate > 384000 {
+			return fmt.Errorf("bitrate must be between 8000 and 384000 bps")
+		}
+	}
+
+	if r.UserLimit != nil {
+		if *r.UserLimit < 0 || *r.UserLimit > 99 {
+			return fmt.Errorf("user_limit must be between 0 and 99")
 		}
 	}
 

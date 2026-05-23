@@ -384,6 +384,14 @@ function ChannelSettings() {
                 </select>
               </div>
 
+              {/* Voice-only: bitrate slider (Track T1).
+                  8 kbps minimum (intelligible speech), 384 kbps maximum
+                  (matches user request — Opus stereo at full quality).
+                  Discord presets: 64 / 96 / 128 / 256 / 384 kbps. */}
+              {selectedChannel.type === "voice" && (
+                <ChannelBitrateRow channel={selectedChannel} />
+              )}
+
               {/* Channel permissions */}
               <ChannelPermissionEditor channel={selectedChannel} />
             </div>
@@ -469,6 +477,84 @@ function ChannelSettings() {
       {showCreateModal && (
         <CreateChannelModal onClose={() => setShowCreateModal(false)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * ChannelBitrateRow — voice-channel bitrate slider (Track T1).
+ *
+ * Discord preset ladder: 64 / 96 / 128 / 256 / 384 kbps. We snap the slider
+ * value to one of those steps on release. The server-side model layer
+ * Validate() already enforces 8000–384000, so the UI doesn't need to clamp
+ * defensively; it just exposes the meaningful presets.
+ *
+ * Saving fires immediately on selection (no separate "Save" button) — same
+ * pattern the category dropdown above uses. PATCH /channels/{id} with the
+ * single `bitrate` field; failure shows a toast and rolls the UI back to the
+ * server-confirmed value on next channel store sync.
+ */
+function ChannelBitrateRow({ channel }: { channel: Channel }) {
+  const { t } = useTranslation("channels");
+  const addToast = useToastStore((s) => s.addToast);
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const [pending, setPending] = useState(false);
+  const [value, setValue] = useState(channel.bitrate ?? 64000);
+
+  useEffect(() => {
+    setValue(channel.bitrate ?? 64000);
+  }, [channel.id, channel.bitrate]);
+
+  const presets = [8000, 64000, 96000, 128000, 256000, 384000];
+
+  async function commit(next: number) {
+    if (!activeServerId || next === channel.bitrate) return;
+    setPending(true);
+    const res = await channelApi.updateChannel(activeServerId, channel.id, {
+      bitrate: next,
+    });
+    setPending(false);
+    if (!res.success) {
+      setValue(channel.bitrate ?? 64000);
+      addToast("error", t("channelUpdateError"));
+    }
+  }
+
+  return (
+    <div className="channel-settings-cat-row">
+      <label className="settings-label">
+        {t("channelBitrate", { defaultValue: "Ses Kalitesi" })}
+        <span style={{ marginLeft: 8, color: "var(--t3)", fontWeight: 400 }}>
+          {Math.round(value / 1000)} kbps
+        </span>
+      </label>
+      <div className="acc-slider-track">
+        <div className="acc-slider-ticks">
+          {presets.map((p) => (
+            <span key={p} className="acc-slider-tick">{Math.round(p / 1000)}k</span>
+          ))}
+        </div>
+        <input
+          type="range"
+          min={8000}
+          max={384000}
+          step={1000}
+          value={value}
+          onChange={(e) => setValue(Number(e.target.value))}
+          onMouseUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+          onTouchEnd={(e) => commit(Number((e.target as HTMLInputElement).value))}
+          onKeyUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+          disabled={pending}
+          className="vs-range"
+          aria-label={t("channelBitrate", { defaultValue: "Ses Kalitesi" })}
+        />
+      </div>
+      <div className="vs-desc" style={{ marginTop: 6 }}>
+        {t("channelBitrateDesc", {
+          defaultValue:
+            "Daha yüksek bitrate = daha net ses, daha fazla bant genişliği. 384 kbps stüdyo kalitesi.",
+        })}
+      </div>
     </div>
   );
 }

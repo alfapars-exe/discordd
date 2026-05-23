@@ -41,7 +41,7 @@ export async function createChannel(serverId: string, data: {
 export async function updateChannel(
   serverId: string,
   id: string,
-  data: { name?: string; topic?: string; category_id?: string }
+  data: { name?: string; topic?: string; category_id?: string; bitrate?: number; user_limit?: number }
 ) {
   return apiClient<Channel>(`/servers/${serverId}/channels/${id}`, {
     method: "PATCH",
