@@ -92,6 +92,12 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       noiseSuppression: true,
       autoGainControl: true,
       echoCancellation: true,
+      // Mono capture across the board. Some USB / virtual mics expose two
+      // channels with one silent; without this, the silent channel feeds
+      // half the playback graph on remotes and shows up as "audio only in
+      // one ear". Forcing mono at capture eliminates that whole class of
+      // bug regardless of downstream processor (RNNoise, VadGate, none).
+      channelCount: 1,
       ...(inputDevice ? { deviceId: inputDevice } : {}),
     }),
     [inputDevice],

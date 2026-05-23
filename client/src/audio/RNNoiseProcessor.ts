@@ -127,9 +127,18 @@ class RNNoiseProcessor
     const inputStream = new MediaStream([track]);
     this.sourceNode = audioContext.createMediaStreamSource(inputStream);
 
-    // Input volume GainNode — applied before RNNoise processing
+    // Input volume GainNode — applied before RNNoise processing.
+    // Explicit mono pinning: if the OS hands us a stereo mic device (some
+    // USB headsets, virtual cables) the right channel can come through
+    // silent — RNNoise's mono pipeline + LiveKit's mono publish then drop
+    // it entirely on the receiving end. Forcing the WebAudio graph to
+    // collapse to a single channel here makes the failure visible AT
+    // SOURCE rather than as one-sided silent playback on remotes.
     this.gainNode = audioContext.createGain();
     this.gainNode.gain.value = this.initialInputVolume / 100;
+    this.gainNode.channelCount = 1;
+    this.gainNode.channelCountMode = "explicit";
+    this.gainNode.channelInterpretation = "speakers";
 
     // maxChannels: 1 — mono mic input (stereo unnecessary, saves CPU)
     this.rnnoiseNode = new RnnoiseWorkletNode(audioContext, {
@@ -137,13 +146,21 @@ class RNNoiseProcessor
       maxChannels: 1,
     });
 
-    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
+    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor", {
+      outputChannelCount: [1],
+      channelCount: 1,
+      channelCountMode: "explicit",
+      channelInterpretation: "speakers",
+    });
     // Send hysteresis thresholds based on the chosen level + sensitivity slider.
     // Level dictates the base curve, sensitivity offsets it ±6 dB; the worklet
     // honours sensitivity=100 as "gate disabled" via a null payload.
     this.applyGateConfig();
 
     this.destinationNode = audioContext.createMediaStreamDestination();
+    this.destinationNode.channelCount = 1;
+    this.destinationNode.channelCountMode = "explicit";
+    this.destinationNode.channelInterpretation = "speakers";
 
     this.sourceNode.connect(this.gainNode);
     this.gainNode.connect(this.rnnoiseNode);

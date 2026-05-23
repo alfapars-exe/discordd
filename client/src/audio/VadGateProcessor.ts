@@ -72,14 +72,28 @@ class VadGateProcessor
     const inputStream = new MediaStream([track]);
     this.sourceNode = audioContext.createMediaStreamSource(inputStream);
 
-    // Input volume GainNode — applied before VAD gate processing
+    // Input volume GainNode — applied before VAD gate processing.
+    // Mono pinning mirrors RNNoiseProcessor: stereo mics with a silent
+    // channel produce one-sided playback on remotes if the WebAudio
+    // graph isn't collapsed at source.
     this.gainNode = audioContext.createGain();
     this.gainNode.gain.value = this.initialInputVolume / 100;
+    this.gainNode.channelCount = 1;
+    this.gainNode.channelCountMode = "explicit";
+    this.gainNode.channelInterpretation = "speakers";
 
-    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
+    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor", {
+      outputChannelCount: [1],
+      channelCount: 1,
+      channelCountMode: "explicit",
+      channelInterpretation: "speakers",
+    });
     this.applyGateConfig();
 
     this.destinationNode = audioContext.createMediaStreamDestination();
+    this.destinationNode.channelCount = 1;
+    this.destinationNode.channelCountMode = "explicit";
+    this.destinationNode.channelInterpretation = "speakers";
 
     this.sourceNode.connect(this.gainNode);
     this.gainNode.connect(this.vadGateNode);

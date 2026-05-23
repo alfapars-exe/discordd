@@ -30,7 +30,15 @@ import { useToastStore } from "./toastStore";
 /** Acquire a local mic (+ optional camera) stream for a call. */
 async function getMediaStream(callType: P2PCallType): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
-    audio: true,
+    // Match VoiceProvider's audioCaptureDefaults: mono + the standard
+    // WebRTC enhancers. Without channelCount:1 some mics expose a stereo
+    // pair with one silent channel and the remote hears audio in one ear.
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
     video:
       callType === "video"
         ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
