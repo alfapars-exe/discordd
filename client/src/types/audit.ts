@@ -20,6 +20,8 @@ export type AuditEventType =
   | "member_kick"
   | "member_ban"
   | "member_unban"
+  | "member_timeout"
+  | "member_timeout_remove"
   | "role_create"
   | "role_delete"
   | "role_assign"

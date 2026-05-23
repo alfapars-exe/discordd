@@ -39,6 +39,7 @@ type messageService struct {
 	roleRepo        repository.RoleRepository
 	reactionRepo    repository.ReactionRepository
 	readStateRepo   repository.ReadStateRepository
+	timeoutRepo     repository.MemberTimeoutRepository
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
 	auditLogger     AuditWriter
@@ -71,6 +72,7 @@ func NewMessageService(
 	roleRepo repository.RoleRepository,
 	reactionRepo repository.ReactionRepository,
 	readStateRepo repository.ReadStateRepository,
+	timeoutRepo repository.MemberTimeoutRepository,
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
 ) MessageService {
@@ -84,6 +86,7 @@ func NewMessageService(
 		roleRepo:        roleRepo,
 		reactionRepo:    reactionRepo,
 		readStateRepo:   readStateRepo,
+		timeoutRepo:     timeoutRepo,
 		hub:             hub,
 		permResolver:    permResolver,
 	}
@@ -190,8 +193,24 @@ func (s *messageService) Create(ctx context.Context, channelID string, userID st
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
 
-	if _, err := s.channelRepo.GetByID(ctx, channelID); err != nil {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
 		return nil, err
+	}
+
+	// Timeout gate — moderators apply Discord-style timeouts via
+	// member_service.Timeout(); enforcement lives at every write
+	// boundary (here for messages, voice_service for joins, etc.).
+	// We check BEFORE the perm resolver to give the more specific
+	// error message ("you are timed out") instead of a generic 403.
+	if channel.ServerID != "" && s.timeoutRepo != nil {
+		active, tErr := s.timeoutRepo.IsActive(ctx, channel.ServerID, userID)
+		if tErr != nil {
+			return nil, fmt.Errorf("check timeout: %w", tErr)
+		}
+		if active {
+			return nil, fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
 	}
 
 	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)

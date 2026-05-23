@@ -150,5 +150,20 @@
   "updateDownloading": "Güncelleme indiriliyor",
   "updateReadyToInstall": "Yeni sürüm hazır",
   "updateRestartAndInstall": "Yeniden Başlat ve Yükle",
-  "dismiss": "Kapat"
+  "dismiss": "Kapat",
+  "timeout": "Sustur",
+  "removeTimeout": "Susturmayı kaldır",
+  "tempBan": "Geçici yasak",
+  "timeoutTitle": "Sustur",
+  "tempBanTitle": "Geçici yasak",
+  "timeoutForUser": "{{username}} için süre seç",
+  "dur_60s": "1 dk",
+  "dur_5m": "5 dk",
+  "dur_10m": "10 dk",
+  "dur_1h": "1 sa",
+  "dur_6h": "6 sa",
+  "dur_1d": "1 gün",
+  "dur_1w": "1 hafta",
+  "dur_30d": "30 gün",
+  "youAreTimedOut": "Bu sunucuda susturuldun"
 }

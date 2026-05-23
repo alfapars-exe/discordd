@@ -18,6 +18,8 @@
     "member_kick": "{{actor}} kicked {{target}}",
     "member_ban": "{{actor}} banned {{target}}",
     "member_unban": "{{actor}} unbanned {{target}}",
+    "member_timeout": "{{actor}} timed out {{target}}",
+    "member_timeout_remove": "{{actor}} removed the timeout from {{target}}",
     "role_create": "{{actor}} created the \"{{roleName}}\" role",
     "role_delete": "{{actor}} deleted the \"{{roleName}}\" role",
     "role_assign": "{{actor}} gave {{target}} the \"{{roleName}}\" role",

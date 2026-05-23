@@ -135,12 +135,78 @@ func (h *MemberHandler) Ban(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.memberService.Ban(r.Context(), serverID, actor.ID, targetID, req.Reason); err != nil {
+	if err := req.Validate(); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.memberService.Ban(r.Context(), serverID, actor.ID, targetID, req.Reason, req.ResolvedExpiresAt()); err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "member banned"})
+}
+
+// Timeout handles PUT /api/servers/{serverId}/members/{id}/timeout.
+// Requires PermTimeoutMembers (enforced via authServerPerm in
+// init_routes.go). Body: { "duration_seconds": int, "reason": string }.
+func (h *MemberHandler) Timeout(w http.ResponseWriter, r *http.Request) {
+	actor, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+	targetID := r.PathValue("id")
+	if targetID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "missing target user id")
+		return
+	}
+
+	var req models.TimeoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := req.Validate(); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.memberService.Timeout(r.Context(), serverID, actor.ID, targetID, req.ExpiresAt(), req.Reason); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"message": "member timed out"})
+}
+
+// RemoveTimeout handles DELETE /api/servers/{serverId}/members/{id}/timeout.
+// Same permission gate as Timeout. No body required; the route alone is
+// the intent. Idempotent — un-timing an untimed user is a no-op.
+func (h *MemberHandler) RemoveTimeout(w http.ResponseWriter, r *http.Request) {
+	actor, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+	targetID := r.PathValue("id")
+	if targetID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "missing target user id")
+		return
+	}
+	if err := h.memberService.RemoveTimeout(r.Context(), serverID, actor.ID, targetID); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"message": "timeout removed"})
 }
 
 // GetBans handles GET /api/servers/{serverId}/bans (requires BAN_MEMBERS).

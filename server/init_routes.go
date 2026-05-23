@@ -283,6 +283,13 @@ func initRoutes(
 	mux.Handle("DELETE /api/servers/{serverId}/members/{id}", authServerPerm(models.PermKickMembers, h.Member.Kick))
 	mux.Handle("POST /api/servers/{serverId}/members/{id}/ban", authServerPerm(models.PermBanMembers, h.Member.Ban))
 
+	// Timeouts — moderator-imposed Discord-style mute. Same route
+	// shape as ban (PUT applies, DELETE lifts); permission is a
+	// brand-new bit (PermTimeoutMembers) so admins can grant timeout
+	// authority without granting full ban authority.
+	mux.Handle("PUT /api/servers/{serverId}/members/{id}/timeout", authServerPerm(models.PermTimeoutMembers, h.Member.Timeout))
+	mux.Handle("DELETE /api/servers/{serverId}/members/{id}/timeout", authServerPerm(models.PermTimeoutMembers, h.Member.RemoveTimeout))
+
 	// Bans
 	mux.Handle("GET /api/servers/{serverId}/bans", authServerPerm(models.PermBanMembers, h.Member.GetBans))
 	mux.Handle("DELETE /api/servers/{serverId}/bans/{id}", authServerPerm(models.PermBanMembers, h.Member.Unban))

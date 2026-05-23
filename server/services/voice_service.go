@@ -86,6 +86,7 @@ type VoiceService interface {
 	SetAppLogger(logger VoiceAppLogger)
 	SetAuditLogger(logger AuditWriter)
 	SetMusicBotHook(hook MusicBotChannelHook)
+	SetMemberTimeoutChecker(checker MemberTimeoutChecker)
 }
 
 // AuditWriter — narrow ISP interface for audit log writes from services.
@@ -137,6 +138,18 @@ type voiceService struct {
 	appLogger        VoiceAppLogger
 	auditLogger      AuditWriter
 	musicBotHook     MusicBotChannelHook
+	// Optional. When wired (via SetMemberTimeoutChecker in main.go),
+	// GenerateToken rejects voice joins from currently timed-out users
+	// — matches Discord's "muted means muted everywhere" UX. Nil-safe
+	// so existing voice tests/code keep working without wiring it.
+	timeoutChecker MemberTimeoutChecker
+}
+
+// MemberTimeoutChecker — narrow ISP interface so voiceService doesn't
+// depend on the full repository contract. Repository.MemberTimeoutRepository
+// already implements this method.
+type MemberTimeoutChecker interface {
+	IsActive(ctx context.Context, serverID, userID string) (bool, error)
 }
 
 func NewVoiceService(
@@ -166,6 +179,13 @@ func NewVoiceService(
 
 func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
 	s.musicBotHook = hook
+}
+
+// SetMemberTimeoutChecker — optional. When wired, GenerateToken rejects
+// voice joins from currently timed-out users. Nil-safe (existing tests
+// keep working without wiring it).
+func (s *voiceService) SetMemberTimeoutChecker(checker MemberTimeoutChecker) {
+	s.timeoutChecker = checker
 }
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {

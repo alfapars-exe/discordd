@@ -33,9 +33,11 @@ const (
 	OpCategoryDelete = "category_delete"
 	OpTypingStart    = "typing_start"
 	OpPresence       = "presence_update"
-	OpMemberJoin     = "member_join"
-	OpMemberLeave    = "member_leave"
-	OpMemberUpdate   = "member_update"
+	OpMemberJoin          = "member_join"
+	OpMemberLeave         = "member_leave"
+	OpMemberUpdate        = "member_update"
+	OpMemberTimeout       = "member_timeout"        // data: server_id, user_id, expires_at, reason
+	OpMemberTimeoutRemove = "member_timeout_remove" // data: server_id, user_id
 	OpRoleCreate     = "role_create"
 	OpRoleUpdate     = "role_update"
 	OpRoleDelete     = "role_delete"

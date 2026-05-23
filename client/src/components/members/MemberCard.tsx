@@ -24,6 +24,7 @@ import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import ReportModal from "../shared/ReportModal";
+import ModDurationPicker, { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./ModDurationPicker";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 
@@ -93,16 +94,20 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   }
   const canKick = isServerContext && !isMe && hasPermission(myPerms, Permissions.KickMembers);
   const canBan = isServerContext && !isMe && hasPermission(myPerms, Permissions.BanMembers);
+  const canTimeout = isServerContext && !isMe && hasPermission(myPerms, Permissions.TimeoutMembers);
   const canManageRoles = isServerContext && !isMe && hasPermission(myPerms, Permissions.ManageRoles);
   const isBadgeAdmin = currentUser?.id === BADGE_ADMIN_USER_ID;
-  const hasModActions = canKick || canBan || canManageRoles;
+  const hasModActions = canKick || canBan || canTimeout || canManageRoles;
+  // Duration picker state — null when closed; "timeout" or "tempban" picks
+  // which preset list + which API to hit on selection.
+  const [pickerMode, setPickerMode] = useState<"timeout" | "tempban" | null>(null);
 
   const isFriend = friends.some((f) => f.user_id === userId);
   const outReq = outgoing.find((r) => r.user_id === userId);
   const inReq = incoming.find((r) => r.user_id === userId);
 
   const childModalOpenRef = useRef(false);
-  childModalOpenRef.current = showBadgeAssign || showRoleEditor || showReport;
+  childModalOpenRef.current = showBadgeAssign || showRoleEditor || showReport || pickerMode !== null;
 
   useLayoutEffect(() => {
     const card = cardRef.current;
@@ -169,6 +174,22 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
     await memberApi.banMember(serverId, userId, "");
+    onClose();
+  }
+
+  async function handleTimeoutPick(seconds: number) {
+    setPickerMode(null);
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    await memberApi.timeoutMember(serverId, userId, seconds, "");
+    onClose();
+  }
+
+  async function handleTempBanPick(seconds: number) {
+    setPickerMode(null);
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    await memberApi.banMember(serverId, userId, "", seconds);
     onClose();
   }
 
@@ -437,12 +458,28 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
                     <span>{t("kick")}</span>
                   </button>
                 )}
+                {canTimeout && (
+                  <button className="mc-btn mc-btn-default" onClick={() => setPickerMode("timeout")}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>{t("timeout")}</span>
+                  </button>
+                )}
                 {canBan && (
                   <button className="mc-btn mc-btn-ban" onClick={handleBan}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
                     </svg>
                     <span>{t("ban")}</span>
+                  </button>
+                )}
+                {canBan && (
+                  <button className="mc-btn mc-btn-ban" onClick={() => setPickerMode("tempban")}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>{t("tempBan")}</span>
                   </button>
                 )}
                 {canManageRoles && (
@@ -482,6 +519,27 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
           userId={userId}
           username={displayName ?? username}
           onClose={() => setShowReport(false)}
+        />
+      )}
+
+      {pickerMode === "timeout" && (
+        <ModDurationPicker
+          title={t("timeoutTitle")}
+          subtitle={t("timeoutForUser", { username: displayName ?? username })}
+          variant="timeout"
+          presets={TIMEOUT_PRESETS}
+          onPick={handleTimeoutPick}
+          onCancel={() => setPickerMode(null)}
+        />
+      )}
+      {pickerMode === "tempban" && (
+        <ModDurationPicker
+          title={t("tempBanTitle")}
+          subtitle={t("timeoutForUser", { username: displayName ?? username })}
+          variant="ban"
+          presets={TEMPBAN_PRESETS}
+          onPick={handleTempBanPick}
+          onCancel={() => setPickerMode(null)}
         />
       )}
     </>,

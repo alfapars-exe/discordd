@@ -18,6 +18,8 @@
     "member_kick": "{{actor}} {{target}}'ı sunucudan attı",
     "member_ban": "{{actor}} {{target}}'ı yasakladı",
     "member_unban": "{{actor}} {{target}}'ın yasağını kaldırdı",
+    "member_timeout": "{{actor}} {{target}}'ı sustudu",
+    "member_timeout_remove": "{{actor}} {{target}}'ın susturmasını kaldırdı",
     "role_create": "{{actor}} \"{{roleName}}\" rolünü oluşturdu",
     "role_delete": "{{actor}} \"{{roleName}}\" rolünü sildi",
     "role_assign": "{{actor}} {{target}}'a \"{{roleName}}\" rolünü verdi",

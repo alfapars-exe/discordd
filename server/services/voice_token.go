@@ -24,6 +24,21 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
 	}
 
+	// Timeout gate — matches the Send-Message check in messageService.
+	// Token issuance is the right boundary: without a token the LiveKit
+	// SDK can't connect, so timed-out users physically can't talk even
+	// if their UI somehow leaks past the client-side gate. Nil checker
+	// is fine (tests + bootstrap paths that haven't wired it yet).
+	if s.timeoutChecker != nil && channel.ServerID != "" {
+		active, tErr := s.timeoutChecker.IsActive(ctx, channel.ServerID, userID)
+		if tErr != nil {
+			return nil, fmt.Errorf("check timeout: %w", tErr)
+		}
+		if active {
+			return nil, fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
+	}
+
 	// channel -> server -> livekit_instance lookup
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
 	if err != nil {
