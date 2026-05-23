@@ -145,6 +145,23 @@ func (s *channelService) Create(ctx context.Context, serverID string, req *model
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
 
+	// One audit channel per server. Reject Create attempts when one
+	// already exists — the auto-created channel from server_service or
+	// the migration backfill is the canonical one. The radio button in
+	// the create modal exists for discoverability; users who try it on a
+	// server that already has an audit channel get a friendly error
+	// instead of accidentally producing duplicates.
+	if req.Type == string(models.ChannelTypeAudit) {
+		existing, listErr := s.channelRepo.GetAllByServer(ctx, serverID)
+		if listErr == nil {
+			for _, ch := range existing {
+				if ch.Type == models.ChannelTypeAudit {
+					return nil, fmt.Errorf("%w: this server already has an audit channel", pkg.ErrBadRequest)
+				}
+			}
+		}
+	}
+
 	if req.CategoryID != "" {
 		if _, err := s.categoryRepo.GetByID(ctx, req.CategoryID); err != nil {
 			return nil, fmt.Errorf("%w: category not found", pkg.ErrBadRequest)
@@ -195,6 +212,13 @@ func (s *channelService) Update(ctx context.Context, id string, req *models.Upda
 		return nil, err
 	}
 
+	// Audit channels are renamable-restricted: the name is part of the
+	// channel's identity ("denetim") and stable across servers. Category
+	// move + topic edits stay allowed so the user can organize the sidebar.
+	if channel.Type == models.ChannelTypeAudit && req.Name != nil && *req.Name != channel.Name {
+		return nil, fmt.Errorf("%w: audit channel cannot be renamed", pkg.ErrForbidden)
+	}
+
 	if req.Name != nil {
 		channel.Name = *req.Name
 	}
@@ -225,6 +249,16 @@ func (s *channelService) Update(ctx context.Context, id string, req *models.Upda
 }
 
 func (s *channelService) Delete(ctx context.Context, id string) error {
+	// Audit channels are non-deletable — they hold the server's moderation
+	// history and removing them would orphan audit_logs rows (FK CASCADE
+	// keeps DB consistent, but UI-side users would lose access to the
+	// feed without warning). Block the operation here so callers always
+	// see a clear error rather than silently destroying the channel.
+	existing, getErr := s.channelRepo.GetByID(ctx, id)
+	if getErr == nil && existing != nil && existing.Type == models.ChannelTypeAudit {
+		return fmt.Errorf("%w: audit channel cannot be deleted", pkg.ErrForbidden)
+	}
+
 	if err := s.channelRepo.Delete(ctx, id); err != nil {
 		return err
 	}
