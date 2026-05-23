@@ -55,7 +55,7 @@
   "screenPickerHint": "Select a screen or window to share",
   "screenPickerShareAudio": "Share audio",
   "screenPickerRefresh": "Refresh sources",
-  "screenPickerWindowHint": "Don't see your app? Open it, then click refresh. DirectX/Vulkan games (CS2, Valorant, etc.) and apps running as administrator never appear in the window list — switch to the 'Screens' tab and share an entire screen instead.",
+  "screenPickerWindowHint": "Don't see your app? Open it, then click refresh. Because HiChat runs in administrator mode, DirectX/Vulkan games (CS2, Valorant, etc.) and elevated apps now show up here. Anti-cheat–protected games such as Valorant may still hide some UI elements (Vanguard restriction).",
   "pingMeasuring": "Measuring...",
   "pingGood": "Good connection",
   "pingMedium": "Average connection",
