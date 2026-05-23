@@ -200,6 +200,7 @@
   "screenShareShowCursorDesc": "When on, the mouse cursor appears in the shared screen. Turn off to hide it from viewers.",
   "screenShareQuality": "Screen Share Quality",
   "screenShareFps": "Frame Rate",
+  "screenShareMax": "Max",
   "screenShareAudio": "Screen Share Audio",
   "screenShareAudioDesc": "Share system audio when screen sharing (game, music). Voice chat audio is automatically excluded.",
   "screenShareAudioDescBrowser": "Share system audio when screen sharing. May cause echo in voice chat.",

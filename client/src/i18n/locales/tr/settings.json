@@ -200,6 +200,7 @@
   "screenShareShowCursorDesc": "Açıkken paylaşılan ekranda fare imleci de görünür. Kapatırsan izleyenler farenin nerede olduğunu görmez.",
   "screenShareQuality": "Ekran Paylaşım Kalitesi",
   "screenShareFps": "Kare Hızı",
+  "screenShareMax": "Maks.",
   "screenShareAudio": "Ekran Paylaşımı Sesi",
   "screenShareAudioDesc": "Ekran paylaşırken sistem sesini paylaş (oyun, müzik). Ses sohbeti otomatik olarak hariç tutulur.",
   "screenShareAudioDescBrowser": "Ekran paylaşırken sistem sesini paylaş. Ses kanalında yankıya neden olabilir.",

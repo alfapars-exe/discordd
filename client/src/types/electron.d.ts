@@ -49,6 +49,23 @@ interface ElectronAPI {
   installUpdate: () => Promise<void>;
 
   getDesktopSources: () => Promise<ElectronDesktopSource[]>;
+
+  /**
+   * Physical-pixel metrics of the monitor the app window currently sits on.
+   * Used by `useDisplayInfo` to populate dynamic "Max" entries in the
+   * screen-share quality + FPS dropdowns.
+   *
+   * `refreshRate` is 0 when the platform doesn't report it — `useDisplayInfo`
+   * uses this as a "hide the Max-Hz option" signal so users never see a
+   * "Max (0 Hz)" label.
+   */
+  getDisplayInfo: () => Promise<{
+    width: number;
+    height: number;
+    refreshRate: number;
+    scaleFactor: number;
+    monitorCount: number;
+  }>;
   /** Main process requests screen picker — delivers sources */
   onShowScreenPicker: (cb: (sources: ElectronDesktopSource[]) => void) => void;
   /**

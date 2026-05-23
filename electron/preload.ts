@@ -33,6 +33,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     Array<{ id: string; name: string; thumbnail: string }>
   > => ipcRenderer.invoke("get-desktop-sources"),
 
+  /**
+   * Physical-pixel metrics of the monitor the main window currently lives on.
+   * Used by `useDisplayInfo` to expose dynamic "Max" options in the
+   * screen-share quality + FPS dropdowns. `refreshRate` is 0 on platforms
+   * that don't report it (some Linux X11 configurations).
+   */
+  getDisplayInfo: (): Promise<{
+    width: number;
+    height: number;
+    refreshRate: number;
+    scaleFactor: number;
+    monitorCount: number;
+  }> => ipcRenderer.invoke("get-display-info"),
+
   // ─── Screen Picker IPC ───
 
   /**
