@@ -26,6 +26,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # LFS objects must be pulled because icons/mqvi-icon.ico (and the
+          # ios/electron icon assets) are stored in LFS — without this flag
+          # the working tree gets pointer files, rcedit chokes with
+          # "Reserved header is not 0", and the icon embed step dies.
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
@@ -186,6 +191,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # LFS objects must be pulled because icons/mqvi-icon.ico (and the
+          # ios/electron icon assets) are stored in LFS — without this flag
+          # the working tree gets pointer files, rcedit chokes with
+          # "Reserved header is not 0", and the icon embed step dies.
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
@@ -238,6 +248,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # LFS objects must be pulled because icons/mqvi-icon.ico (and the
+          # ios/electron icon assets) are stored in LFS — without this flag
+          # the working tree gets pointer files, rcedit chokes with
+          # "Reserved header is not 0", and the icon embed step dies.
+          lfs: true
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
