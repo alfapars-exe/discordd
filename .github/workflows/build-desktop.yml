@@ -13,11 +13,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # macOS dropped from the matrix: signing/notarization needs Apple
+        # certificate secrets the repo doesn't have, so the job dies at
+        # "Import Apple certificate" and takes the whole release with it
+        # (release.needs: [build] treats a failed matrix entry as a failed
+        # job). Re-enable by populating APPLE_CERTIFICATE +
+        # APPLE_CERTIFICATE_PASSWORD + APPLE_API_KEY secrets.
         include:
           - platform: windows-latest
             label: windows-x64
-          - platform: macos-14
-            label: macos-arm64
           - platform: ubuntu-22.04
             label: linux-x64
 
