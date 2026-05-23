@@ -48,7 +48,10 @@ type BoltConfig = {
 function pickBolts(count: number): BoltConfig[] {
   const bolts: BoltConfig[] = [];
   for (let i = 0; i < count; i++) {
-    const cycle = 14 + Math.random() * 10; // 14–24 s per strike cycle
+    // Per-bolt cycle 5–10 s. With BOLT_COUNT=5 staggered desyncs that
+    // averages ~one strike every 1.5 s across the overlay — frequent
+    // enough to feel "alive" without strobing the screen.
+    const cycle = 5 + Math.random() * 5;
     bolts.push({
       id: i,
       path: PATHS[Math.floor(Math.random() * PATHS.length)],
