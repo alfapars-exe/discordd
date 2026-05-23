@@ -159,8 +159,12 @@ function AuditChannel({ channelId, serverId }: AuditChannelProps) {
             <div className="audit-empty">{t("loading")}</div>
           )}
 
-          {/* Empty state */}
-          {!isLoading && entries && entries.length === 0 && (
+          {/* Empty state — also covers the case where the initial fetch
+              never populated `entries` (e.g. transient 5xx, 403 from an
+              unprivileged user who somehow opened the tab directly).
+              Without the `!entries` branch the panel rendered as a totally
+              blank pane with no feedback — see plan §B. */}
+          {!isLoading && (!entries || entries.length === 0) && (
             <div className="audit-empty">{t("empty")}</div>
           )}
 

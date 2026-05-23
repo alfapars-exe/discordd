@@ -22,7 +22,7 @@ type MemberService interface {
 	ModifyRoles(ctx context.Context, serverID, actorID, targetID string, roleIDs []string) (*models.MemberWithRoles, error)
 	Kick(ctx context.Context, serverID, actorID, targetID string) error
 	Ban(ctx context.Context, serverID, actorID, targetID, reason string) error
-	Unban(ctx context.Context, serverID, userID string) error
+	Unban(ctx context.Context, serverID, actorID, userID string) error
 	GetBans(ctx context.Context, serverID string) ([]models.Ban, error)
 	IsBanned(ctx context.Context, serverID, userID string) (bool, error)
 	SetAuditLogger(logger AuditWriter)
@@ -403,8 +403,20 @@ func (s *memberService) removeFromServer(serverID, targetID string) {
 	s.hub.RemoveClientServerID(targetID, serverID)
 }
 
-func (s *memberService) Unban(ctx context.Context, serverID, userID string) error {
-	return s.banRepo.Delete(ctx, serverID, userID)
+func (s *memberService) Unban(ctx context.Context, serverID, actorID, userID string) error {
+	if err := s.banRepo.Delete(ctx, serverID, userID); err != nil {
+		return err
+	}
+
+	actor := actorID
+	target := userID
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &actor,
+		TargetUserID: &target,
+		EventType:    models.AuditEventMemberUnban,
+	})
+	return nil
 }
 
 func (s *memberService) GetBans(ctx context.Context, serverID string) ([]models.Ban, error) {

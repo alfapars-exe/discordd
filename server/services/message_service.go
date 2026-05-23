@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -25,6 +26,7 @@ type MessageService interface {
 	BroadcastCreate(message *models.Message)
 	Update(ctx context.Context, id string, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
 	Delete(ctx context.Context, id string, userID string, userPermissions models.Permission) error
+	SetAuditLogger(logger AuditWriter)
 }
 
 type messageService struct {
@@ -39,6 +41,24 @@ type messageService struct {
 	readStateRepo   repository.ReadStateRepository
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
+	auditLogger     AuditWriter
+}
+
+func (s *messageService) SetAuditLogger(logger AuditWriter) {
+	s.auditLogger = logger
+}
+
+// audit emits an audit log event if an audit logger is wired. Nil-safe.
+// Only called from the moderator-delete branch of Delete (author-delete
+// is not auditable — a user deleting their own message is not a moderation
+// action).
+func (s *messageService) audit(entry models.AuditLog) {
+	if s.auditLogger == nil {
+		log.Printf("[message/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		return
+	}
+	log.Printf("[message/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	s.auditLogger.Write(entry)
 }
 
 func NewMessageService(
@@ -399,6 +419,17 @@ func (s *messageService) Delete(ctx context.Context, id string, userID string, u
 		return fmt.Errorf("%w: you can only delete your own messages", pkg.ErrForbidden)
 	}
 
+	// Snapshot what we need for the audit BEFORE the row is deleted; the
+	// message and (in theory) its channel may not be reachable after.
+	wasModeratorDelete := message.UserID != userID
+	var channelName, serverID string
+	if wasModeratorDelete {
+		if ch, chErr := s.channelRepo.GetByID(ctx, message.ChannelID); chErr == nil && ch != nil {
+			channelName = ch.Name
+			serverID = ch.ServerID
+		}
+	}
+
 	if err := s.messageRepo.Delete(ctx, id); err != nil {
 		return err
 	}
@@ -417,7 +448,38 @@ func (s *messageService) Delete(ctx context.Context, id string, userID string, u
 		},
 	})
 
+	// Audit only on moderator-delete (author-delete is not a mod action).
+	// Server-scoped audit_logs require a serverID; if channel lookup failed
+	// we skip the audit rather than write an orphan row.
+	if wasModeratorDelete && serverID != "" {
+		actor := userID
+		target := message.UserID
+		preview := messagePreview(message.Content)
+		s.audit(models.AuditLog{
+			ServerID:     serverID,
+			ActorUserID:  &actor,
+			TargetUserID: &target,
+			EventType:    models.AuditEventMessageDelete,
+			Metadata:     fmt.Sprintf(`{"channel_name":%q,"content_preview":%q}`, channelName, preview),
+		})
+	}
+
 	return nil
+}
+
+// messagePreview truncates and sanitises a message body for audit metadata.
+// Newlines collapse to spaces (one-line audit entries), and the cap at 80
+// runes keeps the JSON cheap on every event while still giving moderators
+// enough context to identify what was deleted.
+func messagePreview(content string) string {
+	cleaned := strings.ReplaceAll(content, "\r", " ")
+	cleaned = strings.ReplaceAll(cleaned, "\n", " ")
+	runes := []rune(cleaned)
+	const max = 80
+	if len(runes) > max {
+		return string(runes[:max]) + "…"
+	}
+	return cleaned
 }
 
 // extractRoleMentions parses <@&roleId> tokens from content and returns role IDs.
