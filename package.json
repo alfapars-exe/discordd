@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.38",
+  "version": "2.11.39",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
@@ -17,8 +17,8 @@
   },
   "devDependencies": {
     "concurrently": "^9",
-    "electron": "^33",
-    "electron-builder": "^25",
+    "electron": "^34",
+    "electron-builder": "^26",
     "rcedit": "^5.0.2",
     "typescript": "~5.9.3"
   },
