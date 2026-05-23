@@ -11,7 +11,7 @@ import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.
 import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 import vadGateWorkletPath from "../../audio/vadGateWorklet.js?url";
-import { sensitivityToThreshold } from "../../audio/RNNoiseProcessor";
+import { sensitivityToThreshold } from "../../audio/sensitivity";
 
 
 /** Simplified MediaDeviceInfo for select options. */

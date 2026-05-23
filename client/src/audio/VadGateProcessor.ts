@@ -17,6 +17,7 @@ import { Track } from "livekit-client";
 import type { TrackProcessor, AudioProcessorOptions } from "livekit-client";
 
 import vadGateWorkletPath from "./vadGateWorklet.js?url";
+import { sensitivityToThreshold } from "./sensitivity";
 
 /** AudioWorklet registration cache — prevents duplicate addModule() calls per AudioContext. */
 const registeredContexts = new WeakMap<AudioContext, Promise<void>>();
@@ -30,17 +31,11 @@ function ensureWorkletRegistered(ctx: AudioContext): Promise<void> {
   return p;
 }
 
-/**
- * Converts micSensitivity (0-100) to RMS threshold (quadratic curve).
- * Same mapping as RNNoiseProcessor for consistent behavior.
- *
- *   100 -> 0     (gate disabled)
- *   50  -> 0.01  (moderate)
- *   0   -> 0.04  (very aggressive)
- */
 // Shared gate-config helper — same level/sensitivity curve and worklet
 // message format as RNNoiseProcessor's gate path so behaviour is identical
-// regardless of whether the denoiser is on.
+// regardless of whether the denoiser is on. The cubic single-threshold curve
+// in ./sensitivity.ts is the legacy path; the live pipeline routes through
+// postGateConfigToWorklet/levelToThresholds for hysteresis-aware gating.
 import { postGateConfigToWorklet } from "./gateConfig";
 import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice";
 

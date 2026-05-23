@@ -39,6 +39,7 @@ import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 
 import vadGateWorkletPath from "./vadGateWorklet.js?url";
+import { sensitivityToThreshold } from "./sensitivity";
 
 /** WASM binary cache — shared across all processor instances (stateless). */
 let wasmBinaryPromise: Promise<ArrayBuffer> | null = null;
@@ -73,16 +74,11 @@ function ensureWorkletRegistered(ctx: AudioContext, name: string, url: string): 
   return p;
 }
 
-/**
- * Converts micSensitivity (0-100) to RMS threshold using a quadratic curve.
- * Kept for the legacy single-threshold path; the live pipeline uses
- * levelToThresholds() below for hysteresis-aware dB-based gating.
- */
-export function sensitivityToThreshold(sensitivity: number): number {
-  const clamped = Math.max(0, Math.min(100, sensitivity));
-  const inverted = (100 - clamped) / 100;
-  return 0.04 * inverted * inverted;
-}
+// Sensitivity→threshold mapping shared with VadGateProcessor — see
+// ./sensitivity.ts for the curve choice and history. The legacy
+// single-threshold path lives in sensitivity.ts; the live pipeline
+// uses levelToThresholds() from ./gateConfig for hysteresis-aware
+// dB-based gating (different concern, different file).
 
 // Per-level threshold curve + level→worklet config helper now live in
 // ./gateConfig — re-exported above so legacy imports keep working.
