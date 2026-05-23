@@ -32,6 +32,7 @@ type ServerService interface {
 	GetLiveKitSettings(ctx context.Context, serverID string) (*LiveKitSettings, error)
 	// ReorderServers updates the user's personal server list order. No WS broadcast.
 	ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error)
+	SetAuditLogger(logger AuditWriter)
 }
 
 type serverService struct {
@@ -45,6 +46,24 @@ type serverService struct {
 	inviteService InviteService
 	hub           ws.BroadcastAndManage
 	encryptionKey []byte // AES-256-GCM for LiveKit credentials
+	auditLogger   AuditWriter
+}
+
+func (s *serverService) SetAuditLogger(logger AuditWriter) {
+	s.auditLogger = logger
+}
+
+// audit emits an audit log event if an audit logger is wired. Nil-safe.
+// Same observability pattern as member/role/voice/channel: both branches
+// log so a "user X joined/left but audit channel stayed empty" report
+// can be traced from runtime logs.
+func (s *serverService) audit(entry models.AuditLog) {
+	if s.auditLogger == nil {
+		log.Printf("[server/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		return
+	}
+	log.Printf("[server/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	s.auditLogger.Write(entry)
 }
 
 func NewServerService(
@@ -482,6 +501,18 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		})
 	}
 
+	// Audit: member joined via invite. Actor == target (the joining user)
+	// because invite-based join is self-initiated. The i18n template only
+	// references {{target}}, so the duplicate snapshot is harmless.
+	actor := userID
+	target := userID
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &actor,
+		TargetUserID: &target,
+		EventType:    models.AuditEventMemberJoin,
+	})
+
 	log.Printf("[server] user %s joined server %s via invite", userID, serverID)
 	return server, nil
 }
@@ -517,6 +548,17 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 
 	// Remove from WS subscription list
 	s.hub.RemoveClientServerID(userID, serverID)
+
+	// Audit: voluntary leave. Actor == target (kick has its own
+	// member_kick event from member_service so we don't double-log).
+	actor := userID
+	target := userID
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &actor,
+		TargetUserID: &target,
+		EventType:    models.AuditEventMemberLeave,
+	})
 
 	log.Printf("[server] user %s left server %s", userID, serverID)
 	return nil

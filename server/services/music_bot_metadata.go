@@ -71,15 +71,15 @@ func extractTracks(parent context.Context, url, requesterID, requesterName strin
 // metadata blob; we only deserialise these fields. Note `Duration` is a
 // float64 because yt-dlp uses fractional seconds for some sources.
 type ytdlpEntry struct {
-	ID            string  `json:"id"`
-	Title         string  `json:"title"`
-	Uploader      string  `json:"uploader"`
-	Channel       string  `json:"channel"`
-	Duration      float64 `json:"duration"`
-	Thumbnail     string  `json:"thumbnail"`
-	WebpageURL    string  `json:"webpage_url"`
-	OriginalURL   string  `json:"original_url"`
-	URL           string  `json:"url"` // for flat-playlist entries
+	ID          string  `json:"id"`
+	Title       string  `json:"title"`
+	Uploader    string  `json:"uploader"`
+	Channel     string  `json:"channel"`
+	Duration    float64 `json:"duration"`
+	Thumbnail   string  `json:"thumbnail"`
+	WebpageURL  string  `json:"webpage_url"`
+	OriginalURL string  `json:"original_url"`
+	URL         string  `json:"url"` // for flat-playlist entries
 }
 
 func (r ytdlpEntry) toTrack(originalUserURL, requesterID, requesterName string) models.MusicTrack {

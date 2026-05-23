@@ -43,6 +43,12 @@ func (h *ChannelHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /api/servers/{serverId}/channels (requires MANAGE_CHANNELS).
 func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
 	if !ok || serverID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
@@ -55,7 +61,7 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel, err := h.channelService.Create(r.Context(), serverID, &req)
+	channel, err := h.channelService.Create(r.Context(), serverID, user.ID, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -66,6 +72,12 @@ func (h *ChannelHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PATCH /api/servers/{serverId}/channels/{id} (requires MANAGE_CHANNELS).
 func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	id := r.PathValue("id")
 
 	var req models.UpdateChannelRequest
@@ -74,7 +86,7 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel, err := h.channelService.Update(r.Context(), id, &req)
+	channel, err := h.channelService.Update(r.Context(), user.ID, id, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -85,9 +97,15 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/servers/{serverId}/channels/{id} (requires MANAGE_CHANNELS).
 func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	id := r.PathValue("id")
 
-	if err := h.channelService.Delete(r.Context(), id); err != nil {
+	if err := h.channelService.Delete(r.Context(), user.ID, id); err != nil {
 		pkg.Error(w, err)
 		return
 	}

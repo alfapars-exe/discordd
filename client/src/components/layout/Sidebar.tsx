@@ -1,8 +1,9 @@
 /**
- * Sidebar — Expanded (resizable 180-400px) or collapsed (52px).
+ * Sidebar — Expanded (resizable 180-500px) or collapsed (52px).
  * Width persisted in localStorage. Voice control props forwarded to UserBar.
  */
 
+import type { CSSProperties } from "react";
 import { useSidebarStore } from "../../stores/sidebarStore";
 import { useResizeHandle } from "../../hooks/useResizeHandle";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -10,10 +11,10 @@ import SidebarHeader from "./SidebarHeader";
 import ChannelTree from "./ChannelTree";
 import CollapsedSidebar from "./CollapsedSidebar";
 import UserBar from "./UserBar";
-/** Sidebar width bounds (px) */
+/** Sidebar width bounds (px) — default matches Discord's --custom-guild-sidebar-width */
 const SIDEBAR_MIN = 180;
-const SIDEBAR_MAX = 400;
-const SIDEBAR_DEFAULT = 240;
+const SIDEBAR_MAX = 500;
+const SIDEBAR_DEFAULT = 375;
 
 type SidebarProps = {
   onJoinVoice: (channelId: string) => void;
@@ -47,7 +48,7 @@ function Sidebar({
   }
 
   return (
-    <div className="sidebar" style={{ width }}>
+    <div className="sidebar" style={{ width, "--guild-sidebar-width": `${width}px` } as CSSProperties}>
       <div className="sb-main app-panel">
         <SidebarHeader />
         <ChannelTree onJoinVoice={onJoinVoice} />

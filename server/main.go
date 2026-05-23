@@ -139,6 +139,9 @@ func main() {
 	svcs.Voice.SetAuditLogger(svcs.AuditLog)
 	svcs.Member.SetAuditLogger(svcs.AuditLog)
 	svcs.Role.SetAuditLogger(svcs.AuditLog)
+	svcs.Channel.SetAuditLogger(svcs.AuditLog)
+	svcs.Server.SetAuditLogger(svcs.AuditLog)
+	svcs.Message.SetAuditLogger(svcs.AuditLog)
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)

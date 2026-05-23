@@ -1,10 +1,11 @@
 // Package services — DMService interface, struct, construction, and shared helpers.
 //
 // Method implementations are split across concern-based files in this package:
-//   dm_channel.go — GetOrCreateChannel, ListChannels
-//   dm_message.go — GetMessages, SendMessage, BroadcastCreate, EditMessage, DeleteMessage
-//   dm_request.go — AcceptRequest, DeclineRequest, AcceptPendingChannels
-//   dm_extras.go  — ToggleReaction, pins, search, ToggleE2EE
+//
+//	dm_channel.go — GetOrCreateChannel, ListChannels
+//	dm_message.go — GetMessages, SendMessage, BroadcastCreate, EditMessage, DeleteMessage
+//	dm_request.go — AcceptRequest, DeclineRequest, AcceptPendingChannels
+//	dm_extras.go  — ToggleReaction, pins, search, ToggleE2EE
 //
 // Unlike voice_service, dmService holds no in-memory state — all operations go
 // through the repository layer, so the split is purely organizational.

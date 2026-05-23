@@ -162,6 +162,12 @@ func (h *MemberHandler) GetBans(w http.ResponseWriter, r *http.Request) {
 
 // Unban handles DELETE /api/servers/{serverId}/bans/{id} (requires BAN_MEMBERS).
 func (h *MemberHandler) Unban(w http.ResponseWriter, r *http.Request) {
+	actor, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
 	if !ok || serverID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
@@ -170,7 +176,7 @@ func (h *MemberHandler) Unban(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.PathValue("id")
 
-	if err := h.memberService.Unban(r.Context(), serverID, userID); err != nil {
+	if err := h.memberService.Unban(r.Context(), serverID, actor.ID, userID); err != nil {
 		pkg.Error(w, err)
 		return
 	}

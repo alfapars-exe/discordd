@@ -52,8 +52,8 @@ type metricsCollector struct {
 	interval      time.Duration
 	retentionDays int
 
-	hetznerClient    *hcloud.Client // optional, nil = disabled
-	vcpuCache        map[int64]int  // cached vCPU counts per Hetzner server ID
+	hetznerClient    *hcloud.Client     // optional, nil = disabled
+	vcpuCache        map[int64]int      // cached vCPU counts per Hetzner server ID
 	screenShareStats ScreenShareCounter // optional, nil = no screen share tracking
 
 	// Delta computation state. Goroutine-safe: only accessed by collector goroutine.

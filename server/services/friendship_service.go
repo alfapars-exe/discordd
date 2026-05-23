@@ -36,10 +36,10 @@ type FriendRequestsResponse struct {
 }
 
 type friendshipService struct {
-	friendRepo  repository.FriendshipRepository
-	userRepo    repository.UserRepository
-	hub         ws.Broadcaster
-	dmAcceptor  DMRequestAcceptor
+	friendRepo repository.FriendshipRepository
+	userRepo   repository.UserRepository
+	hub        ws.Broadcaster
+	dmAcceptor DMRequestAcceptor
 }
 
 func NewFriendshipService(

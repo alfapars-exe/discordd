@@ -32,10 +32,10 @@ func newTestMessageService(
 
 func TestMessageCreate(t *testing.T) {
 	tests := []struct {
-		name       string
-		content    string
-		perms      models.Permission
-		wantErr    bool
+		name        string
+		content     string
+		perms       models.Permission
+		wantErr     bool
 		errSentinel error
 	}{
 		{

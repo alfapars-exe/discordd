@@ -46,9 +46,9 @@ func (s *deviceService) RegisterDevice(ctx context.Context, userID string, req *
 	}
 
 	device := &models.Device{
-		UserID:         userID,
-		DeviceID:       req.DeviceID,
-		IdentityKey:    req.IdentityKey,
+		UserID:          userID,
+		DeviceID:        req.DeviceID,
+		IdentityKey:     req.IdentityKey,
 		SignedPrekey:    req.SignedPrekey,
 		SignedPrekeyID:  req.SignedPrekeyID,
 		SignedPrekeySig: req.SignedPrekeySig,
