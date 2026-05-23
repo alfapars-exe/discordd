@@ -11,6 +11,7 @@ import { usePreferencesStore } from "./preferencesStore";
 import { useVoiceStore } from "./voiceStore";
 import { useSettingsStore } from "./settingsStore";
 import type { User, UserStatus } from "../types";
+import { oneOf } from "../utils/validation";
 
 const MANUAL_STATUS_KEY = "mqvi_manual_status";
 
@@ -50,7 +51,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: false,
   error: null,
   isInitialized: false,
-  manualStatus: (localStorage.getItem(MANUAL_STATUS_KEY) as UserStatus) || "online",
+  // localStorage values cross a trust boundary: an older version could have
+  // written a status string that's no longer valid (e.g. removed enum value).
+  // oneOf() narrows safely with "online" fallback so the store never holds
+  // an invalid UserStatus that would break downstream switch statements.
+  manualStatus: oneOf<UserStatus>(
+    localStorage.getItem(MANUAL_STATUS_KEY),
+    ["online", "idle", "dnd", "offline"],
+    "online",
+  ),
 
   register: async (username, password, displayName, email) => {
     set({ isLoading: true, error: null });

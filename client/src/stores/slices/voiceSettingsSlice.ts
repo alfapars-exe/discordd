@@ -174,7 +174,16 @@ export function loadSettings(): VoiceSettings {
       try { localStorage.setItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY, "1"); } catch { /* ignore */ }
       return { ...DEFAULT_SETTINGS };
     }
-    const parsed = JSON.parse(raw) as Partial<VoiceSettings>;
+    // JSON.parse can return any shape — array, primitive, null. Guard
+    // against non-object payloads before spreading, otherwise a hand-
+    // edited localStorage entry like '"corrupted"' would spread the
+    // string's index properties over DEFAULT_SETTINGS and pollute the
+    // store with garbage.
+    const parsedRaw = JSON.parse(raw);
+    const parsed: Partial<VoiceSettings> =
+      parsedRaw && typeof parsedRaw === "object" && !Array.isArray(parsedRaw)
+        ? (parsedRaw as Partial<VoiceSettings>)
+        : {};
     const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...parsed };
 
     // One-time migration: previous default was false; users had it saved as
