@@ -1441,8 +1441,15 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .settings-nav-divider-push { margin-top:auto; }
 .settings-nav-logout { color:var(--red)!important; }
 .settings-nav-version { margin-top:8px;padding:0 8px;font-size:13px;color:var(--t3); }
-.settings-content { flex:1;overflow-y:auto;padding:32px 40px;max-width:740px;background:var(--panel-bg);backdrop-filter:var(--panel-backdrop);-webkit-backdrop-filter:var(--panel-backdrop);border:1px solid var(--panel-border);border-radius:var(--panel-radius);box-shadow:var(--panel-inset),var(--panel-shadow); }
-.settings-close { position:fixed;top:40px;right:16px;width:36px;height:36px;border:none;border-radius:999px;background:var(--red);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;z-index:51;transition:background .15s,opacity .15s;opacity:0.85; }
+.settings-content { flex:1;overflow-y:auto;padding:32px 40px;background:var(--panel-bg);backdrop-filter:var(--panel-backdrop);-webkit-backdrop-filter:var(--panel-backdrop);border:1px solid var(--panel-border);border-radius:var(--panel-radius);box-shadow:var(--panel-inset),var(--panel-shadow); }
+/* Wraps .settings-content so the .settings-close button can anchor to the
+ * panel edge (not the viewport). Without this wrap the close button stayed
+ * pinned to the screen's right side and visually collided with the members
+ * panel — see "ayarın çarpısı en solda" bug report. max-width is on the
+ * wrap (not .settings-content) so the close stays glued to the actual
+ * panel edge regardless of viewport width. */
+.settings-content-wrap { flex:1;min-width:0;max-width:740px;position:relative;display:flex; }
+.settings-close { position:absolute;top:14px;right:14px;width:36px;height:36px;border:none;border-radius:999px;background:var(--red);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;z-index:51;transition:background .15s,opacity .15s;opacity:0.85; }
 .settings-close:hover { background:var(--red);opacity:1; }
 
 /* Settings form elements */
