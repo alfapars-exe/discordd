@@ -348,8 +348,10 @@ func (s *memberService) Ban(ctx context.Context, serverID, actorID, targetID, re
 
 	s.removeFromServer(serverID, targetID)
 
-	actor := actorID
-	target := targetID
+	// Audit pointer locals — `target` is already taken by the *models.User
+	// fetched at the top of this function, so we can't reuse the name.
+	auditActor := actorID
+	auditTarget := targetID
 	metadata := "{}"
 	if reason != "" {
 		// Tiny inline JSON marshal — reason is plain string the user typed.
@@ -360,8 +362,8 @@ func (s *memberService) Ban(ctx context.Context, serverID, actorID, targetID, re
 	}
 	s.audit(models.AuditLog{
 		ServerID:     serverID,
-		ActorUserID:  &actor,
-		TargetUserID: &target,
+		ActorUserID:  &auditActor,
+		TargetUserID: &auditTarget,
 		EventType:    models.AuditEventMemberBan,
 		Metadata:     metadata,
 	})
