@@ -9,6 +9,7 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { decryptDMMessage, popSentPlaintext, popEditPlaintext } from "../../crypto/dmEncryption";
 import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
+import { showNotification } from "../../utils/notifications";
 import type { WSMessage, DMChannelWithUser, DMMessage, ReactionGroup } from "../../types";
 
 export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
@@ -90,6 +91,19 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
         dmState.incrementDMUnread(dmMsg.dm_channel_id);
         playNotificationSound();
         window.electronAPI?.flashFrame();
+        // OS toast for the DM. Same gating contract as channel messages
+        // (notifications.ts skips when the window is focused). Tag =
+        // dm channel id so successive messages collapse.
+        const authorName =
+          dmMsg.author?.display_name ||
+          dmMsg.author?.username ||
+          "HiChat!";
+        showNotification({
+          title: authorName,
+          body: dmMsg.content ?? "",
+          icon: dmMsg.author?.avatar_url ?? null,
+          tag: `dm:${dmMsg.dm_channel_id}`,
+        });
       }
       return true;
     }

@@ -55,6 +55,7 @@ import { useInviteStore } from "../../stores/inviteStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useNotificationBadge } from "../../hooks/useNotificationBadge";
+import { ensureNotificationPermission } from "../../utils/notifications";
 
 function AppLayout() {
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
@@ -68,6 +69,19 @@ function AppLayout() {
 
   // Electron taskbar badge for unread count
   useNotificationBadge();
+
+  // Ask the OS for notification permission once after the user reaches
+  // the main app. We do this here (post-auth) instead of at App.tsx so
+  // anonymous landing visitors never see the prompt — they have no
+  // notifications to receive anyway. ensureNotificationPermission()
+  // is idempotent + non-blocking; the toast for new messages is fired
+  // from channelEventHandlers / dmEventHandlers if permission ends up
+  // granted, and silently dropped otherwise.
+  useEffect(() => {
+    ensureNotificationPermission().catch(() => {
+      /* notifications-disabled WebView — no-op */
+    });
+  }, []);
 
   // E2EE device identity check + key init
   useE2EE();
