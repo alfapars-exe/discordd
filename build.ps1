@@ -71,11 +71,14 @@ if ((Test-Path $exePath) -and (Test-Path $rceditBin)) {
 # so app-update.yml needs to be inside it at that point.
 $resourcesDir = "release\win-unpacked\resources"
 if (Test-Path $resourcesDir) {
+    # Repo must match package.json:build.publish (alfapars-exe/discordd) so
+    # electron-updater can find the release. Mismatch was making auto-update
+    # 404 silently — see plan §Devam — Deployment Gap.
     $updateYml = @"
 provider: github
-owner: akinalpfdn
-repo: Mqvi
-updaterCacheDirName: mqvi-desktop-updater
+owner: alfapars-exe
+repo: discordd
+updaterCacheDirName: hichat-desktop-updater
 "@
     Set-Content -Path "$resourcesDir\app-update.yml" -Value $updateYml -Encoding UTF8
     Write-Host "Created app-update.yml in unpacked resources" -ForegroundColor Green
