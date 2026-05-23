@@ -55,7 +55,7 @@
   "screenPickerHint": "Paylaşmak için bir ekran veya pencere seçin",
   "screenPickerShareAudio": "Sesi paylaş",
   "screenPickerRefresh": "Kaynakları yenile",
-  "screenPickerWindowHint": "Uygulamanız listede yok mu? Açın ve yenile butonuna basın. DirectX/Vulkan kullanan oyunlar (CS2, Valorant vb.) ve yönetici olarak çalışan uygulamalar pencere listesinde görünmez — bu durumda 'Ekranlar' sekmesinden tüm ekranı paylaş.",
+  "screenPickerWindowHint": "Uygulamanız listede yok mu? Açın ve yenile butonuna basın. HiChat yönetici modunda çalıştığı için DirectX/Vulkan oyunları (CS2, Valorant vb.) ve yönetici uygulamaları artık burada görünür. Valorant gibi anti-cheat korumalı oyunlarda bazı UI elemanları yine de siyah kalabilir (Vanguard kısıtı).",
   "pingMeasuring": "Ölçülüyor...",
   "pingGood": "İyi bağlantı",
   "pingMedium": "Orta bağlantı",
