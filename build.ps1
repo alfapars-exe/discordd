@@ -54,7 +54,8 @@ if ($LASTEXITCODE -ne 0) { throw "electron-builder (unpacked) failed" }
 # The rcedit npm package ships with rcedit-x64.exe in its bin/ directory.
 # This runs BEFORE the NSIS step so the installer contains the patched exe.
 $rceditBin = "node_modules\rcedit\bin\rcedit-x64.exe"
-$exePath = "release\win-unpacked\mqvi.exe"
+# exe name comes from package.json:build.win.executableName ("HiChat")
+$exePath = "release\win-unpacked\HiChat.exe"
 $icoPath = "icons\mqvi-icon.ico"
 
 if ((Test-Path $exePath) -and (Test-Path $rceditBin)) {

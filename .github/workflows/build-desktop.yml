@@ -121,7 +121,10 @@ jobs:
 
       - name: Embed Windows icon
         if: matrix.platform == 'windows-latest'
-        run: node_modules\rcedit\bin\rcedit-x64.exe release\win-unpacked\mqvi.exe --set-icon icons\mqvi-icon.ico
+        # exe name comes from package.json:build.win.executableName ("HiChat")
+        # — was renamed from mqvi.exe during the rebrand. Hardcoding the old
+        # name made every Windows build fail with "no such file" at rcedit.
+        run: node_modules\rcedit\bin\rcedit-x64.exe release\win-unpacked\HiChat.exe --set-icon icons\mqvi-icon.ico
         shell: cmd
 
       - name: Generate app-update.yml
@@ -163,13 +166,22 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-${{ matrix.label }}
+          # artifactName in package.json is hichat-setup.${ext} after the
+          # rebrand. Glob still matched the legacy mqvi-* name → upload
+          # picked up zero files → release had no installer.
           path: |
-            release/mqvi-setup.*
+            release/hichat-setup.*
             release/latest*.yml
 
   # ─── Server binary build (Linux amd64 + arm64) ───
+  # Non-blocking: HF Space rebuilds the server itself via Dockerfile on
+  # push, so the binaries here are only useful for self-hosters. CGO is
+  # currently disabled, which conflicts with go-libsql (Turso wire proto
+  # driver); fixing that needs cross-toolchain setup. Until then, let this
+  # job fail without blocking the desktop release.
   build-server:
     runs-on: ubuntu-22.04
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -216,7 +228,10 @@ jobs:
 
   # ─── Create release and upload all artifacts ───
   release:
-    needs: [build, build-server]
+    # Only desktop builds gate the release. build-server is best-effort and
+    # marked continue-on-error; if it succeeds its artifacts are picked up
+    # via the merge-multiple download below.
+    needs: [build]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
