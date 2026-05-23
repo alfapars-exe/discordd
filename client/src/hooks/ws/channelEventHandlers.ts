@@ -15,6 +15,7 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { decryptChannelMessage } from "../../crypto/channelEncryption";
 import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
+import { showNotification } from "../../utils/notifications";
 import type {
   WSMessage,
   Channel,
@@ -110,6 +111,20 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
           useReadStateStore.getState().incrementUnread(message.channel_id);
           playNotificationSound();
           window.electronAPI?.flashFrame();
+          // OS toast — only fires when the window isn't currently focused
+          // (notifications.ts handles that gate). Tag = channel id so
+          // successive messages in the same channel replace each other
+          // instead of stacking.
+          const authorName =
+            message.author?.display_name ||
+            message.author?.username ||
+            "";
+          showNotification({
+            title: authorName || "HiChat!",
+            body: message.content ?? "",
+            icon: message.author?.avatar_url ?? null,
+            tag: `channel:${message.channel_id}`,
+          });
         }
       }
       return true;
