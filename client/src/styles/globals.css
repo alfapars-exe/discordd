@@ -4497,7 +4497,11 @@ body.reduce-motion .electron-app-wrapper::after {
 .lightning-bolt {
   position: absolute;
   top: 0;
-  width: 60px;
+  /* Wide enough to accommodate side branches (paths use up to ~80 of
+   * the 100-unit viewBox horizontally after the branch redesign).
+   * Branches make the bolt feel like real lightning, not a straight
+   * ribbon — but they need room. */
+  width: 120px;
   height: 100%;
   transform: translateX(-50%);
   opacity: 0;
@@ -4511,27 +4515,29 @@ body.reduce-motion .electron-app-wrapper::after {
   opacity: 0.45;
 }
 .bolt-core {
-  stroke-dasharray: 150;
-  stroke-dashoffset: 150;
+  /* Branched paths concatenate ~200 path units of length (trunk + 2
+   * forks). 280 is comfortably above so the dashoffset never under-
+   * shoots and leaves a permanent stub visible mid-cycle. */
+  stroke-dasharray: 280;
+  stroke-dashoffset: 280;
   animation: bolt-draw 0.6s ease-out infinite;
   animation-delay: inherit;
   animation-duration: inherit;
 }
 @keyframes lightning-strike {
-  /* Visible flash window is 90 %–100 % of the cycle so the strike
-   * stays ~400–800 ms long even when the per-bolt cycle is short
-   * (5–10 s after the frequency bump). At the previous 3 % window
-   * a 5 s cycle gave only ~150 ms flashes, which felt subliminal. */
-  0%, 90%, 100% { opacity: 0; }
-  91%   { opacity: 0.95; }   /* first jolt */
-  92%   { opacity: 0.5; }
-  93%   { opacity: 0.9; }    /* second brighter jolt */
-  95%   { opacity: 0.6; }
+  /* Visible flash window is 88%–100% of the cycle so the strike stays
+   * ~300–600 ms even at the dense 2.5–5 s cycle. Tightening below this
+   * would make individual bolts feel subliminal at the short end. */
+  0%, 88%, 100% { opacity: 0; }
+  89%   { opacity: 0.95; }   /* first jolt */
+  91%   { opacity: 0.45; }
+  92%   { opacity: 0.9; }    /* second brighter jolt */
+  95%   { opacity: 0.55; }
   98%   { opacity: 0; }      /* fade tail */
 }
 @keyframes bolt-draw {
-  0%, 90%, 100% { stroke-dashoffset: 150; }
-  91%, 97% { stroke-dashoffset: 0; }
+  0%, 88%, 100% { stroke-dashoffset: 280; }
+  89%, 97% { stroke-dashoffset: 0; }
 }
 
 body.reduce-motion .lightning-overlay { display: none; }
