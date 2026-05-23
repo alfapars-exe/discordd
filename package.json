@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.37",
+  "version": "2.11.38",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",

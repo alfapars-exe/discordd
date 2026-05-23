@@ -216,9 +216,14 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     return { serverId: srv.id, serverName: srv.name, serverIconUrl: srv.icon_url };
   }
 
-  function handleTextChannelClick(channelId: string, channelName: string) {
+  function handleTextChannelClick(channelId: string, channelName: string, channelType: "text" | "audit" = "text") {
     selectChannel(channelId);
-    openTab(channelId, "text", channelName, getActiveServerInfo());
+    // Text and audit channels both reach this handler (they're "chat-like"
+    // — see ChannelItem click path). The TabType differs though: AuditChannel
+    // is rendered when type==="audit", ChatArea when type==="text". Passing
+    // a hardcoded "text" here would silently open audit channels as text
+    // channels — exactly the bug that caused "denetim alanı çalışmıyor".
+    openTab(channelId, channelType, channelName, getActiveServerInfo());
     closeAllDrawers();
   }
 
@@ -425,10 +430,14 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                           if (isVoice) {
                             handleVoiceChannelClick(ch.id, ch.name);
                           } else {
-                            // text + audit both open as a chat-style tab via
-                            // the same path. AppLayout's openTab mapping
-                            // picks the right TabType from channel.type.
-                            handleTextChannelClick(ch.id, ch.name);
+                            // text + audit both reach the chat-like handler,
+                            // but they need different TabType so the right
+                            // component renders (ChatArea vs AuditChannel).
+                            handleTextChannelClick(
+                              ch.id,
+                              ch.name,
+                              ch.type === "audit" ? "audit" : "text",
+                            );
                           }
                         }}
                         onContextMenu={(e) => handleChannelContextMenu(e, ch)}
