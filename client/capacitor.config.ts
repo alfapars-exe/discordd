@@ -24,7 +24,12 @@ const config: CapacitorConfig = {
 
   plugins: {
     Keyboard: {
-      resize: "none",
+      // "native" — Capacitor resizes the WebView when the soft keyboard
+      // shows, matching native iOS/Android keyboard avoidance. "none"
+      // (our prior value) left the WebView full-screen and forced the
+      // app to handle keyboard avoidance manually, which combined with
+      // sub-16px inputs to trigger Safari's auto-zoom-on-focus.
+      resize: "native",
     },
   },
 };

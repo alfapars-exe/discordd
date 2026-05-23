@@ -252,7 +252,7 @@ button { font-family:inherit; }
 .ch-tree-cat-row[draggable="true"]:active { cursor:grabbing; }
 /* Inline create form */
 .ch-tree-create-form { padding:4px 10px 6px 28px;display:flex;flex-direction:column;gap:4px; }
-.ch-tree-create-input { width:100%;padding:5px 8px;border:1px solid var(--b1);border-radius:4px;background:var(--bg-0);color:var(--t0);font-size:13px;outline:none; }
+.ch-tree-create-input { width:100%;padding:5px 8px;border:1px solid var(--b1);border-radius:4px;background:var(--bg-0);color:var(--t0);font-size:16px;outline:none; }
 .ch-tree-create-input:focus { border-color:var(--primary); }
 .ch-tree-create-actions { display:flex;align-items:center;gap:4px; }
 .ch-tree-create-btn { padding:3px 8px;border:none;border-radius:4px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer; }
@@ -284,7 +284,7 @@ button { font-family:inherit; }
 .ch-tree-item.muted .ch-tree-label,
 .ch-tree-item.muted .ch-tree-icon { opacity:.5; }
 /* Inline rename input */
-.ch-tree-inline-rename { flex:1;background:var(--input-bg);border:1px solid var(--primary);border-radius:3px;color:var(--t0);font-size:14px;padding:2px 24px 2px 6px;outline:none;min-width:0; }
+.ch-tree-inline-rename { flex:1;background:var(--input-bg);border:1px solid var(--primary);border-radius:3px;color:var(--t0);font-size:16px;padding:2px 24px 2px 6px;outline:none;min-width:0; }
 /* Sidebar inline rename — emoji button + picker wrapper */
 .ch-tree-rename-wrap { position:relative;display:flex;align-items:center;flex:1;min-width:0; }
 .ch-tree-rename-emoji { position:absolute;right:2px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:none;background:transparent;cursor:pointer;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t2);z-index:2;padding:0; }
@@ -622,7 +622,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .gif-picker-flipped { bottom:auto;top:100%;margin-bottom:0;margin-top:6px; }
 .input-gif-picker-wrap .gif-picker { left:auto;right:0; }
 .gif-picker-header { padding:8px;border-bottom:1px solid var(--b1); }
-.gif-picker-search { width:100%;padding:8px 12px;background:var(--bg-4);border:1px solid var(--b1);border-radius:6px;color:var(--t0);font-size:14px;outline:none;transition:border-color .15s; }
+.gif-picker-search { width:100%;padding:8px 12px;background:var(--bg-4);border:1px solid var(--b1);border-radius:6px;color:var(--t0);font-size:16px;outline:none;transition:border-color .15s; }
 .gif-picker-search::placeholder { color:var(--t3); }
 .gif-picker-search:focus { border-color:var(--primary); }
 .gif-picker-body { flex:1;overflow-y:auto;min-height:200px; }
@@ -695,7 +695,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 
 /* Edit mode */
 .msg-edit-area { margin-top:4px; }
-.msg-edit-textarea { width:100%;resize:none;border-radius:8px;background:var(--input-bg);border:1px solid var(--input-border);padding:8px;font-family:inherit;font-size:13px;color:var(--t0);outline:none; }
+.msg-edit-textarea { width:100%;resize:none;border-radius:8px;background:var(--input-bg);border:1px solid var(--input-border);padding:8px;font-family:inherit;font-size:16px;color:var(--t0);outline:none; }
 .msg-edit-textarea:focus { background:var(--bg-4); }
 .msg-edit-hint { font-size:13px;color:var(--t3);margin-top:4px; }
 
@@ -738,7 +738,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .input-box button { width:36px;height:36px;border:none;background:transparent;color:var(--t3);cursor:pointer;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px; }
 .input-box button:hover { color:var(--t1);background:var(--bg-h); }
 .send-btn { color:var(--primary) !important; }
-.input-box textarea { flex:1;background:transparent;border:none;outline:none;color:var(--t0);font-family:inherit;font-size:14px;padding:8px 6px;resize:none;max-height:100px;line-height:1.4; }
+.input-box textarea { flex:1;background:transparent;border:none;outline:none;color:var(--t0);font-family:inherit;font-size:16px;padding:8px 6px;resize:none;max-height:100px;line-height:1.4; }
 .input-box textarea::placeholder { color:var(--t3); }
 .input-box-disabled { justify-content:center;padding:10px;cursor:not-allowed;opacity:0.6; }
 .input-no-perm { font-size:13px;color:var(--t3);font-style:italic;user-select:none; }
@@ -1249,7 +1249,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .auth-error { background:var(--red-s);border:1px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--red); }
 .auth-email-warning { margin-top:6px;font-size:13px;color:var(--yellow);line-height:1.4; }
 .auth-label { display:block;font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px; }
-.auth-input { width:100%;height:44px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:0 14px;color:var(--t0);font-size:14px;outline:none;transition:border-color .15s; }
+.auth-input { width:100%;height:44px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:0 14px;color:var(--t0);font-size:16px;outline:none;transition:border-color .15s; }
 .auth-input:focus { border-color:var(--primary); }
 .auth-input::placeholder { color:var(--t3); }
 .auth-field { margin-bottom:16px; }
@@ -1336,7 +1336,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .settings-section { margin-bottom:32px; }
 .settings-section-title { font-size:18px;font-weight:700;color:var(--t0);margin-bottom:16px; }
 .settings-label { display:block;font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px; }
-.settings-input { width:100%;max-width:400px;height:40px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:0 12px;color:var(--t0);font-size:14px;outline:none;transition:border-color .15s; }
+.settings-input { width:100%;max-width:400px;height:40px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:0 12px;color:var(--t0);font-size:16px;outline:none;transition:border-color .15s; }
 .settings-input:focus { border-color:var(--primary); }
 .settings-input::placeholder { color:var(--t3); }
 .settings-textarea { width:100%;max-width:400px;min-height:80px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;color:var(--t0);font-size:14px;outline:none;resize:vertical;transition:border-color .15s; }
