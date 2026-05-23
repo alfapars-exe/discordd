@@ -40,6 +40,12 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 		return fmt.Errorf("%w: deafen members permission required", pkg.ErrForbidden)
 	}
 
+	// Snapshot the prior state BEFORE mutation so we can emit "transitioned"
+	// audit events (e.g. mute on / mute off) accurately. Mute and deafen
+	// are independent toggles — both can flip in one call.
+	prevMuted := state.IsServerMuted
+	prevDeafened := state.IsServerDeafened
+
 	if isServerMuted != nil {
 		state.IsServerMuted = *isServerMuted
 	}
@@ -63,6 +69,36 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 			Action:           "update",
 		},
 	})
+
+	// Audit log — one entry per state transition. We split mute and deafen
+	// into separate events so the audit channel reads naturally (e.g. "X
+	// muted Y" + "X deafened Y" rather than a combined event).
+	actor := adminUserID
+	target := targetUserID
+	if isServerMuted != nil && *isServerMuted != prevMuted {
+		eventType := models.AuditEventServerUnmute
+		if *isServerMuted {
+			eventType = models.AuditEventServerMute
+		}
+		s.audit(models.AuditLog{
+			ServerID:     state.ServerID,
+			ActorUserID:  &actor,
+			TargetUserID: &target,
+			EventType:    eventType,
+		})
+	}
+	if isServerDeafened != nil && *isServerDeafened != prevDeafened {
+		eventType := models.AuditEventServerUndeafen
+		if *isServerDeafened {
+			eventType = models.AuditEventServerDeafen
+		}
+		s.audit(models.AuditLog{
+			ServerID:     state.ServerID,
+			ActorUserID:  &actor,
+			TargetUserID: &target,
+			EventType:    eventType,
+		})
+	}
 
 	log.Printf("[voice] admin %s updated server state for user %s (muted=%v, deafened=%v)",
 		adminUserID, targetUserID, state.IsServerMuted, state.IsServerDeafened)
@@ -199,6 +235,21 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// Remove phantom from old LiveKit room (best-effort)
 	go s.removeParticipantFromLiveKit(sourceChannelID, targetUserID)
 
+	// Audit: voice move (only when an admin moved someone else; self-moves
+	// are not moderation events and we don't log them).
+	if !isSelfMove {
+		mover := moverUserID
+		target := targetUserID
+		metadata := fmt.Sprintf(`{"from_channel_id":%q,"to_channel_id":%q}`, sourceChannelID, targetChannelID)
+		s.audit(models.AuditLog{
+			ServerID:     targetServerID,
+			ActorUserID:  &mover,
+			TargetUserID: &target,
+			EventType:    models.AuditEventVoiceMove,
+			Metadata:     metadata,
+		})
+	}
+
 	log.Printf("[voice] user %s moved user %s from channel %s to %s",
 		moverUserID, targetUserID, sourceChannelID, targetChannelID)
 	return nil
@@ -256,6 +307,18 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 	})
 
 	go s.removeParticipantFromLiveKit(channelID, targetUserID)
+
+	// Audit: voice kick
+	disconnecter := disconnecterUserID
+	target := targetUserID
+	metadata := fmt.Sprintf(`{"channel_id":%q}`, channelID)
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &disconnecter,
+		TargetUserID: &target,
+		EventType:    models.AuditEventVoiceKick,
+		Metadata:     metadata,
+	})
 
 	log.Printf("[voice] admin %s disconnected user %s from channel %s",
 		disconnecterUserID, targetUserID, channelID)

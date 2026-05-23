@@ -25,6 +25,7 @@ type MemberService interface {
 	Unban(ctx context.Context, serverID, userID string) error
 	GetBans(ctx context.Context, serverID string) ([]models.Ban, error)
 	IsBanned(ctx context.Context, serverID, userID string) (bool, error)
+	SetAuditLogger(logger AuditWriter)
 }
 
 // VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
@@ -33,12 +34,23 @@ type VoiceDisconnecter interface {
 }
 
 type memberService struct {
-	userRepo   repository.UserRepository
-	roleRepo   repository.RoleRepository
-	banRepo    repository.BanRepository
-	serverRepo repository.ServerRepository
-	hub        ws.BroadcastAndManage
-	voiceKick  VoiceDisconnecter
+	userRepo    repository.UserRepository
+	roleRepo    repository.RoleRepository
+	banRepo     repository.BanRepository
+	serverRepo  repository.ServerRepository
+	hub         ws.BroadcastAndManage
+	voiceKick   VoiceDisconnecter
+	auditLogger AuditWriter
+}
+
+func (s *memberService) SetAuditLogger(logger AuditWriter) {
+	s.auditLogger = logger
+}
+
+func (s *memberService) audit(entry models.AuditLog) {
+	if s.auditLogger != nil {
+		s.auditLogger.Write(entry)
+	}
 }
 
 func NewMemberService(
@@ -220,10 +232,24 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 		targetSet[id] = true
 	}
 
+	// Track assignments + removals so we can emit one audit event per role
+	// transition. Doing this in a single pass keeps the audit channel
+	// readable instead of dumping a wall of "X modified roles" entries.
+	actor := actorID
+	target := targetID
 	for _, id := range roleIDs {
 		if !currentSet[id] {
 			if err := s.roleRepo.AssignToUser(ctx, targetID, id, serverID); err != nil {
 				return nil, fmt.Errorf("failed to assign role: %w", err)
+			}
+			if role, _ := s.roleRepo.GetByID(ctx, id); role != nil {
+				s.audit(models.AuditLog{
+					ServerID:     serverID,
+					ActorUserID:  &actor,
+					TargetUserID: &target,
+					EventType:    models.AuditEventRoleAssign,
+					Metadata:     fmt.Sprintf(`{"role_name":%q}`, role.Name),
+				})
 			}
 		}
 	}
@@ -239,6 +265,13 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 			if err := s.roleRepo.RemoveFromUser(ctx, targetID, r.ID); err != nil {
 				return nil, fmt.Errorf("failed to remove role: %w", err)
 			}
+			s.audit(models.AuditLog{
+				ServerID:     serverID,
+				ActorUserID:  &actor,
+				TargetUserID: &target,
+				EventType:    models.AuditEventRoleRemove,
+				Metadata:     fmt.Sprintf(`{"role_name":%q}`, r.Name),
+			})
 		}
 	}
 
@@ -270,6 +303,15 @@ func (s *memberService) Kick(ctx context.Context, serverID, actorID, targetID st
 	}
 
 	s.removeFromServer(serverID, targetID)
+
+	actor := actorID
+	target := targetID
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &actor,
+		TargetUserID: &target,
+		EventType:    models.AuditEventMemberKick,
+	})
 	return nil
 }
 
@@ -305,6 +347,24 @@ func (s *memberService) Ban(ctx context.Context, serverID, actorID, targetID, re
 	}
 
 	s.removeFromServer(serverID, targetID)
+
+	actor := actorID
+	target := targetID
+	metadata := "{}"
+	if reason != "" {
+		// Tiny inline JSON marshal — reason is plain string the user typed.
+		// Escape the few chars that matter for JSON (quotes, backslashes).
+		escaped := strings.ReplaceAll(reason, `\`, `\\`)
+		escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+		metadata = fmt.Sprintf(`{"reason":%q}`, escaped)
+	}
+	s.audit(models.AuditLog{
+		ServerID:     serverID,
+		ActorUserID:  &actor,
+		TargetUserID: &target,
+		EventType:    models.AuditEventMemberBan,
+		Metadata:     metadata,
+	})
 	return nil
 }
 

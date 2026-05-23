@@ -82,7 +82,16 @@ type VoiceService interface {
 	StartOrphanCleanup()
 	StartAFKChecker()
 	SetAppLogger(logger VoiceAppLogger)
+	SetAuditLogger(logger AuditWriter)
 	SetMusicBotHook(hook MusicBotChannelHook)
+}
+
+// AuditWriter — narrow ISP interface for audit log writes from services.
+// Mirrors VoiceAppLogger's pattern: every service that emits audit events
+// holds this interface as an optional field (nil = no-op) so wiring stays
+// pluggable and there's no circular dependency on services.AuditLogService.
+type AuditWriter interface {
+	Write(entry models.AuditLog)
 }
 
 // MusicBotChannelHook — narrow interface VoiceService uses to stop a music
@@ -124,6 +133,7 @@ type voiceService struct {
 	afkTimeoutGetter AFKTimeoutGetter
 	encryptionKey    []byte // AES-256-GCM for LiveKit credential decryption
 	appLogger        VoiceAppLogger
+	auditLogger      AuditWriter
 	musicBotHook     MusicBotChannelHook
 }
 
@@ -158,6 +168,18 @@ func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {
 	s.appLogger = logger
+}
+
+func (s *voiceService) SetAuditLogger(logger AuditWriter) {
+	s.auditLogger = logger
+}
+
+// audit emits an audit log event if an audit logger is wired. Nil-safe.
+// Keeps call sites to one line and avoids repeating the nil check.
+func (s *voiceService) audit(entry models.AuditLog) {
+	if s.auditLogger != nil {
+		s.auditLogger.Write(entry)
+	}
 }
 
 // logError writes a structured error log if appLogger is set.
