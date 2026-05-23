@@ -150,6 +150,10 @@ func main() {
 	// 10c. App log service — async writer + auto-purge (30 days)
 	svcs.AppLog.Start()
 
+	// 10d. Audit log service — async writer + WS broadcast on moderation events.
+	// No auto-purge: audit history is kept indefinitely.
+	svcs.AuditLog.Start()
+
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey)
 
@@ -250,6 +254,7 @@ func main() {
 	log.Println("[main] shutting down...")
 
 	svcs.AppLog.Stop()
+	svcs.AuditLog.Stop()
 	metricsCollector.Stop()
 	hub.Shutdown()
 
@@ -471,10 +476,10 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	corsOrigins := []string{
 		"http://localhost:3030",
 		"http://localhost:1420",
-		"capacitor://localhost",  // iOS Capacitor WKWebView
-		"ionic://localhost",      // iOS Capacitor (legacy scheme)
-		"http://localhost",       // Android Capacitor WebView (legacy)
-		"https://localhost",      // Android Capacitor WebView (Capacitor 6+)
+		"capacitor://localhost", // iOS Capacitor WKWebView
+		"ionic://localhost",     // iOS Capacitor (legacy scheme)
+		"http://localhost",      // Android Capacitor WebView (legacy)
+		"https://localhost",     // Android Capacitor WebView (Capacitor 6+)
 		// Hugging Face Spaces — same-origin requests come from the embed iframe.
 		"https://huggingface.co",
 	}

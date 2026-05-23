@@ -12,6 +12,11 @@ type ChannelType string
 const (
 	ChannelTypeText  ChannelType = "text"
 	ChannelTypeVoice ChannelType = "voice"
+	// ChannelTypeAudit — server-wide moderation event feed. Exactly one per
+	// server, auto-created in server_service.CreateServer. Read-only from the
+	// client's perspective (no message composer); content is rendered from
+	// the audit_logs table via audit_log_service.
+	ChannelTypeAudit ChannelType = "audit"
 )
 
 type Channel struct {
@@ -55,8 +60,16 @@ func (r *CreateChannelRequest) Validate() error {
 		return fmt.Errorf("channel name must be between 1 and 50 characters")
 	}
 
-	if r.Type != string(ChannelTypeText) && r.Type != string(ChannelTypeVoice) {
-		return fmt.Errorf("channel type must be 'text' or 'voice'")
+	// 'audit' is accepted here but is constrained at the service layer to
+	// "exactly one per server" — channel_service.Create returns an error if
+	// the server already has an audit channel. The radio button in the
+	// create modal exists for discoverability; in practice the channel is
+	// auto-created in CreateServer + backfilled into existing servers, so
+	// the user rarely needs to create one manually.
+	if r.Type != string(ChannelTypeText) &&
+		r.Type != string(ChannelTypeVoice) &&
+		r.Type != string(ChannelTypeAudit) {
+		return fmt.Errorf("channel type must be 'text', 'voice', or 'audit'")
 	}
 
 	r.Topic = strings.TrimSpace(r.Topic)

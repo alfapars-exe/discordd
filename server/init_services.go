@@ -49,6 +49,7 @@ type Services struct {
 	Badge             services.BadgeService
 	Preferences       services.PreferencesService
 	AppLog            services.AppLogService
+	AuditLog          services.AuditLogService
 	Feedback          services.FeedbackService
 	FeedbackUpload    services.FeedbackUploadService
 	Soundboard        services.SoundboardService
@@ -56,12 +57,12 @@ type Services struct {
 }
 
 type RateLimiters struct {
-	Login         *ratelimit.LoginRateLimiter
-	Message       *ratelimit.MessageRateLimiter
-	Register      *ratelimit.LoginRateLimiter
-	ForgotPwd     *ratelimit.LoginRateLimiter
-	ResetPwd      *ratelimit.LoginRateLimiter
-	Feedback      *ratelimit.MessageRateLimiter
+	Login     *ratelimit.LoginRateLimiter
+	Message   *ratelimit.MessageRateLimiter
+	Register  *ratelimit.LoginRateLimiter
+	ForgotPwd *ratelimit.LoginRateLimiter
+	ResetPwd  *ratelimit.LoginRateLimiter
+	Feedback  *ratelimit.MessageRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -140,6 +141,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 	preferencesService := services.NewPreferencesService(repos.Preferences)
 	appLogService := services.NewAppLogService(repos.AppLog)
+	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
 
 	metricsHistoryService := services.NewMetricsHistoryService(repos.MetricsHistory, repos.LiveKit)
 	feedbackService := services.NewFeedbackService(repos.Feedback)
@@ -164,9 +166,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// Rate limiters
 	loginLimiter := ratelimit.NewLoginRateLimiter(5, 2*time.Minute)
 	messageLimiter := ratelimit.NewMessageRateLimiter(5, 5*time.Second, 15*time.Second)
-	registerLimiter := ratelimit.NewLoginRateLimiter(3, 10*time.Minute)   // 3 registrations per 10 min per IP
-	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute)   // 3 forgot-password per 5 min per IP
-	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)    // 5 reset attempts per 5 min per IP
+	registerLimiter := ratelimit.NewLoginRateLimiter(3, 10*time.Minute)                  // 3 registrations per 10 min per IP
+	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute)                  // 3 forgot-password per 5 min per IP
+	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)                   // 5 reset attempts per 5 min per IP
 	feedbackLimiter := ratelimit.NewMessageRateLimiter(2, 1*time.Minute, 30*time.Second) // 2 feedback per min, 30s cooldown
 
 	svcs := &Services{
@@ -205,6 +207,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Badge:             badgeService,
 		Preferences:       preferencesService,
 		AppLog:            appLogService,
+		AuditLog:          auditLogService,
 		Feedback:          feedbackService,
 		FeedbackUpload:    feedbackUploadService,
 		Soundboard:        soundboardService,

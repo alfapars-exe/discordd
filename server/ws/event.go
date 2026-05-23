@@ -78,6 +78,10 @@ const (
 	OpVoiceStatesSync         = "voice_states_sync"
 	OpScreenShareViewerUpdate = "screen_share_viewer_update"
 
+	// Audit operations — moderation event broadcast for audit channels.
+	// Sent only to users with audit-view permission for the originating server.
+	OpAuditEvent = "audit_event"
+
 	// Friend operations
 	OpFriendRequestCreate  = "friend_request_create"
 	OpFriendRequestAccept  = "friend_request_accept"
