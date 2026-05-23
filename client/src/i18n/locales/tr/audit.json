@@ -1,0 +1,30 @@
+{
+  "title": "Denetim",
+  "empty": "Henüz olay yok.",
+  "loading": "Yükleniyor…",
+  "loadMore": "Daha eskisini yükle",
+  "unknownActor": "Bilinmeyen kullanıcı",
+  "unknownTarget": "bilinmeyen kullanıcı",
+
+  "events": {
+    "server_mute": "{{actor}} {{target}}'ı sustu",
+    "server_unmute": "{{actor}} {{target}}'ın susturmasını kaldırdı",
+    "server_deafen": "{{actor}} {{target}}'ı sağırlaştırdı",
+    "server_undeafen": "{{actor}} {{target}}'ın sağırlaştırmasını kaldırdı",
+    "voice_kick": "{{actor}} {{target}}'ı ses kanalından attı",
+    "voice_move": "{{actor}} {{target}}'ı ses kanallarında taşıdı",
+    "member_join": "{{target}} sunucuya katıldı",
+    "member_leave": "{{target}} sunucudan ayrıldı",
+    "member_kick": "{{actor}} {{target}}'ı sunucudan attı",
+    "member_ban": "{{actor}} {{target}}'ı yasakladı",
+    "member_unban": "{{actor}} {{target}}'ın yasağını kaldırdı",
+    "role_create": "{{actor}} \"{{roleName}}\" rolünü oluşturdu",
+    "role_delete": "{{actor}} \"{{roleName}}\" rolünü sildi",
+    "role_assign": "{{actor}} {{target}}'a \"{{roleName}}\" rolünü verdi",
+    "role_remove": "{{actor}} {{target}}'tan \"{{roleName}}\" rolünü aldı",
+    "channel_create": "{{actor}} \"{{channelName}}\" kanalını oluşturdu",
+    "channel_delete": "{{actor}} \"{{channelName}}\" kanalını sildi",
+    "channel_rename": "{{actor}} kanalı \"{{oldName}}\" → \"{{newName}}\" olarak yeniden adlandırdı",
+    "message_delete": "{{actor}} {{target}}'ın mesajını sildi"
+  }
+}

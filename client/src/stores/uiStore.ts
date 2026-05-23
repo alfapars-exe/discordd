@@ -25,7 +25,7 @@ export type { LayoutNode, SplitDirection } from "../utils/layoutTree";
 // Types
 // ──────────────────────────────────
 
-export type TabType = "text" | "voice" | "screen" | "dm" | "friends" | "p2p";
+export type TabType = "text" | "voice" | "screen" | "dm" | "friends" | "p2p" | "audit";
 
 /** Server info for multi-server tab disambiguation. Not needed for DM/friends/p2p. */
 export type TabServerInfo = {

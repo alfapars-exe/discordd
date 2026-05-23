@@ -9,6 +9,7 @@
   "channelType": "Kanal Türü",
   "text": "Metin",
   "voice": "Sesli",
+  "audit": "Denetim",
   "deleteConfirm": "#{{name}} kanalını silmek istediğinize emin misiniz?",
   "noChannels": "Henüz kanal yok",
   "reorderSuccess": "Kanal sırası güncellendi",

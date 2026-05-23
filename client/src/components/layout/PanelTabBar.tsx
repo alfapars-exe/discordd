@@ -153,6 +153,7 @@ function PanelTabBar({ panelId }: PanelTabBarProps) {
               {tab.type === "text" && "#"}
               {tab.type === "voice" && "\uD83D\uDD0A"}
               {tab.type === "screen" && "\uD83D\uDDA5"}
+              {tab.type === "audit" && "\u2696\uFE0F"}
               {tab.type === "dm" && (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

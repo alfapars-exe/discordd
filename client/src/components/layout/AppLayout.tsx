@@ -176,12 +176,10 @@ function AppLayout() {
           serverInfo = { serverId: srv.id, serverName: srv.name, serverIconUrl: srv.icon_url };
         }
       }
-      openTab(
-        channel.id,
-        channel.type === "text" ? "text" : "voice",
-        channel.name,
-        serverInfo
-      );
+      const tabType =
+        channel.type === "text" ? "text" :
+        channel.type === "voice" ? "voice" : "audit";
+      openTab(channel.id, tabType, channel.name, serverInfo);
       autoOpenedRef.current = true;
     }
   }, [selectedChannelId, categories, openTab, activeServerId, servers]);
