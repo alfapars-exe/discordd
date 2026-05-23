@@ -4578,23 +4578,24 @@ body.reduce-motion .main-area::after {
   /* Filter chain order matters: blur first to soften the SVG stroke
    * edges, then drop-shadow layers on top of the already-blurred shape
    * for the wide outer halo. Result is a soft "plasma" channel rather
-   * than a pixel-sharp line — what the user asked for with "blur ve
-   * opak". The opacity floor stays at 1.0 in the keyframes so it's
-   * blurred-and-solid, not blurred-and-translucent. */
-  filter: blur(2px) drop-shadow(0 0 10px currentColor) drop-shadow(0 0 24px currentColor);
+   * than a pixel-sharp line.
+   *
+   * Bumped blur 2 → 4 px and widened both drop-shadows (10→14, 24→32)
+   * per user feedback "biraz daha blurlu ve opak". The .bolt-glow and
+   * .bolt-core stroke widths below grew in lockstep so the bolts stay
+   * solid (opak) instead of dissolving into the surrounding glow. */
+  filter: blur(4px) drop-shadow(0 0 14px currentColor) drop-shadow(0 0 32px currentColor);
   animation-name: lightning-strike;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
   animation-fill-mode: both;
 }
 .bolt-glow {
-  /* Bumped from 0.45 → 0.75 so the halo behind the core stays solid
-   * during the flash instead of fading to a thin pencil line.
-   * Wider stroke (3 vs the original 2) compensates for the parent's
-   * 2 px blur — without the bump the halo gets washed out and the
-   * bolt reads as just the core line. */
-  opacity: 0.75;
-  stroke-width: 3;
+  /* opacity 0.8 + stroke 5 scaled up alongside the heavier parent blur
+   * (4 px) so the halo keeps mass and reads as a thick plasma channel
+   * instead of being smeared away. */
+  opacity: 0.8;
+  stroke-width: 5;
 }
 .bolt-core {
   /* Branched paths concatenate ~200 path units of length (trunk + 2
@@ -4602,9 +4603,9 @@ body.reduce-motion .main-area::after {
    * shoots and leaves a permanent stub visible mid-cycle. */
   stroke-dasharray: 280;
   stroke-dashoffset: 280;
-  /* Bumped from 0.45 → 0.75 so the bright core stays visible after
-   * the parent's 2 px blur. Anything thinner blurs into the halo. */
-  stroke-width: 0.75;
+  /* Core stroke 1.2 — wide enough to survive the parent's 4 px blur as
+   * a discernible bright spine inside the wider halo. */
+  stroke-width: 1.2;
   animation: bolt-draw 0.6s ease-out infinite;
   animation-delay: inherit;
   animation-duration: inherit;
