@@ -4575,14 +4575,19 @@ body.reduce-motion .main-area::after {
   height: 100%;
   transform: translateX(-50%);
   opacity: 0;
-  filter: drop-shadow(0 0 6px currentColor);
+  /* Wider drop-shadow + brighter compositing — when the bolts now read
+   * as solid (opaque) the surrounding glow has to keep up or the path
+   * looks pasted-on instead of charged. */
+  filter: drop-shadow(0 0 10px currentColor) drop-shadow(0 0 24px currentColor);
   animation-name: lightning-strike;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
   animation-fill-mode: both;
 }
 .bolt-glow {
-  opacity: 0.45;
+  /* Bumped from 0.45 → 0.75 so the halo behind the core stays solid
+   * during the flash instead of fading to a thin pencil line. */
+  opacity: 0.75;
 }
 .bolt-core {
   /* Branched paths concatenate ~200 path units of length (trunk + 2
@@ -4597,12 +4602,16 @@ body.reduce-motion .main-area::after {
 @keyframes lightning-strike {
   /* Visible flash window is 88%–100% of the cycle so the strike stays
    * ~300–600 ms even at the dense 2.5–5 s cycle. Tightening below this
-   * would make individual bolts feel subliminal at the short end. */
+   * would make individual bolts feel subliminal at the short end.
+   *
+   * Opacity floors raised so the strike reads as OPAQUE (user request):
+   * the two-step flash now sits at 0.85 / 1.0 / 0.85 instead of the
+   * old 0.45-0.95 zig-zag that made bolts look ghostly. */
   0%, 88%, 100% { opacity: 0; }
-  89%   { opacity: 0.95; }   /* first jolt */
-  91%   { opacity: 0.45; }
-  92%   { opacity: 0.9; }    /* second brighter jolt */
-  95%   { opacity: 0.55; }
+  89%   { opacity: 1; }      /* first jolt — solid */
+  91%   { opacity: 0.85; }
+  92%   { opacity: 1; }      /* second peak — solid */
+  95%   { opacity: 0.85; }
   98%   { opacity: 0; }      /* fade tail */
 }
 @keyframes bolt-draw {
