@@ -12,9 +12,12 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// Discord-style token patterns: <@userId> for user mentions, <@&roleId> for role mentions
-var userMentionRegex = regexp.MustCompile(`<@([a-f0-9]+)>`)
-var roleMentionRegex = regexp.MustCompile(`<@&([a-f0-9]+)>`)
+// Discord-style token patterns: <@userId> for user mentions, <@&roleId>
+// for role mentions. The character class is [a-z0-9] (not just hex)
+// because legacy seed role IDs from older database snapshots are
+// alphanumeric — tightening to [a-f0-9] would silently drop them.
+var userMentionRegex = regexp.MustCompile(`<@([a-z0-9]+)>`)
+var roleMentionRegex = regexp.MustCompile(`<@&([a-z0-9]+)>`)
 
 type MessageService interface {
 	GetByChannelID(ctx context.Context, channelID string, userID string, beforeID string, limit int) (*models.MessagePage, error)

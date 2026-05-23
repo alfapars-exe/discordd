@@ -24,8 +24,13 @@ export const KLIPY_REGEX = /^https?:\/\/static\.klipy\.com\/[^\s]+$/;
  * Captures three token kinds: <@id>/<@&id> structured mentions,
  * @word legacy mentions, and bare URLs. Used with String.split to
  * yield text segments + mention/url tokens in order.
+ *
+ * Character class [a-z0-9] (not just hex) covers both UUID-style IDs
+ * AND legacy seed role IDs from earlier database migrations. Without
+ * this, role mentions seeded from an older Mqvi snapshot would render
+ * as raw `<@&abc-123>` text instead of as a styled mention chip.
  */
-export const TOKEN_REGEX = /(<@&?[a-f0-9]+>|@\w+|https?:\/\/[^\s<]+)/gi;
+export const TOKEN_REGEX = /(<@&?[a-z0-9]+>|@\w+|https?:\/\/[^\s<]+)/gi;
 
 type RoleLike = { id: string; name: string; color: string; position: number };
 type MemberLike = { id: string; username: string; display_name: string | null };
@@ -88,7 +93,7 @@ export function renderMessageContent(
   const parts = text.split(TOKEN_REGEX);
   return parts.map((part, i) => {
     // Structured role mention <@&roleId>
-    const roleTokenMatch = part.match(/^<@&([a-f0-9]+)>$/);
+    const roleTokenMatch = part.match(/^<@&([a-z0-9]+)>$/);
     if (roleTokenMatch) {
       const role = roleById.get(roleTokenMatch[1]);
       if (role) {
@@ -106,7 +111,7 @@ export function renderMessageContent(
     }
 
     // Structured user mention <@userId>
-    const userTokenMatch = part.match(/^<@([a-f0-9]+)>$/);
+    const userTokenMatch = part.match(/^<@([a-z0-9]+)>$/);
     if (userTokenMatch) {
       const member = memberById.get(userTokenMatch[1]);
       if (member) {
