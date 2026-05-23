@@ -454,7 +454,11 @@ func (s *messageService) Delete(ctx context.Context, id string, userID string, u
 	if wasModeratorDelete && serverID != "" {
 		actor := userID
 		target := message.UserID
-		preview := messagePreview(message.Content)
+		var content string
+		if message.Content != nil {
+			content = *message.Content
+		}
+		preview := messagePreview(content)
 		s.audit(models.AuditLog{
 			ServerID:     serverID,
 			ActorUserID:  &actor,
