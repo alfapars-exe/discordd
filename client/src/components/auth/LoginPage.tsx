@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
 import { isElectron, isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
+import { localizeAuthError } from "../../utils/authErrors";
 
 function LoginPage() {
   // ─── Hooks ───
@@ -65,8 +66,9 @@ function LoginPage() {
         <h1 className="auth-title">{t("welcomeBack")}</h1>
         <p className="auth-subtitle">{t("excitedToSeeYou")}</p>
 
-        {/* Error Banner */}
-        {error && <div className="auth-error">{error}</div>}
+        {/* Error Banner — localize known backend error patterns into i18n
+            keys so Turkish users don't see raw English server strings. */}
+        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
