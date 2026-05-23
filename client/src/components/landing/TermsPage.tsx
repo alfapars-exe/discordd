@@ -21,7 +21,7 @@ function TermsPage() {
         <nav className="lp-nav">
           <div className="lp-nav-left" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
             <img src="/logodiscord.png" alt="HiChat!" className="lp-nav-logo-img" />
-            <span className="lp-nav-brand">mqvi</span>
+            <span className="lp-nav-brand">{t("appName", { ns: "common" })}</span>
           </div>
           <div className="lp-nav-right">
             <button className="lp-lang-toggle" onClick={toggleLang}>

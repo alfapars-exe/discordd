@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import * as authApi from "../../api/auth";
+import { localizeAuthError } from "../../utils/authErrors";
 
 function ForgotPasswordPage() {
   // ─── Hooks ───
@@ -86,7 +87,7 @@ function ForgotPasswordPage() {
         <h1 className="auth-title">{t("forgotPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("forgotPasswordSubtitle")}</p>
 
-        {error && <div className="auth-error">{error}</div>}
+        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
 
         {cooldown > 0 && (
           <div className="auth-error" style={{ borderColor: "var(--yellow)", color: "var(--yellow)", background: "var(--yellow-s, transparent)" }}>

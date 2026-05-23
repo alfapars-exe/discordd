@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import * as authApi from "../../api/auth";
+import { localizeAuthError } from "../../utils/authErrors";
 
 function ResetPasswordPage() {
   // ─── Hooks ───
@@ -85,7 +86,7 @@ function ResetPasswordPage() {
         <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("resetPasswordSubtitle")}</p>
 
-        {error && <div className="auth-error">{error}</div>}
+        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="auth-field">

@@ -58,7 +58,7 @@ function LandingPage() {
         {/* ═══ NAVBAR ═══ */}
         <nav className="lp-nav">
           <img src="/logodiscord.png" alt="HiChat!" className="lp-nav-logo-img" />
-          <span className="lp-nav-brand">mqvi</span>
+          <span className="lp-nav-brand">{t("appName", { ns: "common" })}</span>
 
           <div className="lp-nav-links">
             {[
@@ -205,7 +205,7 @@ function LandingPage() {
             <div className="lp-comparison-table">
               <div className="lp-comp-header">
                 <div className="lp-comp-cell" />
-                <div className="lp-comp-cell lp-comp-cell--header lp-comp-cell--mqvi">mqvi</div>
+                <div className="lp-comp-cell lp-comp-cell--header lp-comp-cell--mqvi">{t("appName", { ns: "common" })}</div>
                 <div className="lp-comp-cell lp-comp-cell--header lp-comp-cell--other">{t("comp_others")}</div>
               </div>
 

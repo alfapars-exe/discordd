@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
 import { isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
+import { localizeAuthError } from "../../utils/authErrors";
 
 /** Inline modal for Terms of Service / Privacy Policy */
 function LegalModal({ type, onClose }: { type: "terms" | "privacy"; onClose: () => void }) {
@@ -163,8 +164,14 @@ function RegisterPage() {
         {/* Header */}
         <h1 className="auth-title">{t("createAccount")}</h1>
 
-        {/* Error Banner */}
-        {displayError && <div className="auth-error">{displayError}</div>}
+        {/* Error Banner — localize known backend error patterns. localError
+            is already an i18n-keyed message (client-side validation), so we
+            only run the helper on the store-side error string. */}
+        {displayError && (
+          <div className="auth-error">
+            {localError ?? localizeAuthError(error, t)}
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
