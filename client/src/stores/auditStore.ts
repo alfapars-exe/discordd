@@ -56,15 +56,19 @@ export const useAuditStore = create<AuditState>((set, get) => ({
     try {
       const res = await listServerAudit(serverId, { limit: PAGE_SIZE });
       if (res.success && res.data) {
+        // Snapshot the narrowed payload so the `set` callback below keeps
+        // its non-undefined type — TS doesn't preserve control-flow
+        // narrowing across closure boundaries.
+        const entries = res.data.entries;
         // Server returns newest first; flip to oldest-first for natural
         // chat-style chronological rendering (oldest at top, newest at
         // bottom, just like text channels).
-        const sorted = [...res.data.entries].reverse();
+        const sorted = [...entries].reverse();
         set((s) => ({
           eventsByServer: { ...s.eventsByServer, [serverId]: sorted },
           hasMoreByServer: {
             ...s.hasMoreByServer,
-            [serverId]: res.data.entries.length === PAGE_SIZE,
+            [serverId]: entries.length === PAGE_SIZE,
           },
         }));
       }
@@ -89,8 +93,11 @@ export const useAuditStore = create<AuditState>((set, get) => ({
         before: oldest.created_at,
       });
       if (res.success && res.data) {
+        // Snapshot the narrowed payload — see fetchInitial for the
+        // reasoning (TS drops narrowing inside the set() closure).
+        const entries = res.data.entries;
         // New page is newest-first too; reverse + prepend.
-        const older = [...res.data.entries].reverse();
+        const older = [...entries].reverse();
         set((s) => ({
           eventsByServer: {
             ...s.eventsByServer,
@@ -98,7 +105,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
           },
           hasMoreByServer: {
             ...s.hasMoreByServer,
-            [serverId]: res.data.entries.length === PAGE_SIZE,
+            [serverId]: entries.length === PAGE_SIZE,
           },
         }));
       }
