@@ -11,8 +11,27 @@ import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
 export type InputMode = "voice_activity" | "push_to_talk";
-export type ScreenShareQuality = "720p" | "1080p" | "1440p";
-export type ScreenShareFps = 30 | 60 | 120;
+
+/**
+ * Screen-share resolution preset.
+ *   - "720p" / "1080p" / "1440p" — fixed targets that any monitor can downscale to.
+ *   - "native" — resolves to the active monitor's physical pixel count via
+ *     useDisplayInfo at publish time. Hidden from the dropdown on monitors
+ *     ≤ 1440p (the existing tier list already covers them) and on web
+ *     (Electron-only IPC).
+ */
+export type ScreenShareQuality = "720p" | "1080p" | "1440p" | "native";
+
+/**
+ * Screen-share frame rate.
+ *   - 30 / 60 / 120 — fixed targets.
+ *   - -1 — sentinel for "use monitor's native refresh rate" (resolved at
+ *     publish time from useDisplayInfo.refreshRate). We use a sentinel
+ *     number instead of a discriminated union so the existing arithmetic
+ *     (`fps === 60 ? ... : ...` in publish defaults) stays type-clean
+ *     after a single resolve step at the call site.
+ */
+export type ScreenShareFps = 30 | 60 | 120 | -1;
 
 /**
  * Noise suppression level — controls the post-RNNoise VAD gate's open/close

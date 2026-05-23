@@ -16,6 +16,7 @@ import AudioDevicePopup from "./AudioDevicePopup";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import SoundboardPanel from "../soundboard/SoundboardPanel";
 import type { ScreenShareQuality, ScreenShareFps } from "../../stores/voiceStore";
+import { useDisplayInfo } from "../../hooks/useDisplayInfo";
 import { createPortal } from "react-dom";
 
 type UserBarProps = {
@@ -401,17 +402,41 @@ function ScreenShareQualityPopup({
   const top = rect.top - 6;
   const left = rect.left;
 
+  // Pull monitor metrics for the dynamic "Max" options below. Hook returns
+  // null while the IPC is in flight (Electron) — we just render without the
+  // Max entries during that frame; the dropdown re-renders once info arrives.
+  const display = useDisplayInfo();
+
   const qualityOptions: { value: ScreenShareQuality; label: string }[] = [
     { value: "720p", label: "720p" },
     { value: "1080p", label: "1080p" },
     { value: "1440p", label: "1440p" },
   ];
+  // Only surface the Max-resolution option when the monitor is meaningfully
+  // bigger than 1440p — otherwise it duplicates an existing entry. We also
+  // require Electron (refreshRate > 0 reliably distinguishes Electron from
+  // browsers, which always report 0 here).
+  if (display && display.refreshRate > 0 && display.width > 2560) {
+    qualityOptions.push({
+      value: "native",
+      label: `${t("screenShareMax")} (${display.width}×${display.height})`,
+    });
+  }
 
   const fpsOptions: { value: ScreenShareFps; label: string }[] = [
     { value: 30, label: "30 fps" },
     { value: 60, label: "60 fps" },
     { value: 120, label: "120 fps" },
   ];
+  // Only show Max-Hz on monitors above the existing 120 fps tier (165 / 240 /
+  // etc.) — on a 60 Hz panel "Max (60 Hz)" would just be a slower copy of
+  // the 120 fps entry.
+  if (display && display.refreshRate > 120) {
+    fpsOptions.push({
+      value: -1,
+      label: `${t("screenShareMax")} (${display.refreshRate} Hz)`,
+    });
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

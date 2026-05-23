@@ -11,7 +11,7 @@
  * IPC-agnostic and unit-testable.
  */
 
-import { app, clipboard, ipcMain, nativeImage } from "electron";
+import { app, clipboard, ipcMain, nativeImage, screen } from "electron";
 import { autoUpdater } from "electron-updater";
 import { startCapture, stopCapture } from "./audio-capture";
 import { clearCredentials, loadCredentials, saveCredentials } from "./credentials";
@@ -59,6 +59,34 @@ export function registerIpcHandlers(): void {
   // ─── Desktop capturer (legacy enumeration, separate from picker) ─
   ipcMain.handle("get-desktop-sources", async () => {
     return await getSerializedSources();
+  });
+
+  // ─── Display metrics for the monitor the main window is currently on ─
+  // Used by the renderer's `useDisplayInfo` hook to expose a dynamic
+  // "Max" option in the screen-share quality + FPS dropdowns. The "Max"
+  // option resolves to these values at publish time. We use
+  // `getDisplayMatching(window.bounds)` (not `getPrimaryDisplay()`) so
+  // users on multi-monitor setups get the metrics of the screen they're
+  // actively looking at — moving HiChat! to their 4K secondary picks
+  // that monitor's resolution automatically.
+  //
+  // `bounds`/`size` from Electron are DPI-divided ("logical") pixels.
+  // We multiply by scaleFactor to get the physical pixel count the
+  // capturer actually publishes, so the "Max" label matches what
+  // viewers will see.
+  ipcMain.handle("get-display-info", () => {
+    const win = getMainWindow();
+    const display = win
+      ? screen.getDisplayMatching(win.getBounds())
+      : screen.getPrimaryDisplay();
+
+    return {
+      width: Math.round(display.size.width * display.scaleFactor),
+      height: Math.round(display.size.height * display.scaleFactor),
+      refreshRate: display.displayFrequency, // 0 on platforms that don't report it
+      scaleFactor: display.scaleFactor,
+      monitorCount: screen.getAllDisplays().length,
+    };
   });
 
   // ─── Process-exclusive system audio ──────────────────────────────

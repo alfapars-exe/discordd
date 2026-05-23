@@ -48,6 +48,7 @@ import {
 import { useVoiceStore } from "../stores/voiceStore";
 import { useServerStore } from "../stores/serverStore";
 import { useSystemAudioCapture } from "./useSystemAudioCapture";
+import { useDisplayInfo, type DisplayInfo } from "./useDisplayInfo";
 import { isElectron, isCapacitor } from "../utils/constants";
 import {
   startNativeScreenShare,
@@ -66,11 +67,26 @@ type ScreenShareResolution = {
  * Map (quality, fps) to a getDisplayMedia constraint set. The browser/Electron
  * side honors this as a hint — the browser may downsample if the source can't
  * deliver the requested rate.
+ *
+ * `display` is the monitor metrics from useDisplayInfo. Needed to resolve
+ * the "native"/-1 sentinels into concrete numbers — see Track P. Falls back
+ * to 1080p/60 when display is null (hook still loading or browser without
+ * IPC) so the function never returns a 0-pixel resolution.
  */
-function resolutionFor(quality: string, fps: number): ScreenShareResolution {
-  if (quality === "1440p") return { width: 2560, height: 1440, frameRate: fps };
-  if (quality === "1080p") return { width: 1920, height: 1080, frameRate: fps };
-  return { width: 1280, height: 720, frameRate: fps };
+function resolutionFor(
+  quality: string,
+  fps: number,
+  display: DisplayInfo | null,
+): ScreenShareResolution {
+  const resolvedFps =
+    fps === -1 ? (display?.refreshRate && display.refreshRate > 0 ? display.refreshRate : 60) : fps;
+
+  if (quality === "native" && display && display.width > 0) {
+    return { width: display.width, height: display.height, frameRate: resolvedFps };
+  }
+  if (quality === "1440p") return { width: 2560, height: 1440, frameRate: resolvedFps };
+  if (quality === "1080p") return { width: 1920, height: 1080, frameRate: resolvedFps };
+  return { width: 1280, height: 720, frameRate: resolvedFps };
 }
 
 function notifyServerStopped() {
@@ -86,6 +102,15 @@ export function useScreenShareToggle(
 ): void {
   const isStreaming = useVoiceStore((s) => s.isStreaming);
   const screenShareAudio = useVoiceStore((s) => s.screenShareAudio);
+
+  // Monitor metrics — used to resolve the "native"/-1 sentinels in
+  // (quality, fps) into concrete numbers at publish time. Held in a ref
+  // so the toggle effect picks up the latest value without re-subscribing.
+  const display = useDisplayInfo();
+  const displayRef = useRef(display);
+  useLayoutEffect(() => {
+    displayRef.current = display;
+  });
 
   // Native Electron audio capture — excludes our own process tree to prevent
   // screen-share echo. Held in a latest-ref so the toggle effect doesn't
@@ -130,7 +155,7 @@ export function useScreenShareToggle(
             useVoiceStore.getState();
           await localParticipant.setScreenShareEnabled(true, {
             audio: false,
-            resolution: resolutionFor(ssq, ssFps),
+            resolution: resolutionFor(ssq, ssFps, displayRef.current),
             contentHint: "motion",
           });
 
@@ -149,7 +174,7 @@ export function useScreenShareToggle(
             useVoiceStore.getState();
           await localParticipant.setScreenShareEnabled(true, {
             audio: screenShareAudio,
-            resolution: resolutionFor(ssq, ssFps),
+            resolution: resolutionFor(ssq, ssFps, displayRef.current),
             contentHint: "motion",
           });
         }

@@ -28,27 +28,30 @@ import { createTray } from "./tray";
 import { createMainWindow, getMainWindow, setQuitting } from "./window";
 
 // ─── Chromium feature switches ───
-// MUST run before app.whenReady() — switches set later are ignored because
-// Chromium has already initialized its capture / GPU pipelines.
-if (process.platform === "win32") {
-  // Windows Graphics Capture (WGC) — DXGI-aware screen + window enumeration.
-  // Without this, desktopCapturer.getSources() falls back to GDI/BitBlt
-  // which CAN'T see:
-  //   • DirectX/Vulkan exclusive-fullscreen games (CS2, Valorant, etc.) —
-  //     they bypass DWM compositing, so BitBlt of the window handle returns
-  //     a frozen/black frame.
-  //   • Windows with explicit anti-screenshot flags or HW overlay layers.
-  // WGC reads the live DXGI surface directly, so games render correctly
-  // and the picker thumbnails reflect actual content. Win10 1903+ required;
-  // older builds silently ignore the switch and keep the GDI fallback.
-  // The three sub-features cover screen capture, window capture, and the
-  // overall WGC backend; setting all three makes Chromium pick WGC for
-  // every desktopCapturer source type on Win10+.
-  app.commandLine.appendSwitch(
-    "enable-features",
-    "AllowWgcDesktopCapturer,AllowWgcScreenCapturer,AllowWgcWindowCapturer",
-  );
-}
+//
+// Track M (v2.11.41) enabled Windows Graphics Capture (WGC) for screen sharing
+// so DirectX/Vulkan fullscreen games and admin-elevated process windows would
+// render correctly. Track P (this commit) reverts that opt-in because WGC
+// bypasses Chromium's `MediaTrackConstraints.cursor` pipeline — the user-
+// facing "Show cursor in screen share" toggle in Voice Settings was a no-op
+// under WGC since the WGC capturer always composites the system cursor on
+// every frame.
+//
+// Cursor toggle is higher priority than fullscreen-game thumbnails for this
+// app's audience (community voice calls, screen-share onboarding sessions),
+// so we accept the trade-off:
+//   - DirectX/Vulkan exclusive-fullscreen titles may show a black/frozen
+//     thumbnail in the picker. Most still stream once selected because the
+//     GDI fallback handles their composited backbuffer; titles with HW overlay
+//     (some Riot Vanguard / EAC builds) won't capture cleanly either way.
+//   - Admin-elevated app windows still appear because Track M's
+//     `requireAdministrator` manifest stays — integrity-level bypass is
+//     orthogonal to the capture backend.
+//
+// If we ever need WGC back without losing cursor control, the path forward
+// is upstream Chromium: a `--disable-features=WgcCursorCapture` flag or a
+// new Electron API surface on `setDisplayMediaRequestHandler`. Neither
+// exists today.
 
 // ─── App identity ───
 // Sets every "what's the app called?" surface inside Electron — the about
