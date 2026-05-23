@@ -4575,10 +4575,13 @@ body.reduce-motion .main-area::after {
   height: 100%;
   transform: translateX(-50%);
   opacity: 0;
-  /* Wider drop-shadow + brighter compositing — when the bolts now read
-   * as solid (opaque) the surrounding glow has to keep up or the path
-   * looks pasted-on instead of charged. */
-  filter: drop-shadow(0 0 10px currentColor) drop-shadow(0 0 24px currentColor);
+  /* Filter chain order matters: blur first to soften the SVG stroke
+   * edges, then drop-shadow layers on top of the already-blurred shape
+   * for the wide outer halo. Result is a soft "plasma" channel rather
+   * than a pixel-sharp line — what the user asked for with "blur ve
+   * opak". The opacity floor stays at 1.0 in the keyframes so it's
+   * blurred-and-solid, not blurred-and-translucent. */
+  filter: blur(2px) drop-shadow(0 0 10px currentColor) drop-shadow(0 0 24px currentColor);
   animation-name: lightning-strike;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
@@ -4586,8 +4589,12 @@ body.reduce-motion .main-area::after {
 }
 .bolt-glow {
   /* Bumped from 0.45 → 0.75 so the halo behind the core stays solid
-   * during the flash instead of fading to a thin pencil line. */
+   * during the flash instead of fading to a thin pencil line.
+   * Wider stroke (3 vs the original 2) compensates for the parent's
+   * 2 px blur — without the bump the halo gets washed out and the
+   * bolt reads as just the core line. */
   opacity: 0.75;
+  stroke-width: 3;
 }
 .bolt-core {
   /* Branched paths concatenate ~200 path units of length (trunk + 2
@@ -4595,6 +4602,9 @@ body.reduce-motion .main-area::after {
    * shoots and leaves a permanent stub visible mid-cycle. */
   stroke-dasharray: 280;
   stroke-dashoffset: 280;
+  /* Bumped from 0.45 → 0.75 so the bright core stays visible after
+   * the parent's 2 px blur. Anything thinner blurs into the halo. */
+  stroke-width: 0.75;
   animation: bolt-draw 0.6s ease-out infinite;
   animation-delay: inherit;
   animation-duration: inherit;
