@@ -4335,3 +4335,56 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
   justify-content: center;
   padding: 12px 0;
 }
+
+/* ═══════════════════════════════════════
+   DISCORD-STYLE MERGED LAYOUT (Track U)
+
+   Before: sidebar | chat | members rendered as three floating frosted
+   cards with 14px gaps between them and individually rounded corners.
+   That read as loose post-its, not a Discord-style app shell.
+
+   After: panels share edges, the app reads as one continuous canvas
+   with subtle 1px dividers between sections. Sidebar items scaled up
+   a notch (font-size + padding + server-icon size) so DM rows breathe
+   like Discord's instead of feeling cramped.
+
+   The --panel-gap and --panel-radius variables are intentionally NOT
+   changed at :root — modals, popups, message bubbles, the Quick
+   Switcher, and the auth card all reference them and look correct at
+   14px. We just override the load-bearing layout containers below.
+   ═══════════════════════════════════════ */
+
+/* App shell — no outer padding, no gap between sidebar | chat | members */
+.mqvi-app { padding: 0; gap: 0; }
+.sidebar { gap: 0; }
+.main-area { gap: 0; }
+
+/* Strip per-panel rounding + shadows on the major layout containers so
+   they read as one continuous canvas. Modals/popups elsewhere still use
+   .app-panel; this override is scoped to the layout-level instances. */
+.sb-main.app-panel,
+.sb-dock.app-panel,
+.members-inner.app-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Subtle 1px dividers between merged sections — near-zero contrast, just
+   enough to hint at the edge boundary without re-introducing the floating
+   look. Sidebar→chat, chat→members, channels→userbar. */
+.sidebar { border-right: 1px solid var(--b1); }
+.members-panel { border-left: 1px solid var(--b1); }
+.sb-main.app-panel { border-bottom: 1px solid var(--b1); }
+
+/* Channel bar and tab bar used to round their top/bottom to mate with the
+   floating chat-area card. Now flat top + bottom so they sit flush. */
+.channel-bar { border-radius: 0; margin-bottom: 0; }
+.panel-tab-bar { border-radius: 0; }
+
+/* Scale bump — Discord-like breathing room for sidebar rows */
+.ch-tree-section-header { padding: 9px 12px; }
+.ch-tree-server-header { font-size: 16px; padding: 10px 12px; }
+.ch-tree-server-icon,
+.ch-tree-server-icon-fallback { width: 28px; height: 28px; border-radius: 7px; }
+.ch-tree-item { padding: 7px 8px 7px 28px; font-size: 15px; }
+.ch-tree-cat-header { padding: 8px 8px 8px 14px; }
