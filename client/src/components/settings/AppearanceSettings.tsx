@@ -1,4 +1,15 @@
-/** AppearanceSettings — Theme selection grid with color swatch previews. */
+/**
+ * AppearanceSettings — theme picker, wallpaper, and overlay-effect toggles.
+ *
+ * Polished in Track S to match the Discord pattern the user referenced:
+ *   1. A live preview block at the top so theme + accessibility changes
+ *      show up immediately without scrolling around the app.
+ *   2. Effect toggles (blur, transparent) collapsed into a single
+ *      "Overlay effects" group instead of three separate H2s.
+ *   3. Drag-and-drop wallpaper area instead of the file-picker button.
+ *   4. Theme cards keep the swatch layout but get a hover lift +
+ *      stronger active ring so the selected one is impossible to miss.
+ */
 
 import { useRef, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,17 +43,33 @@ function AppearanceSettings() {
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  function handleWallpaperSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-
+  function acceptFile(file: File) {
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
     const blobUrl = URL.createObjectURL(file);
     setPendingFile(file);
     setPendingPreviewUrl(blobUrl);
     setPendingWallpaperPreviewUrl(blobUrl);
+  }
+
+  function handleWallpaperSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) acceptFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    // Match the <input>'s accept list — only image/jpeg, image/png, image/webp.
+    if (!/^image\/(jpe?g|png|webp)$/.test(file.type)) {
+      addToast("error", t("wallpaperBadType", { defaultValue: "Unsupported file type" }));
+      return;
+    }
+    acceptFile(file);
   }
 
   function handleCancelPending() {
@@ -87,10 +114,173 @@ function AppearanceSettings() {
     setTheme(id);
   }
 
+  const currentWallpaperUrl = pendingPreviewUrl
+    ?? (user?.wallpaper_url ? resolveAssetUrl(user.wallpaper_url) : null);
+
   return (
     <div>
-      <h2 className="settings-section-title">{t("blurTitle")}</h2>
+      {/* ─── Live preview block — same shape as AccessibilitySettings ─── */}
+      <div className="vs-section acc-preview-section">
+        <div className="vs-label">{t("acc.preview")}</div>
+        <div className="acc-preview">
+          <div className="acc-preview-msg">
+            <div className="acc-preview-avatar" />
+            <div className="acc-preview-body">
+              <div className="acc-preview-head">
+                <span className="acc-preview-author">{user?.display_name ?? user?.username ?? "ALFAP4RS"}</span>
+                <span className="acc-preview-time">21:38</span>
+              </div>
+              <div className="acc-preview-text">{t("acc.previewMsg1")}</div>
+              <div className="acc-preview-reactions">
+                <span className="acc-preview-react">🌱 3</span>
+                <span className="acc-preview-react">🦜 1</span>
+              </div>
+            </div>
+          </div>
+          <div className="acc-preview-msg">
+            <div className="acc-preview-avatar" />
+            <div className="acc-preview-body">
+              <div className="acc-preview-text">
+                {t("acc.previewMsg2")}{" "}
+                <a href="#" onClick={(e) => e.preventDefault()}>
+                  https://tayfa.app/themes
+                </a>
+              </div>
+              <button type="button" className="acc-preview-button">
+                {t("acc.previewButton")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Theme picker ──────────────────────────────────────────── */}
+      <h2 className="settings-section-title">{t("themeTitle")}</h2>
+      <p className="theme-section-desc">{t("themeDescription")}</p>
+
+      <div className="theme-grid">
+        {THEME_ORDER.map((id) => {
+          const theme = THEMES[id];
+          const isActive = id === themeId;
+
+          return (
+            <button
+              key={id}
+              className={`theme-card${isActive ? " theme-card-active" : ""}`}
+              onClick={() => handleSelectTheme(id)}
+              type="button"
+              aria-pressed={isActive}
+            >
+              <div className="theme-swatches">
+                {theme.swatches.map((color, i) => (
+                  <span
+                    key={i}
+                    className="theme-swatch"
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+
+              <span className="theme-card-name">{t(theme.nameKey)}</span>
+              <span className="theme-card-desc">{t(theme.descKey)}</span>
+
+              {isActive && <span className="theme-card-check">&#10003;</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ─── Wallpaper — drag-drop zone ─────────────────────────────── */}
+      <h2 className="settings-section-title" style={{ marginTop: 28 }}>{t("wallpaperTitle")}</h2>
+      <p className="theme-section-desc">{t("wallpaperDescription")}</p>
+
+      <label className="settings-toggle-row">
+        <span>{t("wallpaperEnable")}</span>
+        <button
+          className={`ub-switch${wallpaperEnabled ? " active" : ""}`}
+          onClick={() => setWallpaperEnabled(!wallpaperEnabled)}
+          role="switch"
+          aria-checked={wallpaperEnabled}
+          type="button"
+        >
+          <span className="ub-switch-thumb" />
+        </button>
+      </label>
+
+      <div
+        className={`wallpaper-dropzone${isDragging ? " dragging" : ""}${currentWallpaperUrl ? " has-image" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => !pendingFile && fileInputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        aria-label={t("wallpaperChoose")}
+      >
+        {currentWallpaperUrl ? (
+          <>
+            <img src={currentWallpaperUrl} alt="" className="wallpaper-dropzone-img" />
+            <div className="wallpaper-dropzone-overlay">
+              {t("wallpaperReplaceHint", { defaultValue: "Click or drop a new image to replace" })}
+            </div>
+          </>
+        ) : (
+          <div className="wallpaper-dropzone-empty">
+            <div className="wallpaper-dropzone-icon">🖼️</div>
+            <div className="wallpaper-dropzone-text">
+              {t("wallpaperDropHint", { defaultValue: "Click or drag an image here" })}
+            </div>
+            <div className="wallpaper-dropzone-types">JPEG · PNG · WebP</div>
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          onChange={handleWallpaperSelect}
+        />
+      </div>
+
+      <div className="wallpaper-actions">
+        {pendingFile ? (
+          <>
+            <button
+              type="button"
+              className="settings-btn"
+              onClick={handleSavePending}
+              disabled={isUploading}
+            >
+              {isUploading ? t("loading") : t("saveChanges")}
+            </button>
+            <button
+              type="button"
+              className="settings-btn settings-btn-secondary"
+              onClick={handleCancelPending}
+              disabled={isUploading}
+            >
+              {t("cancel", { ns: "common" })}
+            </button>
+          </>
+        ) : (
+          user?.wallpaper_url && (
+            <button
+              type="button"
+              className="settings-btn settings-btn-danger"
+              onClick={handleRemoveWallpaper}
+            >
+              {t("wallpaperRemove")}
+            </button>
+          )
+        )}
+      </div>
+
+      {/* ─── Overlay effects — blur + transparent grouped ───────────── */}
+      <h2 className="settings-section-title" style={{ marginTop: 28 }}>
+        {t("overlayEffects", { defaultValue: "Görsel Efektler" })}
+      </h2>
       <p className="theme-section-desc">{t("blurDescription")}</p>
+
       <label className="settings-toggle-row">
         <span>{t("blurTitle")}</span>
         <button
@@ -106,8 +296,6 @@ function AppearanceSettings() {
 
       {isElectron() && (
         <>
-          <h2 className="settings-section-title" style={{ marginTop: 24 }}>{t("transparentTitle")}</h2>
-          <p className="theme-section-desc">{t("transparentDescription")}</p>
           <label className="settings-toggle-row">
             <span>{t("transparentEnable")}</span>
             <button
@@ -121,117 +309,12 @@ function AppearanceSettings() {
             </button>
           </label>
           {transparentBackground !== initialTransparent && (
-            <p className="theme-section-desc" style={{ color: "var(--yellow)", marginTop: 4 }}>{t("transparentRestart")}</p>
+            <p className="theme-section-desc" style={{ color: "var(--yellow)", marginTop: 4 }}>
+              {t("transparentRestart")}
+            </p>
           )}
         </>
       )}
-
-      <h2 className="settings-section-title" style={{ marginTop: 24 }}>{t("wallpaperTitle")}</h2>
-      <p className="theme-section-desc">{t("wallpaperDescription")}</p>
-      <label className="settings-toggle-row">
-        <span>{t("wallpaperEnable")}</span>
-        <button
-          className={`ub-switch${wallpaperEnabled ? " active" : ""}`}
-          onClick={() => setWallpaperEnabled(!wallpaperEnabled)}
-          role="switch"
-          aria-checked={wallpaperEnabled}
-          type="button"
-        >
-          <span className="ub-switch-thumb" />
-        </button>
-      </label>
-      <div className="wallpaper-row">
-        {pendingPreviewUrl ? (
-          <img src={pendingPreviewUrl} alt="" className="wallpaper-preview" />
-        ) : user?.wallpaper_url ? (
-          <img src={resolveAssetUrl(user.wallpaper_url)} alt="" className="wallpaper-preview" />
-        ) : null}
-        <div className="wallpaper-actions">
-          {pendingFile ? (
-            <>
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={handleSavePending}
-                disabled={isUploading}
-              >
-                {isUploading ? t("loading") : t("saveChanges")}
-              </button>
-              <button
-                type="button"
-                className="settings-btn settings-btn-secondary"
-                onClick={handleCancelPending}
-                disabled={isUploading}
-              >
-                {t("cancel", { ns: "common" })}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {user?.wallpaper_url ? t("wallpaperChange") : t("wallpaperChoose")}
-              </button>
-              {user?.wallpaper_url && (
-                <button
-                  type="button"
-                  className="settings-btn settings-btn-danger"
-                  onClick={handleRemoveWallpaper}
-                >
-                  {t("wallpaperRemove")}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          hidden
-          onChange={handleWallpaperSelect}
-        />
-      </div>
-
-      <h2 className="settings-section-title" style={{ marginTop: 24 }}>{t("themeTitle")}</h2>
-      <p className="theme-section-desc">{t("themeDescription")}</p>
-
-      <div className="theme-grid">
-        {THEME_ORDER.map((id) => {
-          const theme = THEMES[id];
-          const isActive = id === themeId;
-
-          return (
-            <button
-              key={id}
-              className={`theme-card${isActive ? " theme-card-active" : ""}`}
-              onClick={() => handleSelectTheme(id)}
-              type="button"
-            >
-              {/* Color swatch preview */}
-              <div className="theme-swatches">
-                {theme.swatches.map((color, i) => (
-                  <span
-                    key={i}
-                    className="theme-swatch"
-                    style={{ background: color }}
-                  />
-                ))}
-              </div>
-
-              {/* Theme info */}
-              <span className="theme-card-name">{t(theme.nameKey)}</span>
-              <span className="theme-card-desc">{t(theme.descKey)}</span>
-
-              {/* Active indicator */}
-              {isActive && <span className="theme-card-check">&#10003;</span>}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
