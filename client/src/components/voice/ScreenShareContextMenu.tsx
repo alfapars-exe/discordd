@@ -3,7 +3,11 @@
  *
  * Right-click on a screen share panel to open. Controls only the screen share
  * audio track — does not affect the user's mic volume (separate screenShareVolumes state).
- * Rendered via portal to escape panel overflow:hidden.
+ *
+ * Portal target: normally document.body (so it escapes panel overflow:hidden),
+ * but if the panel is currently fullscreen we MUST portal into the fullscreen
+ * element itself. Browser Fullscreen API hides every node outside the
+ * fullscreen subtree — without this branch the menu opens but is invisible.
  */
 
 import { useEffect, useRef, useCallback, useState } from "react";
@@ -16,6 +20,13 @@ type ScreenShareContextMenuProps = {
   displayName: string;
   position: { x: number; y: number };
   onClose: () => void;
+  /**
+   * Optional ref to the panel that owns this menu. When that panel is the
+   * current `document.fullscreenElement`, we portal into it so the menu
+   * stays visible. In normal (non-fullscreen) mode we keep the original
+   * document.body target so the menu can still overflow the panel.
+   */
+  fullscreenContainerRef?: React.RefObject<HTMLElement | null>;
 };
 
 function ScreenShareContextMenu({
@@ -23,6 +34,7 @@ function ScreenShareContextMenu({
   displayName,
   position,
   onClose,
+  fullscreenContainerRef,
 }: ScreenShareContextMenuProps) {
   const { t } = useTranslation("voice");
   const menuRef = useRef<HTMLDivElement>(null);
@@ -97,6 +109,40 @@ function ScreenShareContextMenu({
     }
   }, [userId, currentVolume, preMuteVolume, setScreenShareVolume]);
 
+  // Portal host: normally document.body, but if the owning panel is the
+  // current fullscreen element we must portal inside that subtree (Browser
+  // Fullscreen API hides every node outside the fullscreen element). We
+  // resolve this inside an effect — React 19 disallows reading .current in
+  // render — and subscribe to fullscreenchange so the target switches when
+  // the user toggles fullscreen while the menu is open.
+  //
+  // `position` is in the dependency list so the effect re-runs each time
+  // the menu opens (every open creates a fresh `position` object), giving
+  // us a chance to re-evaluate fullscreen state at that moment.
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    function resolveTarget(): HTMLElement {
+      const fsEl =
+        typeof document !== "undefined" ? document.fullscreenElement : null;
+      const panel = fullscreenContainerRef?.current ?? null;
+      if (fsEl && panel && fsEl === panel) {
+        return panel;
+      }
+      return document.body;
+    }
+    setPortalTarget(resolveTarget());
+
+    function handleFullscreenChange() {
+      setPortalTarget(resolveTarget());
+    }
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, [fullscreenContainerRef, position]);
+
+  if (!portalTarget) return null;
+
   return createPortal(
     <div
       ref={menuRef}
@@ -162,7 +208,7 @@ function ScreenShareContextMenu({
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }
 

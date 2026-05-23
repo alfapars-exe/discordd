@@ -115,6 +115,11 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
           displayName={displayName}
           position={ctxMenu}
           onClose={() => setCtxMenu(null)}
+          // When this panel is the current fullscreen element, the menu's
+          // portal renders inside the panel instead of document.body so it
+          // stays visible (Browser Fullscreen API hides everything outside
+          // the fullscreen subtree).
+          fullscreenContainerRef={containerRef}
         />
       )}
     </div>
