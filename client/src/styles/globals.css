@@ -4464,3 +4464,71 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 body.reduce-motion .electron-app-wrapper::after {
   animation: none;
 }
+
+/* ═══════════════════════════════════════
+   LIGHTNING OVERLAY (Track V — central neon bolts)
+
+   Component-driven (LightningOverlay.tsx) but the per-bolt animation
+   timing lives here so designers can tune the strike rhythm without
+   touching React. Each <svg.lightning-bolt> is absolutely positioned
+   in the .main-area; the component sets `left:` for placement and
+   `animation-delay/duration:` for desync. We define the keyframes
+   once and let every bolt share them.
+
+   The 700 ms flash sits inside a 14–24 s cycle (set per-bolt), so
+   strikes feel infrequent and non-distracting. .bolt-glow is the wide
+   soft halo, .bolt-core is the bright centre — both share the same
+   path and animate in lockstep via the parent <svg>'s animation.
+
+   We animate stroke-dashoffset on the core for the "drawing" effect.
+   The path lengths are roughly 130 in path units; pathLength="100"
+   would normalise but isn't supported everywhere — we just use
+   stroke-dasharray:150 (cover the longest path) and dashoffset:150→0.
+
+   reduce-motion stops the whole effect.
+   ═══════════════════════════════════════ */
+.lightning-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+.lightning-bolt {
+  position: absolute;
+  top: 0;
+  width: 60px;
+  height: 100%;
+  transform: translateX(-50%);
+  opacity: 0;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation-name: lightning-strike;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+.bolt-glow {
+  opacity: 0.45;
+}
+.bolt-core {
+  stroke-dasharray: 150;
+  stroke-dashoffset: 150;
+  animation: bolt-draw 0.6s ease-out infinite;
+  animation-delay: inherit;
+  animation-duration: inherit;
+}
+@keyframes lightning-strike {
+  0%, 96%, 100% { opacity: 0; }
+  /* Two-step flash: a brief jolt, a second brighter jolt, then fade. */
+  96.5%   { opacity: 0.95; }
+  97%     { opacity: 0.5; }
+  97.4%   { opacity: 0.9; }
+  98.5%   { opacity: 0.6; }
+  99.5%   { opacity: 0; }
+}
+@keyframes bolt-draw {
+  0%, 96%, 100% { stroke-dashoffset: 150; }
+  96.5%, 99% { stroke-dashoffset: 0; }
+}
+
+body.reduce-motion .lightning-overlay { display: none; }
