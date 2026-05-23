@@ -17,12 +17,24 @@ type RoleService interface {
 	Update(ctx context.Context, serverID, actorID, roleID string, req *models.UpdateRoleRequest) (*models.Role, error)
 	Delete(ctx context.Context, serverID, actorID, roleID string) error
 	ReorderRoles(ctx context.Context, serverID, actorID string, items []models.PositionUpdate) ([]models.Role, error)
+	SetAuditLogger(logger AuditWriter)
 }
 
 type roleService struct {
-	roleRepo repository.RoleRepository
-	userRepo repository.UserRepository
-	hub      ws.Broadcaster
+	roleRepo    repository.RoleRepository
+	userRepo    repository.UserRepository
+	hub         ws.Broadcaster
+	auditLogger AuditWriter
+}
+
+func (s *roleService) SetAuditLogger(logger AuditWriter) {
+	s.auditLogger = logger
+}
+
+func (s *roleService) audit(entry models.AuditLog) {
+	if s.auditLogger != nil {
+		s.auditLogger.Write(entry)
+	}
 }
 
 func NewRoleService(
@@ -100,6 +112,14 @@ func (s *roleService) Create(ctx context.Context, serverID, actorID string, req 
 	s.hub.BroadcastToAll(ws.Event{
 		Op:   ws.OpRoleCreate,
 		Data: role,
+	})
+
+	actor := actorID
+	s.audit(models.AuditLog{
+		ServerID:    serverID,
+		ActorUserID: &actor,
+		EventType:   models.AuditEventRoleCreate,
+		Metadata:    fmt.Sprintf(`{"role_name":%q}`, role.Name),
 	})
 
 	return role, nil
@@ -221,6 +241,14 @@ func (s *roleService) Delete(ctx context.Context, serverID, actorID, roleID stri
 	s.hub.BroadcastToAll(ws.Event{
 		Op:   ws.OpRoleDelete,
 		Data: map[string]string{"id": roleID},
+	})
+
+	actor := actorID
+	s.audit(models.AuditLog{
+		ServerID:    serverID,
+		ActorUserID: &actor,
+		EventType:   models.AuditEventRoleDelete,
+		Metadata:    fmt.Sprintf(`{"role_name":%q}`, role.Name),
 	})
 
 	return nil

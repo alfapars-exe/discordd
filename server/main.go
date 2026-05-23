@@ -133,6 +133,13 @@ func main() {
 	svcs.P2PCall.SetAppLogger(svcs.AppLog)
 	svcs.Auth.SetAppLogger(svcs.AppLog)
 
+	// 9c. Wire audit logger into services that emit moderation events.
+	// Each service stores it as a nil-safe optional field; absent wiring
+	// the events just don't get recorded (still no functional regression).
+	svcs.Voice.SetAuditLogger(svcs.AuditLog)
+	svcs.Member.SetAuditLogger(svcs.AuditLog)
+	svcs.Role.SetAuditLogger(svcs.AuditLog)
+
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
 
