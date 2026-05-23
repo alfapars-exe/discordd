@@ -12,8 +12,8 @@ import (
 
 const (
 	writeWait      = 10 * time.Second
-	pongWait       = 90 * time.Second  // 3 missed heartbeats (30s × 3)
-	maxMessageSize = 32768             // 32KB — WebRTC SDP + E2EE base64 overhead
+	pongWait       = 90 * time.Second // 3 missed heartbeats (30s × 3)
+	maxMessageSize = 32768            // 32KB — WebRTC SDP + E2EE base64 overhead
 	sendBufferSize = 256
 )
 
