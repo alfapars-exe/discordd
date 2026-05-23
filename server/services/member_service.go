@@ -47,10 +47,20 @@ func (s *memberService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
 }
 
+// audit emits an audit log event if an audit logger is wired. Nil-safe.
+//
+// Logs both branches so a "I kicked X / banned Y but the audit channel
+// stayed empty" report tells us exactly where the pipeline dropped:
+// nil logger ⇒ main.go SetAuditLogger wiring regressed; otherwise look
+// at [audit_log] downstream logs from audit_log_service.persistAndBroadcast
+// for Insert / broadcast outcomes. Same pattern as voiceService.audit.
 func (s *memberService) audit(entry models.AuditLog) {
-	if s.auditLogger != nil {
-		s.auditLogger.Write(entry)
+	if s.auditLogger == nil {
+		log.Printf("[member/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		return
 	}
+	log.Printf("[member/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	s.auditLogger.Write(entry)
 }
 
 func NewMemberService(

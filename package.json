@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "hichat-desktop",
-  "version": "2.11.43",
+  "version": "2.11.44",
   "description": "HiChat! desktop application",
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
@@ -49,7 +49,6 @@
       "signAndEditExecutable": false,
       "executableName": "HiChat",
       "legalTrademarks": "HiChat!",
-      "requestedExecutionLevel": "requireAdministrator",
       "extraResources": [
         {
           "from": "native/audio-capture.exe",
