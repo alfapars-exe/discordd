@@ -37,16 +37,32 @@ func (r *sqliteAuditLogRepo) Insert(ctx context.Context, entry *models.AuditLog)
 		metadata = "{}"
 	}
 
+	// INSERT ... RETURNING populates entry.ID and entry.CreatedAt from the
+	// DB-side defaults (`lower(hex(randomblob(8)))` and `datetime('now')`)
+	// so callers can broadcast the row with its canonical id immediately.
+	//
+	// Without RETURNING the caller would receive a struct with an empty ID
+	// and zero CreatedAt — that's a real-world bug we hit (Track R):
+	// audit_log_service broadcasts the entry over WebSocket right after
+	// insert; with empty IDs every event after the first one collides in
+	// the client-side dedupe-by-id step and gets silently dropped.
+	// Sequential moderation actions (kick → move → mute) all looked like
+	// duplicates of the first event. RETURNING fixes the root cause in one
+	// place rather than asking callers to remember to re-fetch.
+	//
+	// SQLite ≥ 3.35 and libSQL/Turso both implement RETURNING with the
+	// same syntax, so this works on every backend we ship to.
 	query := `
 		INSERT INTO audit_logs (
 			server_id, actor_user_id, target_user_id,
 			event_type, metadata, actor_snapshot, target_snapshot
-		) VALUES (?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		RETURNING id, created_at`
 
-	_, err = r.db.ExecContext(ctx, query,
+	err = r.db.QueryRowContext(ctx, query,
 		entry.ServerID, entry.ActorUserID, entry.TargetUserID,
 		entry.EventType, metadata, actorJSON, targetJSON,
-	)
+	).Scan(&entry.ID, &entry.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("insert audit log: %w", err)
 	}

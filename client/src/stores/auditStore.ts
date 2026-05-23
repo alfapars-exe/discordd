@@ -29,6 +29,17 @@ type AuditState = {
   hasMoreByServer: Record<string, boolean>;
   /** server_id -> initial-fetch / pagination loading flag */
   isLoadingByServer: Record<string, boolean>;
+  /**
+   * server_id -> whether the initial DB backfill has run for this server.
+   *
+   * Separate from `eventsByServer[serverId]` because a WebSocket event can
+   * seed the entries map BEFORE the user ever opens the audit channel
+   * (post-Track-R behaviour: live events are never dropped). When they
+   * later open the channel, we still want fetchInitial to run once and
+   * pull older history from the DB — so the gate is "have we backfilled?"
+   * not "is the map populated?".
+   */
+  initialFetchedByServer: Record<string, boolean>;
 
   /** Fetch the latest page for a server if we don't have it cached. */
   fetchInitial: (serverId: string) => Promise<void>;
@@ -46,10 +57,14 @@ export const useAuditStore = create<AuditState>((set, get) => ({
   eventsByServer: {},
   hasMoreByServer: {},
   isLoadingByServer: {},
+  initialFetchedByServer: {},
 
   fetchInitial: async (serverId) => {
     const state = get();
-    if (state.eventsByServer[serverId] || state.isLoadingByServer[serverId]) {
+    // Gate on initialFetched, not on map presence — a WS event may have
+    // seeded entries already and we still want one backfill pass to pull
+    // older history from the DB.
+    if (state.initialFetchedByServer[serverId] || state.isLoadingByServer[serverId]) {
       return;
     }
     set((s) => ({ isLoadingByServer: { ...s.isLoadingByServer, [serverId]: true } }));
@@ -63,14 +78,33 @@ export const useAuditStore = create<AuditState>((set, get) => ({
         // Server returns newest first; flip to oldest-first for natural
         // chat-style chronological rendering (oldest at top, newest at
         // bottom, just like text channels).
-        const sorted = [...entries].reverse();
-        set((s) => ({
-          eventsByServer: { ...s.eventsByServer, [serverId]: sorted },
-          hasMoreByServer: {
-            ...s.hasMoreByServer,
-            [serverId]: entries.length === PAGE_SIZE,
-          },
-        }));
+        const fetched = [...entries].reverse();
+        set((s) => {
+          // Merge with any WS-seeded entries already present. Dedup by id
+          // (only when id is non-empty — Track R fixed server-side empty
+          // ids, but defense in depth never hurt anyone). Then re-sort by
+          // created_at so a live event whose timestamp is older than the
+          // newest fetched row (rare clock skew) still lands in order.
+          const existing = s.eventsByServer[serverId] ?? [];
+          const fetchedIds = new Set(fetched.map((e) => e.id).filter(Boolean));
+          const seededExtras = existing.filter(
+            (e) => !e.id || !fetchedIds.has(e.id),
+          );
+          const merged = [...fetched, ...seededExtras].sort((a, b) =>
+            a.created_at.localeCompare(b.created_at),
+          );
+          return {
+            eventsByServer: { ...s.eventsByServer, [serverId]: merged },
+            hasMoreByServer: {
+              ...s.hasMoreByServer,
+              [serverId]: entries.length === PAGE_SIZE,
+            },
+            initialFetchedByServer: {
+              ...s.initialFetchedByServer,
+              [serverId]: true,
+            },
+          };
+        });
       }
     } finally {
       set((s) => ({ isLoadingByServer: { ...s.isLoadingByServer, [serverId]: false } }));
@@ -117,16 +151,41 @@ export const useAuditStore = create<AuditState>((set, get) => ({
   handleAuditEvent: (event) => {
     set((s) => {
       const current = s.eventsByServer[event.server_id];
+
+      // Pre-Track-R this dropped the event when current was undefined
+      // ("avoid showing one isolated row in an empty panel"). That was the
+      // bug — moderation actions taken before the user ever tabbed into
+      // the audit channel were lost from the live feed, and worse, when
+      // they later opened it the fetchInitial gate skipped because
+      // entries were already populated by some other code path.
+      //
+      // Now: seed the map with this event. hasMoreByServer is set to true
+      // so the channel UI knows there's older history to backfill, and
+      // initialFetchedByServer is left untouched — fetchInitial will still
+      // run on next channel mount and merge older DB rows.
       if (!current) {
-        // We haven't fetched this server's audit yet — drop the live
-        // event; the next fetchInitial pull will include it. This avoids
-        // showing a single isolated event in an otherwise-empty panel.
+        return {
+          eventsByServer: {
+            ...s.eventsByServer,
+            [event.server_id]: [event],
+          },
+          hasMoreByServer: {
+            ...s.hasMoreByServer,
+            [event.server_id]: true,
+          },
+        };
+      }
+
+      // Dedup by id only when id is non-empty. Pre-Track-R server
+      // broadcasts carried id="" so two sequential events both matched
+      // `e.id === event.id` (both empty) and the second one was dropped.
+      // Track R's RETURNING fix populates real ids now; this guard keeps
+      // the check well-defined if any legacy/in-flight event still arrives
+      // without one.
+      if (event.id && current.some((e) => e.id === event.id)) {
         return s;
       }
-      // Dedup by id in case the broadcast races a pagination fetch.
-      if (current.some((e) => e.id === event.id)) {
-        return s;
-      }
+
       return {
         eventsByServer: {
           ...s.eventsByServer,
@@ -141,13 +200,16 @@ export const useAuditStore = create<AuditState>((set, get) => ({
       const events = { ...s.eventsByServer };
       const hasMore = { ...s.hasMoreByServer };
       const isLoading = { ...s.isLoadingByServer };
+      const initialFetched = { ...s.initialFetchedByServer };
       delete events[serverId];
       delete hasMore[serverId];
       delete isLoading[serverId];
+      delete initialFetched[serverId];
       return {
         eventsByServer: events,
         hasMoreByServer: hasMore,
         isLoadingByServer: isLoading,
+        initialFetchedByServer: initialFetched,
       };
     });
   },
