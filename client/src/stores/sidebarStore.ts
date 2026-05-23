@@ -24,7 +24,13 @@ function loadPersistedSidebar(): PersistedSidebar {
   try {
     const raw = localStorage.getItem(SIDEBAR_STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<PersistedSidebar>;
+      // Guard against JSON.parse returning array / primitive / null
+      // before treating the result as a partial settings object.
+      const parsedRaw: unknown = JSON.parse(raw);
+      const parsed: Partial<PersistedSidebar> =
+        parsedRaw && typeof parsedRaw === "object" && !Array.isArray(parsedRaw)
+          ? (parsedRaw as Partial<PersistedSidebar>)
+          : {};
       return {
         isExpanded: typeof parsed.isExpanded === "boolean" ? parsed.isExpanded : true,
         expandedSections:
