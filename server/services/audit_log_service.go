@@ -221,7 +221,7 @@ func (s *auditLogService) persistAndBroadcast(entry models.AuditLog) {
 	ctx := context.Background()
 
 	if err := s.repo.Insert(ctx, &entry); err != nil {
-		log.Printf("[audit_log] failed to insert: %v", err)
+		log.Printf("[audit_log] failed to insert: %v event=%s server=%s", err, entry.EventType, entry.ServerID)
 		return
 	}
 	// The repo populates the row's id + created_at from SQLite defaults but
@@ -235,6 +235,14 @@ func (s *auditLogService) persistAndBroadcast(entry models.AuditLog) {
 	}
 
 	viewers := s.allowedViewers(entry.ServerID)
+	// Observability: log every persisted audit row + viewer count. Helps
+	// diagnose "I did X but the audit channel didn't update" reports —
+	// no log means s.audit() never reached the buffer (auditLogger nil
+	// or Write dropped); 0 viewers means broadcast skipped (clients see
+	// it on next fetchInitial DB read). One line per event is cheap; this
+	// is the only place every successful audit emission converges.
+	log.Printf("[audit_log] persisted event=%s server=%s actor=%v target=%v viewers=%d",
+		entry.EventType, entry.ServerID, entry.ActorUserID, entry.TargetUserID, len(viewers))
 	if len(viewers) > 0 {
 		s.hub.BroadcastToUsers(viewers, ws.Event{
 			Op:   ws.OpAuditEvent,
