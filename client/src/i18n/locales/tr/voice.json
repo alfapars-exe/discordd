@@ -55,7 +55,7 @@
   "screenPickerHint": "Paylaşmak için bir ekran veya pencere seçin",
   "screenPickerShareAudio": "Sesi paylaş",
   "screenPickerRefresh": "Kaynakları yenile",
-  "screenPickerWindowHint": "Uygulamanız listede yok mu? Açın ve yenile butonuna basın. Yönetici olarak çalışan uygulamalar ve bazı tam ekran oyunlar görünmeyebilir.",
+  "screenPickerWindowHint": "Uygulamanız listede yok mu? Açın ve yenile butonuna basın. DirectX/Vulkan kullanan oyunlar (CS2, Valorant vb.) ve yönetici olarak çalışan uygulamalar pencere listesinde görünmez — bu durumda 'Ekranlar' sekmesinden tüm ekranı paylaş.",
   "pingMeasuring": "Ölçülüyor...",
   "pingGood": "İyi bağlantı",
   "pingMedium": "Orta bağlantı",

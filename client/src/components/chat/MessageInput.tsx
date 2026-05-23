@@ -43,6 +43,19 @@ function MessageInput() {
   const mentionStartRef = useRef<number>(-1);
   /** Tracked mention selections for token conversion on send */
   const mentionSelectionsRef = useRef<MentionSelection[]>([]);
+  /**
+   * Synchronous mirror of "mention popup is actively visible" — read by the
+   * Enter handler. mentionQuery (state) lags one render behind the actual
+   * popup close in two paths:
+   *  1. The popup auto-closes via useEffect when filtered results are empty,
+   *     calling onClose() → setMentionQuery(null). React batches that update.
+   *  2. handleMentionSelect / handleMentionClose call setMentionQuery(null).
+   * If the user presses Enter in that one-tick window, the keydown handler
+   * still sees the old non-null mentionQuery and bails before sending —
+   * exactly the "first Enter does nothing, second works" symptom. A ref
+   * updates synchronously and dodges the race entirely.
+   */
+  const mentionActiveRef = useRef(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,11 +155,23 @@ function MessageInput() {
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Let mention popup handle navigation keys when open
-    if (mentionQuery !== null) {
+    // Let mention popup handle navigation keys when open. We read the ref
+    // (mentionActiveRef) rather than the state (mentionQuery) because the
+    // state lags one render behind the popup's actual visibility — see the
+    // comment on mentionActiveRef for the full race description.
+    if (mentionActiveRef.current) {
       if (["Enter", "Tab", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) {
         return;
       }
+    }
+
+    // IME composition: when an Input Method Editor is mid-composition, the
+    // first Enter commits the candidate rather than meaning "submit". Skip
+    // the send so the next Enter (after composition ends) is the real one.
+    // Reading nativeEvent.isComposing dodges React's SyntheticEvent quirks
+    // where the React-level isComposing can be stale.
+    if (e.nativeEvent.isComposing) {
+      return;
     }
 
     // Escape — cancel reply (when mention popup is closed)
@@ -184,14 +209,18 @@ function MessageInput() {
         // Only close on newline — selection via Enter/Tab/click inserts and closes
         if (!query.includes("\n")) {
           mentionStartRef.current = atIndex;
+          mentionActiveRef.current = true;
           setMentionQuery(query);
         } else {
+          mentionActiveRef.current = false;
           setMentionQuery(null);
         }
       } else {
+        mentionActiveRef.current = false;
         setMentionQuery(null);
       }
     } else {
+      mentionActiveRef.current = false;
       setMentionQuery(null);
     }
 
@@ -215,6 +244,7 @@ function MessageInput() {
     const newContent = `${before}${displayText} ${after}`;
 
     setContent(newContent);
+    mentionActiveRef.current = false;
     setMentionQuery(null);
     mentionStartRef.current = -1;
 
@@ -230,6 +260,7 @@ function MessageInput() {
 
   /** Close mention popup */
   function handleMentionClose() {
+    mentionActiveRef.current = false;
     setMentionQuery(null);
     mentionStartRef.current = -1;
   }
