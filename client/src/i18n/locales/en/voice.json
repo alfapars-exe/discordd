@@ -55,7 +55,7 @@
   "screenPickerHint": "Select a screen or window to share",
   "screenPickerShareAudio": "Share audio",
   "screenPickerRefresh": "Refresh sources",
-  "screenPickerWindowHint": "Don't see your app? Open it, then click refresh. Apps running as administrator and some fullscreen games may not appear.",
+  "screenPickerWindowHint": "Don't see your app? Open it, then click refresh. DirectX/Vulkan games (CS2, Valorant, etc.) and apps running as administrator never appear in the window list — switch to the 'Screens' tab and share an entire screen instead.",
   "pingMeasuring": "Measuring...",
   "pingGood": "Good connection",
   "pingMedium": "Average connection",

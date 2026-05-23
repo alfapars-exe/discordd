@@ -26,6 +26,7 @@ import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
+import { useAudioPlayoutTuning } from "../../hooks/useAudioPlayoutTuning";
 import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
 import { useMicSync } from "../../hooks/useMicSync";
 import { useOutputDeviceSync } from "../../hooks/useOutputDeviceSync";
@@ -52,6 +53,10 @@ function VoiceStateManager() {
   // Volume sync — per-user, screen share, master, deafen → setVolume() on
   // every remote participant + retry-on-subscribe + retry-on-reconnect.
   useVolumeSync(room);
+
+  // Playout-delay hint — give the audio jitter buffer ~100 ms headroom so
+  // brief network blips don't trigger the "sped up voice" catchup playback.
+  useAudioPlayoutTuning(room);
 
   // Screen share lifecycle — store↔LiveKit forward sync + external-stop
   // detection (Capacitor native, OS-level "Stop sharing" dialog, SFU drops).
