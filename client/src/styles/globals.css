@@ -4491,9 +4491,19 @@ body.reduce-motion .electron-app-wrapper::after {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3;
+  /* Behind every sibling in .main-area so it lights up the empty black
+   * background but never paints over avatars, member list rows, or —
+   * critically — the screen-share video panel. The negative z-index
+   * stays inside .main-area thanks to that container's z-index:0 anchor
+   * (set below); without that anchor the negative would escape up the
+   * tree and the bolts would disappear behind unrelated UI. */
+  z-index: -1;
   overflow: hidden;
 }
+/* Stacking anchor — keeps the negative-z-index lightning trapped inside
+ * .main-area's stacking context. Without it, the bolts would render
+ * below the entire document instead of just below sibling chat content. */
+.main-area { z-index: 0; }
 .lightning-bolt {
   position: absolute;
   top: 0;
