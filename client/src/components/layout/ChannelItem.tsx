@@ -61,6 +61,11 @@ function ChannelItem({
   const { t: tVoice } = useTranslation("voice");
   const isText = channel.type === "text";
   const isAudit = channel.type === "audit";
+  // Both text and audit channels render chat-style content, never join voice;
+  // group them as "chat-like" for styling / tooltip / active-state purposes.
+  // Only the literal "voice" type gets the voice-channel treatment.
+  const isChat = isText || isAudit;
+  const isVoice = channel.type === "voice";
   const mutedClass = isEffectivelyMuted ? " muted" : "";
 
   return (
@@ -74,14 +79,14 @@ function ChannelItem({
       onDragEnd={onDragEnd}
     >
       <button
-        className={`ch-tree-item${isActive ? " active" : ""}${!isText ? " voice" : ""}${isVoiceLocked ? " locked" : ""}${unread > 0 && !isEffectivelyMuted ? " has-unread" : ""}${voiceDropTarget ? " voice-drop-target" : ""}${mutedClass}`}
+        className={`ch-tree-item${isActive ? " active" : ""}${isVoice ? " voice" : ""}${isVoiceLocked ? " locked" : ""}${unread > 0 && !isEffectivelyMuted ? " has-unread" : ""}${voiceDropTarget ? " voice-drop-target" : ""}${mutedClass}`}
         onClick={onClick}
         onContextMenu={onContextMenu}
         title={
           isVoiceLocked
             ? `${channel.name} — ${tVoice("voiceChannelLocked")}`
-            : isText
-              ? `#${channel.name}`
+            : isChat
+              ? `${isText ? "#" : "⚖️ "}${channel.name}`
               : `${channel.name} — ${tVoice("joinVoice")}`
         }
       >
