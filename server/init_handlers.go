@@ -40,6 +40,7 @@ type Handlers struct {
 	Preferences       *handlers.PreferencesHandler
 	DownloadPrompt    *handlers.DownloadPromptHandler
 	Feedback          *handlers.FeedbackHandler
+	AuditLog          *handlers.AuditLogHandler
 	Soundboard        *handlers.SoundboardHandler
 	Music             *handlers.MusicHandler
 	LiveKitWebhook    *handlers.LiveKitWebhookHandler
@@ -80,6 +81,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Preferences:       handlers.NewPreferencesHandler(svcs.Preferences),
 		DownloadPrompt:    handlers.NewDownloadPromptHandler(repos.User),
 		Feedback:          handlers.NewFeedbackHandler(svcs.Feedback, svcs.FeedbackUpload, cfg.Upload.MaxSize, limiters.Feedback, svcs.AppLog),
+		AuditLog:          handlers.NewAuditLogHandler(svcs.AuditLog),
 		Soundboard:        handlers.NewSoundboardHandler(svcs.Soundboard, cfg.Upload.MaxSize),
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog),

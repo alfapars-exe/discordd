@@ -238,6 +238,11 @@ func initRoutes(
 	// LiveKit settings
 	mux.Handle("GET /api/servers/{serverId}/livekit", authServerPerm(models.PermAdmin, h.Server.GetLiveKitSettings))
 
+	// Audit log — moderation history rendered in audit channels. The service
+	// itself enforces audit-view perms (Admin or Kick/Ban/Mute/Deafen), so
+	// authServer is sufficient here (no per-route perm gate).
+	mux.Handle("GET /api/servers/{serverId}/audit", authServer(h.AuditLog.ListServerAudit))
+
 	// Channels
 	mux.Handle("GET /api/servers/{serverId}/channels", authServer(h.Channel.List))
 	mux.Handle("POST /api/servers/{serverId}/channels", authServerPerm(models.PermManageChannels, h.Channel.Create))

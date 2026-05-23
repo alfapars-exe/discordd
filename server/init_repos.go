@@ -41,6 +41,7 @@ type Repositories struct {
 	Preferences       repository.PreferencesRepository
 	RoleMention       repository.RoleMentionRepository
 	AppLog            repository.AppLogRepository
+	AuditLog          repository.AuditLogRepository
 	Feedback          repository.FeedbackRepository
 	Soundboard        repository.SoundboardRepository
 }
@@ -81,6 +82,7 @@ func initRepositories(conn *sql.DB) *Repositories {
 		Preferences:       repository.NewSQLitePreferencesRepo(conn),
 		RoleMention:       repository.NewSQLiteRoleMentionRepo(conn),
 		AppLog:            repository.NewSQLiteAppLogRepo(conn),
+		AuditLog:          repository.NewSQLiteAuditLogRepo(conn),
 		Feedback:          repository.NewSQLiteFeedbackRepo(conn),
 		Soundboard:        repository.NewSQLiteSoundboardRepo(conn),
 	}
