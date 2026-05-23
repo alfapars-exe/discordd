@@ -244,6 +244,21 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 			return fmt.Errorf("failed to create default voice channel: %w", err)
 		}
 
+		// Audit channel — server-wide moderation event feed. One per server,
+		// non-deletable, non-renamable (enforced in channel_service). Placed
+		// in no category (uncategorized) at high position so it sits at the
+		// bottom of the sidebar by default. Audit-view permission filter on
+		// fetch hides it from non-mods, so regular members won't even see it.
+		auditChannel := &models.Channel{
+			ServerID: server.ID,
+			Name:     "denetim",
+			Type:     models.ChannelTypeAudit,
+			Position: 9999,
+		}
+		if err := txChannelRepo.Create(ctx, auditChannel); err != nil {
+			return fmt.Errorf("failed to create audit channel: %w", err)
+		}
+
 		return nil
 	})
 
