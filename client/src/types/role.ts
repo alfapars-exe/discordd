@@ -21,6 +21,11 @@ export type MemberWithRoles = {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  /** Per-server nickname (migration 065). When set, takes precedence
+   *  over display_name for this server's UI. Use displayLabel(member)
+   *  helper rather than reading directly so the fallback chain stays
+   *  consistent everywhere. */
+  nickname?: string | null;
   status: UserStatus;
   custom_status: string | null;
   created_at: string;

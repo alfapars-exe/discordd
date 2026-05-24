@@ -206,6 +206,76 @@ func (r *sqliteServerRepo) GetMemberCount(ctx context.Context, serverID string) 
 	return count, nil
 }
 
+// GetNickname returns the per-server nickname or nil when unset. NULL and
+// empty string are treated identically — caller never has to think about
+// the difference.
+func (r *sqliteServerRepo) GetNickname(ctx context.Context, serverID, userID string) (*string, error) {
+	var nick sql.NullString
+	err := r.db.QueryRowContext(ctx,
+		`SELECT nickname FROM server_members WHERE server_id = ? AND user_id = ?`,
+		serverID, userID,
+	).Scan(&nick)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get server nickname: %w", err)
+	}
+	if !nick.Valid || nick.String == "" {
+		return nil, nil
+	}
+	s := nick.String
+	return &s, nil
+}
+
+// SetNickname writes the nickname column on the membership row. Pass nil
+// or a pointer to "" to clear. Returns ErrNotFound when the user isn't a
+// member of the server (no row to update).
+func (r *sqliteServerRepo) SetNickname(ctx context.Context, serverID, userID string, nickname *string) error {
+	// Normalise: empty string → NULL so reads stay consistent (only one
+	// "no nickname" representation in the DB).
+	var v interface{}
+	if nickname != nil && *nickname != "" {
+		v = *nickname
+	}
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE server_members SET nickname = ? WHERE server_id = ? AND user_id = ?`,
+		v, serverID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("set server nickname: %w", err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return pkg.ErrNotFound
+	}
+	return nil
+}
+
+// GetNicknamesForServer — batch fetch for member list rendering. Returns
+// only set nicknames so an empty map is a valid "no one customised their
+// name on this server" result, not an error.
+func (r *sqliteServerRepo) GetNicknamesForServer(ctx context.Context, serverID string) (map[string]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT user_id, nickname FROM server_members
+		 WHERE server_id = ? AND nickname IS NOT NULL AND nickname != ''`,
+		serverID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list server nicknames: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]string)
+	for rows.Next() {
+		var uid, nick string
+		if err := rows.Scan(&uid, &nick); err != nil {
+			return nil, fmt.Errorf("scan server nickname: %w", err)
+		}
+		out[uid] = nick
+	}
+	return out, rows.Err()
+}
+
 func (r *sqliteServerRepo) UpdateMemberPositions(ctx context.Context, userID string, items []models.PositionUpdate) error {
 	sqlDB, ok := r.db.(*sql.DB)
 	if !ok {

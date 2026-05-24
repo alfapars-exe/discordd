@@ -20,6 +20,7 @@
     "member_unban": "{{actor}} unbanned {{target}}",
     "member_timeout": "{{actor}} timed out {{target}}",
     "member_timeout_remove": "{{actor}} removed the timeout from {{target}}",
+    "member_nickname_change": "{{actor}} changed {{target}}'s nickname",
     "role_create": "{{actor}} created the \"{{roleName}}\" role",
     "role_delete": "{{actor}} deleted the \"{{roleName}}\" role",
     "role_assign": "{{actor}} gave {{target}} the \"{{roleName}}\" role",

@@ -290,6 +290,12 @@ func initRoutes(
 	mux.Handle("PUT /api/servers/{serverId}/members/{id}/timeout", authServerPerm(models.PermTimeoutMembers, h.Member.Timeout))
 	mux.Handle("DELETE /api/servers/{serverId}/members/{id}/timeout", authServerPerm(models.PermTimeoutMembers, h.Member.RemoveTimeout))
 
+	// Per-server nickname (migration 065). Authed-only at this layer
+	// (any member can hit it) — the handler delegates the self-vs-other
+	// permission split to memberService.SetNickname, which checks
+	// PermManageNicknames for cross-user renames.
+	mux.Handle("PATCH /api/servers/{serverId}/members/{id}/nickname", authServer(h.Member.SetNickname))
+
 	// Bans
 	mux.Handle("GET /api/servers/{serverId}/bans", authServerPerm(models.PermBanMembers, h.Member.GetBans))
 	mux.Handle("DELETE /api/servers/{serverId}/bans/{id}", authServerPerm(models.PermBanMembers, h.Member.Unban))
