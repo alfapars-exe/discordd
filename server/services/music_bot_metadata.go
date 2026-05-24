@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -26,6 +27,35 @@ import (
 // `default` keyword keeps the original web/Android-music behavior on
 // top so anonymous home users still get the fastest path.
 const ytdlpExtractorArgs = "youtube:player_client=default,android,tv"
+
+// ytdlpAuthFlags — read once per invocation from the YTDLP_COOKIES_PATH
+// env var. When YouTube's bot challenge fires on data-center IPs (the
+// "Sign in to confirm you're not a bot" message), the only durable
+// bypass is to pass a real signed-in cookies jar via --cookies.
+//
+// Set YTDLP_COOKIES_PATH in HF Space → Settings → Repository Secrets to
+// a file path inside /data (persisted across container restarts). The
+// file must be Netscape-format cookies exported from a logged-in
+// YouTube session — `yt-dlp --cookies-from-browser firefox --cookies
+// /tmp/cookies.txt --simulate <any_url>` on a local machine is the
+// easiest way to produce one.
+//
+// When the env var is unset, we omit the flag entirely so anonymous
+// (non-bot-challenged) installs keep working without setup.
+func ytdlpAuthFlags() []string {
+	path := strings.TrimSpace(os.Getenv("YTDLP_COOKIES_PATH"))
+	if path == "" {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		// Path was configured but the file isn't readable (typo, not
+		// uploaded, wrong permissions). Skip the flag rather than
+		// erroring — yt-dlp would crash with "unable to open cookie
+		// file" and that's a worse failure than the bot challenge.
+		return nil
+	}
+	return []string{"--cookies", path}
+}
 
 // normalizeYouTubeURL — strip Mix/Radio params that confuse yt-dlp's
 // --flat-playlist mode. YouTube Mix URLs (`list=RD…`) are dynamically
@@ -92,16 +122,17 @@ func extractTracks(parent context.Context, rawURL, requesterID, requesterName st
 	// so the user gets the seed video instead of 0 entries.
 	cleanURL := normalizeYouTubeURL(rawURL)
 
-	cmd := exec.CommandContext(ctx,
-		"yt-dlp",
+	args := []string{
 		"--flat-playlist",
 		"--dump-json",
 		"--no-warnings",
 		"--ignore-errors",
 		"--extractor-args", ytdlpExtractorArgs,
 		"--geo-bypass",
-		cleanURL,
-	)
+	}
+	args = append(args, ytdlpAuthFlags()...)
+	args = append(args, cleanURL)
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 	// Capture stderr separately so a non-zero exit can be reported with its
 	// actual reason ("ERROR: Sign in to confirm…", "Video unavailable", etc.)
 	// instead of the bare "exit status 1". Without this the user toast was

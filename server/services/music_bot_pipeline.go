@@ -191,7 +191,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	//   --no-playlist       — defense-in-depth; if a stray list= param
 	//                         survived normalizeYouTubeURL, don't enumerate
 	//   --no-warnings       — keep stderr clean for our diagnostic capture
-	yt := exec.CommandContext(ctx, "yt-dlp",
+	ytArgs := []string{
 		"-f", "bestaudio/best",
 		"--no-warnings",
 		"--no-playlist",
@@ -200,9 +200,14 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		// in music_bot_metadata.go for the rationale (bypasses YouTube's
 		// data-center IP bot detection that hits HF Space).
 		"--extractor-args", ytdlpExtractorArgs,
-		"-o", "-",
-		track.URL,
-	)
+	}
+	// Optional cookies jar — see ytdlpAuthFlags() in metadata.go. When
+	// the bot-challenge fires, the metadata fetch already failed earlier,
+	// so this is mostly a safety net for the rarer case where extraction
+	// works (cached metadata) but the stream URL hand-off requires auth.
+	ytArgs = append(ytArgs, ytdlpAuthFlags()...)
+	ytArgs = append(ytArgs, "-o", "-", track.URL)
+	yt := exec.CommandContext(ctx, "yt-dlp", ytArgs...)
 	// Capture yt-dlp's stderr so a failure (region lock, sign-in required,
 	// 410 stream URL expired) shows up in the playback_error broadcast
 	// instead of being lost to /dev/null. The buffer is bounded by the
