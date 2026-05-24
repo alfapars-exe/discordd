@@ -94,6 +94,7 @@ function AppLayout() {
   const wallpaperUrl = useAuthStore((s) => s.user?.wallpaper_url ?? null);
   const wallpaperEnabled = useSettingsStore((s) => s.wallpaperEnabled);
   const pendingWallpaperPreviewUrl = useSettingsStore((s) => s.pendingWallpaperPreviewUrl);
+  const lightningEnabled = useSettingsStore((s) => s.lightningEnabled);
   useEffect(() => {
     if (pendingWallpaperPreviewUrl) {
       document.documentElement.style.setProperty("--wallpaper", `url(${pendingWallpaperPreviewUrl})`);
@@ -350,8 +351,9 @@ function AppLayout() {
           <div className="main-area">
             {/* Decorative neon lightning bolts — purely visual, pointer-events
                 none, drawn behind content via z-index. See globals.css for
-                timing + LightningOverlay.tsx for path/colour config. */}
-            <LightningOverlay />
+                timing + LightningOverlay.tsx for path/colour config.
+                Opt-in (Track X): default OFF — toggled via Settings → Appearance. */}
+            {lightningEnabled && <LightningOverlay />}
 
             {/* Split pane container */}
             <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />

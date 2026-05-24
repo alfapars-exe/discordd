@@ -32,6 +32,10 @@ function AppearanceSettings() {
   const setWallpaperEnabled = useSettingsStore((s) => s.setWallpaperEnabled);
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
   const setTransparentBackground = useSettingsStore((s) => s.setTransparentBackground);
+  const lightningEnabled = useSettingsStore((s) => s.lightningEnabled);
+  const setLightningEnabled = useSettingsStore((s) => s.setLightningEnabled);
+  const lightningBlur = useSettingsStore((s) => s.lightningBlur);
+  const setLightningBlur = useSettingsStore((s) => s.setLightningBlur);
   const setPendingWallpaperPreviewUrl = useSettingsStore((s) => s.setPendingWallpaperPreviewUrl);
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
@@ -314,6 +318,46 @@ function AppearanceSettings() {
             </p>
           )}
         </>
+      )}
+
+      {/* Lightning bolts — opt-in (Track X). Slider appears below when on. */}
+      <label className="settings-toggle-row" style={{ marginTop: 16 }}>
+        <span>{t("lightningTitle", { defaultValue: "Yıldırım efekti" })}</span>
+        <button
+          className={`ub-switch${lightningEnabled ? " active" : ""}`}
+          onClick={() => setLightningEnabled(!lightningEnabled)}
+          role="switch"
+          aria-checked={lightningEnabled}
+          type="button"
+        >
+          <span className="ub-switch-thumb" />
+        </button>
+      </label>
+      <p className="theme-section-desc">
+        {t("lightningDescription", {
+          defaultValue: "Ana panelde animasyonlu neon yıldırımlar çakar. Düşük donanımda kapatın.",
+        })}
+      </p>
+
+      {lightningEnabled && (
+        <label className="settings-toggle-row" style={{ alignItems: "center", gap: 12 }}>
+          <span style={{ minWidth: 140 }}>
+            {t("lightningBlurLabel", { defaultValue: "Yıldırım yumuşaklığı" })}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={20}
+            step={1}
+            value={lightningBlur}
+            onChange={(e) => setLightningBlur(parseInt(e.target.value, 10))}
+            style={{ flex: 1, accentColor: "var(--primary)" }}
+            aria-label={t("lightningBlurLabel", { defaultValue: "Yıldırım yumuşaklığı" })}
+          />
+          <span style={{ minWidth: 38, textAlign: "right", color: "var(--t2)", fontVariantNumeric: "tabular-nums" }}>
+            {lightningBlur}px
+          </span>
+        </label>
       )}
     </div>
   );

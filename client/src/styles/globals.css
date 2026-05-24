@@ -608,7 +608,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
    MAIN AREA
    ═══════════════════════════════════════ */
 .main-area { flex:1;display:flex;min-height:0;position:relative;overflow-x:hidden;gap:var(--panel-gap); }
-.chat-area { flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;overflow-x:hidden; }
+.chat-area { flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;overflow-x:hidden;contain:layout; }
 /* gradient overlay removed — flat background */
 
 /* ═══════════════════════════════════════
@@ -627,7 +627,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* ═══════════════════════════════════════
    MESSAGES
    ═══════════════════════════════════════ */
-.messages-scroll { flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0;scrollbar-width:thin;scrollbar-color:var(--bg-5) transparent; }
+.messages-scroll { flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0;scrollbar-width:thin;scrollbar-color:var(--bg-5) transparent;overflow-anchor:none;overscroll-behavior:contain; }
 .date-divider { display:flex;align-items:center;gap:10px;padding:6px 14px;margin:4px 0; }
 .date-divider::before,.date-divider::after { content:'';flex:1;height:1px;background:var(--b1); }
 .date-divider span { font-size:13px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap; }
@@ -812,7 +812,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* ═══════════════════════════════════════
    INPUT AREA
    ═══════════════════════════════════════ */
-.input-area { padding:0;flex-shrink:0;position:relative;z-index:2; }
+.input-area { padding:0;flex-shrink:0;flex-grow:0;position:relative;z-index:2; }
 
 /* Reply bar (above input — preview of replied message) */
 .reply-bar { display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-3);border-radius:8px 8px 0 0;border:1px solid var(--b1);border-bottom:none;margin-bottom:-1px; }
@@ -4739,8 +4739,12 @@ body.reduce-motion .main-area::after {
    * Bumped blur 2 → 4 px and widened both drop-shadows (10→14, 24→32)
    * per user feedback "biraz daha blurlu ve opak". The .bolt-glow and
    * .bolt-core stroke widths below grew in lockstep so the bolts stay
-   * solid (opak) instead of dissolving into the surrounding glow. */
-  filter: blur(4px) drop-shadow(0 0 14px currentColor) drop-shadow(0 0 32px currentColor);
+   * solid (opak) instead of dissolving into the surrounding glow.
+   *
+   * Track X (v2.11.67): blur is now user-tunable via Settings → Appearance.
+   * The CSS variable is set by settingsStore.setLightningBlur(); the 4px
+   * fallback matches the previous hard-coded value. */
+  filter: blur(var(--lightning-blur, 4px)) drop-shadow(0 0 14px currentColor) drop-shadow(0 0 32px currentColor);
   animation-name: lightning-strike;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;

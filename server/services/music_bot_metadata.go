@@ -4,12 +4,54 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 )
+
+// normalizeYouTubeURL — strip Mix/Radio params that confuse yt-dlp's
+// --flat-playlist mode. YouTube Mix URLs (`list=RD…`) are dynamically
+// generated — the N+1th video is materialized only while a real client
+// watches the Nth — so yt-dlp cannot enumerate them ahead of time and
+// typically returns 0 entries with `Unable to extract playlist`. We
+// strip the dynamic-playlist params and pass the seed video on its own,
+// which is also the most predictable behavior when a user shares a Mix
+// from YouTube's "Watch Later → Play" menu.
+//
+// Also drops tracking params (`pp`, `si`) that yt-dlp never needs and
+// that occasionally cause cache-key drift between metadata and stream
+// extraction passes.
+//
+// Real playlists (`list=PL…`, `list=UU…`, `list=OL…`) are left intact so
+// the existing --flat-playlist multi-track flow still works.
+func normalizeYouTubeURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	host := strings.ToLower(u.Host)
+	isYT := host == "www.youtube.com" ||
+		host == "youtube.com" ||
+		host == "m.youtube.com" ||
+		host == "music.youtube.com" ||
+		host == "youtu.be"
+	if !isYT {
+		return raw
+	}
+	q := u.Query()
+	if listID := q.Get("list"); strings.HasPrefix(listID, "RD") {
+		q.Del("list")
+		q.Del("start_radio")
+		q.Del("index")
+	}
+	q.Del("pp")
+	q.Del("si")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
 
 // extractTracks — call yt-dlp to resolve a URL into one or more tracks.
 //
@@ -27,9 +69,13 @@ import (
 //	--ignore-errors     tolerate single-video failures inside a playlist
 //
 // 30s context timeout — playlist resolution can be slow but never minutes.
-func extractTracks(parent context.Context, url, requesterID, requesterName string) ([]models.MusicTrack, error) {
+func extractTracks(parent context.Context, rawURL, requesterID, requesterName string) ([]models.MusicTrack, error) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
+
+	// Mix/Radio URLs cannot be flat-enumerated; normalize before invoking yt-dlp
+	// so the user gets the seed video instead of 0 entries.
+	cleanURL := normalizeYouTubeURL(rawURL)
 
 	cmd := exec.CommandContext(ctx,
 		"yt-dlp",
@@ -37,7 +83,7 @@ func extractTracks(parent context.Context, url, requesterID, requesterName strin
 		"--dump-json",
 		"--no-warnings",
 		"--ignore-errors",
-		url,
+		cleanURL,
 	)
 	stdout, err := cmd.Output()
 	if err != nil {
@@ -58,7 +104,7 @@ func extractTracks(parent context.Context, url, requesterID, requesterName strin
 		if jerr := json.Unmarshal([]byte(line), &raw); jerr != nil {
 			continue
 		}
-		track := raw.toTrack(url, requesterID, requesterName)
+		track := raw.toTrack(cleanURL, requesterID, requesterName)
 		if track.VideoID == "" {
 			continue
 		}
