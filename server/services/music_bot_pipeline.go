@@ -196,10 +196,12 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		"--no-warnings",
 		"--no-playlist",
 		"--geo-bypass",
-		// Same multi-client probe as extractTracks — see ytdlpExtractorArgs
-		// in music_bot_metadata.go for the rationale (bypasses YouTube's
-		// data-center IP bot detection that hits HF Space).
+		// Mobile-first client probe + matching mobile UA — see the
+		// constants in music_bot_metadata.go. YouTube bot-detects the
+		// default desktop client on data-center IPs; mobile flows
+		// sometimes slip through.
 		"--extractor-args", ytdlpExtractorArgs,
+		"--user-agent", ytdlpUserAgent,
 	}
 	// Optional cookies jar — see ytdlpAuthFlags() in metadata.go. When
 	// the bot-challenge fires, the metadata fetch already failed earlier,

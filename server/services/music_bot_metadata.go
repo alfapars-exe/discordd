@@ -14,19 +14,32 @@ import (
 	"github.com/argeinfina/hichat/models"
 )
 
-// ytdlpExtractorArgs — multi-client probe order. YouTube increasingly
-// blocks the default `web` client on data-center IPs (HF Space, AWS,
-// etc.) with "Sign in to confirm you're not a bot." Falling back to
-// the `android` and `tv` clients dodges most of that because those
-// clients use different signature flows. Order matters: yt-dlp tries
-// left-to-right and stops at the first one that produces formats.
+// ytdlpExtractorArgs — multi-client probe order. YouTube serves
+// bot-challenges per client; some are more aggressive than others.
+// Listed mobile-first because mobile clients tend to slip past
+// data-center IP filters that hit the desktop `web` client.
 //
-// This flag value is documented at
-// https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube — keep the
-// list in sync with whatever yt-dlp currently considers stable. The
-// `default` keyword keeps the original web/Android-music behavior on
-// top so anonymous home users still get the fastest path.
-const ytdlpExtractorArgs = "youtube:player_client=default,android,tv"
+// Order matters: yt-dlp tries left-to-right and stops at the first
+// client that produces formats. Mobile web (`mweb`) is checked first
+// because it returns the largest format catalog when it works at all.
+// `tv_embedded` is the most permissive on age-gated / region-locked
+// content. `android` and `ios` are the official-app flows — heavier
+// signature requirements but sometimes still pass when web variants
+// fail. `default` is left at the end as a last-resort.
+//
+// This list will rot — YouTube swaps which clients trip the challenge
+// every few weeks. When playback breaks again, reordering or
+// substituting client names here is the first thing to try.
+//
+// Reference: https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube
+const ytdlpExtractorArgs = "youtube:player_client=mweb,tv_embedded,android,ios,web_safari,default"
+
+// ytdlpUserAgent — a real-looking mobile Safari User-Agent. yt-dlp's
+// default UA includes "yt-dlp/<version>" and is increasingly an
+// instant red flag for YouTube's bot detection. Overriding to a
+// genuine browser string buys some additional plausibility before the
+// challenge fires. Pair with ytdlpExtractorArgs above for best odds.
+const ytdlpUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
 // ytdlpAuthFlags — read once per invocation from the YTDLP_COOKIES_PATH
 // env var. When YouTube's bot challenge fires on data-center IPs (the
@@ -128,6 +141,7 @@ func extractTracks(parent context.Context, rawURL, requesterID, requesterName st
 		"--no-warnings",
 		"--ignore-errors",
 		"--extractor-args", ytdlpExtractorArgs,
+		"--user-agent", ytdlpUserAgent,
 		"--geo-bypass",
 	}
 	args = append(args, ytdlpAuthFlags()...)
