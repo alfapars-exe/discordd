@@ -74,7 +74,12 @@ func (r *sqliteAuditLogRepo) ListByServer(
 	filter models.AuditLogFilter,
 ) ([]models.AuditLog, error) {
 	limit := filter.Limit
-	if limit <= 0 || limit > 100 {
+	// Cap raised from 100 → 500 so client.fetchInitial can prefetch a
+	// real history (~200 by default) without hitting the ceiling. The
+	// (server_id, created_at DESC) index keeps even 500-row scans
+	// cheap so there's no downside to letting the moderation UI show
+	// more entries by default.
+	if limit <= 0 || limit > 500 {
 		limit = 50
 	}
 
