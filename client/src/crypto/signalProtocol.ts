@@ -869,7 +869,7 @@ async function aesGcmEncrypt(
   );
 
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: ad },
+    { name: "AES-GCM", iv: iv as BufferSource, additionalData: ad as BufferSource },
     cryptoKey,
     plaintext as BufferSource
   );
@@ -908,7 +908,7 @@ async function aesGcmDecrypt(
   // Primary: canonical AAD
   try {
     return await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv, additionalData: canonicalHeaderAAD(associatedData) },
+      { name: "AES-GCM", iv: iv as BufferSource, additionalData: canonicalHeaderAAD(associatedData) as BufferSource },
       cryptoKey,
       ciphertext as BufferSource
     );

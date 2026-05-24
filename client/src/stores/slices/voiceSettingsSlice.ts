@@ -71,7 +71,16 @@ export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
  * Picking one of the removed engines from a stale localStorage entry
  * now migrates to "rnnoise" (see loadSettings).
  */
-export type NoiseReductionEngine = "rnnoise" | "krisp" | "webrtc";
+export type NoiseReductionEngine =
+  | "rnnoise"
+  | "krisp"
+  | "webrtc"
+  // Beta engines: dropdown selects them, useAudioProcessor recognises
+  // them and currently runs the RNNoise fallback while toasting.
+  | "deepfilter"
+  | "dtln"
+  | "speex"
+  | "dpdfnet";
 
 export type VoiceSettings = {
   inputMode: InputMode;
