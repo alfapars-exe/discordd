@@ -201,7 +201,7 @@ button { font-family:inherit; }
 
 .mqvi-app { display:flex;flex-direction:row;height:100%;background:transparent;color:var(--t0);-webkit-font-smoothing:antialiased;overflow:hidden;padding:var(--panel-gap);gap:var(--panel-gap); }
 /* Capacitor: mqvi-app must fill flex space between safe-area pseudo-elements, not 100vh */
-.app-body { display:flex;flex-direction:column;flex:1;min-width:0;min-height:0; }
+.app-body { display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;overflow:hidden; }
 
 /* ── Custom Titlebar (Electron) ── */
 .custom-titlebar {
@@ -607,8 +607,8 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* ═══════════════════════════════════════
    MAIN AREA
    ═══════════════════════════════════════ */
-.main-area { flex:1;display:flex;min-height:0;position:relative;overflow-x:hidden;gap:var(--panel-gap); }
-.chat-area { flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;overflow-x:hidden;contain:layout; }
+.main-area { flex:1;display:flex;min-height:0;position:relative;overflow:hidden;gap:var(--panel-gap); }
+.chat-area { flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;overflow:hidden; }
 /* gradient overlay removed — flat background */
 
 /* ═══════════════════════════════════════
