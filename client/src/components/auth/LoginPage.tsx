@@ -1,12 +1,13 @@
 /** LoginPage — User login page. i18n: "auth" namespace. */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
 import { isElectron, isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
+import { useServerWakeUp } from "../../hooks/useServerWakeUp";
 
 function LoginPage() {
   // ─── Hooks ───
@@ -23,6 +24,23 @@ function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Submit anındaki credentials'ı retry için sakla — kullanıcı bekleme
+  // sırasında input'a dokunsa bile retry orijinal değerlerle yapılır.
+  const lastSubmitRef = useRef<{ username: string; password: string } | null>(null);
+
+  // HF Space cold-start desteği — 503 alındığında otomatik "uyanıyor" UX'i.
+  // Probe başarılı olunca son submit'i tekrar denemek için onReady kullanıyoruz.
+  const wakeUp = useServerWakeUp({
+    error,
+    onReady: () => {
+      const saved = lastSubmitRef.current;
+      if (saved) {
+        clearError();
+        void attemptLogin(saved.username, saved.password);
+      }
+    },
+  });
+
   // Load saved credentials from Electron safeStorage on mount
   useEffect(() => {
     if (!isElectron()) return;
@@ -36,14 +54,14 @@ function LoginPage() {
   }, []);
 
   // ─── Handlers ───
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const success = await login(username, password);
+  async function attemptLogin(u: string, p: string) {
+    const success = await login(u, p);
     if (success) {
+      wakeUp.reset();
       // Electron: save or clear credentials
       if (isElectron()) {
         if (rememberMe) {
-          window.electronAPI?.saveCredentials(username, password);
+          window.electronAPI?.saveCredentials(u, p);
         } else {
           window.electronAPI?.clearCredentials();
         }
@@ -51,11 +69,27 @@ function LoginPage() {
       // Redirect to returnUrl (e.g. invite link) or /channels
       const returnUrl = searchParams.get("returnUrl");
       navigate(returnUrl ?? "/channels");
+    } else {
+      // Retry başarısızsa (örn. wake-up sonrası server yine 503 döndü) wake-up
+      // state'ini sıfırla — bir sonraki render watchError'u idle'dan tetikler
+      // ve döngü yeniden başlar. Aksi halde "ready" state'inde takılırdık.
+      if (wakeUp.state.phase === "ready") wakeUp.reset();
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    // "failed" banner'ından çıkıp yeniden denerken loop'u sıfırla.
+    if (wakeUp.state.phase === "failed") wakeUp.reset();
+    lastSubmitRef.current = { username, password };
+    await attemptLogin(username, password);
   }
 
   function handleInputChange() {
     if (error) clearError();
+    // Kullanıcı tekrar etkileşim ediyorsa wake-up döngüsü sıfırlansın —
+    // "failed" durumundaki banner'dan çıkıp normal akışa dönsün.
+    if (wakeUp.state.phase !== "idle") wakeUp.reset();
   }
 
   // ─── Render ───
@@ -66,9 +100,26 @@ function LoginPage() {
         <h1 className="auth-title">{t("welcomeBack")}</h1>
         <p className="auth-subtitle">{t("excitedToSeeYou")}</p>
 
-        {/* Error Banner — localize known backend error patterns into i18n
-            keys so Turkish users don't see raw English server strings. */}
-        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
+        {/* Error / Wake-up Banner — üç mod:
+            1) Wake-up devam ediyor → "Sunucu uyanıyor (X/Y)..." (info ton)
+            2) Wake-up başarısız    → "Sunucu yanıt vermiyor..." (error ton)
+            3) Normal hata          → localize edilmiş auth error
+            Sentinel match olunca raw error banner gösterilmez — wake-up UI
+            zaten kullanıcıya neler olduğunu anlatıyor. */}
+        {wakeUp.state.phase === "waking" && (
+          <div className="auth-error" role="status">
+            {t("serverWakingUpAttempt", {
+              attempt: wakeUp.state.attempt,
+              max: wakeUp.state.max,
+            })}
+          </div>
+        )}
+        {wakeUp.state.phase === "failed" && (
+          <div className="auth-error">{t("serverWakeFailed")}</div>
+        )}
+        {wakeUp.state.phase !== "waking" &&
+          wakeUp.state.phase !== "failed" &&
+          error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
@@ -141,8 +192,14 @@ function LoginPage() {
             </label>
           )}
 
-          <button type="submit" disabled={isLoading} className="auth-btn">
-            {isLoading ? t("loggingIn") : t("login")}
+          <button
+            type="submit"
+            disabled={isLoading || wakeUp.state.phase === "waking"}
+            className="auth-btn"
+          >
+            {isLoading || wakeUp.state.phase === "waking"
+              ? t("loggingIn")
+              : t("login")}
           </button>
         </form>
 

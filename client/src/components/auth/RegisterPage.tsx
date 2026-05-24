@@ -7,6 +7,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
+import { useServerWakeUp } from "../../hooks/useServerWakeUp";
 
 /** Inline modal for Terms of Service / Privacy Policy */
 function LegalModal({ type, onClose }: { type: "terms" | "privacy"; onClose: () => void }) {
@@ -105,7 +106,48 @@ function RegisterPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [legalModal, setLegalModal] = useState<"terms" | "privacy" | null>(null);
 
+  // Submit anındaki form değerlerini retry için sakla.
+  type SubmitPayload = {
+    username: string;
+    password: string;
+    displayName: string;
+    email: string;
+  };
+  const lastSubmitRef = useRef<SubmitPayload | null>(null);
+
+  // HF Space cold-start desteği — backend 503 dönerse "uyanıyor" UX'i.
+  // localError (client-side validation) sentinel formatında olmadığı için
+  // hook'a sadece backend `error`'ı geçiriyoruz.
+  const wakeUp = useServerWakeUp({
+    error,
+    onReady: () => {
+      const saved = lastSubmitRef.current;
+      if (saved) {
+        clearError();
+        void attemptRegister(saved);
+      }
+    },
+  });
+
   // ─── Handlers ───
+  async function attemptRegister(payload: SubmitPayload) {
+    const success = await register(
+      payload.username,
+      payload.password,
+      payload.displayName || undefined,
+      payload.email || undefined,
+    );
+    if (success) {
+      wakeUp.reset();
+      const returnUrl = searchParams.get("returnUrl");
+      navigate(returnUrl ?? "/channels");
+    } else if (wakeUp.state.phase === "ready") {
+      // Retry başarısızsa loop'u sıfırla — bir sonraki render watchError'u
+      // idle'dan tetikler ve döngü yeniden başlar.
+      wakeUp.reset();
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLocalError(null);
@@ -120,25 +162,25 @@ function RegisterPage() {
       return;
     }
 
-    const success = await register(
-      username,
-      password,
-      displayName || undefined,
-      email || undefined,
-    );
-    if (success) {
-      // Redirect to returnUrl (e.g. invite link) or /channels
-      const returnUrl = searchParams.get("returnUrl");
-      navigate(returnUrl ?? "/channels");
-    }
+    // "failed" banner'ından yeni denemeye geçişte loop sıfırlansın.
+    if (wakeUp.state.phase === "failed") wakeUp.reset();
+
+    const payload: SubmitPayload = { username, password, displayName, email };
+    lastSubmitRef.current = payload;
+    await attemptRegister(payload);
   }
 
   function handleInputChange() {
     if (error) clearError();
     if (localError) setLocalError(null);
+    if (wakeUp.state.phase !== "idle") wakeUp.reset();
   }
 
-  const displayError = localError ?? error;
+  // Wake-up aktifken backend hatası UI'da bastırılır (wake-up banner zaten
+  // konuşuyor). Validation/local hatalar her zaman gösterilir.
+  const wakingNow =
+    wakeUp.state.phase === "waking" || wakeUp.state.phase === "failed";
+  const displayError = localError ?? (wakingNow ? null : error);
 
   // ─── Password toggle icon ───
   const EyeIcon = (
@@ -164,6 +206,18 @@ function RegisterPage() {
         {/* Header */}
         <h1 className="auth-title">{t("createAccount")}</h1>
 
+        {/* Wake-up banner (HF Space cold-start) — backend hatasının üstüne biner. */}
+        {wakeUp.state.phase === "waking" && (
+          <div className="auth-error" role="status">
+            {t("serverWakingUpAttempt", {
+              attempt: wakeUp.state.attempt,
+              max: wakeUp.state.max,
+            })}
+          </div>
+        )}
+        {wakeUp.state.phase === "failed" && (
+          <div className="auth-error">{t("serverWakeFailed")}</div>
+        )}
         {/* Error Banner — localize known backend error patterns. localError
             is already an i18n-keyed message (client-side validation), so we
             only run the helper on the store-side error string. */}
@@ -305,8 +359,14 @@ function RegisterPage() {
             </span>
           </label>
 
-          <button type="submit" disabled={isLoading || !acceptedTerms} className="auth-btn">
-            {isLoading ? t("registering") : t("register")}
+          <button
+            type="submit"
+            disabled={isLoading || !acceptedTerms || wakeUp.state.phase === "waking"}
+            className="auth-btn"
+          >
+            {isLoading || wakeUp.state.phase === "waking"
+              ? t("registering")
+              : t("register")}
           </button>
         </form>
 

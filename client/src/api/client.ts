@@ -242,10 +242,32 @@ export async function apiClient<T>(
     return { success: true, data: undefined as T };
   }
 
+  // HF Space "uyku" veya boot durumunda HF edge katmanı 502/503/504 + HTML
+  // gövdesi döner ("Your space is in error, check its status on hf.co"). Bu
+  // bir uygulama hatası değil, geçici altyapı durumu. JSON parse'tan ÖNCE
+  // yakalayıp stable bir sentinel string döndürüyoruz: üst katmanlar (auth
+  // localizer, useServerWakeUp hook) bu prefix'i okuyup retry/UI kararı verir.
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    return {
+      success: false,
+      error: `service_unavailable: HTTP ${res.status}`,
+    } as APIResponse<T>;
+  }
+
   try {
     const data: APIResponse<T> = await res.json();
     return data;
   } catch {
+    // text/html dönmüşse büyük ihtimalle HF/proxy hata sayfasıdır — yine
+    // sentinel'e düş ki UI ham HTML değil dostça mesaj göstersin.
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("text/html")) {
+      console.error(`[apiClient] ${method} ${endpoint}: HTML response (HTTP ${res.status})`);
+      return {
+        success: false,
+        error: `service_unavailable: HTTP ${res.status}`,
+      } as APIResponse<T>;
+    }
     console.error(`[apiClient] ${method} ${endpoint}: invalid JSON (HTTP ${res.status})`);
     return {
       success: false,

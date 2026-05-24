@@ -44,6 +44,12 @@ const PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 
   // Generic transport
   [/network request failed|failed to fetch/i, "networkError"],
+
+  // HF Space cold-start / maintenance — apiClient.ts 502/503/504'ü
+  // "service_unavailable:" sentinel ile döner. useServerWakeUp hook normalde
+  // kendi UI'sını gösterir; bu pattern hook devre dışıysa veya wake-up
+  // başarısız olduğunda raw error'ın görünmesini engelleyen fallback'tir.
+  [/^service_unavailable:|HTTP 50[234]|space is in error/i, "serverMaintenance"],
 ];
 
 /**
