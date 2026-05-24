@@ -15,19 +15,12 @@ import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice"
  * sound is needed to open the gate — i.e. tighter noise rejection. closeThreshold
  * sits below openThreshold to give hysteresis (signal must dip below close
  * AND stay there `holdMs` before the gate fully closes), preventing flicker.
- *
- * Whisper / soft speech sits around -45 to -50 dB RMS. The "medium" default
- * was -42/-48 historically, which meant whispers got gated to silence at
- * the source — LiveKit's IsSpeakingChanged then never fired for quiet
- * talkers (no audio level to detect). Each level is now shifted ~5 dB
- * more permissive so the default catches quiet speech, while preserving
- * the ~5-6 dB hysteresis window between open and close.
  */
 const LEVEL_BASE: Record<NoiseSuppressionLevel, { open: number; close: number; hold: number }> = {
-  low:     { open: -55, close: -60, hold: 400 },
-  medium:  { open: -48, close: -53, hold: 300 },
-  high:    { open: -42, close: -48, hold: 200 },
-  maximum: { open: -36, close: -42, hold: 150 },
+  low:     { open: -50, close: -55, hold: 400 },
+  medium:  { open: -42, close: -48, hold: 300 },
+  high:    { open: -36, close: -42, hold: 200 },
+  maximum: { open: -30, close: -36, hold: 150 },
 };
 
 /**

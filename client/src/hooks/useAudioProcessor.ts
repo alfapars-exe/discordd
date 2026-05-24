@@ -9,8 +9,10 @@
  *     - "krisp"      — LiveKit Cloud's Krisp filter, lazy-imported.
  *                      Requires a paid plan; falls back to RNNoise.
  *     - "rnnoise"    — bundled OSS ML denoiser (default, free).
- *                      Same RNNoise model that werman's native VST
- *                      plugin wraps — we just deliver it via WASM.
+ *     - "deepfilter" — DeepFilterNet3 WASM. BETA: real WASM integration
+ *                      pending; current build falls back to RNNoise and
+ *                      surfaces a toast so the user knows.
+ *     - "dtln"       — DTLN web port. BETA: same fallback contract.
  *     - "vadgate"    — energy-gate only, used when NR is off but
  *                      micSensitivity < 100.
  *
@@ -24,12 +26,6 @@
  * Browser-native NS is also explicitly *disabled* whenever a custom
  * processor is attached — running both layers can phase-cancel speech
  * components and over-suppress quiet talkers.
- *
- * Earlier revisions exposed four extra engines (deepfilter, dtln, speex,
- * dpdfnet) as BETA placeholders that silently fell back to RNNoise. They
- * were removed because the dropdown advertised filters that didn't
- * exist — see voiceSettingsSlice.ts for the migration that snaps stale
- * persisted values to "rnnoise".
  */
 
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -51,9 +47,27 @@ import type { NoiseSuppressionLevel, NoiseReductionEngine } from "../stores/slic
 type ProcessorType =
   | "krisp"
   | "rnnoise"
+  | "deepfilter"
+  | "dtln"
+  | "speex"
+  | "dpdfnet"
   | "webrtc"
   | "vadgate"
   | "none";
+
+/** Engines whose real WASM/AudioWorklet integration is pending — they all
+ *  share the "RNNoise fallback + toast" path inside applyDesiredProcessor. */
+type BetaEngine = "deepfilter" | "dtln" | "speex" | "dpdfnet";
+
+const BETA_ENGINES: readonly BetaEngine[] = ["deepfilter", "dtln", "speex", "dpdfnet"];
+
+/** Pretty label for the beta-fallback toast. */
+const BETA_LABELS: Record<BetaEngine, string> = {
+  deepfilter: "DeepFilterNet3",
+  dtln: "DTLN",
+  speex: "SpeexDSP",
+  dpdfnet: "DPDFNet",
+};
 
 /**
  * Sentinel object used as the processor ref when WebRTC native NS is
@@ -77,8 +91,15 @@ function getDesiredProcessor(
   sens: number,
 ): ProcessorType {
   if (nr) {
+    // Direct engines map 1:1 to a ProcessorType. BETA engines also map 1:1
+    // (so the engine selection survives in processorRef and the user's
+    // pick stays visible in Settings) — applyDesiredProcessor recognises
+    // them and runs the RNNoise fallback while toasting.
     if (engine === "krisp") return "krisp";
     if (engine === "webrtc") return "webrtc";
+    if ((BETA_ENGINES as readonly NoiseReductionEngine[]).includes(engine)) {
+      return engine as BetaEngine;
+    }
     return "rnnoise";
   }
   if (sens < 100) return "vadgate";
@@ -130,6 +151,7 @@ async function applyDesiredProcessor(
   hooks: {
     isCancelled: () => boolean;
     onKrispFallback: () => void;
+    onBetaFallback: (engine: BetaEngine) => void;
   },
 ): Promise<AudioProcessor | null> {
   if (desired === "krisp") {
@@ -158,6 +180,21 @@ async function applyDesiredProcessor(
 
   if (desired === "rnnoise") {
     await setBrowserNoiseSuppression(audioTrack, false);
+    const proc = new RNNoiseProcessor(sens, vol, level);
+    await audioTrack.setProcessor(proc);
+    return proc;
+  }
+
+  if ((BETA_ENGINES as readonly ProcessorType[]).includes(desired)) {
+    // BETA engines: real WASM integration is pending for all four
+    // (deepfilter, dtln, speex, dpdfnet). We keep the user's engine
+    // selection visible in the UI, surface a one-time toast that
+    // explains the fallback, and run RNNoise so audio still gets
+    // cleaned up. Once each engine's WASM/AudioWorklet is wired, its
+    // branch lights up and gets removed from BETA_ENGINES.
+    await setBrowserNoiseSuppression(audioTrack, false);
+    hooks.onBetaFallback(desired as BetaEngine);
+    if (hooks.isCancelled()) return null;
     const proc = new RNNoiseProcessor(sens, vol, level);
     await audioTrack.setProcessor(proc);
     return proc;
@@ -261,6 +298,10 @@ export function useAudioProcessor(
           addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
           setNoiseReductionEngine("rnnoise");
         },
+        onBetaFallback: (engine) => {
+          const label = engine === "deepfilter" ? "DeepFilterNet3" : "DTLN";
+          addToast("info", `${label} (Beta) — şimdilik RNNoise ile çalışıyor.`);
+        },
       });
       if (cancelled) return;
       processorRef.current = proc;
@@ -317,6 +358,9 @@ export function useAudioProcessor(
             onKrispFallback: () => {
               addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
               setNoiseReductionEngine("rnnoise");
+            },
+            onBetaFallback: (engine: BetaEngine) => {
+              addToast("info", `${BETA_LABELS[engine]} (Beta) — şimdilik RNNoise ile çalışıyor.`);
             },
           },
         );

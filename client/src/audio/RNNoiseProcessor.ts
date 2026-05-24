@@ -5,12 +5,6 @@
  * Uses @sapphi-red/web-noise-suppressor for RNNoise WASM + AudioWorklet
  * to suppress mic noise (breath, keyboard, fan, AC).
  *
- * Model lineage: Xiph.Org's RNNoise (https://github.com/xiph/rnnoise).
- * The popular werman/noise-suppression-for-voice project wraps the same
- * model as a native VST/LV2/AU plugin for DAW + OS-level audio routing;
- * we use the WASM port of the same network so we can run it in the
- * browser. Functionally equivalent denoising — different host.
- *
  * Audio pipeline:
  *   Mic Track -> MediaStreamSource -> RnnoiseWorkletNode -> VadGateNode -> MediaStreamDestination
  *                                          |                    |
@@ -79,11 +73,16 @@ function ensureWorkletRegistered(ctx: AudioContext, name: string, url: string): 
   return p;
 }
 
-// Sensitivity→threshold mapping shared with VadGateProcessor — see
-// ./sensitivity.ts for the curve choice and history. The legacy
-// single-threshold path lives in sensitivity.ts; the live pipeline
-// uses levelToThresholds() from ./gateConfig for hysteresis-aware
-// dB-based gating (different concern, different file).
+/**
+ * Converts micSensitivity (0-100) to RMS threshold using a quadratic curve.
+ * Kept for the legacy single-threshold path; the live pipeline uses
+ * levelToThresholds() below for hysteresis-aware dB-based gating.
+ */
+export function sensitivityToThreshold(sensitivity: number): number {
+  const clamped = Math.max(0, Math.min(100, sensitivity));
+  const inverted = (100 - clamped) / 100;
+  return 0.04 * inverted * inverted;
+}
 
 // Per-level threshold curve + level→worklet config helper now live in
 // ./gateConfig — re-exported above so legacy imports keep working.
@@ -133,18 +132,9 @@ class RNNoiseProcessor
     const inputStream = new MediaStream([track]);
     this.sourceNode = audioContext.createMediaStreamSource(inputStream);
 
-    // Input volume GainNode — applied before RNNoise processing.
-    // Explicit mono pinning: if the OS hands us a stereo mic device (some
-    // USB headsets, virtual cables) the right channel can come through
-    // silent — RNNoise's mono pipeline + LiveKit's mono publish then drop
-    // it entirely on the receiving end. Forcing the WebAudio graph to
-    // collapse to a single channel here makes the failure visible AT
-    // SOURCE rather than as one-sided silent playback on remotes.
+    // Input volume GainNode — applied before RNNoise processing
     this.gainNode = audioContext.createGain();
     this.gainNode.gain.value = this.initialInputVolume / 100;
-    this.gainNode.channelCount = 1;
-    this.gainNode.channelCountMode = "explicit";
-    this.gainNode.channelInterpretation = "speakers";
 
     // maxChannels: 1 — mono mic input (stereo unnecessary, saves CPU)
     this.rnnoiseNode = new RnnoiseWorkletNode(audioContext, {
@@ -152,21 +142,13 @@ class RNNoiseProcessor
       maxChannels: 1,
     });
 
-    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor", {
-      outputChannelCount: [1],
-      channelCount: 1,
-      channelCountMode: "explicit",
-      channelInterpretation: "speakers",
-    });
+    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
     // Send hysteresis thresholds based on the chosen level + sensitivity slider.
     // Level dictates the base curve, sensitivity offsets it ±6 dB; the worklet
     // honours sensitivity=100 as "gate disabled" via a null payload.
     this.applyGateConfig();
 
     this.destinationNode = audioContext.createMediaStreamDestination();
-    this.destinationNode.channelCount = 1;
-    this.destinationNode.channelCountMode = "explicit";
-    this.destinationNode.channelInterpretation = "speakers";
 
     this.sourceNode.connect(this.gainNode);
     this.gainNode.connect(this.rnnoiseNode);

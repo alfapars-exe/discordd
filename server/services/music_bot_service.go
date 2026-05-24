@@ -380,29 +380,6 @@ func (s *musicBotService) broadcastState(bot *botInstance) {
 	})
 }
 
-// broadcastPlaybackError — surface a per-track failure to all clients in the
-// server so users see a toast instead of nothing. Without this the bot would
-// silently skip failed tracks (yt-dlp 410, malformed Ogg, codec issues) and
-// listeners would experience the symptom as "queued but never played."
-func (s *musicBotService) broadcastPlaybackError(bot *botInstance, track *models.MusicTrack, reason string) {
-	title := ""
-	videoID := ""
-	if track != nil {
-		title = track.Title
-		videoID = track.VideoID
-	}
-	s.hub.BroadcastToServer(bot.serverID, ws.Event{
-		Op: "music_bot_error",
-		Data: map[string]any{
-			"channel_id":  bot.channelID,
-			"server_id":   bot.serverID,
-			"track_title": title,
-			"video_id":    videoID,
-			"reason":      reason,
-		},
-	})
-}
-
 func (s *musicBotService) logErr(category models.LogCategory, channelID, msg string, meta map[string]string) {
 	if s.appLogger == nil {
 		log.Printf("[music] %s channel=%s %v", msg, channelID, meta)

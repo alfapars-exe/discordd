@@ -11,7 +11,7 @@ import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.
 import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 import vadGateWorkletPath from "../../audio/vadGateWorklet.js?url";
-import { sensitivityToThreshold } from "../../audio/sensitivity";
+import { sensitivityToThreshold } from "../../audio/RNNoiseProcessor";
 
 
 /** Simplified MediaDeviceInfo for select options. */
@@ -550,6 +550,10 @@ function VoiceSettings() {
               <option value="rnnoise">{t("nrEngineRnnoise")}</option>
               <option value="krisp">{t("nrEngineKrisp")}</option>
               <option value="webrtc">{t("nrEngineWebrtc")}</option>
+              <option value="deepfilter">{t("nrEngineDeepfilter")}</option>
+              <option value="dtln">{t("nrEngineDtln")}</option>
+              <option value="speex">{t("nrEngineSpeex")}</option>
+              <option value="dpdfnet">{t("nrEngineDpdfnet")}</option>
             </select>
           </div>
         )}

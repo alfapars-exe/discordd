@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Discord-style topluluk platformu — sesli kanallar + metin
+short_description: Discord-style topluluk platformu — sesli kanallar, metin, dosya
 ---
 
 <p align="center">

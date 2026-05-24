@@ -30,11 +30,17 @@ function ensureWorkletRegistered(ctx: AudioContext): Promise<void> {
   return p;
 }
 
+/**
+ * Converts micSensitivity (0-100) to RMS threshold (quadratic curve).
+ * Same mapping as RNNoiseProcessor for consistent behavior.
+ *
+ *   100 -> 0     (gate disabled)
+ *   50  -> 0.01  (moderate)
+ *   0   -> 0.04  (very aggressive)
+ */
 // Shared gate-config helper — same level/sensitivity curve and worklet
 // message format as RNNoiseProcessor's gate path so behaviour is identical
-// regardless of whether the denoiser is on. The cubic single-threshold curve
-// in ./sensitivity.ts is the legacy path; the live pipeline routes through
-// postGateConfigToWorklet/levelToThresholds for hysteresis-aware gating.
+// regardless of whether the denoiser is on.
 import { postGateConfigToWorklet } from "./gateConfig";
 import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice";
 
@@ -72,28 +78,14 @@ class VadGateProcessor
     const inputStream = new MediaStream([track]);
     this.sourceNode = audioContext.createMediaStreamSource(inputStream);
 
-    // Input volume GainNode — applied before VAD gate processing.
-    // Mono pinning mirrors RNNoiseProcessor: stereo mics with a silent
-    // channel produce one-sided playback on remotes if the WebAudio
-    // graph isn't collapsed at source.
+    // Input volume GainNode — applied before VAD gate processing
     this.gainNode = audioContext.createGain();
     this.gainNode.gain.value = this.initialInputVolume / 100;
-    this.gainNode.channelCount = 1;
-    this.gainNode.channelCountMode = "explicit";
-    this.gainNode.channelInterpretation = "speakers";
 
-    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor", {
-      outputChannelCount: [1],
-      channelCount: 1,
-      channelCountMode: "explicit",
-      channelInterpretation: "speakers",
-    });
+    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
     this.applyGateConfig();
 
     this.destinationNode = audioContext.createMediaStreamDestination();
-    this.destinationNode.channelCount = 1;
-    this.destinationNode.channelCountMode = "explicit";
-    this.destinationNode.channelInterpretation = "speakers";
 
     this.sourceNode.connect(this.gainNode);
     this.gainNode.connect(this.vadGateNode);
