@@ -14,6 +14,13 @@ const THEME_STORAGE_KEY = "mqvi_theme";
 const BLUR_STORAGE_KEY = "mqvi_blur_enabled";
 const WALLPAPER_ENABLED_KEY = "mqvi_wallpaper_enabled";
 const TRANSPARENT_KEY = "mqvi_transparent_bg";
+const LIGHTNING_ENABLED_KEY = "mqvi_lightning_enabled";
+const LIGHTNING_BLUR_KEY = "mqvi_lightning_blur";
+
+/** Default blur for the lightning bolts (px) — matches the original hard-coded value. */
+const LIGHTNING_BLUR_DEFAULT = 4;
+const LIGHTNING_BLUR_MIN = 0;
+const LIGHTNING_BLUR_MAX = 20;
 
 function loadPersistedTheme(): ThemeId {
   try {
@@ -65,6 +72,45 @@ function loadPersistedTransparent(): boolean {
   return false;
 }
 
+/**
+ * Lightning overlay — default OFF (Track X user request). Users opt in
+ * via Settings → Appearance. Stored as "0"/"1" to match the blur/wallpaper
+ * persistence pattern above.
+ */
+function loadPersistedLightningEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem(LIGHTNING_ENABLED_KEY);
+    if (stored === "1") return true;
+    if (stored === "0") return false;
+  } catch {
+    /* localStorage access error */
+  }
+  return false;
+}
+
+function loadPersistedLightningBlur(): number {
+  try {
+    const stored = localStorage.getItem(LIGHTNING_BLUR_KEY);
+    if (stored !== null) {
+      const px = parseInt(stored, 10);
+      if (Number.isFinite(px) && px >= LIGHTNING_BLUR_MIN && px <= LIGHTNING_BLUR_MAX) return px;
+    }
+  } catch {
+    /* localStorage access error */
+  }
+  return LIGHTNING_BLUR_DEFAULT;
+}
+
+/**
+ * Push the lightning blur value into a CSS variable on :root so the
+ * filter in globals.css picks it up live (no re-render needed since the
+ * variable is read by .lightning-bolt's filter declaration directly).
+ */
+function applyLightningBlur(px: number): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--lightning-blur", `${px}px`);
+}
+
 type SettingsTab =
   | "profile"
   | "appearance"
@@ -97,6 +143,10 @@ type SettingsState = {
   wallpaperEnabled: boolean;
   /** Transparent window background — desktop shows through */
   transparentBackground: boolean;
+  /** Lightning bolts overlay in the main content area — opt-in (Track X) */
+  lightningEnabled: boolean;
+  /** Lightning bolt blur in pixels (0–20) — visual softness of the strikes */
+  lightningBlur: number;
   /** Live preview blob URL — applied to the app background without persisting. */
   pendingWallpaperPreviewUrl: string | null;
 
@@ -107,6 +157,8 @@ type SettingsState = {
   setBlurEnabled: (enabled: boolean) => void;
   setWallpaperEnabled: (enabled: boolean) => void;
   setTransparentBackground: (enabled: boolean) => void;
+  setLightningEnabled: (enabled: boolean) => void;
+  setLightningBlur: (px: number) => void;
   setPendingWallpaperPreviewUrl: (url: string | null) => void;
   /** Apply theme from server preferences (no re-sync to server) */
   applyFromServer: (themeId: string) => void;
@@ -118,6 +170,13 @@ const initialTheme = loadPersistedTheme();
 const initialBlur = loadPersistedBlur();
 const initialWallpaperEnabled = loadPersistedWallpaperEnabled();
 const initialTransparent = loadPersistedTransparent();
+const initialLightningEnabled = loadPersistedLightningEnabled();
+const initialLightningBlur = loadPersistedLightningBlur();
+
+// Seed the CSS variable so .lightning-bolt's filter reads the user's
+// preferred blur from first paint — without this it would start at the
+// 4px fallback and snap to the saved value on first setter call.
+applyLightningBlur(initialLightningBlur);
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   isOpen: false,
@@ -126,6 +185,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   blurEnabled: initialBlur,
   wallpaperEnabled: initialWallpaperEnabled,
   transparentBackground: initialTransparent,
+  lightningEnabled: initialLightningEnabled,
+  lightningBlur: initialLightningBlur,
   pendingWallpaperPreviewUrl: null,
 
   openSettings: (tab = "profile") => set({ isOpen: true, activeTab: tab }),
@@ -179,6 +240,26 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } else {
       set({ transparentBackground: enabled });
     }
+  },
+
+  setLightningEnabled: (enabled) => {
+    try {
+      localStorage.setItem(LIGHTNING_ENABLED_KEY, enabled ? "1" : "0");
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    set({ lightningEnabled: enabled });
+  },
+
+  setLightningBlur: (px) => {
+    const clamped = Math.max(LIGHTNING_BLUR_MIN, Math.min(LIGHTNING_BLUR_MAX, Math.round(px)));
+    try {
+      localStorage.setItem(LIGHTNING_BLUR_KEY, String(clamped));
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    applyLightningBlur(clamped);
+    set({ lightningBlur: clamped });
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),
