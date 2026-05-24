@@ -118,15 +118,24 @@ function VoiceUserContextMenu({
 
   const name = displayName || username;
 
-  // Close on outside click or Escape
+  // Close on outside click or Escape — but suspend the outside-click
+  // handler while the duration picker is open. The picker is a sibling
+  // of the menu in the portal tree (so it survives independent of the
+  // menu's lifecycle), but the menu itself is unmounted by the parent
+  // when onClose fires — which would tear down the picker too because
+  // they share a React tree. Skipping outside-click while pickerMode is
+  // set lets the picker handle its own dismissal (backdrop / Escape /
+  // a duration pick) without dragging the menu down with it.
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
+      if (pickerMode !== null) return;
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
 
     function handleEscape(e: KeyboardEvent) {
+      if (pickerMode !== null) return; // picker has its own Escape
       if (e.key === "Escape") onClose();
     }
 
@@ -140,7 +149,7 @@ function VoiceUserContextMenu({
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [onClose]);
+  }, [onClose, pickerMode]);
 
   // Clamp position to viewport bounds
   useEffect(() => {
