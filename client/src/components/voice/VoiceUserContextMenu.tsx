@@ -12,8 +12,11 @@ import { useActiveMembers } from "../../stores/memberStore";
 import { useChannelStore } from "../../stores/channelStore";
 import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
 import { hasPermission, Permissions, resolveChannelPermissions } from "../../utils/permissions";
+import { useServerStore } from "../../stores/serverStore";
+import * as memberApi from "../../api/members";
 import Avatar from "../shared/Avatar";
 import { IconSpeaker, IconSpeakerOff, IconSpeakerMuted, IconMic, IconMicMuted, IconHeadphones, IconHeadphonesMuted } from "../shared/Icons";
+import ModDurationPicker, { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "../members/ModDurationPicker";
 
 type VoiceUserContextMenuProps = {
   userId: string;
@@ -78,8 +81,18 @@ function VoiceUserContextMenu({
   const canMuteMembers = hasPermission(channelPerms, Permissions.MuteMembers);
   const canDeafenMembers = hasPermission(channelPerms, Permissions.DeafenMembers);
   const canMoveMembers = hasPermission(channelPerms, Permissions.MoveMembers);
+  // Timeout + temp ban are SERVER-level perms (not channel-overridable),
+  // so check basePerms not channelPerms. Self-mute would be silly so
+  // also exclude when the target is the viewer.
+  const isMe = userId === currentUser?.id;
+  const canTimeout = !isMe && hasPermission(basePerms, Permissions.TimeoutMembers);
+  const canBanTemp = !isMe && hasPermission(basePerms, Permissions.BanMembers);
 
-  const hasAnyModPerm = canMuteMembers || canDeafenMembers || canMoveMembers;
+  const hasAnyModPerm = canMuteMembers || canDeafenMembers || canMoveMembers || canTimeout || canBanTemp;
+
+  // Duration picker state. null = closed; "timeout" / "tempban" selects
+  // which preset list + which API to fire on selection.
+  const [pickerMode, setPickerMode] = useState<"timeout" | "tempban" | null>(null);
 
   // Voice channels for "Move to Channel" (exclude target's current channel)
   const voiceChannels = useMemo(() => {
@@ -204,7 +217,30 @@ function VoiceUserContextMenu({
     [userId, wsSend, onClose]
   );
 
+  const handleTimeoutPick = useCallback(
+    async (seconds: number) => {
+      setPickerMode(null);
+      const serverId = useServerStore.getState().activeServerId;
+      if (!serverId) return;
+      await memberApi.timeoutMember(serverId, userId, seconds, "");
+      onClose();
+    },
+    [userId, onClose]
+  );
+
+  const handleTempBanPick = useCallback(
+    async (seconds: number) => {
+      setPickerMode(null);
+      const serverId = useServerStore.getState().activeServerId;
+      if (!serverId) return;
+      await memberApi.banMember(serverId, userId, "", seconds);
+      onClose();
+    },
+    [userId, onClose]
+  );
+
   return createPortal(
+    <>
     <div
       ref={menuRef}
       className="voice-ctx-menu"
@@ -305,6 +341,38 @@ function VoiceUserContextMenu({
               </button>
             )}
 
+            {/* Discord-style server-wide timeout — disables messaging + voice
+                until expiry. Hovers next to "kick from voice" because the
+                two are sibling moderator escalations. */}
+            {canTimeout && (
+              <button
+                className="voice-ctx-item danger"
+                onClick={() => setPickerMode("timeout")}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                {t("timeout", { ns: "common", defaultValue: "Sustur" })}
+              </button>
+            )}
+
+            {/* Temp ban — kicks the user AND blocks rejoin until expires_at.
+                Permanent ban stays on the MemberCard; here we keep the menu
+                short and only surface the duration-based variant. */}
+            {canBanTemp && (
+              <button
+                className="voice-ctx-item danger"
+                onClick={() => setPickerMode("tempban")}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                </svg>
+                {t("tempBan", { ns: "common", defaultValue: "Geçici yasak" })}
+              </button>
+            )}
+
             {canMoveMembers && voiceChannels.length > 0 && (
               <div className="voice-ctx-move-wrap">
                 <button
@@ -344,7 +412,32 @@ function VoiceUserContextMenu({
           </>
         )}
       </div>
-    </div>,
+    </div>
+
+    {/* Duration picker — outside the menu div so it stays open even
+        after the menu auto-closes via the outside-click handler.
+        ModDurationPicker has its own backdrop + Escape handling. */}
+    {pickerMode === "timeout" && (
+      <ModDurationPicker
+        title={t("timeout", { ns: "common", defaultValue: "Sustur" })}
+        subtitle={t("timeoutForUser", { ns: "common", username: name })}
+        variant="timeout"
+        presets={TIMEOUT_PRESETS}
+        onPick={handleTimeoutPick}
+        onCancel={() => setPickerMode(null)}
+      />
+    )}
+    {pickerMode === "tempban" && (
+      <ModDurationPicker
+        title={t("tempBan", { ns: "common", defaultValue: "Geçici yasak" })}
+        subtitle={t("timeoutForUser", { ns: "common", username: name })}
+        variant="ban"
+        presets={TEMPBAN_PRESETS}
+        onPick={handleTempBanPick}
+        onCancel={() => setPickerMode(null)}
+      />
+    )}
+    </>,
     document.body
   );
 }
