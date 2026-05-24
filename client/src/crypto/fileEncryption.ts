@@ -51,8 +51,36 @@ export type EncryptedThumbnailResult = {
 // File Encryption
 // ──────────────────────────────────
 
+/**
+ * Hard upper bound on file size for the current single-shot encrypt path.
+ *
+ * Web Crypto's AES-GCM requires the complete plaintext upfront (the auth
+ * tag covers the whole input), so we end up holding plaintext + ciphertext
+ * in RAM simultaneously. At 100MB+ this routinely OOMs the renderer in
+ * Chromium and silently kills the tab — the user gets a "Aw, snap!" with
+ * no idea their attempted upload was the cause.
+ *
+ * We refuse anything above 64MB with a clear error so the failure mode is
+ * a friendly toast instead of a tab crash. Self-hosters who raise the
+ * server-side UPLOAD_MAX_SIZE beyond this will need the chunked-streaming
+ * encrypt refactor (tracked as a follow-up — design notes in audit plan
+ * H14): AES-GCM-SIV with per-chunk nonces, or age-style STREAM
+ * construction over AES-256-GCM with sequential chunk IDs in the AAD.
+ */
+const SINGLE_SHOT_MAX_BYTES = 64 * 1024 * 1024; // 64 MB
+
 /** Encrypt a file with AES-256-GCM. Generates random key + IV, computes SHA-256 hash. */
 export async function encryptFile(file: File): Promise<EncryptedFileResult> {
+  if (file.size > SINGLE_SHOT_MAX_BYTES) {
+    throw new Error(
+      `File ${file.name} is too large for E2EE encryption ` +
+        `(${(file.size / 1024 / 1024).toFixed(1)}MB > ` +
+        `${SINGLE_SHOT_MAX_BYTES / 1024 / 1024}MB limit). ` +
+        `Streaming encryption is not yet implemented — split the file or ` +
+        `disable E2EE for this upload.`,
+    );
+  }
+
   // Random AES-256 key and 12-byte IV
   const fileKey = crypto.getRandomValues(new Uint8Array(32));
   const fileIV = crypto.getRandomValues(new Uint8Array(12));

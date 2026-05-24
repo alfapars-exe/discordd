@@ -1,0 +1,22 @@
+-- Migration 066: per-user JWT token version (revocation support).
+--
+-- Why this column exists:
+--
+-- Until now there was no way to revoke an issued access token before its
+-- exp claim. A user who realized their session was compromised could
+-- change their password (which only stops future logins), but any access
+-- token already in an attacker's hands kept working for the rest of its
+-- TTL (15min by default — long enough for substantial damage).
+--
+-- We now embed a `tv` claim in every access token. ValidateAccessToken
+-- rejects any token whose tv claim is below the current users.token_version.
+-- "Logout from all devices" bumps token_version by 1, which simultaneously
+-- invalidates every outstanding access token for that user.
+--
+-- DEFAULT 0 + NOT NULL so existing tokens (with no tv claim → treated as
+-- tv=0) keep working until they expire naturally. After one full token
+-- TTL has elapsed, every live token has been re-issued with the real tv.
+ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0;
+
+-- Index lookup is unnecessary: token_version is only read alongside the
+-- existing GetByID path which already targets the primary-key row.

@@ -179,6 +179,31 @@ export async function handleVoiceEvent(
       useVoiceStore.getState().handleVoiceReplaced();
       return true;
 
+    case "voice_passphrase_rotated": {
+      // Server rotated the SFrame E2EE passphrase (typically because a
+      // member was kicked/banned/moved out of the channel). We update the
+      // store so subsequent LiveKit (re)connects use the new key, then
+      // emit a re-key request. The just-departed user does NOT receive
+      // this event — they're already off the recipient list server-side.
+      const data = msg.d as { channel_id: string; passphrase: string };
+      const vs = useVoiceStore.getState();
+      if (vs.currentVoiceChannelId !== data.channel_id) {
+        // Stale event for a channel we're no longer in — ignore.
+        return true;
+      }
+      useVoiceStore.setState({ e2eePassphrase: data.passphrase });
+      // useVoice hook subscribes to e2eePassphrase changes and rotates
+      // the LiveKit room's encryption key in place. If the LiveKit SDK
+      // does not support hot re-key (older versions), the hook falls back
+      // to a leave + rejoin cycle on the same channel — invisible to
+      // peers because the WS voice_state remains stable across the swap.
+      console.warn("[ws] voice_passphrase_rotated APPLIED", {
+        channel: data.channel_id,
+        timestamp: new Date().toISOString(),
+      });
+      return true;
+    }
+
     case "music_bot_state": {
       // Backend pushes the full per-channel state on every queue/track/pause
       // change. We just overwrite our cache; the panel re-renders.

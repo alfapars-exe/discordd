@@ -9,9 +9,25 @@
  * import `getMainWindow()` when they need to send events to the renderer.
  */
 
-import { app, BrowserWindow, Menu, screen } from "electron";
+import { app, BrowserWindow, Menu, screen, shell } from "electron";
 import path from "path";
 import { getSettings, getWindowBounds, saveWindowBounds, WindowBounds } from "./settings";
+
+// Origins the renderer is allowed to navigate to in-place. Anything else
+// (an external link in a message, a phishing redirect, a misconfigured
+// invite URL) is opened in the user's default browser instead of being
+// rendered inside the chromeless Electron window — where the URL bar is
+// hidden and a malicious site can convincingly impersonate the app.
+const allowedNavigationOrigins: ReadonlyArray<string> = [
+  // Production bundle loads from disk; preserves SPA history navigation.
+  "file://",
+  // Local dev server (electron:dev runs Vite on 3030).
+  "http://localhost:3030",
+];
+
+function isInternalNavigation(target: string): boolean {
+  return allowedNavigationOrigins.some((o) => target.startsWith(o));
+}
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -76,6 +92,19 @@ export function createMainWindow(): BrowserWindow {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // sandbox: true puts the renderer + preload into Chromium's
+      // OS-level sandbox. Combined with contextIsolation this makes the
+      // common XSS-to-RCE chain (loadModule via shared globals,
+      // process.* leakage, fs access from renderer) materially harder.
+      // Preload code can still use contextBridge.exposeInMainWorld and
+      // ipcRenderer — no functional impact for our IPC surface.
+      sandbox: true,
+      // webSecurity is on by default, but setting it explicitly documents
+      // intent and prevents an accidental flip during a future refactor.
+      webSecurity: true,
+      // Block stale Chromium feature flags / DevTools shortcuts from
+      // exposing data via the renderer when the app is packaged.
+      devTools: !app.isPackaged,
       backgroundThrottling: false,
     },
   });
@@ -115,9 +144,45 @@ export function createMainWindow(): BrowserWindow {
     mainWindow.loadFile(path.join(__dirname, "../client/dist/index.html"));
   }
 
-  // F12 toggles DevTools in production too — useful for user-side debugging
-  mainWindow.webContents.on("before-input-event", (_e, input) => {
-    if (input.key === "F12") mainWindow?.webContents.toggleDevTools();
+  // F12 toggles DevTools — only in development. Leaving DevTools accessible
+  // in production lets a curious user (or someone with brief physical access)
+  // read session tokens out of memory, inspect E2EE state, and copy/paste
+  // their access token to leak it. The forensic value isn't worth the risk
+  // for a Discord-class app; users on Electron get the same support story
+  // as the desktop competitors (no DevTools in shipped builds).
+  if (isDev) {
+    mainWindow.webContents.on("before-input-event", (_e, input) => {
+      if (input.key === "F12") mainWindow?.webContents.toggleDevTools();
+    });
+  }
+
+  // Navigation policy: external URLs open in the user's default browser,
+  // never inside our chromeless window. A phishing link in a message that
+  // resolved inside the Electron shell could impersonate the app perfectly
+  // (no URL bar, our logo at the title) — punting to the OS browser shows
+  // the real address and the user's installed extensions/malware filters.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // shell.openExternal validates the URL with the OS — invalid schemes
+    // (file://, javascript:, custom protocols) silently fail to open.
+    // We still gate on http(s) explicitly to avoid handing weird URIs
+    // to OS handlers that might do something surprising.
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+
+  // Block in-place navigation away from the bundle. The renderer normally
+  // uses React Router (which doesn't trigger will-navigate), so any real
+  // navigation event here is either a user-clicked external link that
+  // slipped past setWindowOpenHandler or an injected redirect attempt.
+  mainWindow.webContents.on("will-navigate", (e, url) => {
+    if (!isInternalNavigation(url)) {
+      e.preventDefault();
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        shell.openExternal(url);
+      }
+    }
   });
 
   // Close-to-tray: hide instead of quit unless tray Quit was clicked

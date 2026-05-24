@@ -138,28 +138,62 @@ export async function encryptDMMessage(
     throw new Error("RECIPIENT_NO_KEYS");
   }
 
-  // Encrypt for each recipient device
+  // Encrypt for each recipient device. Legacy devices (no signing_key)
+  // are flagged in the e2eeStore so the UI can render an "incompatible
+  // device" banner against this DM. We still produce envelopes for the
+  // OTHER recipient devices (modern ones) so the conversation stays
+  // partially functional — only the legacy device is left out, and the
+  // banner explains why.
+  let sawLegacyDevice = false;
   for (const bundle of recipientBundles.data) {
-    const envelope = await encryptForDevice(
-      recipientUserId,
-      bundle,
-      localDeviceId,
-      plaintext
-    );
-    envelopes.push(envelope);
+    try {
+      const envelope = await encryptForDevice(
+        recipientUserId,
+        bundle,
+        localDeviceId,
+        plaintext,
+      );
+      envelopes.push(envelope);
+    } catch (err) {
+      if (err instanceof LegacyDeviceError) {
+        useE2EEStore.getState().markIncompatibleDevice(err.userId, err.deviceId);
+        sawLegacyDevice = true;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (envelopes.length === 0 && sawLegacyDevice) {
+    // ALL recipient devices are legacy — caller can't send the message at
+    // all. Re-throw the most-specific error so the UI shows the right banner.
+    throw new LegacyDeviceError(recipientUserId, recipientBundles.data[0].device_id);
   }
 
   // Self-fanout: encrypt for sender's other devices.
-  // Always force PreKey messages — after recovery restore, only key material
-  // exists (no session state), so regular messages can't be decrypted.
+  //
+  // Earlier code deleted the existing session before every send to force
+  // a PreKey message — this guaranteed the other device could decrypt
+  // even after a recovery restore wiped its ratchet state. But it cost
+  // a fresh X3DH (4 DH operations) and a prekey consumption on every
+  // single self-DM, which is wasteful and burns through the prekey pool.
+  //
+  // New strategy: only force a fresh PreKey when we suspect the receiver
+  // lost its session — specifically when this is the first self-fanout
+  // since our own startup, or when we explicitly know we just restored.
+  // The recovery-aware flag is tracked in metadata under "self_fanout_reset".
+  // After one successful re-handshake the flag clears and subsequent sends
+  // re-use the Double Ratchet session.
+  const needsReset = (await keyStorage.getMetadata<boolean>("self_fanout_reset")) === true;
   const selfBundles = await e2eeApi.fetchPreKeyBundles(currentUserId);
   if (selfBundles.success && selfBundles.data) {
     for (const bundle of selfBundles.data) {
       // Skip own device
       if (bundle.device_id === localDeviceId) continue;
 
-      // Delete existing session to force PreKey message for recovery compatibility
-      await keyStorage.deleteSession(currentUserId, bundle.device_id);
+      if (needsReset) {
+        await keyStorage.deleteSession(currentUserId, bundle.device_id);
+      }
 
       const envelope = await encryptForDevice(
         currentUserId,
@@ -169,9 +203,51 @@ export async function encryptDMMessage(
       );
       envelopes.push(envelope);
     }
+    if (needsReset) {
+      // Clear the flag — we've done the expensive handshake for every
+      // self-device. Subsequent sends use the established Double Ratchet
+      // session, getting forward secrecy without per-message cost.
+      await keyStorage.setMetadata("self_fanout_reset", false);
+    }
   }
 
   return envelopes;
+}
+
+/**
+ * Signals that the next encryptDMMessage should delete every self-device
+ * session and force a fresh PreKey handshake. Call after a recovery
+ * restore (so the recovered device has the new ratchet state) or any time
+ * other-device session state is suspect.
+ */
+export async function markSelfFanoutNeedsReset(): Promise<void> {
+  await keyStorage.setMetadata("self_fanout_reset", true);
+}
+
+/**
+ * Thrown when a peer device's prekey bundle is missing the dedicated
+ * Ed25519 signing key required by the post-C5 protocol. Caught by
+ * encryptDMMessage so the calling UI can render an "incompatible device"
+ * banner instead of surfacing a raw stack trace.
+ *
+ * userId + deviceId pinpoint exactly which peer needs to re-register;
+ * the e2eeStore.incompatibleDevices Set keys off these so the banner
+ * targets the right conversation.
+ */
+export class LegacyDeviceError extends Error {
+  readonly userId: string;
+  readonly deviceId: string;
+
+  constructor(userId: string, deviceId: string) {
+    super(
+      `Peer device ${userId}:${deviceId} uses the legacy E2EE format ` +
+        `(no Ed25519 signing key). They must update their app and re-register ` +
+        `their device before encrypted messages can be exchanged.`,
+    );
+    this.name = "LegacyDeviceError";
+    this.userId = userId;
+    this.deviceId = deviceId;
+  }
 }
 
 /** Encrypt for a single device. Establishes X3DH session if none exists. */
@@ -181,12 +257,23 @@ async function encryptForDevice(
   senderDeviceId: string,
   plaintext: string
 ): Promise<EncryptedEnvelope> {
-  // Establish session if needed (X3DH key agreement)
+  // Establish session if needed (X3DH key agreement).
+  //
+  // A dedicated signing_key is required for prekey-signature verification.
+  // Earlier code fell back to identity_key (an X25519 public key) when
+  // signing_key was missing — but X25519 public keys are not valid
+  // Ed25519 points, so the verification would silently fail or accept
+  // anything depending on the implementation. We now refuse to start a
+  // session with a bundle that doesn't carry a real signing key; the
+  // remote device must re-register (signalProtocol.generateAllKeys now
+  // always produces one).
   if (!(await signalProtocol.hasSessionFor(userId, bundle.device_id))) {
+    if (!bundle.signing_key) {
+      throw new LegacyDeviceError(userId, bundle.device_id);
+    }
     await signalProtocol.processPreKeyBundle(userId, bundle.device_id, {
       identityKey: bundle.identity_key,
-      // Fallback to identity_key for legacy devices without signing_key
-      signingKey: bundle.signing_key ?? bundle.identity_key,
+      signingKey: bundle.signing_key,
       signedPrekeyId: bundle.signed_prekey_id,
       signedPrekey: bundle.signed_prekey,
       signedPrekeySignature: bundle.signed_prekey_signature,

@@ -81,17 +81,88 @@ if (app.requestSingleInstanceLock()) {
   app.quit();
 }
 
-/** Auto-grant the media + display-capture + fullscreen permissions we always need. */
+/**
+ * Auto-grant media/display-capture/fullscreen permissions, but only for
+ * the renderer's legitimate origins. The earlier handler granted to ANY
+ * origin — a stored XSS that loaded a remote iframe could then quietly
+ * open the user's webcam/mic.
+ *
+ * Allowed:
+ *   - file:// — production bundle loaded via loadFile().
+ *   - http://localhost:3030 — Vite dev server in electron:dev.
+ *   - https://hichat.app / https://mqvi.net — official web origins, for
+ *     the rare case we point the desktop wrapper at the SaaS instance.
+ *
+ * Any other origin (data:, javascript:, untrusted https) is rejected.
+ */
 function setupPermissions(): void {
-  session.defaultSession.setPermissionRequestHandler((_w, permission, callback) => {
-    const allowed = ["media", "display-capture", "mediaKeySystem", "fullscreen"];
-    callback(allowed.includes(permission));
+  const allowedPermissions = ["media", "display-capture", "mediaKeySystem", "fullscreen"];
+  const allowedOriginPrefixes = [
+    "file://",
+    "http://localhost:3030",
+    "https://hichat.app",
+    "https://mqvi.net",
+  ];
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (!allowedPermissions.includes(permission)) {
+      callback(false);
+      return;
+    }
+    const url = webContents.getURL();
+    const allowed = allowedOriginPrefixes.some((p) => url.startsWith(p));
+    if (!allowed) {
+      console.warn(`[permissions] denied ${permission} for origin: ${url}`);
+    }
+    callback(allowed);
+  });
+}
+
+/**
+ * Inject a Content Security Policy into every renderer response.
+ *
+ * Defense-in-depth against XSS: even if a stored XSS slips past sanitization
+ * (display names, message content, link previews), the CSP blocks the
+ * attacker from loading external scripts or exfiltrating tokens via
+ * cross-origin requests.
+ *
+ * file: scheme is allowed because the production bundle loads via loadFile.
+ * connect-src is broader than the server-side CSP because the desktop app
+ * talks to arbitrary user-configured LiveKit endpoints (self-host) plus
+ * the central mqvi.net API.
+ */
+function setupCSP(): void {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const csp =
+      "default-src 'self' file:; " +
+      "script-src 'self' file:; " +
+      "style-src 'self' 'unsafe-inline' file:; " +
+      "img-src 'self' data: blob: file: https:; " +
+      "font-src 'self' data: file:; " +
+      "media-src 'self' blob: file:; " +
+      "connect-src 'self' file: ws: wss: https:; " +
+      "worker-src 'self' blob:; " +
+      "frame-ancestors 'none'; " +
+      "frame-src 'none'; " +
+      "object-src 'none'; " +
+      "base-uri 'self'";
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [csp],
+        "X-Content-Type-Options": ["nosniff"],
+        "X-Frame-Options": ["DENY"],
+        "Referrer-Policy": ["strict-origin-when-cross-origin"],
+      },
+    });
   });
 }
 
 // ─── App ready ───
 app.whenReady().then(async () => {
   setupPermissions();
+  setupCSP();
   installScreenPicker();
 
   // Pre-launch splash → check for updates → maybe download + restart

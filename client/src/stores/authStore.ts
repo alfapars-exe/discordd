@@ -116,9 +116,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     await useE2EEStore.getState().reset();
     usePreferencesStore.getState().reset();
 
-    const refreshToken = localStorage.getItem("refresh_token");
-    if (refreshToken) {
-      await authApi.logout(refreshToken);
+    // Refresh token now lives in the HttpOnly cookie — the server reads it
+    // from there during logout and clears the cookie via Set-Cookie. We
+    // still pass an empty string so the API signature stays compatible;
+    // the server's extractRefreshToken() prefers the cookie.
+    try {
+      await authApi.logout("");
+    } catch {
+      /* Network errors during logout are benign — clear local state anyway */
     }
     clearTokens();
     // Close settings modal if open (SPA doesn't reload between logout → login)

@@ -99,17 +99,35 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 			req.ReplyToID = &replyTo
 		}
 
-		// E2EE fields from multipart
+		// E2EE fields from multipart. When encryption_version=1 the client
+		// MUST supply both ciphertext and sender_device_id together —
+		// without both, the server's decrypt-side (DM fanout, E2EE log
+		// audit, search index suppression) can't route the message at all
+		// and the recipients would just see a permanently-undecryptable
+		// blob. Reject the inconsistent shape upfront so the failure is
+		// loud instead of materializing later as a "missing E2EE field"
+		// surprise during peer decrypt.
 		if ev := r.FormValue("encryption_version"); ev == "1" {
 			req.EncryptionVersion = 1
-			if ct := r.FormValue("ciphertext"); ct != "" {
-				req.Ciphertext = &ct
+			ct := r.FormValue("ciphertext")
+			sd := r.FormValue("sender_device_id")
+			if ct == "" || sd == "" {
+				pkg.ErrorWithMessage(w, http.StatusBadRequest,
+					"encryption_version=1 requires both ciphertext and sender_device_id")
+				return
 			}
-			if sd := r.FormValue("sender_device_id"); sd != "" {
-				req.SenderDeviceID = &sd
-			}
+			req.Ciphertext = &ct
+			req.SenderDeviceID = &sd
 			if em := r.FormValue("e2ee_metadata"); em != "" {
 				req.E2EEMetadata = &em
+			}
+		} else {
+			// Plaintext path: ensure no client smuggles half an E2EE payload
+			// (ciphertext without the version flag) past mass-assignment.
+			if r.FormValue("ciphertext") != "" || r.FormValue("sender_device_id") != "" {
+				pkg.ErrorWithMessage(w, http.StatusBadRequest,
+					"ciphertext/sender_device_id provided without encryption_version=1")
+				return
 			}
 		}
 
@@ -129,19 +147,37 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upload files after message creation
+	// Upload files after message creation. Failures used to be silently
+	// swallowed via `continue` — the message would land without its
+	// attachments and the user had no idea anything went wrong. We now
+	// collect per-file failures and surface them on the response so the
+	// client can re-render the message with explicit error chips.
+	type uploadFailure struct {
+		Filename string `json:"filename"`
+		Error    string `json:"error"`
+	}
+	var uploadFailures []uploadFailure
+
 	if isMultipart(contentType) && r.MultipartForm != nil {
 		isEncrypted := req.EncryptionVersion == 1
 		files := r.MultipartForm.File["files"]
 		for _, fileHeader := range files {
 			file, err := fileHeader.Open()
 			if err != nil {
+				uploadFailures = append(uploadFailures, uploadFailure{
+					Filename: fileHeader.Filename,
+					Error:    fmt.Sprintf("could not open file: %v", err),
+				})
 				continue
 			}
 
 			attachment, err := h.uploadService.Upload(r.Context(), message.ID, file, fileHeader, isEncrypted)
-			file.Close()
+			_ = file.Close()
 			if err != nil {
+				uploadFailures = append(uploadFailures, uploadFailure{
+					Filename: fileHeader.Filename,
+					Error:    err.Error(),
+				})
 				continue
 			}
 
@@ -154,6 +190,18 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast after uploads so all clients see attachments
 	h.messageService.BroadcastCreate(message)
+
+	// If some attachments failed to upload, return a multi-status response
+	// (the message itself was created, but some files didn't make it). The
+	// client should display the message with explicit failure markers per
+	// file so the user can retry the upload instead of silently losing data.
+	if len(uploadFailures) > 0 {
+		pkg.JSON(w, http.StatusMultiStatus, map[string]any{
+			"message":         message,
+			"upload_failures": uploadFailures,
+		})
+		return
+	}
 
 	pkg.JSON(w, http.StatusCreated, message)
 }

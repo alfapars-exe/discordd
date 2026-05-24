@@ -23,6 +23,20 @@ function credPath(): string {
 }
 
 export function saveCredentials(username: string, password: string): void {
+  // On Linux without libsecret installed, Electron's safeStorage falls
+  // back to a "plaintext" backend that encryptString hands back as
+  // base64-of-plaintext. Writing that to disk is functionally worse than
+  // not offering the Remember Me checkbox at all, because the user
+  // believes they're protected. Refuse to write when real encryption
+  // isn't available — the caller surfaces this as "Remember Me is
+  // unavailable on this system; install libsecret".
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error(
+      "OS credential encryption unavailable on this system " +
+        "(Linux: install libsecret-1-0; macOS/Windows should always work). " +
+        "Refusing to write plaintext-equivalent credentials to disk.",
+    );
+  }
   const payload = JSON.stringify({ username, password });
   const encrypted = safeStorage.encryptString(payload);
   writeFileSync(credPath(), encrypted);
@@ -32,6 +46,12 @@ export function loadCredentials(): Credentials | null {
   try {
     const p = credPath();
     if (!existsSync(p)) return null;
+    // If safeStorage isn't available we can't trust whatever's on disk
+    // — likely written by an older build before the availability check
+    // was added. Discard it.
+    if (!safeStorage.isEncryptionAvailable()) {
+      return null;
+    }
     const decrypted = safeStorage.decryptString(Buffer.from(readFileSync(p)));
     return JSON.parse(decrypted) as Credentials;
   } catch {

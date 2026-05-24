@@ -11,7 +11,6 @@ package services
 
 import (
 	"context"
-	"crypto/tls"
 	"io"
 	"log"
 	"net/http"
@@ -82,8 +81,13 @@ func NewMetricsCollector(
 		stopCh:           make(chan struct{}),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
+			// TLS verification is ON by default. Self-hosters whose LiveKit
+			// instance presents a self-signed cert can opt out via the
+			// LIVEKIT_INSECURE_TLS environment variable — but it must be set
+			// explicitly, so the dangerous default we shipped before can't
+			// silently expose all platform installs to MITM on metrics polls.
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: liveKitTLSConfig(),
 			},
 		},
 	}

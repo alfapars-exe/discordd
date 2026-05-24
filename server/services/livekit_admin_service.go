@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -89,9 +88,12 @@ func NewLiveKitAdminService(
 		vcpuCache:     make(map[int64]int),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
-			// TLS skip for self-signed certs on internal backend->LiveKit traffic
+			// TLS verification is ON by default. The historical "skip for
+			// self-signed certs" mode is gated on LIVEKIT_INSECURE_TLS=true
+			// so production installs are safe and self-hosters can still
+			// opt in deliberately — see services/tls.go.
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: liveKitTLSConfig(),
 			},
 		},
 	}

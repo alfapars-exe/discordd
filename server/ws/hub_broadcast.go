@@ -28,8 +28,8 @@ func (h *Hub) BroadcastToAll(event Event) {
 			select {
 			case client.send <- data:
 			default:
-				// Buffer full — slow client, disconnect
-				go func(c *Client) { h.unregister <- c }(client)
+				// Buffer full — slow client, queue for disconnect
+				h.queueUnregister(client)
 			}
 		}
 	}
@@ -65,7 +65,7 @@ func (h *Hub) BroadcastToUsers(userIDs []string, event Event) {
 			select {
 			case client.send <- data:
 			default:
-				go func(c *Client) { h.unregister <- c }(client)
+				h.queueUnregister(client)
 			}
 		}
 	}
@@ -92,7 +92,7 @@ func (h *Hub) BroadcastToAllExcept(excludeUserID string, event Event) {
 			select {
 			case client.send <- data:
 			default:
-				go func(c *Client) { h.unregister <- c }(client)
+				h.queueUnregister(client)
 			}
 		}
 	}
@@ -116,7 +116,7 @@ func (h *Hub) BroadcastToUser(userID string, event Event) {
 			select {
 			case client.send <- data:
 			default:
-				go func(c *Client) { h.unregister <- c }(client)
+				h.queueUnregister(client)
 			}
 		}
 	}

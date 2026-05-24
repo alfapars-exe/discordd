@@ -155,10 +155,15 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		participantName = displayName
 	}
 
+	// Token TTL 1h (was 24h). Moderation actions (kick, ban, timeout) need
+	// to take effect within minutes — a 24h token meant a kicked user
+	// could re-join the room until their token expired the next day. With
+	// a 1h cap the client just re-requests via /voice/token; the request
+	// re-evaluates timeout/perm state, so a kick is enforced on next renew.
 	at.AddGrant(grant).
 		SetIdentity(userID).
 		SetName(participantName).
-		SetValidFor(24 * time.Hour)
+		SetValidFor(time.Hour)
 
 	token, err := at.ToJWT()
 	if err != nil {
@@ -239,10 +244,13 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		participantName = displayName + " (Screen)"
 	}
 
+	// Screen share token TTL kept at 1h. Long screen-share sessions just
+	// trigger a token refresh — that's cheaper than leaving a stolen token
+	// usable for hours after a moderation event.
 	at.AddGrant(grant).
 		SetIdentity(ssIdentity).
 		SetName(participantName).
-		SetValidFor(4 * time.Hour)
+		SetValidFor(time.Hour)
 
 	token, err := at.ToJWT()
 	if err != nil {

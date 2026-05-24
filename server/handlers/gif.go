@@ -4,10 +4,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -143,8 +145,24 @@ type klipyMedia struct {
 	Size   int    `json:"size"`
 }
 
+// errKlipyBadURL is returned when fetchKlipyResults gets a URL that
+// doesn't point at the Klipy API. The check is deliberately strict
+// (prefix match against the constant klipyBaseURL) — even if a future
+// caller composes the URL incorrectly, we won't issue arbitrary HTTP
+// requests on behalf of the server. Without this guard the function is
+// an SSRF primitive that any code path with a Go-string handle to it
+// could weaponize (intranet scans, AWS metadata read, etc.).
+var errKlipyBadURL = errors.New("klipy URL outside allowed origin")
+
 func fetchKlipyResults(url string) ([]GifResult, bool, error) {
-	resp, err := http.Get(url)
+	// Hard URL guard. Reject anything that isn't a full HTTPS URL on the
+	// expected Klipy origin — including http:// downgrade attempts and
+	// look-alike hosts (api.klipy.com.attacker.example).
+	if !strings.HasPrefix(url, klipyBaseURL+"/") {
+		return nil, false, errKlipyBadURL
+	}
+
+	resp, err := http.Get(url) // #nosec G107 — URL validated above
 	if err != nil {
 		return nil, false, fmt.Errorf("klipy request failed: %w", err)
 	}

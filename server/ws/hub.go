@@ -103,14 +103,25 @@ type Hub struct {
 
 	// Structured app logger — set in main.go
 	appLogger AppLogger
+
+	// Defense-in-depth check for voice moderation events delivered over WS.
+	// Nil-safe — when absent, legacy single-layer behaviour applies. Set in main.go.
+	voiceAdminAuthz VoiceAdminAuthorizer
 }
 
 func NewHub() *Hub {
 	return &Hub{
 		clients:        make(map[string]map[*Client]bool),
 		serverClients:  make(map[string]map[*Client]bool),
-		register:       make(chan *Client),
-		unregister:     make(chan *Client),
+		register:       make(chan *Client, 64),
+		// Buffered unregister channel: broadcast paths that detect a slow
+		// client spawn a goroutine to push onto this channel. If the Run
+		// loop is momentarily busy processing other registers, the buffer
+		// lets those goroutines complete and exit instead of piling up
+		// blocked on a synchronous send. 256 is enough headroom for a
+		// thundering-herd disconnect (server restart, network blip) and
+		// still bounded so it can't grow without limit.
+		unregister:     make(chan *Client, 256),
 		userInfos:      make(map[string]cachedUserInfo),
 		invisibleUsers: make(map[string]bool),
 	}
@@ -128,6 +139,24 @@ func (h *Hub) Run() {
 		case client := <-h.unregister:
 			h.removeClient(client)
 		}
+	}
+}
+
+// queueUnregister enqueues a slow client for disconnection without
+// blocking the caller. Used by every broadcast path that detects a full
+// send buffer — we want broadcasts to make forward progress instead of
+// stalling on a synchronous unregister handoff. The buffered channel
+// (NewHub) provides headroom; this select-default protects against the
+// pathological case where the buffer is also full (which can only happen
+// if hundreds of clients fail send simultaneously and the Run loop is
+// momentarily blocked). In that case we drop the duplicate enqueue —
+// the read-pump will hit its error and unregister itself on its own
+// goroutine soon enough.
+func (h *Hub) queueUnregister(c *Client) {
+	select {
+	case h.unregister <- c:
+	default:
+		// Buffer full; client will be unregistered via its read-pump exit.
 	}
 }
 

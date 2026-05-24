@@ -1,0 +1,103 @@
+name: Server CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Cancel in-flight runs when a new commit lands on the same branch/PR.
+# Release tag builds still run independently via build-desktop.yml.
+concurrency:
+  group: server-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ─── Go server: vet + test + build ───
+  server-test:
+    name: Go test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: server/go.sum
+
+      # go-libsql (database/database.go) is a CGO-only driver.
+      # Ubuntu runners ship with gcc, so CGO defaults to enabled here.
+      # build-desktop.yml's CGO_ENABLED=0 release build is intentionally
+      # broken for libsql (it's marked continue-on-error there); this CI
+      # validates the development build path that actually compiles.
+      - name: go vet
+        run: go vet ./...
+        working-directory: server
+
+      - name: go test (race + cover)
+        run: go test -race -cover -timeout=5m ./...
+        working-directory: server
+
+      - name: go build
+        run: go build -trimpath -o /tmp/mqvi-server .
+        working-directory: server
+
+  # ─── Go server: lint (advisory until baseline is clean) ───
+  # Marked continue-on-error so first-pass lint findings don't block PRs
+  # while the team triages the baseline. Flip to a hard gate once the
+  # findings list is empty.
+  server-lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: server/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: server
+          args: --timeout=5m
+
+  # ─── React client: lint + type check + test + build ───
+  client-check:
+    name: Client lint, type, test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: client
+
+      - name: ESLint
+        run: npm run lint
+        working-directory: client
+
+      - name: Vitest
+        run: npm test
+        working-directory: client
+
+      # `npm run build` runs `tsc -b && vite build` — covers type checking
+      # and production bundle in one step.
+      - name: Build
+        run: npm run build
+        working-directory: client

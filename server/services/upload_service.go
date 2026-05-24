@@ -79,15 +79,22 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	safeFilename := sanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
-	destPath := filepath.Join(s.uploadDir, diskFilename)
-	destFile, err := os.Create(destPath)
+	// SafeJoin verifies the destination stays inside uploadDir even
+	// though diskFilename is already built from a random prefix and a
+	// sanitized name — defense in depth against a future refactor that
+	// might inadvertently relax sanitizeFilename.
+	destPath, err := pkg.SafeJoin(s.uploadDir, diskFilename)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
+	}
+	destFile, err := os.Create(destPath) // #nosec G304 — path containment verified by SafeJoin
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	defer destFile.Close()
 
 	if _, err := io.Copy(destFile, file); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath)
 		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
 
@@ -101,7 +108,7 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	}
 
 	if err := s.attachmentRepo.Create(ctx, attachment); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath)
 		return nil, fmt.Errorf("failed to create attachment record: %w", err)
 	}
 

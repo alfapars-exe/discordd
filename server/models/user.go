@@ -43,6 +43,11 @@ type User struct {
 	PlatformBanReason     string     `json:"-"`
 	PlatformBannedBy  string     `json:"-"`
 	PlatformBannedAt  *time.Time `json:"-"`
+	// TokenVersion is the revocation counter embedded in JWT "tv" claims.
+	// Bumped by "logout from all devices" to invalidate every outstanding
+	// access token in one DB write. Never exposed to clients (the live
+	// session reads it via the access token claim, not the user payload).
+	TokenVersion      int        `json:"-"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -31,7 +32,7 @@ type AuthService interface {
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateAccessToken(tokenString string) (*models.TokenClaims, error)
-	ChangePassword(ctx context.Context, userID, newPassword string) error
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 	ChangeEmail(ctx context.Context, userID, password, newEmail string) error
 
 	// ForgotPassword sends a password reset email.
@@ -61,6 +62,22 @@ type authService struct {
 	jwtSecret   []byte
 	accessExp   time.Duration
 	refreshExp  time.Duration
+
+	// usedRefreshTokens remembers refresh tokens we've already consumed
+	// (rotated out of the sessions table) for refreshExp + small buffer.
+	// If a second refresh request arrives with the same token, that's a
+	// reuse attempt — almost always means the token was leaked. We
+	// invalidate every session for that user as defense in depth.
+	usedRefreshMu sync.Mutex
+	usedRefresh   map[string]usedRefreshEntry
+}
+
+// usedRefreshEntry records a recently-consumed refresh token. We store the
+// owning user ID so the reuse-detection path can blast all their sessions
+// without re-querying the DB (the token's session row is already gone).
+type usedRefreshEntry struct {
+	userID    string
+	expiresAt time.Time
 }
 
 func (s *authService) SetAppLogger(logger AuthAppLogger) {
@@ -83,7 +100,7 @@ func NewAuthService(
 	accessExpMinutes int,
 	refreshExpDays int,
 ) AuthService {
-	return &authService{
+	s := &authService{
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		resetRepo:   resetRepo,
@@ -92,7 +109,39 @@ func NewAuthService(
 		jwtSecret:   []byte(jwtSecret),
 		accessExp:   time.Duration(accessExpMinutes) * time.Minute,
 		refreshExp:  time.Duration(refreshExpDays) * 24 * time.Hour,
+		usedRefresh: make(map[string]usedRefreshEntry, 128),
 	}
+	// Background sweep so the used-refresh map can't grow unbounded if a
+	// large user base actively rotates tokens. Sweep cadence = refreshExp/4
+	// is plenty: entries expire long before they'd matter, and the sweep
+	// just bounds memory.
+	go s.usedRefreshSweepLoop()
+	return s
+}
+
+// usedRefreshSweepLoop evicts expired entries from usedRefresh once an hour.
+// Runs for the life of the process.
+func (s *authService) usedRefreshSweepLoop() {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		s.usedRefreshMu.Lock()
+		for k, v := range s.usedRefresh {
+			if now.After(v.expiresAt) {
+				delete(s.usedRefresh, k)
+			}
+		}
+		s.usedRefreshMu.Unlock()
+	}
+}
+
+// hashRefreshToken returns the SHA-256 of a refresh token. Used as the
+// map key in usedRefresh so we never store raw tokens in memory longer
+// than the single rotation request.
+func hashRefreshToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 // Register creates a new user account.
@@ -184,9 +233,31 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*Aut
 }
 
 func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error) {
+	tokenHash := hashRefreshToken(refreshToken)
+
 	session, err := s.sessionRepo.GetByRefreshToken(ctx, refreshToken)
 	if err != nil {
 		if errors.Is(err, pkg.ErrNotFound) {
+			// Token isn't in the active sessions table. Either it expired
+			// and was cleaned up, or it was rotated out by a previous
+			// refresh. The latter case is the dangerous one — refresh
+			// token reuse strongly suggests theft. Check the recent
+			// rotation cache.
+			s.usedRefreshMu.Lock()
+			entry, wasUsed := s.usedRefresh[tokenHash]
+			s.usedRefreshMu.Unlock()
+			if wasUsed && time.Now().Before(entry.expiresAt) {
+				// Reuse detected. The legitimate session already rotated
+				// away from this token; anyone presenting it now is
+				// almost certainly the attacker. Kill every session for
+				// this user and bump their token_version so any access
+				// token the attacker holds is dead on the next request.
+				log.Printf("[auth] SECURITY: refresh token reuse detected for user %s — invalidating all sessions", entry.userID)
+				s.logWarn(&entry.userID, "Refresh token reuse detected — all sessions invalidated", nil)
+				_ = s.sessionRepo.DeleteByUserID(ctx, entry.userID)
+				_ = s.userRepo.IncrementTokenVersion(ctx, entry.userID)
+				return nil, fmt.Errorf("%w: token reuse detected, all sessions invalidated", pkg.ErrUnauthorized)
+			}
 			return nil, fmt.Errorf("%w: invalid refresh token", pkg.ErrUnauthorized)
 		}
 		return nil, err
@@ -202,6 +273,17 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 	if err := s.sessionRepo.DeleteByID(ctx, session.ID); err != nil {
 		return nil, fmt.Errorf("failed to delete old session: %w", err)
 	}
+
+	// Mark this token as consumed so a second presentation triggers the
+	// reuse-detection branch above. Window matches the refresh token's
+	// original TTL — anything older than that is uninteresting because
+	// it would fail expiry checks anyway.
+	s.usedRefreshMu.Lock()
+	s.usedRefresh[tokenHash] = usedRefreshEntry{
+		userID:    session.UserID,
+		expiresAt: time.Now().Add(s.refreshExp),
+	}
+	s.usedRefreshMu.Unlock()
 
 	user, err := s.userRepo.GetByID(ctx, session.UserID)
 	if err != nil {
@@ -251,18 +333,56 @@ func (s *authService) ValidateAccessToken(tokenString string) (*models.TokenClai
 		return nil, fmt.Errorf("%w: invalid token claims", pkg.ErrUnauthorized)
 	}
 
+	// Token-version (revocation) check: a "logout from all devices" bumps
+	// users.token_version, which makes every outstanding access token's
+	// tv claim < current version → rejected here.
+	//
+	// Legacy tokens issued before migration 066 have no tv claim, which
+	// decodes to TokenVersion=0. New users also start at token_version=0,
+	// so legacy tokens validate cleanly until their first
+	// revocation event. Background DB read is unavoidable; the user_cache
+	// in AuthMiddleware absorbs the load.
+	user, err := s.userRepo.GetByID(context.Background(), claims.UserID)
+	if err != nil {
+		// Treat missing-user as an invalid token. Returning the raw lookup
+		// error would leak DB shape to clients.
+		return nil, fmt.Errorf("%w: user not found", pkg.ErrUnauthorized)
+	}
+	if claims.TokenVersion < user.TokenVersion {
+		return nil, fmt.Errorf("%w: token revoked (logged out from all devices)", pkg.ErrUnauthorized)
+	}
+
 	return claims, nil
 }
 
 // ChangePassword sets a new password for the authenticated user. The session
 // is the proof-of-identity; we don't re-verify the current password.
-func (s *authService) ChangePassword(ctx context.Context, userID, newPassword string) error {
+// ChangePassword updates the user's password after verifying the current one.
+//
+// Verifying currentPassword (not just the JWT) protects against:
+//   - Stolen access tokens — attacker with the JWT alone can't lock the user out
+//   - Brief unattended-session takeover (shared device, kiosk, screen-share)
+//   - XSS-exfiltrated tokens — the attacker still needs the password
+//
+// Re-asking for the password on top of an authenticated session is the
+// industry standard (Discord, Slack, GitHub, Google all do this). The minor
+// UX friction is worth the defense-in-depth.
+func (s *authService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
 	if len(newPassword) < 6 {
 		return fmt.Errorf("%w: password must be at least 6 characters", pkg.ErrBadRequest)
 	}
+	if currentPassword == "" {
+		return fmt.Errorf("%w: current password is required", pkg.ErrBadRequest)
+	}
 
-	if _, err := s.userRepo.GetByID(ctx, userID); err != nil {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
 		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		s.logWarn(&userID, "password change attempted with wrong current password", nil)
+		return fmt.Errorf("%w: current password is incorrect", pkg.ErrUnauthorized)
 	}
 
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
@@ -270,7 +390,21 @@ func (s *authService) ChangePassword(ctx context.Context, userID, newPassword st
 		return fmt.Errorf("failed to hash new password: %w", err)
 	}
 
-	return s.userRepo.UpdatePassword(ctx, userID, string(newHash))
+	if err := s.userRepo.UpdatePassword(ctx, userID, string(newHash)); err != nil {
+		return err
+	}
+
+	// Bump token_version so every outstanding JWT for this user is
+	// invalidated immediately. A password change is the strongest signal
+	// the user wants to lock out all current sessions — anything still
+	// using the old credentials (including the attacker who triggered
+	// the change) gets booted. Best-effort: if the bump fails, the
+	// password is still changed (caller's primary intent), we just log.
+	if err := s.userRepo.IncrementTokenVersion(ctx, userID); err != nil {
+		log.Printf("[auth] WARN failed to bump token_version after password change for %s: %v", userID, err)
+	}
+
+	return nil
 }
 
 func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmail string) error {
@@ -424,9 +558,13 @@ func (s *authService) ResetPassword(ctx context.Context, token, newPassword stri
 
 func (s *authService) generateTokens(ctx context.Context, user *models.User) (*AuthTokens, error) {
 	now := time.Now()
+	// Embed the current token_version so future "logout from all devices"
+	// can invalidate this token by bumping users.token_version above the
+	// embedded value. See ValidateAccessToken + migration 066.
 	accessClaims := &models.TokenClaims{
-		UserID:   user.ID,
-		Username: user.Username,
+		UserID:       user.ID,
+		Username:     user.Username,
+		TokenVersion: user.TokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.accessExp)),
 			IssuedAt:  jwt.NewNumericDate(now),

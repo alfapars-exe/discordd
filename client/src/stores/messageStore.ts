@@ -70,6 +70,26 @@ type MessageState = {
  */
 const fetchedChannels = new Set<string>();
 
+/**
+ * Per-channel AbortController for in-flight fetchMessages calls. When the
+ * user switches channels (or this store's invalidateFetchCache is called),
+ * any pending request for the abandoned channel is aborted so its late
+ * setState can't trample the active channel's view.
+ *
+ * Keyed by channelId so two channels fetching concurrently don't cancel
+ * each other — only a SECOND fetch for the SAME channel aborts the first.
+ */
+const inflightFetches = new Map<string, AbortController>();
+
+/** Abort an in-flight fetch for the given channel, if any. */
+function abortChannelFetch(channelId: string): void {
+  const ctrl = inflightFetches.get(channelId);
+  if (ctrl) {
+    ctrl.abort();
+    inflightFetches.delete(channelId);
+  }
+}
+
 export const useMessageStore = create<MessageState>((set, get) => ({
   messagesByChannel: {},
   hasMoreByChannel: {},
@@ -80,6 +100,13 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   scrollToMessageId: null,
 
   invalidateFetchCache: () => {
+    // Cancel any in-flight fetches; their late completion would re-populate
+    // messagesByChannel with stale ciphertext encrypted against the
+    // pre-restore E2EE state.
+    for (const ctrl of inflightFetches.values()) {
+      ctrl.abort();
+    }
+    inflightFetches.clear();
     fetchedChannels.clear();
     set({ messagesByChannel: {}, hasMoreByChannel: {} });
   },
@@ -87,17 +114,42 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   fetchMessages: async (channelId, explicitServerId?) => {
     if (fetchedChannels.has(channelId)) return;
 
+    // If a previous fetch for this channel is still in flight, cancel it.
+    // The two main triggers: user spam-clicking channels, and E2EE store
+    // refreshing then re-triggering a fetch. Either way we don't want the
+    // late response to clobber whatever the user is now looking at.
+    abortChannelFetch(channelId);
+    const controller = new AbortController();
+    inflightFetches.set(channelId, controller);
+
     set({ isLoading: true });
 
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
-    if (!serverId) { set({ isLoading: false }); return; }
+    if (!serverId) {
+      inflightFetches.delete(channelId);
+      set({ isLoading: false });
+      return;
+    }
 
     const res = await messageApi.getMessages(serverId, channelId, undefined, DEFAULT_MESSAGE_LIMIT);
+
+    // Aborted while the request was in flight — drop the response. Cache
+    // invalidate also aborts, so this branch covers both user-switch and
+    // E2EE-rotation cases without polluting messagesByChannel.
+    if (controller.signal.aborted) {
+      return;
+    }
+    inflightFetches.delete(channelId);
+
     if (res.success && res.data) {
       fetchedChannels.add(channelId);
 
       // Go nil slice -> JSON null; fallback to empty array
       const apiMessages = await decryptChannelMessages(res.data.messages ?? []);
+
+      // Re-check abort after the async decrypt — a fast channel-switch
+      // during decryption would otherwise still write stale content.
+      if (controller.signal.aborted) return;
 
       set((state) => {
         // Merge WS-buffered messages that arrived during fetch

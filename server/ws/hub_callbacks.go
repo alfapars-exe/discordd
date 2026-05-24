@@ -65,6 +65,34 @@ type P2PSignalCallback func(senderID string, data P2PSignalData)
 // Wired in main.go: validates channel access, broadcasts to server members only.
 type ChannelTypingCallback func(senderUserID, senderUsername, channelID string)
 
+// VoiceAdminAuthorizer is the WS-layer defense-in-depth check for moderator
+// actions delivered over WebSocket (admin mute/deafen, move user, disconnect
+// user). The service layer also enforces the permission downstream, but
+// rejecting unauthorized events here prevents bogus traffic from ever
+// reaching the service goroutine pool. It also fail-closes the system —
+// if a service callback ever forgets its own check, the WS layer still
+// blocks the attack.
+//
+// Returns true iff the actor holds the necessary moderation permission
+// over the target. Nil-safe: when the authorizer isn't wired (tests,
+// bootstrap), the check is skipped and the legacy single-layer behaviour
+// applies.
+type VoiceAdminAuthorizer interface {
+	CanModerateVoiceTarget(ctx VoiceModerationContext) bool
+}
+
+// VoiceModerationContext is the input to a defense-in-depth authorization
+// check. The authorizer typically looks up the target user's current voice
+// channel, resolves the channel's server, and checks the actor's server
+// permissions there.
+type VoiceModerationContext struct {
+	ActorUserID  string
+	TargetUserID string
+	// Action is one of "mute", "move", "disconnect" — drives which permission
+	// bit the authorizer requires.
+	Action string
+}
+
 // ─── DM Callback Types ───
 
 // DMTypingCallback — typing indicator in a DM channel.
@@ -159,4 +187,23 @@ func (h *Hub) OnDMTyping(cb DMTypingCallback) {
 
 func (h *Hub) OnScreenShareWatch(cb ScreenShareWatchCallback) {
 	h.onScreenShareWatch = cb
+}
+
+// SetVoiceAdminAuthorizer wires the WS-layer defense-in-depth check for
+// voice moderation events. Nil-safe (legacy behavior if absent).
+func (h *Hub) SetVoiceAdminAuthorizer(a VoiceAdminAuthorizer) {
+	h.voiceAdminAuthz = a
+}
+
+// authorizeVoiceModeration returns true if the action is allowed (or no
+// authorizer is wired). Centralizes the nil-check.
+func (h *Hub) authorizeVoiceModeration(actorID, targetID, action string) bool {
+	if h.voiceAdminAuthz == nil {
+		return true // No authorizer wired — fall through to legacy single-layer check.
+	}
+	return h.voiceAdminAuthz.CanModerateVoiceTarget(VoiceModerationContext{
+		ActorUserID:  actorID,
+		TargetUserID: targetID,
+		Action:       action,
+	})
 }

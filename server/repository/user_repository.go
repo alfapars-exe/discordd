@@ -16,6 +16,10 @@ type UserRepository interface {
 	UpdateStatus(ctx context.Context, userID string, status models.UserStatus) error
 	UpdatePrefStatus(ctx context.Context, userID string, prefStatus models.UserStatus) error
 	UpdatePassword(ctx context.Context, userID string, newPasswordHash string) error
+	// IncrementTokenVersion bumps users.token_version; every outstanding
+	// JWT access token for this user is invalidated on its next validation.
+	// Used by "logout from all devices" and recommended on password change.
+	IncrementTokenVersion(ctx context.Context, userID string) error
 	// UpdateEmail sets or clears the user's email. nil removes, *string sets.
 	UpdateEmail(ctx context.Context, userID string, email *string) error
 	UpdateWallpaper(ctx context.Context, userID string, wallpaperURL *string) error

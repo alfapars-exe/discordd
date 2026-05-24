@@ -183,7 +183,11 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	state.ChannelID = targetChannelID
 	state.ServerID = targetServerID
 
-	s.cleanupRoomPassphraseIfEmpty(sourceChannelID)
+	// Involuntary move: the moved user knew the source channel's SFrame
+	// passphrase. Rotate so the source channel's continued voice traffic
+	// can't be decrypted by the moved user from their new vantage point.
+	movedSourceRotated := s.rotateOrCleanupPassphrase(sourceChannelID)
+	sourceRemaining := s.remainingChannelMembers(sourceChannelID)
 
 	// Broadcast leave(source) + join(target). If both channels are on the same
 	// server, one BroadcastToServer covers both events' audiences.
@@ -231,6 +235,18 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		Op:   ws.OpVoiceForceMove,
 		Data: ws.VoiceForceMoveData{ChannelID: targetChannelID},
 	})
+
+	// Tell remaining members of the source channel to re-key (excludes the
+	// moved user — they get a fresh passphrase on join via voice/token).
+	for _, newPassphrase := range movedSourceRotated {
+		s.hub.BroadcastToUsers(sourceRemaining, ws.Event{
+			Op: ws.OpVoicePassphraseRotated,
+			Data: ws.VoicePassphraseRotatedData{
+				ChannelID:  sourceChannelID,
+				Passphrase: newPassphrase,
+			},
+		})
+	}
 
 	// Remove phantom from old LiveKit room (best-effort)
 	go s.removeParticipantFromLiveKit(sourceChannelID, targetUserID)
@@ -298,13 +314,30 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 		},
 	})
 
-	s.cleanupRoomPassphraseIfEmpty(channelID)
+	// Forward secrecy for involuntary disconnect: the kicked user might have
+	// the SFrame passphrase in memory. Rotating it for remaining members
+	// guarantees that traffic published after this moment cannot be decrypted
+	// with the leaked passphrase. Empty channels just clean up as before.
+	rotatedRooms := s.rotateOrCleanupPassphrase(channelID)
+	remaining := s.remainingChannelMembers(channelID)
 
 	s.mu.Unlock()
 
 	s.hub.BroadcastToUser(targetUserID, ws.Event{
 		Op: ws.OpVoiceForceDisconnect,
 	})
+
+	// Push the new passphrase to remaining channel members so they re-key
+	// their LiveKit session. The just-kicked user is intentionally excluded.
+	for _, newPassphrase := range rotatedRooms {
+		s.hub.BroadcastToUsers(remaining, ws.Event{
+			Op: ws.OpVoicePassphraseRotated,
+			Data: ws.VoicePassphraseRotatedData{
+				ChannelID:  channelID,
+				Passphrase: newPassphrase,
+			},
+		})
+	}
 
 	go s.removeParticipantFromLiveKit(channelID, targetUserID)
 

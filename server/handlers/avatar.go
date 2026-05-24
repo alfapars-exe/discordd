@@ -194,15 +194,18 @@ func (h *AvatarHandler) processUpload(r *http.Request) (string, error) {
 	safeFilename := sanitizeAvatarFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
-	destPath := filepath.Join(h.uploadDir, diskFilename)
-	destFile, err := os.Create(destPath)
+	destPath, err := pkg.SafeJoin(h.uploadDir, diskFilename)
+	if err != nil {
+		return "", fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
+	}
+	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	defer destFile.Close()
 
 	if _, err := io.Copy(destFile, file); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath)
 		return "", fmt.Errorf("failed to save file: %w", err)
 	}
 

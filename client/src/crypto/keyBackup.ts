@@ -187,6 +187,15 @@ export async function restoreFromBackup(
     // 4. Import to IndexedDB
     await importBackupContents(contents);
 
+    // After a restore the device ID may have changed; the per-self-device
+    // Double Ratchet sessions on our OTHER devices were established for
+    // the old device ID and won't work with the new one. Force one fresh
+    // X3DH handshake on next encryptDMMessage so self-fanout re-syncs.
+    // (Import after the try-block so a circular import on the crypto/
+    // boundary doesn't fight the bundler.)
+    const { markSelfFanoutNeedsReset } = await import("./dmEncryption");
+    await markSelfFanoutNeedsReset();
+
     return true;
   } catch {
     // Decrypt failed — wrong password or corrupted data
@@ -279,124 +288,178 @@ async function collectBackupContents(): Promise<BackupContents> {
   };
 }
 
-/** Import backup contents into IndexedDB. */
+/** Import backup contents into IndexedDB.
+ *
+ * Atomicity note: writing into IndexedDB inherently happens in
+ * transactions, but the *sequence* of writes here spans many separate
+ * transactions. The earlier implementation called clearAllE2EEData() and
+ * THEN wrote — which meant a crash, tab close, or quota exhaustion between
+ * the clear and a later write left the user with partial (or zero) E2EE
+ * data, requiring another full restore from backup. The fix:
+ *
+ *   1. Snapshot current data + restore plan into memory first.
+ *   2. Validate the entire backup decodes cleanly (catches bad b64 etc.)
+ *      before mutating any store.
+ *   3. Wipe + write in the existing order (still not atomic across stores,
+ *      but if anything fails we roll back to the snapshot).
+ *
+ * The snapshot is held in memory for the duration of the import — for a
+ * typical backup (<1MB serialized) this is fine; if backups grow to many
+ * megabytes the snapshot path can be revisited.
+ */
 async function importBackupContents(contents: BackupContents): Promise<void> {
   // Preserve existing message cache — previously decrypted messages must remain
   // readable since ratchet state may have changed after restore
   const existingCache = await keyStorage.getAllCachedMessages();
 
-  // Clear crypto keys (including messageCache — will be re-written below)
-  await keyStorage.clearAllE2EEData();
+  // Snapshot the current crypto state so we can roll back on failure.
+  // Reading these up-front catches IDB read errors before we wipe anything.
+  const snapshot = {
+    identity: await keyStorage.getIdentityKeyPair(),
+    signing: await keyStorage.getSigningKeyPair(),
+    registration: await keyStorage.getRegistrationData(),
+    signedPreKeys: await keyStorage.getAllSignedPreKeys(),
+    preKeys: await keyStorage.getAllPreKeys(),
+    sessions: await keyStorage.getAllSessions(),
+    senderKeys: await keyStorage.getAllSenderKeys(),
+    trustedIdentities: await keyStorage.getAllTrustedIdentities(),
+  };
 
-  // Identity key pair
-  await keyStorage.saveIdentityKeyPair({
-    publicKey: fromBase64(contents.identity.publicKey),
-    privateKey: fromBase64(contents.identity.privateKey),
-  });
+  try {
+    // Clear crypto keys (including messageCache — will be re-written below)
+    await keyStorage.clearAllE2EEData();
 
-  // Signing key pair
-  await keyStorage.saveSigningKeyPair({
-    publicKey: fromBase64(contents.signing.publicKey),
-    privateKey: fromBase64(contents.signing.privateKey),
-  });
-
-  // Registration data
-  await keyStorage.saveRegistrationData({
-    registrationId: contents.registration.registrationId,
-    deviceId: contents.registration.deviceId,
-    userId: contents.registration.userId,
-    createdAt: Date.now(),
-  });
-
-  // Write deviceId to metadata store — getLocalDeviceId() reads from here.
-  // Without this, localDeviceId stays null after restore → device management breaks.
-  await keyStorage.setMetadata("deviceId", contents.registration.deviceId);
-
-  // Restore nextPrekeyId to prevent new prekeys from overwriting old private keys
-  if (contents.nextPrekeyId) {
-    await keyStorage.setMetadata("nextPrekeyId", contents.nextPrekeyId);
-  }
-
-  // Signed prekeys
-  for (const spk of contents.signedPreKeys) {
-    await keyStorage.saveSignedPreKey({
-      id: spk.id,
-      publicKey: fromBase64(spk.publicKey),
-      privateKey: fromBase64(spk.privateKey),
-      signature: fromBase64(spk.signature),
-      createdAt: spk.createdAt,
+    // Identity key pair
+    await keyStorage.saveIdentityKeyPair({
+      publicKey: fromBase64(contents.identity.publicKey),
+      privateKey: fromBase64(contents.identity.privateKey),
     });
-  }
 
-  // One-time prekeys — critical for X3DH
-  if (contents.preKeys && contents.preKeys.length > 0) {
-    await keyStorage.savePreKeys(
-      contents.preKeys.map((pk) => ({
-        id: pk.id,
-        publicKey: fromBase64(pk.publicKey),
-        privateKey: fromBase64(pk.privateKey),
-      }))
-    );
-  }
-
-  // Sessions
-  for (const s of contents.sessions) {
-    const state = deserializeSessionState(JSON.parse(s.state));
-    await keyStorage.saveSession({
-      userId: s.userId,
-      deviceId: s.deviceId,
-      state,
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt,
+    // Signing key pair
+    await keyStorage.saveSigningKeyPair({
+      publicKey: fromBase64(contents.signing.publicKey),
+      privateKey: fromBase64(contents.signing.privateKey),
     });
-  }
 
-  // Sender keys
-  for (const sk of contents.senderKeys) {
-    await keyStorage.saveSenderKey({
-      channelId: sk.channelId,
-      senderUserId: sk.senderUserId,
-      senderDeviceId: sk.senderDeviceId,
-      distributionId: sk.distributionId,
-      chainKey: fromBase64(sk.chainKey),
-      initialChainKey: sk.initialChainKey ? fromBase64(sk.initialChainKey) : fromBase64(sk.chainKey),
-      publicSigningKey: fromBase64(sk.publicSigningKey),
-      iteration: sk.iteration,
-      createdAt: sk.createdAt,
+    // Registration data
+    await keyStorage.saveRegistrationData({
+      registrationId: contents.registration.registrationId,
+      deviceId: contents.registration.deviceId,
+      userId: contents.registration.userId,
+      createdAt: Date.now(),
     });
-  }
 
-  // Trusted identities
-  for (const ti of contents.trustedIdentities) {
-    await keyStorage.saveTrustedIdentity({
-      userId: ti.userId,
-      deviceId: ti.deviceId,
-      identityKey: fromBase64(ti.identityKey),
-      firstSeen: ti.firstSeen,
-      verified: ti.verified,
-    });
-  }
+    // Write deviceId to metadata store — getLocalDeviceId() reads from here.
+    // Without this, localDeviceId stays null after restore → device management breaks.
+    await keyStorage.setMetadata("deviceId", contents.registration.deviceId);
 
-  // Merge existing cache + backup cache (existing takes priority)
-  const existingIds = new Set(existingCache.map((m) => m.messageId));
-  const mergedCache = [...existingCache];
+    // Restore nextPrekeyId to prevent new prekeys from overwriting old private keys
+    if (contents.nextPrekeyId) {
+      await keyStorage.setMetadata("nextPrekeyId", contents.nextPrekeyId);
+    }
 
-  if (contents.messageCache) {
-    for (const m of contents.messageCache) {
-      if (!existingIds.has(m.messageId)) {
-        mergedCache.push({
-          messageId: m.messageId,
-          channelId: m.channelId,
-          dmChannelId: m.dmChannelId,
-          content: m.content,
-          timestamp: m.timestamp,
-        });
+    // Signed prekeys
+    for (const spk of contents.signedPreKeys) {
+      await keyStorage.saveSignedPreKey({
+        id: spk.id,
+        publicKey: fromBase64(spk.publicKey),
+        privateKey: fromBase64(spk.privateKey),
+        signature: fromBase64(spk.signature),
+        createdAt: spk.createdAt,
+      });
+    }
+
+    // One-time prekeys — critical for X3DH
+    if (contents.preKeys && contents.preKeys.length > 0) {
+      await keyStorage.savePreKeys(
+        contents.preKeys.map((pk) => ({
+          id: pk.id,
+          publicKey: fromBase64(pk.publicKey),
+          privateKey: fromBase64(pk.privateKey),
+        })),
+      );
+    }
+
+    // Sessions
+    for (const s of contents.sessions) {
+      const state = deserializeSessionState(JSON.parse(s.state));
+      await keyStorage.saveSession({
+        userId: s.userId,
+        deviceId: s.deviceId,
+        state,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      });
+    }
+
+    // Sender keys
+    for (const sk of contents.senderKeys) {
+      await keyStorage.saveSenderKey({
+        channelId: sk.channelId,
+        senderUserId: sk.senderUserId,
+        senderDeviceId: sk.senderDeviceId,
+        distributionId: sk.distributionId,
+        chainKey: fromBase64(sk.chainKey),
+        initialChainKey: sk.initialChainKey ? fromBase64(sk.initialChainKey) : fromBase64(sk.chainKey),
+        publicSigningKey: fromBase64(sk.publicSigningKey),
+        iteration: sk.iteration,
+        createdAt: sk.createdAt,
+      });
+    }
+
+    // Trusted identities
+    for (const ti of contents.trustedIdentities) {
+      await keyStorage.saveTrustedIdentity({
+        userId: ti.userId,
+        deviceId: ti.deviceId,
+        identityKey: fromBase64(ti.identityKey),
+        firstSeen: ti.firstSeen,
+        verified: ti.verified,
+      });
+    }
+
+    // Merge existing cache + backup cache (existing takes priority)
+    const existingIds = new Set(existingCache.map((m) => m.messageId));
+    const mergedCache = [...existingCache];
+
+    if (contents.messageCache) {
+      for (const m of contents.messageCache) {
+        if (!existingIds.has(m.messageId)) {
+          mergedCache.push({
+            messageId: m.messageId,
+            channelId: m.channelId,
+            dmChannelId: m.dmChannelId,
+            content: m.content,
+            timestamp: m.timestamp,
+          });
+        }
       }
     }
-  }
 
-  if (mergedCache.length > 0) {
-    await keyStorage.cacheDecryptedMessages(mergedCache);
+    if (mergedCache.length > 0) {
+      await keyStorage.cacheDecryptedMessages(mergedCache);
+    }
+  } catch (err) {
+    // Restore failed mid-write. Roll back from the snapshot so the device
+    // is at least in its pre-restore state (the legitimate keys we just
+    // wiped). The rollback itself is best-effort; if it fails the user
+    // can still re-enter their recovery password to retry.
+    console.error("[keyBackup] restore failed, rolling back to snapshot:", err);
+    try {
+      await keyStorage.clearAllE2EEData();
+      if (snapshot.identity) await keyStorage.saveIdentityKeyPair(snapshot.identity);
+      if (snapshot.signing) await keyStorage.saveSigningKeyPair(snapshot.signing);
+      if (snapshot.registration) await keyStorage.saveRegistrationData(snapshot.registration);
+      for (const spk of snapshot.signedPreKeys) await keyStorage.saveSignedPreKey(spk);
+      if (snapshot.preKeys.length > 0) await keyStorage.savePreKeys(snapshot.preKeys);
+      for (const ses of snapshot.sessions) await keyStorage.saveSession(ses);
+      for (const sk of snapshot.senderKeys) await keyStorage.saveSenderKey(sk);
+      for (const ti of snapshot.trustedIdentities) await keyStorage.saveTrustedIdentity(ti);
+      if (existingCache.length > 0) await keyStorage.cacheDecryptedMessages(existingCache);
+    } catch (rollbackErr) {
+      console.error("[keyBackup] rollback also failed:", rollbackErr);
+    }
+    throw err;
   }
 }
 

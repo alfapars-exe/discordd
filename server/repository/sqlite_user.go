@@ -53,7 +53,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at
 		FROM users WHERE id = ?`
 
 	user := &models.User{}
@@ -62,6 +62,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 		&user.PasswordHash, &user.Status, &user.PrefStatus, &user.CustomStatus, &user.Email,
 		&user.Language, &user.DMPrivacy, &user.IsPlatformAdmin, &user.IsPlatformBanned, &user.HasSeenDownloadPrompt, &user.HasSeenWelcome,
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
+		&user.TokenVersion,
 		&user.CreatedAt,
 	)
 
@@ -79,7 +80,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at
 		FROM users WHERE username = ? COLLATE NOCASE`
 
 	user := &models.User{}
@@ -88,6 +89,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 		&user.PasswordHash, &user.Status, &user.PrefStatus, &user.CustomStatus, &user.Email,
 		&user.Language, &user.DMPrivacy, &user.IsPlatformAdmin, &user.IsPlatformBanned, &user.HasSeenDownloadPrompt, &user.HasSeenWelcome,
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
+		&user.TokenVersion,
 		&user.CreatedAt,
 	)
 
@@ -99,6 +101,23 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 	}
 
 	return user, nil
+}
+
+// IncrementTokenVersion bumps users.token_version by 1, which invalidates
+// every outstanding JWT access token for this user via the tv claim check
+// in authService.ValidateAccessToken. Used by "logout from all devices".
+//
+// Refresh tokens are revoked separately by deleting their rows from the
+// sessions table — token_version only governs short-lived access tokens.
+func (r *sqliteUserRepo) IncrementTokenVersion(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET token_version = token_version + 1 WHERE id = ?`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to increment token_version: %w", err)
+	}
+	return nil
 }
 
 func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {

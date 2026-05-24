@@ -51,15 +51,36 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 		}
 		log.Printf("[database] using remote libSQL backend")
 	} else {
-		// Local SQLite file — ensure parent directory exists.
+		// Local SQLite file — ensure parent directory exists. 0750 keeps
+		// the DB file's parent directory closed to "other" on the host so
+		// a sibling user account can't enumerate or copy mqvi.db without
+		// privilege escalation. (The DB file itself is created by SQLite
+		// with its own restrictive perms.)
 		dir := filepath.Dir(dbPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return nil, fmt.Errorf("failed to create database directory: %w", err)
 		}
 
-		// foreign_keys=on (off by default in SQLite), journal_mode=WAL for concurrent r/w,
-		// busy_timeout=5000ms lets concurrent writers wait instead of returning SQLITE_BUSY immediately.
-		conn, err = sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+		// SQLite tuning for Discord-class workloads:
+		//   - foreign_keys=on: SQLite ships with FKs disabled; we always want them on.
+		//   - journal_mode=WAL: concurrent readers + single writer; massively better
+		//     than default rollback journal for chat workloads.
+		//   - busy_timeout=5000: writers retry for up to 5s before SQLITE_BUSY surfaces,
+		//     so brief lock contention during heartbeat broadcasts doesn't fail requests.
+		//   - synchronous=NORMAL: with WAL, NORMAL is the SQLite-recommended balance
+		//     between durability and throughput. The full FULL mode fsyncs on every
+		//     commit (slow); NORMAL fsyncs on checkpoint and keeps power-loss safety.
+		//   - cache_size=-65536: 64 MiB page cache. Hot rows (recent messages, active
+		//     sessions, channel index) live in memory instead of bouncing to disk.
+		//     Negative value = KiB; ~5x default.
+		//   - temp_store=MEMORY: spill temp tables to RAM not disk. Helps FTS5 queries.
+		conn, err = sql.Open("sqlite", dbPath+
+			"?_pragma=foreign_keys(1)"+
+			"&_pragma=journal_mode(WAL)"+
+			"&_pragma=busy_timeout(5000)"+
+			"&_pragma=synchronous(NORMAL)"+
+			"&_pragma=cache_size(-65536)"+
+			"&_pragma=temp_store(MEMORY)")
 		if err != nil {
 			return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 		}

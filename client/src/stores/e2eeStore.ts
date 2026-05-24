@@ -43,6 +43,13 @@ type E2EEState = {
   showRecoveryPrompt: boolean;
   /** Whether the user dismissed the recovery prompt in this session. */
   recoveryPromptDismissed: boolean;
+  /**
+   * Peer devices that ship the pre-C5 key bundle shape (no Ed25519
+   * signing_key). encryptDMMessage flags them on first contact via
+   * LegacyDeviceError; the UI renders an "incompatible device" banner
+   * for the affected conversation. Keyed by "userId:deviceId".
+   */
+  incompatibleDevices: Set<string>;
 
   // ─── Actions ───
 
@@ -60,6 +67,10 @@ type E2EEState = {
   clearDecryptionErrors: (channelId: string) => void;
   /** Generate and upload new prekey batch when server signals low count. */
   handlePrekeyLow: () => Promise<void>;
+  /** Record a peer device that uses the legacy (pre-C5) bundle format. */
+  markIncompatibleDevice: (userId: string, deviceId: string) => void;
+  /** Clear the incompatible mark — call after the peer re-registers. */
+  clearIncompatibleDevice: (userId: string, deviceId: string) => void;
   /** Reset Zustand state on logout. IndexedDB keys are preserved. */
   reset: () => Promise<void>;
 };

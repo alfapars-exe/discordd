@@ -33,6 +33,62 @@ import {
 } from "./types";
 
 // ──────────────────────────────────
+// Identity Key Change Detection (MITM warning)
+// ──────────────────────────────────
+
+/** Captured snapshot of an identity-key change for a remote device. */
+export type IdentityKeyChange = {
+  userId: string;
+  deviceId: string;
+  /** Identity key we'd trusted previously (base64 X25519 public). */
+  previousKey: string;
+  /** Identity key the server is now offering (base64 X25519 public). */
+  newKey: string;
+  detectedAt: number;
+};
+
+// In-memory queue of pending identity-key changes that the UI layer hasn't
+// surfaced yet. The store/UI polls drainIdentityKeyChanges() to display a
+// "Safety number changed for {user}" banner.
+const pendingIdentityChanges: IdentityKeyChange[] = [];
+const identityChangeListeners: Array<() => void> = [];
+
+function recordIdentityKeyChange(
+  userId: string,
+  deviceId: string,
+  previousKey: Uint8Array,
+  newKey: Uint8Array,
+): void {
+  pendingIdentityChanges.push({
+    userId,
+    deviceId,
+    previousKey: toBase64(previousKey),
+    newKey: toBase64(newKey),
+    detectedAt: Date.now(),
+  });
+  // Fire listeners outside the push so a subscriber that reads the queue
+  // synchronously doesn't see a half-updated state.
+  for (const fn of identityChangeListeners) {
+    try { fn(); } catch { /* listener exceptions are not our problem */ }
+  }
+}
+
+/** Drain and return all pending identity-key changes. */
+export function drainIdentityKeyChanges(): IdentityKeyChange[] {
+  const out = pendingIdentityChanges.splice(0, pendingIdentityChanges.length);
+  return out;
+}
+
+/** Subscribe to identity-key-change events. Returns an unsubscribe fn. */
+export function onIdentityKeyChange(fn: () => void): () => void {
+  identityChangeListeners.push(fn);
+  return () => {
+    const idx = identityChangeListeners.indexOf(fn);
+    if (idx >= 0) identityChangeListeners.splice(idx, 1);
+  };
+}
+
+// ──────────────────────────────────
 // Base64 Utilities
 // ──────────────────────────────────
 
@@ -85,18 +141,27 @@ export async function generateAllKeys(): Promise<{
   const identityKeyPair = generateX25519KeyPair();
   await keyStorage.saveIdentityKeyPair(identityKeyPair);
 
-  // 2. Ed25519 signing key pair — same seed, different public key format
-  const signingPublicKey = ed25519.getPublicKey(identityKeyPair.privateKey);
+  // 2. Ed25519 signing key pair — INDEPENDENT seed.
+  //
+  // Earlier versions seeded the Ed25519 keypair with the X25519 secret key,
+  // which is a known cryptographic anti-pattern (cross-protocol attack
+  // surface). Signal's reference design uses XEdDSA to derive an Ed25519
+  // signature from an X25519 key safely; @noble/curves doesn't expose
+  // XEdDSA, so we take the safer route of using an independent seed.
+  //
+  // The signing key is what the recipient verifies prekey-bundle integrity
+  // against — leaking it doesn't compromise the encryption identity, and
+  // a separate keypair removes any risk of one operation weakening the
+  // other.
+  const signingSeed = ed25519.utils.randomSecretKey();
+  const signingPublicKey = ed25519.getPublicKey(signingSeed);
   await keyStorage.saveSigningKeyPair({
     publicKey: signingPublicKey,
-    privateKey: identityKeyPair.privateKey,
+    privateKey: signingSeed,
   });
 
-  // 3. Signed prekey
-  const signedPreKey = await generateSignedPreKey(
-    identityKeyPair.privateKey,
-    1
-  );
+  // 3. Signed prekey — signed with the dedicated Ed25519 key
+  const signedPreKey = await generateSignedPreKey(signingSeed, 1);
   await keyStorage.saveSignedPreKey(signedPreKey);
 
   // 4. One-time prekeys (100)
@@ -122,15 +187,19 @@ export async function generateAllKeys(): Promise<{
   };
 }
 
-/** Generate a signed prekey, signed with Ed25519 identity key (MITM protection). */
+/**
+ * Generate a signed prekey, signed with the dedicated Ed25519 signing key
+ * (MITM protection). The parameter is the signing seed (now independent of
+ * the X25519 identity key — see generateAllKeys for the rationale).
+ */
 async function generateSignedPreKey(
-  identityPrivateKey: Uint8Array,
+  signingPrivateKey: Uint8Array,
   id: number
 ): Promise<StoredSignedPreKey> {
   const keyPair = generateX25519KeyPair();
 
   // Ed25519 signature proves prekey authenticity
-  const signature = ed25519.sign(keyPair.publicKey, identityPrivateKey);
+  const signature = ed25519.sign(keyPair.publicKey, signingPrivateKey);
 
   return {
     id,
@@ -174,13 +243,17 @@ export async function rotateSignedPreKey(newId: number): Promise<{
   publicKey: string;
   signature: string;
 }> {
-  const identityKeyPair = await keyStorage.getIdentityKeyPair();
-  if (!identityKeyPair) {
-    throw new Error("Identity key pair not found — device not initialized");
+  // Use the dedicated signing key, not the X25519 identity private key.
+  // Legacy devices may have a signing key derived from the X25519 secret
+  // (cryptographic anti-pattern); on next rotation they migrate forward
+  // because the signing key store is independently maintained.
+  const signingKeyPair = await keyStorage.getSigningKeyPair();
+  if (!signingKeyPair) {
+    throw new Error("Signing key pair not found — device not initialized");
   }
 
   const newSignedPreKey = await generateSignedPreKey(
-    identityKeyPair.privateKey,
+    signingKeyPair.privateKey,
     newId
   );
   await keyStorage.saveSignedPreKey(newSignedPreKey);
@@ -302,13 +375,32 @@ export async function processPreKeyBundle(
     skippedMessageKeys: [],
   };
 
-  // TOFU — trust on first use
+  // TOFU — trust on first use, with safety-number-change detection.
+  //
+  // Signal's threat model: a hostile server can substitute a different
+  // identity key during the prekey-bundle fetch, then MITM all subsequent
+  // messages. The fix is to remember the identity key we saw on first
+  // contact and refuse to silently overwrite it. If a future fetch hands
+  // us a different key for the same userId/deviceId, the user must be
+  // notified (this is the "Safety number changed" banner in Signal).
+  //
+  // We expose the conflict via the in-memory pendingIdentityChanges queue
+  // so the UI layer can surface a verification prompt. Encryption still
+  // proceeds with the new key (so the user can communicate), but the UI
+  // can prompt them to verify out-of-band before continuing.
+  const existingTrust = await keyStorage.getTrustedIdentity(userId, deviceId);
+  if (existingTrust && !bytesEqual(existingTrust.identityKey, theirIdentityKey)) {
+    recordIdentityKeyChange(userId, deviceId, existingTrust.identityKey, theirIdentityKey);
+  }
   await keyStorage.saveTrustedIdentity({
     userId,
     deviceId,
     identityKey: theirIdentityKey,
-    firstSeen: Date.now(),
-    verified: false,
+    firstSeen: existingTrust?.firstSeen ?? Date.now(),
+    // Reset verified flag on key change — user must re-verify the new key.
+    verified: existingTrust && bytesEqual(existingTrust.identityKey, theirIdentityKey)
+      ? existingTrust.verified
+      : false,
   });
 
   const session: StoredSession = {
@@ -433,13 +525,24 @@ export async function processPreKeyMessage(
     skippedMessageKeys: [],
   };
 
-  // TOFU
+  // TOFU + safety-number-change detection (see processPreKeyBundle).
+  const existingReceiverTrust = await keyStorage.getTrustedIdentity(senderUserId, senderDeviceId);
+  if (existingReceiverTrust && !bytesEqual(existingReceiverTrust.identityKey, senderIdentityKey)) {
+    recordIdentityKeyChange(
+      senderUserId,
+      senderDeviceId,
+      existingReceiverTrust.identityKey,
+      senderIdentityKey,
+    );
+  }
   await keyStorage.saveTrustedIdentity({
     userId: senderUserId,
     deviceId: senderDeviceId,
     identityKey: senderIdentityKey,
-    firstSeen: Date.now(),
-    verified: false,
+    firstSeen: existingReceiverTrust?.firstSeen ?? Date.now(),
+    verified: existingReceiverTrust && bytesEqual(existingReceiverTrust.identityKey, senderIdentityKey)
+      ? existingReceiverTrust.verified
+      : false,
   });
 
   await keyStorage.saveSession({
@@ -717,6 +820,37 @@ async function skipMessageKeys(
   }
 }
 
+/**
+ * Encode a MessageHeader to a canonical byte string for AES-GCM
+ * additionalData.
+ *
+ * The previous implementation used JSON.stringify(header), which is NOT a
+ * canonical serialization — JS engines aren't required to emit object
+ * keys in a fixed order, only V8 happens to. If a future client runs on
+ * JavaScriptCore (Safari) or QuickJS (Bun/embedded), the AAD bytes
+ * differ and every decryption fails. Worse, if a server-side validator
+ * ever re-encodes the header (e.g. to inject a new field), the AAD
+ * changes silently and AES-GCM authentication breaks.
+ *
+ * Canonical layout (no separators, fixed order):
+ *   [ratchetKey raw bytes (32)]
+ *   [previousChainLength as 4-byte big-endian uint]
+ *   [messageNumber       as 4-byte big-endian uint]
+ *
+ * Total: 40 bytes. Reader and writer must both implement this exact
+ * layout; a divergence is a hard decryption failure.
+ */
+function canonicalHeaderAAD(header: MessageHeader): Uint8Array {
+  const ratchet = fromBase64(header.ratchetKey);
+  const out = new Uint8Array(ratchet.length + 8);
+  out.set(ratchet, 0);
+  // 4-byte big-endian: previousChainLength
+  const view = new DataView(out.buffer, out.byteOffset + ratchet.length, 8);
+  view.setUint32(0, header.previousChainLength >>> 0, false);
+  view.setUint32(4, header.messageNumber >>> 0, false);
+  return out;
+}
+
 /** AES-256-GCM encrypt. Returns nonce (12B) + ciphertext + auth tag (16B). */
 async function aesGcmEncrypt(
   key: Uint8Array,
@@ -724,7 +858,7 @@ async function aesGcmEncrypt(
   associatedData: MessageHeader
 ): Promise<ArrayBuffer> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ad = new TextEncoder().encode(JSON.stringify(associatedData));
+  const ad = canonicalHeaderAAD(associatedData);
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
@@ -747,7 +881,14 @@ async function aesGcmEncrypt(
   return result.buffer;
 }
 
-/** AES-256-GCM decrypt. */
+/** AES-256-GCM decrypt.
+ *
+ * Tries the canonical AAD encoding first. If authentication fails, falls
+ * back to the legacy JSON.stringify(header) encoding so messages encrypted
+ * before this migration still decrypt. The fallback path can be removed
+ * after a forward-only deployment window (~30 days) once no client is
+ * sending JSON-AAD messages anymore.
+ */
 async function aesGcmDecrypt(
   key: Uint8Array,
   data: Uint8Array,
@@ -755,7 +896,6 @@ async function aesGcmDecrypt(
 ): Promise<ArrayBuffer> {
   const iv = data.slice(0, 12);
   const ciphertext = data.slice(12);
-  const ad = new TextEncoder().encode(JSON.stringify(associatedData));
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
@@ -765,11 +905,24 @@ async function aesGcmDecrypt(
     ["decrypt"]
   );
 
-  return crypto.subtle.decrypt(
-    { name: "AES-GCM", iv, additionalData: ad },
-    cryptoKey,
-    ciphertext as BufferSource
-  );
+  // Primary: canonical AAD
+  try {
+    return await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, additionalData: canonicalHeaderAAD(associatedData) },
+      cryptoKey,
+      ciphertext as BufferSource
+    );
+  } catch {
+    // Legacy fallback: JSON-serialized AAD. Catches messages encrypted by
+    // pre-migration clients. Identical attempt with the old encoding —
+    // any other failure (corrupted ciphertext, wrong key) still throws.
+    const legacyAD = new TextEncoder().encode(JSON.stringify(associatedData));
+    return await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, additionalData: legacyAD },
+      cryptoKey,
+      ciphertext as BufferSource
+    );
+  }
 }
 
 /** Concatenate multiple Uint8Arrays. */

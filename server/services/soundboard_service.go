@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -68,9 +69,13 @@ func NewSoundboardService(
 	uploadDir string,
 	maxSize int64,
 ) SoundboardService {
-	// Ensure soundboard upload directory exists
+	// Ensure soundboard upload directory exists. 0750 matches the main
+	// upload dir — group-readable for the operator's diagnostic tools,
+	// closed off from "other" so a shared host doesn't leak audio clips.
 	dir := filepath.Join(uploadDir, soundboardSubdir)
-	os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		log.Printf("[soundboard] WARN failed to create soundboard dir %s: %v", dir, err)
+	}
 
 	return &soundboardService{
 		repo:      repo,
@@ -140,9 +145,12 @@ func (s *soundboardService) Create(
 	safeFilename := sanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 	dir := filepath.Join(s.uploadDir, soundboardSubdir)
-	destPath := filepath.Join(dir, diskFilename)
+	destPath, err := pkg.SafeJoin(dir, diskFilename)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
+	}
 
-	destFile, err := os.Create(destPath)
+	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
 	if err != nil {
 		return nil, fmt.Errorf("create file: %w", err)
 	}

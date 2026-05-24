@@ -21,8 +21,76 @@ import {
   type SenderKeyMessage,
   SENDER_KEY_ROTATION_MESSAGES,
   SENDER_KEY_ROTATION_DAYS,
+  SENDER_KEY_REPLAY_WINDOW,
   HKDF_INFO,
 } from "./types";
+
+// ──────────────────────────────────
+// Replay Protection (Sliding Window)
+// ──────────────────────────────────
+
+/**
+ * Returns true if `iteration` was already decrypted under this sender key.
+ *
+ * Uses binary search on the sorted seenIterations array. If the array is
+ * absent (legacy key), no entry has been recorded yet — return false.
+ */
+function isReplay(senderKey: StoredSenderKey, iteration: number): boolean {
+  const seen = senderKey.seenIterations;
+  if (!seen || seen.length === 0) return false;
+
+  // Anything older than the window's low watermark is rejected as
+  // un-provable (we may have evicted that iteration's entry).
+  if (iteration < seen[0]) {
+    return true;
+  }
+
+  // Binary search
+  let lo = 0;
+  let hi = seen.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    if (seen[mid] === iteration) return true;
+    if (seen[mid] < iteration) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return false;
+}
+
+/**
+ * Records a successfully-decrypted iteration into the sliding window.
+ *
+ * Maintains sorted-ascending order so isReplay can binary-search. Caps at
+ * SENDER_KEY_REPLAY_WINDOW entries by evicting the oldest. Mutates the
+ * passed senderKey in place — caller is responsible for persisting.
+ */
+function recordIteration(senderKey: StoredSenderKey, iteration: number): void {
+  if (!senderKey.seenIterations) {
+    senderKey.seenIterations = [];
+  }
+  const seen = senderKey.seenIterations;
+
+  // Fast path: in-order append (most common during live messaging).
+  if (seen.length === 0 || iteration > seen[seen.length - 1]) {
+    seen.push(iteration);
+  } else {
+    // Out-of-order: insert in sorted position via binary search.
+    let lo = 0;
+    let hi = seen.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (seen[mid] < iteration) lo = mid + 1;
+      else hi = mid;
+    }
+    seen.splice(lo, 0, iteration);
+  }
+
+  // Evict oldest entries when window overflows. Slice keeps the array
+  // densely packed and predictable in memory.
+  if (seen.length > SENDER_KEY_REPLAY_WINDOW) {
+    senderKey.seenIterations = seen.slice(seen.length - SENDER_KEY_REPLAY_WINDOW);
+  }
+}
 
 // ──────────────────────────────────
 // Sender Key Distribution
@@ -198,6 +266,18 @@ export async function decryptGroupMessage(
     );
   }
 
+  // Replay protection: reject messages whose iteration we've already
+  // accepted under this distribution. Without this, an attacker (or a
+  // bug in delivery) can resurface an old ciphertext and the client will
+  // re-decrypt and re-render it. The seenIterations window covers both
+  // in-order and out-of-order paths below.
+  if (isReplay(senderKey, message.iteration)) {
+    throw new Error(
+      `Replay detected: iteration ${message.iteration} already processed ` +
+        `for distribution ${message.distributionId}`
+    );
+  }
+
   const rawData = fromBase64(message.ciphertext);
 
   // Verify signature + extract ciphertext
@@ -256,6 +336,13 @@ export async function decryptGroupMessage(
       message.iteration
     );
 
+    // Record this iteration into the replay window so a future delivery
+    // of the same ciphertext is rejected. We persist the senderKey here
+    // even though we don't mutate chainKey/iteration — only seenIterations
+    // changes.
+    recordIteration(senderKey, message.iteration);
+    await keyStorage.saveSenderKey(senderKey);
+
     return new TextDecoder().decode(plaintext);
   }
 
@@ -278,9 +365,13 @@ export async function decryptGroupMessage(
     message.iteration
   );
 
-  // Update sender key
+  // Update sender key. Recording the iteration in the replay window
+  // (in addition to advancing chainKey/iteration) closes the gap where a
+  // delivery system could replay this exact message before iteration has
+  // moved far enough past it.
   senderKey.chainKey = nextChainKey;
   senderKey.iteration = message.iteration + 1;
+  recordIteration(senderKey, message.iteration);
   await keyStorage.saveSenderKey(senderKey);
 
   return new TextDecoder().decode(plaintext);

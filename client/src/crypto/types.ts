@@ -127,7 +127,22 @@ export type StoredSenderKey = {
   /** Current iteration count */
   iteration: number;
   createdAt: number;
+  /**
+   * Sliding-window of iterations already decrypted under this distribution.
+   * Replay protection: an attacker who captures an encrypted message can't
+   * have it accepted twice. Bounded at SENDER_KEY_REPLAY_WINDOW entries —
+   * the oldest is evicted when full. Anything older than the window's low
+   * watermark is rejected outright (cannot prove non-replay).
+   *
+   * Maintained as a sorted ascending array for O(log n) binary-search check
+   * and constant-time append in the common (monotonic) path. May be absent
+   * on legacy stored keys created before this protection was added.
+   */
+  seenIterations?: number[];
 };
+
+/** Sliding-window size for sender-key replay protection. Tuned to MAX_SKIP. */
+export const SENDER_KEY_REPLAY_WINDOW = 1024;
 
 // ──────────────────────────────────
 // Trusted Identities

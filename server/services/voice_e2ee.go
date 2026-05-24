@@ -50,3 +50,72 @@ func (s *voiceService) cleanupRoomPassphraseIfEmpty(channelID string) {
 		}
 	}
 }
+
+// rotateRoomPassphraseForChannel generates a fresh SFrame passphrase for every
+// LiveKit room belonging to the given channel and returns the (roomName, new
+// passphrase) pairs. Used after a member is kicked, banned, or moved out of
+// the channel: the departing user may already hold the old passphrase, so
+// remaining members must re-key for within-session forward secrecy.
+//
+// Caller is responsible for broadcasting OpVoicePassphraseRotated to remaining
+// channel members so they apply the new key to their LiveKit room.
+//
+// Caller MUST hold mu.Lock. Returns an empty map if no rooms exist for the
+// channel (no-op).
+func (s *voiceService) rotateRoomPassphraseForChannel(channelID string) map[string]string {
+	suffix := ":" + channelID
+	rotated := make(map[string]string)
+
+	for roomName := range s.roomPassphrases {
+		if !strings.HasSuffix(roomName, suffix) {
+			continue
+		}
+
+		raw := make([]byte, 32)
+		if _, err := cryptorand.Read(raw); err != nil {
+			log.Printf("[voice] WARN passphrase rotation crypto/rand failed for room %s: %v", roomName, err)
+			continue
+		}
+		newPassphrase := base64.RawURLEncoding.EncodeToString(raw)
+		s.roomPassphrases[roomName] = newPassphrase
+		rotated[roomName] = newPassphrase
+		log.Printf("[voice] rotated E2EE passphrase for room %s (within-session forward secrecy)", roomName)
+	}
+
+	return rotated
+}
+
+// rotateOrCleanupPassphrase picks between rotation and full cleanup based on
+// whether the channel still has voice members. Use this on involuntary
+// removal events (kick / ban / move) — voluntary leave can keep using the
+// existing passphrase since the leaver isn't assumed hostile.
+//
+// Caller MUST hold mu.Lock. Returns the new passphrases that should be
+// broadcast to remaining members (one entry per LiveKit room). Returns nil
+// when the channel emptied out (no broadcast needed; cleanup already done).
+func (s *voiceService) rotateOrCleanupPassphrase(channelID string) map[string]string {
+	for _, state := range s.states {
+		if state.ChannelID == channelID {
+			// At least one member still here — rotate, don't clean.
+			return s.rotateRoomPassphraseForChannel(channelID)
+		}
+	}
+	// Empty room — delegate to existing cleanup (deletes the passphrase).
+	s.cleanupRoomPassphraseIfEmpty(channelID)
+	return nil
+}
+
+// remainingChannelMembers returns userIDs of users still in the given voice
+// channel. Used to target the OpVoicePassphraseRotated broadcast so the
+// just-kicked attacker never receives the new passphrase.
+//
+// Caller MUST hold mu.Lock.
+func (s *voiceService) remainingChannelMembers(channelID string) []string {
+	var users []string
+	for userID, state := range s.states {
+		if state.ChannelID == channelID {
+			users = append(users, userID)
+		}
+	}
+	return users
+}

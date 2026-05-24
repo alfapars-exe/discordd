@@ -108,6 +108,11 @@ const (
 	OpVoiceForceMove       = "voice_force_move"
 	OpVoiceForceDisconnect = "voice_force_disconnect"
 	OpVoiceAFKKick         = "voice_afk_kick" // user kicked for inactivity
+	// OpVoicePassphraseRotated — server notifies remaining voice-channel members
+	// that the SFrame E2EE passphrase has been rotated (e.g. after a kick or ban).
+	// Clients must apply the new passphrase to their LiveKit room so that any
+	// previously-disclosed passphrase no longer decrypts future traffic.
+	OpVoicePassphraseRotated = "voice_passphrase_rotated"
 )
 
 // P2P Call signaling flow:
@@ -281,6 +286,16 @@ type VoiceAFKKickData struct {
 	ChannelID   string `json:"channel_id"`
 	ChannelName string `json:"channel_name"`
 	ServerName  string `json:"server_name"`
+}
+
+// VoicePassphraseRotatedData — sent to all remaining members of a voice
+// channel after the SFrame E2EE passphrase is rotated. The kicked/banned
+// user does NOT receive this event (they no longer have voice access).
+// Clients re-key their LiveKit room with the new passphrase so any
+// previously-leaked passphrase can't decrypt future traffic.
+type VoicePassphraseRotatedData struct {
+	ChannelID  string `json:"channel_id"`
+	Passphrase string `json:"passphrase"`
 }
 
 // ─── P2P Call Event Data ───

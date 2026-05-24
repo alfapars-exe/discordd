@@ -97,8 +97,12 @@ func main() {
 		log.Fatalf("[main] failed to load i18n translations: %v", err)
 	}
 
-	// 4. Upload directory
-	if err := os.MkdirAll(cfg.Upload.Dir, 0755); err != nil {
+	// 4. Upload directory. 0750 (not 0755) so only the mqvi service user
+	// and group can list/read uploads — uploaded files often include
+	// encrypted attachments whose metadata leaking to "other" is undesirable.
+	// HTTP responses still serve them publicly via http.FileServer; this
+	// only restricts shell access on the host.
+	if err := os.MkdirAll(cfg.Upload.Dir, 0o750); err != nil {
 		log.Fatalf("[main] failed to create upload directory: %v", err)
 	}
 
@@ -489,16 +493,35 @@ func initFrontendFS() (fs.FS, bool) {
 }
 
 func initCORS(cfg *config.Config) (*cors.Cors, []string) {
+	// Mobile/native shells always need their custom WebView origins, even
+	// in production — these can't be replaced via CORS_ORIGINS because the
+	// install script doesn't know which mobile clients connect.
 	corsOrigins := []string{
-		"http://localhost:3030",
-		"http://localhost:1420",
 		"capacitor://localhost", // iOS Capacitor WKWebView
 		"ionic://localhost",     // iOS Capacitor (legacy scheme)
 		"http://localhost",      // Android Capacitor WebView (legacy)
 		"https://localhost",     // Android Capacitor WebView (Capacitor 6+)
-		// Hugging Face Spaces — same-origin requests come from the embed iframe.
-		"https://huggingface.co",
 	}
+
+	// Dev-only origins: the Vite proxy and Electron's hot-reload server.
+	// Including these in production CORS would let a developer's local
+	// box reach a deployed instance with credentials — small risk, but
+	// AllowCredentials=true makes it worth avoiding.
+	if !isProduction() {
+		corsOrigins = append(corsOrigins,
+			"http://localhost:3030",
+			"http://localhost:1420",
+		)
+	}
+
+	// Hugging Face Space embed: only when the operator hosts on HF and
+	// has opted in. The old default included https://huggingface.co
+	// unconditionally, which expanded the credential-bearing CORS surface
+	// to anything HF could be tricked into framing.
+	if isHFSpace() {
+		corsOrigins = append(corsOrigins, "https://huggingface.co")
+	}
+
 	if extra := os.Getenv("CORS_ORIGINS"); extra != "" {
 		for _, origin := range strings.Split(extra, ",") {
 			origin = strings.TrimSpace(origin)
@@ -516,14 +539,51 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	}), corsOrigins
 }
 
+// isProduction returns true when the server is running in a deployed
+// configuration. Deliberately conservative — defaults to production unless
+// the operator explicitly sets HICHAT_ENV=development.
+func isProduction() bool {
+	env := strings.ToLower(os.Getenv("HICHAT_ENV"))
+	return env != "development" && env != "dev"
+}
+
+// isHFSpace returns true when the process is running inside a Hugging Face
+// Space (the SDK_SPACE env var is set there).
+func isHFSpace() bool {
+	return os.Getenv("SPACE_ID") != "" || os.Getenv("SDK_SPACE") != ""
+}
+
 // securityHeaders wraps a handler with standard HTTP security headers.
 // Applied to all responses (API + static + SPA).
+//
+// CSP policy notes:
+//   - script-src 'self': no inline scripts; bundled JS only
+//   - style-src 'self' 'unsafe-inline': Tailwind/CSS-in-JS injects inline styles
+//   - img-src includes data: + blob: for avatars/attachments/E2EE thumbnails
+//   - connect-src includes wss: for WebSocket + same-origin for API
+//   - frame-ancestors 'none' + X-Frame-Options DENY = double clickjacking defense
+//   - HSTS forces HTTPS for 2 years (production deployments behind Caddy/Nginx)
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "geolocation=()")
+		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"script-src 'self'; "+
+				"style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data: blob: https:; "+
+				"font-src 'self' data:; "+
+				"media-src 'self' blob:; "+
+				"connect-src 'self' wss: https:; "+
+				"worker-src 'self' blob:; "+
+				"frame-ancestors 'none'; "+
+				"frame-src 'none'; "+
+				"object-src 'none'; "+
+				"base-uri 'self'; "+
+				"form-action 'self'")
 		next.ServeHTTP(w, r)
 	})
 }

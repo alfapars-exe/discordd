@@ -69,25 +69,47 @@ const codeToUiohook: Record<string, number> = {
 let pttTargetKeycode: number | null = null;
 let uiohookRunning = false;
 
-// Single keydown/keyup listener registered once at module load.
-// They filter by pttTargetKeycode at runtime so we don't have to add/remove
-// listeners on every register/unregister call.
+// Privacy-conscious PTT key listener.
+//
+// uIOhook is a global keyboard hook — every keystroke on the system flows
+// through these callbacks before being filtered. That makes it equivalent
+// (in capability) to a keylogger; only our code's discipline keeps it from
+// being one. Two safeguards:
+//
+//   1. We stop the hook entirely when no PTT key is registered. uIOhook
+//      is only spinning while a PTT binding exists, so a user who never
+//      configures PTT never has the hook running at all.
+//
+//   2. We branch as early as possible — first thing we do is keycode
+//      comparison. We never read modifiers, never log the keycode, never
+//      hold a reference to the event object beyond the if-condition.
+//      A future contributor extending these callbacks should preserve
+//      that property (see the // PRIVACY comments).
+//
+// The keycode itself never leaves the main process: we forward a plain
+// boolean ("ptt-global-down" / "ptt-global-up") to the renderer. The
+// renderer cannot reconstruct which physical key was pressed from those
+// signals.
 uIOhook.on("keydown", (e) => {
-  if (pttTargetKeycode !== null && e.keycode === pttTargetKeycode) {
-    getMainWindow()?.webContents.send("ptt-global-down");
-  }
+  // PRIVACY: branch on keycode FIRST. If the event is not the PTT key,
+  // return immediately — we don't read e.altKey, e.shiftKey, e.rawcode
+  // or any other field. The event object is dropped on the next GC.
+  if (pttTargetKeycode === null || e.keycode !== pttTargetKeycode) return;
+  getMainWindow()?.webContents.send("ptt-global-down");
 });
 uIOhook.on("keyup", (e) => {
-  if (pttTargetKeycode !== null && e.keycode === pttTargetKeycode) {
-    getMainWindow()?.webContents.send("ptt-global-up");
-  }
+  // PRIVACY: see keydown rationale.
+  if (pttTargetKeycode === null || e.keycode !== pttTargetKeycode) return;
+  getMainWindow()?.webContents.send("ptt-global-up");
 });
 
 function startUiohook(): void {
   if (uiohookRunning) return;
   uIOhook.start();
   uiohookRunning = true;
-  console.log("[ptt] uIOhook started");
+  // Log without revealing the bound key — operators reading the log
+  // shouldn't be able to learn user keybindings.
+  console.log("[ptt] uIOhook started (global keyboard listener active)");
 }
 
 function stopUiohook(): void {

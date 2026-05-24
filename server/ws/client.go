@@ -38,6 +38,13 @@ type Client struct {
 	// to determine the user's visible status (highest priority wins).
 	// Accessed under Hub.mu.
 	status string
+
+	// rateLimit guards inbound events from a single connection so a
+	// misbehaving (or hostile) client cannot amplify hub broadcasts by
+	// spraying typing/voice-activity events. See rate_limit.go for per-op
+	// caps. Lazily initialized on first event in handleEvent so existing
+	// addClient paths don't need to know about it.
+	rateLimit *clientRateLimiter
 }
 
 // ReadPump reads messages from the WebSocket and dispatches events.
@@ -104,7 +111,24 @@ func init() {
 }
 
 // handleEvent dispatches an incoming event to its registered handler.
+//
+// Inbound events are rate-limited per (client, op) before dispatch. A
+// dropped event is silently discarded with a warning log — never close
+// the connection, which would only force a reconnect storm and make the
+// DoS pressure worse.
 func (c *Client) handleEvent(event Event) {
+	if c.rateLimit == nil {
+		c.rateLimit = newClientRateLimiter()
+	}
+	if !c.rateLimit.allow(event.Op) {
+		// Rate-limit drops are common enough during typing storms that
+		// logging every one would flood the log. Only log every Nth or
+		// at a sampled rate in production — for now we keep it visible
+		// while the limits are being tuned.
+		log.Printf("[ws] RATE LIMIT user=%s op=%s (event dropped)", c.userID, event.Op)
+		return
+	}
+
 	if handler, ok := eventHandlers[event.Op]; ok {
 		handler(c, event)
 		return
@@ -277,6 +301,16 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 		return
 	}
 
+	// Defense-in-depth: reject at the WS layer if the actor isn't allowed
+	// to moderate the target. The service callback enforces this too, but
+	// failing closed here means a forgotten check in the service can't
+	// degrade into a moderation bypass.
+	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
+		log.Printf("[ws] DENIED voice_admin_state_update: actor=%s target=%s (insufficient perms)",
+			c.userID, data.TargetUserID)
+		return
+	}
+
 	if c.hub.onVoiceAdminStateUpdate != nil {
 		go c.hub.onVoiceAdminStateUpdate(c.userID, data.TargetUserID, data.IsServerMuted, data.IsServerDeafened)
 	}
@@ -298,6 +332,12 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 		return
 	}
 
+	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
+		log.Printf("[ws] DENIED voice_move_user: actor=%s target=%s (insufficient perms)",
+			c.userID, data.TargetUserID)
+		return
+	}
+
 	if c.hub.onVoiceMoveUser != nil {
 		go c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID)
 	}
@@ -316,6 +356,12 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 
 	if data.TargetUserID == "" {
 		log.Printf("[ws] voice_disconnect_user missing target_user_id from user %s", c.userID)
+		return
+	}
+
+	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
+		log.Printf("[ws] DENIED voice_disconnect_user: actor=%s target=%s (insufficient perms)",
+			c.userID, data.TargetUserID)
 		return
 	}
 
@@ -450,7 +496,11 @@ func (c *Client) sendEvent(event Event) {
 	case c.send <- data:
 	default:
 		log.Printf("[ws] send buffer full for user %s, dropping connection", c.userID)
-		c.hub.unregister <- c
+		// Non-blocking enqueue — see Hub.queueUnregister rationale. We're
+		// already on the client goroutine here so we don't strictly need
+		// to avoid blocking, but keeping the discipline uniform across
+		// all unregister paths prevents subtle deadlocks.
+		c.hub.queueUnregister(c)
 	}
 }
 
