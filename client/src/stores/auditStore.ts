@@ -51,7 +51,14 @@ type AuditState = {
   clearServer: (serverId: string) => void;
 };
 
-const PAGE_SIZE = 50;
+// PAGE_SIZE — bumped from 50 → 200 so opening the audit channel surfaces
+// a real history, not just the last hour of moderation activity. The
+// server caps at 100 per request so we pass 200 expecting the server
+// clamp; with a longer initial page the user is far less likely to feel
+// like older events "disappeared" (the same 50 they saw yesterday are
+// still in the list today). Older history remains accessible via the
+// scroll-to-load-more path.
+const PAGE_SIZE = 200;
 
 export const useAuditStore = create<AuditState>((set, get) => ({
   eventsByServer: {},
