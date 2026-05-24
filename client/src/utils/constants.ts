@@ -38,6 +38,37 @@ export function isNativeApp(): boolean {
   return isElectron() || isCapacitor();
 }
 
+/**
+ * Detects a *mobile browser* — Android Chrome, iOS Safari, Samsung Internet, etc.
+ * Specifically: NOT Electron, NOT Capacitor, but a phone-class touch device.
+ * Used by useScreenShareToggle to clamp resolution constraints (no 1440p on a
+ * pixel-limited phone) and by layout code to differentiate from desktop browsers
+ * where the existing flow already worked.
+ *
+ * UA-based instead of viewport-based: a desktop browser in a narrow window
+ * should still get the desktop screen-share constraints. Conversely, a tablet
+ * stylus or a Windows touchscreen at 1080p doesn't need the mobile clamp.
+ */
+export function isMobileBrowser(): boolean {
+  if (isElectron() || isCapacitor()) return false;
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent);
+}
+
+/**
+ * Feature-detects browser screen capture. iOS Safari returns false (W3C
+ * doesn't expose getDisplayMedia there); Android Chrome returns true on
+ * Android 11+. Lets the UI surface a "not supported" toast instead of
+ * silently failing.
+ */
+export function canBrowserScreenShare(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    "mediaDevices" in navigator &&
+    typeof navigator.mediaDevices.getDisplayMedia === "function"
+  );
+}
+
 // ─── Server URL Resolution ───
 
 /**

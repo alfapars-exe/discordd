@@ -55,7 +55,15 @@ function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLa
   // Android: disabled — system back gesture conflicts with left edge swipe.
   //   Users use hamburger/members buttons instead.
   // iOS: edge swipe works (no system back gesture conflict).
-  const isAndroid = getCapacitorPlatform() === "android";
+  //
+  // The check covers BOTH Capacitor-Android AND Android Chrome (mobile
+  // browser). Chrome on Android has the same back-gesture conflict at the
+  // OS level even without our app being native — without the UA branch the
+  // browser path was leaving swipe enabled and Android users were
+  // accidentally opening the drawer while trying to navigate back.
+  const isAndroid =
+    getCapacitorPlatform() === "android" ||
+    (typeof navigator !== "undefined" && /Android/.test(navigator.userAgent));
   const swipeHandlers = useSwipeGesture({
     onSwipeRight: isAndroid ? undefined : openLeftDrawer,
     onSwipeLeft: isAndroid ? undefined : openRightDrawer,

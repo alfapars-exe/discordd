@@ -7,6 +7,8 @@
   "undeafen": "Sağırlaştırmayı Kapat",
   "screenShare": "Ekran Paylaş",
   "stopScreenShare": "Paylaşımı Durdur",
+  "screenShareNotSupported": "Bu tarayıcı ekran paylaşımını desteklemiyor. Uygulamayı yükle veya Android Chrome'dan dene.",
+  "screenShareFailed": "Ekran paylaşımı başlatılamadı. Tekrar dene.",
   "voiceConnected": "Ses Bağlı",
   "noOneInVoice": "Bu ses kanalında kimse yok",
   "screenShareLimit": "Maksimum 2 ekran paylaşımına ulaşıldı",
