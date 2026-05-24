@@ -91,6 +91,25 @@ export async function removeTimeout(serverId: string, targetId: string) {
   );
 }
 
+/**
+ * Set or clear a per-server nickname. Self-rename always allowed;
+ * renaming someone else requires PermManageNicknames (server enforces).
+ * Pass an empty string to clear the nickname.
+ */
+export async function setMemberNickname(
+  serverId: string,
+  targetId: string,
+  nickname: string,
+) {
+  return apiClient<MemberWithRoles>(
+    `/servers/${serverId}/members/${targetId}/nickname`,
+    {
+      method: "PATCH",
+      body: { nickname },
+    },
+  );
+}
+
 /** Updates own profile (global, not server-scoped). */
 export async function updateProfile(data: {
   display_name?: string;

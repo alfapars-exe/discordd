@@ -11,10 +11,15 @@ import (
 // MemberWithRoles is the API-facing view of a server member.
 // Intentionally does NOT embed User to avoid leaking PasswordHash.
 type MemberWithRoles struct {
-	ID                   string     `json:"id"`
-	Username             string     `json:"username"`
-	DisplayName          *string    `json:"display_name"`
-	AvatarURL            *string    `json:"avatar_url"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName *string `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+	// Per-server nickname (migration 065). NULL when unset — clients
+	// fall back to DisplayName, then Username. Empty strings are
+	// coerced to NULL by the API layer so saving a blank value
+	// effectively clears the nickname.
+	Nickname             *string    `json:"nickname,omitempty"`
 	Status               UserStatus `json:"status"`
 	CustomStatus         *string    `json:"custom_status"`
 	CreatedAt            time.Time  `json:"created_at"`
@@ -23,7 +28,9 @@ type MemberWithRoles struct {
 }
 
 // ToMemberWithRoles builds a MemberWithRoles from a User and their roles.
-// Computes effective permissions via bitwise OR across all roles.
+// Computes effective permissions via bitwise OR across all roles. Server-
+// scoped data like the per-server nickname is filled in by the caller
+// (member_service) after fetching it from the membership row.
 func ToMemberWithRoles(user *User, roles []Role) MemberWithRoles {
 	// nil slice serializes to JSON null — use empty slice for safe frontend iteration
 	if roles == nil {
@@ -46,6 +53,26 @@ func ToMemberWithRoles(user *User, roles []Role) MemberWithRoles {
 		Roles:                roles,
 		EffectivePermissions: effectivePerms,
 	}
+}
+
+// NicknameRequest — body for PATCH /api/servers/{id}/members/{uid}/nickname.
+// nil Nickname (omitted JSON field) means "no change"; explicit "" clears.
+// Capped at 32 runes to match the display_name limit so role badges and
+// sidebar rows don't blow out at unrelated lengths.
+type NicknameRequest struct {
+	Nickname *string `json:"nickname"`
+}
+
+func (r *NicknameRequest) Validate() error {
+	if r.Nickname == nil {
+		return fmt.Errorf("nickname field is required (use empty string to clear)")
+	}
+	trimmed := strings.TrimSpace(*r.Nickname)
+	r.Nickname = &trimmed
+	if utf8.RuneCountInString(trimmed) > 32 {
+		return fmt.Errorf("nickname must be at most 32 characters")
+	}
+	return nil
 }
 
 // UpdateProfileRequest — nil fields are not updated (partial update).

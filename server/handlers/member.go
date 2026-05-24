@@ -183,6 +183,47 @@ func (h *MemberHandler) Timeout(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "member timed out"})
 }
 
+// SetNickname handles PATCH /api/servers/{serverId}/members/{id}/nickname.
+// Self can always rename themselves. Renaming someone ELSE requires
+// PermManageNicknames; the route layer (init_routes.go) enforces that
+// branch — this handler accepts either case and trusts the caller.
+//
+// Body: { "nickname": "string|null" } — empty/blank/null all clear it.
+func (h *MemberHandler) SetNickname(w http.ResponseWriter, r *http.Request) {
+	actor, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+	targetID := r.PathValue("id")
+	if targetID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "missing target user id")
+		return
+	}
+
+	var req models.NicknameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := req.Validate(); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	updated, err := h.memberService.SetNickname(r.Context(), serverID, actor.ID, targetID, req.Nickname)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, updated)
+}
+
 // RemoveTimeout handles DELETE /api/servers/{serverId}/members/{id}/timeout.
 // Same permission gate as Timeout. No body required; the route alone is
 // the intent. Idempotent — un-timing an untimed user is a no-op.

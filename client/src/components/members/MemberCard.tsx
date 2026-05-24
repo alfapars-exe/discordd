@@ -96,11 +96,18 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const canBan = isServerContext && !isMe && hasPermission(myPerms, Permissions.BanMembers);
   const canTimeout = isServerContext && !isMe && hasPermission(myPerms, Permissions.TimeoutMembers);
   const canManageRoles = isServerContext && !isMe && hasPermission(myPerms, Permissions.ManageRoles);
+  // Self-rename is always allowed; renaming OTHERS needs ManageNicknames.
+  const canSetOwnNickname = isServerContext && isMe;
+  const canSetOtherNickname = isServerContext && !isMe && hasPermission(myPerms, Permissions.ManageNicknames);
+  const canEditNickname = canSetOwnNickname || canSetOtherNickname;
   const isBadgeAdmin = currentUser?.id === BADGE_ADMIN_USER_ID;
   const hasModActions = canKick || canBan || canTimeout || canManageRoles;
   // Duration picker state — null when closed; "timeout" or "tempban" picks
   // which preset list + which API to hit on selection.
   const [pickerMode, setPickerMode] = useState<"timeout" | "tempban" | null>(null);
+  // Nickname editor state — null when closed; otherwise the in-flight
+  // input value (initialised from the current nickname or display name).
+  const [nicknameDraft, setNicknameDraft] = useState<string | null>(null);
 
   const isFriend = friends.some((f) => f.user_id === userId);
   const outReq = outgoing.find((r) => r.user_id === userId);
@@ -191,6 +198,22 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     if (!serverId) return;
     await memberApi.banMember(serverId, userId, "", seconds);
     onClose();
+  }
+
+  function openNicknameEditor() {
+    // Pre-fill with the current nickname (if any), then display name,
+    // then username — so the textbox shows whatever the user is
+    // already known by, and they can edit incrementally.
+    setNicknameDraft(member?.nickname ?? displayName ?? username ?? "");
+  }
+
+  async function handleSaveNickname() {
+    if (nicknameDraft === null) return;
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const trimmed = nicknameDraft.trim();
+    setNicknameDraft(null);
+    await memberApi.setMemberNickname(serverId, userId, trimmed);
   }
 
   async function handleSendMessage() {
@@ -298,8 +321,47 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
         {/* Body */}
         <div className="mc-body">
           <div className="mc-identity">
-            <div className="mc-name">{displayName ?? username}</div>
-            {displayName && <div className="mc-username">@{username}</div>}
+            {/* Per-server nickname takes precedence over the global
+                display name; falls back to display_name → username.
+                Edit pencil shows when the viewer is either renaming
+                themselves OR has ManageNicknames for others. */}
+            <div className="mc-name">
+              {member?.nickname || displayName || username}
+              {canEditNickname && nicknameDraft === null && (
+                <button
+                  className="mc-name-edit"
+                  onClick={openNicknameEditor}
+                  title={t("editNickname", { defaultValue: "Takma adı düzenle" })}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {nicknameDraft !== null && (
+              <div className="mc-name-editor">
+                <input
+                  className="mc-name-input"
+                  autoFocus
+                  value={nicknameDraft}
+                  maxLength={32}
+                  onChange={(e) => setNicknameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveNickname();
+                    if (e.key === "Escape") setNicknameDraft(null);
+                  }}
+                  placeholder={displayName ?? username}
+                />
+                <button className="mc-name-save" onClick={handleSaveNickname}>
+                  {t("save")}
+                </button>
+                <button className="mc-name-cancel" onClick={() => setNicknameDraft(null)}>
+                  {t("cancel")}
+                </button>
+              </div>
+            )}
+            {(displayName || member?.nickname) && <div className="mc-username">@{username}</div>}
             {customStatus && <div className="mc-custom-status">{customStatus}</div>}
             <div className="mc-join-date">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

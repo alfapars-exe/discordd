@@ -36,6 +36,9 @@ type MemberService interface {
 	// IsTimedOut — fast hot-path check returning the active timeout (if
 	// any). nil result means the user is free to act.
 	IsTimedOut(ctx context.Context, serverID, userID string) (*models.MemberTimeout, error)
+	// SetNickname applies a per-server nickname. nil or "" clears.
+	// Caller (handler/route) enforces PermManageNicknames for non-self.
+	SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error)
 	SetAuditLogger(logger AuditWriter)
 }
 
@@ -101,6 +104,16 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 		return nil, fmt.Errorf("failed to get all users: %w", err)
 	}
 
+	// One round-trip for all per-server nicknames — avoids the N+1 we'd
+	// get from calling GetNickname inside the loop.
+	nicknames, err := s.serverRepo.GetNicknamesForServer(ctx, serverID)
+	if err != nil {
+		// Non-fatal — fall back to "no nicknames" instead of failing the
+		// whole member list fetch.
+		log.Printf("[member] failed to load nicknames for server %s: %v", serverID, err)
+		nicknames = map[string]string{}
+	}
+
 	members := make([]models.MemberWithRoles, 0)
 	for i := range users {
 		isMember, err := s.serverRepo.IsMember(ctx, serverID, users[i].ID)
@@ -115,7 +128,12 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 		if err != nil {
 			return nil, fmt.Errorf("failed to get roles for user %s: %w", users[i].ID, err)
 		}
-		members = append(members, models.ToMemberWithRoles(&users[i], roles))
+		m := models.ToMemberWithRoles(&users[i], roles)
+		if nick, ok := nicknames[users[i].ID]; ok && nick != "" {
+			n := nick
+			m.Nickname = &n
+		}
+		members = append(members, m)
 	}
 
 	return members, nil
@@ -133,7 +151,71 @@ func (s *memberService) GetByID(ctx context.Context, serverID, userID string) (*
 	}
 
 	member := models.ToMemberWithRoles(user, roles)
+	// Per-server nickname — non-fatal if it fails (we still return the
+	// member, just without the per-server override).
+	if nick, nerr := s.serverRepo.GetNickname(ctx, serverID, userID); nerr == nil && nick != nil {
+		member.Nickname = nick
+	}
 	return &member, nil
+}
+
+// SetNickname applies a per-server nickname. Self-rename is always
+// allowed (no permission check). Changing OTHER members' nicknames
+// requires PermManageNicknames — checked here so the handler stays
+// thin and so unit tests can cover both branches.
+func (s *memberService) SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error) {
+	if actorID != targetID {
+		actorRoles, err := s.roleRepo.GetByUserIDAndServer(ctx, actorID, serverID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve actor roles: %w", err)
+		}
+		var perms models.Permission
+		for _, role := range actorRoles {
+			perms |= role.Permissions
+		}
+		if !perms.Has(models.PermManageNicknames) {
+			return nil, fmt.Errorf("%w: manage nicknames permission required", pkg.ErrForbidden)
+		}
+	}
+
+	if err := s.serverRepo.SetNickname(ctx, serverID, targetID, nickname); err != nil {
+		return nil, err
+	}
+
+	// Reload the full member view so the response carries the new
+	// nickname (and the WS broadcast below has the canonical row).
+	updated, err := s.GetByID(ctx, serverID, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Same WS op the regular member_update path uses, so existing
+	// client handlers (memberStore, voiceStore, messageStore) refresh
+	// their cached display names without any new wiring.
+	s.hub.BroadcastToServer(serverID, ws.Event{
+		Op:   ws.OpMemberUpdate,
+		Data: updated,
+	})
+
+	// Optional audit row — useful when a moderator renames someone
+	// other than themselves. Self-renames don't generate noise.
+	if actorID != targetID {
+		actor := actorID
+		target := targetID
+		meta := "{}"
+		if nickname != nil && *nickname != "" {
+			meta = fmt.Sprintf(`{"nickname":%q}`, strings.ReplaceAll(*nickname, `"`, `\"`))
+		}
+		s.audit(models.AuditLog{
+			ServerID:     serverID,
+			ActorUserID:  &actor,
+			TargetUserID: &target,
+			EventType:    models.AuditEventMemberNicknameChange,
+			Metadata:     meta,
+		})
+	}
+
+	return updated, nil
 }
 
 func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *models.UpdateProfileRequest) (*models.MemberWithRoles, error) {

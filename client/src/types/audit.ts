@@ -22,6 +22,7 @@ export type AuditEventType =
   | "member_unban"
   | "member_timeout"
   | "member_timeout_remove"
+  | "member_nickname_change"
   | "role_create"
   | "role_delete"
   | "role_assign"

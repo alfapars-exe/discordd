@@ -47,16 +47,28 @@ function VoiceParticipantList({
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const openTab = useUIStore((s) => s.openTab);
 
+  // O(1) lookup so the streamer sub-list can resolve viewer user_ids
+  // back to their full participant rows without a per-render scan.
+  // Viewers must be in the same voice channel to watch — which means
+  // they're already in `participants`, so no extra fetch needed.
+  const participantById = new Map(participants.map((p) => [p.user_id, p]));
+
   return (
     <div className="ch-tree-voice-users">
       {participants.map((p) => {
         const isMe = p.user_id === currentUser?.id;
         const isLocalMuted = localMutedUsers[p.user_id] ?? false;
         const isSpeaking = activeSpeakers[p.user_id] ?? false;
+        // Resolve viewer ids → participant rows for the indented sub-list.
+        // Unknown ids (stale rows) are dropped silently — better than
+        // rendering a "ghost" row with no display name.
+        const watchers = (p.is_streaming ? screenShareViewers[p.user_id] ?? [] : [])
+          .map((id) => participantById.get(id))
+          .filter((w): w is VoiceState => w !== undefined);
 
         return (
+          <div key={p.user_id} className="ch-tree-vu-stack">
           <div
-            key={p.user_id}
             className={`ch-tree-voice-user${isSpeaking ? " speaking" : ""}${draggingVoiceUserId === p.user_id ? " vu-dragging" : ""}`}
             draggable={isMe || canMoveMembers}
             onDragStart={(e) => onDragStart(e, p.user_id, channelId)}
@@ -166,6 +178,41 @@ function VoiceParticipantList({
                 </svg>
               ) : null}
             </span>
+          </div>
+
+          {/* Indented sub-list of users currently watching this broadcaster's
+              screen share. Eye icon makes the "watching" status explicit
+              (matches user feedback: "izleyenlerin yanında göz işareti
+              olsun"). The .ch-tree-vu-watcher CSS pushes them in further
+              than the broadcaster row so they read as a hierarchical
+              dependency, not a sibling. Clicking the row opens the user
+              card — same affordance as the main participant rows. */}
+          {watchers.length > 0 && (
+            <div className="ch-tree-vu-watchers">
+              {watchers.map((w) => (
+                <div key={w.user_id} className="ch-tree-vu-watcher">
+                  <Avatar
+                    name={w.display_name || w.username}
+                    avatarUrl={w.avatar_url}
+                    size={16}
+                    isCircle
+                  />
+                  <span className="ch-tree-vu-watcher-name">{w.display_name || w.username}</span>
+                  <svg
+                    className="ch-tree-vu-watcher-eye"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-label={tVoice("watching", { defaultValue: "İzliyor" })}
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </div>
+              ))}
+            </div>
+          )}
           </div>
         );
       })}
