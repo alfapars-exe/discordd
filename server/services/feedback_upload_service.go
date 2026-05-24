@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
