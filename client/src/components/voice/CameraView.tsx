@@ -50,10 +50,16 @@ function CameraPanel({ trackRef }: Readonly<{ trackRef: TrackReferenceOrPlacehol
   }, []);
 
   const displayName = trackRef.participant.name || trackRef.participant.identity;
+  const isLocal = trackRef.participant.isLocal;
 
   return (
     <div ref={containerRef} className="screen-share-panel">
-      {trackRef.publication && <VideoTrack trackRef={trackRef as TrackReference} />}
+      {trackRef.publication && (
+        <VideoTrack
+          trackRef={trackRef as TrackReference}
+          style={isLocal ? { transform: "scaleX(-1)" } : undefined}
+        />
+      )}
 
       <div className="screen-share-panel-overlay">
         <span className="screen-share-panel-label">{displayName}</span>
@@ -93,12 +99,6 @@ function CameraView() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("vertical");
   const [splitRatio, setSplitRatio] = useState(DEFAULT_RATIO);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (cameraTracks.length < 2) {
-      setSplitRatio(DEFAULT_RATIO);
-    }
-  }, [cameraTracks.length]);
 
   const handleResize = useCallback(
     (delta: number) => {

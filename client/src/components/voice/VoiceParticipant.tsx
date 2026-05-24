@@ -12,7 +12,7 @@
  * Visual states: speaking = green ring, muted = mic-off overlay, deafened = headphone-off overlay.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useIsSpeaking, useParticipantTracks, VideoTrack } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import type { Participant } from "livekit-client";
@@ -44,31 +44,20 @@ function VoiceParticipant({
   // LOCAL: analyzed via local AnalyserNode (instant). REMOTE: from SFU speaker info.
   const rawSpeaking = useIsSpeaking(participant);
 
-  // Hold timer: when rawSpeaking goes false, wait SPEAKING_HOLD_MS before hiding indicator.
-  // If rawSpeaking goes true again within that window, timer is cancelled.
+  // Snap to true on the way up (render-time state sync, no flicker);
+  // hold for SPEAKING_HOLD_MS on the way down so brief gaps between
+  // syllables don't toggle the indicator. If speech resumes within the
+  // window, the render-time branch flips back to true and the effect
+  // cleanup cancels the pending timeout.
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const holdTimerRef = useRef<number>(0);
+  if (rawSpeaking && !isSpeaking) {
+    setIsSpeaking(true);
+  }
 
   useEffect(() => {
-    if (rawSpeaking) {
-      if (holdTimerRef.current) {
-        clearTimeout(holdTimerRef.current);
-        holdTimerRef.current = 0;
-      }
-      setIsSpeaking(true);
-    } else if (!holdTimerRef.current) {
-      holdTimerRef.current = globalThis.setTimeout(() => {
-        setIsSpeaking(false);
-        holdTimerRef.current = 0;
-      }, SPEAKING_HOLD_MS);
-    }
-
-    return () => {
-      if (holdTimerRef.current) {
-        clearTimeout(holdTimerRef.current);
-        holdTimerRef.current = 0;
-      }
-    };
+    if (rawSpeaking) return;
+    const timer = globalThis.setTimeout(() => setIsSpeaking(false), SPEAKING_HOLD_MS);
+    return () => clearTimeout(timer);
   }, [rawSpeaking]);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const voiceStates = useVoiceStore((s) => s.voiceStates);
@@ -153,7 +142,13 @@ function VoiceParticipant({
     avatarContent = (
       <VideoTrack
         trackRef={cameraTrackRef}
-        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          borderRadius: "50%",
+          ...(isLocalUser ? { transform: "scaleX(-1)" } : {}),
+        }}
       />
     );
   } else if (avatarUrl) {

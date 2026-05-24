@@ -92,7 +92,7 @@ function DraggableLocalVideo({ stream }: { stream: MediaStream }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <video ref={videoRef} autoPlay playsInline muted />
+      <video ref={videoRef} autoPlay playsInline muted style={{ transform: "scaleX(-1)" }} />
     </div>
   );
 }
