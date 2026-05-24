@@ -22,6 +22,7 @@
   "commandHintStop": "/stop ile botu durdur",
   "notInVoice": "Önce bir ses kanalına gir",
   "playbackFailed": "\"{{title}}\" çalınamadı",
+  "playbackFailedWithReason": "\"{{title}}\" çalınamadı — {{reason}}",
   "unknownTrack": "şarkı",
   "buffering": "Hazırlanıyor",
   "connecting": "Müzik botu bağlanıyor…"

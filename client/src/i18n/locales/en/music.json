@@ -22,6 +22,7 @@
   "commandHintStop": "/stop to stop the bot",
   "notInVoice": "Join a voice channel first",
   "playbackFailed": "Could not play \"{{title}}\"",
+  "playbackFailedWithReason": "Could not play \"{{title}}\" — {{reason}}",
   "unknownTrack": "track",
   "buffering": "Buffering",
   "connecting": "Music bot is connecting…"

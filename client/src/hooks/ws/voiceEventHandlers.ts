@@ -192,15 +192,25 @@ export async function handleVoiceEvent(
     case "music_bot_error": {
       // playTrack failed (yt-dlp 410, malformed Ogg, codec issue, etc.).
       // The bot already moved to the next queue entry; we just need to
-      // tell the user *why* the track they queued never played. Without
-      // this, the failure mode was silent: queue → no audio → confusion.
+      // tell the user *why* the track they queued never played. The
+      // reason field is included verbatim (truncated) so the user can
+      // self-diagnose: "yt-dlp start: …" → binary missing on server,
+      // "ogg parse: …" → codec issue, etc. Without the reason the user
+      // would have to open DevTools console to see what broke.
       const data = msg.d as { track_title?: string; reason?: string };
       const title = data?.track_title?.trim() || i18n.t("music:unknownTrack", { defaultValue: "track" });
-      useToastStore.getState().addToast(
-        "error",
-        i18n.t("music:playbackFailed", { title, defaultValue: `Could not play "${title}"` }),
-        6000,
-      );
+      const reasonRaw = data?.reason?.trim() ?? "";
+      // Trim to the first ~120 chars so the toast doesn't wrap forever
+      // when yt-dlp dumps a full stack of fallback URLs.
+      const reasonShort = reasonRaw.length > 120 ? `${reasonRaw.slice(0, 117)}…` : reasonRaw;
+      const message = reasonShort
+        ? i18n.t("music:playbackFailedWithReason", {
+            title,
+            reason: reasonShort,
+            defaultValue: `"${title}" çalınamadı — ${reasonShort}`,
+          })
+        : i18n.t("music:playbackFailed", { title, defaultValue: `Could not play "${title}"` });
+      useToastStore.getState().addToast("error", message, 8000);
       console.warn("[music] playback error from server:", data);
       return true;
     }
