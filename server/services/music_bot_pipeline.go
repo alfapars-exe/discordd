@@ -151,6 +151,9 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 			s.logErr(models.LogCategoryVoice, bot.channelID, "music playback failed", map[string]string{
 				"video_id": next.VideoID, "error": err.Error(),
 			})
+			// Tell every listener what failed and why. Otherwise the bot
+			// silently skips the track and users see "queued" with no audio.
+			s.broadcastPlaybackError(bot, &next, err.Error())
 			// Continue to next track regardless of single-track error.
 		}
 	}
@@ -164,6 +167,9 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		bot.channelID, track.VideoID, track.Title)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	// Defensive: covers the early-return paths below (pipe setup, Start())
+	// where the cleanup defer hasn't been pushed yet. On the happy path the
+	// cleanup defer calls cancel() first; this second call is a no-op.
 	defer cancel()
 
 	bot.mu.Lock()
@@ -225,6 +231,12 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	bot.mu.Unlock()
 
 	defer func() {
+		// Kill the pipeline subprocesses BEFORE waiting. exec.CommandContext
+		// kills the process when ctx is cancelled, which unblocks Wait().
+		// Without this, an early return from pumpOggToTrack (ogg parse error
+		// or WriteSample failure mid-track) would block here for the entire
+		// natural duration of the song while yt-dlp/ffmpeg run uselessly.
+		cancel()
 		bot.mu.Lock()
 		bot.cmd = nil
 		bot.cancelFn = nil

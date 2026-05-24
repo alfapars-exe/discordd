@@ -20,5 +20,9 @@
   "commandHintSkip": "/skip to skip the current track",
   "commandHintPause": "/pause to pause, /resume to continue",
   "commandHintStop": "/stop to stop the bot",
-  "notInVoice": "Join a voice channel first"
+  "notInVoice": "Join a voice channel first",
+  "playbackFailed": "Could not play \"{{title}}\"",
+  "unknownTrack": "track",
+  "buffering": "Buffering",
+  "connecting": "Music bot is connecting…"
 }

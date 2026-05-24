@@ -71,7 +71,36 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     return () => clearInterval(id);
   }, [state?.current_track, state?.is_paused, state?.started_at]);
 
-  if (!state?.is_active || !state.current_track || !serverId) return null;
+  if (!state?.is_active || !serverId) return null;
+
+  // Bot is in the room but hasn't started a track yet — show a buffering tile
+  // instead of nothing so the user knows the bot is alive and connecting.
+  // Without this, /play would seem to do nothing until the first sample
+  // arrives (sometimes 5-10 s on cpu-basic HF tier while yt-dlp resolves).
+  if (!state.current_track) {
+    return (
+      <div className="music-bot-panel">
+        <div className="music-bot-now">
+          <div className="music-bot-thumb music-bot-thumb-empty" aria-hidden>♪</div>
+          <div className="music-bot-now-meta">
+            <div className="music-bot-now-label">{t("buffering")}</div>
+            <div className="music-bot-title">{t("connecting")}</div>
+          </div>
+          <div className="music-bot-controls">
+            <button
+              className="music-bot-btn music-bot-btn-danger"
+              onClick={handleStop}
+              title={t("stop")}
+              aria-label={t("stop")}
+            >
+              ⏹
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { current_track: track, queue, is_paused } = state;
   const total = track.duration_seconds || 0;
   const pct = total > 0 ? Math.min(100, (elapsed / total) * 100) : 0;

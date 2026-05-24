@@ -20,5 +20,9 @@
   "commandHintSkip": "/skip ile şu anki şarkıyı geç",
   "commandHintPause": "/pause ile duraklat, /resume ile devam et",
   "commandHintStop": "/stop ile botu durdur",
-  "notInVoice": "Önce bir ses kanalına gir"
+  "notInVoice": "Önce bir ses kanalına gir",
+  "playbackFailed": "\"{{title}}\" çalınamadı",
+  "unknownTrack": "şarkı",
+  "buffering": "Hazırlanıyor",
+  "connecting": "Müzik botu bağlanıyor…"
 }

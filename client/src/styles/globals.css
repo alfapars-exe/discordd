@@ -4168,6 +4168,18 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
   border-radius: 6px;
   background: var(--bg-5);
 }
+.music-bot-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--text-muted);
+  animation: music-bot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes music-bot-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
 .music-bot-now-meta {
   flex: 1;
   min-width: 0;

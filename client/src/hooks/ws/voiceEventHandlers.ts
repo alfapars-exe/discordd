@@ -8,7 +8,9 @@ import { useChannelStore } from "../../stores/channelStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useUIStore } from "../../stores/uiStore";
+import { useToastStore } from "../../stores/toastStore";
 import { playJoinSound, playLeaveSound } from "../../utils/sounds";
+import i18n from "../../i18n";
 import type { WSMessage, VoiceState, VoiceStateUpdateData, MusicBotChannelState } from "../../types";
 import type { WSHandlerContext } from "./types";
 import { isVoiceRecoveryAllowed } from "../../stores/shared/voiceRecovery";
@@ -184,6 +186,22 @@ export async function handleVoiceEvent(
       if (data?.channel_id && data.state) {
         useVoiceStore.getState().setMusicBotState(data.channel_id, data.state);
       }
+      return true;
+    }
+
+    case "music_bot_error": {
+      // playTrack failed (yt-dlp 410, malformed Ogg, codec issue, etc.).
+      // The bot already moved to the next queue entry; we just need to
+      // tell the user *why* the track they queued never played. Without
+      // this, the failure mode was silent: queue → no audio → confusion.
+      const data = msg.d as { track_title?: string; reason?: string };
+      const title = data?.track_title?.trim() || i18n.t("music:unknownTrack", { defaultValue: "track" });
+      useToastStore.getState().addToast(
+        "error",
+        i18n.t("music:playbackFailed", { title, defaultValue: `Could not play "${title}"` }),
+        6000,
+      );
+      console.warn("[music] playback error from server:", data);
       return true;
     }
 
