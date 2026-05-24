@@ -1,12 +1,14 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -179,12 +181,31 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// yt-dlp pipes raw audio to stdout; ffmpeg consumes it and emits Ogg/Opus.
 	// `-re` makes ffmpeg pace its output to real-time, so our blocking reads
 	// downstream are naturally rate-limited at ~50 frames/second (20 ms each).
+	//
+	// Flag rationale:
+	//   -f bestaudio/best   — fall back to combined a/v if bestaudio missing
+	//                         (some videos only expose merged formats now)
+	//   --geo-bypass        — pretend to be in the video's home region;
+	//                         helps for region-locked Turkish artists when
+	//                         the server runs on a non-TR cloud IP
+	//   --no-playlist       — defense-in-depth; if a stray list= param
+	//                         survived normalizeYouTubeURL, don't enumerate
+	//   --no-warnings       — keep stderr clean for our diagnostic capture
 	yt := exec.CommandContext(ctx, "yt-dlp",
-		"-f", "bestaudio",
+		"-f", "bestaudio/best",
 		"--no-warnings",
+		"--no-playlist",
+		"--geo-bypass",
 		"-o", "-",
 		track.URL,
 	)
+	// Capture yt-dlp's stderr so a failure (region lock, sign-in required,
+	// 410 stream URL expired) shows up in the playback_error broadcast
+	// instead of being lost to /dev/null. The buffer is bounded by the
+	// process lifetime; YouTube's worst-case errors are ~2 KB.
+	var ytErrBuf bytes.Buffer
+	yt.Stderr = &ytErrBuf
+
 	ff := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "warning",
 		"-i", "pipe:0",
@@ -200,6 +221,11 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		"-f", "ogg",
 		"pipe:1",
 	)
+	// Capture ffmpeg's stderr too — codec errors (e.g., "Invalid data
+	// found when processing input" when yt-dlp produced nothing) surface
+	// here and need to reach the user toast same way.
+	var ffErrBuf bytes.Buffer
+	ff.Stderr = &ffErrBuf
 
 	ytOut, err := yt.StdoutPipe()
 	if err != nil {
@@ -254,9 +280,71 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		if skipped || stopped {
 			return nil
 		}
+		// Snapshot whatever stderr the subprocesses already flushed and
+		// enrich the error with the upstream message — yt-dlp will have
+		// printed its "ERROR: Sign in / region locked / format unavailable"
+		// line by now because we only reach this branch after the pipeline
+		// broke (which usually means yt-dlp already exited).
+		hint := extractPipelineErrorHint(yt, ff, &ytErrBuf, &ffErrBuf)
+		if hint != "" {
+			return fmt.Errorf("%w (%s)", err, hint)
+		}
 		return err
 	}
 	return nil
+}
+
+// extractPipelineErrorHint — pick the most relevant stderr snippet from
+// either yt-dlp or ffmpeg so the user toast says e.g. "ogg parse:… (yt-dlp:
+// ERROR: Sign in to confirm you're not a bot)" instead of a generic
+// "ogg parse: EOF". Truncated so the WS payload + toast stay readable.
+//
+// Snapshots whatever stderr both subprocesses have flushed so far; does
+// not block waiting for them to exit (that happens in the cleanup
+// defer). For the common YouTube-blocked-the-request case, yt-dlp
+// writes its error and exits well before pumpOggToTrack returns, so
+// the buffer already has the diagnostic by this point.
+func extractPipelineErrorHint(_, _ *exec.Cmd, ytErr, ffErr *bytes.Buffer) string {
+	yMsg := lastErrorLine(ytErr.String())
+	fMsg := lastErrorLine(ffErr.String())
+
+	switch {
+	case yMsg != "" && fMsg != "":
+		return fmt.Sprintf("yt-dlp: %s", yMsg) // yt-dlp upstream usually the real cause
+	case yMsg != "":
+		return fmt.Sprintf("yt-dlp: %s", yMsg)
+	case fMsg != "":
+		return fmt.Sprintf("ffmpeg: %s", fMsg)
+	}
+	return ""
+}
+
+// lastErrorLine — scan multi-line stderr for the most informative line
+// (last line that mentions ERROR / WARNING / failed). Trims and caps at
+// 160 chars so the toast doesn't wrap forever. Returns "" if nothing
+// useful was logged.
+func lastErrorLine(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var best string
+	for _, line := range strings.Split(raw, "\n") {
+		s := strings.TrimSpace(line)
+		if s == "" {
+			continue
+		}
+		// Prefer ERROR lines, then fall back to the last non-empty line.
+		lower := strings.ToLower(s)
+		if strings.Contains(lower, "error") || strings.Contains(lower, "failed") {
+			best = s
+		} else if best == "" {
+			best = s
+		}
+	}
+	if len(best) > 160 {
+		best = best[:157] + "…"
+	}
+	return best
 }
 
 // pumpOggToTrack — read Ogg/Opus pages off ffmpeg's stdout, write each as a
