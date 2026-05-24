@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,20 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 )
+
+// ytdlpExtractorArgs — multi-client probe order. YouTube increasingly
+// blocks the default `web` client on data-center IPs (HF Space, AWS,
+// etc.) with "Sign in to confirm you're not a bot." Falling back to
+// the `android` and `tv` clients dodges most of that because those
+// clients use different signature flows. Order matters: yt-dlp tries
+// left-to-right and stops at the first one that produces formats.
+//
+// This flag value is documented at
+// https://github.com/yt-dlp/yt-dlp/wiki/Extractors#youtube — keep the
+// list in sync with whatever yt-dlp currently considers stable. The
+// `default` keyword keeps the original web/Android-music behavior on
+// top so anonymous home users still get the fastest path.
+const ytdlpExtractorArgs = "youtube:player_client=default,android,tv"
 
 // normalizeYouTubeURL — strip Mix/Radio params that confuse yt-dlp's
 // --flat-playlist mode. YouTube Mix URLs (`list=RD…`) are dynamically
@@ -83,13 +98,26 @@ func extractTracks(parent context.Context, rawURL, requesterID, requesterName st
 		"--dump-json",
 		"--no-warnings",
 		"--ignore-errors",
+		"--extractor-args", ytdlpExtractorArgs,
+		"--geo-bypass",
 		cleanURL,
 	)
+	// Capture stderr separately so a non-zero exit can be reported with its
+	// actual reason ("ERROR: Sign in to confirm…", "Video unavailable", etc.)
+	// instead of the bare "exit status 1". Without this the user toast was
+	// "yt-dlp extraction failed: yt-dlp exited exit status 1" — informative
+	// to nobody.
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
 	stdout, err := cmd.Output()
 	if err != nil {
 		// yt-dlp returns non-zero on partial playlist failures even when
 		// some entries succeeded; keep going if we got any JSON lines.
 		if len(stdout) == 0 {
+			reason := lastErrorLine(stderrBuf.String())
+			if reason != "" {
+				return nil, fmt.Errorf("yt-dlp exited %v: %s", err, reason)
+			}
 			return nil, fmt.Errorf("yt-dlp exited %v", err)
 		}
 	}

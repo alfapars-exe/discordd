@@ -196,6 +196,10 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		"--no-warnings",
 		"--no-playlist",
 		"--geo-bypass",
+		// Same multi-client probe as extractTracks — see ytdlpExtractorArgs
+		// in music_bot_metadata.go for the rationale (bypasses YouTube's
+		// data-center IP bot detection that hits HF Space).
+		"--extractor-args", ytdlpExtractorArgs,
 		"-o", "-",
 		track.URL,
 	)
