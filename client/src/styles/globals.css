@@ -4364,6 +4364,65 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
   padding: 12px 0;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ * Track W — Mobile browser polish
+ *
+ * Tightens the 4-300-line `globals.css` to handle phone-sized viewports
+ * (Android Chrome, iOS Safari) without breaking the desktop / Capacitor
+ * native paths. Only targets surfaces that user-reported feedback or
+ * grep-audit flagged as "blows out below 380 px".
+ * ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* Modal-ish surfaces that hard-coded a desktop width. Each switches
+   * to viewport-relative so the panel always fits with comfortable
+   * margins. */
+  .mod-picker { width: calc(100vw - 32px); max-width: 360px; }
+  .member-card { width: calc(100vw - 24px); max-width: 340px; }
+  .quick-switcher { width: calc(100vw - 24px); max-width: 480px; }
+  .gif-picker { width: calc(100vw - 24px); max-width: 500px; }
+
+  /* Settings overlay — drop the 218 px nav rail on narrow viewports and
+   * let the content fill width. SettingsNav remains accessible via a
+   * future hamburger; for now mobile users go straight to the active
+   * tab they opened. */
+  .settings-nav { display: none; }
+  .settings-content-wrap { max-width: 100%; }
+  .settings-content { padding: 20px 16px; }
+
+  /* Voice room — shrink participant avatars so 4-6 fit on a 360 px row
+   * without horizontal scroll. Camera tile inherits the same downsize. */
+  .voice-participant { min-width: 96px; }
+  .voice-participant-avatar { width: 56px; height: 56px; }
+
+  /* Bigger tap targets — Apple HIG / Material both ask for 44 px.
+   * The desktop default is 24-28 px which is fine with a mouse but
+   * misses with a thumb. */
+  .ch-actions button,
+  .voice-ctx-item,
+  .mc-btn,
+  .tab-close { min-height: 36px; }
+
+  /* Audit feed: keep the time column visible but tighten so the event
+   * text isn't squeezed into 2 chars. */
+  .audit-entry { padding: 6px 10px; gap: 8px; }
+  .audit-entry-time { font-size: 10px; }
+}
+
+/* Hover-only affordances need an always-visible fallback for touch.
+ * `(hover: none)` matches iOS Safari, Android Chrome, Capacitor webview,
+ * AND any Electron build running on a touch laptop — without forcing
+ * desktop mice to deal with permanently visible plus icons.
+ *
+ * Touch users were missing: category "+", server "+", channel rename
+ * controls, and the nickname pencil. All of these used `opacity:0` →
+ * `:hover { opacity:1 }`. */
+@media (hover: none) {
+  .ch-tree-cat-add,
+  .ch-tree-server-add,
+  .mc-name-edit { opacity: 1; }
+}
+
 /* ═══════════════════════════════════════
    DISCORD-STYLE MERGED LAYOUT (Track U)
 

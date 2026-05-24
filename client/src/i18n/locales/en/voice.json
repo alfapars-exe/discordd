@@ -7,6 +7,8 @@
   "undeafen": "Undeafen",
   "screenShare": "Share Screen",
   "stopScreenShare": "Stop Sharing",
+  "screenShareNotSupported": "This browser doesn't support screen sharing. Install the app or use Android Chrome.",
+  "screenShareFailed": "Couldn't start screen sharing. Try again.",
   "voiceConnected": "Voice Connected",
   "noOneInVoice": "No one is in this voice channel",
   "screenShareLimit": "Maximum of 2 screen shares reached",

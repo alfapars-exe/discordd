@@ -47,15 +47,22 @@ import {
 
 import { useVoiceStore } from "../stores/voiceStore";
 import { useServerStore } from "../stores/serverStore";
+import { useToastStore } from "../stores/toastStore";
 import { useSystemAudioCapture } from "./useSystemAudioCapture";
 import { useDisplayInfo, type DisplayInfo } from "./useDisplayInfo";
-import { isElectron, isCapacitor } from "../utils/constants";
+import {
+  isElectron,
+  isCapacitor,
+  isMobileBrowser,
+  canBrowserScreenShare,
+} from "../utils/constants";
 import {
   startNativeScreenShare,
   stopNativeScreenShare,
   onNativeScreenShareStopped,
 } from "../utils/nativePlugins";
 import { getScreenShareToken } from "../api/voice";
+import i18n from "../i18n";
 
 type ScreenShareResolution = {
   width: number;
@@ -170,8 +177,27 @@ export function useScreenShareToggle(
           });
           customAudioPubRef.current = pub;
         } else {
-          const { screenShareQuality: ssq, screenShareFps: ssFps } =
+          // Browser path — LiveKit calls navigator.mediaDevices.getDisplayMedia.
+          // Cap-check first so iOS Safari (no getDisplayMedia) surfaces a
+          // toast instead of failing silently when the user taps the button.
+          if (!canBrowserScreenShare()) {
+            useToastStore.getState().addToast(
+              "error",
+              i18n.t("screenShareNotSupported", { ns: "voice" }),
+              6000,
+            );
+            notifyServerStopped();
+            return;
+          }
+
+          // Mobile browsers (Android Chrome on phone): clamp to 720p/30fps
+          // regardless of the user's saved quality preference. A 1440p
+          // request on a 360-px-wide phone screen wastes upstream bandwidth
+          // and trips OOM on weak GPUs.
+          const { screenShareQuality: savedQ, screenShareFps: savedFps } =
             useVoiceStore.getState();
+          const ssq = isMobileBrowser() ? "720p" : savedQ;
+          const ssFps = isMobileBrowser() ? 30 : savedFps;
           await localParticipant.setScreenShareEnabled(true, {
             audio: screenShareAudio,
             resolution: resolutionFor(ssq, ssFps, displayRef.current),
@@ -199,6 +225,19 @@ export function useScreenShareToggle(
       if (!cancelled) {
         console.error("[useScreenShareToggle] Failed to toggle screen share:", err);
         if (isStreaming) {
+          // NotAllowedError = user cancelled the browser permission prompt.
+          // That's a normal "I changed my mind" path — no toast, just
+          // rollback the streaming flag silently.
+          const isCancellation =
+            err instanceof Error &&
+            (err.name === "NotAllowedError" || err.name === "AbortError");
+          if (!isCancellation) {
+            useToastStore.getState().addToast(
+              "error",
+              i18n.t("screenShareFailed", { ns: "voice" }),
+              6000,
+            );
+          }
           notifyServerStopped();
         }
       }
