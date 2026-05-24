@@ -89,6 +89,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   initError: null,
   showRecoveryPrompt: false,
   recoveryPromptDismissed: false,
+  incompatibleDevices: new Set(),
 
   initialize: async (userId: string) => {
     const current = get().initStatus;
@@ -370,6 +371,29 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     }
   },
 
+  markIncompatibleDevice: (userId: string, deviceId: string) => {
+    set((state) => {
+      const key = `${userId}:${deviceId}`;
+      if (state.incompatibleDevices.has(key)) {
+        // Already flagged — avoid re-rendering subscribers.
+        return state;
+      }
+      const next = new Set(state.incompatibleDevices);
+      next.add(key);
+      return { incompatibleDevices: next };
+    });
+  },
+
+  clearIncompatibleDevice: (userId: string, deviceId: string) => {
+    set((state) => {
+      const key = `${userId}:${deviceId}`;
+      if (!state.incompatibleDevices.has(key)) return state;
+      const next = new Set(state.incompatibleDevices);
+      next.delete(key);
+      return { incompatibleDevices: next };
+    });
+  },
+
   reset: async () => {
     // Only reset Zustand state on logout.
     // IndexedDB keys and server device registration are PRESERVED
@@ -385,6 +409,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       initError: null,
       showRecoveryPrompt: false,
       recoveryPromptDismissed: false,
+      incompatibleDevices: new Set(),
     });
   },
 }));
