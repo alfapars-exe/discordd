@@ -36,6 +36,13 @@ export type DisplayInfo = {
    * value to display.
    */
   refreshRate: number;
+  /**
+   * Number of monitors attached. Web fallback returns 1 (we can't tell
+   * without the Window Management API + permission grant). Used by
+   * diagnostic telemetry to correlate multi-monitor setups with screen-
+   * share failures.
+   */
+  monitorCount: number;
 };
 
 export function useDisplayInfo(): DisplayInfo | null {
@@ -53,6 +60,7 @@ export function useDisplayInfo(): DisplayInfo | null {
             width: d.width,
             height: d.height,
             refreshRate: d.refreshRate,
+            monitorCount: d.monitorCount,
           });
         })
         .catch(() => {
@@ -63,6 +71,7 @@ export function useDisplayInfo(): DisplayInfo | null {
             width: window.screen.width,
             height: window.screen.height,
             refreshRate: 0,
+            monitorCount: 1,
           });
         });
     } else {
@@ -74,6 +83,7 @@ export function useDisplayInfo(): DisplayInfo | null {
         width: window.screen.width,
         height: window.screen.height,
         refreshRate: 0,
+        monitorCount: 1,
       });
     }
 
