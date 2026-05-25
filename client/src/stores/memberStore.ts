@@ -2,6 +2,13 @@
  * Member Store — Per-server member list + presence state management.
  * Members are cached per server: `membersByServer[serverId] -> MemberWithRoles[]`.
  * Online user IDs are global (presence is cross-server).
+ *
+ * Also tracks active moderator timeouts (`timeoutsByServer`) so the
+ * MemberCard + MemberItem can draw the muted-until banner/badge. The
+ * server already filters expired rows on read, but to keep the UI
+ * accurate without polling we also run a client-side setTimeout that
+ * clears the local entry when expires_at passes — see the
+ * timerHandles map below.
  */
 
 import { create } from "zustand";
@@ -9,10 +16,23 @@ import * as memberApi from "../api/members";
 import { useServerStore } from "./serverStore";
 import type { MemberWithRoles, UserStatus, Role } from "../types";
 
+export type ActiveTimeout = {
+  expires_at: string;
+  reason?: string;
+  applied_by?: string;
+};
+
 type MemberState = {
   membersByServer: Record<string, MemberWithRoles[]>;
   onlineUserIds: Set<string>;
   loadingServers: Set<string>;
+  /**
+   * Active timeouts indexed by server, then user. Seeded from
+   * member.timeout_expires_at on every fetch, kept up to date by the
+   * member_timeout / member_timeout_remove WS events, and auto-cleared
+   * by the client-side expiry timer scheduled in scheduleExpiry().
+   */
+  timeoutsByServer: Record<string, Record<string, ActiveTimeout>>;
 
   // ─── Selectors ───
   /** Get members for a specific server (returns stable empty array if not loaded) */
@@ -32,6 +52,13 @@ type MemberState = {
   handleRoleUpdate: (serverId: string, role: Role) => void;
   handleRoleDelete: (serverId: string, roleId: string) => void;
   handleRolesReorder: (serverId: string, roles: Role[]) => void;
+  /** WS: member_timeout — moderator applied or extended a timeout. */
+  handleMemberTimeout: (
+    serverId: string,
+    data: { user_id: string; expires_at: string; reason?: string; applied_by?: string },
+  ) => void;
+  /** WS: member_timeout_remove — moderator lifted (or it expired). */
+  handleMemberTimeoutRemove: (serverId: string, userId: string) => void;
   /** Remove cache for a specific server (e.g. on leave/delete) */
   clearServer: (serverId: string) => void;
 };
@@ -42,10 +69,66 @@ const EMPTY_MEMBERS: MemberWithRoles[] = [];
 /** Tracks in-flight fetches to prevent duplicate requests */
 const fetchingServers = new Set<string>();
 
+/**
+ * Pending expiry timers, keyed by `${serverId}:${userId}`. Lives in
+ * module scope (not Zustand state) so scheduling/cancelling doesn't
+ * trigger re-renders of timeout selectors. Always cancel-before-set
+ * so an extended timeout doesn't fire prematurely.
+ */
+const timerHandles = new Map<string, ReturnType<typeof setTimeout>>();
+
+function timerKey(serverId: string, userId: string): string {
+  return `${serverId}:${userId}`;
+}
+
+function clearTimer(serverId: string, userId: string): void {
+  const key = timerKey(serverId, userId);
+  const handle = timerHandles.get(key);
+  if (handle !== undefined) {
+    clearTimeout(handle);
+    timerHandles.delete(key);
+  }
+}
+
+function clearAllTimersForServer(serverId: string): void {
+  const prefix = `${serverId}:`;
+  for (const key of timerHandles.keys()) {
+    if (key.startsWith(prefix)) {
+      const handle = timerHandles.get(key);
+      if (handle !== undefined) clearTimeout(handle);
+      timerHandles.delete(key);
+    }
+  }
+}
+
+/**
+ * Schedule a local auto-clear when the timeout passes. The server's
+ * repo already hides expired rows on the next read, but this keeps the
+ * UI honest in the meantime so muted badges don't linger after expiry.
+ * Negative/zero delays fire immediately (Date.parse on a past date).
+ */
+function scheduleExpiry(serverId: string, userId: string, expiresAtIso: string): void {
+  clearTimer(serverId, userId);
+  const ms = Date.parse(expiresAtIso) - Date.now();
+  if (Number.isNaN(ms)) return; // bad ISO → leave it; refresh will fix
+  // setTimeout caps at ~24.8 days in browsers; for our 28-day max we
+  // still need a clean schedule. If the duration is past the cap we
+  // just schedule at the cap and re-evaluate; the WS event or next
+  // fetch will refresh the entry well before then.
+  const SAFE_MAX = 2_147_483_647; // ~24.8 days
+  const delay = Math.max(0, Math.min(ms, SAFE_MAX));
+  const handle = setTimeout(() => {
+    timerHandles.delete(timerKey(serverId, userId));
+    useMemberStore.getState().handleMemberTimeoutRemove(serverId, userId);
+  }, delay);
+  timerHandles.set(timerKey(serverId, userId), handle);
+}
+
 export const useMemberStore = create<MemberState>((set, get) => ({
   membersByServer: {},
   onlineUserIds: new Set<string>(),
   loadingServers: new Set(),
+  timeoutsByServer: {},
 
   // ─── Selectors ───
 
@@ -70,6 +153,18 @@ export const useMemberStore = create<MemberState>((set, get) => ({
     fetchingServers.delete(serverId);
 
     if (res.data) {
+      // Refresh timer state from the freshly-fetched member list.
+      // Cancel any timers that no longer have a backing entry, then
+      // reschedule for everyone the server still flagged as timed out.
+      clearAllTimersForServer(serverId);
+      const seededTimeouts: Record<string, ActiveTimeout> = {};
+      for (const m of res.data) {
+        if (m.timeout_expires_at) {
+          seededTimeouts[m.id] = { expires_at: m.timeout_expires_at };
+          scheduleExpiry(serverId, m.id, m.timeout_expires_at);
+        }
+      }
+
       set((state) => {
         // Merge member statuses into onlineUserIds
         const merged = new Set(state.onlineUserIds);
@@ -84,6 +179,10 @@ export const useMemberStore = create<MemberState>((set, get) => ({
           membersByServer: { ...state.membersByServer, [serverId]: res.data! },
           onlineUserIds: merged,
           loadingServers: newLoading,
+          timeoutsByServer: {
+            ...state.timeoutsByServer,
+            [serverId]: seededTimeouts,
+          },
         };
       });
     } else {
@@ -252,10 +351,53 @@ export const useMemberStore = create<MemberState>((set, get) => ({
     });
   },
 
-  clearServer: (serverId) => {
+  handleMemberTimeout: (serverId, data) => {
+    // (Re-)schedule the local expiry timer first; if the moderator
+    // EXTENDED an existing timeout, the existing handle would otherwise
+    // fire at the old (earlier) time and prematurely clear the badge.
+    scheduleExpiry(serverId, data.user_id, data.expires_at);
     set((state) => {
-      const { [serverId]: _, ...rest } = state.membersByServer;
-      return { membersByServer: rest };
+      const forServer = state.timeoutsByServer[serverId] ?? {};
+      return {
+        timeoutsByServer: {
+          ...state.timeoutsByServer,
+          [serverId]: {
+            ...forServer,
+            [data.user_id]: {
+              expires_at: data.expires_at,
+              reason: data.reason,
+              applied_by: data.applied_by,
+            },
+          },
+        },
+      };
+    });
+  },
+
+  handleMemberTimeoutRemove: (serverId, userId) => {
+    clearTimer(serverId, userId);
+    set((state) => {
+      const forServer = state.timeoutsByServer[serverId];
+      if (!forServer || !(userId in forServer)) return state;
+      const { [userId]: _, ...rest } = forServer;
+      return {
+        timeoutsByServer: {
+          ...state.timeoutsByServer,
+          [serverId]: rest,
+        },
+      };
+    });
+  },
+
+  clearServer: (serverId) => {
+    clearAllTimersForServer(serverId);
+    set((state) => {
+      const { [serverId]: _members, ...restMembers } = state.membersByServer;
+      const { [serverId]: _timeouts, ...restTimeouts } = state.timeoutsByServer;
+      return {
+        membersByServer: restMembers,
+        timeoutsByServer: restTimeouts,
+      };
     });
   },
 }));
@@ -281,4 +423,20 @@ export function useMembersForServer(serverId?: string): MemberWithRoles[] {
   const id = serverId ?? activeServerId;
   if (!id) return EMPTY_MEMBERS;
   return membersByServer[id] ?? EMPTY_MEMBERS;
+}
+
+/**
+ * Derived selector: the active moderator timeout for a (server, user)
+ * pair, or undefined when the user is not currently muted. Used by
+ * MemberCard to render the "muted until X" banner and by MemberItem
+ * to render the clock badge.
+ */
+export function useMemberTimeout(
+  serverId: string | null | undefined,
+  userId: string | null | undefined,
+): ActiveTimeout | undefined {
+  return useMemberStore((s) => {
+    if (!serverId || !userId) return undefined;
+    return s.timeoutsByServer[serverId]?.[userId];
+  });
 }

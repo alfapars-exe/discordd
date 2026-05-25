@@ -21,6 +21,7 @@
 import { app, BrowserWindow, session } from "electron";
 import { checkForUpdateBeforeLaunch, setupAutoUpdater } from "./auto-updater";
 import { shutdownCapture } from "./audio-capture";
+import { setupCrashReporter } from "./crash-reporter";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { installScreenPicker } from "./screen-picker";
 import { shutdownPTT } from "./push-to-talk";
@@ -158,6 +159,12 @@ function setupCSP(): void {
     });
   });
 }
+
+// ─── Crash reporter ───
+// Registered BEFORE whenReady so it catches early-life crashes too. Writes
+// last-crash.json to userData on render/child-process-gone; the renderer
+// uploads on next successful login.
+setupCrashReporter();
 
 // ─── App ready ───
 app.whenReady().then(async () => {

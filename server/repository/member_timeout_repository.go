@@ -23,4 +23,8 @@ type MemberTimeoutRepository interface {
 	// (SendMessage, JoinChannel). Equivalent to Get(...) != nil but
 	// cheaper because it doesn't allocate.
 	IsActive(ctx context.Context, serverID, userID string) (bool, error)
+	// ListActive returns every non-expired timeout for a server in one
+	// round-trip. Used by member_service.GetAll to populate
+	// MemberWithRoles.TimeoutExpiresAt without an N+1 of single-row Gets.
+	ListActive(ctx context.Context, serverID string) ([]models.MemberTimeout, error)
 }

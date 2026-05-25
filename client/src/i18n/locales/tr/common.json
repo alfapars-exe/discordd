@@ -166,6 +166,14 @@
   "dur_1w": "1 hafta",
   "dur_30d": "30 gün",
   "youAreTimedOut": "Bu sunucuda susturuldun",
+  "timeoutActive": "Susturuldu",
+  "timeoutActiveUntil": "{{date}} tarihine kadar susturuldu",
+  "timeoutExpiresIn": "{{rel}} sonra biter",
+  "removeTimeoutTooltip": "Susturmayı kaldır",
+  "permanentBan": "Kalıcı",
+  "banExpiresAt": "Bitiş tarihi",
+  "banExpiresIn": "{{rel}} sonra biter",
+  "banPermanentLabel": "Kalıcı yasak",
   "editNickname": "Takma adı düzenle",
   "nicknamePlaceholder": "Takma ad (boş bırak kaldır)"
 }

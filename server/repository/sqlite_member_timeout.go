@@ -93,3 +93,34 @@ func (r *sqliteMemberTimeoutRepo) IsActive(ctx context.Context, serverID, userID
 	}
 	return true, nil
 }
+
+// ListActive — bulk fetch of non-expired timeouts for one server.
+// Used by member_service.GetAll so the member list can be tagged with
+// "timed out until X" without an N+1 of single-row Gets. Same
+// expires_at filter as Get so callers never see expired rows.
+func (r *sqliteMemberTimeoutRepo) ListActive(ctx context.Context, serverID string) ([]models.MemberTimeout, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT server_id, user_id, expires_at, applied_by, reason, created_at
+		 FROM member_timeouts
+		 WHERE server_id = ?
+		   AND expires_at > datetime('now')`,
+		serverID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list active member_timeouts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.MemberTimeout
+	for rows.Next() {
+		var t models.MemberTimeout
+		if err := rows.Scan(&t.ServerID, &t.UserID, &t.ExpiresAt, &t.AppliedBy, &t.Reason, &t.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan member_timeout row: %w", err)
+		}
+		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate member_timeout rows: %w", err)
+	}
+	return out, nil
+}

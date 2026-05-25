@@ -25,6 +25,13 @@ type MemberWithRoles struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	Roles                []Role     `json:"roles"`
 	EffectivePermissions Permission `json:"effective_permissions"`
+	// TimeoutExpiresAt — when set, the member is currently under a
+	// moderator-imposed timeout that ends at this UTC timestamp. nil
+	// means no active timeout. The repo already filters expired rows,
+	// so this is either future-dated or omitted. Clients use it to draw
+	// the "timed out until X" banner + clock badge without a separate
+	// API call.
+	TimeoutExpiresAt *time.Time `json:"timeout_expires_at,omitempty"`
 }
 
 // ToMemberWithRoles builds a MemberWithRoles from a User and their roles.

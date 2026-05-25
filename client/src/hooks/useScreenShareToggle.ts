@@ -62,6 +62,7 @@ import {
   onNativeScreenShareStopped,
 } from "../utils/nativePlugins";
 import { getScreenShareToken } from "../api/voice";
+import { logToServer } from "../api/clientLog";
 import i18n from "../i18n";
 
 type ScreenShareResolution = {
@@ -142,6 +143,30 @@ export function useScreenShareToggle(
       if (cancelled) return;
 
       if (isStreaming) {
+        // Diagnostic — record the publish attempt with every input that
+        // could influence the encode path. Captured BEFORE the branch so a
+        // crash mid-branch still has the attempt row to correlate against.
+        const ss = useVoiceStore.getState();
+        const attemptStart = Date.now();
+        const branch = useNativeScreenShare
+          ? "capacitor"
+          : isElectron() && screenShareAudio
+            ? "electron-audio"
+            : "browser";
+        logToServer("info", "screen_share_attempt", {
+          branch,
+          quality: ss.screenShareQuality,
+          fps: ss.screenShareFps,
+          audio: ss.screenShareAudio,
+          lowLatency: ss.screenShareLowLatency,
+          codec: ss.screenShareLowLatency ? "h264" : "vp9",
+          showCursor: ss.screenShareShowCursor,
+          displayWidth: displayRef.current?.width ?? 0,
+          displayHeight: displayRef.current?.height ?? 0,
+          refreshRate: displayRef.current?.refreshRate ?? 0,
+          monitorCount: displayRef.current?.monitorCount ?? 0,
+        });
+
         if (useNativeScreenShare) {
           const serverId = useServerStore.getState().activeServerId;
           const channelId = useVoiceStore.getState().currentVoiceChannelId;
@@ -153,10 +178,18 @@ export function useScreenShareToggle(
               "[useScreenShareToggle] Failed to get screen share token:",
               response.error,
             );
+            logToServer("warn", "screen_share_token_failed", {
+              branch,
+              error: response.error ?? "unknown",
+            });
             return;
           }
 
           await startNativeScreenShare(response.data.url, response.data.token);
+          logToServer("info", "screen_share_success", {
+            branch,
+            durationMs: Date.now() - attemptStart,
+          });
         } else if (isElectron() && screenShareAudio) {
           const { screenShareQuality: ssq, screenShareFps: ssFps } =
             useVoiceStore.getState();
@@ -169,13 +202,27 @@ export function useScreenShareToggle(
           if (cancelled) return;
 
           const audioTrack = await systemAudioCaptureRef.current.start();
-          if (cancelled || !audioTrack) return;
+          if (cancelled || !audioTrack) {
+            // Video already published; audio track failed (Mac/Linux no
+            // native helper, WASAPI denied, etc.). Log the partial state so
+            // we can tell crash-with-audio from crash-without.
+            logToServer("warn", "screen_share_success_no_audio", {
+              branch,
+              durationMs: Date.now() - attemptStart,
+              reason: cancelled ? "cancelled" : "no_audio_track",
+            });
+            return;
+          }
 
           const lkTrack = new LKLocalAudioTrack(audioTrack, undefined, false);
           const pub = await localParticipant.publishTrack(lkTrack, {
             source: Track.Source.ScreenShareAudio,
           });
           customAudioPubRef.current = pub;
+          logToServer("info", "screen_share_success", {
+            branch,
+            durationMs: Date.now() - attemptStart,
+          });
         } else {
           // Browser path — LiveKit calls navigator.mediaDevices.getDisplayMedia.
           // Cap-check first so iOS Safari (no getDisplayMedia) surfaces a
@@ -202,6 +249,12 @@ export function useScreenShareToggle(
             audio: screenShareAudio,
             resolution: resolutionFor(ssq, ssFps, displayRef.current),
             contentHint: "motion",
+          });
+          logToServer("info", "screen_share_success", {
+            branch,
+            durationMs: Date.now() - attemptStart,
+            effectiveQuality: ssq,
+            effectiveFps: ssFps,
           });
         }
       } else {
@@ -238,6 +291,19 @@ export function useScreenShareToggle(
               6000,
             );
           }
+          // Failure log — pair against the attempt log via userId + timestamp
+          // on the admin side. Cancellations are info-level since they're
+          // not a bug; everything else is warn so it stands out.
+          const errName = err instanceof Error ? err.name : typeof err;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const errStack =
+            err instanceof Error && err.stack ? err.stack.slice(0, 1024) : "";
+          logToServer(isCancellation ? "info" : "warn", "screen_share_failure", {
+            isCancellation,
+            errorName: errName,
+            errorMessage: errMsg,
+            errorStack: errStack,
+          });
           notifyServerStopped();
         }
       }

@@ -165,6 +165,38 @@ export async function handleSystemEvent(
       return true;
     }
 
+    case "member_timeout": {
+      // Moderator applied or extended a timeout. The store reschedules
+      // its local expiry timer so an extension doesn't fire at the old
+      // (earlier) time and prematurely clear the muted badge.
+      const data = msg.d as {
+        server_id: string;
+        user_id: string;
+        expires_at: string;
+        reason?: string;
+        applied_by?: string;
+      };
+      const serverId = msg.server_id || data.server_id;
+      if (serverId) {
+        useMemberStore.getState().handleMemberTimeout(serverId, {
+          user_id: data.user_id,
+          expires_at: data.expires_at,
+          reason: data.reason,
+          applied_by: data.applied_by,
+        });
+      }
+      return true;
+    }
+
+    case "member_timeout_remove": {
+      const data = msg.d as { server_id: string; user_id: string };
+      const serverId = msg.server_id || data.server_id;
+      if (serverId) {
+        useMemberStore.getState().handleMemberTimeoutRemove(serverId, data.user_id);
+      }
+      return true;
+    }
+
     // ─── Roles ───
     case "role_create": {
       const serverId = msg.server_id;

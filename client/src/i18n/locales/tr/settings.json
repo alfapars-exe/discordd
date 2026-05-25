@@ -335,6 +335,11 @@
   "confirmUnban": "\"{{name}}\" adlı üyenin yasağını kaldırmak istediğinizden emin misiniz? Sunucuya tekrar katılabilecek.",
   "memberUnbanned": "Yasak kaldırıldı",
   "memberUnbanError": "Yasak kaldırılırken hata oluştu",
+  "banExpiresAt": "Bitiş tarihi",
+  "banExpiresIn": "{{rel}} sonra biter",
+  "banTemporaryBadge": "Geçici",
+  "banPermanentLabel": "Kalıcı yasak",
+  "tempBanExpired": "(süresi doldu)",
 
   "updateDownloading": "v{{version}} güncelleme indiriliyor...",
   "updateReady": "v{{version}} güncelleme hazır",

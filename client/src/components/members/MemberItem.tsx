@@ -9,7 +9,7 @@ import { useContextMenu } from "../../hooks/useContextMenu";
 import type { ContextMenuItem } from "../../hooks/useContextMenu";
 import { copyToClipboard } from "../../utils/constants";
 import { useAuthStore } from "../../stores/authStore";
-import { useActiveMembers } from "../../stores/memberStore";
+import { useActiveMembers, useMemberTimeout } from "../../stores/memberStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useFriendStore } from "../../stores/friendStore";
@@ -22,6 +22,7 @@ import type { MemberWithRoles } from "../../types";
 import MemberCard from "./MemberCard";
 import RoleEditorPopup from "./RoleEditorPopup";
 import BadgeAssignModal from "./BadgeAssignModal";
+import { formatFullDateTime } from "../../utils/dateFormat";
 
 /** The user ID that can assign badges to other users. */
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
@@ -81,7 +82,7 @@ function getRowStatusClass(status: string, isOnline: boolean): string {
 }
 
 function MemberItem({ member, isOnline }: MemberItemProps) {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
   const { menuState, openMenu, closeMenu } = useContextMenu();
   const confirm = useConfirm();
   const currentUser = useAuthStore((s) => s.user);
@@ -89,6 +90,11 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
   const friends = useFriendStore((s) => s.friends);
   const incoming = useFriendStore((s) => s.incoming);
   const outgoing = useFriendStore((s) => s.outgoing);
+  // Subscribes to the timeout slice so the badge appears/disappears
+  // live as the store handles member_timeout(_remove) events.
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const timeout = useMemberTimeout(activeServerId, member.id);
+  const timeoutExpiresAt = timeout?.expires_at ?? member.timeout_expires_at ?? undefined;
 
   const [showCard, setShowCard] = useState(false);
   const [cardPos, setCardPos] = useState({ top: 0, left: 0 });
@@ -306,7 +312,30 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
             useful at-a-glance signal in the member list, and CSS classes
             cleanly carry the glow/shadow that goes with each colour. */}
         <div className="member-info">
-          <span className="member-name">{displayName}</span>
+          <span className="member-name">
+            {displayName}
+            {timeoutExpiresAt && (
+              <span
+                className="member-timeout-badge"
+                title={`${t("timeoutActive")} — ${formatFullDateTime(timeoutExpiresAt, i18n.language)}`}
+                aria-label={t("timeoutActive")}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </span>
+            )}
+          </span>
 
           {member.custom_status && (
             <span className="member-activity">

@@ -114,6 +114,22 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 		nicknames = map[string]string{}
 	}
 
+	// Bulk-load active timeouts so the member list carries the "timed
+	// out until X" expiry without N+1 single-row Gets. Non-fatal — if
+	// the repo errors we still return the member list, just without
+	// the muted-badge metadata.
+	timeoutsByUser := map[string]time.Time{}
+	if s.timeoutRepo != nil {
+		active, terr := s.timeoutRepo.ListActive(ctx, serverID)
+		if terr != nil {
+			log.Printf("[member] failed to load active timeouts for server %s: %v", serverID, terr)
+		} else {
+			for _, t := range active {
+				timeoutsByUser[t.UserID] = t.ExpiresAt
+			}
+		}
+	}
+
 	members := make([]models.MemberWithRoles, 0)
 	for i := range users {
 		isMember, err := s.serverRepo.IsMember(ctx, serverID, users[i].ID)
@@ -132,6 +148,10 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 		if nick, ok := nicknames[users[i].ID]; ok && nick != "" {
 			n := nick
 			m.Nickname = &n
+		}
+		if expiresAt, ok := timeoutsByUser[users[i].ID]; ok {
+			t := expiresAt
+			m.TimeoutExpiresAt = &t
 		}
 		members = append(members, m)
 	}
@@ -155,6 +175,14 @@ func (s *memberService) GetByID(ctx context.Context, serverID, userID string) (*
 	// member, just without the per-server override).
 	if nick, nerr := s.serverRepo.GetNickname(ctx, serverID, userID); nerr == nil && nick != nil {
 		member.Nickname = nick
+	}
+	// Active moderator timeout — non-fatal. Repo filters expired rows,
+	// so a non-nil row here is always future-dated.
+	if s.timeoutRepo != nil {
+		if t, terr := s.timeoutRepo.Get(ctx, serverID, userID); terr == nil && t != nil {
+			exp := t.ExpiresAt
+			member.TimeoutExpiresAt = &exp
+		}
 	}
 	return &member, nil
 }

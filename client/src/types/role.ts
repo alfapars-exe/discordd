@@ -31,6 +31,12 @@ export type MemberWithRoles = {
   created_at: string;
   roles: Role[];
   effective_permissions: number;
+  /** RFC3339 timestamp when this member's moderator-imposed timeout
+   *  expires. Absent / null when not muted. The server only ever sends
+   *  future-dated values (the repo filters expired rows), so the UI
+   *  can render "muted until X" + a clock badge without comparing
+   *  timestamps. */
+  timeout_expires_at?: string | null;
 };
 
 /** Badge template created by the badge admin. */

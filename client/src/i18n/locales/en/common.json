@@ -166,6 +166,14 @@
   "dur_1w": "1 week",
   "dur_30d": "30 days",
   "youAreTimedOut": "You are timed out on this server",
+  "timeoutActive": "Timed out",
+  "timeoutActiveUntil": "Muted until {{date}}",
+  "timeoutExpiresIn": "Ends in {{rel}}",
+  "removeTimeoutTooltip": "Remove timeout",
+  "permanentBan": "Permanent",
+  "banExpiresAt": "Expires at",
+  "banExpiresIn": "Expires in {{rel}}",
+  "banPermanentLabel": "Permanent ban",
   "editNickname": "Edit nickname",
   "nicknamePlaceholder": "Nickname (leave blank to clear)"
 }

@@ -38,9 +38,28 @@ interface ElectronCaptureAudioHeader {
   formatTag: number; // 1=PCM, 3=IEEE_FLOAT
 }
 
+/**
+ * Crash record persisted by electron/crash-reporter.ts on render-process-gone
+ * or child-process-gone events. Drained by `consumeLastCrash()` on the next
+ * launch's first successful login and forwarded to /api/client-log.
+ */
+interface ElectronCrashRecord {
+  kind: "render-process-gone" | "child-process-gone";
+  reason: string;
+  exitCode?: number;
+  serviceName?: string;
+  processType?: string;
+  occurredAt: string;
+}
+
 interface ElectronAPI {
   getVersion: () => Promise<string>;
   relaunch: () => Promise<void>;
+  /**
+   * Read & clear the persisted crash record (if any) from the previous run.
+   * Returns null when there's nothing to report.
+   */
+  consumeLastCrash: () => Promise<ElectronCrashRecord | null>;
 
   /** Whether update check was already performed at splash */
   wasUpdateChecked: () => Promise<boolean>;

@@ -87,3 +87,39 @@ export function formatFullDateTime(dateStr: string, locale: string): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * Localised future-relative duration ("in 5 minutes" / "5 dakika sonra").
+ * Uses Intl.RelativeTimeFormat so the language matches i18next.language
+ * without hardcoding translations. Picks the largest sensible unit:
+ * sub-minute → "in 30 seconds", under an hour → minutes, etc.
+ *
+ * Returns the absolute date if the target is more than 28 days out
+ * (matches the timeout max so the UI never says "in 1 month") and
+ * "now" for anything in the past — callers should normally avoid
+ * passing past dates since the server filters expired rows, but the
+ * fallback keeps the UI sensible if a stale ISO leaks through.
+ */
+export function formatRelativeFuture(toIso: string, locale: string): string {
+  const now = Date.now();
+  const target = Date.parse(toIso);
+  if (Number.isNaN(target)) return "";
+
+  const diffSec = Math.round((target - now) / 1000);
+  if (diffSec <= 0) {
+    // already past — caller should usually have cleared the entry by now
+    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(0, "second");
+  }
+
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (diffSec < 60) return rtf.format(diffSec, "second");
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return rtf.format(diffMin, "minute");
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return rtf.format(diffHr, "hour");
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay <= 28) return rtf.format(diffDay, "day");
+  // Past 28 days — fall back to absolute date so we don't say "in 2 months"
+  // for a 30-day temp ban.
+  return formatFullDateTime(toIso, locale);
+}

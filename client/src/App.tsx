@@ -6,6 +6,7 @@ import { useSettingsStore } from "./stores/settingsStore";
 import CustomTitleBar from "./components/layout/CustomTitleBar";
 import UpdateBanner from "./components/shared/UpdateBanner";
 import { isElectron, isNativeApp } from "./utils/constants";
+import { logToServer } from "./api/clientLog";
 
 // Lazy-load route components so each path bundles separately. The
 // initial JS that has to ship before the first paint is just App.tsx +
@@ -39,6 +40,35 @@ function App() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Drain any persisted crash record from the previous Electron launch and
+  // ship it to /api/client-log. Fires on every transition to authenticated
+  // state — the IPC handler atomically reads+deletes the file, so a second
+  // call sees null. The crash that triggered the previous shutdown is
+  // ALWAYS reported here; live crashes never go through this path.
+  useEffect(() => {
+    if (!user || !isElectron()) return;
+    const api = window.electronAPI;
+    if (!api?.consumeLastCrash) return;
+    api
+      .consumeLastCrash()
+      .then((record) => {
+        if (!record) return;
+        const level =
+          record.kind === "render-process-gone" ? "error" : "warn";
+        logToServer(level, "electron_crash", {
+          kind: record.kind,
+          reason: record.reason,
+          exitCode: record.exitCode,
+          serviceName: record.serviceName,
+          processType: record.processType,
+          occurredAt: record.occurredAt,
+        });
+      })
+      .catch(() => {
+        /* IPC failure is non-fatal — next launch will retry if needed */
+      });
+  }, [user]);
 
   // Apply blur + transparent classes at root level so they also affect
   // pre-auth pages (login, register, landing).

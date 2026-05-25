@@ -335,6 +335,11 @@
   "confirmUnban": "Are you sure you want to unban \"{{name}}\"? They will be able to rejoin the server.",
   "memberUnbanned": "Ban has been revoked",
   "memberUnbanError": "Failed to revoke ban",
+  "banExpiresAt": "Expires at",
+  "banExpiresIn": "Expires in {{rel}}",
+  "banTemporaryBadge": "Temporary",
+  "banPermanentLabel": "Permanent ban",
+  "tempBanExpired": "(expired)",
 
   "updateDownloading": "Downloading update v{{version}}...",
   "updateReady": "Update v{{version}} ready",

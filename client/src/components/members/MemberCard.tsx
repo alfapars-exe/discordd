@@ -13,7 +13,7 @@ import BadgePill from "../shared/BadgePill";
 import { useUserBadges } from "../../hooks/useUserBadges";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
-import { useActiveMembers } from "../../stores/memberStore";
+import { useActiveMembers, useMemberTimeout } from "../../stores/memberStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useFriendStore } from "../../stores/friendStore";
@@ -25,6 +25,7 @@ import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import ReportModal from "../shared/ReportModal";
 import ModDurationPicker, { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./ModDurationPicker";
+import { formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 
@@ -47,7 +48,7 @@ type MemberCardProps = {
 };
 
 function MemberCard({ member, user: userProp, position, onClose }: MemberCardProps) {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
   const confirm = useConfirm();
   const cardRef = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState(position);
@@ -64,6 +65,15 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const customStatus = target.custom_status;
   const createdAt = target.created_at;
   const isServerContext = !!member;
+
+  // Active moderator timeout (if any). Falls back to the inline field
+  // on the freshly-fetched member object so the banner appears even
+  // before the first WS event arrives. Subscribes to the store so the
+  // banner disappears live when handleMemberTimeoutRemove fires.
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const storeTimeout = useMemberTimeout(activeServerId, userId);
+  const timeoutExpiresAt =
+    storeTimeout?.expires_at ?? (isServerContext ? member?.timeout_expires_at ?? undefined : undefined);
 
   const activeMembers = useActiveMembers();
   const currentMember = activeMembers.find((m) => m.id === currentUser?.id);
@@ -190,6 +200,18 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     if (!serverId) return;
     await memberApi.timeoutMember(serverId, userId, seconds, "");
     onClose();
+  }
+
+  // One-click "Susturmayı kaldır" — matches Discord's direct moderation
+  // UX (no confirmation dialog). The mod can re-timeout with one click
+  // if they remove by mistake, so the reversal cost is low.
+  async function handleRemoveTimeout() {
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    await memberApi.removeTimeout(serverId, userId);
+    // No onClose here — the banner disappears via WS event and the mod
+    // may want to perform follow-up actions (kick / ban) without
+    // reopening the popover.
   }
 
   async function handleTempBanPick(seconds: number) {
@@ -370,6 +392,47 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
               <span>{t("joinedAt", { date: joinDate })}</span>
             </div>
           </div>
+
+          {/* Active moderator timeout banner — visible to everyone (so
+              the target user themselves can see "you're muted until X"
+              if they open their own card), but the Remove button only
+              renders for mods with PermTimeoutMembers. */}
+          {isServerContext && timeoutExpiresAt && (
+            <div className="mc-timeout-banner" role="status">
+              <svg
+                className="mc-timeout-banner-icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <div className="mc-timeout-banner-text">
+                <strong>{t("timeoutActive")}</strong>
+                <span title={formatFullDateTime(timeoutExpiresAt, i18n.language)}>
+                  {t("timeoutExpiresIn", {
+                    rel: formatRelativeFuture(timeoutExpiresAt, i18n.language),
+                  })}
+                </span>
+              </div>
+              {canTimeout && (
+                <button
+                  className="mc-timeout-banner-action"
+                  onClick={handleRemoveTimeout}
+                  title={t("removeTimeoutTooltip")}
+                  type="button"
+                >
+                  {t("removeTimeout")}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Roles (server context only) */}
           {sortedRoles.length > 0 && (

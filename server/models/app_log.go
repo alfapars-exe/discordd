@@ -21,6 +21,7 @@ const (
 	LogCategoryGeneral     LogCategory = "general"
 	LogCategoryFeedback    LogCategory = "feedback"
 	LogCategoryLiveKit     LogCategory = "livekit"
+	LogCategoryClient      LogCategory = "client"
 )
 
 // AppLog represents a structured log entry stored in SQLite.

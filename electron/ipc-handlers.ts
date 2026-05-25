@@ -14,6 +14,7 @@
 import { app, clipboard, ipcMain, nativeImage, screen } from "electron";
 import { autoUpdater } from "electron-updater";
 import { startCapture, stopCapture } from "./audio-capture";
+import { consumeLastCrash } from "./crash-reporter";
 import { clearCredentials, loadCredentials, saveCredentials } from "./credentials";
 import { registerPTT, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
@@ -29,6 +30,12 @@ export function registerIpcHandlers(): void {
     app.relaunch();
     app.exit(0);
   });
+
+  // ─── Crash report flush ──────────────────────────────────────────
+  // Renderer calls this after a successful login. Returns the persisted
+  // crash record (if any) and deletes it so the next launch doesn't
+  // double-report. Null means "no crash since last call".
+  ipcMain.handle("consume-last-crash", () => consumeLastCrash());
 
   // ─── Auto-updater (renderer-driven) ─────────────────────────────
   ipcMain.handle("was-update-checked", () => wasPrelaunchChecked());

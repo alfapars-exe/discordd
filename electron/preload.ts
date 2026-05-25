@@ -16,6 +16,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   /** Relaunch the app — used by ConnectionSettings */
   relaunch: (): Promise<void> => ipcRenderer.invoke("relaunch"),
 
+  /**
+   * Read the persisted crash record (if any) from the previous launch and
+   * delete it. Returns null when there's nothing to report. The renderer
+   * calls this once after a successful login and forwards the record to
+   * /api/client-log so it lands in the admin panel.
+   */
+  consumeLastCrash: (): Promise<{
+    kind: "render-process-gone" | "child-process-gone";
+    reason: string;
+    exitCode?: number;
+    serviceName?: string;
+    processType?: string;
+    occurredAt: string;
+  } | null> => ipcRenderer.invoke("consume-last-crash"),
+
   /** Whether pre-launch update check ran — prevents duplicate checks in renderer */
   wasUpdateChecked: (): Promise<boolean> => ipcRenderer.invoke("was-update-checked"),
 

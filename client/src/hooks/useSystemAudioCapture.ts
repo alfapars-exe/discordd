@@ -26,6 +26,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { isElectron } from "../utils/constants";
+import { logToServer } from "../api/clientLog";
 
 /** Return type of useSystemAudioCapture hook */
 interface SystemAudioCapture {
@@ -66,6 +67,15 @@ export function useSystemAudioCapture(): SystemAudioCapture {
       // Forward main process errors/debug to renderer console
       api.onCaptureAudioError((msg: string) => {
         console.error("[useSystemAudioCapture] Main process:", msg);
+        // Only surface real failures — the WASAPI helper emits informational
+        // stderr lines we don't care about. EXIT/SPAWN ERROR are the ones
+        // that mean the helper actually died.
+        if (msg.includes("EXIT") || msg.includes("SPAWN ERROR")) {
+          logToServer("warn", "system_audio_capture_failed", {
+            reason: "helper_process_died",
+            detail: msg.slice(0, 256),
+          });
+        }
       });
 
       // Listen for audio header (format info) from native capture
@@ -144,6 +154,10 @@ export function useSystemAudioCapture(): SystemAudioCapture {
           resolve(track);
         } catch (err) {
           console.error("[useSystemAudioCapture] Setup failed:", err);
+          logToServer("warn", "system_audio_capture_failed", {
+            reason: "worklet_setup",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
           resolved = true;
           resolve(null);
         }
@@ -153,6 +167,9 @@ export function useSystemAudioCapture(): SystemAudioCapture {
       api.onCaptureAudioStopped(() => {
         console.error("[useSystemAudioCapture] Capture stopped (exe exited before header)");
         if (!resolved) {
+          logToServer("warn", "system_audio_capture_failed", {
+            reason: "stopped_before_header",
+          });
           resolved = true;
           resolve(null);
         }
@@ -162,6 +179,10 @@ export function useSystemAudioCapture(): SystemAudioCapture {
       api.startSystemCapture().catch((err: unknown) => {
         console.error("[useSystemAudioCapture] Start failed:", err);
         if (!resolved) {
+          logToServer("warn", "system_audio_capture_failed", {
+            reason: "start_rejected",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
           resolved = true;
           resolve(null);
         }
@@ -171,6 +192,9 @@ export function useSystemAudioCapture(): SystemAudioCapture {
       setTimeout(() => {
         if (!resolved) {
           console.error("[useSystemAudioCapture] Timeout waiting for header");
+          logToServer("warn", "system_audio_capture_failed", {
+            reason: "header_timeout_5s",
+          });
           resolved = true;
           resolve(null);
         }

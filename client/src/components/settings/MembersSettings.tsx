@@ -11,12 +11,13 @@ import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import { resolveAssetUrl } from "../../utils/constants";
+import { formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
 import type { Ban } from "../../types";
 
 type Tab = "members" | "bans";
 
 function MembersSettings() {
-  const { t } = useTranslation("settings");
+  const { t, i18n } = useTranslation("settings");
   const members = useActiveMembers();
   const fetchMembers = useMemberStore((s) => s.fetchMembers);
   const roles = useActiveRoles();
@@ -96,6 +97,31 @@ function MembersSettings() {
       fetchBans();
     }
   }, [activeTab, canBan, fetchBans]);
+
+  // Client-side temp-ban expiry. The backend already filters expired
+  // bans on every GET /bans, but once the page is open the moderator
+  // would see stale rows until they refresh. One timer per visible
+  // temp-ban row clears it locally the moment it expires. Cleans up
+  // on unmount and whenever the bans list changes (which cancels and
+  // reschedules timers for the new set).
+  useEffect(() => {
+    if (activeTab !== "bans") return;
+    const handles: ReturnType<typeof setTimeout>[] = [];
+    for (const ban of bans) {
+      if (!ban.expires_at) continue;
+      const ms = Date.parse(ban.expires_at) - Date.now();
+      const SAFE_MAX = 2_147_483_647; // setTimeout cap (~24.8 days)
+      const delay = Math.max(0, Math.min(ms, SAFE_MAX));
+      const h = setTimeout(() => {
+        setBans((prev) => prev.filter((b) => b.user_id !== ban.user_id));
+        setSelectedBanUserId((id) => (id === ban.user_id ? null : id));
+      }, delay);
+      handles.push(h);
+    }
+    return () => {
+      for (const h of handles) clearTimeout(h);
+    };
+  }, [bans, activeTab]);
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab);
@@ -303,9 +329,16 @@ function MembersSettings() {
                   <div className="member-settings-info">
                     <span className="member-settings-name member-settings-name-banned">
                       {ban.username}
+                      {ban.expires_at && (
+                        <span className="ban-row-temp-pill">{t("banTemporaryBadge")}</span>
+                      )}
                     </span>
                     <span className="member-settings-username">
-                      {formatBanDate(ban.created_at)}
+                      {ban.expires_at
+                        ? t("banExpiresIn", {
+                            rel: formatRelativeFuture(ban.expires_at, i18n.language),
+                          })
+                        : formatBanDate(ban.created_at)}
                     </span>
                   </div>
                 </div>
@@ -475,6 +508,24 @@ function MembersSettings() {
                   <p className="ban-detail-value">
                     {selectedBan.banned_by}
                   </p>
+                </div>
+
+                <div className="settings-field">
+                  <label className="settings-label">
+                    {selectedBan.expires_at ? t("banExpiresAt") : t("banPermanentLabel")}
+                  </label>
+                  <p className="ban-detail-value">
+                    {selectedBan.expires_at
+                      ? formatFullDateTime(selectedBan.expires_at, i18n.language)
+                      : "—"}
+                  </p>
+                  {selectedBan.expires_at && (
+                    <p className="ban-detail-expiry">
+                      {t("banExpiresIn", {
+                        rel: formatRelativeFuture(selectedBan.expires_at, i18n.language),
+                      })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="member-settings-actions">

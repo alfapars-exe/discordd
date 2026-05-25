@@ -117,6 +117,9 @@ func initRoutes(
 	// Report
 	mux.Handle("POST /api/users/{userId}/report", auth(h.Report.CreateReport))
 
+	// Client diagnostic logs (screen-share lifecycle, Electron crash dumps, etc.)
+	mux.Handle("POST /api/client-log", auth(h.ClientLog.Log))
+
 	// Feedback
 	mux.Handle("POST /api/feedback", auth(h.Feedback.CreateTicket))
 	mux.Handle("GET /api/feedback", auth(h.Feedback.ListMyTickets))
