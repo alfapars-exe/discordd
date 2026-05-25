@@ -16,11 +16,18 @@ const WALLPAPER_ENABLED_KEY = "mqvi_wallpaper_enabled";
 const TRANSPARENT_KEY = "mqvi_transparent_bg";
 const LIGHTNING_ENABLED_KEY = "mqvi_lightning_enabled";
 const LIGHTNING_BLUR_KEY = "mqvi_lightning_blur";
+const NEON_ENABLED_KEY = "mqvi_neon_enabled";
+const NEON_INTENSITY_KEY = "mqvi_neon_intensity";
 
 /** Default blur for the lightning bolts (px) — matches the original hard-coded value. */
 const LIGHTNING_BLUR_DEFAULT = 4;
 const LIGHTNING_BLUR_MIN = 0;
 const LIGHTNING_BLUR_MAX = 20;
+
+/** Default neon intensity (%) — softened from the previous always-on 100. */
+const NEON_INTENSITY_DEFAULT = 60;
+const NEON_INTENSITY_MIN = 0;
+const NEON_INTENSITY_MAX = 100;
 
 function loadPersistedTheme(): ThemeId {
   try {
@@ -111,6 +118,46 @@ function applyLightningBlur(px: number): void {
   document.documentElement.style.setProperty("--lightning-blur", `${px}px`);
 }
 
+function loadPersistedNeonEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem(NEON_ENABLED_KEY);
+    if (stored === "1") return true;
+    if (stored === "0") return false;
+  } catch {
+    /* localStorage access error */
+  }
+  return true;
+}
+
+function loadPersistedNeonIntensity(): number {
+  try {
+    const stored = localStorage.getItem(NEON_INTENSITY_KEY);
+    if (stored !== null) {
+      const pct = parseInt(stored, 10);
+      if (Number.isFinite(pct) && pct >= NEON_INTENSITY_MIN && pct <= NEON_INTENSITY_MAX) return pct;
+    }
+  } catch {
+    /* localStorage access error */
+  }
+  return NEON_INTENSITY_DEFAULT;
+}
+
+/**
+ * Apply both pieces of neon state to the DOM in one shot:
+ *   - --neon-intensity (0..1) scales opacity on the decorative neon layers
+ *     (edge halo + ambient aurora blobs). globals.css reads it via opacity:
+ *     var(--neon-intensity) and calc().
+ *   - body.neon-off fully hides the same layers via display:none, which
+ *     also stops their animations from consuming CPU.
+ * Keeping enabled+intensity in a single applier prevents the two from
+ * drifting out of sync (e.g. enabled=true but the variable still 0).
+ */
+function applyNeonStyles(enabled: boolean, intensityPct: number): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--neon-intensity", String(intensityPct / 100));
+  document.body.classList.toggle("neon-off", !enabled);
+}
+
 type SettingsTab =
   | "profile"
   | "appearance"
@@ -147,6 +194,10 @@ type SettingsState = {
   lightningEnabled: boolean;
   /** Lightning bolt blur in pixels (0–20) — visual softness of the strikes */
   lightningBlur: number;
+  /** Decorative neon layers (edge halo + ambient aurora) on/off. */
+  neonEnabled: boolean;
+  /** Decorative neon intensity (0–100%) — scales opacity of the neon layers. */
+  neonIntensity: number;
   /** Live preview blob URL — applied to the app background without persisting. */
   pendingWallpaperPreviewUrl: string | null;
 
@@ -159,6 +210,8 @@ type SettingsState = {
   setTransparentBackground: (enabled: boolean) => void;
   setLightningEnabled: (enabled: boolean) => void;
   setLightningBlur: (px: number) => void;
+  setNeonEnabled: (enabled: boolean) => void;
+  setNeonIntensity: (pct: number) => void;
   setPendingWallpaperPreviewUrl: (url: string | null) => void;
   /** Apply theme from server preferences (no re-sync to server) */
   applyFromServer: (themeId: string) => void;
@@ -172,11 +225,17 @@ const initialWallpaperEnabled = loadPersistedWallpaperEnabled();
 const initialTransparent = loadPersistedTransparent();
 const initialLightningEnabled = loadPersistedLightningEnabled();
 const initialLightningBlur = loadPersistedLightningBlur();
+const initialNeonEnabled = loadPersistedNeonEnabled();
+const initialNeonIntensity = loadPersistedNeonIntensity();
 
 // Seed the CSS variable so .lightning-bolt's filter reads the user's
 // preferred blur from first paint — without this it would start at the
 // 4px fallback and snap to the saved value on first setter call.
 applyLightningBlur(initialLightningBlur);
+// Same idea for neon: write --neon-intensity + body.neon-off on module
+// load so the decorative layers paint at the user's preferred amount
+// from frame 1 instead of flashing in at 0.6 and then snapping.
+applyNeonStyles(initialNeonEnabled, initialNeonIntensity);
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   isOpen: false,
@@ -187,6 +246,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   transparentBackground: initialTransparent,
   lightningEnabled: initialLightningEnabled,
   lightningBlur: initialLightningBlur,
+  neonEnabled: initialNeonEnabled,
+  neonIntensity: initialNeonIntensity,
   pendingWallpaperPreviewUrl: null,
 
   openSettings: (tab = "profile") => set({ isOpen: true, activeTab: tab }),
@@ -260,6 +321,30 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyLightningBlur(clamped);
     set({ lightningBlur: clamped });
+  },
+
+  setNeonEnabled: (enabled) => {
+    try {
+      localStorage.setItem(NEON_ENABLED_KEY, enabled ? "1" : "0");
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    // Re-apply both pieces so the body class flips alongside the variable.
+    // Reads the current intensity from the store rather than receiving it
+    // as an argument — keeps the call sites symmetrical with lightning.
+    applyNeonStyles(enabled, useSettingsStore.getState().neonIntensity);
+    set({ neonEnabled: enabled });
+  },
+
+  setNeonIntensity: (pct) => {
+    const clamped = Math.max(NEON_INTENSITY_MIN, Math.min(NEON_INTENSITY_MAX, Math.round(pct)));
+    try {
+      localStorage.setItem(NEON_INTENSITY_KEY, String(clamped));
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    applyNeonStyles(useSettingsStore.getState().neonEnabled, clamped);
+    set({ neonIntensity: clamped });
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),

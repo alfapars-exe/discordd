@@ -36,6 +36,10 @@ function AppearanceSettings() {
   const setLightningEnabled = useSettingsStore((s) => s.setLightningEnabled);
   const lightningBlur = useSettingsStore((s) => s.lightningBlur);
   const setLightningBlur = useSettingsStore((s) => s.setLightningBlur);
+  const neonEnabled = useSettingsStore((s) => s.neonEnabled);
+  const setNeonEnabled = useSettingsStore((s) => s.setNeonEnabled);
+  const neonIntensity = useSettingsStore((s) => s.neonIntensity);
+  const setNeonIntensity = useSettingsStore((s) => s.setNeonIntensity);
   const setPendingWallpaperPreviewUrl = useSettingsStore((s) => s.setPendingWallpaperPreviewUrl);
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
@@ -297,6 +301,48 @@ function AppearanceSettings() {
           <span className="ub-switch-thumb" />
         </button>
       </label>
+
+      {/* Neon decorations — edge halo + ambient aurora. Toggle gates the
+          slider, slider scales --neon-intensity. Lightning has its own
+          control further down. */}
+      <label className="settings-toggle-row" style={{ marginTop: 16 }}>
+        <span>{t("neonTitle", { defaultValue: "Neon efektleri" })}</span>
+        <button
+          className={`ub-switch${neonEnabled ? " active" : ""}`}
+          onClick={() => setNeonEnabled(!neonEnabled)}
+          role="switch"
+          aria-checked={neonEnabled}
+          type="button"
+        >
+          <span className="ub-switch-thumb" />
+        </button>
+      </label>
+      <p className="theme-section-desc">
+        {t("neonDescription", {
+          defaultValue: "Pencere kenarındaki ışıltı ve ana paneldeki aurora arka planı. Düşük donanımda yoğunluğu azaltın veya kapatın.",
+        })}
+      </p>
+
+      {neonEnabled && (
+        <label className="settings-toggle-row" style={{ alignItems: "center", gap: 12 }}>
+          <span style={{ minWidth: 140 }}>
+            {t("neonIntensityLabel", { defaultValue: "Neon yoğunluğu" })}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={neonIntensity}
+            onChange={(e) => setNeonIntensity(parseInt(e.target.value, 10))}
+            style={{ flex: 1, accentColor: "var(--primary)" }}
+            aria-label={t("neonIntensityLabel", { defaultValue: "Neon yoğunluğu" })}
+          />
+          <span style={{ minWidth: 38, textAlign: "right", color: "var(--t2)", fontVariantNumeric: "tabular-nums" }}>
+            {neonIntensity}%
+          </span>
+        </label>
+      )}
 
       {isElectron() && (
         <>

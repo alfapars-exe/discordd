@@ -4575,6 +4575,12 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
     inset 0 0 60px 8px rgba(168, 85, 247, 0.30),
     inset 0 0 120px 20px rgba(59, 130, 246, 0.15);
   animation: neon-edge-cycle 14s ease-in-out infinite;
+  /* Settings → Appearance → Neon intensity. opacity scales the whole
+   * box-shadow render uniformly, so we can keep the rgba alphas hand-tuned
+   * above and just dim the final composite. Fallback 0.6 matches the
+   * default the store seeds on first load, so if the variable hasn't
+   * been written yet the first paint already looks right. */
+  opacity: var(--neon-intensity, 0.6);
 }
 
 @keyframes neon-edge-cycle {
@@ -4600,6 +4606,17 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 
 body.reduce-motion .electron-app-wrapper::after {
   animation: none;
+}
+
+/* Settings → Appearance → Neon effects = OFF. display:none drops the layers
+ * out of the render tree entirely, killing the box-shadow paint and the
+ * 14 s edge-cycle / 25–32 s aurora-drift animations — i.e. zero CPU cost
+ * vs. opacity:0 which would still composite. The aurora rules below cover
+ * the second neon layer (the blurred coloured blobs in .main-area). */
+body.neon-off .electron-app-wrapper::after,
+body.neon-off .main-area::before,
+body.neon-off .main-area::after {
+  display: none;
 }
 
 /* ═══════════════════════════════════════
@@ -4668,7 +4685,10 @@ body.reduce-motion .electron-app-wrapper::after {
   height: 90%;
   border-radius: 50%;
   filter: blur(110px);
-  opacity: 0.5;
+  /* 0.5 was the original always-on alpha; --neon-intensity now scales it so
+   * Settings → Appearance → Neon intensity slider takes effect live. The 0.6
+   * fallback keeps the rule sensible if the variable hasn't been set yet. */
+  opacity: calc(0.5 * var(--neon-intensity, 0.6));
   /* Transparent edges so neighbouring panels (sidebar, members) aren't
    * tinted — only what bleeds inside .main-area's box matters. */
   will-change: transform;
