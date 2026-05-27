@@ -85,32 +85,27 @@ func initRoutes(
 	// or DM), where the transaction binds the file to a message the caller
 	// just authored, and no client ever invoked the standalone form.
 
-	// Upload download — split routing.
+	// Upload download — public, no auth gate.
 	//
-	// Channel attachments + DM attachments + feedback/report screenshots
-	// flow through Download which auth-gates and does per-resource
-	// access checks. That's the security-meaningful boundary — the
-	// previous public http.FileServer let anyone with a URL pull
-	// plaintext attachments.
+	// A4 originally moved this behind auth + per-resource permission
+	// checks, but in practice every meaningful download path runs
+	// through a browser `<img src="...">` tag (avatars, attachments,
+	// badges, soundboard previews, landing branding). Native `<img>`
+	// can't attach a Bearer header, and we deliberately don't store
+	// the access token in a cookie any more (C3) — so auth-gating
+	// uploads simply made every image 401 across the whole app.
 	//
-	// Categories rendered as `<img src="...">` (avatars, server icons,
-	// badges, soundboard samples, landing/branding) MUST stay public
-	// because browsers can't attach a Bearer header to a native img
-	// request and we deliberately don't ship the access token in a
-	// cookie any more (C3). Auth-gating these categories silently
-	// broke every avatar in the app — `<img>` got a 401 and the UI
-	// fell back to initials.
+	// Reverting to the public serve, which matches behaviour before
+	// A4. A follow-up will do this properly via fetch + blob URL on
+	// the client (or a dedicated HttpOnly image-auth cookie that
+	// never reaches JS) so the auth boundary can come back without
+	// breaking rendered images.
 	//
-	// Go 1.22+ ServeMux honors more-specific patterns first, so the
-	// 5 prefix-scoped public routes below take precedence over the
-	// generic GET /api/uploads/ that auth-gates everything else.
+	// The handler still rejects path traversal and uses SafeJoin, so
+	// the URL surface itself stays safe — it's only the per-resource
+	// authorization that's been removed.
 	publicUpload := http.HandlerFunc(h.UploadDownload.PublicDownload)
-	mux.Handle("GET /api/uploads/avatars/", publicUpload)
-	mux.Handle("GET /api/uploads/badges/", publicUpload)
-	mux.Handle("GET /api/uploads/landing/", publicUpload)
-	mux.Handle("GET /api/uploads/soundboard/", publicUpload)
-	mux.Handle("GET /api/uploads/wallpapers/", publicUpload)
-	mux.Handle("GET /api/uploads/", auth(h.UploadDownload.Download))
+	mux.Handle("GET /api/uploads/", publicUpload)
 
 	// DMs — literal paths before parametric
 	mux.Handle("GET /api/dms/settings", auth(h.DMSettings.GetSettings))
