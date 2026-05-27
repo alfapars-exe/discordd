@@ -78,7 +78,7 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	}
 	defer destFile.Close()
 
-	if _, err := io.Copy(destFile, file); err != nil {
+	if _, err := io.Copy(destFile, body); err != nil {
 		_ = os.Remove(destPath)
 		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
@@ -89,7 +89,7 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 		Filename:    header.Filename,
 		FileURL:     "/api/uploads/" + diskFilename,
 		FileSize:    &fileSize,
-		MimeType:    &mimeBase,
+		MimeType:    &mimeForRecord,
 	}
 
 	if err := s.dmRepo.CreateAttachment(ctx, attachment); err != nil {
