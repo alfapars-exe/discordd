@@ -2,8 +2,12 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/hlogo.png" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- Single source of truth: hlogo.png. The old /favicon.ico link
+         pointed at a stale 16x16 derived from the previous brand —
+         after the brand refresh it 404'd, and even when present
+         showed the wrong art. Modern browsers honour PNG favicons,
+         apple-touch-icon stays the same. -->
+    <link rel="icon" type="image/png" href="/hlogo.png" />
     <link rel="apple-touch-icon" sizes="256x256" href="/hlogo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>HiChat!</title>
