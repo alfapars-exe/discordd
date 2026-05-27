@@ -95,7 +95,7 @@ function createSplashWindow(): BrowserWindow {
     transparent: false,
     alwaysOnTop: true,
     backgroundColor: "#111111",
-    icon: path.join(__dirname, "../icons/logodiscord.png"),
+    icon: path.join(__dirname, "../icons/hlogo.png"),
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
 
@@ -160,7 +160,7 @@ function createSplashWindow(): BrowserWindow {
 
   // Inject logo as data URL after load — avoids URL-encoding issues with base64 in source.
   win.webContents.once("did-finish-load", () => {
-    const logoPath = path.join(__dirname, "../icons/logodiscord.png");
+    const logoPath = path.join(__dirname, "../icons/hlogo.png");
     try {
       const buf = readFileSync(logoPath);
       const dataUrl = `data:image/png;base64,${buf.toString("base64")}`;

@@ -16,7 +16,7 @@ export function createTray(): void {
   // Single canonical app logo across platforms. Electron resizes the
   // PNG for the platform's tray density (16/22 on Linux/macOS, 256 on
   // Windows) so we no longer need separate small/large variants.
-  const iconPath = path.join(__dirname, "../icons", "logodiscord.png");
+  const iconPath = path.join(__dirname, "../icons", "hlogo.png");
   tray = new Tray(nativeImage.createFromPath(iconPath));
   tray.setToolTip("HiChat!");
 

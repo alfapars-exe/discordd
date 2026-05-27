@@ -20,7 +20,7 @@ function TermsPage() {
         {/* Nav */}
         <nav className="lp-nav">
           <div className="lp-nav-left" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
-            <img src="/logodiscord.png" alt="HiChat!" className="lp-nav-logo-img" />
+            <img src="/hlogo.png" alt="HiChat!" className="lp-nav-logo-img" />
             <span className="lp-nav-brand">{t("appName", { ns: "common" })}</span>
           </div>
           <div className="lp-nav-right">
@@ -126,7 +126,7 @@ function TermsPage() {
         {/* Footer */}
         <footer className="lp-footer">
           <div className="lp-footer-left">
-            <img src="/logodiscord.png" alt="HiChat!" className="lp-footer-logo-img" />
+            <img src="/hlogo.png" alt="HiChat!" className="lp-footer-logo-img" />
             <span className="lp-footer-copy">{t("footerCopy")}</span>
           </div>
           <div className="lp-footer-links">

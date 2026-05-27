@@ -10,7 +10,7 @@ short_description: Discord-style topluluk — ses, metin, dosya paylaşımı
 ---
 
 <p align="center">
-  <img src="icons/logodiscord.png" alt="HiChat!" width="80" />
+  <img src="icons/hlogo.png" alt="HiChat!" width="80" />
 </p>
 
 <h1 align="center">HiChat!</h1>

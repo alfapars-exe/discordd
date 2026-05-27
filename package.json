@@ -45,7 +45,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "icons/logodiscord.png",
+      "icon": "icons/hlogo.png",
       "signAndEditExecutable": false,
       "executableName": "HiChat",
       "legalTrademarks": "HiChat!",
@@ -65,7 +65,7 @@
       "target": [
         "AppImage"
       ],
-      "icon": "icons/logodiscord.png",
+      "icon": "icons/hlogo.png",
       "category": "Network;Chat"
     }
   }
