@@ -4,11 +4,49 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
+)
+
+// noopReadStateRepo — minimal ReadStateRepository stub for tests.
+// The production NewMessageService grew readStateRepo + timeoutRepo
+// dependencies after these tests were written; rather than thread two
+// new args through 9 call sites, we satisfy the interfaces with
+// always-succeed stubs (the test helper hides them entirely).
+type noopReadStateRepo struct{}
+
+func (noopReadStateRepo) Upsert(_ context.Context, _, _, _ string) error { return nil }
+func (noopReadStateRepo) GetUnreadCounts(_ context.Context, _, _ string) ([]models.UnreadInfo, error) {
+	return nil, nil
+}
+func (noopReadStateRepo) MarkAllRead(_ context.Context, _, _ string) error           { return nil }
+func (noopReadStateRepo) IncrementUnreadCounts(_ context.Context, _, _ string) error { return nil }
+func (noopReadStateRepo) DecrementUnreadForDeleted(_ context.Context, _, _ string, _ time.Time) error {
+	return nil
+}
+
+// noopTimeoutRepo — minimal MemberTimeoutRepository stub. Returns
+// "no active timeout" for every Get; everything else is a no-op.
+type noopTimeoutRepo struct{}
+
+func (noopTimeoutRepo) Upsert(_ context.Context, _ *models.MemberTimeout) error { return nil }
+func (noopTimeoutRepo) Get(_ context.Context, _, _ string) (*models.MemberTimeout, error) {
+	return nil, nil
+}
+func (noopTimeoutRepo) Delete(_ context.Context, _, _ string) error           { return nil }
+func (noopTimeoutRepo) IsActive(_ context.Context, _, _ string) (bool, error) { return false, nil }
+func (noopTimeoutRepo) ListActive(_ context.Context, _ string) ([]models.MemberTimeout, error) {
+	return nil, nil
+}
+
+var (
+	_ repository.ReadStateRepository     = noopReadStateRepo{}
+	_ repository.MemberTimeoutRepository = noopTimeoutRepo{}
 )
 
 func newTestMessageService(
@@ -26,6 +64,7 @@ func newTestMessageService(
 	return NewMessageService(
 		msgRepo, attachRepo, chanRepo, userRepo,
 		mentionRepo, roleMentionRepo, roleRepo, reactionRepo,
+		noopReadStateRepo{}, noopTimeoutRepo{},
 		hub, permResolver,
 	)
 }
