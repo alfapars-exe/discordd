@@ -25,6 +25,7 @@
   "build": {
     "appId": "net.hichat.app",
     "productName": "HiChat!",
+    "afterPack": "./build/after-pack.js",
     "directories": {
       "output": "release"
     },
@@ -45,7 +46,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "icons/hlogo.png",
+      "icon": "icons/hichat-icon.ico",
       "signAndEditExecutable": false,
       "executableName": "HiChat",
       "legalTrademarks": "HiChat!",

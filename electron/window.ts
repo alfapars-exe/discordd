@@ -83,6 +83,12 @@ export function createMainWindow(): BrowserWindow {
     height: 800,
     minWidth: 940,
     minHeight: 560,
+    // Explicit title — without this, the window flashes "Electron" between
+    // BrowserWindow creation and the renderer's <title> tag attaching to
+    // the DOM. Also covers Alt+Tab listing in the brief gap before the
+    // page loads, and the WM_GETTEXT fallback some screen readers / OS
+    // utilities query before the DOM title is ready.
+    title: "HiChat!",
     icon: path.join(__dirname, "../icons/hlogo.png"),
     transparent: isTransparent,
     ...(isTransparent ? {} : { backgroundColor: "#111111" }),
