@@ -15,7 +15,7 @@ function BlockedUsersSettings() {
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
+    queueMicrotask(() => setIsLoading(true));
     blockApi.listBlocked().then((res) => {
       if (cancelled) return;
       if (res.success && res.data) {

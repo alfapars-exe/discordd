@@ -65,6 +65,7 @@
   "friendRemove": "Remove",
   "friendRemoveConfirm": "Are you sure you want to remove {{username}} from your friends?",
   "friendSearchPlaceholder": "Search friends...",
+  "dmOpenFailed": "Couldn't open the chat. The user may have blocked you, disabled DMs, or you may have lost connection.",
   "noFriendsYet": "No friends yet",
   "noIncomingRequests": "No incoming requests",
   "noOutgoingRequests": "No outgoing requests",

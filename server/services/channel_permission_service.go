@@ -46,6 +46,25 @@ type ChannelPermissionService interface {
 	ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error)
 	// BuildVisibilityFilter builds a per-user channel visibility filter for ViewChannel checks.
 	BuildVisibilityFilter(ctx context.Context, userID, serverID string) (*ChannelVisibilityFilter, error)
+
+	// InvalidateUser drops every cached permission entry for one user.
+	// Wire into member kick/ban/role-add/role-remove so a permission
+	// revocation lands within ~1s instead of after permCacheTTL (30s).
+	InvalidateUser(userID string)
+	// InvalidateAll drops the entire cache. Used by RoleService when a
+	// role's permission bits change — that affects every member with
+	// the role across every channel, and enumerating them costs more
+	// than a full cache rebuild over the TTL window.
+	InvalidateAll()
+}
+
+// PermissionInvalidator is the cache-invalidation slice of
+// ChannelPermissionService, exposed as its own interface so
+// RoleService / MemberService can depend on the smallest possible
+// surface (ISP) and tests can supply trivial stubs.
+type PermissionInvalidator interface {
+	InvalidateUser(userID string)
+	InvalidateAll()
 }
 
 type channelPermService struct {
@@ -282,4 +301,30 @@ func (s *channelPermService) invalidateChannelCache(channelID string) {
 	s.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasSuffix(key, suffix)
 	})
+}
+
+// InvalidateUser clears every cached entry for one user.
+//
+// Mirrors invalidateChannelCache, just by the other half of the
+// "userID:channelID" composite key. Called when a single user's role
+// membership changes (assign/remove) or when they are kicked/banned
+// from a server (defence — they should already be unable to call the
+// API, but the cache entry would still leak through any half-finished
+// request).
+func (s *channelPermService) InvalidateUser(userID string) {
+	prefix := userID + ":"
+	s.permCache.DeleteFunc(func(key string) bool {
+		return strings.HasPrefix(key, prefix)
+	})
+}
+
+// InvalidateAll drops the entire cache.
+//
+// Used by role mutations (Update / Delete) where the change affects
+// every member who holds the role across every channel. Enumerating
+// those users would cost an extra "roles → users" query at every role
+// edit; a full cache wipe lets the next request rebuild lazily and
+// the system returns to steady state within permCacheTTL (30s).
+func (s *channelPermService) InvalidateAll() {
+	s.permCache.DeleteFunc(func(string) bool { return true })
 }

@@ -7,6 +7,7 @@ import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useConfirmStore } from "../../stores/confirmStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
+import { useToastStore } from "../../stores/toastStore";
 import FriendItem from "./FriendItem";
 import FriendRequestForm from "./FriendRequestForm";
 import type { FriendshipWithUser } from "../../types";
@@ -34,6 +35,7 @@ function FriendsView() {
   const openTab = useUIStore((s) => s.openTab);
   const confirmOpen = useConfirmStore((s) => s.open);
   const initiateCall = useP2PCallStore((s) => s.initiateCall);
+  const addToast = useToastStore((s) => s.addToast);
 
   // Fetch on mount
   useEffect(() => {
@@ -80,6 +82,13 @@ function FriendsView() {
       selectDM(channelId);
       openTab(channelId, "dm", displayName);
       fetchMessages(channelId);
+    } else {
+      // createOrGetChannel returns null on API failure (rate-limit, blocked
+      // user, DM privacy denial, network error). Previously this exited
+      // silently — the click button simply did nothing, which the user
+      // reads as "the chat icon is broken". Surface the failure as a toast
+      // so they know to try again or check their connection.
+      addToast("error", t("dmOpenFailed"));
     }
   }
 

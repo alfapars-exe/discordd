@@ -47,8 +47,17 @@ function MentionAutocomplete({ query, serverId, onSelect, onClose }: MentionAuto
     if (!rolesByServer[effectiveServerId]) fetchRoles(effectiveServerId);
   }, [effectiveServerId, membersByServer, rolesByServer, fetchMembers, fetchRoles]);
 
-  const members: MemberWithRoles[] = effectiveServerId ? (membersByServer[effectiveServerId] ?? []) : [];
-  const roles: Role[] = effectiveServerId ? (rolesByServer[effectiveServerId] ?? []) : [];
+  // Wrap in useMemo so the filtered-list memo below gets stable
+  // references — `effectiveServerId ? store[id] : []` would otherwise
+  // allocate a fresh `[]` every render and bust the downstream memo.
+  const members = useMemo<MemberWithRoles[]>(
+    () => (effectiveServerId ? (membersByServer[effectiveServerId] ?? []) : []),
+    [effectiveServerId, membersByServer]
+  );
+  const roles = useMemo<Role[]>(
+    () => (effectiveServerId ? (rolesByServer[effectiveServerId] ?? []) : []),
+    [effectiveServerId, rolesByServer]
+  );
   const [activeIndex, setActiveIndex] = useState(0);
 
   const filtered = useMemo(() => {
@@ -77,10 +86,23 @@ function MentionAutocomplete({ query, serverId, onSelect, onClose }: MentionAuto
     return items.slice(0, MAX_RESULTS);
   }, [query, members, roles]);
 
-  useEffect(() => {
+  // Reset the highlight to the top entry whenever the user changes
+  // their @mention query — the existing list no longer corresponds to
+  // the new filter so the previous index is stale. React docs allow
+  // calling setState during render when guarded by a "did the input
+  // change?" check; the cascading-render rule's set-state-in-effect
+  // warning doesn't fire for this pattern because there's no effect.
+  const [lastQuery, setLastQuery] = useState(query);
+  if (query !== lastQuery) {
+    setLastQuery(query);
     setActiveIndex(0);
-  }, [query]);
+  }
 
+  // Auto-close when the query matches nothing — the popup would just
+  // render an empty box otherwise. Stays in a useEffect because
+  // onClose lives in the parent and we need to call it outside the
+  // render commit (calling it during render would re-enter the parent
+  // mid-render).
   useEffect(() => {
     if (filtered.length === 0 && query.length > 0) {
       onClose();

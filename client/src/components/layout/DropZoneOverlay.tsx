@@ -3,43 +3,20 @@
  *
  * Pure visual (pointer-events: none). All drag events are handled
  * by the parent PanelView which passes activeZone as a prop.
+ *
+ * The DropZone type + calculateZone helper used to live in this file
+ * but were extracted to ./dropZone.ts so this module exports only the
+ * component — required for react-refresh/only-export-components
+ * (Vite's Fast Refresh boundary must be component-pure).
  */
 
-export type DropZone = "left" | "right" | "top" | "bottom" | "center";
+import type { DropZone } from "./dropZone";
 
 type DropZoneOverlayProps = {
   activeZone: DropZone | null;
 };
 
 const ZONES: DropZone[] = ["left", "right", "top", "bottom", "center"];
-
-/**
- * Determines which zone the cursor is in based on relative distance
- * to each edge. Closest edge within 25% threshold wins; otherwise center.
- * Exported for use by PanelView.
- */
-export function calculateZone(
-  clientX: number,
-  clientY: number,
-  rect: DOMRect
-): DropZone {
-  const relX = (clientX - rect.left) / rect.width;
-  const relY = (clientY - rect.top) / rect.height;
-
-  const distLeft = relX;
-  const distRight = 1 - relX;
-  const distTop = relY;
-  const distBottom = 1 - relY;
-
-  const minDist = Math.min(distLeft, distRight, distTop, distBottom);
-  const threshold = 0.25;
-
-  if (minDist >= threshold) return "center";
-  if (minDist === distLeft) return "left";
-  if (minDist === distRight) return "right";
-  if (minDist === distTop) return "top";
-  return "bottom";
-}
 
 function DropZoneOverlay({ activeZone }: DropZoneOverlayProps) {
   if (!activeZone) return null;

@@ -84,14 +84,20 @@ body:has(.landing-page) #root { overflow-y: auto !important; height: auto !impor
 /* ── Screenshot Background ──
    Heavily blurred in-app screenshot as an abstract color field.
    Overscan so blur feather doesn't expose hard edges. */
+/* Background field: a heavy multi-stop gradient stand-in for the missing
+   /bg.png screenshot. The original CSS referenced a public-dir asset that
+   never landed in the repo, so production builds 404'd on every landing
+   render and the page fell back to a flat #110f14. The aurora layer
+   below (.lp-aurora-wrap) provides the moving color; this layer just
+   provides depth + a darker base so text stays readable. */
 .landing-page::before {
   content: "";
   position: fixed;
   inset: -120px;
   background:
-    linear-gradient(180deg, rgba(17, 15, 20, 0.5), rgba(11,10,14,0.65)),
-    url("/bg.png?v=2") center/cover no-repeat;
-  filter: blur(20px) saturate(1.2);
+    radial-gradient(1200px 600px at 20% 10%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(1000px 500px at 85% 85%, rgba(168, 85, 247, 0.15), transparent 55%),
+    linear-gradient(180deg, rgba(17, 15, 20, 0.95), rgba(11, 10, 14, 0.98));
   z-index: 0;
   pointer-events: none;
 }

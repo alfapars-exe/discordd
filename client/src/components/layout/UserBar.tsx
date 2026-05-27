@@ -55,10 +55,15 @@ function UserBar({
   const sbBtnRef = useRef<HTMLButtonElement>(null);
   const [sbPos, setSbPos] = useState<{ top: number; left: number } | null>(null);
 
-  // Audio device popup state
-  const micChevronRef = useRef<HTMLButtonElement>(null);
-  const speakerChevronRef = useRef<HTMLButtonElement>(null);
-  const screenShareChevronRef = useRef<HTMLButtonElement>(null);
+  // Audio device popup state — store chevron DOM elements in state via
+  // callback refs so the JSX below can pass them as `anchorEl` without
+  // touching .current during render. The previous useRef + render-time
+  // read pattern triggered react-hooks/refs (refs read during render
+  // miss the latest commit and the popup positioned against stale
+  // bounds on the first open after a layout shift).
+  const [micChevronEl, setMicChevronEl] = useState<HTMLButtonElement | null>(null);
+  const [speakerChevronEl, setSpeakerChevronEl] = useState<HTMLButtonElement | null>(null);
+  const [screenShareChevronEl, setScreenShareChevronEl] = useState<HTMLButtonElement | null>(null);
   const [devicePopup, setDevicePopup] = useState<"input" | "output" | "screenshare" | null>(null);
 
   // Connected voice channel name
@@ -171,7 +176,7 @@ function UserBar({
                 </svg>
               </button>
               <button
-                ref={screenShareChevronRef}
+                ref={setScreenShareChevronEl}
                 className={`ub-chevron${devicePopup === "screenshare" ? " active" : ""}`}
                 onClick={() => setDevicePopup(devicePopup === "screenshare" ? null : "screenshare")}
               >
@@ -223,6 +228,18 @@ function UserBar({
             />
             <span className={`ub-status-dot ${statusDotClass}`} />
           </div>
+          {/* Display name + @username next to avatar — requested so users can
+              see who they're signed in as at a glance without hovering.
+              Re-uses the existing .ub-info / .ub-name / .ub-status CSS that
+              was left in globals.css from an earlier UserBar revision — those
+              classes already handle truncation (min-width:0 + ellipsis) so
+              long names don't push the mic/headphone row off the sidebar. */}
+          <div className="ub-info">
+            <span className="ub-name">{user.display_name || user.username}</span>
+            {user.display_name && (
+              <span className="ub-status">@{user.username}</span>
+            )}
+          </div>
         </div>
 
         {/* Mic toggle + device chevron */}
@@ -241,7 +258,7 @@ function UserBar({
             </svg>
           </button>
           <button
-            ref={micChevronRef}
+            ref={setMicChevronEl}
             className={`ub-chevron${devicePopup === "input" ? " active" : ""}`}
             onClick={() => setDevicePopup(devicePopup === "input" ? null : "input")}
           >
@@ -270,7 +287,7 @@ function UserBar({
             </svg>
           </button>
           <button
-            ref={speakerChevronRef}
+            ref={setSpeakerChevronEl}
             className={`ub-chevron${devicePopup === "output" ? " active" : ""}`}
             onClick={() => setDevicePopup(devicePopup === "output" ? null : "output")}
           >
@@ -324,25 +341,25 @@ function UserBar({
       </div>
 
       {/* Audio device popup */}
-      {devicePopup === "input" && micChevronRef.current && (
+      {devicePopup === "input" && micChevronEl && (
         <AudioDevicePopup
           kind="input"
-          anchorEl={micChevronRef.current}
+          anchorEl={micChevronEl}
           onClose={() => setDevicePopup(null)}
         />
       )}
-      {devicePopup === "output" && speakerChevronRef.current && (
+      {devicePopup === "output" && speakerChevronEl && (
         <AudioDevicePopup
           kind="output"
-          anchorEl={speakerChevronRef.current}
+          anchorEl={speakerChevronEl}
           onClose={() => setDevicePopup(null)}
         />
       )}
 
       {/* Screen share quality popup */}
-      {devicePopup === "screenshare" && screenShareChevronRef.current && (
+      {devicePopup === "screenshare" && screenShareChevronEl && (
         <ScreenShareQualityPopup
-          anchorEl={screenShareChevronRef.current}
+          anchorEl={screenShareChevronEl}
           onClose={() => setDevicePopup(null)}
         />
       )}

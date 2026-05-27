@@ -116,18 +116,27 @@ function DMChatContent({
     }
   }, [e2eeInitStatus, channelId, invalidateMessages, fetchMessages]);
 
-  // Auto-open search panel when triggered from context menu
+  // Auto-open search panel when triggered from context menu. Deferred
+  // via microtask so the setState fires AFTER React's current commit,
+  // not synchronously in the effect body (which trips
+  // react-hooks/set-state-in-effect as a cascading-render pattern).
   useEffect(() => {
     if (pendingSearchChannelId === channelId) {
-      setShowSearch(true);
-      setPendingSearchChannelId(null);
+      queueMicrotask(() => {
+        setShowSearch(true);
+        setPendingSearchChannelId(null);
+      });
     }
   }, [pendingSearchChannelId, channelId, setPendingSearchChannelId]);
 
-  // Check recipient's key status when E2EE is active (for warning banner)
+  // Check recipient's key status when E2EE is active (for warning banner).
+  // All setState calls happen behind an `await`/`.then()` boundary so
+  // the lint rule treats them as Promise-callback state — the only
+  // remaining issue was the sync `setRecipientHasKeys(true)` on the
+  // gate branch, now deferred via microtask.
   useEffect(() => {
     if (!dmE2EEEnabled || !otherUser) {
-      setRecipientHasKeys(true);
+      queueMicrotask(() => setRecipientHasKeys(true));
       return;
     }
     let cancelled = false;

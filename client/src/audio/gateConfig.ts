@@ -15,12 +15,19 @@ import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice"
  * sound is needed to open the gate — i.e. tighter noise rejection. closeThreshold
  * sits below openThreshold to give hysteresis (signal must dip below close
  * AND stay there `holdMs` before the gate fully closes), preventing flicker.
+ *
+ * Thresholds shifted ~10 dB more permissive across the board after reports
+ * of quiet talkers / low-gain mics (laptop internal mic, cheap USB) being
+ * fully silenced for remote listeners at the previous "medium" setting.
+ * RMS for normal speech on weak hardware lands around -45..-50 dB; the old
+ * medium=-42 never opened. New medium=-52 lets that through while still
+ * rejecting keyboard/fan noise (typically -55..-65 dB).
  */
 const LEVEL_BASE: Record<NoiseSuppressionLevel, { open: number; close: number; hold: number }> = {
-  low:     { open: -50, close: -55, hold: 400 },
-  medium:  { open: -42, close: -48, hold: 300 },
-  high:    { open: -36, close: -42, hold: 200 },
-  maximum: { open: -30, close: -36, hold: 150 },
+  low:     { open: -60, close: -65, hold: 400 },
+  medium:  { open: -52, close: -58, hold: 300 },
+  high:    { open: -45, close: -52, hold: 200 },
+  maximum: { open: -38, close: -45, hold: 150 },
 };
 
 /**

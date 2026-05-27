@@ -118,17 +118,51 @@ export function useSystemAudioCapture(): SystemAudioCapture {
           const isFloat = header.formatTag === 3;
           const bytesPerSample = header.bitsPerSample / 8;
 
+          // Track total bytes dropped on the renderer side (separate from
+          // the main-process drop counter). We only get here when the main
+          // batched buffer made it across IPC but the worklet's port
+          // message queue is still backed up — usually because the
+          // AudioContext has been throttled (tab hidden, system sleep).
+          // Without this counter the queue would grow until V8 OOM'd.
+          const MAX_PORT_BACKLOG = 16; // ~80 ms of buffered audio
+          let droppedSinceLog = 0;
+          let outstandingMessages = 0;
+          // The worklet acks each processed chunk via port.onmessage. The
+          // ack lets us track how far behind it is without coordinating
+          // through a separate channel.
+          workletNode.port.onmessage = (event) => {
+            if (event.data === "processed") {
+              outstandingMessages = Math.max(0, outstandingMessages - 1);
+            }
+          };
+
           api.onCaptureAudioData((data: Uint8Array) => {
-            // Convert raw bytes to Float32Array for the worklet
+            if (outstandingMessages > MAX_PORT_BACKLOG) {
+              droppedSinceLog += data.byteLength;
+              if (droppedSinceLog > 256 * 1024) {
+                logToServer("warn", "system_audio_renderer_backlog", {
+                  droppedBytes: droppedSinceLog,
+                  outstandingMessages,
+                });
+                droppedSinceLog = 0;
+              }
+              return;
+            }
+
+            // Convert raw bytes to Float32Array for the worklet. Allocate
+            // a *copy* (not a view on data.buffer) so we can transfer the
+            // underlying ArrayBuffer to the worklet — IPC-supplied Uint8Array
+            // backing buffers may be shared/pooled by Electron and aren't
+            // safe to neuter.
             let float32Data: Float32Array;
 
             if (isFloat && bytesPerSample === 4) {
-              // Already float32 — just reinterpret
-              float32Data = new Float32Array(
+              const view = new Float32Array(
                 data.buffer,
                 data.byteOffset,
                 Math.floor(data.byteLength / 4)
               );
+              float32Data = new Float32Array(view); // copy so we can transfer
             } else if (bytesPerSample === 2) {
               // 16-bit PCM int → float32
               const int16 = new Int16Array(
@@ -145,8 +179,11 @@ export function useSystemAudioCapture(): SystemAudioCapture {
               return;
             }
 
-            // Send to worklet's ring buffer via port
-            workletNode.port.postMessage(float32Data);
+            // Transferable postMessage — neuters our Float32Array's buffer
+            // but avoids the structured-clone copy across the worklet
+            // boundary, which is the main source of GC pressure here.
+            outstandingMessages++;
+            workletNode.port.postMessage(float32Data, [float32Data.buffer]);
           });
 
           setIsCapturing(true);

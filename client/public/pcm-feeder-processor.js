@@ -39,11 +39,17 @@ class PCMFeederProcessor extends AudioWorkletProcessor {
     this.readPos = 0;
     this.available = 0; // frames available to read
 
-    // Receive PCM data from main thread
+    // Receive PCM data from main thread. We post "processed" back so the
+    // renderer can track how many in-flight chunks are sitting in the port
+    // message queue and drop new ones when the queue gets too deep — the
+    // queue is otherwise unbounded and used to grow into multi-hundred-MB
+    // territory when the audio thread was throttled (background tab,
+    // system sleep, GC pause), eventually OOM'ing the renderer.
     this.port.onmessage = (event) => {
       const data = event.data;
       if (data instanceof Float32Array) {
         this._writeInterleaved(data);
+        this.port.postMessage("processed");
       }
     };
   }

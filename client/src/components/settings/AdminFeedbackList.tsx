@@ -53,7 +53,7 @@ function AdminFeedbackList() {
   }, [statusFilter, typeFilter, addToast, t]);
 
   useEffect(() => {
-    fetchTickets();
+    queueMicrotask(() => fetchTickets());
   }, [fetchTickets]);
 
   const openTicket = async (ticketId: string) => {

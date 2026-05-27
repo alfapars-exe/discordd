@@ -198,8 +198,16 @@ type InviteItemProps = {
 function InviteItem({ invite, onCopyCode, onCopyLink, onDelete }: InviteItemProps) {
   const { t } = useTranslation("settings");
 
+  // Snapshot "now" once per render-pass + every 60s so render stays
+  // pure (no Date.now() / new Date() reads during render — they trip
+  // react-hooks/purity because they're non-deterministic).
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const isExpired =
-    invite.expires_at !== null && new Date(invite.expires_at) < new Date();
+    invite.expires_at !== null && new Date(invite.expires_at).getTime() < nowMs;
   const isMaxed =
     invite.max_uses > 0 && invite.uses >= invite.max_uses;
   const isInvalid = isExpired || isMaxed;
@@ -210,7 +218,7 @@ function InviteItem({ invite, onCopyCode, onCopyLink, onDelete }: InviteItemProp
     if (!invite.expires_at) return t("expiryNever");
     if (isExpired) return t("inviteExpired");
 
-    const diff = new Date(invite.expires_at).getTime() - Date.now();
+    const diff = new Date(invite.expires_at).getTime() - nowMs;
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 

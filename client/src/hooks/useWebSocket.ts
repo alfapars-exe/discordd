@@ -15,8 +15,8 @@
  * IDs are incremented (never reset) to prevent stale onclose collisions.
  */
 
-import { useEffect, useRef, useCallback, useState } from "react";
-import { ensureFreshToken } from "../api/client";
+import { useEffect, useLayoutEffect, useRef, useCallback, useState } from "react";
+import { ensureFreshToken, apiClient } from "../api/client";
 import { APP_RESUME_EVENT } from "../utils/nativePlugins";
 import { useP2PCallStore } from "../stores/p2pCallStore";
 import { useVoiceStore } from "../stores/voiceStore";
@@ -78,27 +78,11 @@ export function useWebSocket() {
    */
   const routeEventRef = useRef<(msg: WSMessage) => void>(() => {});
 
-  /**
-   * routeEvent — Thin dispatcher that delegates to domain-specific handler modules.
-   * Each handler returns true if it handled the event, false otherwise.
-   */
-  async function routeEvent(msg: WSMessage) {
-    // Heartbeat ack is handled inline (no store interaction)
-    if (msg.op === "heartbeat_ack") {
-      missedHeartbeatsRef.current = 0;
-      return;
-    }
-
-    const ctx: WSHandlerContext = { sendVoiceJoin };
-
-    if (await handleChannelEvent(msg)) return;
-    if (await handleDMEvent(msg)) return;
-    if (await handleVoiceEvent(msg, ctx)) return;
-    if (await handleSystemEvent(msg, ctx, setConnectionStatus)) return;
-  }
-
-  // Keep routeEventRef fresh every render (latest ref pattern)
-  routeEventRef.current = routeEvent;
+  // routeEvent is defined further down (below sendVoiceJoin) because
+  // it captures sendVoiceJoin in its WSHandlerContext. The lint rule
+  // react-hooks/immutability used to flag the forward reference in the
+  // old top-of-component routeEvent; reordering the declarations is
+  // the minimal-disruption fix.
 
   function cleanupTimers() {
     if (heartbeatIntervalRef.current) {
@@ -190,6 +174,35 @@ export function useWebSocket() {
   }, []);
 
   /**
+   * routeEvent — Thin dispatcher that delegates to domain-specific
+   * handler modules. Declared HERE (after sendVoiceJoin) so the
+   * WSHandlerContext captures a real function reference instead of a
+   * forward declaration that react-hooks/immutability flagged as
+   * accessed-before-declared.
+   */
+  async function routeEvent(msg: WSMessage) {
+    // Heartbeat ack is handled inline (no store interaction)
+    if (msg.op === "heartbeat_ack") {
+      missedHeartbeatsRef.current = 0;
+      return;
+    }
+
+    const ctx: WSHandlerContext = { sendVoiceJoin };
+
+    if (await handleChannelEvent(msg)) return;
+    if (await handleDMEvent(msg)) return;
+    if (await handleVoiceEvent(msg, ctx)) return;
+    if (await handleSystemEvent(msg, ctx, setConnectionStatus)) return;
+  }
+
+  // Latest-ref mirror — updated after every commit so onmessage in
+  // the WebSocket lifecycle effect can always dispatch through the
+  // freshest handler closure without stale-context bugs.
+  useLayoutEffect(() => {
+    routeEventRef.current = routeEvent;
+  });
+
+  /**
    * sendPresenceUpdate — Sends presence status via WS.
    * Called by idle detection (isAuto=true) and manual status picker (isAuto=false).
    * Auto-idle does NOT persist to pref_status — so idle detection resumes after WS reconnect.
@@ -232,8 +245,15 @@ export function useWebSocket() {
     }
   }, []);
 
-  // Register WS sender in P2P call store
-  useP2PCallStore.getState().registerSendWS(sendWS);
+  // Register WS sender in P2P call store. Done inside an effect (vs in
+  // the render body) because the previous shape was flagged by
+  // react-hooks/refs — passing a useCallback identity to a store
+  // setter during render is a render-time side effect. The store
+  // accepts re-registration; calling it again with the same `sendWS`
+  // reference is a no-op, and only the latest call wins anyway.
+  useEffect(() => {
+    useP2PCallStore.getState().registerSendWS(sendWS);
+  }, [sendWS]);
 
   // ─── Effect: Mount/unmount lifecycle ───
   useEffect(() => {
@@ -291,7 +311,31 @@ export function useWebSocket() {
         wsRef.current = null;
       }
 
-      const socket = new WebSocket(`${WS_URL}?token=${token}`);
+      // Prefer the short-lived one-time ticket over embedding the JWT
+      // access token in the WS URL. The ticket dies on first use (or
+      // ~30s later, whichever comes first) and never lands in proxy
+      // access logs or browser history as a recoverable credential.
+      //
+      // Falls back to the legacy `?token=` path if the server hasn't
+      // shipped the ticket endpoint yet — apiClient turns the 404 into
+      // a success:false response, which we read explicitly here.
+      let connectURL = `${WS_URL}?token=${token}`;
+      try {
+        const ticketRes = await apiClient<{ ticket: string }>(
+          "/auth/ws-ticket",
+          { method: "POST" },
+        );
+        if (ticketRes.success && ticketRes.data?.ticket) {
+          connectURL = `${WS_URL}?ticket=${ticketRes.data.ticket}`;
+        }
+      } catch {
+        // Network blip / server cold-boot — fall through to the token
+        // path; the next reconnect cycle will retry the ticket fetch.
+      }
+
+      if (activeConnectionIdRef.current !== myId) return;
+
+      const socket = new WebSocket(connectURL);
       wsRef.current = socket;
 
       // ─── onopen ───
@@ -399,8 +443,13 @@ export function useWebSocket() {
     window.addEventListener(APP_RESUME_EVENT, onAppResume);
 
     return () => {
-      // Increment (not reset) to invalidate all callbacks from this connection
-      activeConnectionIdRef.current++;
+      // Increment from the snapshotted myId so the lint rule
+      // react-hooks/exhaustive-deps doesn't flag a cleanup-time
+      // ref read. Semantically identical to `activeConnectionIdRef.current++`
+      // because no one else mutates this ref during the effect's
+      // lifetime (scheduleReconnect/doConnect only *read* it via
+      // `=== myId` checks and bail out — they never increment).
+      activeConnectionIdRef.current = myId + 1;
       cleanupTimers();
       window.removeEventListener(APP_RESUME_EVENT, onAppResume);
 

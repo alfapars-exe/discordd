@@ -204,14 +204,8 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 			return fmt.Errorf("failed to read migration %s: %w", file, err)
 		}
 
-		if err := db.execStatements(file, string(content)); err != nil {
+		if err := db.applyMigrationFile(file, string(content)); err != nil {
 			return err
-		}
-
-		if _, err := db.Conn.Exec(
-			"INSERT INTO schema_migrations (filename) VALUES (?)", file,
-		); err != nil {
-			return fmt.Errorf("failed to record migration %s: %w", file, err)
 		}
 
 		log.Printf("[database] migration applied: %s", file)
@@ -220,14 +214,61 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 	return nil
 }
 
-// execStatements runs each SQL statement individually, skipping recoverable errors
-// (e.g. "duplicate column name" from a partially applied migration).
+// applyMigrationFile runs all statements in a single transaction so a
+// half-applied migration can never persist. Either every statement +
+// the schema_migrations row commits together, or the file is rolled back
+// and the next boot retries from scratch. Previously each statement ran
+// individually and the schema_migrations record was a separate Exec —
+// a failure in statement N left statements 1..N-1 visible without ever
+// marking the file applied, so subsequent boots re-ran the prefix and
+// either tripped "duplicate column name" forever or, worse, double-
+// applied non-idempotent INSERTs.
 //
-// PRAGMA statements are skipped entirely: connection-level settings
-// (foreign_keys, journal_mode, busy_timeout) are already passed via the SQLite
-// DSN, and remote libSQL/Turso rejects PRAGMAs with HTTP 400 because the
-// server manages those settings itself.
-func (db *DB) execStatements(filename, content string) error {
+// PRAGMA statements are skipped (set via DSN / managed by libSQL),
+// matching the prior behaviour. Comment-only chunks emitted by the
+// splitter are also skipped.
+func (db *DB) applyMigrationFile(filename, content string) error {
+	tx, err := db.Conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction for migration %s: %w", filename, err)
+	}
+	// Defensive rollback — Commit nils tx, so this is a no-op on success.
+	// On any early return below, the tx is cleaned up here.
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err := execStatementsTx(tx, filename, content); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(
+		"INSERT INTO schema_migrations (filename) VALUES (?)", filename,
+	); err != nil {
+		return fmt.Errorf("failed to record migration %s: %w", filename, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration %s: %w", filename, err)
+	}
+	committed = true
+	return nil
+}
+
+// execStatementsTx runs each SQL statement inside the provided transaction.
+// Recoverable errors (e.g. "duplicate column name" from a partially applied
+// migration on a pre-transactional install) are still tolerated as a
+// defensive fallback for upgrade paths — but with full transactional
+// commits going forward, partial application shouldn't recur.
+//
+// PRAGMA statements are skipped: connection-level settings (foreign_keys,
+// journal_mode, busy_timeout) are already passed via the SQLite DSN, and
+// remote libSQL/Turso rejects PRAGMAs with HTTP 400 because the server
+// manages those settings itself.
+func execStatementsTx(tx *sql.Tx, filename, content string) error {
 	statements := splitStatements(content)
 
 	for i, stmt := range statements {
@@ -264,7 +305,7 @@ func (db *DB) execStatements(filename, content string) error {
 			continue
 		}
 
-		if _, err := db.Conn.Exec(stmt); err != nil {
+		if _, err := tx.Exec(stmt); err != nil {
 			errMsg := err.Error()
 			recoverable := false
 			for _, pattern := range recoverableErrors {

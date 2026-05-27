@@ -30,6 +30,13 @@ function MessageInput() {
   const [content, setContent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isSending, setIsSending] = useState(false);
+  // Synchronous mirror of isSending — read inside handleSend BEFORE React
+  // has flushed setIsSending(true). Without this, hammering Enter (or a
+  // user double-tap on the send button) fires handleSend twice in the same
+  // tick because both invocations see the stale state-level isSending=false
+  // and pass the guard, posting the same message to the API twice.
+  // The state is still kept for `disabled={isSending}` / button styling.
+  const isSendingRef = useRef(false);
 
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -114,7 +121,11 @@ function MessageInput() {
   const handleSend = useCallback(async () => {
     if (!channelId) return;
     if (!content.trim() && files.length === 0) return;
-    if (isSending) return;
+    // Ref-based guard runs BEFORE React batches the state update — closes
+    // the same-tick double-fire race that the previous `isSending` state
+    // guard could not (state hadn't propagated by the second handleSend).
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
 
     setIsSending(true);
 
@@ -147,11 +158,12 @@ function MessageInput() {
     } catch (err) {
       console.error("[MessageInput] send failed:", err);
     } finally {
+      isSendingRef.current = false;
       setIsSending(false);
       // Restore focus after send — disabled={isSending} causes browser to drop focus.
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
-  }, [channelId, content, files, isSending, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend]);
+  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -284,19 +296,28 @@ function MessageInput() {
 
   /** Send GIF URL as message content immediately */
   async function handleGifSelect(url: string) {
-    if (!channelId || isSending) return;
+    if (!channelId) return;
+    // Same ref-based guard as handleSend — a fast double-click on a GIF
+    // tile used to fire two API requests because the state-based check
+    // only saw isSending=false until React flushed the next render.
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
     setShowGifPicker(false);
     setIsSending(true);
-    const success = await sendMessage(url, [], undefined);
-    if (success) {
-      setContent("");
-      setFiles([]);
-      setReplyingTo(null);
+    try {
+      const success = await sendMessage(url, [], undefined);
+      if (success) {
+        setContent("");
+        setFiles([]);
+        setReplyingTo(null);
+      }
+    } finally {
+      isSendingRef.current = false;
+      setIsSending(false);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
     }
-    setIsSending(false);
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
   }
 
   /** Paste handler — supports pasting images/files from clipboard */

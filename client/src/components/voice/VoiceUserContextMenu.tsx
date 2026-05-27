@@ -16,7 +16,8 @@ import { useServerStore } from "../../stores/serverStore";
 import * as memberApi from "../../api/members";
 import Avatar from "../shared/Avatar";
 import { IconSpeaker, IconSpeakerOff, IconSpeakerMuted, IconMic, IconMicMuted, IconHeadphones, IconHeadphonesMuted } from "../shared/Icons";
-import ModDurationPicker, { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "../members/ModDurationPicker";
+import ModDurationPicker from "../members/ModDurationPicker";
+import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "../members/modDurationPresets";
 
 type VoiceUserContextMenuProps = {
   userId: string;

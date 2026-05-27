@@ -86,6 +86,29 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			user = loaded
 		}
 
+		// Revocation + ban gate against the cached user row.
+		//
+		// Moved here from AuthService.ValidateAccessToken so a warm cache
+		// can satisfy the entire authenticated request with zero DB reads
+		// (previously the validator always hit users by ID before this
+		// middleware ran, so the cache hit only saved the SECOND read).
+		//
+		// Trade-off: revocation / ban can be up to userCacheTTL stale
+		// (30s). This is the same trade-off already accepted for
+		// IsPlatformBanned in the previous turn — TokenVersion now
+		// follows the same rule. For instant invalidation (rare),
+		// password change / logout-from-all-devices / ban paths should
+		// call AuthMiddleware.InvalidateUser to drop the cached row
+		// (see authService.ChangePassword wiring for the existing path).
+		if claims.TokenVersion < user.TokenVersion {
+			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "token revoked (logged out from all devices)")
+			return
+		}
+		if user.IsPlatformBanned {
+			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "account suspended")
+			return
+		}
+
 		ctx := context.WithValue(r.Context(), handlers.UserContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

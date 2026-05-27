@@ -385,3 +385,97 @@ func TestBuildVisibilityFilter_PermRepoError(t *testing.T) {
 		t.Fatal("expected error when perm repo fails")
 	}
 }
+
+// ─── Cache invalidation ───
+//
+// These tests pin down the behaviour B1 wires up: when a role mutation
+// or a member kick happens, the next ResolveChannelPermissions call MUST
+// go back to the repo instead of returning a stale cached result. We
+// detect "cache miss" by counting how many times the role repo's
+// GetByUserIDAndServer fn fires — ResolveChannelPermissions calls it
+// exactly once per cache miss.
+
+// resolveCallCounter wires a role repo whose Get fn increments a
+// counter, so a test can assert how many times Resolve actually touched
+// the database.
+type resolveCallCounter struct {
+	count int
+}
+
+func (c *resolveCallCounter) roleRepo(roles []models.Role) *testutil.MockRoleRepo {
+	return &testutil.MockRoleRepo{
+		GetByUserIDAndServerFn: func(_ context.Context, _, _ string) ([]models.Role, error) {
+			c.count++
+			return roles, nil
+		},
+	}
+}
+
+func newCachedSvc(roles []models.Role, counter *resolveCallCounter) ChannelPermissionService {
+	permRepo := &testutil.MockChannelPermRepo{
+		GetByChannelAndRolesFn: func(_ context.Context, _ string, _ []string) ([]models.ChannelPermissionOverride, error) {
+			return nil, nil
+		},
+	}
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return &models.Channel{ID: "c1", ServerID: "s1"}, nil
+		},
+	}
+	return newTestChannelPermService(permRepo, counter.roleRepo(roles), channelRepo, &testutil.MockBroadcaster{})
+}
+
+func TestInvalidateUser_DropsThatUsersEntriesOnly(t *testing.T) {
+	counter := &resolveCallCounter{}
+	roles := []models.Role{{ID: "r1", Permissions: models.PermSendMessages}}
+	svc := newCachedSvc(roles, counter)
+	ctx := context.Background()
+
+	// Warm cache for two users; expect 2 repo calls.
+	_, _ = svc.ResolveChannelPermissions(ctx, "alice", "c1")
+	_, _ = svc.ResolveChannelPermissions(ctx, "bob", "c1")
+	if counter.count != 2 {
+		t.Fatalf("cache warm-up: expected 2 repo hits, got %d", counter.count)
+	}
+
+	// Repeated lookups before invalidation are pure cache reads.
+	_, _ = svc.ResolveChannelPermissions(ctx, "alice", "c1")
+	_, _ = svc.ResolveChannelPermissions(ctx, "bob", "c1")
+	if counter.count != 2 {
+		t.Fatalf("cache hit: repo must not be touched (got %d total hits)", counter.count)
+	}
+
+	// Drop alice's entries — bob's must survive.
+	svc.InvalidateUser("alice")
+
+	_, _ = svc.ResolveChannelPermissions(ctx, "alice", "c1")
+	if counter.count != 3 {
+		t.Fatalf("post-invalidate alice: expected 3 repo hits, got %d", counter.count)
+	}
+	_, _ = svc.ResolveChannelPermissions(ctx, "bob", "c1")
+	if counter.count != 3 {
+		t.Fatalf("bob's cache must persist: expected 3 hits, got %d", counter.count)
+	}
+}
+
+func TestInvalidateAll_DropsEveryEntry(t *testing.T) {
+	counter := &resolveCallCounter{}
+	roles := []models.Role{{ID: "r1", Permissions: models.PermSendMessages}}
+	svc := newCachedSvc(roles, counter)
+	ctx := context.Background()
+
+	_, _ = svc.ResolveChannelPermissions(ctx, "alice", "c1")
+	_, _ = svc.ResolveChannelPermissions(ctx, "bob", "c1")
+	if counter.count != 2 {
+		t.Fatalf("cache warm-up: expected 2 repo hits, got %d", counter.count)
+	}
+
+	svc.InvalidateAll()
+
+	// Both users must miss after a full wipe.
+	_, _ = svc.ResolveChannelPermissions(ctx, "alice", "c1")
+	_, _ = svc.ResolveChannelPermissions(ctx, "bob", "c1")
+	if counter.count != 4 {
+		t.Fatalf("post-invalidate-all: expected 4 total hits, got %d", counter.count)
+	}
+}

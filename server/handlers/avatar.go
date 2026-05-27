@@ -61,7 +61,7 @@ func (h *AvatarHandler) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fileURL, err := h.processUpload(r)
+	fileURL, err := h.processUpload(w, r)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -91,7 +91,7 @@ func (h *AvatarHandler) UploadUserWallpaper(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	fileURL, err := h.processUpload(r)
+	fileURL, err := h.processUpload(w, r)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -136,7 +136,7 @@ func (h *AvatarHandler) UploadServerIcon(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fileURL, err := h.processUpload(r)
+	fileURL, err := h.processUpload(w, r)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -161,8 +161,11 @@ func (h *AvatarHandler) UploadServerIcon(w http.ResponseWriter, r *http.Request)
 
 // processUpload parses the multipart form, validates the file, and saves it to disk.
 // Returns the URL path (e.g. "/api/uploads/a1b2c3d4_avatar.png").
-func (h *AvatarHandler) processUpload(r *http.Request) (string, error) {
-	if err := r.ParseMultipartForm(avatarMaxSize); err != nil {
+// w is forwarded to MaxBytesReader so the body cap takes effect before the
+// parser starts spilling to disk; callers always pass their handler's
+// ResponseWriter.
+func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request) (string, error) {
+	if err := pkg.LimitedParseMultipartForm(w, r, avatarMaxSize); err != nil {
 		return "", fmt.Errorf("%w: failed to parse multipart form", pkg.ErrBadRequest)
 	}
 

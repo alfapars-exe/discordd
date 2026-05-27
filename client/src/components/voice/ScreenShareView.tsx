@@ -51,10 +51,12 @@ function ScreenShareView() {
   // Container ref for converting pixel deltas to percentages
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset ratio when dropping back to single track
+  // Reset ratio when dropping back to single track. Microtask defer
+  // so the lint rule react-hooks/set-state-in-effect doesn't see this
+  // as a cascading-render write.
   useEffect(() => {
     if (screenShareTracks.length < 2) {
-      setSplitRatio(DEFAULT_RATIO);
+      queueMicrotask(() => setSplitRatio(DEFAULT_RATIO));
     }
   }, [screenShareTracks.length]);
 

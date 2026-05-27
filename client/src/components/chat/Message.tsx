@@ -71,7 +71,23 @@ function Message({ message, isCompact }: MessageProps) {
   const confirm = useConfirm();
   const { menuState, openMenu, closeMenu } = useContextMenu();
 
-  const editing = useMessageEditing({
+  // Destructure the editing hook's return at the top so downstream JSX
+  // reads named locals (editTextareaRef, editContent, onChange, ...)
+  // instead of `editing.<prop>` everywhere — the react-hooks/refs rule
+  // treats `<hookBag>.<refLike>` access in render as a "current read"
+  // because it can't statically prove the property isn't a ref.
+  const {
+    isEditing,
+    editContent,
+    editMentionQuery,
+    editTextareaRef,
+    startEdit,
+    saveAndExit,
+    cancel: cancelEdit,
+    onChange: onEditChange,
+    onMentionSelect: onEditMentionSelect,
+    closeMentionAutocomplete: closeEditMentionAutocomplete,
+  } = useMessageEditing({
     initialContent: message.content,
     saveEdit: (newContent) => editMessage(message.id, newContent),
   });
@@ -160,7 +176,7 @@ function Message({ message, isCompact }: MessageProps) {
       if (isOwner) {
         items.push({
           label: t("editMessage"),
-          onClick: editing.startEdit,
+          onClick: startEdit,
           separator: !canManageMessages,
         });
       }
@@ -183,7 +199,7 @@ function Message({ message, isCompact }: MessageProps) {
 
       openMenu(e, items);
     },
-    [t, handleReply, message.content, message.id, canManageMessages, isOwner, isPinned, handlePinToggle, handleDelete, editing.startEdit, openMenu],
+    [t, handleReply, message.content, message.id, canManageMessages, isOwner, isPinned, handlePinToggle, handleDelete, startEdit, openMenu],
   );
 
   // Long-press → bottom-sheet on mobile (in lieu of context menu)
@@ -281,29 +297,29 @@ function Message({ message, isCompact }: MessageProps) {
             </div>
           )}
 
-          {editing.isEditing ? (
+          {isEditing ? (
             <div className="msg-edit-area">
-              {editing.editMentionQuery !== null && mode === "channel" && (
+              {editMentionQuery !== null && mode === "channel" && (
                 <MentionAutocomplete
-                  query={editing.editMentionQuery}
-                  onSelect={editing.onMentionSelect}
-                  onClose={editing.closeMentionAutocomplete}
+                  query={editMentionQuery}
+                  onSelect={onEditMentionSelect}
+                  onClose={closeEditMentionAutocomplete}
                 />
               )}
               <textarea
-                ref={editing.editTextareaRef}
-                value={editing.editContent}
-                onChange={editing.onChange}
+                ref={editTextareaRef}
+                value={editContent}
+                onChange={onEditChange}
                 onKeyDown={(e) => {
                   // While the autocomplete is open, defer nav keys to it
-                  if (editing.editMentionQuery !== null) {
+                  if (editMentionQuery !== null) {
                     if (["Enter", "Tab", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) return;
                   }
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    editing.saveAndExit();
+                    saveAndExit();
                   }
-                  if (e.key === "Escape") editing.cancel();
+                  if (e.key === "Escape") cancelEdit();
                 }}
                 className="msg-edit-textarea"
                 rows={2}
@@ -343,7 +359,7 @@ function Message({ message, isCompact }: MessageProps) {
           />
         </div>
 
-        {!editing.isEditing && (
+        {!isEditing && (
           <MessageHoverActions
             isOwner={isOwner}
             isPinned={isPinned}
@@ -354,7 +370,7 @@ function Message({ message, isCompact }: MessageProps) {
             onPickerOpen={() => setPickerSource("hover")}
             onPickerClose={() => setPickerSource(null)}
             onPinToggle={handlePinToggle}
-            onEditStart={editing.startEdit}
+            onEditStart={startEdit}
             onDelete={handleDelete}
           />
         )}
@@ -372,7 +388,7 @@ function Message({ message, isCompact }: MessageProps) {
             setMobileActionsOpen(false);
           }}
           onPinToggle={handlePinToggle}
-          onEdit={editing.startEdit}
+          onEdit={startEdit}
           onDelete={handleDelete}
           onReaction={handleReaction}
           onCopy={() => {

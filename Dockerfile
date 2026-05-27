@@ -38,28 +38,53 @@ COPY server ./server
 # Frontend bundle goes where //go:embed all:dist expects it.
 COPY --from=frontend /app/client/dist ./server/static/dist
 
-# After source is present, `go mod tidy` can detect new imports (go-libsql)
-# and add the missing go.sum entries before `go build` verifies them.
+# Build pins to whatever the checked-in go.mod / go.sum already resolve
+# to. We deliberately do NOT run `go mod tidy` inside the build — tidy
+# can mutate go.sum by re-resolving indirect dependency versions, which
+# makes byte-identical commits produce different images depending on
+# when they were built. CI (.github/workflows/server-ci.yml) runs a
+# tidy diff check on every PR, so the lockfile is kept honest there.
+#
+# CGO_ENABLED=1 is required because tursodatabase/go-libsql is a
+# CGO-only Rust wrapper. GOARCH is left empty so buildx picks it up
+# from the --platform flag (linux/amd64, linux/arm64).
 WORKDIR /app/server
-RUN go mod tidy && \
-    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+RUN CGO_ENABLED=1 GOOS=linux \
     go build -trimpath -ldflags="-s -w" -o /out/hichat-server .
 
 # ─── Stage 3: Runtime ───
 # Stay on glibc (debian-slim) to match what go-libsql linked against. The
 # image is ~30MB larger than alpine but the binary actually runs.
 FROM debian:bookworm-slim
-# yt-dlp + ffmpeg are runtime dependencies for the music bot service —
-# yt-dlp resolves YouTube URLs into audio streams, ffmpeg encodes them as
-# Ogg/Opus that LiveKit's Pion stack can publish. yt-dlp is pulled from
-# the latest GitHub release at build time because Debian's apt-shipped
-# package is months stale and YouTube tightens its protocol regularly.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg python3 curl && \
-    curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-      -o /usr/local/bin/yt-dlp && \
-    chmod +x /usr/local/bin/yt-dlp && \
-    apt-get purge -y --auto-remove curl && \
+
+# yt-dlp pinned + checksum-verified. The previous "latest" fetch was
+# both a supply-chain risk (any compromise of the yt-dlp release artifact
+# would land in our image on the next rebuild) and a reproducibility
+# bug (identical commits produced different images as yt-dlp shipped
+# new releases). Override at build time with --build-arg YT_DLP_VERSION=...
+# to take a newer version; the official SHA2-256SUMS file from the same
+# release is fetched and verified, so the build fails loudly on any
+# tampering instead of silently shipping an unknown binary.
+ARG YT_DLP_VERSION=2024.11.04
+
+# ffmpeg + tzdata + ca-certificates from apt are still pulled "latest
+# in distro" — Debian's bookworm-slim apt snapshot is reproducible
+# within the lifetime of the base image tag, which is good enough for
+# our threat model. The base image tag itself (debian:bookworm-slim) is
+# the supply-chain boundary; operators wanting full reproducibility
+# should pin to a digest (debian:bookworm-slim@sha256:...).
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg python3 curl; \
+    BASE="https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}"; \
+    curl -fsSL "${BASE}/yt-dlp" -o /usr/local/bin/yt-dlp; \
+    curl -fsSL "${BASE}/SHA2-256SUMS" -o /tmp/yt-dlp-sums; \
+    EXPECTED=$(grep -E '  yt-dlp$' /tmp/yt-dlp-sums | awk '{print $1}'); \
+    if [ -z "$EXPECTED" ]; then echo "yt-dlp checksum not found in SHA2-256SUMS"; exit 1; fi; \
+    echo "${EXPECTED}  /usr/local/bin/yt-dlp" | sha256sum -c -; \
+    chmod +x /usr/local/bin/yt-dlp; \
+    rm /tmp/yt-dlp-sums; \
+    apt-get purge -y --auto-remove curl; \
     rm -rf /var/lib/apt/lists/*
 
 # Sanity check — fail the image build immediately if yt-dlp / ffmpeg /
@@ -70,10 +95,14 @@ RUN yt-dlp --version && ffmpeg -version | head -1 && python3 --version
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server
 
-# Run as root inside the container — the HF Storage Bucket mount at /data
-# brings its own ownership (root-owned by default), so a non-root USER like
-# `hichat` would get "permission denied" on mkdir /data/uploads. HF Spaces
-# isolate the container itself, so root-in-container is the normal pattern.
+# Default runtime is still root because the HF Spaces deployment mounts
+# /data with root-owned ownership and a non-root USER would fail mkdir
+# /data/uploads at first start. HF isolates the container itself, so
+# root-in-container is the documented pattern there.
+#
+# Self-hosters should run with `--user 1000:1000` and pre-chown the
+# /data volume on the host (or use a docker-compose `user:` override);
+# a follow-up Dockerfile.selfhost variant will codify that.
 # The Go binary will mkdir /data/uploads and /data/landing on first start.
 
 # HF Space defaults to port 7860 (the value of $PORT inside the container).

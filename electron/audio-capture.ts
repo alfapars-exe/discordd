@@ -25,6 +25,74 @@ let captureGeneration = 0;
 let headerParsed = false;
 let headerBuffer = Buffer.alloc(0);
 
+// PCM data IPC batching. The native helper streams ~384 KB/sec at 48 kHz
+// stereo float32, which used to fire `webContents.send("capture-audio-data", chunk)`
+// at the raw stdout chunk rate (often >500 calls/sec). Each call goes
+// through IPC serialization and lands on the renderer's microtask queue.
+// On any frame where the renderer can't drain that queue (GC, layout
+// thrash, suspended AudioContext) the queue grew unboundedly and the
+// renderer OOM'd ~1 minute into screen-share-with-audio sessions.
+//
+// We buffer chunks in the main process and flush every FLUSH_INTERVAL_MS
+// as one IPC message. That drops the call rate to ~50/sec and lets V8
+// reclaim the per-chunk Buffer immediately. If the buffer exceeds
+// MAX_BUFFER_BYTES (renderer is hopelessly behind) we drop everything
+// and log — newer audio is always more useful than stale audio.
+const FLUSH_INTERVAL_MS = 20;
+const MAX_BUFFER_BYTES = 100 * 1024; // ~250 ms of float32 stereo @ 48 kHz
+let pcmBuffer: Buffer[] = [];
+let pcmBufferBytes = 0;
+let pcmDroppedBytes = 0;
+let flushTimer: NodeJS.Timeout | null = null;
+
+function flushPcmBuffer(): void {
+  if (pcmBuffer.length === 0) return;
+  const win = getMainWindow();
+  if (!win || win.isDestroyed()) {
+    pcmBuffer = [];
+    pcmBufferBytes = 0;
+    return;
+  }
+  const merged = pcmBuffer.length === 1 ? pcmBuffer[0] : Buffer.concat(pcmBuffer, pcmBufferBytes);
+  pcmBuffer = [];
+  pcmBufferBytes = 0;
+  win.webContents.send("capture-audio-data", merged);
+}
+
+function startFlushTimer(): void {
+  if (flushTimer) return;
+  flushTimer = setInterval(flushPcmBuffer, FLUSH_INTERVAL_MS);
+}
+
+function stopFlushTimer(): void {
+  if (flushTimer) {
+    clearInterval(flushTimer);
+    flushTimer = null;
+  }
+  pcmBuffer = [];
+  pcmBufferBytes = 0;
+  pcmDroppedBytes = 0;
+}
+
+function enqueuePcm(chunk: Buffer): void {
+  // If the renderer has fallen behind to where we've buffered a quarter
+  // second of audio, drop the backlog rather than letting it grow into
+  // OOM territory. Log once per ~1 MB dropped so we can see this in
+  // production without flooding stderr.
+  if (pcmBufferBytes + chunk.length > MAX_BUFFER_BYTES) {
+    pcmDroppedBytes += pcmBufferBytes + chunk.length;
+    pcmBuffer = [];
+    pcmBufferBytes = 0;
+    if (pcmDroppedBytes >= 1024 * 1024) {
+      console.warn(`[audio-capture] renderer behind — dropped ${pcmDroppedBytes} bytes of PCM data`);
+      pcmDroppedBytes = 0;
+    }
+    return;
+  }
+  pcmBuffer.push(chunk);
+  pcmBufferBytes += chunk.length;
+}
+
 function exePath(): string {
   // Dev: native/audio-capture.exe (project root)
   // Prod: resources/native/audio-capture.exe (extraResources)
@@ -56,6 +124,7 @@ export function startCapture(): void {
   const thisGen = ++captureGeneration;
   headerParsed = false;
   headerBuffer = Buffer.alloc(0);
+  stopFlushTimer();
 
   const exe = exePath();
   console.log(`[audio-capture] starting gen=${thisGen}: ${exe} (exclude PID ${process.pid})`);
@@ -80,12 +149,13 @@ export function startCapture(): void {
         );
         win?.webContents.send("capture-audio-header", { sampleRate, channels, bitsPerSample, formatTag });
         headerParsed = true;
+        startFlushTimer();
         const remaining = headerBuffer.subarray(12);
-        if (remaining.length > 0) win?.webContents.send("capture-audio-data", remaining);
+        if (remaining.length > 0) enqueuePcm(remaining);
         headerBuffer = Buffer.alloc(0);
       }
     } else {
-      win?.webContents.send("capture-audio-data", chunk);
+      enqueuePcm(chunk);
     }
   });
 
@@ -102,6 +172,10 @@ export function startCapture(): void {
       console.log(`[audio-capture] ignoring stale exit (current=${captureGeneration})`);
       return;
     }
+    // Flush any tail audio before announcing exit so the renderer's
+    // worklet drains cleanly instead of clipping mid-word.
+    flushPcmBuffer();
+    stopFlushTimer();
     const win = getMainWindow();
     win?.webContents.send("capture-audio-error", `EXIT code=${code}`);
     captureProcess = null;
@@ -112,6 +186,7 @@ export function startCapture(): void {
   captureProcess.on("error", (err) => {
     if (thisGen !== captureGeneration) return;
     console.error("[audio-capture] spawn error:", err);
+    stopFlushTimer();
     const win = getMainWindow();
     win?.webContents.send("capture-audio-error", `SPAWN ERROR: ${err.message}`);
     captureProcess = null;
@@ -127,6 +202,7 @@ export function stopCapture(): void {
   captureProcess.kill();
   captureProcess = null;
   headerParsed = false;
+  stopFlushTimer();
   // Bump generation so stale exit handler skips renderer notifications
   captureGeneration++;
 }
@@ -144,6 +220,7 @@ export function shutdownCapture(): Promise<void> | null {
   const proc = captureProcess;
   captureGeneration++;
   captureProcess = null;
+  stopFlushTimer();
   return new Promise<void>((resolve) => {
     let done = false;
     const finish = () => {

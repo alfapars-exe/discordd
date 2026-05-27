@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -108,6 +110,26 @@ func (r *sqliteAttachmentRepo) GetByMessageIDs(ctx context.Context, messageIDs [
 	}
 
 	return attachments, nil
+}
+
+// GetByFileURL resolves a /api/uploads/{name} download URL back to its
+// attachment row. The auth-gated download handler uses the returned
+// message_id to verify the requester has access to the conversation
+// that owns the file.
+func (r *sqliteAttachmentRepo) GetByFileURL(ctx context.Context, fileURL string) (*models.Attachment, error) {
+	query := `SELECT id, message_id, filename, file_url, file_size, mime_type, created_at
+		FROM attachments WHERE file_url = ? LIMIT 1`
+	var a models.Attachment
+	err := r.db.QueryRowContext(ctx, query, fileURL).Scan(
+		&a.ID, &a.MessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, pkg.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get attachment by file_url: %w", err)
+	}
+	return &a, nil
 }
 
 func (r *sqliteAttachmentRepo) Delete(ctx context.Context, id string) error {

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -665,6 +666,26 @@ func (r *sqliteDMRepo) GetAttachmentsByMessageIDs(ctx context.Context, messageID
 	}
 
 	return result, nil
+}
+
+// GetAttachmentByFileURL resolves a /api/uploads/{name} download URL back
+// to its DM attachment row. The auth-gated download handler uses the
+// returned dm_message_id to look up the parent DM channel and verify
+// participant access.
+func (r *sqliteDMRepo) GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.DMAttachment, error) {
+	query := `SELECT id, dm_message_id, filename, file_url, file_size, mime_type, created_at
+		FROM dm_attachments WHERE file_url = ? LIMIT 1`
+	var a models.DMAttachment
+	err := r.db.QueryRowContext(ctx, query, fileURL).Scan(
+		&a.ID, &a.DMMessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, pkg.ErrNotFound
+		}
+		return nil, fmt.Errorf("get DM attachment by file_url: %w", err)
+	}
+	return &a, nil
 }
 
 // ─── Search Operations ───

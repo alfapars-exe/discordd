@@ -190,7 +190,7 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(badgeIconMaxSize); err != nil {
+	if err := pkg.LimitedParseMultipartForm(w, r, badgeIconMaxSize); err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "failed to parse multipart form")
 		return
 	}

@@ -31,12 +31,18 @@ func extractTracks(parent context.Context, url, requesterID, requesterName strin
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
+	// `--` terminates yt-dlp's option parsing. Without it, a caller-supplied
+	// `url` like `--exec "wget ..."` would be interpreted as a yt-dlp flag
+	// (argument injection → RCE under the server process). Handlers also
+	// allow-list the URL scheme, but this is the defense-in-depth layer
+	// closest to the actual subprocess.
 	cmd := exec.CommandContext(ctx,
 		"yt-dlp",
 		"--flat-playlist",
 		"--dump-json",
 		"--no-warnings",
 		"--ignore-errors",
+		"--",
 		url,
 	)
 	stdout, err := cmd.Output()
@@ -71,15 +77,15 @@ func extractTracks(parent context.Context, url, requesterID, requesterName strin
 // metadata blob; we only deserialise these fields. Note `Duration` is a
 // float64 because yt-dlp uses fractional seconds for some sources.
 type ytdlpEntry struct {
-	ID            string  `json:"id"`
-	Title         string  `json:"title"`
-	Uploader      string  `json:"uploader"`
-	Channel       string  `json:"channel"`
-	Duration      float64 `json:"duration"`
-	Thumbnail     string  `json:"thumbnail"`
-	WebpageURL    string  `json:"webpage_url"`
-	OriginalURL   string  `json:"original_url"`
-	URL           string  `json:"url"` // for flat-playlist entries
+	ID          string  `json:"id"`
+	Title       string  `json:"title"`
+	Uploader    string  `json:"uploader"`
+	Channel     string  `json:"channel"`
+	Duration    float64 `json:"duration"`
+	Thumbnail   string  `json:"thumbnail"`
+	WebpageURL  string  `json:"webpage_url"`
+	OriginalURL string  `json:"original_url"`
+	URL         string  `json:"url"` // for flat-playlist entries
 }
 
 func (r ytdlpEntry) toTrack(originalUserURL, requesterID, requesterName string) models.MusicTrack {

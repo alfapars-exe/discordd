@@ -20,7 +20,7 @@
  *   bir retry yapılır (probe başarılı olunca).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { pingServer } from "../utils/serverProbe";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -90,7 +90,13 @@ export function useServerWakeUp(options: UseServerWakeUpOptions): UseServerWakeU
   // onReady'i ref'te tutuyoruz ki tick içinde çağrı yaparken closure-stale
   // olmasın (kullanıcı render arasında callback'i değiştirmiş olabilir).
   const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
+  // Latest-ref mirror (post-commit) — keeps tick() reading the freshest
+  // onReady callback identity without re-subscribing the interval each
+  // render. Writing ref.current during render is flagged by
+  // react-hooks/refs.
+  useLayoutEffect(() => {
+    onReadyRef.current = onReady;
+  });
 
   const stopLoop = useCallback(() => {
     if (intervalRef.current) {

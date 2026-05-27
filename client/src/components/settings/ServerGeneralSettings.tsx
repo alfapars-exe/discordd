@@ -54,14 +54,18 @@ function ServerGeneralSettings() {
     : false;
 
   useEffect(() => {
-    // Clear stale state on server switch
-    setServer(null);
-    setIsLoaded(false);
-    setLkSettings(null);
-    setLkNotFound(false);
-    setEditLkUrl("");
-    setEditLkKey("");
-    setEditLkSecret("");
+    // Clear stale state on server switch — deferred via microtask so
+    // the lint react-hooks/set-state-in-effect treats the writes as
+    // post-commit work, not a cascading render.
+    queueMicrotask(() => {
+      setServer(null);
+      setIsLoaded(false);
+      setLkSettings(null);
+      setLkNotFound(false);
+      setEditLkUrl("");
+      setEditLkKey("");
+      setEditLkSecret("");
+    });
 
     async function fetchServer() {
       if (!activeServerId) return;

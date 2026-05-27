@@ -54,6 +54,7 @@ type Services struct {
 	FeedbackUpload    services.FeedbackUploadService
 	Soundboard        services.SoundboardService
 	MusicBot          services.MusicBotService
+	WSTicket          services.WSTicketService
 }
 
 type RateLimiters struct {
@@ -212,6 +213,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		FeedbackUpload:    feedbackUploadService,
 		Soundboard:        soundboardService,
 		MusicBot:          musicBotService,
+		WSTicket:          services.NewWSTicketService(),
 	}
 
 	limiters := &RateLimiters{

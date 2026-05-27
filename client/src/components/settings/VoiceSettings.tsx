@@ -11,7 +11,7 @@ import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.
 import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 import vadGateWorkletPath from "../../audio/vadGateWorklet.js?url";
-import { sensitivityToThreshold } from "../../audio/RNNoiseProcessor";
+import { postGateConfigToWorklet } from "../../audio/gateConfig";
 
 
 /** Simplified MediaDeviceInfo for select options. */
@@ -126,6 +126,7 @@ function VoiceSettings() {
       const nr = useVoiceStore.getState().noiseReduction;
       const sens = useVoiceStore.getState().micSensitivity;
       const inVol = useVoiceStore.getState().inputVolume;
+      const level = useVoiceStore.getState().noiseSuppressionLevel;
 
       // Input volume GainNode — applied before all processing (same as real pipeline)
       const gainNode = ctx.createGain();
@@ -137,7 +138,7 @@ function VoiceSettings() {
       let vadGateNode: AudioWorkletNode | null = null;
 
       if (nr) {
-        // Full pipeline: source -> RNNoise -> VAD gate
+        // Full pipeline: source -> RNNoise -> VAD gate. Mirrors RNNoiseProcessor.init.
         const wasmBinary = await loadRnnoise({
           url: rnnoiseWasmPath,
           simdUrl: rnnoiseSimdWasmPath,
@@ -154,9 +155,13 @@ function VoiceSettings() {
         });
 
         vadGateNode = new AudioWorkletNode(ctx, "vad-gate-processor");
-        vadGateNode.port.postMessage({
-          threshold: sensitivityToThreshold(sens),
-        });
+        // Use the SAME hysteresis dB curve as the live mic pipeline (see
+        // RNNoiseProcessor.applyGateConfig). The previous one-shot
+        // `{threshold}` payload triggered the worklet's legacy single-
+        // threshold mode with a much tighter curve than the real pipeline,
+        // so the test bar said "gate closed" while the real publisher was
+        // still passing audio (and vice-versa).
+        postGateConfigToWorklet(vadGateNode, level, sens);
 
         gainNode.connect(rnnoiseNode);
         rnnoiseNode.connect(vadGateNode);
@@ -165,9 +170,7 @@ function VoiceSettings() {
         // VAD gate only (no noise reduction but sensitivity threshold active)
         await ctx.audioWorklet.addModule(vadGateWorkletPath);
         vadGateNode = new AudioWorkletNode(ctx, "vad-gate-processor");
-        vadGateNode.port.postMessage({
-          threshold: sensitivityToThreshold(sens),
-        });
+        postGateConfigToWorklet(vadGateNode, level, sens);
         gainNode.connect(vadGateNode);
         lastNode = vadGateNode;
       }
@@ -202,7 +205,12 @@ function VoiceSettings() {
 
       micTestRef.current = { stream, ctx, analyser, gainNode, raf: 0, rnnoiseNode, vadGateNode, loopbackAudio };
       micTestRef.current.raf = requestAnimationFrame(tick);
-      setIsTesting(true);
+      // NOTE: setIsTesting is intentionally NOT called here — the
+      // caller (button click handler OR the lifecycle effect below)
+      // flips isTesting, and this function only owns the pipeline.
+      // Keeping setState out of here is what lets the
+      // restart-on-deps-change effect call us without tripping
+      // react-hooks/set-state-in-effect.
     } catch (err) {
       console.error("[MicTest] Failed to start:", err);
     }
@@ -222,7 +230,10 @@ function VoiceSettings() {
     ctx.close().catch(() => {});
     micTestRef.current = null;
     setMicLevel(0);
-    setIsTesting(false);
+    // setIsTesting NOT called here — same reason as in startMicTest:
+    // ownership of the boolean lives with the button handler / the
+    // lifecycle effect so the pipeline functions stay
+    // setState-free and can be safely invoked from effects.
   }, []);
 
   // Stop mic test on unmount
@@ -243,23 +254,35 @@ function VoiceSettings() {
     };
   }, []);
 
-  // Restart test if device changes while testing
+  // Single source of truth for the mic-test pipeline lifecycle:
+  // whenever `isTesting` flips on (or its inputs change while on),
+  // tear down the previous pipeline and build a fresh one with the
+  // current settings; whenever `isTesting` flips off, just tear down.
+  // The button below only toggles isTesting via setState — this
+  // effect does the actual stream/AudioContext work. Crucially the
+  // pipeline functions (startMicTest / stopMicTest) no longer call
+  // setIsTesting themselves, so they're safe to invoke from inside an
+  // effect without tripping react-hooks/set-state-in-effect.
   useEffect(() => {
-    if (isTesting) {
+    if (!isTesting) return;
+    void startMicTest();
+    return () => {
       stopMicTest();
-      startMicTest();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputDevice, outputDevice]);
+    };
+  }, [isTesting, inputDevice, outputDevice, noiseReduction, startMicTest, stopMicTest]);
 
-  // Update VAD gate threshold live when sensitivity changes during test
+  // Update VAD gate config live when sensitivity or level changes during test.
+  // Uses the same gateConfig helper as the real pipeline so the test bar
+  // tracks what remote listeners would actually hear.
   useEffect(() => {
     if (micTestRef.current?.vadGateNode) {
-      micTestRef.current.vadGateNode.port.postMessage({
-        threshold: sensitivityToThreshold(micSensitivity),
-      });
+      postGateConfigToWorklet(
+        micTestRef.current.vadGateNode,
+        noiseSuppressionLevel,
+        micSensitivity,
+      );
     }
-  }, [micSensitivity]);
+  }, [micSensitivity, noiseSuppressionLevel]);
 
   // Update gain live when input volume changes during test
   useEffect(() => {
@@ -267,15 +290,6 @@ function VoiceSettings() {
       micTestRef.current.gainNode.gain.value = inputVolume / 100;
     }
   }, [inputVolume]);
-
-  // Restart test when noise reduction toggles during test
-  useEffect(() => {
-    if (isTesting) {
-      stopMicTest();
-      startMicTest();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noiseReduction]);
 
   // ─── Device enumeration ───
   useEffect(() => {
@@ -453,7 +467,7 @@ function VoiceSettings() {
         <div className="vs-mic-test-row">
           <button
             className={`vs-mic-test-btn${isTesting ? " active" : ""}`}
-            onClick={isTesting ? stopMicTest : startMicTest}
+            onClick={() => setIsTesting((prev) => !prev)}
           >
             {isTesting ? t("micTestStop") : t("micTest")}
           </button>

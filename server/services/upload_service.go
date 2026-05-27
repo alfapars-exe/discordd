@@ -59,16 +59,33 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
+	claimedType := header.Header.Get("Content-Type")
+	if claimedType == "" {
+		claimedType = "application/octet-stream"
 	}
-	mimeBase := strings.Split(contentType, ";")[0]
-	mimeBase = strings.TrimSpace(mimeBase)
+	claimedType = strings.TrimSpace(strings.Split(claimedType, ";")[0])
 
-	// Skip MIME whitelist for E2EE files (opaque blobs on server)
-	if !isEncrypted && !allowedMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: file type not allowed: %s", pkg.ErrBadRequest, mimeBase)
+	// E2EE uploads are opaque ciphertext blobs from the server's point of
+	// view (the client-side AES-GCM step rewrites the body before posting),
+	// so MIME sniffing isn't useful here — the bytes will always look like
+	// random data and never match an allowlist. Skip the check, but still
+	// record claimedType for client-side bookkeeping.
+	mimeForRecord := claimedType
+	body := io.Reader(file)
+	if !isEncrypted {
+		// Sniff the actual content type from the first 512 bytes instead
+		// of trusting header.Header (client-controlled). A request that
+		// labels a .js shell or .html XSS payload as image/png used to
+		// sail through the previous allowlist check; sniffing closes
+		// that and surfaces the mismatch in MIMETypeError so logs can
+		// show "claimed X, bytes are Y".
+		var realMIME string
+		var err error
+		realMIME, body, err = pkg.SniffAndValidate(file, claimedType, allowedMimeTypes)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		}
+		mimeForRecord = realMIME
 	}
 
 	// Generate unique filename: {random_hex}_{original_filename}
@@ -93,7 +110,10 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	}
 	defer destFile.Close()
 
-	if _, err := io.Copy(destFile, file); err != nil {
+	// `body` is either the original file reader (E2EE branch) or the
+	// SniffAndValidate replay reader (sniff buffer + remaining file).
+	// Either way, copying it drains the whole upload to disk.
+	if _, err := io.Copy(destFile, body); err != nil {
 		_ = os.Remove(destPath)
 		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
@@ -104,7 +124,7 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 		Filename:  header.Filename,
 		FileURL:   "/api/uploads/" + diskFilename,
 		FileSize:  &fileSize,
-		MimeType:  &mimeBase,
+		MimeType:  &mimeForRecord,
 	}
 
 	if err := s.attachmentRepo.Create(ctx, attachment); err != nil {

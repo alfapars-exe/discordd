@@ -363,6 +363,16 @@ func (s *messageService) Update(ctx context.Context, id string, userID string, r
 		return nil, fmt.Errorf("%w: you can only edit your own messages", pkg.ErrForbidden)
 	}
 
+	// Reject mismatched encryption versions. The repo decides which columns
+	// to write off message.EncryptionVersion (loaded from DB) — if the
+	// request asks to send a different shape we'd silently scribble the
+	// wrong payload into the wrong columns. The client should never produce
+	// this; a paranoid 400 here makes the inconsistency loud.
+	if req.EncryptionVersion != message.EncryptionVersion {
+		return nil, fmt.Errorf("%w: cannot change encryption_version on edit (stored=%d, requested=%d)",
+			pkg.ErrBadRequest, message.EncryptionVersion, req.EncryptionVersion)
+	}
+
 	if req.EncryptionVersion == 1 {
 		message.Ciphertext = req.Ciphertext
 		message.SenderDeviceID = req.SenderDeviceID

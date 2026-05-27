@@ -168,7 +168,8 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateDMMessageRequest
 
 	if isMultipart(contentType) {
-		if err := r.ParseMultipartForm(h.maxUploadSize); err != nil {
+		// Hard body cap before parsing — see message.go SendMessage for rationale.
+		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 10); err != nil {
 			pkg.ErrorWithMessage(w, http.StatusBadRequest, "failed to parse multipart form")
 			return
 		}

@@ -11,7 +11,7 @@
  *      stronger active ring so the selected one is impossible to miss.
  */
 
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -45,8 +45,12 @@ function AppearanceSettings() {
   const updateUser = useAuthStore((s) => s.updateUser);
   const addToast = useToastStore((s) => s.addToast);
 
-  // Track initial value to detect change — restart needed in either direction
-  const initialTransparent = useMemo(() => transparentBackground, []);
+  // Track initial value to detect change — restart needed in either
+  // direction. useState with a lazy initializer freezes the value at
+  // mount; we never call the setter, so it stays the mount-time
+  // snapshot. (useRef.current was flagged by react-hooks/refs as a
+  // render-time ref read; useMemo([]) lies about deps.)
+  const [initialTransparent] = useState(() => transparentBackground);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);

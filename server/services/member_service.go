@@ -40,6 +40,10 @@ type MemberService interface {
 	// Caller (handler/route) enforces PermManageNicknames for non-self.
 	SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error)
 	SetAuditLogger(logger AuditWriter)
+	// SetPermInvalidator wires the per-channel permission cache so that
+	// role-assignment, kick, and ban operations drop the affected user's
+	// cached permissions immediately rather than after permCacheTTL.
+	SetPermInvalidator(inv PermissionInvalidator)
 }
 
 // VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
@@ -48,18 +52,31 @@ type VoiceDisconnecter interface {
 }
 
 type memberService struct {
-	userRepo    repository.UserRepository
-	roleRepo    repository.RoleRepository
-	banRepo     repository.BanRepository
-	timeoutRepo repository.MemberTimeoutRepository
-	serverRepo  repository.ServerRepository
-	hub         ws.BroadcastAndManage
-	voiceKick   VoiceDisconnecter
-	auditLogger AuditWriter
+	userRepo        repository.UserRepository
+	roleRepo        repository.RoleRepository
+	banRepo         repository.BanRepository
+	timeoutRepo     repository.MemberTimeoutRepository
+	serverRepo      repository.ServerRepository
+	hub             ws.BroadcastAndManage
+	voiceKick       VoiceDisconnecter
+	auditLogger     AuditWriter
+	permInvalidator PermissionInvalidator
 }
 
 func (s *memberService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
+}
+
+func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
+	s.permInvalidator = inv
+}
+
+// invalidateUserPerms — nil-safe wrapper so call sites stay flat.
+// Optional dependency: test setups frequently leave it nil.
+func (s *memberService) invalidateUserPerms(userID string) {
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateUser(userID)
+	}
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -414,6 +431,10 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 		return nil, err
 	}
 
+	// Drop the target's cached per-channel permissions — their role
+	// set just changed, so any previous resolution is stale.
+	s.invalidateUserPerms(targetID)
+
 	// Role changes are server-scoped — only broadcast to that server
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpMemberUpdate,
@@ -436,6 +457,11 @@ func (s *memberService) Kick(ctx context.Context, serverID, actorID, targetID st
 		return fmt.Errorf("failed to kick user: %w", err)
 	}
 
+	// Kicked user shouldn't be holding live API connections anyway, but
+	// drop their cached permissions defensively so any in-flight request
+	// re-resolves against the now-empty membership.
+	s.invalidateUserPerms(targetID)
+
 	s.removeFromServer(serverID, targetID)
 
 	actor := actorID
@@ -452,8 +478,8 @@ func (s *memberService) Kick(ctx context.Context, serverID, actorID, targetID st
 // Ban — permanent OR temp ban depending on expiresAt:
 //   - nil       → permanent (original behaviour, original audit shape)
 //   - non-nil   → temp ban; the row's expires_at column is set, the
-//                 BanRepository's WHERE filter hides it after the
-//                 timestamp, and the ban silently lifts itself.
+//     BanRepository's WHERE filter hides it after the
+//     timestamp, and the ban silently lifts itself.
 //
 // Either way the user is removed from the server membership and
 // force-disconnected from voice. Re-banning an already-banned user
@@ -490,6 +516,9 @@ func (s *memberService) Ban(ctx context.Context, serverID, actorID, targetID, re
 	if rmErr := s.serverRepo.RemoveMember(ctx, serverID, targetID); rmErr != nil {
 		log.Printf("[member] failed to remove member after ban server=%s user=%s: %v", serverID, targetID, rmErr)
 	}
+
+	// Same rationale as Kick — drop cached permissions defensively.
+	s.invalidateUserPerms(targetID)
 
 	s.removeFromServer(serverID, targetID)
 

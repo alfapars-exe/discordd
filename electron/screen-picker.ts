@@ -26,12 +26,37 @@ type SerializedSource = {
   appIcon: string | null;
 };
 
+// Hard cap on how long we'll wait for desktopCapturer.getSources. Windows
+// builds with many top-level windows (or elevated processes alongside our
+// non-elevated app) have been observed to hang this call indefinitely,
+// which then locks up the renderer waiting for the picker IPC and
+// eventually crashes it. Race with a timeout so a hang surfaces as a
+// clean "no sources" instead of a renderer death.
+const GET_SOURCES_TIMEOUT_MS = 5000;
+
 async function querySources() {
-  return await desktopCapturer.getSources({
+  // thumbnailSize halved (480×270 → 240×135) — each PNG dataURL was ~200-400
+  // KB; on machines with 30+ windows the combined IPC payload ran past 10 MB
+  // in a single message and crashed V8 string allocation. 240×135 stays
+  // clear enough for picker UX while shrinking IPC ~4×.
+  //
+  // fetchWindowIcons disabled — icons are another 50-100 KB per source and
+  // are the specific surface Electron has crashed on for users with
+  // elevated/protected windows (Vanguard, EAC, some banking apps).
+  const sourcesPromise = desktopCapturer.getSources({
     types: ["screen", "window"],
-    thumbnailSize: { width: 480, height: 270 },
-    fetchWindowIcons: true,
+    thumbnailSize: { width: 240, height: 135 },
+    fetchWindowIcons: false,
   });
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(
+      () => reject(new Error(`desktopCapturer.getSources timed out after ${GET_SOURCES_TIMEOUT_MS}ms`)),
+      GET_SOURCES_TIMEOUT_MS,
+    ),
+  );
+
+  return await Promise.race([sourcesPromise, timeoutPromise]);
 }
 
 function serialize(s: Awaited<ReturnType<typeof querySources>>[number]): SerializedSource {

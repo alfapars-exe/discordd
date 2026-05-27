@@ -49,7 +49,10 @@ func (h *ReportHandler) CreateReport(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 
 	if isMultipart(contentType) {
-		if err := r.ParseMultipartForm(h.maxUploadSize); err != nil {
+		// Reports allow up to 3 evidence attachments — hard-cap the body
+		// before parser spill to keep the public report endpoint from
+		// becoming a free disk-fill vector.
+		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 3); err != nil {
 			pkg.ErrorWithMessage(w, http.StatusBadRequest, "failed to parse multipart form")
 			return
 		}

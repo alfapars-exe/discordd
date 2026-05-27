@@ -71,6 +71,7 @@ func extractRefreshToken(r *http.Request, bodyToken string) string {
 
 type AuthHandler struct {
 	authService      services.AuthService
+	wsTicketService  services.WSTicketService
 	loginLimiter     *ratelimit.LoginRateLimiter
 	registerLimiter  *ratelimit.LoginRateLimiter
 	forgotPwdLimiter *ratelimit.LoginRateLimiter
@@ -80,6 +81,7 @@ type AuthHandler struct {
 // NewAuthHandler creates a new AuthHandler. All limiters may be nil to disable rate limiting.
 func NewAuthHandler(
 	authService services.AuthService,
+	wsTicketService services.WSTicketService,
 	loginLimiter *ratelimit.LoginRateLimiter,
 	registerLimiter *ratelimit.LoginRateLimiter,
 	forgotPwdLimiter *ratelimit.LoginRateLimiter,
@@ -87,11 +89,39 @@ func NewAuthHandler(
 ) *AuthHandler {
 	return &AuthHandler{
 		authService:      authService,
+		wsTicketService:  wsTicketService,
 		loginLimiter:     loginLimiter,
 		registerLimiter:  registerLimiter,
 		forgotPwdLimiter: forgotPwdLimiter,
 		resetPwdLimiter:  resetPwdLimiter,
 	}
+}
+
+// WSTicket handles POST /api/auth/ws-ticket — issues a one-time,
+// ~30-second ticket the client uses to open the WebSocket connection.
+// See services/ws_ticket_service.go for the rationale (keeps the
+// long-lived JWT out of WS URL query strings and proxy access logs).
+func (h *AuthHandler) WSTicket(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	if h.wsTicketService == nil {
+		// Server started without WS ticket service — fall back to the
+		// legacy `?token=` path on the WS handler. Returning 503 here
+		// would break clients that send the request preflight; a
+		// 404 is the cleanest "feature not enabled" signal for them
+		// to skip the request and try the legacy path.
+		pkg.ErrorWithMessage(w, http.StatusNotFound, "ws ticket service not enabled")
+		return
+	}
+	ticket, err := h.wsTicketService.Issue(user.ID)
+	if err != nil {
+		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to issue ws ticket")
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"ticket": ticket})
 }
 
 // Register handles POST /api/auth/register

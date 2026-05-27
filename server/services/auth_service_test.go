@@ -469,6 +469,106 @@ func TestValidateAccessToken(t *testing.T) {
 	}
 }
 
+// TestValidateAccessToken_NoDBReadForBannedUser pins down the B2
+// optimization: ValidateAccessToken is now JWT-only, NO DB read.
+// The IsPlatformBanned + TokenVersion checks moved to:
+//   - HTTP: middleware/auth.go AuthMiddleware.Require (against userCache)
+//   - WS:   ws/handler.go HandleConnection (against the user row it
+//     already fetches for username/avatar)
+//
+// This test would have failed under the prior implementation that
+// inlined a userRepo.GetByID lookup inside ValidateAccessToken: the
+// mock here returns IsPlatformBanned=true, but the validator must
+// still return the parsed claims because the gate is no longer here.
+func TestValidateAccessToken_NoDBReadForBannedUser(t *testing.T) {
+	validClaims := &models.TokenClaims{
+		UserID:   "user-banned",
+		Username: "banned",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "mqvi",
+		},
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, validClaims).
+		SignedString([]byte(testJWTSecret))
+	if err != nil {
+		t.Fatalf("failed to create test token: %v", err)
+	}
+
+	// Sentinel: if anyone reintroduces a DB read inside
+	// ValidateAccessToken, this fn fires and fails the test.
+	repoCalled := false
+	userRepo := &testutil.MockUserRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.User, error) {
+			repoCalled = true
+			return &models.User{
+				ID:               "user-banned",
+				Username:         "banned",
+				IsPlatformBanned: true,
+			}, nil
+		},
+	}
+	svc := newTestAuthService(userRepo, &testutil.MockSessionRepo{})
+
+	claims, err := svc.ValidateAccessToken(token)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken should pass JWT-only check, got: %v", err)
+	}
+	if claims.UserID != "user-banned" {
+		t.Fatalf("expected UserID=user-banned, got %q", claims.UserID)
+	}
+	if repoCalled {
+		t.Fatal("ValidateAccessToken must NOT call userRepo.GetByID — the DB check moved to AuthMiddleware / WS handler")
+	}
+}
+
+// TestValidateAccessToken_NoDBReadForBumpedVersion is the TokenVersion
+// twin of the test above. Same rationale: the version gate now lives
+// in the middleware (HTTP) and the WS upgrade path. ValidateAccessToken
+// only parses the JWT.
+func TestValidateAccessToken_NoDBReadForBumpedVersion(t *testing.T) {
+	validClaims := &models.TokenClaims{
+		UserID:       "user-bumped",
+		Username:     "bumped",
+		TokenVersion: 0,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "mqvi",
+		},
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, validClaims).
+		SignedString([]byte(testJWTSecret))
+	if err != nil {
+		t.Fatalf("failed to create test token: %v", err)
+	}
+
+	repoCalled := false
+	userRepo := &testutil.MockUserRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.User, error) {
+			repoCalled = true
+			return &models.User{
+				ID:           "user-bumped",
+				Username:     "bumped",
+				TokenVersion: 1, // bumped (e.g. by PlatformBan or "logout-all")
+			}, nil
+		},
+	}
+	svc := newTestAuthService(userRepo, &testutil.MockSessionRepo{})
+
+	claims, err := svc.ValidateAccessToken(token)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken should pass JWT-only check, got: %v", err)
+	}
+	if claims.TokenVersion != 0 {
+		t.Fatalf("expected TokenVersion=0 (from JWT), got %d", claims.TokenVersion)
+	}
+	if repoCalled {
+		t.Fatal("ValidateAccessToken must NOT call userRepo.GetByID — version gate moved to AuthMiddleware / WS handler")
+	}
+}
+
 func TestChangePassword(t *testing.T) {
 	hashedPassword := preHashPassword(t, "currentpass1")
 

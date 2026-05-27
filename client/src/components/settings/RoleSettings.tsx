@@ -92,6 +92,14 @@ function RoleSettings() {
   const canEditSelected = canManageRoles && !isRoleAboveActor && !isOwnerRole;
   const canEditOwnerAppearance = isOwnerRole && isActorOwner;
 
+  // Dragged role tracked in state (not a ref) so the JSX can read it
+  // to apply the .dragging className. The previous ref-based shape
+  // had to read dragRoleIdRef.current during render, which the
+  // react-hooks/refs rule (correctly) flags — refs aren't reactive,
+  // so the first render after a drag start would still see null and
+  // miss the className flip. Drag handlers below mirror writes into
+  // the ref for the same-render reads inside drop-handling helpers.
+  const [draggingRoleId, setDraggingRoleId] = useState<string | null>(null);
   const dragRoleIdRef = useRef<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{
     roleId: string;
@@ -111,16 +119,19 @@ function RoleSettings() {
 
   useEffect(() => {
     if (selectedRole) {
-      setEditName(selectedRole.name);
-      setEditColor(selectedRole.color);
-      setEditPerms(selectedRole.permissions);
-      setEditMentionable(selectedRole.mentionable);
-      setHasChanges(false);
+      queueMicrotask(() => {
+        setEditName(selectedRole.name);
+        setEditColor(selectedRole.color);
+        setEditPerms(selectedRole.permissions);
+        setEditMentionable(selectedRole.mentionable);
+        setHasChanges(false);
+      });
     }
   }, [selectedRole]);
 
   function handleDragStart(roleId: string) {
     dragRoleIdRef.current = roleId;
+    setDraggingRoleId(roleId);
   }
 
   function handleDragOver(e: React.DragEvent, roleId: string) {
@@ -149,6 +160,7 @@ function RoleSettings() {
 
     const dragId = dragRoleIdRef.current;
     dragRoleIdRef.current = null;
+    setDraggingRoleId(null);
 
     if (!dragId || dragId === targetRoleId) return;
 
@@ -186,6 +198,7 @@ function RoleSettings() {
 
   function handleDragEnd() {
     dragRoleIdRef.current = null;
+    setDraggingRoleId(null);
     setDropIndicator(null);
   }
 
@@ -273,7 +286,7 @@ function RoleSettings() {
             return (
               <div
                 key={role.id}
-                className={`role-drag-wrap${dragRoleIdRef.current === role.id ? " dragging" : ""}${dropPos === "above" ? " drop-above" : ""}${dropPos === "below" ? " drop-below" : ""}`}
+                className={`role-drag-wrap${draggingRoleId === role.id ? " dragging" : ""}${dropPos === "above" ? " drop-above" : ""}${dropPos === "below" ? " drop-below" : ""}`}
                 draggable={draggable}
                 onDragStart={() => handleDragStart(role.id)}
                 onDragOver={(e) => handleDragOver(e, role.id)}

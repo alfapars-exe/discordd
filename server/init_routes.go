@@ -54,6 +54,7 @@ func initRoutes(
 	mux.Handle("POST /api/auth/logout", auth(h.Auth.Logout))
 	mux.HandleFunc("POST /api/auth/forgot-password", h.Auth.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset-password", h.Auth.ResetPassword)
+	mux.Handle("POST /api/auth/ws-ticket", auth(h.Auth.WSTicket))
 
 	// User
 	mux.Handle("GET /api/users/me", auth(h.Auth.Me))
@@ -77,8 +78,19 @@ func initRoutes(
 	// Server mutes — literal path before {serverId} wildcard
 	mux.Handle("GET /api/servers/mutes", auth(h.ServerMute.ListMuted))
 
-	// Upload
-	mux.Handle("POST /api/upload", auth(h.Message.Upload))
+	// Standalone POST /api/upload was removed: it allowed any authenticated
+	// user to attach a file to any message_id (no ownership / channel-access
+	// check), trusting "random ID is unguessable" as a security boundary.
+	// All real upload paths go through the message-create endpoints (channel
+	// or DM), where the transaction binds the file to a message the caller
+	// just authored, and no client ever invoked the standalone form.
+
+	// Upload download — was public http.FileServer in main.go; now gated
+	// behind auth + per-attachment access checks (channel ReadMessages
+	// permission for channel attachments, participant check for DM
+	// attachments, auth-only for avatars/icons/badges/soundboard). See
+	// handlers/upload_download.go for the full lookup matrix.
+	mux.Handle("GET /api/uploads/", auth(h.UploadDownload.Download))
 
 	// DMs — literal paths before parametric
 	mux.Handle("GET /api/dms/settings", auth(h.DMSettings.GetSettings))

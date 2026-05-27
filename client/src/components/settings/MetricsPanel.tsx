@@ -87,12 +87,14 @@ function MetricsPanel({ instanceId }: MetricsPanelProps) {
   }, [instanceId]);
 
   useEffect(() => {
-    fetchMetrics();
+    queueMicrotask(() => fetchMetrics());
   }, [fetchMetrics]);
 
   useEffect(() => {
-    fetchHistory(selectedPeriod);
-    fetchTimeSeries(selectedPeriod);
+    queueMicrotask(() => {
+      fetchHistory(selectedPeriod);
+      fetchTimeSeries(selectedPeriod);
+    });
   }, [fetchHistory, fetchTimeSeries, selectedPeriod]);
 
   const handlePeriodChange = useCallback((period: "24h" | "7d" | "30d") => {

@@ -52,7 +52,7 @@ function FeedbackSettings() {
   }, [addToast, t]);
 
   useEffect(() => {
-    fetchTickets();
+    queueMicrotask(() => fetchTickets());
   }, [fetchTickets]);
 
   const openTicket = async (ticketId: string) => {

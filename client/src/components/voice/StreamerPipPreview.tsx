@@ -18,7 +18,7 @@
  * purely a UI mirror.
  */
 
-import { Component, useEffect, useRef, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -71,13 +71,18 @@ function StreamerPipPreviewInner() {
   });
 
   const [gearOpen, setGearOpen] = useState(false);
-  const gearRef = useRef<HTMLButtonElement>(null);
+  // Callback-ref stored in state so the JSX can read the live DOM node
+  // (for getBoundingClientRect → menu positioning) without touching
+  // a useRef.current during render. useRef + .current access at render
+  // time trips react-hooks/refs because refs aren't reactive — the
+  // first paint after mount wouldn't see the assignment otherwise.
+  const [gearEl, setGearEl] = useState<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!gearOpen) return;
     function handleOutside(e: MouseEvent) {
       const target = e.target as Node;
-      if (gearRef.current?.contains(target)) return;
+      if (gearEl?.contains(target)) return;
       // Close on any other click — the gear button itself toggles.
       const menu = document.querySelector(".pip-gear-menu");
       if (menu && menu.contains(target)) return;
@@ -85,7 +90,7 @@ function StreamerPipPreviewInner() {
     }
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
-  }, [gearOpen]);
+  }, [gearOpen, gearEl]);
 
   // Outer <StreamerPipPreview> already gates on isStreaming +
   // currentVoiceChannelId, so no redundant check needed here.
@@ -138,7 +143,7 @@ function StreamerPipPreviewInner() {
     useSettingsStore.getState().openSettings("feedback");
   }
 
-  const gearRect = gearRef.current?.getBoundingClientRect();
+  const gearRect = gearEl?.getBoundingClientRect();
 
   return (
     <>
@@ -174,7 +179,7 @@ function StreamerPipPreviewInner() {
             <span>{viewers.length}</span>
           </span>
           <button
-            ref={gearRef}
+            ref={setGearEl}
             className="pip-gear"
             onClick={() => setGearOpen((p) => !p)}
             title={t("streamSettings", { defaultValue: "Yayın ayarları" })}

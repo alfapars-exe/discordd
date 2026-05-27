@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,11 @@ type Config struct {
 	Klipy           KlipyConfig
 	EncryptionKey   string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
 	HetznerAPIToken string // Hetzner Cloud API token (read-only) — optional
+	// TrustedProxies is the raw CIDR/IP list parsed from the
+	// TRUSTED_PROXIES env var. The ratelimit package consumes it via
+	// SetTrustedProxies at boot; the IP-extraction logic uses it to
+	// decide whether X-Forwarded-For is honoured for the request.
+	TrustedProxies []string
 }
 
 // EmailConfig — optional. If RESEND_API_KEY is empty, password reset is disabled.
@@ -43,7 +49,7 @@ type DatabaseConfig struct {
 
 type JWTConfig struct {
 	Secret             string
-	AccessTokenExpiry  int // minutes (default: 15)
+	AccessTokenExpiry  int // minutes (default: 1440 = 24 hours)
 	RefreshTokenExpiry int // days (default: 7)
 }
 
@@ -68,7 +74,15 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid SERVER_PORT: %w", err)
 	}
 
-	accessExpiry, err := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRY_MINUTES", "15"))
+	// Default 1440 = 24 hours. The HTTP client transparently refreshes via the
+	// HttpOnly refresh-token cookie on 401, but real users hit the 401 window
+	// as "Unauthorized" toast spikes when their tab is idle through the access
+	// TTL — surfacing them as broken UI even though the retry succeeds. A 24h
+	// access token keeps the refresh path as the rotation mechanism without
+	// punishing normal day-long sessions. The localStorage mirror is XSS-
+	// exposed for longer (24h vs 15m) but that's a deliberate trade chosen by
+	// the operator; tighten via JWT_ACCESS_EXPIRY_MINUTES env if needed.
+	accessExpiry, err := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRY_MINUTES", "1440"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT_ACCESS_EXPIRY_MINUTES: %w", err)
 	}
@@ -92,6 +106,15 @@ func Load() (*Config, error) {
 	if encKey == "" {
 		return nil, fmt.Errorf("ENCRYPTION_KEY environment variable is required (64 hex chars = 32 byte AES-256 key)")
 	}
+
+	// TRUSTED_PROXIES is a comma-separated CIDR/IP list of upstream proxy
+	// networks whose X-Forwarded-For headers the rate limiter will honour.
+	// Empty → loopback defaults (127.0.0.0/8, ::1/128) — correct for HF
+	// Space and most local-dev setups where requests are proxied by an
+	// in-host sidecar. Operators behind Cloudflare/Caddy/nginx should set
+	// this to the upstream's IP range; anything else lets attackers spoof
+	// XFF and bypass per-IP rate limits.
+	trustedProxies := splitAndTrim(getEnv("TRUSTED_PROXIES", ""))
 
 	cfg := &Config{
 		Server: ServerConfig{
@@ -127,6 +150,7 @@ func Load() (*Config, error) {
 		},
 		EncryptionKey:   encKey,
 		HetznerAPIToken: getEnv("HETZNER_API_TOKEN", ""),
+		TrustedProxies:  trustedProxies,
 	}
 
 	return cfg, nil
@@ -142,6 +166,24 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+// splitAndTrim parses a comma-separated env var into a non-empty trimmed
+// slice. Used for list-style settings like TRUSTED_PROXIES where the
+// caller wants to skip blanks rather than treat them as wildcard entries.
+func splitAndTrim(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // firstNonEmpty returns the first non-empty string from values, or "" if all are empty.

@@ -38,6 +38,54 @@ export default defineConfig(({ command }) => ({
     minify: "esbuild",
     sourcemap: false,
     rollupOptions: {
+      output: {
+        // Manual chunk strategy — without this, the bundler stuffs every
+        // shared dependency into AppLayout (1.45 MB) and the entry index
+        // (1.77 MB), producing two long-poll JS files on first load.
+        // Splitting heavy vendor groups lets the browser parallel-download
+        // them and lets the CDN cache vendor chunks across deploys (only
+        // the app chunks rotate on most releases).
+        //
+        // Boundaries:
+        //  - vendor: React + router + state (loaded on every page, very stable)
+        //  - livekit: voice/screen-share runtime (loaded only when joining
+        //    a voice channel — but currently statically imported; the chunk
+        //    still ships eagerly until VoiceProvider becomes lazy)
+        //  - emoji: emoji-mart data + react (loaded when picker opens, but
+        //    the data is huge and bundled eagerly today)
+        //
+        // Anything not matched here stays in the per-route chunks Vite
+        // auto-splits via dynamic import.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("/react-router-dom/") ||
+            id.includes("/react-router/") ||
+            id.includes("/zustand/")
+          ) {
+            return "vendor";
+          }
+          // krisp-noise-filter is dynamic-imported from useAudioProcessor
+          // only when the user opts into the Krisp engine — keep it OUT
+          // of the livekit chunk so it splits naturally and isn't
+          // downloaded by users sticking with the RNNoise default.
+          if (id.includes("@livekit/krisp-noise-filter")) {
+            return "krisp";
+          }
+          if (
+            id.includes("livekit-client") ||
+            id.includes("@livekit/components-react")
+          ) {
+            return "livekit";
+          }
+          if (id.includes("@emoji-mart/") || id.includes("/emoji-mart/")) {
+            return "emoji";
+          }
+          return undefined;
+        },
+      },
       onwarn(warning, defaultHandler) {
         // Suppress the "dynamic import will not move module into another
         // chunk" warning for our intentional circular-dep-avoidance pattern

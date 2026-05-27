@@ -45,12 +45,13 @@ type Handlers struct {
 	Music             *handlers.MusicHandler
 	LiveKitWebhook    *handlers.LiveKitWebhookHandler
 	ClientLog         *handlers.ClientLogHandler
+	UploadDownload    *handlers.UploadDownloadHandler
 	WS                *ws.Handler
 }
 
 func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, hub *ws.Hub, cfg *config.Config, encryptionKey []byte) *Handlers {
 	return &Handlers{
-		Auth:              handlers.NewAuthHandler(svcs.Auth, limiters.Login, limiters.Register, limiters.ForgotPwd, limiters.ResetPwd),
+		Auth:              handlers.NewAuthHandler(svcs.Auth, svcs.WSTicket, limiters.Login, limiters.Register, limiters.ForgotPwd, limiters.ResetPwd),
 		Channel:           handlers.NewChannelHandler(svcs.Channel),
 		Category:          handlers.NewCategoryHandler(svcs.Category),
 		Message:           handlers.NewMessageHandler(svcs.Message, svcs.Upload, cfg.Upload.MaxSize, limiters.Message),
@@ -87,6 +88,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog),
 		ClientLog:         handlers.NewClientLogHandler(svcs.AppLog),
-		WS:                ws.NewHandler(hub, svcs.Auth, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute),
+		UploadDownload:    handlers.NewUploadDownloadHandler(cfg.Upload.Dir, repos.Attachment, repos.DM, repos.Message, svcs.ChannelPermission),
+		WS:                ws.NewHandler(hub, svcs.Auth, svcs.WSTicket, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute),
 	}
 }

@@ -48,6 +48,11 @@ function MessageList() {
   /** Last observed scrollTop — used to detect direction in handleScroll. */
   const prevScrollTopRef = useRef(0);
   const prevMessageCountRef = useRef(0);
+  /** Tracks the channelId we've already restored scroll for, so the
+   *  layout-effect below stays a one-shot per channel even though
+   *  messages.length is now in its dep array (lint required it because
+   *  the body reads messages.length). */
+  const restoredForChannelRef = useRef<string | null>(null);
 
   // ─── Mention Navigation State ───
   const seenMentions = useReadStateStore((s) => s.seenMentions[channelId]);
@@ -99,11 +104,24 @@ function MessageList() {
   // Fetch messages on channel change, disable auto-scroll during transition
   useEffect(() => {
     stickToBottomRef.current = false;
+    // Allow the restore-effect below to run again for the new channel.
+    restoredForChannelRef.current = null;
 
     if (channelId) {
       fetchMessages();
     }
   }, [channelId, fetchMessages]);
+
+  // scrollToBottom lifted up (declaration moved here from below) so
+  // the auto-scroll useEffect can call it without
+  // react-hooks/immutability flagging a forward reference. Pure DOM
+  // mutation, no state, no captured render values — useCallback
+  // wrapping would be ceremony.
+  function scrollToBottom() {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }
 
   // Auto-scroll on new message (only when already at bottom)
   useEffect(() => {
@@ -135,27 +153,38 @@ function MessageList() {
     return () => observer.disconnect();
   }, []);
 
-  /** Restore scroll position — runs before paint via useLayoutEffect. */
+  /**
+   * Restore scroll position — runs before paint via useLayoutEffect.
+   *
+   * One-shot per channel: guarded by restoredForChannelRef so new
+   * messages arriving in the same channel don't re-trigger the body
+   * (which would jump the scrollbar away from the user's position).
+   * The guard is reset to null when channelId changes (see fetch
+   * useEffect above), allowing the next channel's restore to run.
+   */
   useLayoutEffect(() => {
-    if (!isLoading && messages.length > 0 && scrollRef.current) {
-      const savedPos = scrollPositions.get(channelId);
-      if (savedPos !== undefined) {
-        scrollRef.current.scrollTop = savedPos;
-        // Stick-to-bottom intent matches whatever position we restored to:
-        // if the user was within ~20px of the floor when they left this
-        // channel, keep them pinned as new messages arrive.
-        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        stickToBottomRef.current = scrollHeight - scrollTop - clientHeight < 20;
-        prevScrollTopRef.current = scrollTop;
-      } else {
-        scrollToBottom();
-        // No saved position → user just opened the channel → keep them pinned.
-        stickToBottomRef.current = true;
-        prevScrollTopRef.current = scrollRef.current.scrollTop;
-      }
-      prevMessageCountRef.current = messages.length;
+    if (restoredForChannelRef.current === channelId) return;
+    if (isLoading || messages.length === 0 || !scrollRef.current) return;
+
+    restoredForChannelRef.current = channelId;
+
+    const savedPos = scrollPositions.get(channelId);
+    if (savedPos !== undefined) {
+      scrollRef.current.scrollTop = savedPos;
+      // Stick-to-bottom intent matches whatever position we restored to:
+      // if the user was within ~20px of the floor when they left this
+      // channel, keep them pinned as new messages arrive.
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      stickToBottomRef.current = scrollHeight - scrollTop - clientHeight < 20;
+      prevScrollTopRef.current = scrollTop;
+    } else {
+      scrollToBottom();
+      // No saved position → user just opened the channel → keep them pinned.
+      stickToBottomRef.current = true;
+      prevScrollTopRef.current = scrollRef.current.scrollTop;
     }
-  }, [isLoading, channelId]);
+    prevMessageCountRef.current = messages.length;
+  }, [isLoading, channelId, messages.length]);
 
   /** Scroll-to-message effect — triggered when reply preview is clicked. */
   useEffect(() => {
@@ -174,12 +203,6 @@ function MessageList() {
 
     setScrollToMessageId(null);
   }, [scrollToMessageId, setScrollToMessageId]);
-
-  function scrollToBottom() {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }
 
   /** Scroll handler — save position + update stick-to-bottom intent + trigger infinite scroll */
   const handleScroll = useCallback(() => {

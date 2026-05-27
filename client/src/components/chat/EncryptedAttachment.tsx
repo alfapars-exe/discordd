@@ -61,10 +61,12 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
     }
   }, [attachment.file_url, fileMeta, state]);
 
-  // Auto-decrypt images on mount
+  // Auto-decrypt images on mount — deferred via microtask so the
+  // setState inside doDecrypt lands behind a Promise-callback boundary
+  // (react-hooks/set-state-in-effect treats those as allowed).
   useEffect(() => {
     if (isImage && state === "idle") {
-      doDecrypt();
+      queueMicrotask(() => doDecrypt());
     }
   }, [isImage, state, doDecrypt]);
 

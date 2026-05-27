@@ -24,10 +24,30 @@ import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import ReportModal from "../shared/ReportModal";
-import ModDurationPicker, { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./ModDurationPicker";
+import ModDurationPicker from "./ModDurationPicker";
+import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
+
+// FriendIcon — module-scope so React/ESLint sees it as a stable
+// component identity. Defining it inside MemberCard's body would make
+// it a "fresh" component every render, defeating reconciliation and
+// triggering react-hooks/static-components.
+function FriendIcon({ isFriend }: { isFriend: boolean }) {
+  if (isFriend) {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="18" y1="11" x2="23" y2="11" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" />
+    </svg>
+  );
+}
 
 const SELF_STATUS_OPTIONS: {
   value: "online" | "idle" | "dnd" | "offline";
@@ -54,16 +74,17 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const [adjustedPos, setAdjustedPos] = useState(position);
   const currentUser = useAuthStore((s) => s.user);
 
-  // Derive common fields from member or user prop
+  // Derive common fields from member or user prop. `target` may be null
+  // (caller fed neither a member nor a user prop); we still call every
+  // hook below with safe-fallback inputs so React's hook-order
+  // invariant holds, then early-return AFTER the hook block.
   const target = member ?? userProp;
-  if (!target) return null;
-
-  const userId = target.id;
-  const username = target.username;
-  const displayName = target.display_name;
-  const avatarUrl = target.avatar_url;
-  const customStatus = target.custom_status;
-  const createdAt = target.created_at;
+  const userId = target?.id ?? "";
+  const username = target?.username ?? "";
+  const displayName = target?.display_name;
+  const avatarUrl = target?.avatar_url;
+  const customStatus = target?.custom_status;
+  const createdAt = target?.created_at ?? "";
   const isServerContext = !!member;
 
   // Active moderator timeout (if any). Falls back to the inline field
@@ -124,7 +145,15 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const inReq = incoming.find((r) => r.user_id === userId);
 
   const childModalOpenRef = useRef(false);
-  childModalOpenRef.current = showBadgeAssign || showRoleEditor || showReport || pickerMode !== null;
+  // Mirror the open-child-modal state into a ref so the click-outside
+  // handler (registered once in useEffect) can read the latest value
+  // without re-subscribing on every state change. useLayoutEffect runs
+  // synchronously after commit but before paint, so the ref is fresh
+  // by the time any pointer event fires.
+  useLayoutEffect(() => {
+    childModalOpenRef.current =
+      showBadgeAssign || showRoleEditor || showReport || pickerMode !== null;
+  });
 
   useLayoutEffect(() => {
     const card = cardRef.current;
@@ -164,6 +193,13 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
       document.removeEventListener("mousedown", handleClick);
     };
   }, [onClose]);
+
+  // Early return AFTER every hook above — keeps React's hook call order
+  // stable across renders. If we early-returned before the hooks (the
+  // target=null path), React would lose its hook-list alignment the
+  // moment target flipped to non-null and crash with "rendered more
+  // hooks than during the previous render".
+  if (!target) return null;
 
   const sortedRoles = member ? [...member.roles].sort((a, b) => b.position - a.position) : [];
   const joinDate = new Date(createdAt).toLocaleDateString();
@@ -278,21 +314,6 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     if (outReq) return t("cancelRequest");
     if (inReq) return t("acceptRequest");
     return t("addFriend");
-  }
-
-  function FriendIcon() {
-    if (isFriend) {
-      return (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="18" y1="11" x2="23" y2="11" />
-        </svg>
-      );
-    }
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" />
-      </svg>
-    );
   }
 
   return createPortal(
@@ -500,7 +521,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
                   className={`mc-btn${isFriend ? " mc-btn-danger" : " mc-btn-default"}`}
                   onClick={handleFriendAction}
                 >
-                  <FriendIcon />
+                  <FriendIcon isFriend={isFriend} />
                   <span>{getFriendLabel()}</span>
                 </button>
                 {isBadgeAdmin && (

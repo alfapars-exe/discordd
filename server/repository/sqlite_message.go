@@ -177,11 +177,31 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 	return messages, nil
 }
 
+// Update edits a message. For E2EE channel messages (encryption_version=1)
+// the new ciphertext + sender_device_id + e2ee_metadata are persisted so the
+// edited body actually survives a reload — previously this branch only
+// touched `content` and `edited_at`, which meant the post-edit ciphertext
+// got broadcast over WS but never written to the DB. Anyone fetching message
+// history (page refresh, scrollback, search) saw the pre-edit ciphertext or
+// an unparseable mix, depending on what the row still held in `content`.
+//
+// Mirrors sqliteDMRepo.UpdateMessage's E2EE branching so behaviour is
+// uniform across channel and DM edits.
 func (r *sqliteMessageRepo) Update(ctx context.Context, message *models.Message) error {
 	now := time.Now()
-	query := `UPDATE messages SET content = ?, edited_at = ? WHERE id = ?`
 
-	result, err := r.db.ExecContext(ctx, query, message.Content, now, message.ID)
+	var result sql.Result
+	var err error
+
+	if message.EncryptionVersion == 1 {
+		query := `UPDATE messages SET ciphertext = ?, sender_device_id = ?, e2ee_metadata = ?, edited_at = ? WHERE id = ?`
+		result, err = r.db.ExecContext(ctx, query,
+			message.Ciphertext, message.SenderDeviceID, message.E2EEMetadata, now, message.ID,
+		)
+	} else {
+		query := `UPDATE messages SET content = ?, edited_at = ? WHERE id = ?`
+		result, err = r.db.ExecContext(ctx, query, message.Content, now, message.ID)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to update message: %w", err)
 	}

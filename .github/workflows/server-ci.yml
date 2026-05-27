@@ -32,11 +32,25 @@ jobs:
 
       # go-libsql (database/database.go) is a CGO-only driver.
       # Ubuntu runners ship with gcc, so CGO defaults to enabled here.
-      # build-desktop.yml's CGO_ENABLED=0 release build is intentionally
-      # broken for libsql (it's marked continue-on-error there); this CI
-      # validates the development build path that actually compiles.
+      # Self-host distribution moved to a multi-arch Docker image (see
+      # build-desktop.yml's docker-publish job), so we no longer maintain
+      # a CGO_ENABLED=0 fallback build path.
       - name: go vet
         run: go vet ./...
+        working-directory: server
+
+      # go mod tidy diff check — the Dockerfile used to call `go mod tidy`
+      # at build time, which made image builds non-reproducible (a moving
+      # registry could shift indirect deps between identical commits).
+      # Tidy now runs here instead; if go.mod/go.sum drift the CI fails
+      # and the developer is expected to commit the tidy result.
+      - name: go mod tidy (no drift)
+        run: |
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "::error::go.mod or go.sum is out of date. Run 'go mod tidy' in server/ and commit the result."
+            exit 1
+          fi
         working-directory: server
 
       - name: go test (race + cover)

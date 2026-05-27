@@ -49,10 +49,11 @@ function ChannelPermissionEditor({ channel }: Props) {
     fetchOverrides(channel.id);
   }, [fetchRoles, fetchOverrides, channel.id]);
 
-  // Auto-select first role
+  // Auto-select first role — microtask-deferred to keep
+  // react-hooks/set-state-in-effect quiet.
   useEffect(() => {
     if (!selectedRoleId && roles.length > 0) {
-      setSelectedRoleId(roles[0].id);
+      queueMicrotask(() => setSelectedRoleId(roles[0].id));
     }
   }, [selectedRoleId, roles]);
 

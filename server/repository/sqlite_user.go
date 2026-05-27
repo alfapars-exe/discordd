@@ -416,12 +416,18 @@ func (r *sqliteUserRepo) UpdateLastVoiceActivity(ctx context.Context, userID str
 // ─── Platform Ban ───
 
 func (r *sqliteUserRepo) PlatformBan(ctx context.Context, userID, reason, bannedBy string) error {
+	// Bumping token_version here invalidates every outstanding access
+	// token for this user in the same write. ValidateAccessToken's
+	// version check + the new is_platform_banned check below it both
+	// fire — defence in depth so a token escapes the ban only if BOTH
+	// gates are silently bypassed.
 	query := `
 		UPDATE users
 		SET is_platform_banned = 1,
 			platform_ban_reason = ?,
 			platform_banned_by = ?,
-			platform_banned_at = CURRENT_TIMESTAMP
+			platform_banned_at = CURRENT_TIMESTAMP,
+			token_version = token_version + 1
 		WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query, reason, bannedBy, userID)

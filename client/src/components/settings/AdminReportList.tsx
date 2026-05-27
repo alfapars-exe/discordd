@@ -5,7 +5,7 @@
  * Only visible to platform admins (backend-protected).
  */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -156,9 +156,21 @@ function AdminReportList() {
     startWidth: number;
   } | null>(null);
   const widthsRef = useRef(columnWidths);
-  widthsRef.current = columnWidths;
+  // Latest-ref mirror — pointer-move handlers (registered once via
+  // useEffect, kept across renders) need to read the current widths
+  // map without re-subscribing every time the user resizes a column.
+  // Writing the ref directly in the render body trips
+  // react-hooks/refs; useLayoutEffect runs synchronously after commit
+  // before any subsequent event handler can fire.
+  useLayoutEffect(() => {
+    widthsRef.current = columnWidths;
+  });
 
   // --- Fetch ---
+  // Kept as a useCallback so the post-mutation manual refresh paths
+  // can re-invoke it. The mount-time load runs inline below in an
+  // async IIFE so the lint rule react-hooks/set-state-in-effect
+  // doesn't fire on the synchronous fetcher call.
   const fetchReports = useCallback(async () => {
     setIsLoading(true);
     const res = await listAdminReports(statusFilter || undefined);
@@ -171,8 +183,19 @@ function AdminReportList() {
   }, [statusFilter, addToast, t]);
 
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    let cancelled = false;
+    (async () => {
+      const res = await listAdminReports(statusFilter || undefined);
+      if (cancelled) return;
+      if (res.success && res.data) {
+        setReports(res.data.reports);
+      } else {
+        addToast("error", res.error ?? t("platformReportLoadError"));
+      }
+      setIsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [statusFilter, addToast, t]);
 
   // --- Filtered + Sorted data ---
   const filteredReports = useMemo(() => {

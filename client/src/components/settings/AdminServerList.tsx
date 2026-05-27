@@ -1,6 +1,6 @@
 /** AdminServerList — Platform admin server management table with LiveKit instance migration. */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -143,6 +143,17 @@ function AdminServerList() {
   const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({});
   const [savingServers, setSavingServers] = useState<Set<string>>(new Set());
 
+  // ─── Time snapshot for formatRelativeTime ───
+  // Render must stay pure (no Date.now() during render — see
+  // react-hooks/purity). Snapshot once + refresh every 30s so the
+  // displayed "5m ago" / "2h ago" labels stay roughly current
+  // without triggering an impure read on each render.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // ─── Column resize refs ───
   const resizingRef = useRef<{
     col: string;
@@ -150,7 +161,12 @@ function AdminServerList() {
     startWidth: number;
   } | null>(null);
   const widthsRef = useRef(columnWidths);
-  widthsRef.current = columnWidths;
+  // Latest-ref mirror (post-commit) — pointer-move handler reads
+  // .current without re-subscribing each render. Render-time .current
+  // writes are flagged by react-hooks/refs as render-time side effects.
+  useLayoutEffect(() => {
+    widthsRef.current = columnWidths;
+  });
 
   // ─── Fetch ───
   useEffect(() => {
@@ -319,7 +335,11 @@ function AdminServerList() {
   function formatRelativeTime(iso: string | null) {
     if (!iso) return t("platformServerNever");
     try {
-      const diff = Date.now() - parseUTC(iso);
+      // Render purity: read Date.now() via the `nowMs` snapshot state
+      // declared at the top of this component (auto-refreshes every
+      // 30s). Calling Date.now() directly during render tripped
+      // react-hooks/purity because it's a non-deterministic source.
+      const diff = nowMs - parseUTC(iso);
       const mins = Math.floor(diff / 60000);
       if (mins < 1) return t("platformServerJustNow");
       if (mins < 60) return `${mins}m`;

@@ -20,8 +20,9 @@ import DMChat from "../dm/DMChat";
 import FriendsView from "../friends/FriendsView";
 import P2PCallScreen from "../p2p/P2PCallScreen";
 import AuditChannel from "../audit/AuditChannel";
-import DropZoneOverlay, { calculateZone } from "./DropZoneOverlay";
-import type { DropZone } from "./DropZoneOverlay";
+import DropZoneOverlay from "./DropZoneOverlay";
+import { calculateZone } from "./dropZone";
+import type { DropZone } from "./dropZone";
 
 type PanelViewProps = {
   panelId: string;

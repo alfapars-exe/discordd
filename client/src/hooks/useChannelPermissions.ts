@@ -25,7 +25,13 @@ export function useChannelPermissions(channelID: string | null) {
     [members, currentUser?.id]
   );
 
-  const overrides = channelID ? getOverrides(channelID) : [];
+  // Wrap in useMemo — `channelID ? store(channelID) : []` would
+  // otherwise allocate a fresh `[]` every render and bust the
+  // downstream channelPerms memo.
+  const overrides = useMemo(
+    () => (channelID ? getOverrides(channelID) : []),
+    [channelID, getOverrides]
+  );
 
   const roleIds = useMemo(
     () => currentMember?.roles.map((r) => r.id) ?? [],

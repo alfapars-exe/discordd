@@ -1,10 +1,19 @@
-# mqvi Docker Compose
+# HiChat! Docker Compose
 #
 # Usage:
 #   docker-compose up        → Start all services
 #   docker-compose up -d     → Start in background
 #   docker-compose down      → Stop
 #   docker-compose logs -f   → Follow logs
+#
+# Volume note: the data volume is named `hichat-data` going forward
+# (was `mqvi-data` in earlier revisions). The DB *file* path inside
+# the volume stays at `/data/mqvi.db` to keep existing HF Space and
+# local docker-compose deployments working without a manual rename.
+# Operators upgrading from the old volume name can migrate with:
+#   docker volume create hichat-data
+#   docker run --rm -v mqvi-data:/from -v hichat-data:/to alpine \
+#     cp -av /from/. /to/
 
 services:
   # ─── Go Backend API ───
@@ -14,27 +23,42 @@ services:
       dockerfile: Dockerfile
     ports:
       - "9090:9090"
+    # Secrets are required from the host environment (or a `.env` file
+    # alongside this compose file). The ${VAR:?msg} form makes compose
+    # FAIL FAST at `docker-compose up` if any secret is missing, instead
+    # of starting the server with a known-insecure default. See
+    # `.env.example` for the full list and how to generate values.
     environment:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=9090
+      # Legacy filename — preserved so upgrading deployments don't
+      # silently lose their database. New installs inherit it; rename
+      # is a breaking change deferred indefinitely (it requires every
+      # operator to mv the file inside the volume before restarting).
       - DATABASE_PATH=/data/mqvi.db
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-      - JWT_ACCESS_EXPIRY_MINUTES=15
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required (run: openssl rand -hex 32)}
+      - JWT_ACCESS_EXPIRY_MINUTES=1440
       - JWT_REFRESH_EXPIRY_DAYS=7
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (run: openssl rand -hex 32)}
       - LIVEKIT_URL=ws://livekit:7880
-      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
-      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-devsecret}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is required}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
       - UPLOAD_DIR=/data/uploads
       - UPLOAD_MAX_SIZE=26214400
     volumes:
-      - mqvi-data:/data
+      - hichat-data:/data
     depends_on:
       - livekit
     restart: unless-stopped
 
   # ─── LiveKit SFU (Voice/Video/Screen Share) ───
   livekit:
-    image: livekit/livekit-server:latest
+    # Pinned to a specific release. `latest` floats: LiveKit ships
+    # breaking changes between majors (signaling protocol, room API,
+    # ICE config defaults) and an unattended `docker-compose pull`
+    # could silently swap in an incompatible build. Bump this tag
+    # deliberately after testing the corresponding client SDK.
+    image: livekit/livekit-server:v1.8.4
     ports:
       - "7880:7880"     # WebSocket signaling
       - "7881:7881"     # WebRTC over TCP
@@ -62,5 +86,5 @@ services:
       - server
 
 volumes:
-  mqvi-data:
+  hichat-data:
     driver: local

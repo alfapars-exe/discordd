@@ -19,17 +19,37 @@ type RoleService interface {
 	Delete(ctx context.Context, serverID, actorID, roleID string) error
 	ReorderRoles(ctx context.Context, serverID, actorID string, items []models.PositionUpdate) ([]models.Role, error)
 	SetAuditLogger(logger AuditWriter)
+	// SetPermInvalidator wires the per-channel permission cache so that
+	// role mutations (Update / Delete) clear stale resolution results.
+	// Optional: if not wired, permission revocations take up to
+	// permCacheTTL (30s) to land — same behaviour as before this hook
+	// existed, just without the immediate-invalidate guarantee.
+	SetPermInvalidator(inv PermissionInvalidator)
 }
 
 type roleService struct {
-	roleRepo    repository.RoleRepository
-	userRepo    repository.UserRepository
-	hub         ws.Broadcaster
-	auditLogger AuditWriter
+	roleRepo        repository.RoleRepository
+	userRepo        repository.UserRepository
+	hub             ws.Broadcaster
+	auditLogger     AuditWriter
+	permInvalidator PermissionInvalidator
 }
 
 func (s *roleService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
+}
+
+func (s *roleService) SetPermInvalidator(inv PermissionInvalidator) {
+	s.permInvalidator = inv
+}
+
+// invalidatePerms is a nil-safe wrapper — the invalidator is optional
+// (test setups frequently leave it nil), so every call site goes
+// through here instead of repeating the nil check.
+func (s *roleService) invalidatePerms() {
+	if s.permInvalidator != nil {
+		s.permInvalidator.InvalidateAll()
+	}
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -211,6 +231,13 @@ func (s *roleService) Update(ctx context.Context, serverID, actorID, roleID stri
 		return nil, fmt.Errorf("failed to update role: %w", err)
 	}
 
+	// Only invalidate when permission bits changed — name/color/mentionable
+	// edits don't affect any resolved permission and shouldn't blow the
+	// per-channel cache during routine cosmetic edits.
+	if req.Permissions != nil {
+		s.invalidatePerms()
+	}
+
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpRoleUpdate,
 		Data: role,
@@ -245,6 +272,10 @@ func (s *roleService) Delete(ctx context.Context, serverID, actorID, roleID stri
 	if err := s.roleRepo.Delete(ctx, roleID); err != nil {
 		return fmt.Errorf("failed to delete role: %w", err)
 	}
+
+	// Deletion strips this role's contribution from every member who
+	// held it — always invalidate the resolution cache.
+	s.invalidatePerms()
 
 	s.hub.BroadcastToAll(ws.Event{
 		Op:   ws.OpRoleDelete,

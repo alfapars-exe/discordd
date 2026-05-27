@@ -173,10 +173,17 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// yt-dlp pipes raw audio to stdout; ffmpeg consumes it and emits Ogg/Opus.
 	// `-re` makes ffmpeg pace its output to real-time, so our blocking reads
 	// downstream are naturally rate-limited at ~50 frames/second (20 ms each).
+	//
+	// `--` terminates yt-dlp option parsing — `track.URL` originates from the
+	// fallback chain in music_bot_metadata.go:toTrack(), which can land on
+	// the user's raw input if yt-dlp didn't return a webpage URL. Without
+	// the terminator a crafted URL would let the dequeue path inherit the
+	// same argument-injection risk fixed in extractTracks.
 	yt := exec.CommandContext(ctx, "yt-dlp",
 		"-f", "bestaudio",
 		"--no-warnings",
 		"-o", "-",
+		"--",
 		track.URL,
 	)
 	ff := exec.CommandContext(ctx, "ffmpeg",

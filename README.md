@@ -22,8 +22,10 @@ short_description: Discord-style topluluk — ses, metin, dosya paylaşımı
 
 <p align="center">
   <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.exe"><img src="icons/btn-windows.svg" alt="Download for Windows" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.dmg"><img src="icons/btn-macos.svg" alt="Download for macOS" height="48" /></a>&nbsp;&nbsp;
   <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.AppImage"><img src="icons/btn-linux.svg" alt="Download for Linux" height="48" /></a>
+</p>
+<p align="center">
+  <sub><em>macOS build is on hold — the release workflow currently lacks Apple Developer ID + notarization credentials. Track <a href="https://github.com/alfapars-exe/discordd/issues">issues</a> for progress.</em></sub>
 </p>
 
 <p align="center">

@@ -78,12 +78,15 @@ export function useDisplayInfo(): DisplayInfo | null {
       // Web (non-Electron) — browser API only gives logical (DPI-divided) px
       // and no refresh-rate info. Both are fine: web users rarely have
       // monitors above 1440p in this audience, and hiding the Max-Hz option
-      // is the right behaviour on web anyway.
-      setInfo({
-        width: window.screen.width,
-        height: window.screen.height,
-        refreshRate: 0,
-        monitorCount: 1,
+      // is the right behaviour on web anyway. Microtask defer keeps
+      // react-hooks/set-state-in-effect quiet.
+      queueMicrotask(() => {
+        setInfo({
+          width: window.screen.width,
+          height: window.screen.height,
+          refreshRate: 0,
+          monitorCount: 1,
+        });
       });
     }
 

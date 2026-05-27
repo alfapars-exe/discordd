@@ -1,6 +1,6 @@
 /** AdminUserList — Platform admin user management table (sortable, filterable, resizable columns). */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -172,7 +172,21 @@ function AdminUserList() {
     startWidth: number;
   } | null>(null);
   const widthsRef = useRef(columnWidths);
-  widthsRef.current = columnWidths;
+  // Latest-ref mirror (post-commit) — pointer-move handler reads
+  // .current without re-subscribing each render. Render-time .current
+  // writes are flagged by react-hooks/refs as render-time side effects.
+  useLayoutEffect(() => {
+    widthsRef.current = columnWidths;
+  });
+
+  // Render purity: snapshot Date.now() once + refresh every 30s for
+  // the relative-time labels. Direct Date.now() during render trips
+  // react-hooks/purity because it's non-deterministic.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   // ─── Fetch ───
   useEffect(() => {
@@ -423,7 +437,9 @@ function AdminUserList() {
   function formatRelativeTime(iso: string | null) {
     if (!iso) return t("platformUserNever");
     try {
-      const diff = Date.now() - parseUTC(iso);
+      // Snapshot-backed (see nowMs at the top of this component) to
+      // keep render pure for react-hooks/purity.
+      const diff = nowMs - parseUTC(iso);
       const mins = Math.floor(diff / 60000);
       if (mins < 1) return t("platformUserJustNow");
       if (mins < 60) return `${mins}m`;

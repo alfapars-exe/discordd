@@ -21,6 +21,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/i18n"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/static"
 	"github.com/argeinfina/hichat/ws"
@@ -71,6 +72,15 @@ func main() {
 		log.Fatalf("[main] failed to load config: %v", err)
 	}
 	log.Printf("[main] config loaded (port=%d)", cfg.Server.Port)
+
+	// Apply trusted-proxy list to the rate limiter before any request can
+	// land. Empty list keeps the safe loopback defaults; an invalid CIDR
+	// in TRUSTED_PROXIES is fatal — better to fail boot than silently
+	// fall back to "trust no proxy" and break legitimate rate-limit
+	// signals from a real upstream.
+	if err := ratelimit.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		log.Fatalf("[main] invalid TRUSTED_PROXIES: %v", err)
+	}
 
 	// Log music-bot dependency versions so missing binaries are obvious from
 	// the boot log instead of buried inside per-track Enqueue failures.
@@ -146,6 +156,15 @@ func main() {
 	svcs.Channel.SetAuditLogger(svcs.AuditLog)
 	svcs.Server.SetAuditLogger(svcs.AuditLog)
 	svcs.Message.SetAuditLogger(svcs.AuditLog)
+
+	// 9c-bis. Wire the channel-permission cache invalidator into the
+	// services whose mutations can change resolved permissions. Without
+	// this, a revoked role or kicked member keeps their cached
+	// permissions for up to permCacheTTL (30s). The invalidator type is
+	// the small ISP interface (`services.PermissionInvalidator`)
+	// implemented by the full ChannelPermissionService.
+	svcs.Role.SetPermInvalidator(svcs.ChannelPermission)
+	svcs.Member.SetPermInvalidator(svcs.ChannelPermission)
 
 	// 9d. Wire the member-timeout checker into voice. messageService
 	// gets the timeout repo via its constructor; voiceService uses a
@@ -434,18 +453,11 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 	}
 }
 
-// registerStaticAndUploads sets up the upload file serving endpoint.
+// registerStaticAndUploads sets up the public static endpoints (landing,
+// health, version). The /api/uploads/ route used to live here as a raw
+// public http.FileServer; it now sits in initRoutes behind the auth
+// middleware + per-attachment access checks (see handlers/upload_download.go).
 func registerStaticAndUploads(mux *http.ServeMux, cfg *config.Config) {
-	uploadsHandler := http.StripPrefix("/api/uploads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Block path traversal but allow one level of subdirectory (e.g. soundboard/)
-		if strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.Path, "..") {
-			http.NotFound(w, r)
-			return
-		}
-		http.FileServer(http.Dir(cfg.Upload.Dir)).ServeHTTP(w, r)
-	}))
-	mux.Handle("GET /api/uploads/", uploadsHandler)
-
 	// Landing page assets (video, screenshots) — public, no auth
 	landingDir := cfg.Upload.Dir + "/../landing"
 	landingHandler := http.StripPrefix("/static/landing/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

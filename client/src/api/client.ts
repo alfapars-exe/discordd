@@ -22,27 +22,27 @@ import type { APIResponse } from "../types";
 import { API_BASE_URL } from "../utils/constants";
 
 // Access token lives in module memory only — no localStorage read/write.
+//
+// Earlier revisions hydrated the access token from localStorage and
+// mirrored every fresh issuance back to it so reloads stayed signed in.
+// That re-exposed the short-lived credential to any XSS that could call
+// localStorage.getItem, defeating the cookie-only refresh design. The
+// current behaviour: on page reload, accessTokenMemory starts null, the
+// first /api/users/me call returns 401, apiClient transparently calls
+// /api/auth/refresh (using the HttpOnly refresh cookie), gets a fresh
+// access token, retries the original request. Net UX cost: one extra
+// round-trip on cold reload; net security gain: access token is never
+// visible to scripts that can't intercept the in-memory variable
+// directly (which is a much higher bar than reading a known storage key).
 let accessTokenMemory: string | null = null;
 
-// Pre-C2 clients stored access_token in localStorage too. Hydrate from
-// there on first load so a reload doesn't sign the user out. Once a fresh
-// access token is issued via refresh, this stale value is overwritten.
+// Sweep any leftovers from prior storage schemes so a stored XSS that
+// scans localStorage can't lift a stale credential we no longer write.
 try {
-  const stored = localStorage.getItem("access_token");
-  if (stored) accessTokenMemory = stored;
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
 } catch {
-  /* private mode / quota — fall through, user re-authenticates */
-}
-
-// Drain the legacy refresh token from localStorage. The server-side cookie
-// is now the source of truth; keeping the value around in JS-readable
-// storage would defeat the entire C2 fix.
-try {
-  if (localStorage.getItem("refresh_token") !== null) {
-    localStorage.removeItem("refresh_token");
-  }
-} catch {
-  /* ignore */
+  /* private mode / quota — irrelevant, we don't store anything anyway */
 }
 
 function getAccessToken(): string | null {
@@ -50,26 +50,23 @@ function getAccessToken(): string | null {
 }
 
 function setTokens(access: string, _refresh: string): void {
+  // Access token stays in memory only — see the comment at the top of
+  // this file for the rationale. The _refresh parameter is unused; it
+  // remains in the signature so the rest of the auth code can keep
+  // calling setTokens(access, refresh) until we tidy the callers in a
+  // follow-up. The server stopped including refresh_token in the JSON
+  // body (AuthTokens.RefreshToken is `json:"-"` now), so most callers
+  // already pass an empty string.
   accessTokenMemory = access;
-  // Refresh token is delivered via Set-Cookie, not stored client-side.
-  // The _refresh parameter is intentionally unused — kept for callsite
-  // compatibility during the C2 migration. Once all server responses
-  // omit refresh_token from the JSON body, callers can drop the arg.
-  try {
-    // Mirror access token to localStorage so a page reload keeps the user
-    // signed in until a refresh cycle replaces it. Acceptable because the
-    // access token TTL is short (≤ 15 min by default).
-    localStorage.setItem("access_token", access);
-  } catch {
-    /* ignore */
-  }
 }
 
 function clearTokens(): void {
   accessTokenMemory = null;
+  // Sweep historical entries — if a user was signed in under the old
+  // localStorage scheme we still want logout to evict whatever they
+  // had cached. New code never writes these keys.
   try {
     localStorage.removeItem("access_token");
-    // Defensive — sweep any stale refresh token from older clients.
     localStorage.removeItem("refresh_token");
   } catch {
     /* ignore */
@@ -165,7 +162,17 @@ export async function apiClient<T>(
     ...extraHeaders,
   };
 
-  const token = getAccessToken();
+  // Proactive refresh — if the access token is inside the 5-minute pre-
+  // expiry window, refresh BEFORE issuing the request rather than waiting
+  // for the 401-retry cycle. The refresh promise lock in
+  // refreshAccessToken() collapses parallel requests onto a single network
+  // call. If refresh fails we still send with the stale token; the 401
+  // handler below will try once more and then propagate the failure.
+  let token = getAccessToken();
+  if (token && isTokenAboutToExpire(token)) {
+    await refreshAccessToken();
+    token = getAccessToken();
+  }
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -285,6 +292,28 @@ function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp * 1000 < Date.now() + 10_000;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Proactive-refresh window. With a 24h access token we refresh ~5 minutes
+ * before expiry rather than waiting for the first 401 — that way the user
+ * never sees the "Unauthorized" toast that the old reactive refresh
+ * surfaced for the duration of the in-flight request when their tab had
+ * been idle past the access TTL.
+ *
+ * Short-lived tokens (e.g. operator-tightened 15-minute deploys) still
+ * refresh just-in-time because the window won't trigger until they're
+ * already inside it.
+ */
+const PROACTIVE_REFRESH_WINDOW_MS = 5 * 60 * 1000;
+
+function isTokenAboutToExpire(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp * 1000 < Date.now() + PROACTIVE_REFRESH_WINDOW_MS;
   } catch {
     return true;
   }

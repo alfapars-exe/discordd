@@ -91,10 +91,20 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// TicketConsumer exchanges a short-lived WS connect ticket for a userID
+// (one-shot, ~30s TTL). See services/ws_ticket_service.go for the
+// rationale (keeps the long-lived JWT out of WS URL query strings).
+// nil is acceptable — the handler then falls back to the legacy
+// `?token=JWT` query path for clients that haven't been upgraded yet.
+type TicketConsumer interface {
+	Consume(ticket string) (string, error)
+}
+
 // Handler handles WebSocket connection upgrades.
 type Handler struct {
 	hub                 *Hub
 	tokenValidator      TokenValidator
+	ticketConsumer      TicketConsumer
 	banChecker          BanChecker
 	voiceStatesProvider VoiceStatesProvider
 	userInfoProvider    UserInfoProvider
@@ -106,6 +116,7 @@ type Handler struct {
 func NewHandler(
 	hub *Hub,
 	tokenValidator TokenValidator,
+	ticketConsumer TicketConsumer,
 	banChecker BanChecker,
 	voiceStatesProvider VoiceStatesProvider,
 	userInfoProvider UserInfoProvider,
@@ -116,6 +127,7 @@ func NewHandler(
 	return &Handler{
 		hub:                 hub,
 		tokenValidator:      tokenValidator,
+		ticketConsumer:      ticketConsumer,
 		banChecker:          banChecker,
 		voiceStatesProvider: voiceStatesProvider,
 		userInfoProvider:    userInfoProvider,
@@ -126,22 +138,54 @@ func NewHandler(
 }
 
 // HandleConnection upgrades HTTP to WebSocket, validates auth, and starts the client.
-// Token is passed as a query param (?token=JWT) since browsers can't set
-// custom headers on WebSocket handshakes.
+//
+// Preferred path: client POSTs /api/auth/ws-ticket, gets a one-time
+// 30-second ticket, opens the WS with `?ticket=...`. Tickets are
+// consumed on first use and never appear in logs as recoverable
+// credentials.
+//
+// Legacy path: `?token=JWT` (the long-lived access token in the URL).
+// Retained during the rollout window so non-upgraded clients keep
+// connecting; remove once all official builds are pushing tickets.
 func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		http.Error(w, "missing token", http.StatusUnauthorized)
-		return
+	var userIDFromTicket string
+	if h.ticketConsumer != nil {
+		if t := r.URL.Query().Get("ticket"); t != "" {
+			uid, err := h.ticketConsumer.Consume(t)
+			if err != nil {
+				h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid ticket", map[string]string{
+					"error": err.Error(),
+				})
+				http.Error(w, "invalid ticket", http.StatusUnauthorized)
+				return
+			}
+			userIDFromTicket = uid
+		}
 	}
 
-	claims, err := h.tokenValidator.ValidateAccessToken(token)
-	if err != nil {
-		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid token", map[string]string{
-			"error": err.Error(),
-		})
-		http.Error(w, "invalid token", http.StatusUnauthorized)
-		return
+	var claims *models.TokenClaims
+	if userIDFromTicket != "" {
+		// Ticket exchange already validated the user; synthesize a
+		// claims-like shape so the rest of the handler reads the
+		// userID uniformly. Username is filled below from
+		// userInfoProvider, the same way the JWT path does it.
+		claims = &models.TokenClaims{UserID: userIDFromTicket}
+	} else {
+		// Legacy token path — drops out once all clients are upgraded.
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "missing ticket or token", http.StatusUnauthorized)
+			return
+		}
+		var err error
+		claims, err = h.tokenValidator.ValidateAccessToken(token)
+		if err != nil {
+			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid token", map[string]string{
+				"error": err.Error(),
+			})
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
 	}
 
 	// Fetch user info before upgrade — reject banned users early
@@ -157,11 +201,30 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}
+		// Token-version (revocation) gate. Previously verified inside
+		// AuthService.ValidateAccessToken; moved out so the HTTP
+		// middleware can satisfy a request from the userCache. The
+		// WS upgrade path doesn't go through that middleware, so we
+		// re-check here against the live user row we just fetched
+		// (defense-in-depth: a banned/revoked user can't keep a WS
+		// open just because their JWT still parses).
+		if claims.TokenVersion < user.TokenVersion {
+			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: token revoked", nil)
+			http.Error(w, "token revoked", http.StatusUnauthorized)
+			return
+		}
 		if user.IsPlatformBanned {
 			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: account suspended", nil)
 			http.Error(w, "account suspended", http.StatusForbidden)
 			return
 		}
+		// Always sync username from the live DB row. The ticket path
+		// (above) synthesises an empty-Username claims object, and even
+		// the JWT path can carry a stale username if the user renamed
+		// after the token was issued. Without this, typing/voice WS
+		// events broadcast `username: ""` for ticket-connected clients,
+		// rendering as blank rows in other members' UIs.
+		claims.Username = user.Username
 		if user.DisplayName != nil {
 			displayName = *user.DisplayName
 		}

@@ -11,8 +11,10 @@
 
 <p align="center">
   <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.exe"><img src="icons/btn-windows.svg" alt="Windows İndir" height="48" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.dmg"><img src="icons/btn-macos.svg" alt="macOS İndir" height="48" /></a>&nbsp;&nbsp;
   <a href="https://github.com/alfapars-exe/discordd/releases/latest/download/hichat-setup.AppImage"><img src="icons/btn-linux.svg" alt="Linux İndir" height="48" /></a>
+</p>
+<p align="center">
+  <sub><em>macOS yapısı şimdilik askıda — release workflow'unda Apple Developer ID + notarization secret'ları henüz yok. Gelişmeler için <a href="https://github.com/alfapars-exe/discordd/issues">issue'ları</a> takip edin.</em></sub>
 </p>
 
 <p align="center">

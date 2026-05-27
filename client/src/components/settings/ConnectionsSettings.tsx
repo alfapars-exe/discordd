@@ -4,7 +4,7 @@
  * since SERVER_URL is computed at module level.
  */
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -87,27 +87,34 @@ function ConnectionsSettings() {
   }
 
   // ─── Handlers ───
+  //
+  // Plain function definitions, not useCallback wrappers. The handlers
+  // only call setState setters (stable across renders) and aren't passed
+  // to memoized children, so manual useCallback wraps add zero value
+  // here — the lint rule preserve-manual-memoization rightly flagged
+  // the empty-deps array as inconsistent with the inferred setState
+  // dependencies. React Compiler (when enabled) memoizes these anyway.
 
-  const handleAdd = useCallback(() => {
+  function handleAdd() {
     setIsAdding(true);
     setEditingId(null);
     setFormName("");
     setFormUrl("");
-  }, []);
+  }
 
-  const handleEdit = useCallback((conn: SavedConnection) => {
+  function handleEdit(conn: SavedConnection) {
     setEditingId(conn.id);
     setIsAdding(false);
     setFormName(conn.name);
     setFormUrl(conn.url);
-  }, []);
+  }
 
-  const handleCancelForm = useCallback(() => {
+  function handleCancelForm() {
     setIsAdding(false);
     setEditingId(null);
     setFormName("");
     setFormUrl("");
-  }, []);
+  }
 
   function handleSaveNew() {
     const trimmedName = formName.trim();

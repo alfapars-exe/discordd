@@ -39,6 +39,10 @@ type DMRepository interface {
 	// Attachment operations
 	CreateAttachment(ctx context.Context, attachment *models.DMAttachment) error
 	GetAttachmentsByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]models.DMAttachment, error)
+	// GetAttachmentByFileURL resolves a /api/uploads/{name} download URL
+	// to its DM attachment row. Used by the auth-gated download handler to
+	// verify the requester is a participant of the DM that owns the file.
+	GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.DMAttachment, error)
 
 	// Search operations (FTS5 full-text search with pagination)
 	SearchMessages(ctx context.Context, channelID string, query string, limit, offset int) ([]models.DMMessage, int, error)

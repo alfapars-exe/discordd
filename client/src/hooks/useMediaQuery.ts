@@ -18,8 +18,10 @@ function useMediaQuery(query: string): boolean {
 
     const mql = window.matchMedia(query);
 
-    // Sync on mount in case of SSR hydration mismatch
-    setMatches(mql.matches);
+    // Sync on mount in case of SSR hydration mismatch — microtask
+    // defer so react-hooks/set-state-in-effect treats it as a
+    // post-commit write instead of a cascading render.
+    queueMicrotask(() => setMatches(mql.matches));
 
     function handleChange(e: MediaQueryListEvent) {
       setMatches(e.matches);

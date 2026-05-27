@@ -48,7 +48,7 @@ func (h *SoundboardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(h.maxUpload); err != nil {
+	if err := pkg.LimitedParseMultipartForm(w, r, h.maxUpload); err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid multipart form")
 		return
 	}

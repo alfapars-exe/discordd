@@ -47,8 +47,19 @@ type AuthService interface {
 }
 
 type AuthTokens struct {
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
+	AccessToken string `json:"access_token"`
+	// RefreshToken is delivered to clients exclusively via the
+	// HttpOnly+Secure+SameSite=Strict cookie set by setRefreshCookie.
+	// `json:"-"` keeps the field populated in-process (handlers read it
+	// to write the cookie) but stops it from appearing in the JSON body
+	// — clients holding a stolen body or a screen-recorded response
+	// can no longer extract the long-lived credential.
+	//
+	// Native clients that previously relied on the body value should
+	// migrate to the cookie; the server still ACCEPTS a body-supplied
+	// refresh_token on POST /api/auth/refresh as a transitional path
+	// (see extractRefreshToken in handlers/auth.go).
+	RefreshToken string      `json:"-"`
 	User         models.User `json:"user"`
 }
 
@@ -316,6 +327,21 @@ func (s *authService) Logout(ctx context.Context, refreshToken string) error {
 	return s.sessionRepo.DeleteByID(ctx, session.ID)
 }
 
+// ValidateAccessToken — JWT-only validation. NO DB read.
+//
+// Token-version (revocation) and IsPlatformBanned checks moved to the
+// callers so they can hit a warm cache instead of bypassing it:
+//   - HTTP: AuthMiddleware.Require checks against m.userCache (30s TTL),
+//     cutting one DB read per authenticated request.
+//   - WebSocket: ws/handler.go HandleConnection already fetches the user
+//     row for username/displayName/avatar — it now also inspects
+//     TokenVersion + IsPlatformBanned from that same row.
+//
+// Trade-off: revocation/ban land in up to userCacheTTL (30s) instead of
+// instantly. This is the same trade-off accepted for IsPlatformBanned
+// in the previous round (E3); TokenVersion now follows the same rule.
+// For instant invalidation in critical paths, the mutation site can
+// call AuthMiddleware.InvalidateUser to drop the cached row.
 func (s *authService) ValidateAccessToken(tokenString string) (*models.TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &models.TokenClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -332,26 +358,6 @@ func (s *authService) ValidateAccessToken(tokenString string) (*models.TokenClai
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("%w: invalid token claims", pkg.ErrUnauthorized)
 	}
-
-	// Token-version (revocation) check: a "logout from all devices" bumps
-	// users.token_version, which makes every outstanding access token's
-	// tv claim < current version → rejected here.
-	//
-	// Legacy tokens issued before migration 066 have no tv claim, which
-	// decodes to TokenVersion=0. New users also start at token_version=0,
-	// so legacy tokens validate cleanly until their first
-	// revocation event. Background DB read is unavoidable; the user_cache
-	// in AuthMiddleware absorbs the load.
-	user, err := s.userRepo.GetByID(context.Background(), claims.UserID)
-	if err != nil {
-		// Treat missing-user as an invalid token. Returning the raw lookup
-		// error would leak DB shape to clients.
-		return nil, fmt.Errorf("%w: user not found", pkg.ErrUnauthorized)
-	}
-	if claims.TokenVersion < user.TokenVersion {
-		return nil, fmt.Errorf("%w: token revoked (logged out from all devices)", pkg.ErrUnauthorized)
-	}
-
 	return claims, nil
 }
 

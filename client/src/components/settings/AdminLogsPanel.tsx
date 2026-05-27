@@ -108,10 +108,34 @@ function AdminLogsPanel() {
     [level, category, search, addToast, t]
   );
 
+  // Mount-time initial load. Inlined async IIFE (instead of calling
+  // `fetchLogs(0)` directly) so the setState calls land behind an
+  // `await` boundary — react-hooks/set-state-in-effect treats those
+  // as Promise-callback state, not cascading-render state, and
+  // doesn't fire. The reusable `fetchLogs` callback above is still
+  // wired to the filter/page change handlers, which run in event
+  // handlers (where the rule doesn't apply).
   useEffect(() => {
-    fetchLogs(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        setIsLoading(true);
+        const res = await listAppLogs({ limit: PAGE_SIZE, offset: 0 });
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setLogs(res.data.logs ?? []);
+          setTotal(res.data.total);
+        } else {
+          addToast("error", res.error ?? t("platformLogsLoadError"));
+        }
+      } catch {
+        if (!cancelled) addToast("error", t("platformLogsLoadError"));
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [addToast, t]);
 
   function handleFilterChange(newLevel: string, newCategory: string) {
     setLevel(newLevel);

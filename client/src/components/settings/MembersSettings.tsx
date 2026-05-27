@@ -45,8 +45,10 @@ function MembersSettings() {
 
   useEffect(() => {
     if (selectedMember) {
-      setEditRoleIds(selectedMember.roles.map((r) => r.id));
-      setHasChanges(false);
+      queueMicrotask(() => {
+        setEditRoleIds(selectedMember.roles.map((r) => r.id));
+        setHasChanges(false);
+      });
     }
   }, [selectedMember]);
 
@@ -94,7 +96,7 @@ function MembersSettings() {
 
   useEffect(() => {
     if (activeTab === "bans" && canBan) {
-      fetchBans();
+      queueMicrotask(() => fetchBans());
     }
   }, [activeTab, canBan, fetchBans]);
 

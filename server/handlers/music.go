@@ -58,6 +58,15 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "url is required")
 		return
 	}
+	// Scheme allow-list — first line of defense against yt-dlp argument
+	// injection. The service layer also passes `--` to yt-dlp so a
+	// `--exec "..."` style payload would be treated as a positional URL,
+	// but rejecting non-http(s) here means the offender never reaches
+	// the subprocess at all (smaller blast radius, no exec spawn cost).
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "url must start with http:// or https://")
+		return
+	}
 
 	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
 		pkg.Error(w, err)

@@ -16,6 +16,20 @@ rtc:
   node_ip: 127.0.0.1
 
 keys:
+  # OVERRIDE THESE WHEN RUNNING WITH docker-compose.
+  #
+  # docker-compose.yml passes LIVEKIT_API_KEY / LIVEKIT_API_SECRET as
+  # env vars to the `server` service (the Go backend), which is what
+  # actually talks to this LiveKit instance — those values authenticate
+  # the API client. The keys block below is what the LiveKit server
+  # itself accepts as valid credentials; in production both sides must
+  # match.
+  #
+  # Easiest path: mount a generated livekit.yaml at deploy time and
+  # write `keys: ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}` (templated
+  # by envsubst or similar). For local dev / Docker Desktop, the
+  # placeholder pair below is harmless because the network is
+  # container-only.
   devkey: devsecret
 
 logging:

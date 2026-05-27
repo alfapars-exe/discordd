@@ -39,11 +39,11 @@ export type ScreenShareFps = 30 | 60 | 120 | -1;
  * the level sets a base curve, sensitivity offsets it ±6 dB. sensitivity=100
  * still disables the gate entirely (legacy "off" semantic preserved).
  *
- * Mapping (see RNNoiseProcessor.levelToThresholds):
- *   "low"      — open=-50dB / close=-55dB / hold=400ms (very permissive)
- *   "medium"   — open=-42dB / close=-48dB / hold=300ms (default — Discord-ish)
- *   "high"     — open=-36dB / close=-42dB / hold=200ms (tight, kicks more noise)
- *   "maximum"  — open=-30dB / close=-36dB / hold=150ms (very tight; loud rooms)
+ * Mapping (see gateConfig.LEVEL_BASE):
+ *   "low"      — open=-60dB / close=-65dB / hold=400ms (effectively pass-through)
+ *   "medium"   — open=-52dB / close=-58dB / hold=300ms (default — passes quiet speech, blocks fan/keyboard)
+ *   "high"     — open=-45dB / close=-52dB / hold=200ms (tight, kicks more noise)
+ *   "maximum"  — open=-38dB / close=-45dB / hold=150ms (very tight; loud rooms only)
  */
 export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
 

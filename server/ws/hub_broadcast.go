@@ -144,7 +144,15 @@ func (h *Hub) BroadcastToServer(serverID string, event Event) {
 		select {
 		case client.send <- data:
 		default:
-			go func(c *Client) { h.unregister <- c }(client)
+			// Match the rest of the broadcast methods — bounded queue
+			// instead of an ad-hoc `go func() { h.unregister <- c }`.
+			// Under a thundering-herd disconnect (e.g. server-wide
+			// announcement after a network blip), the goroutine form
+			// spawned one goroutine per slow client per broadcast and
+			// left them blocked on `h.unregister` until drained,
+			// stacking up unboundedly. queueUnregister is non-blocking
+			// and deduplicates internally.
+			h.queueUnregister(client)
 		}
 	}
 }
@@ -170,7 +178,8 @@ func (h *Hub) BroadcastToServerExcept(serverID, excludeUserID string, event Even
 		select {
 		case client.send <- data:
 		default:
-			go func(c *Client) { h.unregister <- c }(client)
+			// See BroadcastToServer above — same goroutine-leak fix.
+			h.queueUnregister(client)
 		}
 	}
 }

@@ -50,15 +50,20 @@ export function useE2EEKeyProvider(
   // Worker lifecycle is bound to "is encryption on?" not "what passphrase?".
   // Re-keying reuses the existing worker; only on/off transitions create or
   // tear down the thread.
+  //
+  // The `e2eeOn` boolean is a separate local so the useMemo dependency
+  // array stays a simple expression — react-hooks/exhaustive-deps
+  // rejects the `!!e2eePassphrase` coercion shape that used to live
+  // inline. Functionally identical: on/off-only memoisation.
+  const e2eeOn = !!e2eePassphrase;
   const e2eeWorker = useMemo(() => {
-    if (e2eePassphrase) {
+    if (e2eeOn) {
       return new Worker(
         new URL("livekit-client/e2ee-worker", import.meta.url),
       );
     }
     return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!e2eePassphrase]);
+  }, [e2eeOn]);
 
   useEffect(() => {
     return () => {

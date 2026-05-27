@@ -152,6 +152,7 @@ async function applyDesiredProcessor(
     isCancelled: () => boolean;
     onKrispFallback: () => void;
     onBetaFallback: (engine: BetaEngine) => void;
+    onRnnoiseFallback: () => void;
   },
 ): Promise<AudioProcessor | null> {
   if (desired === "krisp") {
@@ -179,10 +180,24 @@ async function applyDesiredProcessor(
   }
 
   if (desired === "rnnoise") {
+    // RNNoise needs a WASM blob + two AudioWorklet modules. On Electron/
+    // browser builds where any of those URLs fail to load (CSP, broken
+    // build, hash mismatch after a deploy) init() throws and the user
+    // would be left with a silent published track. Mirror the Krisp
+    // fallback contract: drop to browser-native NS so the call keeps
+    // working with at least some noise rejection.
     await setBrowserNoiseSuppression(audioTrack, false);
-    const proc = new RNNoiseProcessor(sens, vol, level);
-    await audioTrack.setProcessor(proc);
-    return proc;
+    try {
+      const proc = new RNNoiseProcessor(sens, vol, level);
+      await audioTrack.setProcessor(proc);
+      return proc;
+    } catch (err) {
+      console.warn("[useAudioProcessor] RNNoise init failed, falling back to browser NS:", err);
+      hooks.onRnnoiseFallback();
+      if (hooks.isCancelled()) return null;
+      await setBrowserNoiseSuppression(audioTrack, true);
+      return WEBRTC_SENTINEL;
+    }
   }
 
   if ((BETA_ENGINES as readonly ProcessorType[]).includes(desired)) {
@@ -302,6 +317,10 @@ export function useAudioProcessor(
           const label = engine === "deepfilter" ? "DeepFilterNet3" : "DTLN";
           addToast("info", `${label} (Beta) — şimdilik RNNoise ile çalışıyor.`);
         },
+        onRnnoiseFallback: () => {
+          addToast("warning", "RNNoise yüklenemedi, tarayıcı gürültü azaltmasına geçildi.");
+          setNoiseReductionEngine("webrtc");
+        },
       });
       if (cancelled) return;
       processorRef.current = proc;
@@ -361,6 +380,10 @@ export function useAudioProcessor(
             },
             onBetaFallback: (engine: BetaEngine) => {
               addToast("info", `${BETA_LABELS[engine]} (Beta) — şimdilik RNNoise ile çalışıyor.`);
+            },
+            onRnnoiseFallback: () => {
+              addToast("warning", "RNNoise yüklenemedi, tarayıcı gürültü azaltmasına geçildi.");
+              setNoiseReductionEngine("webrtc");
             },
           },
         );

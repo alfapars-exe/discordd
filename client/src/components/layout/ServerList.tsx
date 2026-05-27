@@ -22,6 +22,18 @@ type ServerListProps = {
   renderServerBody: (serverId: string) => ReactNode;
 };
 
+// Chevron — module-scope component so React's reconciler keeps a
+// stable identity across renders. Defining it inside ServerList's
+// body (the previous shape) would re-create it every render and
+// trip react-hooks/static-components.
+function Chevron({ expanded }: { expanded: boolean }) {
+  return (
+    <span className={`ch-tree-chevron${expanded ? " expanded" : ""}`}>
+      &#x276F;
+    </span>
+  );
+}
+
 function ServerList({
   onAddServer,
   onCreateChannel,
@@ -69,6 +81,12 @@ function ServerList({
     return expandedSections[key] ?? true;
   }
 
+  // State + ref pair for the dragged server:
+  //   state → renders the .srv-dragging className (reactive)
+  //   ref   → read synchronously inside drop / drag-over handlers
+  // The previous render-time `.current` read fell foul of
+  // react-hooks/refs because refs aren't reactive.
+  const [draggingServerId, setDraggingServerId] = useState<string | null>(null);
   const dragServerIdRef = useRef<string | null>(null);
   const [serverDropIndicator, setServerDropIndicator] = useState<{
     serverId: string;
@@ -78,6 +96,7 @@ function ServerList({
   function handleServerDragStart(e: React.DragEvent, serverId: string) {
     e.stopPropagation();
     dragServerIdRef.current = serverId;
+    setDraggingServerId(serverId);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/server", serverId);
   }
@@ -109,6 +128,7 @@ function ServerList({
 
     const dragId = dragServerIdRef.current;
     dragServerIdRef.current = null;
+    setDraggingServerId(null);
 
     if (!dragId || dragId === targetServerId) return;
 
@@ -136,6 +156,7 @@ function ServerList({
 
   function handleServerDragEnd() {
     dragServerIdRef.current = null;
+    setDraggingServerId(null);
     setServerDropIndicator(null);
   }
 
@@ -218,14 +239,6 @@ function ServerList({
     openMenu(e, items);
   }
 
-  function Chevron({ expanded }: { expanded: boolean }) {
-    return (
-      <span className={`ch-tree-chevron${expanded ? " expanded" : ""}`}>
-        &#x276F;
-      </span>
-    );
-  }
-
   return (
     <>
       <div className="ch-tree-section">
@@ -262,7 +275,7 @@ function ServerList({
               }
 
               const srvDropPos = serverDropIndicator?.serverId === srv.id ? serverDropIndicator.position : null;
-              const isSrvDragging = dragServerIdRef.current === srv.id;
+              const isSrvDragging = draggingServerId === srv.id;
 
               return (
                 <div

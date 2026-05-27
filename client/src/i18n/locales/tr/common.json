@@ -65,6 +65,7 @@
   "friendRemove": "Kaldır",
   "friendRemoveConfirm": "{{username}} adlı kullanıcıyı arkadaş listenizden kaldırmak istediğinize emin misiniz?",
   "friendSearchPlaceholder": "Arkadaş ara...",
+  "dmOpenFailed": "Sohbet açılamadı. Kullanıcı engellemiş, DM gizliliği kapalı veya bağlantın kopmuş olabilir.",
   "noFriendsYet": "Henüz arkadaş yok",
   "noIncomingRequests": "Gelen istek yok",
   "noOutgoingRequests": "Gönderilen istek yok",

@@ -1,6 +1,6 @@
 /** ChannelSettings — Channel and category management (two-tab panel). */
 
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useChannelStore } from "../../stores/channelStore";
 import { useToastStore } from "../../stores/toastStore";
@@ -35,21 +35,25 @@ function ChannelSettings() {
     .map((cg) => cg.category);
 
   // ─── Channels Tab State ───
-  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
-
-  // Sync selectedChannel with store after rename
-  useEffect(() => {
-    if (!selectedChannel) return;
-    const updated = allChannels.find((ch) => ch.id === selectedChannel.id);
-    if (updated && (updated.name !== selectedChannel.name || updated.category_id !== selectedChannel.category_id)) {
-      setSelectedChannel(updated);
-    }
-  }, [allChannels, selectedChannel]);
+  //
+  // We track only the SELECTED ID and derive the live channel object
+  // via useMemo. This removes the two cascading-render useEffects that
+  // previously (a) mirrored the store's renamed-channel back into local
+  // state and (b) reset the rename buffer on selection change — the
+  // first now resolves naturally on every render, and the second uses
+  // the ChannelEditPanel `key={selectedChannelId}` remount trick below
+  // to discard the buffer when the user picks a different channel.
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const selectedChannel = useMemo<Channel | null>(
+    () => (selectedChannelId ? allChannels.find((ch) => ch.id === selectedChannelId) ?? null : null),
+    [allChannels, selectedChannelId],
+  );
 
   // ─── Create Modal State ───
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // ─── Channel Rename State ───
+  // ─── Channel Rename State (per-selection local buffers — reset via
+  // key={selectedChannelId} on the edit panel JSX further down). ───
   const [editName, setEditName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
 
@@ -57,38 +61,21 @@ function ChannelSettings() {
   const [editCategoryId, setEditCategoryId] = useState("");
   const [isSavingCategory, setIsSavingCategory] = useState(false);
 
-  // Update edit state when selected channel changes
-  useEffect(() => {
-    if (selectedChannel) {
-      setEditName(selectedChannel.name);
-      setEditCategoryId(selectedChannel.category_id ?? "");
-    }
-  }, [selectedChannel]);
-
   // ─── Emoji picker state ───
   const [showChEmojiPicker, setShowChEmojiPicker] = useState(false);
   const [showCatEmojiPicker, setShowCatEmojiPicker] = useState(false);
 
-  // ─── Categories Tab State ───
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  // ─── Categories Tab State (same ID-derived pattern as channels) ───
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const selectedCategory = useMemo<Category | null>(
+    () =>
+      selectedCategoryId
+        ? realCategories.find((c) => c.id === selectedCategoryId) ?? null
+        : null,
+    [realCategories, selectedCategoryId],
+  );
   const [editCatName, setEditCatName] = useState("");
   const [isSavingCatName, setIsSavingCatName] = useState(false);
-
-  // Sync selectedCategory with store
-  useEffect(() => {
-    if (!selectedCategory) return;
-    const updated = realCategories.find((c) => c.id === selectedCategory.id);
-    if (updated && updated.name !== selectedCategory.name) {
-      setSelectedCategory(updated);
-      setEditCatName(updated.name);
-    }
-  }, [realCategories, selectedCategory]);
-
-  useEffect(() => {
-    if (selectedCategory) {
-      setEditCatName(selectedCategory.name);
-    }
-  }, [selectedCategory]);
 
   // ─── Channel Handlers ───
 
@@ -105,7 +92,7 @@ function ChannelSettings() {
     const res = await channelApi.deleteChannel(serverId, channelId);
     if (res.success) {
       addToast("success", t("channelDeleted"));
-      if (selectedChannel?.id === channelId) setSelectedChannel(null);
+      if (selectedChannel?.id === channelId) setSelectedChannelId(null);
     } else {
       addToast("error", t("channelDeleteError"));
     }
@@ -175,7 +162,7 @@ function ChannelSettings() {
     const res = await channelApi.deleteCategory(serverId, catId);
     if (res.success) {
       addToast("success", t("categoryDeleted"));
-      if (selectedCategory?.id === catId) setSelectedCategory(null);
+      if (selectedCategory?.id === catId) setSelectedCategoryId(null);
     } else {
       addToast("error", t("categoryDeleteError"));
     }
@@ -247,7 +234,16 @@ function ChannelSettings() {
               <div
                 key={ch.id}
                 className={`role-list-item channel-settings-ch-row${ch.id === selectedChannel?.id ? " active" : ""}`}
-                onClick={() => setSelectedChannel(ch)}
+                onClick={() => {
+                  setSelectedChannelId(ch.id);
+                  // Seed the rename buffer with the channel's current
+                  // name/category so the edit panel opens populated. The
+                  // panel's key={selectedChannelId} below remounts when
+                  // ID flips, so this seed becomes the fresh initial
+                  // state for the new selection.
+                  setEditName(ch.name);
+                  setEditCategoryId(ch.category_id ?? "");
+                }}
               >
                 <span className="channel-settings-ch-icon">
                   {ch.type === "voice" ? "\uD83D\uDD0A" : "#"}
@@ -280,7 +276,10 @@ function ChannelSettings() {
                 <div
                   key={cat.id}
                   className={`role-list-item channel-settings-ch-row${cat.id === selectedCategory?.id ? " active" : ""}`}
-                  onClick={() => setSelectedCategory(cat)}
+                  onClick={() => {
+                    setSelectedCategoryId(cat.id);
+                    setEditCatName(cat.name);
+                  }}
                 >
                   <span className="channel-settings-ch-icon">&#x25BC;</span>
                   <span className="role-list-name">{cat.name}</span>
@@ -389,7 +388,12 @@ function ChannelSettings() {
                   (matches user request — Opus stereo at full quality).
                   Discord presets: 64 / 96 / 128 / 256 / 384 kbps. */}
               {selectedChannel.type === "voice" && (
-                <ChannelBitrateRow channel={selectedChannel} />
+                // key= forces a remount when the user picks a different
+                // channel, so ChannelBitrateRow's local `value` state
+                // re-initialises from the new channel.bitrate without a
+                // sync useEffect (which the lint flags as a
+                // cascading-render anti-pattern).
+                <ChannelBitrateRow key={selectedChannel.id} channel={selectedChannel} />
               )}
 
               {/* Channel permissions */}
@@ -499,11 +503,11 @@ function ChannelBitrateRow({ channel }: { channel: Channel }) {
   const addToast = useToastStore((s) => s.addToast);
   const activeServerId = useServerStore((s) => s.activeServerId);
   const [pending, setPending] = useState(false);
+  // Local controlled value. Remount-on-id-change (caller passes
+  // `key={channel.id}`) re-initialises this from the new channel's
+  // bitrate, so we don't need a sync useEffect that the lint would
+  // flag as set-state-in-effect.
   const [value, setValue] = useState(channel.bitrate ?? 64000);
-
-  useEffect(() => {
-    setValue(channel.bitrate ?? 64000);
-  }, [channel.id, channel.bitrate]);
 
   const presets = [8000, 64000, 96000, 128000, 256000, 384000];
 

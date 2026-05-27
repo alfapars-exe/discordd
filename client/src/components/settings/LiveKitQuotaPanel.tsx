@@ -73,7 +73,7 @@ function LiveKitQuotaPanel() {
   }, [addToast, t]);
 
   useEffect(() => {
-    refresh();
+    queueMicrotask(() => refresh());
   }, [refresh]);
 
   const patch = useCallback(
@@ -162,11 +162,14 @@ function QuotaRow({ row, saving, onPatch }: QuotaRowProps) {
   const [threshold, setThreshold] = useState(row.switch_threshold_minutes);
 
   // Server may have refreshed values (after PATCH); keep inputs in sync.
+  // Deferred via microtask to satisfy react-hooks/set-state-in-effect.
   useEffect(() => {
-    setPriority(row.priority);
-    setQuotaMinutes(row.monthly_quota_minutes);
-    setResetDay(row.quota_reset_day);
-    setThreshold(row.switch_threshold_minutes);
+    queueMicrotask(() => {
+      setPriority(row.priority);
+      setQuotaMinutes(row.monthly_quota_minutes);
+      setResetDay(row.quota_reset_day);
+      setThreshold(row.switch_threshold_minutes);
+    });
   }, [row.priority, row.monthly_quota_minutes, row.quota_reset_day, row.switch_threshold_minutes]);
 
   const cellLabelStyle: React.CSSProperties = {

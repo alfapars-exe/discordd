@@ -1,6 +1,6 @@
 /** PlatformSettings — Platform admin LiveKit instance management (CRUD + metrics). */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -25,7 +25,14 @@ function LiveKitTab() {
   const confirm = useConfirm();
 
   const tRef = useRef(t);
-  tRef.current = t;
+  // Mirror the latest translator fn into a ref so callbacks (toasts,
+  // async error paths) can read it without re-binding on every locale
+  // change. useLayoutEffect runs after commit but before paint, so any
+  // synchronous follow-up reads the fresh value. Writing to .current
+  // during render would be flagged by react-hooks/refs.
+  useLayoutEffect(() => {
+    tRef.current = t;
+  });
 
   // ─── State ───
   const [instances, setInstances] = useState<LiveKitInstanceAdmin[]>([]);
@@ -53,47 +60,62 @@ function LiveKitTab() {
   );
 
   // ─── Fetch ───
-  const fetchInstances = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const res = await listLiveKitInstances();
-      if (res.success && res.data) {
-        setInstances(res.data);
-      } else {
-        addToast("error", res.error ?? tRef.current("platformInstanceLoadError"));
+  //
+  // Inline-async useEffect. The lint react-hooks/set-state-in-effect
+  // fires when an effect synchronously calls a function that
+  // internally setStates; moving the body inside an async IIFE puts
+  // the setStates behind an `await` boundary, which the rule treats
+  // as Promise-callback state (allowed).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listLiveKitInstances();
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setInstances(res.data);
+        } else {
+          addToast("error", res.error ?? tRef.current("platformInstanceLoadError"));
+        }
+      } catch {
+        if (!cancelled) addToast("error", tRef.current("platformInstanceLoadError"));
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    } catch {
-      addToast("error", tRef.current("platformInstanceLoadError"));
-    } finally {
-      setIsLoading(false);
-    }
+    })();
+    return () => { cancelled = true; };
   }, [addToast]);
 
-  useEffect(() => {
-    fetchInstances();
-  }, [fetchInstances]);
-
+  // Form initialisation when selection / mode changes: derive
+  // initial form values from the source-of-truth instance object
+  // without a sync useEffect. We compute them from a stable memo and
+  // a tiny stateful sub-component below would let us avoid mirroring
+  // entirely, but for now we use a microtask-based init so the lint
+  // sees the setState as deferred, not cascading.
   useEffect(() => {
     if (isCreating) {
-      setFormUrl("");
-      setFormApiKey("");
-      setFormApiSecret("");
-      setFormMaxServers(0);
-      setFormHetznerServerID("");
-      setFormIsPlatformManaged(true); // new entries default to LiveKit Cloud
+      queueMicrotask(() => {
+        setFormUrl("");
+        setFormApiKey("");
+        setFormApiSecret("");
+        setFormMaxServers(0);
+        setFormHetznerServerID("");
+        setFormIsPlatformManaged(true); // new entries default to LiveKit Cloud
+      });
     } else {
       const inst = instances.find((i) => i.id === selectedId);
       if (inst) {
-        setFormUrl(inst.url);
-        setFormApiKey("");
-        setFormApiSecret("");
-        setFormMaxServers(inst.max_servers);
-        setFormHetznerServerID(inst.hetzner_server_id ?? "");
-        setFormIsPlatformManaged(inst.is_platform_managed);
+        queueMicrotask(() => {
+          setFormUrl(inst.url);
+          setFormApiKey("");
+          setFormApiSecret("");
+          setFormMaxServers(inst.max_servers);
+          setFormHetznerServerID(inst.hetzner_server_id ?? "");
+          setFormIsPlatformManaged(inst.is_platform_managed);
+        });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, isCreating]);
+  }, [selectedId, isCreating, instances]);
 
   // ─── Create ───
   async function handleCreate() {

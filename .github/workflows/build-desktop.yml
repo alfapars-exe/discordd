@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  # Required for the docker-publish job to push to GitHub Container Registry.
+  packages: write
 
 jobs:
   build:
@@ -182,63 +184,51 @@ jobs:
             release/hichat-setup.*
             release/latest*.yml
 
-  # ─── Server binary build (Linux amd64 + arm64) ───
-  # Non-blocking: HF Space rebuilds the server itself via Dockerfile on
-  # push, so the binaries here are only useful for self-hosters. CGO is
-  # currently disabled, which conflicts with go-libsql (Turso wire proto
-  # driver); fixing that needs cross-toolchain setup. Until then, let this
-  # job fail without blocking the desktop release.
-  build-server:
+  # ─── Self-host server: multi-arch Docker image to GHCR ───
+  # Replaced the previous CGO_ENABLED=0 cross-compile that was marked
+  # continue-on-error because go-libsql (the Turso wire-protocol driver)
+  # is CGO-only and refused to link with cross-toolchains. A Docker
+  # image solves the toolchain problem inside the container, ships
+  # reproducibly from the same Dockerfile that HF Spaces builds from,
+  # and gives self-hosters a single `docker run` UX.
+  docker-publish:
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up QEMU (cross-arch emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          fetch-depth: 0
-          # LFS objects must be pulled because icons/mqvi-icon.ico (and the
-          # ios/electron icon assets) are stored in LFS — without this flag
-          # the working tree gets pointer files, rcedit chokes with
-          # "Reserved header is not 0", and the icon embed step dies.
-          lfs: true
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-          cache: true
-          cache-dependency-path: server/go.sum
-
-      - name: Install client dependencies
-        run: npm ci --prefix client
-
-      - name: Build client (Vite) for embedding
-        run: npx vite build --outDir dist
-        working-directory: client
-
-      - name: Embed frontend into server/static/dist
+      # Lowercase the repository owner — GHCR rejects uppercase paths and
+      # GitHub orgs/users with mixed-case names would otherwise fail here.
+      - name: Compute image name
+        id: image
         run: |
-          rm -rf server/static/dist
-          cp -r client/dist server/static/dist
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${OWNER}/hichat-server" >> "$GITHUB_OUTPUT"
 
-      - name: Build mqvi-server (linux/amd64)
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../release-server/mqvi-server-linux-amd64 .
-        working-directory: server
-
-      - name: Build mqvi-server (linux/arm64)
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../release-server/mqvi-server-linux-arm64 .
-        working-directory: server
-
-      - name: Copy install script
-        run: cp deploy/install.sh release-server/install.sh
-
-      - name: Upload server artifacts
-        uses: actions/upload-artifact@v4
+      - name: Build and push (linux/amd64 + linux/arm64)
+        uses: docker/build-push-action@v6
         with:
-          name: artifacts-server-linux
-          path: release-server/*
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.image }}:${{ github.ref_name }}
+            ${{ steps.image.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ─── Create release and upload all artifacts ───
   release:

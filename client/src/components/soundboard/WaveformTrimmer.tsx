@@ -20,6 +20,19 @@ const BAR_WIDTH = 2;
 const BAR_GAP = 1;
 const HANDLE_WIDTH = 8;
 
+// Module-scope helper: draws a single drag handle bar with grip lines.
+// Hoisted here (vs. inside the component body) so drawWaveform's
+// useCallback closure can reference it without lint's
+// react-hooks/immutability rule complaining about a forward-reference
+// to a per-render function definition.
+function drawHandle(ctx: CanvasRenderingContext2D, x: number) {
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x - HANDLE_WIDTH / 2, 0, HANDLE_WIDTH, CANVAS_HEIGHT);
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fillRect(x - 1, 8, 1, CANVAS_HEIGHT - 16);
+  ctx.fillRect(x + 1, 8, 1, CANVAS_HEIGHT - 16);
+}
+
 function WaveformTrimmer({
   fileUrl,
   totalDurationMs,
@@ -37,54 +50,13 @@ function WaveformTrimmer({
   const draggingRef = useRef<"start" | "end" | "region" | null>(null);
   const dragOffsetRef = useRef(0);
 
-  // Decode audio and compute peaks
-  useEffect(() => {
-    const ctx = new AudioContext();
-    fetch(fileUrl)
-      .then((r) => r.arrayBuffer())
-      .then((buf) => ctx.decodeAudioData(buf))
-      .then((audioBuffer) => {
-        const data = audioBuffer.getChannelData(0);
-        const barCount = Math.floor(containerWidth / (BAR_WIDTH + BAR_GAP)) || 100;
-        const blockSize = Math.floor(data.length / barCount);
-        const peaks: number[] = [];
-        for (let i = 0; i < barCount; i++) {
-          let sum = 0;
-          const start = i * blockSize;
-          for (let j = start; j < start + blockSize && j < data.length; j++) {
-            sum += Math.abs(data[j]);
-          }
-          peaks.push(sum / blockSize);
-        }
-        // Normalize
-        const max = Math.max(...peaks, 0.01);
-        peaksRef.current = peaks.map((p) => p / max);
-        drawWaveform();
-        ctx.close();
-      })
-      .catch(() => {
-        ctx.close();
-      });
-  }, [fileUrl, containerWidth]);
-
-  // Observe container resize
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
-      }
-    });
-    ro.observe(el);
-    setContainerWidth(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
-
-  // Redraw on trim change
-  useEffect(() => {
-    drawWaveform();
-  }, [trimStart, trimEnd, containerWidth]);
+  // ─── Coordinate + draw helpers (declared before the effects that
+  // call them, so the lint rule react-hooks/immutability — which
+  // forbids referencing a useCallback from a closure that runs before
+  // the assignment — is satisfied). drawHandle is a pure local helper
+  // (no React state); keeping it inside the component would still
+  // re-create it every render, but it doesn't capture any reactive
+  // values so this is a no-op cost.
 
   const msToX = useCallback(
     (ms: number) => (ms / totalDurationMs) * containerWidth,
@@ -131,18 +103,60 @@ function WaveformTrimmer({
     ctx.fillRect(endX, 0, containerWidth - endX, CANVAS_HEIGHT);
 
     // Handles
-    drawHandle(ctx, startX, "#fff");
-    drawHandle(ctx, endX, "#fff");
+    drawHandle(ctx, startX);
+    drawHandle(ctx, endX);
   }, [containerWidth, trimStart, trimEnd, msToX]);
 
-  function drawHandle(ctx: CanvasRenderingContext2D, x: number, color: string) {
-    ctx.fillStyle = color;
-    ctx.fillRect(x - HANDLE_WIDTH / 2, 0, HANDLE_WIDTH, CANVAS_HEIGHT);
-    // Grip lines
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.fillRect(x - 1, 8, 1, CANVAS_HEIGHT - 16);
-    ctx.fillRect(x + 1, 8, 1, CANVAS_HEIGHT - 16);
-  }
+  // ─── Effects (declared AFTER the callbacks they reference) ───
+
+  // Decode audio and compute peaks
+  useEffect(() => {
+    const ctx = new AudioContext();
+    fetch(fileUrl)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => ctx.decodeAudioData(buf))
+      .then((audioBuffer) => {
+        const data = audioBuffer.getChannelData(0);
+        const barCount = Math.floor(containerWidth / (BAR_WIDTH + BAR_GAP)) || 100;
+        const blockSize = Math.floor(data.length / barCount);
+        const peaks: number[] = [];
+        for (let i = 0; i < barCount; i++) {
+          let sum = 0;
+          const start = i * blockSize;
+          for (let j = start; j < start + blockSize && j < data.length; j++) {
+            sum += Math.abs(data[j]);
+          }
+          peaks.push(sum / blockSize);
+        }
+        // Normalize
+        const max = Math.max(...peaks, 0.01);
+        peaksRef.current = peaks.map((p) => p / max);
+        drawWaveform();
+        ctx.close();
+      })
+      .catch(() => {
+        ctx.close();
+      });
+  }, [fileUrl, containerWidth, drawWaveform]);
+
+  // Observe container resize
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  // Redraw on trim change
+  useEffect(() => {
+    drawWaveform();
+  }, [trimStart, trimEnd, containerWidth, drawWaveform]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();

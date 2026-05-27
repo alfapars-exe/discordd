@@ -10,17 +10,14 @@
  * Caller wires the title + button-set (timeout vs temp-ban) + the
  * onPick callback. Picker is fully controlled — closes itself when
  * onPick fires or the user clicks the backdrop / presses Escape.
+ *
+ * Preset arrays + DurationPreset type live in ./modDurationPresets so
+ * this module only exports the component (react-refresh boundary).
  */
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-
-export type DurationPreset = {
-  /** Duration in seconds — sent verbatim to the timeout/ban API. */
-  seconds: number;
-  /** i18n key under "members" namespace, e.g. "dur_60s". */
-  labelKey: string;
-};
+import type { DurationPreset } from "./modDurationPresets";
 
 type Props = {
   title: string;
@@ -32,28 +29,6 @@ type Props = {
   onPick: (seconds: number) => void;
   onCancel: () => void;
 };
-
-/** Defaults Discord uses — short to mid range. The 28 d cap matches
- *  the server's max in models/member_timeout.go. */
-export const TIMEOUT_PRESETS: DurationPreset[] = [
-  { seconds: 60, labelKey: "dur_60s" },
-  { seconds: 5 * 60, labelKey: "dur_5m" },
-  { seconds: 10 * 60, labelKey: "dur_10m" },
-  { seconds: 60 * 60, labelKey: "dur_1h" },
-  { seconds: 24 * 60 * 60, labelKey: "dur_1d" },
-  { seconds: 7 * 24 * 60 * 60, labelKey: "dur_1w" },
-];
-
-/** Temp ban presets — wider range (minutes to a month) since
- *  removing someone for 60 s is rarely worth the audit row. */
-export const TEMPBAN_PRESETS: DurationPreset[] = [
-  { seconds: 10 * 60, labelKey: "dur_10m" },
-  { seconds: 60 * 60, labelKey: "dur_1h" },
-  { seconds: 6 * 60 * 60, labelKey: "dur_6h" },
-  { seconds: 24 * 60 * 60, labelKey: "dur_1d" },
-  { seconds: 7 * 24 * 60 * 60, labelKey: "dur_1w" },
-  { seconds: 30 * 24 * 60 * 60, labelKey: "dur_30d" },
-];
 
 function ModDurationPicker({ title, subtitle, variant = "timeout", presets, onPick, onCancel }: Props) {
   const { t } = useTranslation("common");

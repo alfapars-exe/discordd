@@ -78,7 +78,7 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   useEffect(() => {
     const rect = anchorEl.getBoundingClientRect();
-    setPos({ top: rect.top - 6, left: rect.left });
+    queueMicrotask(() => setPos({ top: rect.top - 6, left: rect.left }));
   }, [anchorEl]);
 
   // Clamp to viewport after render

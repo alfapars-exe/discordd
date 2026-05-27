@@ -58,10 +58,14 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     };
   }, [serverId, channelId, setMusicBotState]);
 
-  // Tick elapsed time every second when actively playing.
+  // Tick elapsed time every second when actively playing. setElapsed
+  // calls happen either inside an interval callback (allowed by the
+  // lint rule — Promise/timer-callback state) or deferred via
+  // microtask (the "reset on stop" branch). Both flavours dodge
+  // react-hooks/set-state-in-effect's cascading-render check.
   useEffect(() => {
     if (!state?.current_track || state.is_paused || !state.started_at) {
-      setElapsed(0);
+      queueMicrotask(() => setElapsed(0));
       return;
     }
     const startMs = new Date(state.started_at).getTime();

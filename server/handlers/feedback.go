@@ -47,7 +47,8 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.HasPrefix(contentType, "multipart/") {
-		if err := r.ParseMultipartForm(h.maxUploadSize); err != nil {
+		// Feedback tickets allow up to 5 screenshots.
+		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 5); err != nil {
 			pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid multipart form")
 			return
 		}
@@ -151,7 +152,7 @@ func (h *FeedbackHandler) AddReply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ticketID := r.PathValue("id")
-	reply, err := h.parseAndCreateReply(r, ticketID, user.ID, false)
+	reply, err := h.parseAndCreateReply(w, r, ticketID, user.ID, false)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -222,7 +223,7 @@ func (h *FeedbackHandler) AdminReply(w http.ResponseWriter, r *http.Request) {
 	}
 	ticketID := r.PathValue("id")
 
-	reply, err := h.parseAndCreateReply(r, ticketID, admin.ID, true)
+	reply, err := h.parseAndCreateReply(w, r, ticketID, admin.ID, true)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -250,12 +251,13 @@ func (h *FeedbackHandler) AdminUpdateStatus(w http.ResponseWriter, r *http.Reque
 }
 
 // parseAndCreateReply handles both JSON and multipart reply creation with optional file uploads.
-func (h *FeedbackHandler) parseAndCreateReply(r *http.Request, ticketID, userID string, isAdmin bool) (*models.FeedbackReply, error) {
+func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Request, ticketID, userID string, isAdmin bool) (*models.FeedbackReply, error) {
 	var req models.CreateFeedbackReplyRequest
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.HasPrefix(contentType, "multipart/") {
-		if err := r.ParseMultipartForm(h.maxUploadSize); err != nil {
+		// Replies allow up to 3 attachments.
+		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 3); err != nil {
 			return nil, fmt.Errorf("%w: invalid multipart form", pkg.ErrBadRequest)
 		}
 		req.Content = r.FormValue("content")
