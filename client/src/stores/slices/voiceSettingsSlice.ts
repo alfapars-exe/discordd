@@ -48,39 +48,29 @@ export type ScreenShareFps = 30 | 60 | 120 | -1;
 export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
 
 /**
- * Available noise-reduction engines. See the noiseReductionEngine field
- * docs below for the per-engine pipeline + status notes.
+ * Available noise-reduction engines.
  *
- * NOTE on werman/noise-suppression-for-voice:
+ * History:
+ *  - "dpdfnet" was a label-only impersonation of DeepFilterNet3 (UI lied:
+ *    selecting it ran the same engine as "deepfilter"). Removed in v2.11.81;
+ *    stale localStorage entries are migrated to "rnnoise" by loadSettings.
+ *  - "deepfilter" and "dtln" are now both fully wired to their real
+ *    underlying models (DeepFilterNet3 via deepfilternet3-noise-filter,
+ *    DTLN via @sapphi-red/dtln-web). No more BETA fallbacks.
+ *
+ * On werman/noise-suppression-for-voice (not exposed as an engine):
  * That popular project is a native VST/LV2/AU plugin (C++), not a
- * browser library — it wraps Xiph's RNNoise for DAW + OS-level audio
- * pipelines (OBS, Equalizer APO, PipeWire). We deliver the SAME
- * underlying RNNoise model via WASM through @sapphi-red/web-noise-
- * suppressor, so there's no functional benefit to adding werman as an
- * "engine" — the model is identical, only the host platform differs.
- *
- * Earlier revisions of this file exposed four extra engines
- * (`deepfilter`, `dtln`, `speex`, `dpdfnet`) as "BETA placeholders"
- * that silently fell back to RNNoise. They've been removed because:
- *  - The UI lied: users picking "DeepFilterNet3" got plain RNNoise.
- *  - The fallback toast disclosed the lie on every selection — a
- *    smell that the option shouldn't have been there at all.
- *  - Wiring those engines for real means adding ~5-10 MB of WASM +
- *    model weights per engine, plus an integration audit. That's its
- *    own project, not a settings dropdown.
- * Picking one of the removed engines from a stale localStorage entry
- * now migrates to "rnnoise" (see loadSettings).
+ * browser library — it wraps Xiph's RNNoise for DAW + OS-level audio.
+ * We already deliver the same RNNoise model via WASM through the
+ * "rnnoise" engine, so adding werman would be redundant.
  */
 export type NoiseReductionEngine =
   | "rnnoise"
   | "krisp"
   | "webrtc"
-  // Beta engines: dropdown selects them, useAudioProcessor recognises
-  // them and currently runs the RNNoise fallback while toasting.
   | "deepfilter"
   | "dtln"
-  | "speex"
-  | "dpdfnet";
+  | "speex";
 
 export type VoiceSettings = {
   inputMode: InputMode;
@@ -112,6 +102,14 @@ export type VoiceSettings = {
    */
   noiseReductionEngine: NoiseReductionEngine;
   noiseSuppressionLevel: NoiseSuppressionLevel;
+  /**
+   * DeepFilterNet3 suppression strength, 0-100. Live-tunable through
+   * DeepFilterNoiseFilterProcessor.setSuppressionLevel without rebuilding
+   * the audio graph. Independent from noiseSuppressionLevel (which only
+   * applies to gate-only mode now). Default 70 matches the legacy
+   * "medium" preset for users migrating from preset-based settings.
+   */
+  deepfilterSuppression: number;
   screenShareVolumes: Record<string, number>;
   screenShareAudio: boolean;
   screenShareQuality: ScreenShareQuality;
@@ -158,13 +156,12 @@ const STORAGE_KEY = "mqvi_voice_settings";
 const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudio";
 
 /**
- * Engines that used to appear in the picker but never actually worked
- * (BETA placeholders that always fell back to RNNoise). Any user with
- * one of these in their persisted settings gets quietly migrated to
- * "rnnoise" on load — same audio they were already getting, just with
- * an honest label in Settings → Voice.
+ * Engines removed from the picker over time. Persisted settings with one
+ * of these values get quietly migrated to "rnnoise" on load:
+ *  - "dpdfnet" (v2.11.81): was an alias for "deepfilter" with a different
+ *    label — UI lie, removed alongside DTLN/DeepFilter real-engine wiring.
  */
-const REMOVED_ENGINES = new Set<string>([]);
+const REMOVED_ENGINES = new Set<string>(["dpdfnet"]);
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
   inputMode: "voice_activity",
@@ -180,6 +177,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   noiseReduction: true,
   noiseReductionEngine: "rnnoise",
   noiseSuppressionLevel: "medium",
+  deepfilterSuppression: 70,
   screenShareVolumes: {},
   // Default true: most users sharing a screen also want to share its audio
   // (gameplay, presentations, video). When the toggle is on, the browser's
@@ -261,6 +259,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     noiseReduction: s.noiseReduction,
     noiseReductionEngine: s.noiseReductionEngine,
     noiseSuppressionLevel: s.noiseSuppressionLevel,
+    deepfilterSuppression: s.deepfilterSuppression,
     screenShareVolumes: s.screenShareVolumes,
     screenShareAudio: s.screenShareAudio,
     screenShareQuality: s.screenShareQuality,
@@ -292,6 +291,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
+  setDeepfilterSuppression: (value: number) => void;
   toggleLocalMute: (userId: string) => void;
   applyFromServer: (settings: Record<string, unknown>) => void;
 };
@@ -318,6 +318,7 @@ export const createVoiceSettingsSlice: StateCreator<
     noiseReduction: initial.noiseReduction,
     noiseReductionEngine: initial.noiseReductionEngine,
     noiseSuppressionLevel: initial.noiseSuppressionLevel,
+    deepfilterSuppression: initial.deepfilterSuppression,
     screenShareVolumes: initial.screenShareVolumes,
     screenShareAudio: initial.screenShareAudio,
     screenShareQuality: initial.screenShareQuality,
@@ -416,6 +417,13 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
+    setDeepfilterSuppression: (value) => {
+      // Clamp to 0-100 — DeepFilterNet3's setSuppressionLevel API range.
+      const clamped = Math.max(0, Math.min(100, value));
+      set({ deepfilterSuppression: clamped });
+      saveSettings(currentSettings(get()));
+    },
+
     toggleLocalMute: (userId: string) => {
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
       const isCurrentlyMuted = localMutedUsers[userId] ?? false;
@@ -480,6 +488,7 @@ export const createVoiceSettingsSlice: StateCreator<
         noiseReduction: merged.noiseReduction,
         noiseReductionEngine: merged.noiseReductionEngine,
         noiseSuppressionLevel: merged.noiseSuppressionLevel,
+        deepfilterSuppression: merged.deepfilterSuppression,
         screenShareVolumes: merged.screenShareVolumes,
       });
     },
