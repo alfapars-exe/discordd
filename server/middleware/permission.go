@@ -14,11 +14,24 @@ import (
 )
 
 // permCacheTTL caps how long an effective-permissions read is reused.
-// Short enough that role changes take effect quickly; long enough to absorb
-// the per-request load from a chatty client. The cache is per
-// userID+serverID, so a role edit on server A doesn't poison server B's
-// permission reads for the same user.
-const permCacheTTL = 30 * time.Second
+//
+// Audit 2026-05-27 (P0-BC-04): tightened from 30s → 5s. The previous 30s
+// window meant a revoked admin role could still authorize privileged
+// actions for up to 30s after revocation — unacceptable for an incident-
+// response scenario (compromised account being demoted).
+//
+// Trade-off: cache miss rate is ~6x higher (every 5s vs every 30s), so
+// burst-heavy clients (rapid channel switching, role inspector tools) hit
+// the role repository more often. Mitigations:
+//  1. Event-driven invalidation (InvalidateUserPermissions /
+//     InvalidateServerPermissions) is called from role-edit paths, so
+//     the cache is correct between TTL boundaries already.
+//  2. roleRepo.GetByUserIDAndServer is itself indexed (PK lookup +
+//     role_members JOIN) — sub-millisecond at typical scale.
+//
+// If DB load becomes a problem under specific access patterns, prefer
+// adding an L2 cache (Redis) rather than relaxing the TTL.
+const permCacheTTL = 5 * time.Second
 
 // PermissionMiddleware checks user permissions within a server context.
 // Runs after AuthMiddleware + ServerMembershipMiddleware.

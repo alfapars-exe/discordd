@@ -43,16 +43,22 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
+	claimedType := header.Header.Get("Content-Type")
+	if claimedType == "" {
+		claimedType = "application/octet-stream"
 	}
-	mimeBase := strings.Split(contentType, ";")[0]
-	mimeBase = strings.TrimSpace(mimeBase)
+	claimedType = strings.TrimSpace(strings.Split(claimedType, ";")[0])
 
 	// E2EE files arrive as application/octet-stream — skip MIME whitelist
-	if !isEncrypted && !allowedMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: file type not allowed: %s", pkg.ErrBadRequest, mimeBase)
+	mimeForRecord := claimedType
+	body := io.Reader(file)
+	if !isEncrypted {
+		realMIME, replay, err := pkg.SniffAndValidate(file, claimedType, allowedMimeTypes)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		}
+		mimeForRecord = realMIME
+		body = replay
 	}
 
 	randomBytes := make([]byte, 8)

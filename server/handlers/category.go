@@ -59,6 +59,12 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PATCH /api/servers/{serverId}/categories/{id}
 func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+
 	id := r.PathValue("id")
 
 	var req models.UpdateCategoryRequest
@@ -67,7 +73,7 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := h.categoryService.Update(r.Context(), id, &req)
+	category, err := h.categoryService.Update(r.Context(), serverID, id, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -103,9 +109,15 @@ func (h *CategoryHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/servers/{serverId}/categories/{id}
 func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+
 	id := r.PathValue("id")
 
-	if err := h.categoryService.Delete(r.Context(), id); err != nil {
+	if err := h.categoryService.Delete(r.Context(), serverID, id); err != nil {
 		pkg.Error(w, err)
 		return
 	}

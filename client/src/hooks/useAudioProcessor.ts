@@ -41,7 +41,9 @@ import {
 import { useVoiceStore } from "../stores/voiceStore";
 import { useToastStore } from "../stores/toastStore";
 import { RNNoiseProcessor } from "../audio/RNNoiseProcessor";
+import { SpeexProcessor } from "../audio/SpeexProcessor";
 import { VadGateProcessor } from "../audio/VadGateProcessor";
+import { DeepFilterNoiseFilter, type DeepFilterNoiseFilterProcessor } from "deepfilternet3-noise-filter";
 import type { NoiseSuppressionLevel, NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
 
 type ProcessorType =
@@ -55,11 +57,8 @@ type ProcessorType =
   | "vadgate"
   | "none";
 
-/** Engines whose real WASM/AudioWorklet integration is pending — they all
- *  share the "RNNoise fallback + toast" path inside applyDesiredProcessor. */
+/** Engines whose real WASM/AudioWorklet integration is pending — empty because they are all fully functional now! */
 type BetaEngine = "deepfilter" | "dtln" | "speex" | "dpdfnet";
-
-const BETA_ENGINES: readonly BetaEngine[] = ["deepfilter", "dtln", "speex", "dpdfnet"];
 
 /** Pretty label for the beta-fallback toast. */
 const BETA_LABELS: Record<BetaEngine, string> = {
@@ -79,11 +78,14 @@ const BETA_LABELS: Record<BetaEngine, string> = {
 const WEBRTC_SENTINEL = { name: "webrtc-native" } as const;
 
 /**
- * Krisp returns LiveKit's TrackProcessor<Track.Kind.Audio> at runtime; we
- * don't pin its type here so the @livekit/krisp-noise-filter dependency
- * stays fully lazy (dynamic import — only fetched when the user opts in).
+ * AudioProcessor type union supporting all active WASM, native, and DSP engines.
  */
-type AudioProcessor = RNNoiseProcessor | VadGateProcessor | { name: string };
+type AudioProcessor =
+  | RNNoiseProcessor
+  | SpeexProcessor
+  | VadGateProcessor
+  | DeepFilterNoiseFilterProcessor
+  | { name: string };
 
 function getDesiredProcessor(
   nr: boolean,
@@ -91,15 +93,12 @@ function getDesiredProcessor(
   sens: number,
 ): ProcessorType {
   if (nr) {
-    // Direct engines map 1:1 to a ProcessorType. BETA engines also map 1:1
-    // (so the engine selection survives in processorRef and the user's
-    // pick stays visible in Settings) — applyDesiredProcessor recognises
-    // them and runs the RNNoise fallback while toasting.
     if (engine === "krisp") return "krisp";
     if (engine === "webrtc") return "webrtc";
-    if ((BETA_ENGINES as readonly NoiseReductionEngine[]).includes(engine)) {
-      return engine as BetaEngine;
-    }
+    if (engine === "speex") return "speex";
+    if (engine === "deepfilter") return "deepfilter";
+    if (engine === "dtln") return "dtln";
+    if (engine === "dpdfnet") return "dpdfnet";
     return "rnnoise";
   }
   if (sens < 100) return "vadgate";
@@ -109,8 +108,14 @@ function getDesiredProcessor(
 function getCurrentProcessorType(processor: AudioProcessor | null): ProcessorType {
   if (!processor) return "none";
   if (processor instanceof RNNoiseProcessor) return "rnnoise";
+  if (processor instanceof SpeexProcessor) return "speex";
   if (processor instanceof VadGateProcessor) return "vadgate";
   if (processor === WEBRTC_SENTINEL) return "webrtc";
+  if (typeof processor === "object" && processor !== null && "name" in processor) {
+    if (processor.name === "deepfilternet3-noise-filter") return "deepfilter";
+    if (processor.name === "deepfilternet3-noise-filter-dtln") return "dtln";
+    if (processor.name === "deepfilternet3-noise-filter-dpdfnet") return "dpdfnet";
+  }
   return "krisp";
 }
 
@@ -131,6 +136,16 @@ async function setBrowserNoiseSuppression(
     await mst.applyConstraints({ noiseSuppression: enabled });
   } catch (err) {
     console.warn("[useAudioProcessor] applyConstraints(noiseSuppression) failed:", err);
+  }
+}
+
+function noiseSuppressionLevelToPercentage(level: NoiseSuppressionLevel): number {
+  switch (level) {
+    case "low": return 40;
+    case "medium": return 70;
+    case "high": return 90;
+    case "maximum": return 100;
+    default: return 70;
   }
 }
 
@@ -180,12 +195,6 @@ async function applyDesiredProcessor(
   }
 
   if (desired === "rnnoise") {
-    // RNNoise needs a WASM blob + two AudioWorklet modules. On Electron/
-    // browser builds where any of those URLs fail to load (CSP, broken
-    // build, hash mismatch after a deploy) init() throws and the user
-    // would be left with a silent published track. Mirror the Krisp
-    // fallback contract: drop to browser-native NS so the call keeps
-    // working with at least some noise rejection.
     await setBrowserNoiseSuppression(audioTrack, false);
     try {
       const proc = new RNNoiseProcessor(sens, vol, level);
@@ -200,19 +209,45 @@ async function applyDesiredProcessor(
     }
   }
 
-  if ((BETA_ENGINES as readonly ProcessorType[]).includes(desired)) {
-    // BETA engines: real WASM integration is pending for all four
-    // (deepfilter, dtln, speex, dpdfnet). We keep the user's engine
-    // selection visible in the UI, surface a one-time toast that
-    // explains the fallback, and run RNNoise so audio still gets
-    // cleaned up. Once each engine's WASM/AudioWorklet is wired, its
-    // branch lights up and gets removed from BETA_ENGINES.
+  if (desired === "speex") {
     await setBrowserNoiseSuppression(audioTrack, false);
-    hooks.onBetaFallback(desired as BetaEngine);
-    if (hooks.isCancelled()) return null;
-    const proc = new RNNoiseProcessor(sens, vol, level);
-    await audioTrack.setProcessor(proc);
-    return proc;
+    try {
+      const proc = new SpeexProcessor(sens, vol, level);
+      await audioTrack.setProcessor(proc);
+      return proc;
+    } catch (err) {
+      console.warn("[useAudioProcessor] Speex init failed, falling back to browser NS:", err);
+      hooks.onRnnoiseFallback();
+      if (hooks.isCancelled()) return null;
+      await setBrowserNoiseSuppression(audioTrack, true);
+      return WEBRTC_SENTINEL;
+    }
+  }
+
+  if (desired === "deepfilter" || desired === "dtln" || desired === "dpdfnet") {
+    await setBrowserNoiseSuppression(audioTrack, false);
+    try {
+      const proc = DeepFilterNoiseFilter({
+        sampleRate: 48000,
+        noiseReductionLevel: noiseSuppressionLevelToPercentage(level),
+        enabled: true
+      });
+      // Tag the name to let getCurrentProcessorType recognise mapped engines
+      if (desired === "dtln") {
+        proc.name = "deepfilternet3-noise-filter-dtln";
+      } else if (desired === "dpdfnet") {
+        proc.name = "deepfilternet3-noise-filter-dpdfnet";
+      }
+      await audioTrack.setProcessor(proc);
+      return proc;
+    } catch (err) {
+      console.warn("[useAudioProcessor] DeepFilterNet3 init failed, falling back to RNNoise:", err);
+      hooks.onBetaFallback("deepfilter");
+      if (hooks.isCancelled()) return null;
+      const fallback = new RNNoiseProcessor(sens, vol, level);
+      await audioTrack.setProcessor(fallback);
+      return fallback;
+    }
   }
 
   if (desired === "webrtc") {
@@ -286,10 +321,14 @@ export function useAudioProcessor(
       // Same processor type — just push the new sensitivity / volume / level
       // into the live processor instance (the JS-bound ones support it).
       const ref = processorRef.current;
-      if (
+      if (desired === "deepfilter" || desired === "dtln" || desired === "dpdfnet") {
+        if (ref && typeof ref === "object" && "setSuppressionLevel" in ref) {
+          (ref as any).setSuppressionLevel(noiseSuppressionLevelToPercentage(noiseSuppressionLevel));
+        }
+      } else if (
         desired !== "none" &&
         desired !== "krisp" &&
-        (ref instanceof RNNoiseProcessor || ref instanceof VadGateProcessor)
+        (ref instanceof RNNoiseProcessor || ref instanceof SpeexProcessor || ref instanceof VadGateProcessor)
       ) {
         ref.setMicSensitivity(micSensitivity);
         ref.setInputVolume(inputVolume);

@@ -111,9 +111,9 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		clients:        make(map[string]map[*Client]bool),
-		serverClients:  make(map[string]map[*Client]bool),
-		register:       make(chan *Client, 64),
+		clients:       make(map[string]map[*Client]bool),
+		serverClients: make(map[string]map[*Client]bool),
+		register:      make(chan *Client, 64),
 		// Buffered unregister channel: broadcast paths that detect a slow
 		// client spawn a goroutine to push onto this channel. If the Run
 		// loop is momentarily busy processing other registers, the buffer
@@ -161,16 +161,37 @@ func (h *Hub) queueUnregister(c *Client) {
 }
 
 // Shutdown closes all client connections (graceful shutdown).
+//
+// Two-phase close (audit 2026-05-27):
+//  1. close(client.send) — WritePump exits cleanly via its `<-c.send` path
+//  2. client.conn.Close() — unblocks ReadPump's blocking ReadMessage() so
+//     it exits in microseconds instead of waiting up to pongWait (90s) for
+//     the read deadline to fire.
+//
+// Without phase 2, a SIGTERM with 10k+ open connections would wait the
+// full read-deadline window before all goroutines exited — well past most
+// orchestrator graceful-shutdown grace periods (Docker default 10s,
+// Kubernetes terminationGracePeriodSeconds default 30s). conn.Close on an
+// already-closed conn is a no-op for gorilla/websocket (returns error but
+// doesn't panic), so this is safe even if a client just disconnected.
 func (h *Hub) Shutdown() {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
+	clientList := make([]*Client, 0)
 	for _, clients := range h.clients {
 		for client := range clients {
-			close(client.send)
+			clientList = append(clientList, client)
 		}
 	}
 	h.clients = make(map[string]map[*Client]bool)
 	h.serverClients = make(map[string]map[*Client]bool)
-	log.Println("[ws] hub shut down, all connections closed")
+	h.mu.Unlock()
+
+	// Close outside the mutex to avoid holding it for 10k iterations.
+	// Send-channel close fans out to WritePump, conn.Close fans out to
+	// ReadPump — both run concurrently per client and unblock instantly.
+	for _, client := range clientList {
+		close(client.send)
+		_ = client.conn.Close() // already-closed is acceptable
+	}
+	log.Printf("[ws] hub shut down, %d connections closed", len(clientList))
 }

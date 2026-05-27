@@ -368,6 +368,9 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 		if err != nil {
 			return nil, fmt.Errorf("role %s not found: %w", roleID, err)
 		}
+		if role.ServerID != serverID {
+			return nil, fmt.Errorf("%w: role %s does not belong to this server", pkg.ErrForbidden, roleID)
+		}
 		if role.Position >= actorMaxPos {
 			return nil, fmt.Errorf("%w: cannot assign role '%s' with equal or higher position", pkg.ErrForbidden, role.Name)
 		}

@@ -39,6 +39,11 @@ func NewMessageHandler(
 // Cursor-based pagination: before=messageID for older messages, limit max 100.
 func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("id")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
@@ -55,7 +60,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	page, err := h.messageService.GetByChannelID(r.Context(), channelID, user.ID, beforeID, limit)
+	page, err := h.messageService.GetByChannelID(r.Context(), serverID, channelID, user.ID, beforeID, limit)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -68,6 +73,11 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 // Accepts JSON or multipart/form-data (for file attachments).
 func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("id")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
@@ -147,7 +157,7 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	message, err := h.messageService.Create(r.Context(), channelID, user.ID, &req)
+	message, err := h.messageService.Create(r.Context(), serverID, channelID, user.ID, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -192,7 +202,7 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set transient server_id so clients can route cross-server notifications
-	message.ServerID = r.PathValue("serverId")
+	message.ServerID = serverID
 
 	// Broadcast after uploads so all clients see attachments
 	h.messageService.BroadcastCreate(message)
@@ -215,6 +225,11 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Update handles PATCH /api/messages/{id} (owner only).
 func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
@@ -228,7 +243,7 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.messageService.Update(r.Context(), id, user.ID, &req)
+	message, err := h.messageService.Update(r.Context(), serverID, id, user.ID, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -240,6 +255,11 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /api/messages/{id} (owner or MANAGE_MESSAGES permission).
 func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
@@ -249,7 +269,7 @@ func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	perms, _ := r.Context().Value(PermissionsContextKey).(models.Permission)
 
-	if err := h.messageService.Delete(r.Context(), id, user.ID, perms); err != nil {
+	if err := h.messageService.Delete(r.Context(), serverID, id, user.ID, perms); err != nil {
 		pkg.Error(w, err)
 		return
 	}

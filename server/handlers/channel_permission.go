@@ -22,8 +22,13 @@ func NewChannelPermissionHandler(service services.ChannelPermissionService) *Cha
 // ListOverrides handles GET /api/channels/{id}/permissions
 func (h *ChannelPermissionHandler) ListOverrides(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("id")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
-	overrides, err := h.service.GetOverrides(r.Context(), channelID)
+	overrides, err := h.service.GetOverrides(r.Context(), serverID, channelID)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -39,6 +44,11 @@ func (h *ChannelPermissionHandler) ListOverrides(w http.ResponseWriter, r *http.
 func (h *ChannelPermissionHandler) SetOverride(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelId")
 	roleID := r.PathValue("roleId")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
 	var req models.SetOverrideRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -46,7 +56,7 @@ func (h *ChannelPermissionHandler) SetOverride(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.service.SetOverride(r.Context(), channelID, roleID, &req); err != nil {
+	if err := h.service.SetOverride(r.Context(), serverID, channelID, roleID, &req); err != nil {
 		pkg.Error(w, err)
 		return
 	}
@@ -59,8 +69,13 @@ func (h *ChannelPermissionHandler) SetOverride(w http.ResponseWriter, r *http.Re
 func (h *ChannelPermissionHandler) DeleteOverride(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelId")
 	roleID := r.PathValue("roleId")
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
-	if err := h.service.DeleteOverride(r.Context(), channelID, roleID); err != nil {
+	if err := h.service.DeleteOverride(r.Context(), serverID, channelID, roleID); err != nil {
 		pkg.Error(w, err)
 		return
 	}

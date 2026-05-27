@@ -112,4 +112,26 @@ ENV SERVER_HOST=0.0.0.0 \
     DATABASE_PATH=/data/hichat.db
 
 EXPOSE 7860
+
+# HEALTHCHECK — hits the shallow /api/health endpoint. Note this only
+# verifies the HTTP layer; DB/Redis/LiveKit are NOT validated here.
+# A future deeper /health endpoint should validate downstream deps.
+# Tunables:
+#   --interval=30s : how often the check fires
+#   --timeout=5s   : per-check timeout (curl exits non-zero on timeout)
+#   --start-period=20s : Go binary + DB migration cold-start grace window
+#   --retries=3    : N consecutive failures = container "unhealthy"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:${SERVER_PORT}/api/health || exit 1
+
+# --- Self-host hardening (commented out for HF Space compatibility) ---
+# Uncomment for self-hosted deployments. HF Spaces requires root because
+# the platform mounts /data as root-owned at first start.
+#
+# RUN useradd --create-home --uid 1000 --shell /sbin/nologin hichat && \
+#     mkdir -p /data/uploads /data/landing && \
+#     chown -R hichat:hichat /data /app
+# USER hichat
+# -------------------------------------------------------------------
+
 ENTRYPOINT ["/app/hichat-server"]

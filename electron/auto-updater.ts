@@ -24,21 +24,23 @@ let runtimeCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * How often we re-poll GitHub Releases for a newer version while the app
- * is running. 1 minute is aggressive — users see a new release within
- * 60s of publish, in line with the "always-latest" expectation.
+ * is running.
  *
- * Rate-limit math: GitHub's anonymous API budget is 60 requests/hour from
- * a single IP. One client polling once per minute uses exactly that
- * budget. A user with two clients open (laptop + desktop, say) will
- * occasionally hit a 60s window where the request is rejected; the
- * `.catch(() => undefined)` in setupAutoUpdater swallows that — they
- * just miss one cycle and notice the update on the next.
+ * Audit 2026-05-27: bumped from 60s → 5min to stay within GitHub's anonymous
+ * API budget (60 requests/hour per IP). At 60s a single client used the
+ * whole budget; multiple clients on the same NAT (corp office, household)
+ * silently hit rate-limit and missed critical security updates because the
+ * `.catch(() => undefined)` in setupAutoUpdater swallowed the 429.
  *
- * If we ever ship a public-facing instance with thousands of clients,
- * bump this back to 5 minutes (the original cadence) or move the
- * release-check upstream to a server endpoint that fans out.
+ * At 5min:
+ *   - 1 client = 12 req/hour (well under 60)
+ *   - 5 clients on same NAT = 60 req/hour (exactly the budget — acceptable)
+ *   - Update visibility delay: max ~5min after release publish
+ *
+ * Long-term: route release-check through our own backend (server-side cache
+ * with 1h TTL → fans out to unlimited clients without burning GitHub quota).
  */
-const RUNTIME_CHECK_MS = 60 * 1000;
+const RUNTIME_CHECK_MS = 5 * 60 * 1000;
 
 /** Has the pre-launch splash already run an update check? Used to deduplicate. */
 export function wasPrelaunchChecked(): boolean {

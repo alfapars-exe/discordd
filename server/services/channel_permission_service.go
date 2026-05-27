@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/cache"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
@@ -38,10 +39,10 @@ type ChannelPermResolver interface {
 
 // ChannelPermissionService manages per-channel permission overrides.
 type ChannelPermissionService interface {
-	GetOverrides(ctx context.Context, channelID string) ([]models.ChannelPermissionOverride, error)
+	GetOverrides(ctx context.Context, serverID, channelID string) ([]models.ChannelPermissionOverride, error)
 	// SetOverride creates or updates an override. If allow=0 and deny=0, deletes it (revert to inherit).
-	SetOverride(ctx context.Context, channelID, roleID string, req *models.SetOverrideRequest) error
-	DeleteOverride(ctx context.Context, channelID, roleID string) error
+	SetOverride(ctx context.Context, serverID, channelID, roleID string, req *models.SetOverrideRequest) error
+	DeleteOverride(ctx context.Context, serverID, channelID, roleID string) error
 	// ResolveChannelPermissions computes effective permissions for a user in a channel.
 	ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error)
 	// BuildVisibilityFilter builds a per-user channel visibility filter for ViewChannel checks.
@@ -93,7 +94,11 @@ func NewChannelPermissionService(
 	}
 }
 
-func (s *channelPermService) GetOverrides(ctx context.Context, channelID string) ([]models.ChannelPermissionOverride, error) {
+func (s *channelPermService) GetOverrides(ctx context.Context, serverID, channelID string) ([]models.ChannelPermissionOverride, error) {
+	if _, err := s.validateOverrideScope(ctx, serverID, channelID, ""); err != nil {
+		return nil, err
+	}
+
 	overrides, err := s.permRepo.GetByChannel(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channel overrides: %w", err)
@@ -106,9 +111,12 @@ func (s *channelPermService) GetOverrides(ctx context.Context, channelID string)
 	return overrides, nil
 }
 
-func (s *channelPermService) SetOverride(ctx context.Context, channelID, roleID string, req *models.SetOverrideRequest) error {
+func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelID, roleID string, req *models.SetOverrideRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("invalid override request: %w", err)
+	}
+	if _, err := s.validateOverrideScope(ctx, serverID, channelID, roleID); err != nil {
+		return err
 	}
 
 	// allow=0, deny=0 -> no effect (same as inherit), delete
@@ -119,7 +127,7 @@ func (s *channelPermService) SetOverride(ctx context.Context, channelID, roleID 
 
 		s.invalidateChannelCache(channelID)
 
-		s.hub.BroadcastToAll(ws.Event{
+		s.hub.BroadcastToServer(serverID, ws.Event{
 			Op: ws.OpChannelPermissionDelete,
 			Data: map[string]string{
 				"channel_id": channelID,
@@ -143,7 +151,7 @@ func (s *channelPermService) SetOverride(ctx context.Context, channelID, roleID 
 
 	s.invalidateChannelCache(channelID)
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelPermissionUpdate,
 		Data: override,
 	})
@@ -151,14 +159,17 @@ func (s *channelPermService) SetOverride(ctx context.Context, channelID, roleID 
 	return nil
 }
 
-func (s *channelPermService) DeleteOverride(ctx context.Context, channelID, roleID string) error {
+func (s *channelPermService) DeleteOverride(ctx context.Context, serverID, channelID, roleID string) error {
+	if _, err := s.validateOverrideScope(ctx, serverID, channelID, roleID); err != nil {
+		return err
+	}
 	if err := s.permRepo.Delete(ctx, channelID, roleID); err != nil {
 		return fmt.Errorf("failed to delete channel override: %w", err)
 	}
 
 	s.invalidateChannelCache(channelID)
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op: ws.OpChannelPermissionDelete,
 		Data: map[string]string{
 			"channel_id": channelID,
@@ -167,6 +178,28 @@ func (s *channelPermService) DeleteOverride(ctx context.Context, channelID, role
 	})
 
 	return nil
+}
+
+func (s *channelPermService) validateOverrideScope(ctx context.Context, serverID, channelID, roleID string) (*models.Channel, error) {
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel: %w", err)
+	}
+	if channel.ServerID != serverID {
+		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+	}
+
+	if roleID != "" {
+		role, err := s.roleRepo.GetByID(ctx, roleID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get role: %w", err)
+		}
+		if role.ServerID != serverID {
+			return nil, fmt.Errorf("%w: role not found", pkg.ErrNotFound)
+		}
+	}
+
+	return channel, nil
 }
 
 // BuildVisibilityFilter builds a per-user channel visibility filter.

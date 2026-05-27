@@ -96,6 +96,11 @@ func (h *E2EEHandler) CreateGroupSession(w http.ResponseWriter, r *http.Request)
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
 		return
 	}
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
 	deviceID := r.URL.Query().Get("device_id")
 	if deviceID == "" {
@@ -109,7 +114,7 @@ func (h *E2EEHandler) CreateGroupSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.e2eeService.UpsertGroupSession(r.Context(), channelID, user.ID, deviceID, &req); err != nil {
+	if err := h.e2eeService.UpsertGroupSession(r.Context(), serverID, channelID, user.ID, deviceID, &req); err != nil {
 		pkg.Error(w, err)
 		return
 	}
@@ -120,7 +125,7 @@ func (h *E2EEHandler) CreateGroupSession(w http.ResponseWriter, r *http.Request)
 // GetGroupSessions returns all active group sessions for a channel.
 // GET /api/servers/{serverId}/channels/{channelId}/group-sessions
 func (h *E2EEHandler) GetGroupSessions(w http.ResponseWriter, r *http.Request) {
-	_, ok := r.Context().Value(UserContextKey).(*models.User)
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -131,8 +136,13 @@ func (h *E2EEHandler) GetGroupSessions(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
 		return
 	}
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return
+	}
 
-	sessions, err := h.e2eeService.GetGroupSessions(r.Context(), channelID)
+	sessions, err := h.e2eeService.GetGroupSessions(r.Context(), serverID, channelID, user.ID)
 	if err != nil {
 		pkg.Error(w, err)
 		return

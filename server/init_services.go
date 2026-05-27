@@ -64,6 +64,10 @@ type RateLimiters struct {
 	ForgotPwd *ratelimit.LoginRateLimiter
 	ResetPwd  *ratelimit.LoginRateLimiter
 	Feedback  *ratelimit.MessageRateLimiter
+	// WSTicket added 2026-05-27 (P1-BC-07): /api/auth/ws-ticket was
+	// unrate-limited, so an attacker could spam ticket issuance to
+	// exhaust ws_ticket_service's in-memory map and degrade legit logins.
+	WSTicket *ratelimit.LoginRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -135,7 +139,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
 	deviceService := services.NewDeviceService(repos.Device, hub)
-	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, hub)
+	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, hub, repos.Channel, channelPermService)
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
 	adminServerService := services.NewAdminServerService(repos.Server, repos.User, repos.LiveKit, hub, emailSender)
@@ -173,6 +177,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute)                  // 3 forgot-password per 5 min per IP
 	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)                   // 5 reset attempts per 5 min per IP
 	feedbackLimiter := ratelimit.NewMessageRateLimiter(2, 1*time.Minute, 30*time.Second) // 2 feedback per min, 30s cooldown
+	// 30/min/IP: a normal client refreshes a ticket on reconnect (~1-3/min
+	// even on flaky mobile networks); 30 is generous enough to absorb
+	// reconnect storms while killing the brute-force / DoS scenario.
+	wsTicketLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
 
 	svcs := &Services{
 		Auth:              authService,
@@ -225,6 +233,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		ForgotPwd: forgotPwdLimiter,
 		ResetPwd:  resetPwdLimiter,
 		Feedback:  feedbackLimiter,
+		WSTicket:  wsTicketLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

@@ -43,6 +43,16 @@ export function saveCredentials(username: string, password: string): void {
 }
 
 export function loadCredentials(): Credentials | null {
+  // Audit 2026-05-27 — minimise plaintext footprint in V8 heap:
+  // 1. Read file into a Buffer we own (mutable, can zeroize).
+  // 2. Decrypt via safeStorage — returned plaintext is a V8-managed string.
+  //    JS strings are immutable and may be interned/copied by GC, so true
+  //    zeroization is impossible. We do the next best thing: hold the
+  //    plaintext for the minimum time, then drop the reference.
+  // 3. Zero the encrypted file Buffer in finally — defensive even though
+  //    the encrypted form doesn't reveal plaintext.
+  let fileBuf: Buffer | null = null;
+  let plaintext: string | null = null;
   try {
     const p = credPath();
     if (!existsSync(p)) return null;
@@ -52,11 +62,22 @@ export function loadCredentials(): Credentials | null {
     if (!safeStorage.isEncryptionAvailable()) {
       return null;
     }
-    const decrypted = safeStorage.decryptString(Buffer.from(readFileSync(p)));
-    return JSON.parse(decrypted) as Credentials;
+    fileBuf = readFileSync(p); // we own this buffer
+    plaintext = safeStorage.decryptString(fileBuf);
+    const creds = JSON.parse(plaintext) as Credentials;
+    // Caller should consume `creds` immediately and not retain a reference.
+    return creds;
   } catch {
     // Corrupt file or decrypt failure — treat as absent
     return null;
+  } finally {
+    // Best-effort zeroization of buffers we control.
+    if (fileBuf) fileBuf.fill(0);
+    // Drop the plaintext reference so GC can reclaim it sooner.
+    // Cannot actually zero a JS string — V8 limitation, see top comment.
+    plaintext = null;
+    // Hint the engine to collect. Only present when run with --expose-gc.
+    (globalThis as unknown as { gc?: () => void }).gc?.();
   }
 }
 

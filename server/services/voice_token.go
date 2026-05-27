@@ -15,6 +15,20 @@ import (
 	"github.com/livekit/protocol/auth"
 )
 
+// voiceTokenTTL caps how long a single LiveKit JWT remains valid.
+//
+// Audit 2026-05-27 (P1-BC-06): reduced from 1h → 15min. Moderation actions
+// (kick, ban, timeout) take effect only when the user's next token request
+// is denied — with a 1h token a banned user could keep talking for up to
+// 60 minutes. 15min strikes the balance: ban → max 15min residual access,
+// while a single talkative voice session triggers ~4 token refreshes/hour
+// (well below LiveKit's stated capacity).
+//
+// For instant revocation, pair this with webhook-driven ejection on
+// ban/kick events (see livekit_webhook.go) — the TTL is just the
+// fail-safe floor.
+const voiceTokenTTL = 15 * time.Minute
+
 func (s *voiceService) GenerateToken(ctx context.Context, userID, username, displayName, channelID string) (*models.VoiceTokenResponse, error) {
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
 	if err != nil {
@@ -155,15 +169,12 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		participantName = displayName
 	}
 
-	// Token TTL 1h (was 24h). Moderation actions (kick, ban, timeout) need
-	// to take effect within minutes — a 24h token meant a kicked user
-	// could re-join the room until their token expired the next day. With
-	// a 1h cap the client just re-requests via /voice/token; the request
-	// re-evaluates timeout/perm state, so a kick is enforced on next renew.
+	// TTL controlled by voiceTokenTTL (15min as of 2026-05-27 audit).
+	// See voiceTokenTTL declaration for rationale.
 	at.AddGrant(grant).
 		SetIdentity(userID).
 		SetName(participantName).
-		SetValidFor(time.Hour)
+		SetValidFor(voiceTokenTTL)
 
 	token, err := at.ToJWT()
 	if err != nil {
@@ -244,13 +255,13 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		participantName = displayName + " (Screen)"
 	}
 
-	// Screen share token TTL kept at 1h. Long screen-share sessions just
-	// trigger a token refresh — that's cheaper than leaving a stolen token
-	// usable for hours after a moderation event.
+	// Screen share token TTL matches voice token TTL (15min as of 2026-05-27
+	// audit) — long screen shares trigger ~4 refreshes/hour, but a stolen
+	// token can't outlive a moderation event by more than the TTL window.
 	at.AddGrant(grant).
 		SetIdentity(ssIdentity).
 		SetName(participantName).
-		SetValidFor(time.Hour)
+		SetValidFor(voiceTokenTTL)
 
 	token, err := at.ToJWT()
 	if err != nil {

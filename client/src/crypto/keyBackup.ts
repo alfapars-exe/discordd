@@ -3,10 +3,16 @@
  *
  * Inspired by Matrix/Element model:
  * - User sets an optional recovery password
- * - PBKDF2 (1M iterations) derives AES-256-GCM key
+ * - PBKDF2 derives AES-256-GCM key (iteration count is encoded in `algorithm`)
  * - All E2EE keys are encrypted and uploaded to server
  * - Server only stores encrypted blob (never sees the password)
  * - New device restores keys by entering recovery password
+ *
+ * Cryptographic agility — 2026-05-27 audit:
+ * Iteration count is part of the `algorithm` string ("aes-256-gcm+pbkdf2-N")
+ * so backups created with different iteration counts decrypt correctly even
+ * after we bump the default. Legacy backups (algorithm === "aes-256-gcm",
+ * pre-audit) fall back to 1,000,000 iterations.
  */
 
 import * as keyStorage from "./keyStorage";
@@ -16,14 +22,51 @@ import { toBase64, fromBase64 } from "./signalProtocol";
 // Constants
 // ──────────────────────────────────
 
-/** PBKDF2 iterations — higher = more secure but slower */
-const PBKDF2_ITERATIONS = 1_000_000;
+/** PBKDF2 iterations for NEW backups — OWASP 2025 recommendation. */
+const PBKDF2_ITERATIONS_DEFAULT = 2_000_000;
 
-/** Backup algorithm identifier */
-const BACKUP_ALGORITHM = "aes-256-gcm";
+/** PBKDF2 iterations for LEGACY backups created before the 2026-05-27 audit
+ *  bump. Used when the algorithm string lacks an explicit iteration count. */
+const PBKDF2_ITERATIONS_LEGACY = 1_000_000;
+
+/** Safety bounds for parsed iteration counts.
+ *  Lower bound: never below current OWASP 2024 minimum (600k).
+ *  Upper bound: caps brute-force-tolerance-vs-login-time at ~30s on mobile. */
+const PBKDF2_ITERATIONS_MIN = 600_000;
+const PBKDF2_ITERATIONS_MAX = 10_000_000;
+
+/** Backup algorithm identifier — encodes AEAD + KDF + iteration count. */
+const BACKUP_ALGORITHM = `aes-256-gcm+pbkdf2-${PBKDF2_ITERATIONS_DEFAULT}`;
 
 /** Backup version */
 const BACKUP_VERSION = 1;
+
+/**
+ * Parse the `algorithm` string back to its components.
+ * Legacy backups: "aes-256-gcm" → uses PBKDF2_ITERATIONS_LEGACY
+ * New backups:    "aes-256-gcm+pbkdf2-2000000" → parses iteration count
+ * Unknown/malicious: throws — refuse to derive a key with attacker-controlled params.
+ */
+function parseAlgorithm(algorithm: string): { iterations: number } {
+  if (algorithm === "aes-256-gcm") {
+    return { iterations: PBKDF2_ITERATIONS_LEGACY };
+  }
+  const match = /^aes-256-gcm\+pbkdf2-(\d+)$/.exec(algorithm);
+  if (!match) {
+    throw new Error(`Unsupported backup algorithm: ${algorithm}`);
+  }
+  const iterations = Number.parseInt(match[1], 10);
+  if (
+    !Number.isFinite(iterations) ||
+    iterations < PBKDF2_ITERATIONS_MIN ||
+    iterations > PBKDF2_ITERATIONS_MAX
+  ) {
+    throw new Error(
+      `Iteration count ${iterations} out of allowed range [${PBKDF2_ITERATIONS_MIN}, ${PBKDF2_ITERATIONS_MAX}]`
+    );
+  }
+  return { iterations };
+}
 
 // ──────────────────────────────────
 // Backup Types
@@ -114,9 +157,13 @@ export async function createBackup(recoveryPassword: string): Promise<{
   // 2. JSON serialize
   const plaintext = new TextEncoder().encode(JSON.stringify(contents));
 
-  // 3. Derive key via PBKDF2
+  // 3. Derive key via PBKDF2 (2,000,000 iterations — 2025 OWASP recommendation)
   const salt = crypto.getRandomValues(new Uint8Array(32));
-  const derivedKey = await deriveKeyFromPassword(recoveryPassword, salt);
+  const derivedKey = await deriveKeyFromPassword(
+    recoveryPassword,
+    salt,
+    PBKDF2_ITERATIONS_DEFAULT
+  );
 
   // 4. Encrypt with AES-256-GCM
   const nonce = crypto.getRandomValues(new Uint8Array(12));
@@ -147,19 +194,27 @@ export async function createBackup(recoveryPassword: string): Promise<{
 // Backup Restoration
 // ──────────────────────────────────
 
-/** Restore E2EE keys from backup using recovery password. Returns false if wrong password. */
+/** Restore E2EE keys from backup using recovery password. Returns false if wrong password.
+ *
+ * `algorithm` is optional for backwards-compat: backups created before the
+ * 2026-05-27 audit didn't carry an algorithm field in the restore call site,
+ * and they used PBKDF2 with 1M iterations. Treat absent algorithm as legacy.
+ */
 export async function restoreFromBackup(
   backup: {
     encryptedData: string;
     nonce: string;
     salt: string;
+    algorithm?: string;
   },
   recoveryPassword: string
 ): Promise<boolean> {
   try {
-    // 1. Derive key via PBKDF2
+    // 1. Derive key via PBKDF2 with the iteration count this backup was created with.
+    //    Missing algorithm = pre-audit legacy backup (1M iterations).
+    const { iterations } = parseAlgorithm(backup.algorithm ?? "aes-256-gcm");
     const salt = fromBase64(backup.salt);
-    const derivedKey = await deriveKeyFromPassword(recoveryPassword, salt);
+    const derivedKey = await deriveKeyFromPassword(recoveryPassword, salt, iterations);
 
     // 2. Decrypt with AES-256-GCM
     const nonce = fromBase64(backup.nonce);
@@ -507,10 +562,15 @@ function deserializeSessionState(data: any): any {
 // Internal: PBKDF2
 // ──────────────────────────────────
 
-/** Derive AES-256 key from recovery password via PBKDF2 (1M iterations). */
+/**
+ * Derive AES-256 key from recovery password via PBKDF2.
+ * Iteration count is passed explicitly so create-time and restore-time
+ * paths can use different values (cryptographic agility).
+ */
 async function deriveKeyFromPassword(
   password: string,
-  salt: Uint8Array
+  salt: Uint8Array,
+  iterations: number
 ): Promise<Uint8Array> {
   const passwordBytes = new TextEncoder().encode(password);
 
@@ -526,7 +586,7 @@ async function deriveKeyFromPassword(
     {
       name: "PBKDF2",
       salt: salt as BufferSource,
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
       hash: "SHA-256",
     },
     baseKey,

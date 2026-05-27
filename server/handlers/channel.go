@@ -78,6 +78,12 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+
 	id := r.PathValue("id")
 
 	var req models.UpdateChannelRequest
@@ -86,7 +92,7 @@ func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel, err := h.channelService.Update(r.Context(), user.ID, id, &req)
+	channel, err := h.channelService.Update(r.Context(), serverID, user.ID, id, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -103,9 +109,15 @@ func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+
 	id := r.PathValue("id")
 
-	if err := h.channelService.Delete(r.Context(), user.ID, id); err != nil {
+	if err := h.channelService.Delete(r.Context(), serverID, user.ID, id); err != nil {
 		pkg.Error(w, err)
 		return
 	}

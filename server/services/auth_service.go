@@ -101,6 +101,16 @@ func (s *authService) logWarn(userID *string, message string, metadata map[strin
 	}
 }
 
+// logError is reserved for security-critical events (token reuse, account
+// compromise indicators). These should trigger alerts in production —
+// audit_log queries filtering on LogLevelError + LogCategoryAuth surface them.
+// Added 2026-05-27 audit (P0-BC-03).
+func (s *authService) logError(userID *string, message string, metadata map[string]string) {
+	if s.appLogger != nil {
+		s.appLogger.Log(models.LogLevelError, models.LogCategoryAuth, userID, nil, message, metadata)
+	}
+}
+
 func NewAuthService(
 	userRepo repository.UserRepository,
 	sessionRepo repository.SessionRepository,
@@ -263,8 +273,19 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 				// almost certainly the attacker. Kill every session for
 				// this user and bump their token_version so any access
 				// token the attacker holds is dead on the next request.
+				//
+				// Audit 2026-05-27 (P0-BC-03): elevated from Warn to
+				// Error and given structured metadata so monitoring can
+				// alert specifically on this event. This is a
+				// near-certain indicator of credential compromise.
 				log.Printf("[auth] SECURITY: refresh token reuse detected for user %s — invalidating all sessions", entry.userID)
-				s.logWarn(&entry.userID, "Refresh token reuse detected — all sessions invalidated", nil)
+				s.logError(&entry.userID, "Refresh token reuse detected — all sessions invalidated", map[string]string{
+					"event":           "token_compromise_detected",
+					"severity":        "critical",
+					"action_taken":    "all_sessions_invalidated,token_version_incremented",
+					"reuse_window_at": time.Now().UTC().Format(time.RFC3339),
+					"original_used":   entry.expiresAt.Add(-s.refreshExp).UTC().Format(time.RFC3339),
+				})
 				_ = s.sessionRepo.DeleteByUserID(ctx, entry.userID)
 				_ = s.userRepo.IncrementTokenVersion(ctx, entry.userID)
 				return nil, fmt.Errorf("%w: token reuse detected, all sessions invalidated", pkg.ErrUnauthorized)
@@ -289,10 +310,24 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 	// reuse-detection branch above. Window matches the refresh token's
 	// original TTL — anything older than that is uninteresting because
 	// it would fail expiry checks anyway.
+	//
+	// Audit 2026-05-27 (P0-BC-02): trigger emergency eviction when the
+	// map grows past usedRefreshEmergencyThreshold so the hourly sweep
+	// can't fall behind during a refresh-token storm (DoS attack or
+	// just a bursty rollout). Inline eviction holds the mutex briefly
+	// but unbounded growth → OOM is the worse failure mode.
 	s.usedRefreshMu.Lock()
 	s.usedRefresh[tokenHash] = usedRefreshEntry{
 		userID:    session.UserID,
 		expiresAt: time.Now().Add(s.refreshExp),
+	}
+	if len(s.usedRefresh) > usedRefreshEmergencyThreshold {
+		now := time.Now()
+		for k, v := range s.usedRefresh {
+			if now.After(v.expiresAt) {
+				delete(s.usedRefresh, k)
+			}
+		}
 	}
 	s.usedRefreshMu.Unlock()
 
@@ -446,6 +481,17 @@ func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmai
 
 const resetCooldown = 90 * time.Second
 const resetTokenExpiry = 20 * time.Minute
+
+// usedRefreshEmergencyThreshold caps the in-memory used-refresh-token map.
+// When exceeded, the next RefreshToken call performs inline expired-entry
+// eviction so the hourly sweep can't fall behind during a refresh storm.
+//
+// Audit 2026-05-27 (P0-BC-02): chosen so a single instance can comfortably
+// hold the active-window of a 1k-user deployment (each user refreshes
+// every ~15min = ~67 entries/user across a 1h window; 10k cap is ~150
+// users at peak). Multi-instance deploys should move this map to Redis —
+// the threshold is a per-instance memory guard, not a global rate limit.
+const usedRefreshEmergencyThreshold = 10_000
 
 // ForgotPassword sends a reset email. Token stored as SHA256 hash in DB.
 // Email enumeration protection: returns success even if email not found.

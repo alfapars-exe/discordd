@@ -24,8 +24,8 @@ type E2EEService interface {
 
 	// UpsertGroupSession creates/updates a Sender Key group session.
 	// Broadcasts "group_session_new" to channel members on success.
-	UpsertGroupSession(ctx context.Context, channelID, userID, deviceID string, req *models.CreateGroupSessionRequest) error
-	GetGroupSessions(ctx context.Context, channelID string) ([]models.ChannelGroupSession, error)
+	UpsertGroupSession(ctx context.Context, serverID, channelID, userID, deviceID string, req *models.CreateGroupSessionRequest) error
+	GetGroupSessions(ctx context.Context, serverID, channelID, userID string) ([]models.ChannelGroupSession, error)
 	DeleteGroupSessionsByChannel(ctx context.Context, channelID string) error
 	DeleteGroupSessionsByUser(ctx context.Context, channelID, userID string) error
 }
@@ -34,17 +34,23 @@ type e2eeService struct {
 	backupRepo       repository.E2EEKeyBackupRepository
 	groupSessionRepo repository.GroupSessionRepository
 	hub              ws.Broadcaster
+	channelGetter    ChannelGetter
+	permResolver     ChannelPermResolver
 }
 
 func NewE2EEService(
 	backupRepo repository.E2EEKeyBackupRepository,
 	groupSessionRepo repository.GroupSessionRepository,
 	hub ws.Broadcaster,
+	channelGetter ChannelGetter,
+	permResolver ChannelPermResolver,
 ) E2EEService {
 	return &e2eeService{
 		backupRepo:       backupRepo,
 		groupSessionRepo: groupSessionRepo,
 		hub:              hub,
+		channelGetter:    channelGetter,
+		permResolver:     permResolver,
 	}
 }
 
@@ -73,15 +79,18 @@ func (s *e2eeService) DeleteKeyBackup(ctx context.Context, userID string) error 
 	return nil
 }
 
-func (s *e2eeService) UpsertGroupSession(ctx context.Context, channelID, userID, deviceID string, req *models.CreateGroupSessionRequest) error {
+func (s *e2eeService) UpsertGroupSession(ctx context.Context, serverID, channelID, userID, deviceID string, req *models.CreateGroupSessionRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+	}
+	if err := s.authorizeGroupSession(ctx, serverID, channelID, userID, true); err != nil {
+		return err
 	}
 	if err := s.groupSessionRepo.Upsert(ctx, channelID, userID, deviceID, req); err != nil {
 		return fmt.Errorf("failed to upsert group session: %w", err)
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op: ws.OpGroupSessionNew,
 		Data: GroupSessionNewData{
 			ChannelID:    channelID,
@@ -93,7 +102,10 @@ func (s *e2eeService) UpsertGroupSession(ctx context.Context, channelID, userID,
 	return nil
 }
 
-func (s *e2eeService) GetGroupSessions(ctx context.Context, channelID string) ([]models.ChannelGroupSession, error) {
+func (s *e2eeService) GetGroupSessions(ctx context.Context, serverID, channelID, userID string) ([]models.ChannelGroupSession, error) {
+	if err := s.authorizeGroupSession(ctx, serverID, channelID, userID, false); err != nil {
+		return nil, err
+	}
 	sessions, err := s.groupSessionRepo.GetByChannel(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group sessions: %w", err)
@@ -102,6 +114,28 @@ func (s *e2eeService) GetGroupSessions(ctx context.Context, channelID string) ([
 		sessions = []models.ChannelGroupSession{}
 	}
 	return sessions, nil
+}
+
+func (s *e2eeService) authorizeGroupSession(ctx context.Context, serverID, channelID, userID string, requireSend bool) error {
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to get channel: %w", err)
+	}
+	if channel.ServerID != serverID {
+		return fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+	}
+
+	perms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve channel permissions: %w", err)
+	}
+	if !perms.Has(models.PermViewChannel) || !perms.Has(models.PermReadMessages) {
+		return fmt.Errorf("%w: read messages permission required", pkg.ErrForbidden)
+	}
+	if requireSend && !perms.Has(models.PermSendMessages) {
+		return fmt.Errorf("%w: send messages permission required", pkg.ErrForbidden)
+	}
+	return nil
 }
 
 func (s *e2eeService) DeleteGroupSessionsByChannel(ctx context.Context, channelID string) error {

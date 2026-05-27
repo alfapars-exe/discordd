@@ -164,7 +164,7 @@ const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudi
  * "rnnoise" on load — same audio they were already getting, just with
  * an honest label in Settings → Voice.
  */
-const REMOVED_ENGINES = new Set(["deepfilter", "dtln", "speex", "dpdfnet"]);
+const REMOVED_ENGINES = new Set<string>([]);
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
   inputMode: "voice_activity",

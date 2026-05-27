@@ -2,7 +2,9 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -116,7 +118,40 @@ func init() {
 // dropped event is silently discarded with a warning log — never close
 // the connection, which would only force a reconnect storm and make the
 // DoS pressure worse.
+//
+// Panic recovery (audit 2026-05-27): a panic in any handler is recovered,
+// logged with a full stack trace, and written as a critical audit event so
+// operators can alert on it. The misbehaving connection is closed to
+// prevent further panic-inducing payloads on the same socket; the client
+// will reconnect and the panicking handler can be fixed without taking
+// down the rest of the hub. Choice rationale: closing one connection has
+// far smaller blast radius than crashing the whole goroutine (which
+// previously orphaned the connection and could cascade to the hub).
 func (c *Client) handleEvent(event Event) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		stack := debug.Stack()
+		log.Printf("[ws] PANIC in handler user=%s op=%s recovered=%v\n%s",
+			c.userID, event.Op, r, stack)
+		c.hub.logEvent(
+			models.LogLevelError, models.LogCategoryWS, &c.userID,
+			fmt.Sprintf("WS handler panic recovered (op=%s)", event.Op),
+			map[string]string{
+				"op":     event.Op,
+				"panic":  fmt.Sprintf("%v", r),
+				"stack":  string(stack),
+				"action": "connection_closed",
+			},
+		)
+		// Close the misbehaving connection — client will reconnect with a
+		// fresh state and a future event won't immediately re-trigger the
+		// same panic on the same socket buffer.
+		c.hub.queueUnregister(c)
+	}()
+
 	if c.rateLimit == nil {
 		c.rateLimit = newClientRateLimiter()
 	}

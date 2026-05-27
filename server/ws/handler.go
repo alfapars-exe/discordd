@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 
 	"github.com/gorilla/websocket"
 
@@ -73,8 +75,15 @@ var upgrader = websocket.Upgrader{
 		if origin == "" {
 			return true
 		}
-		// Electron sends "file://" or "null" as Origin depending on version
+		// Electron sends "file://" or "null" as Origin depending on version.
+		// Allowed in development only to prevent Cross-Site WebSocket Hijacking (CSWSH) in production.
 		if origin == "null" || origin == "file://" {
+			env := strings.ToLower(os.Getenv("HICHAT_ENV"))
+			isDev := env == "development" || env == "dev"
+			if !isDev {
+				log.Printf("[ws] rejected null/file origin in production context")
+				return false
+			}
 			return true
 		}
 		// Same-origin: origin host matches request Host header
@@ -171,12 +180,37 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		// userInfoProvider, the same way the JWT path does it.
 		claims = &models.TokenClaims{UserID: userIDFromTicket}
 	} else {
-		// Legacy token path — drops out once all clients are upgraded.
+		// Legacy token path — defaults to REJECT after audit 2026-05-27.
+		//
+		// JWT in query strings leaks via proxy/CDN logs, browser history,
+		// and network monitoring (P0-BC-01). The ticket flow (POST
+		// /api/auth/ws-ticket → ?ticket=<one-shot>) replaces it.
+		//
+		// During the client rollout, operators can opt back in by setting
+		// HICHAT_ALLOW_LEGACY_WS_TOKEN=1. Every legacy connection writes
+		// an audit event so the operator can track migration progress and
+		// remove the env var once usage drops to zero.
+		legacyAllowed := os.Getenv("HICHAT_ALLOW_LEGACY_WS_TOKEN") == "1"
 		token := r.URL.Query().Get("token")
-		if token == "" {
-			http.Error(w, "missing ticket or token", http.StatusUnauthorized)
+
+		if token != "" && !legacyAllowed {
+			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil,
+				"WS connect blocked: legacy ?token= path rejected (set HICHAT_ALLOW_LEGACY_WS_TOKEN=1 during rollout)",
+				map[string]string{
+					"remote_addr": r.RemoteAddr,
+					"user_agent":  r.Header.Get("User-Agent"),
+				})
+			http.Error(w, "legacy token path disabled — use /api/auth/ws-ticket", http.StatusUnauthorized)
 			return
 		}
+
+		if token == "" {
+			http.Error(w, "missing ticket", http.StatusUnauthorized)
+			return
+		}
+
+		// Legacy path explicitly opted-in — validate, but always emit an
+		// audit event so operator visibility is unaffected by log level.
 		var err error
 		claims, err = h.tokenValidator.ValidateAccessToken(token)
 		if err != nil {
@@ -186,6 +220,11 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
+		h.hub.logEvent(models.LogLevelInfo, models.LogCategoryAuth, &claims.UserID,
+			"WS connect via legacy ?token= path (opted-in via HICHAT_ALLOW_LEGACY_WS_TOKEN)",
+			map[string]string{
+				"user_agent": r.Header.Get("User-Agent"),
+			})
 	}
 
 	// Fetch user info before upgrade — reject banned users early

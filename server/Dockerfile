@@ -33,7 +33,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o mqvi .
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates tzdata && \
+    apt-get install -y --no-install-recommends ca-certificates tzdata curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -44,9 +44,18 @@ COPY --from=builder /build/mqvi .
 # Migrations
 COPY --from=builder /build/database/migrations ./database/migrations
 
-# Data directory
-RUN mkdir -p /data/uploads
+# Non-root user (uid 1000) — self-host path, no HF Space constraint here.
+# /data must be writable by uid 1000; docker-compose `user:` override or
+# host `chown -R 1000:1000 ./data` is required.
+RUN useradd --create-home --uid 1000 --shell /sbin/nologin hichat && \
+    mkdir -p /data/uploads && \
+    chown -R hichat:hichat /data /app
+USER hichat
 
 EXPOSE 9090
+
+# HEALTHCHECK — same shallow /api/health pattern as root Dockerfile.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:9090/api/health || exit 1
 
 CMD ["./mqvi"]

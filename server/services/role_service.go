@@ -137,7 +137,7 @@ func (s *roleService) Create(ctx context.Context, serverID, actorID string, req 
 		return nil, fmt.Errorf("failed to create role: %w", err)
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpRoleCreate,
 		Data: role,
 	})
@@ -161,6 +161,9 @@ func (s *roleService) Update(ctx context.Context, serverID, actorID, roleID stri
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
 		return nil, err
+	}
+	if role.ServerID != serverID {
+		return nil, fmt.Errorf("%w: role not found", pkg.ErrNotFound)
 	}
 
 	// Owner role: only server owner can edit name/color; permissions are immutable
@@ -251,6 +254,9 @@ func (s *roleService) Delete(ctx context.Context, serverID, actorID, roleID stri
 	if err != nil {
 		return err
 	}
+	if role.ServerID != serverID {
+		return fmt.Errorf("%w: role not found", pkg.ErrNotFound)
+	}
 
 	if role.IsOwner {
 		return fmt.Errorf("%w: the Owner role cannot be deleted", pkg.ErrForbidden)
@@ -277,7 +283,7 @@ func (s *roleService) Delete(ctx context.Context, serverID, actorID, roleID stri
 	// held it — always invalidate the resolution cache.
 	s.invalidatePerms()
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpRoleDelete,
 		Data: map[string]string{"id": roleID},
 	})
@@ -311,6 +317,9 @@ func (s *roleService) ReorderRoles(ctx context.Context, serverID, actorID string
 		if err != nil {
 			return nil, err
 		}
+		if role.ServerID != serverID {
+			return nil, fmt.Errorf("%w: role not found", pkg.ErrNotFound)
+		}
 
 		if role.IsOwner {
 			return nil, fmt.Errorf("%w: the Owner role cannot be reordered", pkg.ErrForbidden)
@@ -339,7 +348,7 @@ func (s *roleService) ReorderRoles(ctx context.Context, serverID, actorID string
 		return nil, fmt.Errorf("failed to reload roles after reorder: %w", err)
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpRolesReorder,
 		Data: roles,
 	})

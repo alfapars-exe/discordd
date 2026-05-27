@@ -46,8 +46,8 @@ func (f *ChannelVisibilityFilter) CanSee(channelID string) bool {
 type ChannelService interface {
 	GetAllGrouped(ctx context.Context, serverID, userID string) ([]models.CategoryWithChannels, error)
 	Create(ctx context.Context, serverID, actorID string, req *models.CreateChannelRequest) (*models.Channel, error)
-	Update(ctx context.Context, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error)
-	Delete(ctx context.Context, actorID, id string) error
+	Update(ctx context.Context, serverID, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error)
+	Delete(ctx context.Context, serverID, actorID, id string) error
 	ReorderChannels(ctx context.Context, serverID string, req *models.ReorderChannelsRequest, userID string) ([]models.CategoryWithChannels, error)
 	SetAuditLogger(logger AuditWriter)
 }
@@ -183,8 +183,12 @@ func (s *channelService) Create(ctx context.Context, serverID, actorID string, r
 	}
 
 	if req.CategoryID != "" {
-		if _, err := s.categoryRepo.GetByID(ctx, req.CategoryID); err != nil {
+		category, err := s.categoryRepo.GetByID(ctx, req.CategoryID)
+		if err != nil {
 			return nil, fmt.Errorf("%w: category not found", pkg.ErrBadRequest)
+		}
+		if category.ServerID != serverID {
+			return nil, fmt.Errorf("%w: category not found", pkg.ErrNotFound)
 		}
 	}
 
@@ -214,7 +218,7 @@ func (s *channelService) Create(ctx context.Context, serverID, actorID string, r
 		return nil, fmt.Errorf("failed to create channel: %w", err)
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelCreate,
 		Data: nil,
 	})
@@ -235,7 +239,7 @@ func (s *channelService) Create(ctx context.Context, serverID, actorID string, r
 	return channel, nil
 }
 
-func (s *channelService) Update(ctx context.Context, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error) {
+func (s *channelService) Update(ctx context.Context, serverID, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
@@ -243,6 +247,9 @@ func (s *channelService) Update(ctx context.Context, actorID, id string, req *mo
 	channel, err := s.channelRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if channel.ServerID != serverID {
+		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
 	}
 
 	// Audit channels are renamable-restricted: the name is part of the
@@ -265,8 +272,12 @@ func (s *channelService) Update(ctx context.Context, actorID, id string, req *mo
 		if *req.CategoryID == "" {
 			channel.CategoryID = nil
 		} else {
-			if _, err := s.categoryRepo.GetByID(ctx, *req.CategoryID); err != nil {
+			category, err := s.categoryRepo.GetByID(ctx, *req.CategoryID)
+			if err != nil {
 				return nil, fmt.Errorf("%w: category not found", pkg.ErrBadRequest)
+			}
+			if category.ServerID != serverID {
+				return nil, fmt.Errorf("%w: category not found", pkg.ErrNotFound)
 			}
 			channel.CategoryID = req.CategoryID
 		}
@@ -286,7 +297,7 @@ func (s *channelService) Update(ctx context.Context, actorID, id string, req *mo
 		return nil, err
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelUpdate,
 		Data: channel,
 	})
@@ -307,14 +318,20 @@ func (s *channelService) Update(ctx context.Context, actorID, id string, req *mo
 	return channel, nil
 }
 
-func (s *channelService) Delete(ctx context.Context, actorID, id string) error {
+func (s *channelService) Delete(ctx context.Context, serverID, actorID, id string) error {
 	// Audit channels are non-deletable — they hold the server's moderation
 	// history and removing them would orphan audit_logs rows (FK CASCADE
 	// keeps DB consistent, but UI-side users would lose access to the
 	// feed without warning). Block the operation here so callers always
 	// see a clear error rather than silently destroying the channel.
 	existing, getErr := s.channelRepo.GetByID(ctx, id)
-	if getErr == nil && existing != nil && existing.Type == models.ChannelTypeAudit {
+	if getErr != nil {
+		return getErr
+	}
+	if existing == nil || existing.ServerID != serverID {
+		return fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+	}
+	if existing.Type == models.ChannelTypeAudit {
 		return fmt.Errorf("%w: audit channel cannot be deleted", pkg.ErrForbidden)
 	}
 
@@ -322,7 +339,7 @@ func (s *channelService) Delete(ctx context.Context, actorID, id string) error {
 		return err
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelDelete,
 		Data: map[string]string{"id": id},
 	})
@@ -347,11 +364,30 @@ func (s *channelService) ReorderChannels(ctx context.Context, serverID string, r
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
 
+	for _, item := range req.Items {
+		channel, err := s.channelRepo.GetByID(ctx, item.ID)
+		if err != nil {
+			return nil, err
+		}
+		if channel.ServerID != serverID {
+			return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+		}
+		if item.CategoryID != nil && *item.CategoryID != "" {
+			category, err := s.categoryRepo.GetByID(ctx, *item.CategoryID)
+			if err != nil {
+				return nil, fmt.Errorf("%w: category not found", pkg.ErrBadRequest)
+			}
+			if category.ServerID != serverID {
+				return nil, fmt.Errorf("%w: category not found", pkg.ErrNotFound)
+			}
+		}
+	}
+
 	if err := s.channelRepo.UpdatePositions(ctx, req.Items); err != nil {
 		return nil, fmt.Errorf("failed to update channel positions: %w", err)
 	}
 
-	s.hub.BroadcastToAll(ws.Event{
+	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelReorder,
 		Data: nil,
 	})

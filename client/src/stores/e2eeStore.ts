@@ -221,6 +221,9 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
           encryptedData: response.data.encrypted_data,
           nonce: response.data.nonce,
           salt: response.data.salt,
+          // Pass algorithm so legacy (1M iter) vs new (2M iter) backups
+          // both decrypt correctly. See keyBackup.ts:parseAlgorithm.
+          algorithm: response.data.algorithm,
         },
         password
       );

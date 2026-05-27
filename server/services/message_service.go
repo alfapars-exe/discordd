@@ -21,11 +21,11 @@ var userMentionRegex = regexp.MustCompile(`<@([a-z0-9]+)>`)
 var roleMentionRegex = regexp.MustCompile(`<@&([a-z0-9]+)>`)
 
 type MessageService interface {
-	GetByChannelID(ctx context.Context, channelID string, userID string, beforeID string, limit int) (*models.MessagePage, error)
-	Create(ctx context.Context, channelID string, userID string, req *models.CreateMessageRequest) (*models.Message, error)
+	GetByChannelID(ctx context.Context, serverID, channelID, userID string, beforeID string, limit int) (*models.MessagePage, error)
+	Create(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error)
 	BroadcastCreate(message *models.Message)
-	Update(ctx context.Context, id string, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
-	Delete(ctx context.Context, id string, userID string, userPermissions models.Permission) error
+	Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
+	Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error
 	SetAuditLogger(logger AuditWriter)
 }
 
@@ -94,12 +94,16 @@ func NewMessageService(
 
 // GetByChannelID returns messages with cursor-based pagination.
 // Checks per-channel ReadMessages permission (override-aware).
-func (s *messageService) GetByChannelID(ctx context.Context, channelID string, userID string, beforeID string, limit int) (*models.MessagePage, error) {
+func (s *messageService) GetByChannelID(ctx context.Context, serverID, channelID, userID string, beforeID string, limit int) (*models.MessagePage, error) {
+	if _, err := s.validateChannelScope(ctx, serverID, channelID); err != nil {
+		return nil, err
+	}
+
 	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !channelPerms.Has(models.PermReadMessages) {
+	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermReadMessages) {
 		return nil, fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
@@ -188,12 +192,12 @@ func (s *messageService) GetByChannelID(ctx context.Context, channelID string, u
 
 // Create creates a new message. Checks per-channel SendMessages permission.
 // WS broadcast is NOT done here — handler calls BroadcastCreate after file uploads.
-func (s *messageService) Create(ctx context.Context, channelID string, userID string, req *models.CreateMessageRequest) (*models.Message, error) {
+func (s *messageService) Create(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
 
-	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	channel, err := s.validateChannelScope(ctx, serverID, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +221,7 @@ func (s *messageService) Create(ctx context.Context, channelID string, userID st
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !channelPerms.Has(models.PermSendMessages) {
+	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermSendMessages) {
 		return nil, fmt.Errorf("%w: missing send messages permission for this channel", pkg.ErrForbidden)
 	}
 
@@ -349,7 +353,7 @@ func (s *messageService) BroadcastCreate(message *models.Message) {
 }
 
 // Update edits a message. Only the message owner can edit.
-func (s *messageService) Update(ctx context.Context, id string, userID string, req *models.UpdateMessageRequest) (*models.Message, error) {
+func (s *messageService) Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
@@ -361,6 +365,16 @@ func (s *messageService) Update(ctx context.Context, id string, userID string, r
 
 	if message.UserID != userID {
 		return nil, fmt.Errorf("%w: you can only edit your own messages", pkg.ErrForbidden)
+	}
+	if _, err := s.validateChannelScope(ctx, serverID, message.ChannelID); err != nil {
+		return nil, err
+	}
+	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, message.ChannelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
+	}
+	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermReadMessages) {
+		return nil, fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
 	// Reject mismatched encryption versions. The repo decides which columns
@@ -438,8 +452,12 @@ func (s *messageService) Update(ctx context.Context, id string, userID string, r
 }
 
 // Delete deletes a message. Owner or MANAGE_MESSAGES permission required.
-func (s *messageService) Delete(ctx context.Context, id string, userID string, userPermissions models.Permission) error {
+func (s *messageService) Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error {
 	message, err := s.messageRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	channel, err := s.validateChannelScope(ctx, serverID, message.ChannelID)
 	if err != nil {
 		return err
 	}
@@ -451,12 +469,9 @@ func (s *messageService) Delete(ctx context.Context, id string, userID string, u
 	// Snapshot what we need for the audit BEFORE the row is deleted; the
 	// message and (in theory) its channel may not be reachable after.
 	wasModeratorDelete := message.UserID != userID
-	var channelName, serverID string
+	var channelName string
 	if wasModeratorDelete {
-		if ch, chErr := s.channelRepo.GetByID(ctx, message.ChannelID); chErr == nil && ch != nil {
-			channelName = ch.Name
-			serverID = ch.ServerID
-		}
+		channelName = channel.Name
 	}
 
 	if err := s.messageRepo.Delete(ctx, id); err != nil {
@@ -498,6 +513,17 @@ func (s *messageService) Delete(ctx context.Context, id string, userID string, u
 	}
 
 	return nil
+}
+
+func (s *messageService) validateChannelScope(ctx context.Context, serverID, channelID string) (*models.Channel, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel.ServerID != serverID {
+		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+	}
+	return channel, nil
 }
 
 // messagePreview truncates and sanitises a message body for audit metadata.

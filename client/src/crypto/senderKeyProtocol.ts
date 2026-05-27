@@ -439,7 +439,17 @@ function advanceChainKey(chainKey: Uint8Array): Uint8Array {
   return hmac(sha256, chainKey, new Uint8Array([0x01]));
 }
 
-/** AES-256-GCM encrypt for group messages. AD = distributionId:iteration. */
+/** AES-256-GCM encrypt for group messages. AD = distributionId:iteration.
+ *
+ * IV note (audit 2026-05-27): random 96-bit IV is SAFE here because every
+ * call uses a freshly-derived `key` (deriveGroupMessageKey on the advanced
+ * chain key). AES-GCM IV reuse is only catastrophic when the SAME (key, IV)
+ * pair is used twice — per-message keys make collision cryptographically
+ * impossible regardless of how concurrent the send queue is.
+ *
+ * If you ever change this to encrypt multiple messages under the same key,
+ * switch to a deterministic IV (e.g. HKDF(key, "iv-" || counter)).
+ */
 async function groupAesGcmEncrypt(
   key: Uint8Array,
   plaintext: Uint8Array,

@@ -76,6 +76,10 @@ type AuthHandler struct {
 	registerLimiter  *ratelimit.LoginRateLimiter
 	forgotPwdLimiter *ratelimit.LoginRateLimiter
 	resetPwdLimiter  *ratelimit.LoginRateLimiter
+	// wsTicketLimiter added 2026-05-27 (P1-BC-07): caps /api/auth/ws-ticket
+	// issuance per IP. Without this the in-memory ticket map could grow
+	// unbounded under spam, degrading legitimate logins.
+	wsTicketLimiter *ratelimit.LoginRateLimiter
 }
 
 // NewAuthHandler creates a new AuthHandler. All limiters may be nil to disable rate limiting.
@@ -86,6 +90,7 @@ func NewAuthHandler(
 	registerLimiter *ratelimit.LoginRateLimiter,
 	forgotPwdLimiter *ratelimit.LoginRateLimiter,
 	resetPwdLimiter *ratelimit.LoginRateLimiter,
+	wsTicketLimiter *ratelimit.LoginRateLimiter,
 ) *AuthHandler {
 	return &AuthHandler{
 		authService:      authService,
@@ -94,6 +99,7 @@ func NewAuthHandler(
 		registerLimiter:  registerLimiter,
 		forgotPwdLimiter: forgotPwdLimiter,
 		resetPwdLimiter:  resetPwdLimiter,
+		wsTicketLimiter:  wsTicketLimiter,
 	}
 }
 
@@ -102,6 +108,21 @@ func NewAuthHandler(
 // See services/ws_ticket_service.go for the rationale (keeps the
 // long-lived JWT out of WS URL query strings and proxy access logs).
 func (h *AuthHandler) WSTicket(w http.ResponseWriter, r *http.Request) {
+	// IP-based rate limit (audit 2026-05-27, P1-BC-07).
+	// Endpoint is auth-gated by middleware so user is already known, but
+	// IP-based limit catches a single attacker spinning up many accounts.
+	if h.wsTicketLimiter != nil {
+		ip := ratelimit.ExtractIP(r)
+		if !h.wsTicketLimiter.Allow(ip) {
+			retryAfter := h.wsTicketLimiter.RetryAfterSeconds(ip)
+			w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+			pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+				fmt.Sprintf("too many ws-ticket requests, please try again in %s",
+					ratelimit.FormatRetryMessage(retryAfter)))
+			return
+		}
+	}
+
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
