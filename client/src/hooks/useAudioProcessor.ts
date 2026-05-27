@@ -212,10 +212,24 @@ async function applyDesiredProcessor(
   if (desired === "deepfilter") {
     await setBrowserNoiseSuppression(audioTrack, false);
     try {
+      // Self-hosted assets: the npm package ships only JS — the WASM
+      // (df_bg.wasm) and the ONNX model archive
+      // (DeepFilterNet3_onnx.tar.gz) live behind the configured cdnUrl,
+      // joined as `${cdnUrl}/v2/pkg/df_bg.wasm` and
+      // `${cdnUrl}/v2/models/DeepFilterNet3_onnx.tar.gz` (see AssetLoader
+      // in deepfilternet3-noise-filter/dist/index.js).
+      //
+      // Default cdnUrl points at cdn.mezon.ai, which is blocked by our
+      // production CSP and was the root cause of "DeepFilterNet3 stays
+      // in Beta / never actually denoises" — fetchAsset() rejected, init
+      // failed, code silently fell back to RNNoise. Pointing at /deepfilter
+      // (served from client/public/deepfilter/) keeps everything same-origin
+      // and removes the third-party runtime dependency.
       const proc = DeepFilterNoiseFilter({
         sampleRate: 48000,
         noiseReductionLevel: deepfilterSuppression,
         enabled: true,
+        assetConfig: { cdnUrl: "/deepfilter" },
       });
       await audioTrack.setProcessor(proc);
       return proc;
