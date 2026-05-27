@@ -85,11 +85,31 @@ func initRoutes(
 	// or DM), where the transaction binds the file to a message the caller
 	// just authored, and no client ever invoked the standalone form.
 
-	// Upload download — was public http.FileServer in main.go; now gated
-	// behind auth + per-attachment access checks (channel ReadMessages
-	// permission for channel attachments, participant check for DM
-	// attachments, auth-only for avatars/icons/badges/soundboard). See
-	// handlers/upload_download.go for the full lookup matrix.
+	// Upload download — split routing.
+	//
+	// Channel attachments + DM attachments + feedback/report screenshots
+	// flow through Download which auth-gates and does per-resource
+	// access checks. That's the security-meaningful boundary — the
+	// previous public http.FileServer let anyone with a URL pull
+	// plaintext attachments.
+	//
+	// Categories rendered as `<img src="...">` (avatars, server icons,
+	// badges, soundboard samples, landing/branding) MUST stay public
+	// because browsers can't attach a Bearer header to a native img
+	// request and we deliberately don't ship the access token in a
+	// cookie any more (C3). Auth-gating these categories silently
+	// broke every avatar in the app — `<img>` got a 401 and the UI
+	// fell back to initials.
+	//
+	// Go 1.22+ ServeMux honors more-specific patterns first, so the
+	// 5 prefix-scoped public routes below take precedence over the
+	// generic GET /api/uploads/ that auth-gates everything else.
+	publicUpload := http.HandlerFunc(h.UploadDownload.PublicDownload)
+	mux.Handle("GET /api/uploads/avatars/", publicUpload)
+	mux.Handle("GET /api/uploads/badges/", publicUpload)
+	mux.Handle("GET /api/uploads/landing/", publicUpload)
+	mux.Handle("GET /api/uploads/soundboard/", publicUpload)
+	mux.Handle("GET /api/uploads/wallpapers/", publicUpload)
 	mux.Handle("GET /api/uploads/", auth(h.UploadDownload.Download))
 
 	// DMs — literal paths before parametric

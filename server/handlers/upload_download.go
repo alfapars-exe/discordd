@@ -37,11 +37,11 @@ import (
 )
 
 type UploadDownloadHandler struct {
-	uploadDir        string
-	attachmentRepo   repository.AttachmentRepository
-	dmRepo           repository.DMRepository
-	messageRepo      repository.MessageRepository
-	permResolver     services.ChannelPermResolver
+	uploadDir      string
+	attachmentRepo repository.AttachmentRepository
+	dmRepo         repository.DMRepository
+	messageRepo    repository.MessageRepository
+	permResolver   services.ChannelPermResolver
 }
 
 func NewUploadDownloadHandler(
@@ -58,6 +58,31 @@ func NewUploadDownloadHandler(
 		messageRepo:    messageRepo,
 		permResolver:   permResolver,
 	}
+}
+
+// PublicDownload serves whitelisted upload subpaths without auth.
+//
+// Categories that need to load via `<img src="...">` (avatars, server
+// icons, badges, soundboard sounds, landing/branding) can't carry a
+// Bearer header — the browser refuses to set custom headers on a
+// native img request, and we deliberately don't put the access token
+// in a cookie any more (C3). Auth-gating these categories means every
+// rendered avatar 401s and the user sees initials placeholders forever.
+//
+// The whitelist lives in init_routes.go (only specific prefixes are
+// routed here); this handler just performs the SafeJoin + serve. The
+// route patterns prevent traversal at the mux level; serveFile
+// re-validates with path.Clean + SafeJoin as defense-in-depth.
+//
+// Real per-channel/per-DM attachments still go through Download and
+// require auth — that's where the security-meaningful check is.
+func (h *UploadDownloadHandler) PublicDownload(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/api/uploads/")
+	if name == "" || strings.Contains(name, "..") || strings.Contains(name, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+	h.serveFile(w, r, name)
 }
 
 // Download serves a file from uploadDir after verifying the requester has
