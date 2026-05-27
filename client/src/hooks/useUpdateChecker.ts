@@ -10,8 +10,11 @@
  * No-op in web mode.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { isElectron } from "../utils/constants";
+
+/** Re-show the banner this many ms after user dismisses it. */
+const DISMISS_SNOOZE_MS = 30 * 60 * 1000;
 
 type UpdateStatus =
   | "idle"
@@ -35,6 +38,12 @@ export function useUpdateChecker(): UpdateChecker {
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [progress, setProgress] = useState(0);
 
+  // Holds the downloaded UpdateInfo across a dismiss → snooze → re-show
+  // cycle. Without this, dismissing the banner cleared the React state
+  // and the snooze timer had nothing to restore.
+  const downloadedUpdateRef = useRef<UpdateInfo | null>(null);
+  const snoozeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!isElectron()) return;
 
@@ -50,7 +59,10 @@ export function useUpdateChecker(): UpdateChecker {
       setProgress(Math.round(progressInfo.percent));
     });
 
-    api.onUpdateDownloaded(() => {
+    api.onUpdateDownloaded((info) => {
+      const downloaded: UpdateInfo = { version: info?.version ?? "" };
+      downloadedUpdateRef.current = downloaded;
+      setUpdate(downloaded);
       setProgress(100);
       setStatus("ready");
     });
@@ -69,10 +81,21 @@ export function useUpdateChecker(): UpdateChecker {
     window.electronAPI!.installUpdate();
   }, []);
 
-  // Dismiss banner — update installs on app quit (autoInstallOnAppQuit)
+  // Snooze banner for DISMISS_SNOOZE_MS, then re-show. The downloaded
+  // installer is still sitting on disk — we just stopped nagging for
+  // half an hour. Without the snooze, a single dismiss meant the user
+  // never saw the prompt again until the next app launch, which for
+  // tray-resident users effectively meant "never".
   const dismiss = useCallback(() => {
     setStatus("idle");
-    setUpdate(null);
+    if (snoozeTimerRef.current) clearTimeout(snoozeTimerRef.current);
+    snoozeTimerRef.current = setTimeout(() => {
+      if (downloadedUpdateRef.current) {
+        setUpdate(downloadedUpdateRef.current);
+        setProgress(100);
+        setStatus("ready");
+      }
+    }, DISMISS_SNOOZE_MS);
   }, []);
 
   return { status, update, progress, restartAndInstall, dismiss };

@@ -12,11 +12,12 @@
  * without it — they just won't get push notifications between launches.
  */
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Notification } from "electron";
 import { autoUpdater } from "electron-updater";
 import { readFileSync } from "fs";
 import path from "path";
-import { getMainWindow } from "./window";
+import { getMainWindow, setUpdateDownloaded } from "./window";
+import { setTrayUpdateReady } from "./tray";
 
 let prelaunchChecked = false;
 let splashWindow: BrowserWindow | null = null;
@@ -72,7 +73,38 @@ export function setupAutoUpdater(): void {
     getMainWindow()?.webContents.send("update-progress", progress);
   });
   autoUpdater.on("update-downloaded", (info) => {
+    // Renderer banner — visible only when a window is open. Backed up by
+    // the next three signals so tray-only users never miss the update.
     getMainWindow()?.webContents.send("update-downloaded", info);
+
+    // Tray menu entry — surfaces "Restart and install" so users who keep
+    // the app tray-resident can apply the update without ever opening
+    // the renderer.
+    setTrayUpdateReady(info.version);
+
+    // Close-button semantics swap — the next X click will quit() instead
+    // of going to tray, letting autoInstallOnAppQuit actually fire. The
+    // alternative (autoInstallOnAppQuit waiting for a quit that never
+    // comes) is exactly why close-to-tray users sat on stale versions.
+    setUpdateDownloaded();
+
+    // Native Windows toast — fires once per update, even when the window
+    // is minimised to tray. Click invokes quitAndInstall directly.
+    try {
+      const notification = new Notification({
+        title: "HiChat! — Güncelleme Hazır",
+        body: `v${info.version} indirildi. Yeniden başlatmak için tıklayın.`,
+        icon: path.join(__dirname, "../icons/hlogo.png"),
+      });
+      notification.on("click", () => {
+        autoUpdater.quitAndInstall(true, true);
+      });
+      notification.show();
+    } catch (err) {
+      // OS denied notifications, or running without a desktop session —
+      // tray entry + renderer banner still cover the path.
+      console.warn("[auto-updater] notification failed:", err);
+    }
   });
   autoUpdater.on("error", (err) => {
     getMainWindow()?.webContents.send("update-error", err.message);

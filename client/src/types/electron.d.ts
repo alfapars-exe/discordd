@@ -148,7 +148,7 @@ interface ElectronAPI {
 
   onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => void;
   onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => void;
-  onUpdateDownloaded: (cb: () => void) => void;
+  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => void;
   onUpdateError: (cb: (message: string) => void) => void;
 }
 
