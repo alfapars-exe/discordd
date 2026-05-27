@@ -103,7 +103,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService)
+	memberService.SetPermInvalidator(channelPermService)
 	roleService := services.NewRoleService(repos.Role, repos.User, hub)
+	roleService.SetPermInvalidator(channelPermService)
 	serverService := services.NewServerService(
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, inviteService, hub, encryptionKey,

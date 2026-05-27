@@ -157,14 +157,9 @@ func main() {
 	svcs.Server.SetAuditLogger(svcs.AuditLog)
 	svcs.Message.SetAuditLogger(svcs.AuditLog)
 
-	// 9c-bis. Wire the channel-permission cache invalidator into the
-	// services whose mutations can change resolved permissions. Without
-	// this, a revoked role or kicked member keeps their cached
-	// permissions for up to permCacheTTL (30s). The invalidator type is
-	// the small ISP interface (`services.PermissionInvalidator`)
-	// implemented by the full ChannelPermissionService.
-	svcs.Role.SetPermInvalidator(svcs.ChannelPermission)
-	svcs.Member.SetPermInvalidator(svcs.ChannelPermission)
+	// (SetPermInvalidator wiring moved into initServices — single
+	// source of truth for service-to-service dependency setup; main.go
+	// only owns app-level concerns now.)
 
 	// 9d. Wire the member-timeout checker into voice. messageService
 	// gets the timeout repo via its constructor; voiceService uses a

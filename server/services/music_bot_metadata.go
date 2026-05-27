@@ -27,9 +27,13 @@ import (
 //	--ignore-errors     tolerate single-video failures inside a playlist
 //
 // 30s context timeout — playlist resolution can be slow but never minutes.
-func extractTracks(parent context.Context, url, requesterID, requesterName string) ([]models.MusicTrack, error) {
+func extractTracks(parent context.Context, urlStr, requesterID, requesterName string) ([]models.MusicTrack, error) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
+
+	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
+		return nil, fmt.Errorf("invalid URL scheme: only http and https are allowed")
+	}
 
 	// `--` terminates yt-dlp's option parsing. Without it, a caller-supplied
 	// `url` like `--exec "wget ..."` would be interpreted as a yt-dlp flag

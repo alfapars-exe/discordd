@@ -346,9 +346,13 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
 
   addDecryptionError: (error: DecryptionError) => {
     set((state) => {
-      const updated = [...state.decryptionErrors, error];
-      // Cap at 500 entries to prevent memory leak
-      return { decryptionErrors: updated.length > 500 ? updated.slice(-500) : updated };
+      const currentErrors = state.decryptionErrors;
+      if (currentErrors.length >= 500) {
+        const nextErrors = currentErrors.slice(1);
+        nextErrors.push(error);
+        return { decryptionErrors: nextErrors };
+      }
+      return { decryptionErrors: [...currentErrors, error] };
     });
   },
 
