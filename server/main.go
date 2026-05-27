@@ -435,6 +435,40 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 			log.Fatalf("[main] failed to seed platform livekit instance: %v", createErr)
 		}
 		log.Printf("[main] seeded platform LiveKit instance (url=%s, id=%s)", cfg.LiveKit.URL, platformInstance.ID)
+	} else {
+		// Instance already exists. Keep its stored (encrypted) credentials in
+		// sync with the env triplet so rotating LIVEKIT_URL/KEY/SECRET and
+		// restarting actually updates the key the voice-token signer uses.
+		// Without this, the DB keeps the original seed credentials forever and
+		// an env rotation silently has no effect (the 2026-05-27 voice outage).
+		changed := false
+		if platformInstance.URL != cfg.LiveKit.URL {
+			platformInstance.URL = cfg.LiveKit.URL
+			changed = true
+		}
+		if cur, err := crypto.Decrypt(platformInstance.APIKey, encryptionKey); err != nil || cur != cfg.LiveKit.APIKey {
+			if enc, encErr := crypto.Encrypt(cfg.LiveKit.APIKey, encryptionKey); encErr != nil {
+				log.Printf("[main] warning: failed to encrypt rotated platform livekit key: %v", encErr)
+			} else {
+				platformInstance.APIKey = enc
+				changed = true
+			}
+		}
+		if cur, err := crypto.Decrypt(platformInstance.APISecret, encryptionKey); err != nil || cur != cfg.LiveKit.APISecret {
+			if enc, encErr := crypto.Encrypt(cfg.LiveKit.APISecret, encryptionKey); encErr != nil {
+				log.Printf("[main] warning: failed to encrypt rotated platform livekit secret: %v", encErr)
+			} else {
+				platformInstance.APISecret = enc
+				changed = true
+			}
+		}
+		if changed {
+			if updErr := repos.LiveKit.Update(ctx, platformInstance); updErr != nil {
+				log.Printf("[main] warning: failed to sync platform livekit credentials from env: %v", updErr)
+			} else {
+				log.Printf("[main] synced platform LiveKit credentials from env (id=%s)", platformInstance.ID)
+			}
+		}
 	}
 
 	result, linkErr := db.Conn.ExecContext(ctx,
