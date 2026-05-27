@@ -33,13 +33,19 @@ func hashRefreshToken(token string) string {
 }
 
 func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session) error {
-	// We persist only the hash. The plaintext `refresh_token` column is
-	// kept NULL for new rows; once all live deployments have migrated
-	// past 067 the column itself will be dropped in a follow-up.
+	// We persist only the hash. The legacy `refresh_token` column is
+	// declared NOT NULL in migration 001, so we can't write SQL NULL
+	// here — we'd trip "NOT NULL constraint failed: sessions.refresh_token"
+	// on every login. Writing an empty string satisfies the constraint
+	// and the column itself becomes dead data (no code path reads it
+	// any more — lookups go through refresh_token_hash). A follow-up
+	// migration will rebuild the table to drop the column outright,
+	// but that requires a row-by-row copy + rename and is sequenced
+	// after every live deployment has rolled past 067.
 	hash := hashRefreshToken(session.RefreshToken)
 	query := `
 		INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at)
-		VALUES (lower(hex(randomblob(8))), ?, ?, NULL, ?)
+		VALUES (lower(hex(randomblob(8))), ?, ?, '', ?)
 		RETURNING id, created_at`
 
 	err := r.db.QueryRowContext(ctx, query,
