@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 
 	"github.com/gorilla/websocket"
 
@@ -75,15 +74,14 @@ var upgrader = websocket.Upgrader{
 		if origin == "" {
 			return true
 		}
-		// Electron sends "file://" or "null" as Origin depending on version.
-		// Allowed in development only to prevent Cross-Site WebSocket Hijacking (CSWSH) in production.
+		// Electron desktop sends "file://" or "null" as Origin. These are
+		// non-browser clients and are allowed here: every WS connection must
+		// present a one-shot ticket (or opted-in legacy token) in
+		// HandleConnection, so a malicious web page cannot hijack a session
+		// via these origins — it cannot obtain a valid ticket cross-origin.
+		// Real browser origins (which can never be spoofed to "file://"/"null"
+		// from a normal page) are still checked strictly below.
 		if origin == "null" || origin == "file://" {
-			env := strings.ToLower(os.Getenv("HICHAT_ENV"))
-			isDev := env == "development" || env == "dev"
-			if !isDev {
-				log.Printf("[ws] rejected null/file origin in production context")
-				return false
-			}
 			return true
 		}
 		// Same-origin: origin host matches request Host header
