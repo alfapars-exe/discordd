@@ -34,23 +34,26 @@ func hashRefreshToken(token string) string {
 
 func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session) error {
 	// We persist only the hash. The legacy `refresh_token` column is
-	// declared NOT NULL in migration 001, so we can't write SQL NULL
-	// here — we'd trip "NOT NULL constraint failed: sessions.refresh_token"
-	// on every login. Writing an empty string satisfies the constraint
-	// and the column itself becomes dead data (no code path reads it
-	// any more — lookups go through refresh_token_hash). A follow-up
-	// migration will rebuild the table to drop the column outright,
-	// but that requires a row-by-row copy + rename and is sequenced
-	// after every live deployment has rolled past 067.
+	// declared NOT NULL **and** UNIQUE in migration 001, so we can't
+	// write SQL NULL here, and we can't write a shared sentinel ('' or
+	// 'deprecated') either — the second login would trip the UNIQUE
+	// constraint. Bind the same hash into both columns: it satisfies
+	// NOT NULL, satisfies UNIQUE (SHA-256 of a 32-byte random token
+	// collides with probability ~1/2^128), and the legacy column
+	// stays dead data because every lookup goes through
+	// refresh_token_hash. A follow-up migration will rebuild the
+	// table to drop the column outright once every live deployment
+	// has rolled past 067.
 	hash := hashRefreshToken(session.RefreshToken)
 	query := `
 		INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at)
-		VALUES (lower(hex(randomblob(8))), ?, ?, '', ?)
+		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?)
 		RETURNING id, created_at`
 
 	err := r.db.QueryRowContext(ctx, query,
 		session.UserID,
 		hash,
+		hash, // legacy NOT NULL + UNIQUE column — reuse hash for uniqueness
 		session.ExpiresAt,
 	).Scan(&session.ID, &session.CreatedAt)
 
