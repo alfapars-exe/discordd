@@ -497,6 +497,11 @@ function ChannelSettings() {
  * pattern the category dropdown above uses. PATCH /channels/{id} with the
  * single `bitrate` field; failure shows a toast and rolls the UI back to the
  * server-confirmed value on next channel store sync.
+ *
+ * Takes effect on next reconnect: VoiceProvider captures the bitrate at
+ * the moment LiveKit publishes the mic. Changing the slider while users
+ * are already in the channel doesn't re-encode their stream; the new
+ * value applies the next time anyone joins.
  */
 function ChannelBitrateRow({ channel }: { channel: Channel }) {
   const { t } = useTranslation("channels");
@@ -506,8 +511,10 @@ function ChannelBitrateRow({ channel }: { channel: Channel }) {
   // Local controlled value. Remount-on-id-change (caller passes
   // `key={channel.id}`) re-initialises this from the new channel's
   // bitrate, so we don't need a sync useEffect that the lint would
-  // flag as set-state-in-effect.
-  const [value, setValue] = useState(channel.bitrate ?? 64000);
+  // flag as set-state-in-effect. Fallback (384000) matches the
+  // platform-wide default in channel_service.go and the resolver
+  // fallback in VoiceProvider.
+  const [value, setValue] = useState(channel.bitrate ?? 384000);
 
   const presets = [8000, 64000, 96000, 128000, 256000, 384000];
 
@@ -519,7 +526,7 @@ function ChannelBitrateRow({ channel }: { channel: Channel }) {
     });
     setPending(false);
     if (!res.success) {
-      setValue(channel.bitrate ?? 64000);
+      setValue(channel.bitrate ?? 384000);
       addToast("error", t("channelUpdateError"));
     }
   }
@@ -556,7 +563,7 @@ function ChannelBitrateRow({ channel }: { channel: Channel }) {
       <div className="vs-desc" style={{ marginTop: 6 }}>
         {t("channelBitrateDesc", {
           defaultValue:
-            "Daha yüksek bitrate = daha net ses, daha fazla bant genişliği. 384 kbps stüdyo kalitesi.",
+            "Daha yüksek bitrate = daha net ses, daha fazla bant genişliği. 384 kbps stüdyo kalitesi. Değişiklik, kullanıcılar kanala bir sonraki bağlanışında geçerli olur.",
         })}
       </div>
     </div>
