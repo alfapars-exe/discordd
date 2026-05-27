@@ -32,6 +32,17 @@ function isInternalNavigation(target: string): boolean {
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
+/**
+ * Set to true by auto-updater when an installer has finished downloading.
+ * When this is true, close-to-tray is bypassed — clicking X behaves like
+ * "Quit" so app.quit() fires and `autoInstallOnAppQuit` actually installs
+ * the update. Without this, tray-only users (who never explicitly Quit)
+ * stayed forever on whatever version was installed when they first
+ * launched, because their main process never died and the
+ * autoInstallOnAppQuit branch never ran.
+ */
+let updateDownloaded = false;
+
 /** Read-only access for other modules that need to send IPC events. */
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
@@ -44,6 +55,16 @@ export function setQuitting(v: boolean): void {
 
 export function isQuittingNow(): boolean {
   return isQuitting;
+}
+
+/**
+ * Called by auto-updater when an installer is downloaded and waiting to
+ * apply. Changes close-button semantics so a tray-only user actually
+ * triggers app.quit() (and thus autoInstallOnAppQuit) instead of going
+ * to tray and staying there forever.
+ */
+export function setUpdateDownloaded(): void {
+  updateDownloaded = true;
 }
 
 let boundsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -191,8 +212,18 @@ export function createMainWindow(): BrowserWindow {
     }
   });
 
-  // Close-to-tray: hide instead of quit unless tray Quit was clicked
+  // Close-to-tray: hide instead of quit unless tray Quit was clicked.
+  //
+  // Exception: when an update installer is downloaded and waiting, bypass
+  // close-to-tray entirely so the close button actually quits the app —
+  // electron-updater's autoInstallOnAppQuit then fires on the way out and
+  // the user lands on the new version next launch. Without this branch,
+  // tray-only users never trigger app.quit() and updates pile up forever.
   mainWindow.on("close", (e) => {
+    if (updateDownloaded) {
+      setQuitting(true);
+      return;
+    }
     if (!isQuitting && getSettings().closeToTray) {
       e.preventDefault();
       mainWindow?.hide();

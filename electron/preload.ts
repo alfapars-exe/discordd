@@ -258,9 +258,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update-progress", (_e, progress) => cb(progress));
   },
 
-  /** Download completed */
-  onUpdateDownloaded: (cb: () => void): void => {
-    ipcRenderer.on("update-downloaded", () => cb());
+  /** Download completed — info carries `{ version, releaseNotes?, ... }` */
+  onUpdateDownloaded: (cb: (info: { version: string }) => void): void => {
+    ipcRenderer.on("update-downloaded", (_e, info) => cb(info));
   },
 
   /** Update error */
