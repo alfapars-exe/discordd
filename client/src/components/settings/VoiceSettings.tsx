@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import type { InputMode } from "../../stores/voiceStore";
-import type { NoiseReductionEngine, NoiseSuppressionLevel } from "../../stores/slices/voiceSettingsSlice";
+import type { NoiseReductionEngine } from "../../stores/slices/voiceSettingsSlice";
 import { isElectron } from "../../utils/constants";
 import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
 import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url";
@@ -85,7 +85,8 @@ function VoiceSettings() {
   const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
   const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
   const noiseSuppressionLevel = useVoiceStore((s) => s.noiseSuppressionLevel);
-  const setNoiseSuppressionLevel = useVoiceStore((s) => s.setNoiseSuppressionLevel);
+  const deepfilterSuppression = useVoiceStore((s) => s.deepfilterSuppression);
+  const setDeepfilterSuppression = useVoiceStore((s) => s.setDeepfilterSuppression);
   const screenShareShowCursor = useVoiceStore((s) => s.screenShareShowCursor);
   const setScreenShareShowCursor = useVoiceStore((s) => s.setScreenShareShowCursor);
 
@@ -567,48 +568,36 @@ function VoiceSettings() {
               <option value="deepfilter">{t("nrEngineDeepfilter")}</option>
               <option value="dtln">{t("nrEngineDtln")}</option>
               <option value="speex">{t("nrEngineSpeex")}</option>
-              <option value="dpdfnet">{t("nrEngineDpdfnet")}</option>
             </select>
           </div>
         )}
 
-        {/* Gürültü engelleme seviyesi — yalnızca DeepFilter ailesinde
-            (deepfilter / dtln / dpdfnet) anlamlı, çünkü o engine'lerde
-            level → suppression yüzdesi olarak doğrudan WASM model'e
-            geçiriliyor. RNNoise ve Speex'in built-in VAD'ı var ve eski
-            gate-tabanlı kullanım ses kesilmesine neden oluyordu — bu
-            yüzden onlar için kontrol gizleniyor. Krisp/WebRTC zaten
-            kendi NS'lerini kullanıyor, level'a duyarsız. */}
-        {noiseReduction &&
-          (noiseReductionEngine === "deepfilter" ||
-            noiseReductionEngine === "dtln" ||
-            noiseReductionEngine === "dpdfnet") && (
-          <div className="vs-toggle-row" style={{ marginTop: 12 }}>
+        {/* DeepFilterNet3 suppression slider — only meaningful when DeepFilter
+            is the active engine, since it's the engine whose ML model has a
+            live-tunable strength dial (setSuppressionLevel 0-100). Other
+            engines (RNNoise, DTLN, Krisp, WebRTC, Speex) either have a
+            built-in fixed strength or expose no equivalent runtime knob. */}
+        {noiseReduction && noiseReductionEngine === "deepfilter" && (
+          <div className="vs-section" style={{ marginTop: 12 }}>
             <div>
-              <div className="vs-label">{t("noiseSuppressionLevel")}</div>
-              <div className="vs-desc">{t("noiseSuppressionLevelDesc")}</div>
+              <div className="vs-label">{t("deepfilterSuppressionLabel")}</div>
+              <div className="vs-desc">{t("deepfilterSuppressionDesc")}</div>
             </div>
-            <select
-              value={noiseSuppressionLevel}
-              onChange={(e) =>
-                setNoiseSuppressionLevel(e.target.value as NoiseSuppressionLevel)
-              }
-              style={{
-                background: "var(--input-bg)",
-                color: "var(--t0)",
-                border: "1px solid var(--panel-border)",
-                borderRadius: 6,
-                padding: "6px 10px",
-                minWidth: 200,
-                fontSize: 14,
-                cursor: "pointer",
-              }}
-            >
-              <option value="low">{t("nrLevelLow")}</option>
-              <option value="medium">{t("nrLevelMedium")}</option>
-              <option value="high">{t("nrLevelHigh")}</option>
-              <option value="maximum">{t("nrLevelMaximum")}</option>
-            </select>
+            <div className="vs-slider-row" style={{ marginTop: 8 }}>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={deepfilterSuppression}
+                onChange={(e) =>
+                  setDeepfilterSuppression(Number(e.target.value))
+                }
+                className="vs-range"
+                aria-label={t("deepfilterSuppressionLabel")}
+              />
+              <span className="vs-slider-value">{deepfilterSuppression}%</span>
+            </div>
           </div>
         )}
       </div>

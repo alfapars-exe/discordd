@@ -9,10 +9,14 @@
  *     - "krisp"      — LiveKit Cloud's Krisp filter, lazy-imported.
  *                      Requires a paid plan; falls back to RNNoise.
  *     - "rnnoise"    — bundled OSS ML denoiser (default, free).
- *     - "deepfilter" — DeepFilterNet3 WASM. BETA: real WASM integration
- *                      pending; current build falls back to RNNoise and
- *                      surfaces a toast so the user knows.
- *     - "dtln"       — DTLN web port. BETA: same fallback contract.
+ *     - "deepfilter" — DeepFilterNet3 (Rikorose) running native at 48 kHz
+ *                      via the deepfilternet3-noise-filter package.
+ *                      Real WASM + ONNX inference; suppression level is
+ *                      live-tunable through setSuppressionLevel(0-100).
+ *     - "dtln"       — DTLN (Dual-signal Transformation LSTM Network,
+ *                      Westhausen 2020) via @sapphi-red/dtln-web. Runs at
+ *                      16 kHz in a dedicated AudioContext; see DtlnProcessor.
+ *     - "speex"      — Speex DSP noise suppression WASM.
  *     - "vadgate"    — energy-gate only, used when NR is off but
  *                      micSensitivity < 100.
  *
@@ -43,7 +47,11 @@ import { useToastStore } from "../stores/toastStore";
 import { RNNoiseProcessor } from "../audio/RNNoiseProcessor";
 import { SpeexProcessor } from "../audio/SpeexProcessor";
 import { VadGateProcessor } from "../audio/VadGateProcessor";
-import { DeepFilterNoiseFilter, type DeepFilterNoiseFilterProcessor } from "deepfilternet3-noise-filter";
+import { DtlnProcessor } from "../audio/DtlnProcessor";
+import {
+  DeepFilterNoiseFilter,
+  DeepFilterNoiseFilterProcessor,
+} from "deepfilternet3-noise-filter";
 import type { NoiseSuppressionLevel, NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
 
 type ProcessorType =
@@ -52,21 +60,9 @@ type ProcessorType =
   | "deepfilter"
   | "dtln"
   | "speex"
-  | "dpdfnet"
   | "webrtc"
   | "vadgate"
   | "none";
-
-/** Engines whose real WASM/AudioWorklet integration is pending — empty because they are all fully functional now! */
-type BetaEngine = "deepfilter" | "dtln" | "speex" | "dpdfnet";
-
-/** Pretty label for the beta-fallback toast. */
-const BETA_LABELS: Record<BetaEngine, string> = {
-  deepfilter: "DeepFilterNet3",
-  dtln: "DTLN",
-  speex: "SpeexDSP",
-  dpdfnet: "DPDFNet",
-};
 
 /**
  * Sentinel object used as the processor ref when WebRTC native NS is
@@ -84,6 +80,7 @@ type AudioProcessor =
   | RNNoiseProcessor
   | SpeexProcessor
   | VadGateProcessor
+  | DtlnProcessor
   | DeepFilterNoiseFilterProcessor
   | { name: string };
 
@@ -98,7 +95,6 @@ function getDesiredProcessor(
     if (engine === "speex") return "speex";
     if (engine === "deepfilter") return "deepfilter";
     if (engine === "dtln") return "dtln";
-    if (engine === "dpdfnet") return "dpdfnet";
     return "rnnoise";
   }
   if (sens < 100) return "vadgate";
@@ -110,12 +106,9 @@ function getCurrentProcessorType(processor: AudioProcessor | null): ProcessorTyp
   if (processor instanceof RNNoiseProcessor) return "rnnoise";
   if (processor instanceof SpeexProcessor) return "speex";
   if (processor instanceof VadGateProcessor) return "vadgate";
+  if (processor instanceof DtlnProcessor) return "dtln";
+  if (processor instanceof DeepFilterNoiseFilterProcessor) return "deepfilter";
   if (processor === WEBRTC_SENTINEL) return "webrtc";
-  if (typeof processor === "object" && processor !== null && "name" in processor) {
-    if (processor.name === "deepfilternet3-noise-filter") return "deepfilter";
-    if (processor.name === "deepfilternet3-noise-filter-dtln") return "dtln";
-    if (processor.name === "deepfilternet3-noise-filter-dpdfnet") return "dpdfnet";
-  }
   return "krisp";
 }
 
@@ -139,16 +132,6 @@ async function setBrowserNoiseSuppression(
   }
 }
 
-function noiseSuppressionLevelToPercentage(level: NoiseSuppressionLevel): number {
-  switch (level) {
-    case "low": return 40;
-    case "medium": return 70;
-    case "high": return 90;
-    case "maximum": return 100;
-    default: return 70;
-  }
-}
-
 /**
  * Single source of truth for "create the processor of type X and attach it
  * to the track". Used by both the runtime switch effect and the on-publish
@@ -163,10 +146,12 @@ async function applyDesiredProcessor(
   sens: number,
   vol: number,
   level: NoiseSuppressionLevel,
+  deepfilterSuppression: number,
   hooks: {
     isCancelled: () => boolean;
     onKrispFallback: () => void;
-    onBetaFallback: (engine: BetaEngine) => void;
+    onDeepFilterFallback: () => void;
+    onDtlnFallback: () => void;
     onRnnoiseFallback: () => void;
   },
 ): Promise<AudioProcessor | null> {
@@ -224,25 +209,35 @@ async function applyDesiredProcessor(
     }
   }
 
-  if (desired === "deepfilter" || desired === "dtln" || desired === "dpdfnet") {
+  if (desired === "deepfilter") {
     await setBrowserNoiseSuppression(audioTrack, false);
     try {
       const proc = DeepFilterNoiseFilter({
         sampleRate: 48000,
-        noiseReductionLevel: noiseSuppressionLevelToPercentage(level),
-        enabled: true
+        noiseReductionLevel: deepfilterSuppression,
+        enabled: true,
       });
-      // Tag the name to let getCurrentProcessorType recognise mapped engines
-      if (desired === "dtln") {
-        proc.name = "deepfilternet3-noise-filter-dtln";
-      } else if (desired === "dpdfnet") {
-        proc.name = "deepfilternet3-noise-filter-dpdfnet";
-      }
       await audioTrack.setProcessor(proc);
       return proc;
     } catch (err) {
       console.warn("[useAudioProcessor] DeepFilterNet3 init failed, falling back to RNNoise:", err);
-      hooks.onBetaFallback("deepfilter");
+      hooks.onDeepFilterFallback();
+      if (hooks.isCancelled()) return null;
+      const fallback = new RNNoiseProcessor(sens, vol, level);
+      await audioTrack.setProcessor(fallback);
+      return fallback;
+    }
+  }
+
+  if (desired === "dtln") {
+    await setBrowserNoiseSuppression(audioTrack, false);
+    try {
+      const proc = new DtlnProcessor(sens, vol);
+      await audioTrack.setProcessor(proc);
+      return proc;
+    } catch (err) {
+      console.warn("[useAudioProcessor] DTLN init failed, falling back to RNNoise:", err);
+      hooks.onDtlnFallback();
       if (hooks.isCancelled()) return null;
       const fallback = new RNNoiseProcessor(sens, vol, level);
       await audioTrack.setProcessor(fallback);
@@ -284,6 +279,7 @@ export function useAudioProcessor(
   const micSensitivity = useVoiceStore((s) => s.micSensitivity);
   const inputVolume = useVoiceStore((s) => s.inputVolume);
   const noiseSuppressionLevel = useVoiceStore((s) => s.noiseSuppressionLevel);
+  const deepfilterSuppression = useVoiceStore((s) => s.deepfilterSuppression);
   const addToast = useToastStore((s) => s.addToast);
 
   // The currently attached processor, or null if "none".
@@ -298,12 +294,14 @@ export function useAudioProcessor(
   const micSensitivityRef = useRef(micSensitivity);
   const inputVolumeRef = useRef(inputVolume);
   const noiseSuppressionLevelRef = useRef(noiseSuppressionLevel);
+  const deepfilterSuppressionRef = useRef(deepfilterSuppression);
   useLayoutEffect(() => {
     noiseReductionRef.current = noiseReduction;
     noiseReductionEngineRef.current = noiseReductionEngine;
     micSensitivityRef.current = micSensitivity;
     inputVolumeRef.current = inputVolume;
     noiseSuppressionLevelRef.current = noiseSuppressionLevel;
+    deepfilterSuppressionRef.current = deepfilterSuppression;
   });
 
   // Effect A: switch processor when settings change at runtime.
@@ -318,16 +316,18 @@ export function useAudioProcessor(
     const current = getCurrentProcessorType(processorRef.current);
 
     if (desired === current) {
-      // Same processor type — push the new sensitivity / volume / level
-      // into the live processor instance. RNNoise and Speex no longer carry
-      // a downstream VAD gate (caused silence at high levels), so only
-      // input volume is meaningful for them; gate retune is exclusive to
-      // VadGateProcessor (gate-only mode when NR is off).
+      // Same processor type — push live setting updates into the existing
+      // processor instance instead of rebuilding the graph. Routing per
+      // engine:
+      //   - DeepFilter: setSuppressionLevel (0-100) is live-tunable.
+      //   - DTLN: model strength is fixed, only volume cached.
+      //   - VadGateProcessor: full sens/vol/level retune (gate-only mode).
+      //   - RNNoise/Speex: only inputVolume — gate removed in v2.11.80.
       const ref = processorRef.current;
-      if (desired === "deepfilter" || desired === "dtln" || desired === "dpdfnet") {
-        if (ref && typeof ref === "object" && "setSuppressionLevel" in ref) {
-          (ref as any).setSuppressionLevel(noiseSuppressionLevelToPercentage(noiseSuppressionLevel));
-        }
+      if (ref instanceof DeepFilterNoiseFilterProcessor) {
+        ref.setSuppressionLevel(deepfilterSuppression);
+      } else if (ref instanceof DtlnProcessor) {
+        ref.setInputVolume(inputVolume);
       } else if (ref instanceof VadGateProcessor) {
         ref.setMicSensitivity(micSensitivity);
         ref.setInputVolume(inputVolume);
@@ -347,15 +347,19 @@ export function useAudioProcessor(
       }
       if (cancelled) return;
 
-      const proc = await applyDesiredProcessor(audioTrack, desired, micSensitivity, inputVolume, noiseSuppressionLevel, {
+      const proc = await applyDesiredProcessor(audioTrack, desired, micSensitivity, inputVolume, noiseSuppressionLevel, deepfilterSuppression, {
         isCancelled: () => cancelled,
         onKrispFallback: () => {
           addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
           setNoiseReductionEngine("rnnoise");
         },
-        onBetaFallback: (engine) => {
-          const label = engine === "deepfilter" ? "DeepFilterNet3" : "DTLN";
-          addToast("info", `${label} (Beta) — şimdilik RNNoise ile çalışıyor.`);
+        onDeepFilterFallback: () => {
+          addToast("warning", "DeepFilterNet3 yüklenemedi, RNNoise'a geçildi.");
+          setNoiseReductionEngine("rnnoise");
+        },
+        onDtlnFallback: () => {
+          addToast("warning", "DTLN yüklenemedi, RNNoise'a geçildi.");
+          setNoiseReductionEngine("rnnoise");
         },
         onRnnoiseFallback: () => {
           addToast("warning", "RNNoise yüklenemedi, tarayıcı gürültü azaltmasına geçildi.");
@@ -379,6 +383,7 @@ export function useAudioProcessor(
     micSensitivity,
     inputVolume,
     noiseSuppressionLevel,
+    deepfilterSuppression,
     localParticipant,
     addToast,
     setNoiseReductionEngine,
@@ -412,14 +417,20 @@ export function useAudioProcessor(
           micSensitivityRef.current,
           inputVolumeRef.current,
           noiseSuppressionLevelRef.current,
+          deepfilterSuppressionRef.current,
           {
             isCancelled: () => cancelled,
             onKrispFallback: () => {
               addToast("warning", "Krisp etkin değil, RNNoise'a geçildi.");
               setNoiseReductionEngine("rnnoise");
             },
-            onBetaFallback: (engine: BetaEngine) => {
-              addToast("info", `${BETA_LABELS[engine]} (Beta) — şimdilik RNNoise ile çalışıyor.`);
+            onDeepFilterFallback: () => {
+              addToast("warning", "DeepFilterNet3 yüklenemedi, RNNoise'a geçildi.");
+              setNoiseReductionEngine("rnnoise");
+            },
+            onDtlnFallback: () => {
+              addToast("warning", "DTLN yüklenemedi, RNNoise'a geçildi.");
+              setNoiseReductionEngine("rnnoise");
             },
             onRnnoiseFallback: () => {
               addToast("warning", "RNNoise yüklenemedi, tarayıcı gürültü azaltmasına geçildi.");
