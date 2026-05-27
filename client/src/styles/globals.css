@@ -166,6 +166,27 @@ body { font-family:var(--f-ui); font-weight:500; -webkit-font-smoothing:antialia
 button { font-family:inherit; }
 .mono { font-family:var(--f-m); }
 
+/* ═══════════════════════════════════════
+   NATIVE SELECT / OPTION CONTRAST FIX
+   ───────────────────────────────────────
+   Windows + Chrome/Edge render <option> using OS-default colors
+   (light text on near-white bg) regardless of parent color-scheme,
+   because the dropdown popup is a native OS widget. Forcing
+   color + background here makes the open-state list readable in
+   every native <select> across the app — works in both dark and
+   light themes because we use theme-tracked CSS vars. */
+select option {
+  background-color:var(--bg-2);
+  color:var(--t0);
+  padding:6px 8px;
+}
+select option:checked {
+  background-color:var(--primary-s);
+  color:var(--t0);
+  font-weight:600;
+}
+select option:disabled { color:var(--t3); }
+
 /* Theme transition — added by applyTheme(), removed after 400ms to avoid slowing hover/focus */
 .theme-transitioning *,.theme-transitioning *::before,.theme-transitioning *::after {
   transition:background-color .35s ease, color .35s ease, border-color .35s ease, fill .35s ease, stroke .35s ease !important;
