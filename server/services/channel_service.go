@@ -211,7 +211,12 @@ func (s *channelService) Create(ctx context.Context, serverID, actorID string, r
 		channel.Topic = &req.Topic
 	}
 	if channel.Type == models.ChannelTypeVoice {
-		channel.Bitrate = 64000
+		// Default to the validation ceiling so newly-created voice channels
+		// inherit the platform-wide hi-fi behavior. The DB column DEFAULT
+		// (64000, set in 001_init.sql) is never reached because this branch
+		// always assigns explicitly — see migration 068 for the matching
+		// backfill of pre-existing rows.
+		channel.Bitrate = 384000
 	}
 
 	if err := s.channelRepo.Create(ctx, channel); err != nil {

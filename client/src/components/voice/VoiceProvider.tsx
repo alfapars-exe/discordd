@@ -24,24 +24,18 @@ import StreamerPipPreview from "./StreamerPipPreview";
 import type { AudioCaptureOptions, AudioPreset, RoomOptions } from "livekit-client";
 
 /**
- * Hard-coded high-fidelity Opus encode for the user mic.
- *
- * 384 kbps is the upper bound the channel model already documents
- * ([models/channel.go:86-89](server/models/channel.go:86)) — the Opus
- * codec publishes cleanly at this rate and the ear stops noticing
- * improvements past ~128 kbps, but the user explicitly asked for the
- * maximum. Bandwidth budget per active speaker: ~768 kbps bidirectional
- * stereo, which sits comfortably inside any modern broadband uplink
- * (and well within the self-hosted SFU's per-publisher quota).
- *
- * A follow-up could wire this to the per-channel `bitrate` column
- * already exposed on UpdateChannelRequest — for now the slider in the
- * channel-settings UI persists the value but the publish path uses
- * this constant.
+ * Default Opus bitrate when the active voice channel can't be resolved
+ * from the channel store (cross-server view, store not yet hydrated,
+ * channel record missing a value). 384 kbps matches the system-wide
+ * default in [channel_service.go](server/services/channel_service.go)
+ * and the historical hard-coded value — picking it as the fallback
+ * keeps the audible experience identical for anyone who hasn't moved
+ * the per-channel slider.
  */
-const HIFI_VOICE_PRESET: AudioPreset = { maxBitrate: 384_000 };
+const DEFAULT_VOICE_BITRATE = 384_000;
 
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useChannelStore } from "../../stores/channelStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useTranslation } from "react-i18next";
 import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
@@ -62,6 +56,27 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const livekitToken = useVoiceStore((s) => s.livekitToken);
   const e2eePassphrase = useVoiceStore((s) => s.e2eePassphrase);
   const inputDevice = useVoiceStore((s) => s.inputDevice);
+  const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
+
+  // Per-channel Opus bitrate (Track T1). Resolved from the channel store
+  // at the moment LiveKit captures publishDefaults — LiveKit doesn't
+  // re-publish on later option changes, so subsequent slider edits only
+  // take effect on the next reconnect (Discord matches this behavior).
+  //
+  // The selector returns DEFAULT_VOICE_BITRATE when the channel isn't in
+  // the store. This covers two cases that would otherwise flap the value:
+  //   1. The user switched server view while staying in voice — the
+  //      voice channel's parent server is no longer the active one.
+  //   2. The channel record is hydrated but bitrate is 0 / nullish.
+  // Both situations preserve the pre-existing 384 kbps behavior.
+  const voiceBitrate = useChannelStore((s) => {
+    if (!currentVoiceChannelId) return DEFAULT_VOICE_BITRATE;
+    for (const group of s.categories) {
+      const ch = group.channels.find((c) => c.id === currentVoiceChannelId);
+      if (ch) return ch.bitrate || DEFAULT_VOICE_BITRATE;
+    }
+    return DEFAULT_VOICE_BITRATE;
+  });
 
   const isInVoice = !!livekitUrl && !!livekitToken;
 
@@ -123,6 +138,13 @@ function VoiceProvider({ children }: VoiceProviderProps) {
 
   const publishDefaults = useScreenSharePublishDefaults();
 
+  // Stable AudioPreset reference — recomputes only when the resolved
+  // bitrate changes. LiveKit applies this on first audio publish.
+  const voiceAudioPreset: AudioPreset = useMemo(
+    () => ({ maxBitrate: voiceBitrate }),
+    [voiceBitrate],
+  );
+
   const roomOptions: RoomOptions | undefined = useMemo(() => {
     if (!isConnected) return undefined;
 
@@ -130,11 +152,10 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       audioCaptureDefaults,
       publishDefaults: {
         ...publishDefaults,
-        // Top-of-range hi-fi voice (384 kbps Opus). See HIFI_VOICE_PRESET
-        // above for the rationale + bandwidth math. Previously this was
-        // AudioPresets.musicHighQuality (~64 kbps) which the user found
-        // too compressed for music sessions.
-        audioPreset: HIFI_VOICE_PRESET,
+        // Per-channel Opus bitrate from the slider (8–384 kbps). Falls
+        // back to 384 kbps when the channel record isn't available —
+        // see voiceBitrate resolver above for the rationale.
+        audioPreset: voiceAudioPreset,
       },
       webAudioMix: true,
       // adaptiveStream: SFU sends the lower simulcast layer when a
@@ -154,7 +175,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     }
 
     return base;
-  }, [isConnected, audioCaptureDefaults, publishDefaults, e2eePassphrase, keyProvider, e2eeWorker]);
+  }, [isConnected, audioCaptureDefaults, publishDefaults, voiceAudioPreset, e2eePassphrase, keyProvider, e2eeWorker]);
 
   return (
     <LiveKitRoom

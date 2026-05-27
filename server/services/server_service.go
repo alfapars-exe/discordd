@@ -257,7 +257,10 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 			Type:       models.ChannelTypeVoice,
 			CategoryID: &voiceCategory.ID,
 			Position:   0,
-			Bitrate:    64000,
+			// Match the system-wide default in channel_service.Create —
+			// hi-fi Opus out of the box. See migration 068 for backfill of
+			// pre-existing servers' voice channels.
+			Bitrate: 384000,
 		}
 		if err := txChannelRepo.Create(ctx, voiceChannel); err != nil {
 			return fmt.Errorf("failed to create default voice channel: %w", err)
