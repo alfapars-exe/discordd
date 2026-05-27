@@ -318,21 +318,22 @@ export function useAudioProcessor(
     const current = getCurrentProcessorType(processorRef.current);
 
     if (desired === current) {
-      // Same processor type — just push the new sensitivity / volume / level
-      // into the live processor instance (the JS-bound ones support it).
+      // Same processor type — push the new sensitivity / volume / level
+      // into the live processor instance. RNNoise and Speex no longer carry
+      // a downstream VAD gate (caused silence at high levels), so only
+      // input volume is meaningful for them; gate retune is exclusive to
+      // VadGateProcessor (gate-only mode when NR is off).
       const ref = processorRef.current;
       if (desired === "deepfilter" || desired === "dtln" || desired === "dpdfnet") {
         if (ref && typeof ref === "object" && "setSuppressionLevel" in ref) {
           (ref as any).setSuppressionLevel(noiseSuppressionLevelToPercentage(noiseSuppressionLevel));
         }
-      } else if (
-        desired !== "none" &&
-        desired !== "krisp" &&
-        (ref instanceof RNNoiseProcessor || ref instanceof SpeexProcessor || ref instanceof VadGateProcessor)
-      ) {
+      } else if (ref instanceof VadGateProcessor) {
         ref.setMicSensitivity(micSensitivity);
         ref.setInputVolume(inputVolume);
         ref.setNoiseSuppressionLevel(noiseSuppressionLevel);
+      } else if (ref instanceof RNNoiseProcessor || ref instanceof SpeexProcessor) {
+        ref.setInputVolume(inputVolume);
       }
       return;
     }

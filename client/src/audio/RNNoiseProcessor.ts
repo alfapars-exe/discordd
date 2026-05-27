@@ -1,23 +1,22 @@
 /**
- * RNNoiseProcessor — RNNoise WASM noise suppression + VAD gate TrackProcessor.
+ * RNNoiseProcessor — RNNoise WASM noise suppression TrackProcessor.
  *
  * Implements LiveKit's TrackProcessor<Track.Kind.Audio>.
  * Uses @sapphi-red/web-noise-suppressor for RNNoise WASM + AudioWorklet
  * to suppress mic noise (breath, keyboard, fan, AC).
  *
  * Audio pipeline:
- *   Mic Track -> MediaStreamSource -> RnnoiseWorkletNode -> VadGateNode -> MediaStreamDestination
- *                                          |                    |
- *                                     RNNoise WASM        Energy-based gate
- *                                 (ML-based denoising)    (controlled by micSensitivity)
+ *   Mic Track -> MediaStreamSource -> GainNode -> RnnoiseWorkletNode -> MediaStreamDestination
+ *                                                       |
+ *                                                  RNNoise WASM
+ *                                              (ML-based denoising +
+ *                                               built-in VAD suppression)
  *
- * VAD Gate: measures RMS energy after RNNoise. If below threshold (no speech),
- * outputs silence. Attack (~5ms) and release (~200ms) prevent clipping.
- *
- * micSensitivity (0-100) mapping:
- * - 100 = most sensitive (gate disabled, everything passes)
- * - 50 = moderate (breath cut, speech passes)
- * - 0 = most aggressive (only clear speech passes)
+ * RNNoise has its own ML-based VAD that suppresses non-speech frames natively.
+ * An additional energy-gate would double-gate the signal and silence quiet
+ * talkers (root cause of the "Gürültü Azaltma açınca sesim gitmiyor" bug).
+ * Gate-only behaviour is still available through VadGateProcessor when
+ * noise reduction is disabled but sensitivity < 100.
  *
  * Lifecycle: init() -> restart() -> destroy()
  * Used via LocalAudioTrack.setProcessor(new RNNoiseProcessor()).
@@ -27,9 +26,8 @@ import { Track } from "livekit-client";
 import type { TrackProcessor, AudioProcessorOptions } from "livekit-client";
 import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
 import type { NoiseSuppressionLevel } from "../stores/slices/voiceSettingsSlice";
-import { postGateConfigToWorklet } from "./gateConfig";
 
-// Re-export so existing imports (e.g. VadGateProcessor) keep resolving;
+// Re-export so legacy imports (e.g. VadGateProcessor) keep resolving;
 // the canonical home is now ./gateConfig.
 export { levelToThresholds } from "./gateConfig";
 
@@ -37,8 +35,6 @@ export { levelToThresholds } from "./gateConfig";
 import rnnoiseWorkletPath from "@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url";
 import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
-
-import vadGateWorkletPath from "./vadGateWorklet.js?url";
 
 /** WASM binary cache — shared across all processor instances (stateless). */
 let wasmBinaryPromise: Promise<ArrayBuffer> | null = null;
@@ -74,18 +70,15 @@ function ensureWorkletRegistered(ctx: AudioContext, name: string, url: string): 
 }
 
 /**
- * Converts micSensitivity (0-100) to RMS threshold using a quadratic curve.
- * Kept for the legacy single-threshold path; the live pipeline uses
- * levelToThresholds() below for hysteresis-aware dB-based gating.
+ * Legacy: converts micSensitivity (0-100) to RMS threshold using a quadratic
+ * curve. Kept exported for any external caller; the live RNNoise pipeline
+ * no longer uses it (RNNoise has built-in VAD).
  */
 export function sensitivityToThreshold(sensitivity: number): number {
   const clamped = Math.max(0, Math.min(100, sensitivity));
   const inverted = (100 - clamped) / 100;
   return 0.04 * inverted * inverted;
 }
-
-// Per-level threshold curve + level→worklet config helper now live in
-// ./gateConfig — re-exported above so legacy imports keep working.
 
 class RNNoiseProcessor
   implements TrackProcessor<Track.Kind.Audio, AudioProcessorOptions>
@@ -96,38 +89,31 @@ class RNNoiseProcessor
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private gainNode: GainNode | null = null;
   private rnnoiseNode: RnnoiseWorkletNode | null = null;
-  private vadGateNode: AudioWorkletNode | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
 
-  private initialSensitivity: number;
   private initialInputVolume: number;
-  private initialLevel: NoiseSuppressionLevel;
 
+  // Constructor signature kept for backwards compat with useAudioProcessor —
+  // micSensitivity and level are accepted but ignored (RNNoise's built-in
+  // VAD handles speech detection; an extra gate caused the silence bug).
   constructor(
-    micSensitivity = 50,
+    _micSensitivity = 50,
     inputVolume = 100,
-    level: NoiseSuppressionLevel = "medium",
+    _level: NoiseSuppressionLevel = "medium",
   ) {
-    this.initialSensitivity = micSensitivity;
     this.initialInputVolume = inputVolume;
-    this.initialLevel = level;
   }
 
   /**
    * Builds the audio processing graph.
-   * Called by LiveKit: LocalAudioTrack.setProcessor() -> init().
-   *
-   * Pipeline: source -> rnnoise -> vadGate -> destination
+   * Pipeline: source -> gain -> rnnoise -> destination
    */
   async init(opts: AudioProcessorOptions): Promise<void> {
     const { audioContext, track } = opts;
 
     const wasmBinary = await getWasmBinary();
 
-    await Promise.all([
-      ensureWorkletRegistered(audioContext, "rnnoise", rnnoiseWorkletPath),
-      ensureWorkletRegistered(audioContext, "vad-gate", vadGateWorkletPath),
-    ]);
+    await ensureWorkletRegistered(audioContext, "rnnoise", rnnoiseWorkletPath);
 
     const inputStream = new MediaStream([track]);
     this.sourceNode = audioContext.createMediaStreamSource(inputStream);
@@ -142,18 +128,11 @@ class RNNoiseProcessor
       maxChannels: 1,
     });
 
-    this.vadGateNode = new AudioWorkletNode(audioContext, "vad-gate-processor");
-    // Send hysteresis thresholds based on the chosen level + sensitivity slider.
-    // Level dictates the base curve, sensitivity offsets it ±6 dB; the worklet
-    // honours sensitivity=100 as "gate disabled" via a null payload.
-    this.applyGateConfig();
-
     this.destinationNode = audioContext.createMediaStreamDestination();
 
     this.sourceNode.connect(this.gainNode);
     this.gainNode.connect(this.rnnoiseNode);
-    this.rnnoiseNode.connect(this.vadGateNode);
-    this.vadGateNode.connect(this.destinationNode);
+    this.rnnoiseNode.connect(this.destinationNode);
 
     // LiveKit publishes this track instead of the original
     this.processedTrack = this.destinationNode.stream.getAudioTracks()[0];
@@ -165,16 +144,14 @@ class RNNoiseProcessor
     await this.init(opts);
   }
 
-  /** Updates the VAD gate threshold. Safe to call when processor is inactive. */
-  setMicSensitivity(sensitivity: number): void {
-    this.initialSensitivity = sensitivity;
-    this.applyGateConfig();
+  /** No-op — RNNoise has built-in VAD, sensitivity is honoured by gate-only mode. */
+  setMicSensitivity(_sensitivity: number): void {
+    // intentional no-op
   }
 
-  /** Updates the noise-suppression level (recomputes gate thresholds). */
-  setNoiseSuppressionLevel(level: NoiseSuppressionLevel): void {
-    this.initialLevel = level;
-    this.applyGateConfig();
+  /** No-op — RNNoise denoising strength is fixed; level no longer maps to a gate. */
+  setNoiseSuppressionLevel(_level: NoiseSuppressionLevel): void {
+    // intentional no-op
   }
 
   /** Updates input volume gain. 100 = unity, 200 = 2x amplification. */
@@ -183,11 +160,6 @@ class RNNoiseProcessor
     if (this.gainNode) {
       this.gainNode.gain.value = volume / 100;
     }
-  }
-
-  /** Compute gate config from current level + sensitivity and post to worklet. */
-  private applyGateConfig(): void {
-    postGateConfigToWorklet(this.vadGateNode, this.initialLevel, this.initialSensitivity);
   }
 
   /** Disconnects all audio nodes and frees WASM memory. */
@@ -212,12 +184,6 @@ class RNNoiseProcessor
     }
 
     try {
-      this.vadGateNode?.disconnect();
-    } catch {
-      /* already disconnected */
-    }
-
-    try {
       this.destinationNode?.disconnect();
     } catch {
       /* already disconnected */
@@ -226,7 +192,6 @@ class RNNoiseProcessor
     this.sourceNode = null;
     this.gainNode = null;
     this.rnnoiseNode = null;
-    this.vadGateNode = null;
     this.destinationNode = null;
     this.processedTrack = undefined;
   }

@@ -572,11 +572,17 @@ function VoiceSettings() {
           </div>
         )}
 
-        {/* Gürültü engelleme seviyesi — VAD gate'in dB threshold + hold time
-            curve'ünü 4 preset arasında seçtirir. Slider'la birlikte çalışır
-            (slider sensitivity offset olur). Slider 100 = gate kapalı, level
-            etkisiz; diğer durumlarda level base'i belirler. */}
-        {noiseReduction && (
+        {/* Gürültü engelleme seviyesi — yalnızca DeepFilter ailesinde
+            (deepfilter / dtln / dpdfnet) anlamlı, çünkü o engine'lerde
+            level → suppression yüzdesi olarak doğrudan WASM model'e
+            geçiriliyor. RNNoise ve Speex'in built-in VAD'ı var ve eski
+            gate-tabanlı kullanım ses kesilmesine neden oluyordu — bu
+            yüzden onlar için kontrol gizleniyor. Krisp/WebRTC zaten
+            kendi NS'lerini kullanıyor, level'a duyarsız. */}
+        {noiseReduction &&
+          (noiseReductionEngine === "deepfilter" ||
+            noiseReductionEngine === "dtln" ||
+            noiseReductionEngine === "dpdfnet") && (
           <div className="vs-toggle-row" style={{ marginTop: 12 }}>
             <div>
               <div className="vs-label">{t("noiseSuppressionLevel")}</div>
