@@ -47,7 +47,7 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 		"--no-warnings",
 		"--ignore-errors",
 		"--",
-		url,
+		urlStr,
 	)
 	stdout, err := cmd.Output()
 	if err != nil {
@@ -68,7 +68,7 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 		if jerr := json.Unmarshal([]byte(line), &raw); jerr != nil {
 			continue
 		}
-		track := raw.toTrack(url, requesterID, requesterName)
+		track := raw.toTrack(urlStr, requesterID, requesterName)
 		if track.VideoID == "" {
 			continue
 		}
