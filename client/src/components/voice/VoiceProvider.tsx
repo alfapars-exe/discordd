@@ -21,8 +21,25 @@
 import { useCallback, useMemo } from "react";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import StreamerPipPreview from "./StreamerPipPreview";
-import { AudioPresets } from "livekit-client";
-import type { AudioCaptureOptions, RoomOptions } from "livekit-client";
+import type { AudioCaptureOptions, AudioPreset, RoomOptions } from "livekit-client";
+
+/**
+ * Hard-coded high-fidelity Opus encode for the user mic.
+ *
+ * 384 kbps is the upper bound the channel model already documents
+ * ([models/channel.go:86-89](server/models/channel.go:86)) — the Opus
+ * codec publishes cleanly at this rate and the ear stops noticing
+ * improvements past ~128 kbps, but the user explicitly asked for the
+ * maximum. Bandwidth budget per active speaker: ~768 kbps bidirectional
+ * stereo, which sits comfortably inside any modern broadband uplink
+ * (and well within the self-hosted SFU's per-publisher quota).
+ *
+ * A follow-up could wire this to the per-channel `bitrate` column
+ * already exposed on UpdateChannelRequest — for now the slider in the
+ * channel-settings UI persists the value but the publish path uses
+ * this constant.
+ */
+const HIFI_VOICE_PRESET: AudioPreset = { maxBitrate: 384_000 };
 
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useToastStore } from "../../stores/toastStore";
@@ -113,10 +130,11 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       audioCaptureDefaults,
       publishDefaults: {
         ...publishDefaults,
-        // Hi-fi audio (64 kbps stereo Opus) — speech default is 20 kbps mono.
-        // Stereo + higher bitrate noticeably cleans up music/game/voice quality
-        // for ~3x the bandwidth, well within self-hosted SFU budgets.
-        audioPreset: AudioPresets.musicHighQuality,
+        // Top-of-range hi-fi voice (384 kbps Opus). See HIFI_VOICE_PRESET
+        // above for the rationale + bandwidth math. Previously this was
+        // AudioPresets.musicHighQuality (~64 kbps) which the user found
+        // too compressed for music sessions.
+        audioPreset: HIFI_VOICE_PRESET,
       },
       webAudioMix: true,
       // adaptiveStream: SFU sends the lower simulcast layer when a
