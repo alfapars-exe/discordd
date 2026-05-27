@@ -133,9 +133,11 @@ jobs:
       - name: Embed Windows icon
         if: matrix.platform == 'windows-latest'
         # exe name comes from package.json:build.win.executableName ("HiChat")
-        # — was renamed from mqvi.exe during the rebrand. Hardcoding the old
-        # name made every Windows build fail with "no such file" at rcedit.
-        run: node_modules\rcedit\bin\rcedit-x64.exe release\win-unpacked\HiChat.exe --set-icon icons\mqvi-icon.ico
+        # — was renamed from mqvi.exe during the rebrand. The icon file was
+        # renamed too (icons/mqvi-icon.ico → icons/hichat-icon.ico) when the
+        # old path stopped tracking anything resolvable; pinning to the new
+        # name here matches the actual repo state.
+        run: node_modules\rcedit\bin\rcedit-x64.exe release\win-unpacked\HiChat.exe --set-icon icons\hichat-icon.ico
         shell: cmd
 
       - name: Generate app-update.yml
