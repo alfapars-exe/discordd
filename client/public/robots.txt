@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Lighthouse's robots.txt validator parses the SPA fallback (index.html) as
+# robots.txt when this file is missing and reports 41 syntax errors — a
+# false-positive. This minimal file silences that audit without exposing
+# anything the SPA doesn't already expose at the public URL.

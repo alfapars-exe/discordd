@@ -68,7 +68,7 @@ function ForgotPasswordPage() {
   // ─── Render: Success ───
   if (isSent) {
     return (
-      <div className="auth-page">
+      <main className="auth-page">
         <div className="auth-card">
           <h1 className="auth-title">{t("resetLinkSent")}</h1>
           <p className="auth-subtitle">{t("resetLinkSentSubtitle")}</p>
@@ -76,13 +76,13 @@ function ForgotPasswordPage() {
             <Link to="/login">{t("backToLogin")}</Link>
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   // ─── Render: Form ───
   return (
-    <div className="auth-page">
+    <main className="auth-page">
       <div className="auth-card">
         <h1 className="auth-title">{t("forgotPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("forgotPasswordSubtitle")}</p>
@@ -128,7 +128,7 @@ function ForgotPasswordPage() {
           <Link to="/login">{t("backToLogin")}</Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 

@@ -157,7 +157,7 @@ function UserBar({
             <button
               className={`ub-switch${noiseReduction ? " active" : ""}`}
               onClick={() => setNoiseReduction(!noiseReduction)}
-              title={noiseReduction ? t("noiseReductionOff") : t("noiseReductionOn")}
+              title={noiseReduction ? t("noiseReductionOn") : t("noiseReductionOff")}
               role="switch"
               aria-checked={noiseReduction}
             >
@@ -391,11 +391,13 @@ function UserBar({
 /**
  * Pre-share options popup: resolution, frame rate, and audio toggle.
  *
- * Surfaced from the chevron next to the screen-share button. Settings are
- * applied live: changing resolution/fps mid-share is honored on the next
- * publish (i.e. user re-shares to see new ceiling). The audio toggle takes
- * effect on next share start — flipping mid-share doesn't add/remove the
- * audio track without a restart.
+ * Surfaced from the chevron next to the screen-share button. Resolution and
+ * frame-rate changes mid-share automatically stop + restart the share with
+ * the new values (350 ms debounce — see useScreenShareToggle Effect 4). In
+ * the browser path the restart re-prompts the OS source picker; Electron
+ * and Capacitor restart silently. The audio toggle still takes effect only
+ * on the next share start — flipping mid-share doesn't add/remove the audio
+ * track without a manual restart.
  */
 function ScreenShareQualityPopup({
   anchorEl,

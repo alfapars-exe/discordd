@@ -1,5 +1,26 @@
-/* Google Fonts — Manrope (UI + display via weight hierarchy), Source Code Pro (mono) */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Source+Code+Pro:wght@400;500&display=swap');
+/* Brand fonts — self-hosted woff2 (Mayıs 28 2026 Lighthouse audit follow-up).
+   Previously loaded from fonts.googleapis.com via <link> in index.html. Moving
+   to self-host removes two third-party connections (fonts.googleapis.com +
+   fonts.gstatic.com), kills a CSP violation we used to allowlist around, and
+   gives these files the same 1y immutable cache as the rest of /assets/* —
+   net win on every metric.
+   Subsetting matches Google's split (latin + latin-ext), so browsers still
+   only download the ranges they need for the page content. font-display:swap
+   prevents an invisible-text flash if the font hasn't arrived by FCP. */
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:400; font-display:swap; src:url('/fonts/manrope-400-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:400; font-display:swap; src:url('/fonts/manrope-400-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:500; font-display:swap; src:url('/fonts/manrope-500-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:500; font-display:swap; src:url('/fonts/manrope-500-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:600; font-display:swap; src:url('/fonts/manrope-600-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:600; font-display:swap; src:url('/fonts/manrope-600-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:700; font-display:swap; src:url('/fonts/manrope-700-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:700; font-display:swap; src:url('/fonts/manrope-700-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:800; font-display:swap; src:url('/fonts/manrope-800-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Manrope'; font-style:normal; font-weight:800; font-display:swap; src:url('/fonts/manrope-800-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Source Code Pro'; font-style:normal; font-weight:400; font-display:swap; src:url('/fonts/source-code-pro-400-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Source Code Pro'; font-style:normal; font-weight:400; font-display:swap; src:url('/fonts/source-code-pro-400-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Source Code Pro'; font-style:normal; font-weight:500; font-display:swap; src:url('/fonts/source-code-pro-500-latin-ext.woff2') format('woff2'); unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Source Code Pro'; font-style:normal; font-weight:500; font-display:swap; src:url('/fonts/source-code-pro-500-latin.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 /* ═══════════════════════════════════════
    CSS VARIABLES
@@ -1457,8 +1478,12 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .auth-field-password .auth-input { padding-right:42px; }
 .auth-password-toggle { position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;padding:4px;border-radius:6px;transition:color .15s,background .15s; }
 .auth-password-toggle:hover { color:var(--t0);background:var(--bg-4); }
-.auth-btn { width:100%;height:44px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s; }
-.auth-btn:hover { background:var(--primary-h); }
+/* Brand --primary (#3b82f6) gives 3.53:1 against #fff — fails WCAG AA (needs 4.5:1)
+   per Lighthouse audit (Mayıs 28 2026). We darken to #2563eb (Tailwind blue-600,
+   4.78:1 AA pass) ONLY on the auth submit button so the marketing/brand tone
+   elsewhere is unchanged. Hover stays in the same family. */
+.auth-btn { width:100%;height:44px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s; }
+.auth-btn:hover { background:#1d4ed8; }
 .auth-btn:disabled { opacity:.5;cursor:not-allowed; }
 .auth-remember { display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:14px;color:var(--t1);user-select:none; }
 .auth-remember input[type="checkbox"] { width:16px;height:16px;accent-color:var(--primary);cursor:pointer; }
@@ -3125,11 +3150,16 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
   --mobile-backdrop-z: 39;
 }
 
-/* dvh fix — account for mobile browser address bar */
+/* dvh fix — track the visible viewport at every width so bottom-anchored
+   UI (UserBar in the sidebar, MessageInput in the chat column) hugs the
+   visible bottom edge even when the layout viewport differs from it. The
+   previous max-width:768px gate only handled phone-Chrome URL-bar overlap;
+   the same desync also bites narrow windows on HF Space (the app runs in
+   an iframe and the iframe's containing block can be taller than what's
+   visible). On stable-chrome desktop browsers 100dvh == 100vh == 100% so
+   this is a no-op there. */
 @supports (height: 100dvh) {
-  @media (max-width: 768px) {
-    html, body { height: 100dvh; }
-  }
+  html, body { height: 100dvh; }
 }
 
 /* Disable pull-to-refresh on mobile */

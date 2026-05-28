@@ -130,9 +130,34 @@ func (h *ClientLogHandler) Log(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := user.ID
-	h.appLogger.Log(level, models.LogCategoryClient, &uid, nil, message, metadata)
+	h.appLogger.Log(level, categoryForMessage(message), &uid, nil, message, metadata)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// categoryForMessage maps a client log identifier to its admin-panel category
+// using the message-name prefix. Without this routing, every client log lands
+// in LogCategoryClient and disappears from the existing voice/ws/screen_share
+// filter dropdowns. Unrecognised prefixes fall back to LogCategoryClient so
+// older messages keep flowing.
+func categoryForMessage(message string) models.LogCategory {
+	switch {
+	case strings.HasPrefix(message, "screen_share_"):
+		return models.LogCategoryScreenShare
+	case strings.HasPrefix(message, "voice_"),
+		strings.HasPrefix(message, "p2p_"):
+		return models.LogCategoryVoice
+	case strings.HasPrefix(message, "livekit_"):
+		return models.LogCategoryLiveKit
+	case strings.HasPrefix(message, "ws_"):
+		return models.LogCategoryWS
+	case strings.HasPrefix(message, "network_"),
+		strings.HasPrefix(message, "client_"),
+		strings.HasPrefix(message, "electron_"):
+		return models.LogCategoryGeneral
+	default:
+		return models.LogCategoryClient
+	}
 }
 
 // allow runs a per-user token bucket. Returns false when the bucket is empty.

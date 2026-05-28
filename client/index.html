@@ -10,7 +10,14 @@
     <link rel="icon" type="image/png" href="/hlogo.png" />
     <link rel="apple-touch-icon" sizes="256x256" href="/hlogo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="HiChat! — Açık kaynak, gerçek zamanlı sohbet ve sesli iletişim platformu. Discord alternatifi, kendi sunucunuzda barındırabileceğiniz tam özellikli iletişim aracı." />
     <title>HiChat!</title>
+    <!-- Brand fonts (Manrope + Source Code Pro) are now self-hosted via
+         @font-face declarations in src/styles/globals.css. Removed the
+         third-party fonts.googleapis.com <link> after the Mayıs 28 2026
+         Lighthouse audit — saves two cross-origin handshakes, eliminates
+         a CSP allowlist surface, and lets the woff2 files share the same
+         immutable cache as the rest of /assets/*. -->
     <!-- Prevent white flash before CSS/JS loads -->
     <style>
       html, body { margin:0; padding:0; background:#0f1419; color:#e0e0e0; }
@@ -32,7 +39,7 @@
     <div id="root">
       <!-- Loading state shown until React mounts -->
       <div id="app-loader">
-        <img class="logo" src="/hlogo.png" alt="HiChat!" />
+        <img class="logo" src="/hlogo.png" alt="HiChat!" width="72" height="72" />
         <div class="spinner"></div>
       </div>
     </div>

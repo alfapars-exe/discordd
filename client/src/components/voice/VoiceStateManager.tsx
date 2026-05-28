@@ -35,6 +35,10 @@ import { useOutputDeviceSync } from "../../hooks/useOutputDeviceSync";
 import { useTrackSubscriptions } from "../../hooks/useTrackSubscriptions";
 import { useInitialRoomSync } from "../../hooks/useInitialRoomSync";
 import { useLiveKitDebugTracer } from "../../hooks/useLiveKitDebugTracer";
+// Side-effect import: registers window.__hichatAudioDoctor in dev / when the
+// `hichat_audio_doctor=1` localStorage flag is set. No runtime cost in prod
+// builds when the flag is absent.
+import "../../audio/audioDoctor";
 
 function VoiceStateManager() {
   const room = useRoomContext();
@@ -131,6 +135,19 @@ function VoiceStateManager() {
     return () => {
       if (typeof room.setMaxListeners === "function") {
         room.setMaxListeners(10);
+      }
+    };
+  }, [room]);
+
+  // Expose the live Room on globalThis so the dev `__hichatAudioDoctor()`
+  // helper can inspect the local mic pipeline from the DevTools console.
+  // Gated by the same dev/flag check inside audioDoctor.ts; this effect
+  // is cheap to always run and the global gets cleared on unmount.
+  useEffect(() => {
+    globalThis.__hichatRoom = room;
+    return () => {
+      if (globalThis.__hichatRoom === room) {
+        globalThis.__hichatRoom = undefined;
       }
     };
   }, [room]);
