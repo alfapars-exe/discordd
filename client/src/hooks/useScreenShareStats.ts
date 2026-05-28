@@ -45,6 +45,19 @@ import {
 
 import { useVoiceStore } from "../stores/voiceStore";
 import { logToServer } from "../api/clientLog";
+import type { ScreenShareLimitationReason } from "../stores/slices/voiceScreenShareSlice";
+
+/**
+ * Number of consecutive samples (at STATS_INTERVAL_MS = 10 s) the same
+ * encoder limitation has to persist before we promote it to the public
+ * `screenSharePublisherWarning` store entry. 2 → 20 s of sustained
+ * trouble. Same threshold to clear: 2 clean samples → 20 s of recovery.
+ *
+ * Stops the UI from flashing a banner on every 10 s spike (which the
+ * encoder absolutely WILL produce during a single dropped frame burst)
+ * without hiding genuine sustained problems.
+ */
+const HYSTERESIS_SAMPLES = 2;
 
 /**
  * 10 s gives us ~6 samples/minute per active publisher — fine-grained
@@ -134,15 +147,39 @@ function summariseOutbound(report: RTCStatsReport): OutboundRtpSnapshot {
   return acc;
 }
 
+/**
+ * Map the spec's qualityLimitationReason to the actionable subset we
+ * surface to the broadcaster. "other" rolls into null because no clear
+ * UX guidance applies; "none" is the no-warning state.
+ */
+function actionableReason(raw: string): ScreenShareLimitationReason | null {
+  if (raw === "cpu") return "cpu";
+  if (raw === "bandwidth") return "bandwidth";
+  return null;
+}
+
 export function useScreenShareStats(localParticipant: LocalParticipant): void {
   const isStreaming = useVoiceStore((s) => s.isStreaming);
   const baselineRef = useRef<Baseline | null>(null);
 
+  // Hysteresis trackers — kept in refs because state-bumping them every
+  // 10 s would force a re-render on the entire component tree above us
+  // even when no UI change is needed.
+  const pendingReasonRef = useRef<ScreenShareLimitationReason | null>(null);
+  const pendingCountRef = useRef(0);
+  const cleanCountRef = useRef(0);
+
   useEffect(() => {
     if (!isStreaming) {
       // Stream ended — drop the baseline so a future start re-baselines
-      // cleanly instead of producing a giant first-delta spike.
+      // cleanly instead of producing a giant first-delta spike. Also
+      // clear any active warning so the banner doesn't stick after the
+      // user stops sharing.
       baselineRef.current = null;
+      pendingReasonRef.current = null;
+      pendingCountRef.current = 0;
+      cleanCountRef.current = 0;
+      useVoiceStore.getState().setScreenSharePublisherWarning(null);
       return;
     }
 
@@ -214,6 +251,39 @@ export function useScreenShareStats(localParticipant: LocalParticipant): void {
 
       const kbps = Math.round((dBytes * 8) / dtSec / 1000);
       const fps = Math.round(dFrames / dtSec);
+
+      // Hysteresis update — promote a sustained reason to the store
+      // warning, or clear it after sustained recovery. Refs so this
+      // doesn't churn renders; only the actual store.set call (gated by
+      // the no-op guard inside the setter) triggers UI updates.
+      const reason = actionableReason(snap.qualityLimitationReason);
+      const currentWarning = useVoiceStore.getState().screenSharePublisherWarning;
+      if (reason) {
+        // Trouble this cycle — reset the clean streak and either start
+        // a new pending streak or extend the existing one.
+        cleanCountRef.current = 0;
+        if (pendingReasonRef.current === reason) {
+          pendingCountRef.current += 1;
+        } else {
+          pendingReasonRef.current = reason;
+          pendingCountRef.current = 1;
+        }
+        if (
+          pendingCountRef.current >= HYSTERESIS_SAMPLES &&
+          currentWarning !== reason
+        ) {
+          useVoiceStore.getState().setScreenSharePublisherWarning(reason);
+        }
+      } else {
+        // Clean cycle — reset pending and either count toward a clear
+        // or (if already cleared) stay quiet.
+        pendingReasonRef.current = null;
+        pendingCountRef.current = 0;
+        cleanCountRef.current += 1;
+        if (cleanCountRef.current >= HYSTERESIS_SAMPLES && currentWarning !== null) {
+          useVoiceStore.getState().setScreenSharePublisherWarning(null);
+        }
+      }
 
       logToServer("info", "screen_share_stats", {
         intervalSec: Math.round(dtSec),

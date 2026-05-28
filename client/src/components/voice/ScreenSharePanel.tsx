@@ -16,6 +16,7 @@ import { resolveUserId } from "../../utils/constants";
 import ScreenShareContextMenu from "./ScreenShareContextMenu";
 import ScreenShareViewerChip from "./ScreenShareViewerChip";
 import ScreenShareQualityBadge from "./ScreenShareQualityBadge";
+import ScreenSharePublisherWarning from "./ScreenSharePublisherWarning";
 
 type ScreenSharePanelProps = {
   trackRef: TrackReferenceOrPlaceholder;
@@ -114,10 +115,16 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
           (no hover gate) so the broadcaster sees "N watching" at a glance
           even when the hover overlay is hidden. */}
       {isLocalUser && (
-        <ScreenShareViewerChip
-          broadcasterUserId={realUserId}
-          fullscreenContainerRef={containerRef}
-        />
+        <>
+          <ScreenShareViewerChip
+            broadcasterUserId={realUserId}
+            fullscreenContainerRef={containerRef}
+          />
+          {/* Encoder limitation banner — only the local broadcaster sees
+              this; remote viewers get the quality grade dot instead. The
+              component renders nothing when no sustained warning is active. */}
+          <ScreenSharePublisherWarning />
+        </>
       )}
 
       {/* Hover overlay with CSS opacity transition */}
