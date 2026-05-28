@@ -46,7 +46,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "icons/hichat-icon.ico",
+      "icon": "icons/hlogo.ico",
       "signAndEditExecutable": false,
       "executableName": "HiChat",
       "legalTrademarks": "HiChat!",
@@ -60,7 +60,11 @@
     "copyright": "© 2026 HiChat!",
     "nsis": {
       "oneClick": true,
-      "perMachine": false
+      "perMachine": false,
+      "installerIcon": "icons/hlogo.ico",
+      "uninstallerIcon": "icons/hlogo.ico",
+      "installerHeaderIcon": "icons/hlogo.ico",
+      "include": "build/installer.nsh"
     },
     "linux": {
       "target": [

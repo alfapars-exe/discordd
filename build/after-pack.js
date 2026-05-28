@@ -39,7 +39,11 @@ module.exports = async function afterPack(context) {
   const version = context.packager.appInfo.version;          // package.json version
   const buildVersion = context.packager.appInfo.buildVersion || version;
   const copyright = context.packager.appInfo.copyright || "© 2026 HiChat!";
-  const iconPath = path.resolve(context.packager.projectDir, "icons/hichat-icon.ico");
+  // Single canonical source of truth: hlogo.ico (multi-resolution 16/24/32/48/64/128/256)
+  // generated from icons/hlogo.png. Keep in sync with package.json `win.icon` and
+  // `nsis.installerIcon`. The old hichat-icon.ico was single-frame and looked
+  // blurry in the Start Menu / taskbar small-icon sizes.
+  const iconPath = path.resolve(context.packager.projectDir, "icons/hlogo.ico");
 
   await rcedit(exePath, {
     "version-string": {
