@@ -1,5 +1,18 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+// Single source of truth for the shipped version: root package.json. Both
+// Electron (which uses this version for the installer + autoUpdater) and
+// the web bundle (where users may run an out-of-date client because the
+// browser cached JS) read the same string via __APP_VERSION__.
+//
+// Surfaces server-side: clientLog attaches it to every diagnostic event,
+// so logs can be filtered by version to find users stuck on stale builds.
+const ROOT_PKG = JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf8")) as {
+  version: string;
+};
 
 // https://vite.dev/config/
 // command: "serve" → dev server (vite dev), "build" → production build (vite build)
@@ -15,6 +28,12 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ command }) => ({
   plugins: [react()],
   clearScreen: false,
+  define: {
+    // Inlined into the bundle at build time. Survives even when the
+    // browser/Electron renderer is offline at log-emit time (the value
+    // is a string constant in the compiled JS, not an env lookup).
+    __APP_VERSION__: JSON.stringify(ROOT_PKG.version),
+  },
   server: {
     port: 3030,
     strictPort: true, // Fail if port is taken — Electron dev expects a fixed port

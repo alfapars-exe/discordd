@@ -139,7 +139,11 @@ func (s *voiceService) sweepOrphanStates() {
 			livekitIsCloud:    isCloud,
 		})
 		log.Printf("[voice] orphan cleanup: removed user %s from channel %s (offline for %s)", userID, channelID, now.Sub(offlineTime).Round(time.Second))
-		s.logWarn(models.LogCategoryVoice, &userID, "orphan cleanup: stale voice state removed", map[string]string{
+		// INFO, not WARN: orphan sweep is the documented happy-path
+		// recovery (WS disconnect != voice leave, janitor catches the
+		// leftover). Flooding the WARN channel with every successful
+		// cleanup buries real anomalies in dashboards.
+		s.logInfo(models.LogCategoryVoice, &userID, "orphan cleanup: stale voice state removed", map[string]string{
 			"channel_id":      channelID,
 			"offline_seconds": fmt.Sprintf("%.0f", now.Sub(offlineTime).Seconds()),
 		})
@@ -217,9 +221,11 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 	if err != nil {
 		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": err.Error()}
 		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "not found") {
-			// Expected when participant already left LiveKit (e.g. network drop, orphan sweep after LiveKit timeout)
+			// Expected when participant already left LiveKit (e.g. network drop, orphan sweep after LiveKit timeout).
+			// Logged at INFO so the WARN channel stays meaningful — this branch always represents the success path
+			// after a benign race between WS disconnect, LiveKit timeout, and our 30s orphan sweep.
 			log.Printf("[voice] removeParticipant: user=%s room=%s already gone (not found)", userID, roomName)
-			s.logWarn(models.LogCategoryVoice, &userID, "removeParticipant: participant already left LiveKit", meta)
+			s.logInfo(models.LogCategoryVoice, &userID, "removeParticipant: participant already left LiveKit", meta)
 		} else {
 			log.Printf("[voice] removeParticipant: user=%s room=%s result: %v", userID, roomName, err)
 			s.logError(models.LogCategoryVoice, &userID, "removeParticipant: LiveKit API call failed", meta)
