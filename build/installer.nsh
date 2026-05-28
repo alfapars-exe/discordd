@@ -31,6 +31,16 @@
   ; NSIS tries to overwrite them. 500ms is empirically enough for
   ; SetEndOfFile / CloseHandle to complete on a typical machine.
   Sleep 500
+
+  ; Remove legacy "Electron.lnk" shortcuts left behind by builds whose
+  ; productName was still the electron-builder default ("Electron"). The
+  ; current installer creates "HiChat!.lnk" from productName, but NSIS
+  ; uninstallers only track shortcuts they themselves created — orphans
+  ; from a prior productName persist, and Windows Search picks "Electron"
+  ; as the top hit on an "electron" query because the .lnk filename is
+  ; what the Start Menu shows. Delete is a no-op when the file is absent.
+  Delete "$SMPROGRAMS\Electron.lnk"
+  Delete "$DESKTOP\Electron.lnk"
 !macroend
 
 !macro customUnInit
