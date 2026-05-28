@@ -14,6 +14,13 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY client ./
+# Root package.json carries the canonical app version. vite.config.ts reads
+# it via `readFileSync(resolve(__dirname, "../package.json"))` and inlines
+# the version into the bundle as __APP_VERSION__ so client logs can be
+# filtered by release. Without this copy the read throws ENOENT mid-build
+# and the whole Space goes red. (vite.config.ts also falls back gracefully
+# to "0.0.0" if this file is somehow missing — defense in depth.)
+COPY package.json /app/package.json
 RUN npm run build
 # Output: /app/client/dist/
 

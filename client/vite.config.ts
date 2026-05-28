@@ -10,9 +10,26 @@ import { resolve } from "path";
 //
 // Surfaces server-side: clientLog attaches it to every diagnostic event,
 // so logs can be filtered by version to find users stuck on stale builds.
-const ROOT_PKG = JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf8")) as {
-  version: string;
-};
+//
+// Read defensively: HF Space's Docker build copies only client/, so the
+// root package.json isn't always reachable from this file's directory.
+// First try ../package.json (local dev + Dockerfile's symlinked /app/
+// package.json), then HICHAT_APP_VERSION env (set in the Dockerfile),
+// finally fall back to "0.0.0" so the build never explodes — appVersion
+// will still appear in logs, just as "0.0.0" for builds that lost the
+// chain. Never broken, possibly imprecise.
+function resolveAppVersion(): string {
+  try {
+    const txt = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const parsed = JSON.parse(txt) as { version?: string };
+    if (parsed.version) return parsed.version;
+  } catch {
+    /* fall through */
+  }
+  if (process.env.HICHAT_APP_VERSION) return process.env.HICHAT_APP_VERSION;
+  return "0.0.0";
+}
+const APP_VERSION = resolveAppVersion();
 
 // https://vite.dev/config/
 // command: "serve" → dev server (vite dev), "build" → production build (vite build)
@@ -32,7 +49,7 @@ export default defineConfig(({ command }) => ({
     // Inlined into the bundle at build time. Survives even when the
     // browser/Electron renderer is offline at log-emit time (the value
     // is a string constant in the compiled JS, not an env lookup).
-    __APP_VERSION__: JSON.stringify(ROOT_PKG.version),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   server: {
     port: 3030,
