@@ -50,14 +50,19 @@ function CameraPanel({ trackRef }: Readonly<{ trackRef: TrackReferenceOrPlacehol
   }, []);
 
   const displayName = trackRef.participant.name || trackRef.participant.identity;
-  const isLocal = trackRef.participant.isLocal;
 
+  // Universal scaleX(-1): both self and remote cameras render in the actor's
+  // own perspective (left hand on the left of the screen). Discord/Zoom mirror
+  // only self-view, but a "naive" viewer reads remote videos as "what side of
+  // the screen the hand is on = which hand it is" — face-to-face flip is
+  // counter-intuitive. Trade-off: text/signs held up to the camera will read
+  // reversed on remote viewers' screens. Accepted by product owner.
   return (
     <div ref={containerRef} className="screen-share-panel">
       {trackRef.publication && (
         <VideoTrack
           trackRef={trackRef as TrackReference}
-          style={isLocal ? { transform: "scaleX(-1)" } : undefined}
+          style={{ transform: "scaleX(-1)" }}
         />
       )}
 

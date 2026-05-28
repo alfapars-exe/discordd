@@ -139,6 +139,10 @@ function VoiceParticipant({
 
   let avatarContent: React.ReactNode;
   if (videoInAvatar && cameraTrackRef) {
+    // Universal mirror — match CameraView. Self + remote both render in the
+    // actor's perspective so "left hand raised" stays on the left of every
+    // viewer's screen. See CameraView.tsx for the trade-off rationale (held
+    // text reads reversed on remote screens; product owner accepted).
     avatarContent = (
       <VideoTrack
         trackRef={cameraTrackRef}
@@ -147,7 +151,7 @@ function VoiceParticipant({
           height: "100%",
           objectFit: "cover",
           borderRadius: "50%",
-          ...(isLocalUser ? { transform: "scaleX(-1)" } : {}),
+          transform: "scaleX(-1)",
         }}
       />
     );
