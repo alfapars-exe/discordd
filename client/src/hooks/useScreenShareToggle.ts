@@ -327,6 +327,19 @@ export function useScreenShareToggle(
       monitorCount: displayRef.current?.monitorCount ?? 0,
     });
 
+    // Diagnostic — survive-the-tick check. Yield the event loop once and
+    // emit a second log. If `attempt` reaches the server but `attempt_post`
+    // never does, the renderer died inside the picker IPC queue (the
+    // documented Windows-elevated-process hang path in screen-picker.ts)
+    // before getDisplayMedia even returned. If both rows land but
+    // `publish_details` doesn't, the crash is inside setScreenShareEnabled.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (shouldCancel()) return;
+    logToServer("info", "screen_share_attempt_post", {
+      branch,
+      msSinceAttempt: Date.now() - attemptStart,
+    });
+
     if (branch === "capacitor") {
       const serverId = useServerStore.getState().activeServerId;
       const channelId = useVoiceStore.getState().currentVoiceChannelId;

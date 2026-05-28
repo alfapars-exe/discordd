@@ -116,6 +116,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("screen-picker-result", sourceId);
   },
 
+  /**
+   * Subscribe to diagnostic events emitted by the main-process screen picker.
+   * Each event carries a phase string (request_handler_start, sources_query_*,
+   * picker_shown, result_received, handler_error, etc.) plus arbitrary
+   * extras. The renderer is expected to forward these to /client-log so the
+   * admin panel can correlate a "screen_share_attempt" row against the
+   * main-process picker timeline. Idempotent registration is the caller's
+   * job — install once at module load.
+   */
+  onScreenPickerDiagnostic: (
+    cb: (event: { phase: string; timestamp: number } & Record<string, unknown>) => void,
+  ): void => {
+    ipcRenderer.on("screen-picker-diagnostic", (_e, payload) => cb(payload));
+  },
+
   // ─── Process-Exclusive Audio Capture IPC ───
   // Uses native audio-capture.exe (WASAPI process loopback) to capture
   // system audio while excluding our own process tree — no voice echo.

@@ -108,6 +108,18 @@ interface ElectronAPI {
   /** Send user's selection back to main process (null = cancelled) */
   sendScreenPickerResult: (sourceId: string | null) => void;
 
+  /**
+   * Subscribe to diagnostic events from the main-process screen picker.
+   * Phases: request_handler_start, sources_query_start, sources_query_done,
+   * sources_query_error, no_sources, picker_shown, result_received,
+   * result_cancelled, handler_error. Extras vary by phase but all include
+   * a server-side `timestamp` (ms). Caller is expected to forward to
+   * /client-log. Optional — undefined in pre-v2.11.94 Electron builds.
+   */
+  onScreenPickerDiagnostic?: (
+    cb: (event: { phase: string; timestamp: number } & Record<string, unknown>) => void,
+  ) => void;
+
   /** Start process-exclusive system audio capture (excludes our own audio) */
   startSystemCapture: () => Promise<void>;
   stopSystemCapture: () => Promise<void>;

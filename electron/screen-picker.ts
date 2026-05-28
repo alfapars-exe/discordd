@@ -32,7 +32,30 @@ type SerializedSource = {
 // which then locks up the renderer waiting for the picker IPC and
 // eventually crashes it. Race with a timeout so a hang surfaces as a
 // clean "no sources" instead of a renderer death.
-const GET_SOURCES_TIMEOUT_MS = 5000;
+//
+// Track P → Track Q (v2.11.94): lowered 5000 → 2500. Field reports show
+// renderers dying ~2 s after screen_share_attempt in CS2 sessions even
+// before the picker UI surfaces — long enough for getDisplayMedia to be
+// in flight but with no event-loop tick in the renderer. 2500 ms still
+// fits a healthy Windows desktop with 30+ windows (typical: 200–400 ms)
+// while shortening the danger window where the renderer can die waiting.
+const GET_SOURCES_TIMEOUT_MS = 2500;
+
+// Helper: emit a structured diagnostic event to the renderer so it can
+// forward the row to /client-log. Best-effort — missing main window or
+// failed send are silently swallowed; diagnostics MUST NOT break the
+// real picker flow.
+function emitPickerDiagnostic(phase: string, extra: Record<string, unknown> = {}): void {
+  try {
+    getMainWindow()?.webContents.send("screen-picker-diagnostic", {
+      phase,
+      timestamp: Date.now(),
+      ...extra,
+    });
+  } catch {
+    /* swallow — diagnostic only */
+  }
+}
 
 async function querySources() {
   // thumbnailSize halved (480×270 → 240×135) — each PNG dataURL was ~200-400
@@ -43,6 +66,9 @@ async function querySources() {
   // fetchWindowIcons disabled — icons are another 50-100 KB per source and
   // are the specific surface Electron has crashed on for users with
   // elevated/protected windows (Vanguard, EAC, some banking apps).
+  const queryStart = Date.now();
+  emitPickerDiagnostic("sources_query_start");
+
   const sourcesPromise = desktopCapturer.getSources({
     types: ["screen", "window"],
     thumbnailSize: { width: 240, height: 135 },
@@ -56,7 +82,21 @@ async function querySources() {
     ),
   );
 
-  return await Promise.race([sourcesPromise, timeoutPromise]);
+  try {
+    const sources = await Promise.race([sourcesPromise, timeoutPromise]);
+    emitPickerDiagnostic("sources_query_done", {
+      durationMs: Date.now() - queryStart,
+      sourceCount: sources.length,
+    });
+    return sources;
+  } catch (err) {
+    emitPickerDiagnostic("sources_query_error", {
+      durationMs: Date.now() - queryStart,
+      error: err instanceof Error ? err.message : String(err),
+      timedOut: err instanceof Error && /timed out/.test(err.message),
+    });
+    throw err;
+  }
 }
 
 function serialize(s: Awaited<ReturnType<typeof querySources>>[number]): SerializedSource {
@@ -74,15 +114,27 @@ function serialize(s: Awaited<ReturnType<typeof querySources>>[number]): Seriali
  */
 export function installScreenPicker(): void {
   session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    // Diagnostic — the renderer's screen_share_attempt log lands BEFORE this
+    // runs; pairing the two rows tells us whether getDisplayMedia even made
+    // it into the handler before the renderer died. Missing = crash in the
+    // IPC queue (the Windows-elevated-process hang path).
+    const handlerStart = Date.now();
+    emitPickerDiagnostic("request_handler_start");
+
     try {
       let sources = await querySources();
       if (sources.length === 0) {
+        emitPickerDiagnostic("no_sources", { msSinceHandlerStart: Date.now() - handlerStart });
         callback({});
         return;
       }
 
       const win = getMainWindow();
       win?.webContents.send("show-screen-picker", sources.map(serialize));
+      emitPickerDiagnostic("picker_shown", {
+        msSinceHandlerStart: Date.now() - handlerStart,
+        sourceCount: sources.length,
+      });
 
       // Refresh handler — re-queries while picker is open. Lifetime is one
       // getDisplayMedia call; removed in finally below.
@@ -106,8 +158,16 @@ export function installScreenPicker(): void {
 
         if (sourceId) {
           const selected = sources.find((s) => s.id === sourceId);
+          emitPickerDiagnostic("result_received", {
+            msSinceHandlerStart: Date.now() - handlerStart,
+            picked: !!selected,
+            sourceKind: selected?.id?.startsWith("screen:") ? "screen" : (selected ? "window" : "none"),
+          });
           callback(selected ? { video: selected } : {});
         } else {
+          emitPickerDiagnostic("result_cancelled", {
+            msSinceHandlerStart: Date.now() - handlerStart,
+          });
           callback({});
         }
       } finally {
@@ -115,6 +175,10 @@ export function installScreenPicker(): void {
       }
     } catch (err) {
       console.error("[screen-picker] error:", err);
+      emitPickerDiagnostic("handler_error", {
+        msSinceHandlerStart: Date.now() - handlerStart,
+        error: err instanceof Error ? err.message : String(err),
+      });
       callback({});
     }
   });
