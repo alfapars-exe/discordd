@@ -32,6 +32,24 @@ export type ScreenShareQualityGrade = "good" | "fair" | "poor";
  */
 export type ScreenShareLimitationReason = "cpu" | "bandwidth";
 
+/**
+ * A single point in the per-publisher quality history ring buffer. Each
+ * sample useScreenShareReceiverStats produces one of these and pushes
+ * it into the buffer; everything older than HISTORY_WINDOW_MS is
+ * evicted so the array stays bounded.
+ */
+export type ScreenShareQualityHistoryPoint = {
+  /** Epoch ms at the moment the sample was taken. */
+  t: number;
+  /** Grade computed by computeGrade() in the receiver hook. */
+  grade: ScreenShareQualityGrade;
+  /** Window kbps from that sample (delta-based). */
+  kbps: number;
+};
+
+/** Keep about a minute of history so the tooltip can render a short trend. */
+export const SCREEN_SHARE_HISTORY_WINDOW_MS = 60_000;
+
 export type VoiceScreenShareSlice = {
   /** streamer user IDs we're actively subscribed to */
   watchingScreenShares: Record<string, boolean>;
@@ -60,6 +78,16 @@ export type VoiceScreenShareSlice = {
    * active. Cleared on share stop.
    */
   screenSharePublisherWarning: ScreenShareLimitationReason | null;
+  /**
+   * publisherUserID -> recent quality samples (last ~60 s). Drives the
+   * hover tooltip on ScreenShareQualityBadge so viewers can see the
+   * trend at a glance: was the stream always poor, or did it just
+   * dip? Capped by SCREEN_SHARE_HISTORY_WINDOW_MS in the writer.
+   */
+  screenShareQualityHistoryByPublisher: Record<
+    string,
+    ScreenShareQualityHistoryPoint[]
+  >;
 
   toggleWatchScreenShare: (userId: string) => void;
   focusScreenShare: (userId: string) => void;
@@ -71,6 +99,11 @@ export type VoiceScreenShareSlice = {
   clearScreenShareQualityGrade: (publisherId: string) => void;
   /** Set the local broadcaster's encoder-limitation warning, or pass null to clear. */
   setScreenSharePublisherWarning: (reason: ScreenShareLimitationReason | null) => void;
+  /** Append one history point and evict samples older than the window. */
+  pushScreenShareQualityHistoryPoint: (
+    publisherId: string,
+    point: ScreenShareQualityHistoryPoint,
+  ) => void;
 };
 
 export const createVoiceScreenShareSlice: StateCreator<
@@ -83,6 +116,7 @@ export const createVoiceScreenShareSlice: StateCreator<
   screenShareViewers: {},
   screenShareQualityGradeByPublisher: {},
   screenSharePublisherWarning: null,
+  screenShareQualityHistoryByPublisher: {},
 
   toggleWatchScreenShare: (userId: string) => {
     const { watchingScreenShares, _wsSend } = get();
@@ -127,10 +161,18 @@ export const createVoiceScreenShareSlice: StateCreator<
 
   clearScreenShareQualityGrade: (publisherId) => {
     const cur = get().screenShareQualityGradeByPublisher;
-    if (!(publisherId in cur)) return;
-    const next = { ...cur };
-    delete next[publisherId];
-    set({ screenShareQualityGradeByPublisher: next });
+    const curHist = get().screenShareQualityHistoryByPublisher;
+    const inGrade = publisherId in cur;
+    const inHist = publisherId in curHist;
+    if (!inGrade && !inHist) return;
+    const nextGrade = inGrade ? { ...cur } : cur;
+    if (inGrade) delete (nextGrade as Record<string, ScreenShareQualityGrade>)[publisherId];
+    const nextHist = inHist ? { ...curHist } : curHist;
+    if (inHist) delete (nextHist as Record<string, ScreenShareQualityHistoryPoint[]>)[publisherId];
+    set({
+      screenShareQualityGradeByPublisher: nextGrade,
+      screenShareQualityHistoryByPublisher: nextHist,
+    });
   },
 
   setScreenSharePublisherWarning: (reason) => {
@@ -140,6 +182,26 @@ export const createVoiceScreenShareSlice: StateCreator<
     // future callers.
     if (get().screenSharePublisherWarning === reason) return;
     set({ screenSharePublisherWarning: reason });
+  },
+
+  pushScreenShareQualityHistoryPoint: (publisherId, point) => {
+    const cur = get().screenShareQualityHistoryByPublisher;
+    const prev = cur[publisherId] ?? [];
+    // Single pass: keep entries within the window and append the new one.
+    // Iterating once instead of filter+push keeps GC pressure low at the
+    // 10 s tick — each push allocates one fresh array, no intermediate.
+    const cutoff = point.t - SCREEN_SHARE_HISTORY_WINDOW_MS;
+    const next: ScreenShareQualityHistoryPoint[] = [];
+    for (let i = 0; i < prev.length; i++) {
+      if (prev[i].t >= cutoff) next.push(prev[i]);
+    }
+    next.push(point);
+    set({
+      screenShareQualityHistoryByPublisher: {
+        ...cur,
+        [publisherId]: next,
+      },
+    });
   },
 
   focusScreenShare: (userId: string) => {

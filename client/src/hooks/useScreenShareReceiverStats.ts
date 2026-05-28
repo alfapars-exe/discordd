@@ -308,6 +308,14 @@ export function useScreenShareReceiverStats(room: Room): void {
       // resolveUserId) reads the same key the panel rendered for.
       const realUserId = resolveUserId(participant.identity);
       useVoiceStore.getState().setScreenShareQualityGrade(realUserId, quality);
+      // Append to the rolling history so the tooltip can show "was this
+      // always poor, or did it just dip?". Window eviction happens inside
+      // the store setter — see SCREEN_SHARE_HISTORY_WINDOW_MS.
+      useVoiceStore.getState().pushScreenShareQualityHistoryPoint(realUserId, {
+        t: now,
+        grade: quality,
+        kbps,
+      });
 
       logToServer("info", "screen_share_receiver_stats", {
         publisherId: participant.identity,
