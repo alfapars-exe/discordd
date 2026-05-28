@@ -56,7 +56,7 @@ if ($LASTEXITCODE -ne 0) { throw "electron-builder (unpacked) failed" }
 $rceditBin = "node_modules\rcedit\bin\rcedit-x64.exe"
 # exe name comes from package.json:build.win.executableName ("HiChat")
 $exePath = "release\win-unpacked\HiChat.exe"
-$icoPath = "icons\mqvi-icon.ico"
+$icoPath = "icons\hlogo.ico"
 
 if ((Test-Path $exePath) -and (Test-Path $rceditBin)) {
     Write-Host "Phase 2: Embedding icon into EXE..." -ForegroundColor Cyan
@@ -95,7 +95,7 @@ if ($Nsis) {
 Write-Host "Build complete! Output: release/" -ForegroundColor Green
 
 # Reminder: When creating a GitHub release, upload BOTH files:
-#   gh release upload vX.Y.Z release/mqvi-setup.exe release/latest.yml
+#   gh release upload vX.Y.Z release/hichat-setup.exe release/latest.yml
 # latest.yml is REQUIRED for electron-updater auto-update to work.
 if ($Nsis -and (Test-Path "release\latest.yml")) {
     Write-Host ""
