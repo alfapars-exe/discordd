@@ -81,5 +81,9 @@
   "afkKickTitle": "Wakey Wakey!",
   "afkKickMessage": "You were disconnected from {{channel}} on {{server}} for being AFK. The tumbleweeds were getting lonely.",
   "afkKickSubtitle": "Pro tip: Move your mouse, say something, or at least pretend to be awake.",
-  "afkKickDismiss": "I'm awake, I swear!"
+  "afkKickDismiss": "I'm awake, I swear!",
+
+  "selectMicrophoneDevice": "Select microphone device",
+  "selectSpeakerDevice": "Select speaker device",
+  "selectScreenShareSettings": "Screen share settings"
 }

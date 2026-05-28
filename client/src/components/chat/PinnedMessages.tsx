@@ -14,7 +14,7 @@ type PinnedMessagesProps = {
 };
 
 function PinnedMessages({ channelId, onClose }: PinnedMessagesProps) {
-  const { t } = useTranslation("chat");
+  const { t, i18n } = useTranslation("chat");
   const fetchPins = usePinStore((s) => s.fetchPins);
   const getPinsForChannel = usePinStore((s) => s.getPinsForChannel);
   const unpinAction = usePinStore((s) => s.unpin);
@@ -41,10 +41,13 @@ function PinnedMessages({ channelId, onClose }: PinnedMessagesProps) {
     [channelId, unpinAction]
   );
 
-  /** Format timestamp */
+  /** Format timestamp in the user's chosen i18n language; empty-array
+   *  arg fell back to the browser's UI locale, which on HF Space prod
+   *  shipped en-US "MM/DD/YYYY, hh:mm AM/PM" alongside Turkish day-of-
+   *  week timestamps elsewhere in the UI. */
   function formatDate(dateStr: string): string {
     const date = new Date(dateStr);
-    return date.toLocaleDateString([], {
+    return date.toLocaleDateString(i18n.language, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",

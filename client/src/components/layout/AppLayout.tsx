@@ -14,7 +14,7 @@
  * Cascade refetch on server switch (channels, members, roles, readState).
  */
 
-import { useEffect, useMemo, useRef, useCallback } from "react";
+import { useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import SplitPaneContainer from "./SplitPaneContainer";
 import MobileAppLayout from "./MobileAppLayout";
@@ -25,7 +25,15 @@ import ConfirmDialog from "../shared/ConfirmDialog";
 import DownloadPromptModal from "../shared/DownloadPromptModal";
 import WelcomeModal from "../shared/WelcomeModal";
 import SettingsModal from "../settings/SettingsModal";
-import VoiceProvider from "../voice/VoiceProvider";
+// VoiceProvider is lazy + conditionally mounted so the ~528 KiB livekit chunk
+// stays off /channels' initial load (Mayıs 28 2026 Lighthouse audit). The
+// component itself short-circuits when !isInVoice (see VoiceProvider.tsx:217),
+// so a non-voice mount would be cheap — but the *module load* still pulled in
+// `@livekit/components-react` statically. Gating on `isInVoiceActive` here
+// means the chunk is fetched only when the user actually joins a voice
+// channel; the brief Suspense fallback during that fetch is hidden behind the
+// existing "Connecting..." UX from useVoice's join flow.
+const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useVoice } from "../../hooks/useVoice";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
@@ -322,47 +330,72 @@ function AppLayout() {
     </>
   );
 
+  // VoiceProvider only mounts when the user is (or is rejoining) a voice
+  // channel. Outside of voice the lazy chunk + livekit bundle (~528 KiB) stays
+  // off the wire entirely — measured on Lighthouse 13 (Mayıs 28 2026).
+  // Suspense fallback returns the same body so the screen never blanks during
+  // the chunk fetch on first voice join; the existing "Connecting..." toast
+  // covers the perceived gap.
+  const isVoiceSessionActive = !!currentVoiceChannelId;
+
   // Mobile layout
   if (isMobile) {
-    const mobileContent = (
-      <VoiceProvider>
+    const mobileBody = (
+      <>
         <MobileAppLayout
           sidebarProps={sidebarProps}
           sendTyping={sendTyping}
           sendDMTyping={sendDMTyping}
         />
         {overlays}
-      </VoiceProvider>
+      </>
+    );
+
+    const mobileContent = isVoiceSessionActive ? (
+      <Suspense fallback={mobileBody}>
+        <VoiceProvider>{mobileBody}</VoiceProvider>
+      </Suspense>
+    ) : (
+      mobileBody
     );
 
     return mobileContent;
   }
 
   // Desktop layout
+  const desktopBody = (
+    <div className="app-body">
+      {/* <main> landmark — Lighthouse (Mayıs 28 2026) flagged the missing
+          landmark on /channels. Sidebar stays outside <main> because it's
+          a navigation region, not main content. */}
+      <main className="main-area">
+        {/* Decorative neon lightning bolts — purely visual, pointer-events
+            none, drawn behind content via z-index. See globals.css for
+            timing + LightningOverlay.tsx for path/colour config.
+            Opt-in (Track X): default OFF — toggled via Settings → Appearance. */}
+        {lightningEnabled && <LightningOverlay />}
+
+        {/* Split pane container */}
+        <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />
+
+        {/* Member list panel */}
+        <MemberList />
+      </main>
+    </div>
+  );
+
   const desktopContent = (
     <div className="mqvi-app">
       {/* Sidebar */}
       <Sidebar {...sidebarProps} />
 
-      {/* VoiceProvider wraps body — keeps LiveKit connection alive across tab switches */}
-      <VoiceProvider>
-        <div className="app-body">
-          {/* Main content area */}
-          <div className="main-area">
-            {/* Decorative neon lightning bolts — purely visual, pointer-events
-                none, drawn behind content via z-index. See globals.css for
-                timing + LightningOverlay.tsx for path/colour config.
-                Opt-in (Track X): default OFF — toggled via Settings → Appearance. */}
-            {lightningEnabled && <LightningOverlay />}
-
-            {/* Split pane container */}
-            <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />
-
-            {/* Member list panel */}
-            <MemberList />
-          </div>
-        </div>
-      </VoiceProvider>
+      {isVoiceSessionActive ? (
+        <Suspense fallback={desktopBody}>
+          <VoiceProvider>{desktopBody}</VoiceProvider>
+        </Suspense>
+      ) : (
+        desktopBody
+      )}
 
       {overlays}
     </div>

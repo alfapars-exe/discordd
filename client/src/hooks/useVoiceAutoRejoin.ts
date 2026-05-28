@@ -61,6 +61,18 @@ export function useVoiceAutoRejoin(isNativeVoice: boolean): {
   // different channel" events that should reset the counter.
   const prevChannelRef = useRef<string | null>(null);
 
+  // Generation token. Incremented on unmount so any in-flight
+  // refreshVoiceToken().then(...) chain captured a stale generation and
+  // can detect that it's running after the hook tore down — without this
+  // a promise resolving post-unmount would run leaveVoiceChannel() or
+  // _wsSend() against a defunct closure.
+  const generationRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      generationRef.current += 1;
+    };
+  }, []);
+
   // Reset rejoin counter when the user explicitly joins a different channel.
   // We only update prevChannelRef on non-null channel ids so a null →
   // same-channel transition (which is what auto-rejoin produces) doesn't
@@ -118,10 +130,15 @@ export function useVoiceAutoRejoin(isNativeVoice: boolean): {
             `[useVoiceAutoRejoin] Auto-rejoin attempt ${rejoinAttemptsRef.current}/${MAX_REJOIN_ATTEMPTS} -> ${channelToRejoin}`,
           );
 
+          // Capture generation at dispatch time so a late-arriving
+          // resolve after unmount is a no-op instead of touching stale
+          // store state.
+          const myGeneration = generationRef.current;
           useVoiceStore
             .getState()
             .refreshVoiceToken(channelToRejoin)
             .then((tokenResp) => {
+              if (generationRef.current !== myGeneration) return;
               if (tokenResp && _wsSend) {
                 console.warn("[useVoiceAutoRejoin] Auto-rejoin SUCCESS");
                 _wsSend("voice_join", { channel_id: channelToRejoin });

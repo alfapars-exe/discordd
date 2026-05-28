@@ -12,7 +12,7 @@
  * No JSX here — pure state machine.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
 import type { MentionSelection } from "../components/chat/MentionAutocomplete";
 
@@ -59,6 +59,22 @@ export function useMessageEditing(args: UseMessageEditingArgs): UseMessageEditin
   const editMentionStartRef = useRef<number>(-1);
   const editMentionSelectionsRef = useRef<MentionSelection[]>([]);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // When the textarea first appears, drop the caret at the end of the
+  // existing draft and focus — without this React renders the textarea
+  // with the browser default (caret at position 0), forcing the user to
+  // press End or click before they can append. requestAnimationFrame
+  // waits for React to commit the textarea so the ref is populated.
+  useEffect(() => {
+    if (!isEditing) return;
+    requestAnimationFrame(() => {
+      const ta = editTextareaRef.current;
+      if (!ta) return;
+      const end = ta.value.length;
+      ta.focus();
+      ta.setSelectionRange(end, end);
+    });
+  }, [isEditing]);
 
   const startEdit = useCallback(() => {
     setEditContent(initialContent ?? "");
@@ -149,7 +165,10 @@ export function useMessageEditing(args: UseMessageEditingArgs): UseMessageEditin
   }, []);
 
   const saveAndExit = useCallback(async () => {
-    const tokenized = tokenize(editContent.trim());
+    // trimEnd only — trim() also stripped leading whitespace, which the
+    // user may have typed intentionally (e.g. indented continuation,
+    // leading bullet, or a space after a mention prefix).
+    const tokenized = tokenize(editContent.trimEnd());
     if (tokenized && tokenized !== (initialContent ?? "")) {
       await saveEdit(tokenized);
     }

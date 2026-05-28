@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
+import { useToastStore } from "../../stores/toastStore";
 import { searchCachedDMMessages } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
 import type { DMMessage } from "../../types";
@@ -25,7 +26,7 @@ type SearchState = {
 } | null;
 
 function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
-  const { t } = useTranslation("chat");
+  const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const isE2EEReady = useE2EEStore((s) => s.initStatus === "ready");
   const searchMessages = useDMStore((s) => s.searchMessages);
@@ -129,16 +130,38 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
     doSearch(query, newOffset);
   }
 
-  /** Scroll to message on result click */
+  const addToast = useToastStore((s) => s.addToast);
+
+  /** Scroll to message on result click. Results are a snapshot — if
+   *  the message has been deleted (other session, peer revocation),
+   *  the scroll target won't be in dmStore anymore. Verify against
+   *  the live store and bail out with a toast + local filter instead
+   *  of silently navigating to a no-longer-existing record. */
   function handleSelectResult(msg: DMMessage) {
+    const live = useDMStore.getState().messagesByChannel[channelId];
+    if (!live?.some((m) => m.id === msg.id)) {
+      addToast("info", t("messageNoLongerExists"));
+      setResults((prev) =>
+        prev
+          ? {
+              ...prev,
+              messages: prev.messages.filter((m) => m.id !== msg.id),
+              totalCount: Math.max(0, prev.totalCount - 1),
+            }
+          : null,
+      );
+      return;
+    }
     setScrollToMessageId(msg.id);
     onClose();
   }
 
-  /** Format timestamp */
+  /** Format timestamp using the user's chosen i18n language. Passing []
+   *  resolved to the browser locale (en-US on HF Space prod), producing
+   *  "MM/DD/YYYY" inside an otherwise-Turkish UI. */
   function formatDate(dateStr: string): string {
     const date = new Date(dateStr);
-    return date.toLocaleDateString([], {
+    return date.toLocaleDateString(i18n.language, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",

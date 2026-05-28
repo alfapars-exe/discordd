@@ -44,12 +44,38 @@ import { resolveUserId } from "../utils/constants";
 
 const RECONNECT_REAPPLY_DELAY_MS = 1000;
 
+// Errors thrown by setMicrophoneEnabled when the underlying engine has
+// already torn down. These are the expected fallout from a room.state
+// check racing the actual SDK lifecycle; surfacing them as console
+// errors makes real failures hard to spot. Matched by error class name
+// (PublishTrackError / ConnectionError) AND substring (different SDK
+// versions phrase the message differently).
+function isHarmlessVoiceRace(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("engine not connected") ||
+    msg.includes("client initiated disconnect") ||
+    err.name === "PublishTrackError" ||
+    err.name === "ConnectionError"
+  );
+}
+
 export function useInitialRoomSync(
   room: Room,
   localParticipant: LocalParticipant,
   initialSyncDoneRef: React.RefObject<boolean>,
 ): void {
   useEffect(() => {
+    // Track every setTimeout scheduled by this effect so we can drain
+    // them on cleanup. Without this, a Reconnected event near unmount
+    // queued a 1s-delayed setMicrophoneEnabled call that fired after
+    // VoiceProvider had already disconnected the room — the callback
+    // ran with stale closures and produced PublishTrackError noise. The
+    // 4× duplicate-error pattern reported in the second QA round was
+    // multiple accumulated cycles each leaking one of these timers.
+    const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
     function applyInitialState() {
       // Defensive: RoomEvent.Connected fires in a microtask after the SDK
       // flips its state, but by the time this handler runs the room may
@@ -73,13 +99,9 @@ export function useInitialRoomSync(
       const fullyDeaf = deaf || srvDeaf;
 
       localParticipant.setMicrophoneEnabled(shouldEnable).catch((err: unknown) => {
-        // Filter the engine-teardown race: between the room.state check
-        // above and the SDK reaching the publish path, the PeerConnection
-        // can still close. The error is harmless — the next Connected event
-        // re-fires this whole handler — so don't surface it as a console
-        // error. Anything else is a real failure worth seeing.
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("engine not connected")) return;
+        // Filter the engine-teardown race — see isHarmlessVoiceRace above
+        // for the matching surface. Anything else is a real failure.
+        if (isHarmlessVoiceRace(err)) return;
         console.error("[useInitialRoomSync] Failed to set initial mic state:", err);
       });
 
@@ -117,8 +139,12 @@ export function useInitialRoomSync(
 
       // Wait for the PeerConnection to stabilize before re-applying state.
       // RemoteParticipant objects may have been recreated; volumes and
-      // subscriptions need to be reapplied from scratch.
-      setTimeout(() => {
+      // subscriptions need to be reapplied from scratch. The timer is
+      // tracked in pendingTimeouts so the effect cleanup can drain it
+      // when the room unmounts mid-reconnect.
+      const timer = setTimeout(() => {
+        pendingTimeouts.delete(timer);
+
         // The 1s delay above creates a window where the room could leave the
         // Connected state (user navigates away, voice service drops). Skip
         // the whole reapply if we've fallen out of Connected — the next
@@ -126,11 +152,8 @@ export function useInitialRoomSync(
         if (room.state !== ConnectionState.Connected) return;
 
         localParticipant.setMicrophoneEnabled(shouldEnable).catch((err: unknown) => {
-          // Same engine-teardown race as applyInitialState; treat the
-          // "engine not connected" message as expected race fallout and
-          // suppress to keep the console signal-to-noise high.
-          const msg = err instanceof Error ? err.message : String(err);
-          if (msg.includes("engine not connected")) return;
+          // Same engine-teardown race as applyInitialState.
+          if (isHarmlessVoiceRace(err)) return;
           console.error(
             "[useInitialRoomSync] Failed to restore mic after reconnect:",
             err,
@@ -174,6 +197,7 @@ export function useInitialRoomSync(
           });
         });
       }, RECONNECT_REAPPLY_DELAY_MS);
+      pendingTimeouts.add(timer);
     }
 
     // Apply right away if already connected when the hook mounts.
@@ -185,6 +209,8 @@ export function useInitialRoomSync(
     room.on(RoomEvent.Reconnected, handleReconnected);
 
     return () => {
+      pendingTimeouts.forEach(clearTimeout);
+      pendingTimeouts.clear();
       room.off(RoomEvent.Connected, handleConnected);
       room.off(RoomEvent.Reconnected, handleReconnected);
       initialSyncDoneRef.current = false;

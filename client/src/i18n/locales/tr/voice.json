@@ -81,5 +81,9 @@
   "afkKickTitle": "Uyan Bakalım!",
   "afkKickMessage": "{{server}} sunucusundaki {{channel}} kanalından AFK olduğun için atıldın. Tozlar birikmeye başlamıştı.",
   "afkKickSubtitle": "İpucu: Mouse'unu oynat, bir şey söyle, ya da en azından uyanıkmış gibi yap.",
-  "afkKickDismiss": "Uyanığım, yemin ederim!"
+  "afkKickDismiss": "Uyanığım, yemin ederim!",
+
+  "selectMicrophoneDevice": "Mikrofon cihazını seç",
+  "selectSpeakerDevice": "Hoparlör cihazını seç",
+  "selectScreenShareSettings": "Ekran paylaşımı ayarları"
 }

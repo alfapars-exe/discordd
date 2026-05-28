@@ -179,8 +179,10 @@ function UserBar({
                 ref={setScreenShareChevronEl}
                 className={`ub-chevron${devicePopup === "screenshare" ? " active" : ""}`}
                 onClick={() => setDevicePopup(devicePopup === "screenshare" ? null : "screenshare")}
+                aria-label={t("selectScreenShareSettings")}
+                aria-expanded={devicePopup === "screenshare"}
               >
-                <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor">
+                <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
                   {devicePopup === "screenshare"
                     ? <path d="M2 7l3-4 3 4H2z" />
                     : <path d="M2 3l3 4 3-4H2z" />
@@ -261,8 +263,10 @@ function UserBar({
             ref={setMicChevronEl}
             className={`ub-chevron${devicePopup === "input" ? " active" : ""}`}
             onClick={() => setDevicePopup(devicePopup === "input" ? null : "input")}
+            aria-label={t("selectMicrophoneDevice")}
+            aria-expanded={devicePopup === "input"}
           >
-            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor">
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
               {devicePopup === "input"
                 ? <path d="M2 7l3-4 3 4H2z" />
                 : <path d="M2 3l3 4 3-4H2z" />
@@ -290,8 +294,10 @@ function UserBar({
             ref={setSpeakerChevronEl}
             className={`ub-chevron${devicePopup === "output" ? " active" : ""}`}
             onClick={() => setDevicePopup(devicePopup === "output" ? null : "output")}
+            aria-label={t("selectSpeakerDevice")}
+            aria-expanded={devicePopup === "output"}
           >
-            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor">
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
               {devicePopup === "output"
                 ? <path d="M2 7l3-4 3 4H2z" />
                 : <path d="M2 3l3 4 3-4H2z" />

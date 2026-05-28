@@ -12,6 +12,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
+import { useE2EEStore } from "../../stores/e2eeStore";
 import { useChatContext } from "../../hooks/useChatContext";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
@@ -50,7 +51,15 @@ type MessageProps = {
 
 function Message({ message, isCompact }: MessageProps) {
   const { t, i18n } = useTranslation("chat");
+  const { t: tE2ee } = useTranslation("e2ee");
   const currentUser = useAuthStore((s) => s.user);
+  // Surface E2EE decryption failures inline so empty bubbles aren't
+  // mistaken for blank messages. dmEncryption.ts pushes both failure
+  // paths (decrypt throw + missing envelope for this device) into the
+  // store; this selector reads the per-message presence flag.
+  const hasDecryptionError = useE2EEStore((s) =>
+    s.decryptionErrors.some((e) => e.messageId === message.id),
+  );
   const {
     mode,
     editMessage,
@@ -328,6 +337,16 @@ function Message({ message, isCompact }: MessageProps) {
               <p className="msg-edit-hint">
                 escape = {t("editCancel", "cancel")}, enter = {t("editSave", "save")}
               </p>
+            </div>
+          ) : hasDecryptionError ? (
+            <div className="msg-text msg-decryption-failed">
+              <span className="msg-decryption-failed-icon" aria-hidden>🔒</span>
+              <span className="msg-decryption-failed-text">{tE2ee("decryptionError")}</span>
+              {isCompact && (
+                <span className="msg-gtime" title={formatFullDate(message.created_at)}>
+                  {formatTime(message.created_at)}
+                </span>
+              )}
             </div>
           ) : (
             <div className="msg-text">

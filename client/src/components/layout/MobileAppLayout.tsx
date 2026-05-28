@@ -95,9 +95,10 @@ function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLa
       </MobileDrawer>
 
       <div className="app-body">
-        <div className="main-area">
+        {/* <main> landmark — mirrors AppLayout.tsx desktop. */}
+        <main className="main-area">
           <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />
-        </div>
+        </main>
       </div>
     </div>
   );

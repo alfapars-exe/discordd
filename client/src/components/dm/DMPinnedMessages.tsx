@@ -12,7 +12,7 @@ type DMPinnedMessagesProps = {
 };
 
 function DMPinnedMessages({ channelId, onClose }: DMPinnedMessagesProps) {
-  const { t } = useTranslation("chat");
+  const { t, i18n } = useTranslation("chat");
   const getPinnedMessages = useDMStore((s) => s.getPinnedMessages);
   const unpinMessage = useDMStore((s) => s.unpinMessage);
 
@@ -44,10 +44,12 @@ function DMPinnedMessages({ channelId, onClose }: DMPinnedMessagesProps) {
     [channelId, unpinMessage]
   );
 
-  /** Format timestamp for display */
+  /** Format timestamp for display in the user's chosen i18n language; an
+   *  empty-array arg fell back to the browser locale (en-US on HF Space)
+   *  while other timestamps in the UI used Turkish formatting. */
   function formatDate(dateStr: string): string {
     const date = new Date(dateStr);
-    return date.toLocaleDateString([], {
+    return date.toLocaleDateString(i18n.language, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",

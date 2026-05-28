@@ -692,6 +692,9 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .msg-text { font-size:13px;line-height:1.45;color:var(--t0);white-space:pre-wrap;word-break:break-word; }
 .msg-text code { font-family:var(--f-m);font-size:13px;background:var(--bg-0);padding:1px 5px;border-radius:3px;border:1px solid var(--b1);color:var(--teal); }
 .msg-edited { font-size:13px;color:var(--t3);margin-left:4px; }
+.msg-decryption-failed { display:inline-flex;align-items:center;gap:6px;font-style:italic;color:var(--t2); }
+.msg-decryption-failed-icon { font-size:14px;opacity:.7; }
+.msg-decryption-failed-text { font-size:13px; }
 .mention { background:var(--primary-s);color:var(--primary);padding:0 3px;border-radius:3px;font-weight:500;cursor:pointer; }
 .mention:hover { background:var(--primary-m); }
 .msg-mention { background:var(--primary-s);color:var(--primary);padding:0 3px;border-radius:3px;font-weight:500; }
@@ -3386,6 +3389,12 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 
   /* User bar control buttons — 34px → 44px */
   .ub-ctrl {
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+  }
+
+  /* User bar chevrons — 24×34 → 44×44 on touch devices (Mayıs 28 2026 Lighthouse) */
+  .ub-chevron {
     width: var(--mobile-touch-target);
     height: var(--mobile-touch-target);
   }

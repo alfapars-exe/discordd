@@ -115,6 +115,12 @@ export function useVolumeSync(room: Room): void {
   // Effect B: apply volume when new tracks are subscribed.
   // Retry after 300ms — webAudioMix pipeline may not be ready at subscribe time.
   useEffect(() => {
+    // Track every scheduled retry so the cleanup can drain them; bare
+    // setTimeouts here used to leak past room teardown and fire with
+    // stale participant references, contributing to the post-leave
+    // console-spam pattern reported in the second QA round.
+    const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
     function handleTrackSubscribed(
       track: RemoteTrack,
       _publication: RemoteTrackPublication,
@@ -123,11 +129,17 @@ export function useVolumeSync(room: Room): void {
       if (track.kind !== Track.Kind.Audio) return;
 
       applyVolumeToParticipant(participant);
-      setTimeout(() => applyVolumeToParticipant(participant), TRACK_SUBSCRIBED_RETRY_MS);
+      const timer = setTimeout(() => {
+        pendingTimeouts.delete(timer);
+        applyVolumeToParticipant(participant);
+      }, TRACK_SUBSCRIBED_RETRY_MS);
+      pendingTimeouts.add(timer);
     }
 
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     return () => {
+      pendingTimeouts.forEach(clearTimeout);
+      pendingTimeouts.clear();
       room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     };
   }, [room, applyVolumeToParticipant]);
@@ -135,15 +147,20 @@ export function useVolumeSync(room: Room): void {
   // Effect C: apply volume on participant reconnect (new RemoteParticipant
   // object, track publications arrive after a brief window).
   useEffect(() => {
+    const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
     function handleParticipantConnected(participant: RemoteParticipant) {
-      setTimeout(
-        () => applyVolumeToParticipant(participant),
-        PARTICIPANT_CONNECTED_DELAY_MS,
-      );
+      const timer = setTimeout(() => {
+        pendingTimeouts.delete(timer);
+        applyVolumeToParticipant(participant);
+      }, PARTICIPANT_CONNECTED_DELAY_MS);
+      pendingTimeouts.add(timer);
     }
 
     room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
     return () => {
+      pendingTimeouts.forEach(clearTimeout);
+      pendingTimeouts.clear();
       room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
     };
   }, [room, applyVolumeToParticipant]);

@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -190,25 +189,36 @@ func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request) (s
 		return "", fmt.Errorf("%w: only image files are allowed (jpeg, png, gif, webp)", pkg.ErrBadRequest)
 	}
 
+	// Downscale + re-encode before touching disk. ResizeAvatarBytes accepts
+	// any image MIME we allow, caps the longest edge at avatarMaxDim, and
+	// returns the encoder-chosen extension (.png for alpha, .jpg otherwise).
+	// The resize step also strips EXIF / colour-profile metadata, so a user
+	// can't accidentally publish GPS-tagged photos as their avatar.
+	//
+	// Pre-resize avatars routinely hit ~1.3 MiB on disk (the Lighthouse audit
+	// from Mayıs 28 2026 showed five concurrent member-list avatars eating
+	// ~5.9 MiB of bandwidth). Post-resize each one fits in ~6-15 KB.
+	resized, ext, err := ResizeAvatarBytes(file)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", pkg.ErrBadRequest, err)
+	}
+
 	randomBytes := make([]byte, 8)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", fmt.Errorf("failed to generate random filename: %w", err)
 	}
 	safeFilename := sanitizeAvatarFilename(header.Filename)
+	// Replace the original extension with the one chosen by the resizer —
+	// a .png upload re-encoded as JPEG must land on disk as .jpg so the
+	// MIME sniff at serve time matches the actual bytes.
+	safeFilename = SwapExtension(safeFilename, ext)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
 	destPath, err := pkg.SafeJoin(h.uploadDir, diskFilename)
 	if err != nil {
 		return "", fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
-	if err != nil {
-		return "", fmt.Errorf("failed to create file: %w", err)
-	}
-	defer destFile.Close()
-
-	if _, err := io.Copy(destFile, file); err != nil {
-		_ = os.Remove(destPath)
+	if err := os.WriteFile(destPath, resized, 0o640); err != nil { // #nosec G304 — verified by SafeJoin
 		return "", fmt.Errorf("failed to save file: %w", err)
 	}
 

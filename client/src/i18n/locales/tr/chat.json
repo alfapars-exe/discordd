@@ -29,6 +29,7 @@
   "searchResultCount": "{{count}} sonuç",
   "searchPrev": "Önceki",
   "searchNext": "Sonraki",
+  "messageNoLongerExists": "Bu mesaj artık mevcut değil",
   "directMessages": "Direkt Mesajlar",
   "noDMs": "Henüz konuşma yok",
   "dmPlaceholder": "@{{user}} kullanıcısına mesaj yaz",

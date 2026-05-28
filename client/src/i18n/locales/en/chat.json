@@ -29,6 +29,7 @@
   "searchResultCount": "{{count}} results",
   "searchPrev": "Previous",
   "searchNext": "Next",
+  "messageNoLongerExists": "This message no longer exists",
   "directMessages": "Direct Messages",
   "noDMs": "No conversations yet",
   "dmPlaceholder": "Message @{{user}}",

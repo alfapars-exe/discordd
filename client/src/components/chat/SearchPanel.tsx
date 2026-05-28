@@ -6,6 +6,8 @@ import { searchMessages } from "../../api/search";
 import { searchCachedMessages } from "../../crypto/keyStorage";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
+import { useMessageStore } from "../../stores/messageStore";
+import { useToastStore } from "../../stores/toastStore";
 import type { SearchResult } from "../../api/search";
 import type { Message } from "../../types";
 import Avatar from "../shared/Avatar";
@@ -21,7 +23,7 @@ type SearchPanelProps = {
 };
 
 function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
-  const { t } = useTranslation("chat");
+  const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const isE2EEReady = useE2EEStore((s) => s.initStatus === "ready");
   // E2EE is per-server. Plaintext servers can use backend FTS5; only route
@@ -127,9 +129,39 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     doSearch(query, newOffset);
   }
 
+  const addToast = useToastStore((s) => s.addToast);
+
+  /** Clicking a result navigates to the original message, but the
+   *  result list is a snapshot — if the message has been deleted in
+   *  another tab/session, the chat scroll-target no longer exists.
+   *  Verify against messageStore at click time and bail out with a
+   *  toast + local filter instead of leaving the user stranded. */
+  const handleResultClick = useCallback(
+    (msg: Message) => {
+      const live = useMessageStore.getState().messagesByChannel[msg.channel_id];
+      if (!live?.some((m) => m.id === msg.id)) {
+        addToast("info", t("messageNoLongerExists"));
+        setResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                messages: prev.messages.filter((m) => m.id !== msg.id),
+                total_count: Math.max(0, prev.total_count - 1),
+              }
+            : null,
+        );
+        return;
+      }
+      onSelectResult?.(msg);
+    },
+    [onSelectResult, addToast, t],
+  );
+
   function formatDate(dateStr: string): string {
     const date = new Date(dateStr);
-    return date.toLocaleDateString([], {
+    // Use the user's chosen i18n language; previously [] (default locale)
+    // produced en-US "MM/DD/YYYY" on HF Space prod regardless of UI lang.
+    return date.toLocaleDateString(i18n.language, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -193,7 +225,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
                 <div
                   key={msg.id}
                   className="search-result-item"
-                  onClick={() => onSelectResult?.(msg)}
+                  onClick={() => handleResultClick(msg)}
                 >
                   <div className="search-result-header">
                     <Avatar
