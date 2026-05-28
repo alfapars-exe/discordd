@@ -50,6 +50,7 @@ import { useServerStore } from "../stores/serverStore";
 import { useToastStore } from "../stores/toastStore";
 import { useSystemAudioCapture } from "./useSystemAudioCapture";
 import { useDisplayInfo, type DisplayInfo } from "./useDisplayInfo";
+import { useScreenSharePublishDefaults } from "./useScreenSharePublishDefaults";
 import {
   isElectron,
   isCapacitor,
@@ -118,6 +119,17 @@ export function useScreenShareToggle(
   const displayRef = useRef(display);
   useLayoutEffect(() => {
     displayRef.current = display;
+  });
+
+  // Per-publish encoder + capture options. Held in a ref so the toggle
+  // effect captures the latest value at publish time without re-running
+  // every time the user opens settings. Was previously applied via the
+  // room-level publishDefaults (one-shot at room creation), which made
+  // mid-session quality / mode changes a no-op until the user reconnected.
+  const publishOpts = useScreenSharePublishDefaults();
+  const publishOptsRef = useRef(publishOpts);
+  useLayoutEffect(() => {
+    publishOptsRef.current = publishOpts;
   });
 
   // Native Electron audio capture — excludes our own process tree to prevent
@@ -193,11 +205,19 @@ export function useScreenShareToggle(
         } else if (isElectron() && screenShareAudio) {
           const { screenShareQuality: ssq, screenShareFps: ssFps } =
             useVoiceStore.getState();
+          const opts = publishOptsRef.current;
+          // captureOptions (2nd arg) — getDisplayMedia hints; we suppress
+          // audio in this branch because the native helper publishes a
+          // separate audio track later.
+          // publishOptions (3rd arg) — encoder + simulcast + codec are
+          // taken from useScreenSharePublishDefaults so quality / FPS /
+          // mode changes apply on the NEXT screen-share start without a
+          // full room reconnect.
           await localParticipant.setScreenShareEnabled(true, {
             audio: false,
             resolution: resolutionFor(ssq, ssFps, displayRef.current),
-            contentHint: "motion",
-          });
+            contentHint: opts.screenShareCapture.contentHint,
+          }, opts.screenSharePublish);
 
           if (cancelled) return;
 
@@ -245,11 +265,12 @@ export function useScreenShareToggle(
             useVoiceStore.getState();
           const ssq = isMobileBrowser() ? "720p" : savedQ;
           const ssFps = isMobileBrowser() ? 30 : savedFps;
+          const opts = publishOptsRef.current;
           await localParticipant.setScreenShareEnabled(true, {
             audio: screenShareAudio,
             resolution: resolutionFor(ssq, ssFps, displayRef.current),
-            contentHint: "motion",
-          });
+            contentHint: opts.screenShareCapture.contentHint,
+          }, opts.screenSharePublish);
           logToServer("info", "screen_share_success", {
             branch,
             durationMs: Date.now() - attemptStart,

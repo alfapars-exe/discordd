@@ -135,7 +135,26 @@ export type VoiceSettings = {
    * options popup. Trade-off documented in user-visible tooltip.
    */
   screenShareLowLatency: boolean;
+  /**
+   * Screen-share content profile.
+   *   - "motion": video / games / animations. Pairs with maintain-framerate
+   *     degradation + contentHint:"motion". Bandwidth tight → resolution
+   *     softens first, frame rate stays smooth. (Discord-default behaviour.)
+   *   - "detail": presentations / code / docs. Pairs with maintain-resolution
+   *     degradation + contentHint:"detail". Bandwidth tight → frame rate
+   *     drops first, text stays sharp.
+   *
+   * Default "motion" because most users share gameplay/video. Power users
+   * sharing slides or text should switch to "detail" via Voice Settings.
+   * Setting takes effect immediately on the next screen-share start (and
+   * mid-stream when the publish opts are passed per-publish — see
+   * useScreenShareToggle).
+   */
+  screenShareMode: ScreenShareMode;
 };
+
+/** Display profile that shapes encoder degradation + content hint. */
+export type ScreenShareMode = "motion" | "detail";
 
 const STORAGE_KEY = "mqvi_voice_settings";
 
@@ -189,6 +208,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   screenShareFps: 30,
   screenShareShowCursor: true,
   screenShareLowLatency: false,
+  screenShareMode: "motion",
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -266,6 +286,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     screenShareFps: s.screenShareFps,
     screenShareShowCursor: s.screenShareShowCursor,
     screenShareLowLatency: s.screenShareLowLatency,
+    screenShareMode: s.screenShareMode,
   };
 }
 
@@ -288,6 +309,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareFps: (fps: ScreenShareFps) => void;
   setScreenShareShowCursor: (enabled: boolean) => void;
   setScreenShareLowLatency: (enabled: boolean) => void;
+  setScreenShareMode: (mode: ScreenShareMode) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
@@ -325,6 +347,7 @@ export const createVoiceSettingsSlice: StateCreator<
     screenShareFps: initial.screenShareFps,
     screenShareShowCursor: initial.screenShareShowCursor,
     screenShareLowLatency: initial.screenShareLowLatency,
+    screenShareMode: initial.screenShareMode,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -399,6 +422,11 @@ export const createVoiceSettingsSlice: StateCreator<
 
     setScreenShareLowLatency: (enabled) => {
       set({ screenShareLowLatency: enabled });
+      saveSettings(currentSettings(get()));
+    },
+
+    setScreenShareMode: (mode: ScreenShareMode) => {
+      set({ screenShareMode: mode });
       saveSettings(currentSettings(get()));
     },
 
