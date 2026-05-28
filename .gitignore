@@ -141,3 +141,7 @@ DECISIONS.md
 
 server/mqvi-server
 server/server.exe
+
+# Local binary backups (HF Space pre-receive rejects raw binaries; keep
+# them on disk but out of git).
+*.bak
