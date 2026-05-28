@@ -133,12 +133,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   /** Restore session from stored token on app start. */
   initialize: async () => {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      set({ isInitialized: true });
-      return;
-    }
-
+    // Access token lives in module memory only (see api/client.ts). On cold
+    // reload the in-memory token starts null, getMe() returns 401, apiClient
+    // transparently calls /auth/refresh via the HttpOnly cookie and retries.
+    // If the refresh cookie is invalid or missing, the retry fails too and we
+    // fall into the else branch — clearTokens + isInitialized=true bounces
+    // the user to /login. No localStorage gate: the legacy access_token key
+    // is swept at boot and would always read null, preventing this whole flow.
     const res = await authApi.getMe();
     if (res.success && res.data) {
       syncLanguageFromUser(res.data);

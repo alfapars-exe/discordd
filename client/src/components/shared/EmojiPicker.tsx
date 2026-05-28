@@ -107,7 +107,7 @@ function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
       className={`emoji-picker${flipped ? " emoji-picker-flipped" : ""}`}
       ref={pickerRef}
     >
-      {data && (
+      {data !== null && (
         <Suspense fallback={null}>
           <Picker
             data={data}

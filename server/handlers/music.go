@@ -108,15 +108,15 @@ func (h *MusicHandler) Stop(w http.ResponseWriter, r *http.Request) {
 }
 
 // State — GET /api/servers/.../music/state. Returns the channel's current
-// MusicBotChannelState (or 404 if no bot is active). Used for first-paint
-// and reconnect — every other update arrives over the WebSocket.
+// MusicBotChannelState, or a null body when no bot is active. Used for
+// first-paint and reconnect; every subsequent update arrives over the
+// WebSocket. We deliberately return 200 + null instead of 404 because the
+// client polls this on every voice join — a missing bot is "expected absence"
+// rather than a client error, and surfacing it as 404 produces console noise
+// on the happy path with nothing meaningful for the caller to do about it.
 func (h *MusicHandler) State(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelId")
 	state := h.music.GetState(channelID)
-	if state == nil {
-		pkg.ErrorWithMessage(w, http.StatusNotFound, "no active bot for this channel")
-		return
-	}
 	pkg.JSON(w, http.StatusOK, state)
 }
 

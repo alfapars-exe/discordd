@@ -81,6 +81,13 @@ func (h *InviteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Preview handles GET /api/invites/{code}/preview
 // No auth required. Returns server name, icon, and member count for invite cards.
+//
+// The client renders InviteJoinPage twice in the unauthenticated → /login →
+// authenticated path, and re-renders on auth-state transitions, so the same
+// preview is requested multiple times in quick succession. A short shared
+// Cache-Control keeps the browser HTTP cache from going back to the network
+// on those repeats without making the data feel stale (invites change rarely;
+// 60s is well below any human-perceptible "I just revoked it" delay).
 func (h *InviteHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
@@ -94,5 +101,6 @@ func (h *InviteHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	pkg.JSON(w, http.StatusOK, preview)
 }

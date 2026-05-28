@@ -49,7 +49,9 @@ export async function stopMusic(serverId: string, channelId: string) {
 }
 
 /**
- * Initial-load fetch for the panel. Returns null on 404 (no active bot).
+ * Initial-load fetch for the panel. When no bot is active the server still
+ * responds 200 success=true but omits `data` — treat an absent `res.data`
+ * as "no music playing" (the panel already does, via `!res.data` guard).
  * Real-time deltas come via the WebSocket — this is for first paint and
  * reconnect resync.
  */

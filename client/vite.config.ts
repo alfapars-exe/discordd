@@ -87,8 +87,13 @@ export default defineConfig(({ command }) => ({
         //  - livekit: voice/screen-share runtime (loaded only when joining
         //    a voice channel — but currently statically imported; the chunk
         //    still ships eagerly until VoiceProvider becomes lazy)
-        //  - emoji: emoji-mart data + react (loaded when picker opens, but
-        //    the data is huge and bundled eagerly today)
+        //
+        // emoji-mart is intentionally NOT in manualChunks: forcing it into a
+        // named chunk made Vite treat it as a static dep of the entry and
+        // inserted <link rel="modulepreload"> into index.html, even when the
+        // only callers (EmojiPicker.tsx) dynamic-imported it. Letting Vite
+        // auto-split it on dynamic-import boundaries keeps the ~500 KiB off
+        // the /login critical path. (Mayıs 28 2026 Lighthouse follow-up.)
         //
         // Anything not matched here stays in the per-route chunks Vite
         // auto-splits via dynamic import.
@@ -115,9 +120,6 @@ export default defineConfig(({ command }) => ({
             id.includes("@livekit/components-react")
           ) {
             return "livekit";
-          }
-          if (id.includes("@emoji-mart/") || id.includes("/emoji-mart/")) {
-            return "emoji";
           }
           return undefined;
         },
