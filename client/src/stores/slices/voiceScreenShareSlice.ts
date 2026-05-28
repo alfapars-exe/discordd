@@ -20,6 +20,18 @@ import type { VoiceStore } from "../voiceStore";
  */
 export type ScreenShareQualityGrade = "good" | "fair" | "poor";
 
+/**
+ * Sustained reason the publisher's encoder is dropping quality. Mirrors
+ * RTCRtpSender's qualityLimitationReason but with our own hysteresis
+ * applied (one 10 s spike doesn't flash the banner — we require two
+ * consecutive samples to set, and two consecutive clean samples to clear).
+ *
+ * "none" is the absence of a warning; we don't store it (entry is just
+ * cleared). "other" is grouped with "none" because it doesn't suggest a
+ * user-actionable fix.
+ */
+export type ScreenShareLimitationReason = "cpu" | "bandwidth";
+
 export type VoiceScreenShareSlice = {
   /** streamer user IDs we're actively subscribed to */
   watchingScreenShares: Record<string, boolean>;
@@ -39,6 +51,15 @@ export type VoiceScreenShareSlice = {
    * Not persisted — purely transient per-session derived state.
    */
   screenShareQualityGradeByPublisher: Record<string, ScreenShareQualityGrade>;
+  /**
+   * When the local user is broadcasting and the encoder reports a
+   * sustained limitation (cpu / bandwidth), useScreenShareStats writes
+   * it here. The broadcaster surface reads this to render an
+   * actionable banner ("CPU yetersiz — Düşük Gecikme moduna geç" or
+   * "Bandwidth düşük — kalite/FPS azalt"). Null when no warning is
+   * active. Cleared on share stop.
+   */
+  screenSharePublisherWarning: ScreenShareLimitationReason | null;
 
   toggleWatchScreenShare: (userId: string) => void;
   focusScreenShare: (userId: string) => void;
@@ -48,6 +69,8 @@ export type VoiceScreenShareSlice = {
   setScreenShareQualityGrade: (publisherId: string, quality: ScreenShareQualityGrade) => void;
   /** Drop a publisher's quality entry (called on Unsubscribe / Disconnect). */
   clearScreenShareQualityGrade: (publisherId: string) => void;
+  /** Set the local broadcaster's encoder-limitation warning, or pass null to clear. */
+  setScreenSharePublisherWarning: (reason: ScreenShareLimitationReason | null) => void;
 };
 
 export const createVoiceScreenShareSlice: StateCreator<
@@ -59,6 +82,7 @@ export const createVoiceScreenShareSlice: StateCreator<
   watchingScreenShares: {},
   screenShareViewers: {},
   screenShareQualityGradeByPublisher: {},
+  screenSharePublisherWarning: null,
 
   toggleWatchScreenShare: (userId: string) => {
     const { watchingScreenShares, _wsSend } = get();
@@ -107,6 +131,15 @@ export const createVoiceScreenShareSlice: StateCreator<
     const next = { ...cur };
     delete next[publisherId];
     set({ screenShareQualityGradeByPublisher: next });
+  },
+
+  setScreenSharePublisherWarning: (reason) => {
+    // Idempotent — same warning twice in a row shouldn't re-render the
+    // banner. The hook does its own hysteresis on top, but the no-op
+    // guard here protects against accidental redundant set calls from
+    // future callers.
+    if (get().screenSharePublisherWarning === reason) return;
+    set({ screenSharePublisherWarning: reason });
   },
 
   focusScreenShare: (userId: string) => {
