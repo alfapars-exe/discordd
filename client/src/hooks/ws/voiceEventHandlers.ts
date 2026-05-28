@@ -43,6 +43,23 @@ export async function handleVoiceEvent(
         else if (prevStreaming && !voiceData.is_streaming) playLeaveSound();
       }
 
+      // Stream-stop cleanup — fires for ANY user in the same channel
+      // (including local self-stop). Belt-and-suspenders with the LiveKit
+      // event-driven cleanup in useTrackSubscriptions, which can miss when
+      // we never managed to subscribe before the share ended (race) or
+      // for iOS native "_ss" sub-participants whose lifecycle is separate.
+      // Without this, watchingScreenShares retains the stale entry and
+      // VoiceParticipantGrid stays stuck in compact-strip mode.
+      if (
+        isSameChannel &&
+        voiceData.action === "update" &&
+        prevStreaming &&
+        !voiceData.is_streaming
+      ) {
+        voiceState.removeWatchScreenShare(voiceData.user_id);
+        voiceState.clearScreenShareQualityGrade(voiceData.user_id);
+      }
+
       // Enforce server mute/deafen on self — update store so VoiceStateManager syncs to LiveKit
       if (isMe && voiceData.action === "update") {
         useVoiceStore.setState({

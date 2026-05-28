@@ -56,7 +56,13 @@ function VoiceParticipantGrid() {
   );
 
   const watchingScreenShares = useVoiceStore((s) => s.watchingScreenShares);
-  const hasScreenShare = Object.values(watchingScreenShares).some(Boolean);
+  // Cross-check watch state against the WS-authoritative voice states: the
+  // layout flips back to full grid the moment a streamer's is_streaming
+  // goes false, even if useTrackSubscriptions' LiveKit-event cleanup hasn't
+  // removed the watch entry yet (race / never-subscribed / iOS "_ss" cases).
+  const hasScreenShare = !!channelStates?.some(
+    (s) => s.is_streaming && (watchingScreenShares[s.user_id] ?? false),
+  );
 
   // Cameras switch the grid to compact-strip mode the same way screen shares
   // do, so the central area can host CameraView (rendered above this grid in
