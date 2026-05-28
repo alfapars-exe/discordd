@@ -12,17 +12,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="HiChat! — Açık kaynak, gerçek zamanlı sohbet ve sesli iletişim platformu. Discord alternatifi, kendi sunucunuzda barındırabileceğiniz tam özellikli iletişim aracı." />
     <title>HiChat!</title>
-    <!-- Brand fonts loaded from <head> (not @import inside CSS) so the preload
-         scanner can kick the request off in parallel with the rest of the
-         document — saves ~1 RTT vs. discovering the URL after globals.css
-         parses. Manrope weight 300 is intentionally dropped: zero call sites
-         in src/. Weights 400/500/600/700/800 cover all UI states (body,
-         medium emphasis, semibold, bold, extrabold heading). JetBrains Mono
-         is loaded only on marketing pages via landing.css to keep this
-         critical-path request small. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;500&display=swap" />
+    <!-- Brand fonts (Manrope + Source Code Pro) are now self-hosted via
+         @font-face declarations in src/styles/globals.css. Removed the
+         third-party fonts.googleapis.com <link> after the Mayıs 28 2026
+         Lighthouse audit — saves two cross-origin handshakes, eliminates
+         a CSP allowlist surface, and lets the woff2 files share the same
+         immutable cache as the rest of /assets/*. -->
     <!-- Prevent white flash before CSS/JS loads -->
     <style>
       html, body { margin:0; padding:0; background:#0f1419; color:#e0e0e0; }

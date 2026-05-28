@@ -608,11 +608,13 @@ func isHFSpace() bool {
 // Applied to all responses (API + static + SPA).
 //
 // CSP policy notes:
-//   - script-src 'self': no inline scripts; bundled JS only
-//   - style-src 'self' 'unsafe-inline' fonts.googleapis.com: Tailwind/CSS-in-JS
-//     injects inline styles; fonts.googleapis.com hosts the Manrope/Source Code Pro
-//     stylesheet preloaded from index.html
-//   - font-src 'self' data: fonts.gstatic.com: woff2 font files served from gstatic
+//   - script-src 'self' 'wasm-unsafe-eval': bundled JS only; wasm-unsafe-eval
+//     allows the deepfilter/dtln WASM noise filters to compile
+//   - style-src 'self' 'unsafe-inline': React component <style> + tooltip libs
+//     inject inline styles. No external stylesheet hosts allowed after the
+//     Manrope/Source Code Pro fonts moved to self-hosted /fonts/* (Mayıs 28
+//     2026 Lighthouse follow-up).
+//   - font-src 'self' data:: self-hosted woff2 only
 //   - img-src includes data: + blob: for avatars/attachments/E2EE thumbnails
 //   - connect-src includes wss: for WebSocket + same-origin for API
 //   - frame-ancestors 'none' + X-Frame-Options DENY = double clickjacking defense
@@ -648,12 +650,18 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "geolocation=()")
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		// COOP isolates the top-level window from same-origin pop-ups; required to
+		// re-enable certain high-resolution timing APIs (performance.now() precision,
+		// SharedArrayBuffer) and addresses the Lighthouse "Ensure proper origin
+		// isolation with COOP" finding (high-severity). same-origin is safe here —
+		// we deliberately have no cross-origin window.opener relationships.
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'wasm-unsafe-eval'; "+
-				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: blob: https:; "+
-				"font-src 'self' data: https://fonts.gstatic.com; "+
+				"font-src 'self' data:; "+
 				"media-src 'self' blob:; "+
 				"connect-src 'self' wss: https:; "+
 				"worker-src 'self' blob:; "+

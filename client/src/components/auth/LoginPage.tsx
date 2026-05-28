@@ -238,7 +238,7 @@ function LoginPage() {
           </Link>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 

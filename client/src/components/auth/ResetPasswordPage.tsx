@@ -52,7 +52,7 @@ function ResetPasswordPage() {
   // ─── Render: No Token ───
   if (!token) {
     return (
-      <div className="auth-page">
+      <main className="auth-page">
         <div className="auth-card">
           <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
           <div className="auth-error">{t("invalidOrExpiredToken")}</div>
@@ -60,14 +60,14 @@ function ResetPasswordPage() {
             <Link to="/login">{t("goToLogin")}</Link>
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   // ─── Render: Success ───
   if (isSuccess) {
     return (
-      <div className="auth-page">
+      <main className="auth-page">
         <div className="auth-card">
           <h1 className="auth-title">{t("resetSuccess")}</h1>
           <p className="auth-subtitle">{t("resetSuccessSubtitle")}</p>
@@ -75,13 +75,13 @@ function ResetPasswordPage() {
             {t("goToLogin")}
           </Link>
         </div>
-      </div>
+      </main>
     );
   }
 
   // ─── Render: Form ───
   return (
-    <div className="auth-page">
+    <main className="auth-page">
       <div className="auth-card">
         <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("resetPasswordSubtitle")}</p>
@@ -133,7 +133,7 @@ function ResetPasswordPage() {
           <Link to="/login">{t("backToLogin")}</Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }
 
