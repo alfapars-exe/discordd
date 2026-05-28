@@ -25,14 +25,18 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"strings"
 
 	"golang.org/x/image/draw"
-	_ "golang.org/x/image/webp" // register WebP decoder (encoder not provided)
+	// Blank imports register decoders with the image package. We never call
+	// gif.* or webp.* directly — image.Decode picks them up via init() — but
+	// without these the decoder for animated avatars or webp uploads
+	// disappears.
+	_ "golang.org/x/image/webp"
+	_ "image/gif"
 )
 
 // avatarMaxDim is the longest-edge cap applied to every uploaded avatar /
