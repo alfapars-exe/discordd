@@ -619,6 +619,30 @@ func isHFSpace() bool {
 //   - connect-src includes wss: for WebSocket + same-origin for API
 //   - frame-ancestors 'none' + X-Frame-Options DENY = double clickjacking defense
 //   - HSTS forces HTTPS for 2 years (production deployments behind Caddy/Nginx)
+// setStaticCacheHeaders applies cache lifetimes to embedded frontend assets.
+//
+// Vite emits content-hashed filenames under /assets/* — every rebuild changes
+// the hash, so a cached copy can never refer to stale content. That is a hard
+// invariant of Vite's build, which is why "immutable" is safe here without a
+// rotating query string. One year is the maximum well-respected by browsers
+// and CDNs.
+//
+// Everything outside /assets/ (index.html, hlogo.png, robots.txt, locales/…)
+// keeps its filename across deploys. We send no-cache so the client always
+// revalidates — index.html in particular MUST be fresh because it carries the
+// references to the current hashed asset bundle.
+//
+// Lighthouse "Use efficient cache lifetimes" was the largest single audit
+// finding (~1.5 MiB savings) — the prior `http.FileServer` send the embed FS
+// with no Cache-Control at all, so every visit re-downloaded the bundle.
+func setStaticCacheHeaders(w http.ResponseWriter, path string) {
+	if strings.HasPrefix(path, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+}
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
