@@ -60,6 +60,24 @@ import { createMainWindow, getMainWindow, setQuitting } from "./window";
 // (on Windows) the taskbar grouping AppUserModelID. Must run before any
 // app.getPath() / app.requestSingleInstanceLock() / window creation.
 app.setName("HiChat!");
+
+// Linux `ps`/`htop` and the GNOME/KDE task switcher read process.title
+// to label the running process. Without this override the binary shows
+// up as "electron" (the argv[0] from the packaged launcher) or, on Linux
+// AppImage, the AppRun shim's name.
+process.title = "HiChat!";
+
+// macOS "About HiChat!" menu, the GNOME help-overlay banner, and several
+// Linux DEs read setAboutPanelOptions for the modal that opens from the
+// system menu. Without this Electron falls back to its default panel
+// labelled "Electron <version>".
+app.setAboutPanelOptions({
+  applicationName: "HiChat!",
+  applicationVersion: app.getVersion(),
+  copyright: "© 2026 HiChat!",
+  website: "https://hichat.app",
+});
+
 if (process.platform === "win32") {
   // Match package.json build.appId so taskbar and Action Center associate
   // notifications with this app rather than the generic "Electron" host.
@@ -120,6 +138,23 @@ function setupPermissions(): void {
 }
 
 /**
+ * Strip the "Electron/<version>" token from the default User-Agent.
+ *
+ * Default Electron UA looks like:
+ *   Mozilla/5.0 (...) AppleWebKit/... Chrome/X.Y Electron/A.B Safari/...
+ * The Electron token leaks the runtime identity to every server we talk to
+ * (auth backends, LiveKit, image previews) and shows up in their access
+ * logs — exactly the kind of "app reveals it's Electron" surface the brand
+ * wants to drop. Chrome/Safari/Mozilla tokens stay so server-side feature
+ * detection (HTTP/2 push, image format negotiation) still works.
+ */
+function setupUserAgent(): void {
+  const original = session.defaultSession.getUserAgent();
+  const cleaned = original.replace(/\s*Electron\/\S+/i, "").trim();
+  session.defaultSession.setUserAgent(cleaned);
+}
+
+/**
  * Inject a Content Security Policy into every renderer response.
  *
  * Defense-in-depth against XSS: even if a stored XSS slips past sanitization
@@ -136,7 +171,7 @@ function setupCSP(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const csp =
       "default-src 'self' file:; " +
-      "script-src 'self' file:; " +
+      "script-src 'self' 'wasm-unsafe-eval' file:; " +
       "style-src 'self' 'unsafe-inline' file:; " +
       "img-src 'self' data: blob: file: https:; " +
       "font-src 'self' data: file:; " +
@@ -168,6 +203,7 @@ setupCrashReporter();
 
 // ─── App ready ───
 app.whenReady().then(async () => {
+  setupUserAgent();
   setupPermissions();
   setupCSP();
   installScreenPicker();
