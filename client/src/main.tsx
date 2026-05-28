@@ -9,6 +9,7 @@ import App from "./App";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import { isNativeApp } from "./utils/constants";
 import { configureMobileUI, initAppLifecycle } from "./utils/nativePlugins";
+import { installGlobalErrorLogger } from "./api/globalErrorLogger";
 
 // Native shells (Electron file://, Capacitor capacitor://) don't support HTML5 History API.
 // Web uses BrowserRouter for clean URLs.
@@ -19,6 +20,10 @@ configureMobileUI();
 
 // Initialize app lifecycle listeners (background/foreground, back button) — no-op on web/Electron
 initAppLifecycle();
+
+// Capture window-level errors / unhandled rejections / online-offline events
+// for the admin Uygulama Günlükleri panel. Idempotent — safe under StrictMode.
+installGlobalErrorLogger();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

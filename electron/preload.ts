@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     serviceName?: string;
     processType?: string;
     occurredAt: string;
+    dumpFile?: string;
   } | null> => ipcRenderer.invoke("consume-last-crash"),
 
   /** Whether pre-launch update check ran — prevents duplicate checks in renderer */

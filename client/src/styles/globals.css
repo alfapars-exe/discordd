@@ -1,5 +1,8 @@
-/* Google Fonts — Manrope (UI + display via weight hierarchy), Source Code Pro (mono) */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Source+Code+Pro:wght@400;500&display=swap');
+/* Brand fonts (Manrope + Source Code Pro) are loaded from index.html <head>
+   with <link rel="preconnect"> + <link rel="stylesheet">. Doing it there
+   instead of via @import here lets the browser's preload scanner start the
+   font request immediately, in parallel with this stylesheet — an @import
+   chain blocks first paint until after globals.css downloads and parses. */
 
 /* ═══════════════════════════════════════
    CSS VARIABLES

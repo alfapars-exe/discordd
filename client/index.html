@@ -10,7 +10,19 @@
     <link rel="icon" type="image/png" href="/hlogo.png" />
     <link rel="apple-touch-icon" sizes="256x256" href="/hlogo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="HiChat! — Açık kaynak, gerçek zamanlı sohbet ve sesli iletişim platformu. Discord alternatifi, kendi sunucunuzda barındırabileceğiniz tam özellikli iletişim aracı." />
     <title>HiChat!</title>
+    <!-- Brand fonts loaded from <head> (not @import inside CSS) so the preload
+         scanner can kick the request off in parallel with the rest of the
+         document — saves ~1 RTT vs. discovering the URL after globals.css
+         parses. Manrope weight 300 is intentionally dropped: zero call sites
+         in src/. Weights 400/500/600/700/800 cover all UI states (body,
+         medium emphasis, semibold, bold, extrabold heading). JetBrains Mono
+         is loaded only on marketing pages via landing.css to keep this
+         critical-path request small. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;500&display=swap" />
     <!-- Prevent white flash before CSS/JS loads -->
     <style>
       html, body { margin:0; padding:0; background:#0f1419; color:#e0e0e0; }
@@ -32,7 +44,7 @@
     <div id="root">
       <!-- Loading state shown until React mounts -->
       <div id="app-loader">
-        <img class="logo" src="/hlogo.png" alt="HiChat!" />
+        <img class="logo" src="/hlogo.png" alt="HiChat!" width="72" height="72" />
         <div class="spinner"></div>
       </div>
     </div>

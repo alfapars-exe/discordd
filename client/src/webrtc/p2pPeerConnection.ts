@@ -11,6 +11,8 @@
  * created — both initial and mid-call renegotiation routes through here.
  */
 
+import { logToServer } from "../api/clientLog";
+
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -36,6 +38,11 @@ export function applyDegradationPreference(pc: RTCPeerConnection): void {
     params.degradationPreference = "balanced";
     sender.setParameters(params).catch((err) => {
       console.warn("[p2p] Failed to set degradationPreference:", err);
+      logToServer("warn", "p2p_degradation_pref_failed", {
+        errorMessage:
+          err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+        errorName: err instanceof Error ? err.name : typeof err,
+      });
     });
   }
 }
@@ -96,6 +103,12 @@ export function createPeerConnection(
         disconnectedTimer = null;
       }
       console.warn("[p2p] PeerConnection state:", pc.connectionState);
+      logToServer("warn", "p2p_connection_terminated", {
+        connectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        signalingState: pc.signalingState,
+        callId,
+      });
       callbacks.onTerminated();
       return;
     }
@@ -108,10 +121,25 @@ export function createPeerConnection(
         timeout,
       });
       if (!disconnectedTimer) {
+        // Single log per transient-disconnect cycle — gated by the same
+        // `!disconnectedTimer` check that protects against ICE re-check spam.
+        logToServer("info", "p2p_disconnected_transient", {
+          signalingState: pc.signalingState,
+          iceConnectionState: pc.iceConnectionState,
+          recoveryTimeoutMs: timeout,
+          callId,
+        });
         disconnectedTimer = setTimeout(() => {
           disconnectedTimer = null;
           if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
             console.warn("[p2p] PeerConnection did not recover, ending call");
+            logToServer("warn", "p2p_recovery_timeout", {
+              finalConnectionState: pc.connectionState,
+              iceConnectionState: pc.iceConnectionState,
+              signalingState: pc.signalingState,
+              timeoutMs: timeout,
+              callId,
+            });
             callbacks.onTerminated();
           }
         }, timeout);
@@ -136,6 +164,14 @@ export function createPeerConnection(
       });
     } catch (err) {
       console.error("[p2p] Renegotiation error:", err);
+      logToServer("error", "p2p_renegotiation_failed", {
+        errorMessage:
+          err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+        errorName: err instanceof Error ? err.name : typeof err,
+        errorStack: err instanceof Error && err.stack ? err.stack.slice(0, 1024) : "",
+        signalingState: pc.signalingState,
+        callId,
+      });
     } finally {
       makingOffer = false;
     }

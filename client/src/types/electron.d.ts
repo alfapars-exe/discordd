@@ -50,6 +50,13 @@ interface ElectronCrashRecord {
   serviceName?: string;
   processType?: string;
   occurredAt: string;
+  /**
+   * Basename of the most recent native .dmp dump (Crashpad/Breakpad) at the
+   * time the record was drained. Lets support tell the user which file to
+   * zip up from `%APPDATA%/HiChat/Crashpad/` (or the platform equivalent).
+   * Empty when no dump existed — common for clean-exit-ish events.
+   */
+  dumpFile?: string;
 }
 
 interface ElectronAPI {

@@ -38,6 +38,11 @@ export type CrashRecord = {
   serviceName?: string; // child-process-gone only
   processType?: string; // child-process-gone only
   occurredAt: string; // ISO 8601
+  // Basename of the newest native crash dump under app.getPath('crashDumps').
+  // Attached at consumeLastCrash() time, not at write time — Crashpad may
+  // still be flushing the .dmp when the listener fires. Lets support ask
+  // the user to send a specific file instead of "anything that looks new".
+  dumpFile?: string;
 };
 
 let cachedCrashPath: string | null = null;
@@ -46,6 +51,42 @@ function crashFilePath(): string {
   if (cachedCrashPath) return cachedCrashPath;
   cachedCrashPath = path.join(app.getPath("userData"), "last-crash.json");
   return cachedCrashPath;
+}
+
+// Scan the platform-specific crash dump directory and return the basename of
+// the most recently modified .dmp. We can't reliably correlate a specific
+// .dmp to a specific listener event because Crashpad finalises dumps on its
+// own schedule (often hundreds of ms after the listener fires). At drain time
+// (next launch), the newest .dmp is the right one: this app singletons, so the
+// dump that caused last-crash.json is the freshest one on disk.
+async function findLatestCrashDump(): Promise<string | null> {
+  // Scan both `pending` and `completed` — Crashpad starts writes in `pending`
+  // and moves finalised dumps to `completed`. We don't care which state, just
+  // which is newest. On Linux/Breakpad the same `crashDumps` path resolves
+  // somewhere with the same .dmp filename convention.
+  const root = app.getPath("crashDumps");
+  const candidates: { name: string; mtimeMs: number }[] = [];
+  for (const sub of ["pending", "completed", ""]) {
+    const dir = sub ? path.join(root, sub) : root;
+    let entries: string[];
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      continue; // missing subdir is fine — Crashpad creates them lazily
+    }
+    for (const name of entries) {
+      if (!name.endsWith(".dmp")) continue;
+      try {
+        const st = await fs.stat(path.join(dir, name));
+        candidates.push({ name, mtimeMs: st.mtimeMs });
+      } catch {
+        // stat race (file deleted between readdir and stat) — skip
+      }
+    }
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates[0].name;
 }
 
 async function writeCrashRecord(record: CrashRecord): Promise<void> {
@@ -76,7 +117,10 @@ export async function consumeLastCrash(): Promise<CrashRecord | null> {
     // re-sending the same record forever. Trade: one missed crash report
     // per network failure, vs. an indefinite duplicate-report loop.
     await fs.unlink(file).catch(() => {});
-    return JSON.parse(raw) as CrashRecord;
+    const record = JSON.parse(raw) as CrashRecord;
+    const dumpFile = await findLatestCrashDump().catch(() => null);
+    if (dumpFile) record.dumpFile = dumpFile;
+    return record;
   } catch (err: unknown) {
     // ENOENT = no crash, the common case
     const code = (err as NodeJS.ErrnoException)?.code;

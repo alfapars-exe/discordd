@@ -6,7 +6,11 @@
    Prefix: .lp- (landing page)
 */
 
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Manrope is loaded globally from index.html <head>; this @import is scoped
+   to JetBrains Mono only — used exclusively by marketing pages, so paying
+   the @import-chain cost for one extra font on /landing /terms /privacy
+   keeps it off the login critical path. */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ── Scroll override ──
    Overrides the overflow:hidden from globals.css for the landing page.

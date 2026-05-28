@@ -41,6 +41,7 @@ import { useTranslation } from "react-i18next";
 import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useVoiceAutoRejoin } from "../../hooks/useVoiceAutoRejoin";
+import { logToServer } from "../../api/clientLog";
 import VoiceStateManager from "./VoiceStateManager";
 
 type VoiceProviderProps = {
@@ -87,6 +88,12 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const handleE2eeKeyError = useCallback(
     (err: unknown) => {
       console.error("[VoiceProvider] Failed to set E2EE key:", err);
+      logToServer("error", "voice_e2ee_key_failed", {
+        errorMessage:
+          err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+        errorName: err instanceof Error ? err.name : typeof err,
+        errorStack: err instanceof Error && err.stack ? err.stack.slice(0, 1024) : "",
+      });
       useToastStore.getState().addToast("error", tE2ee("voiceE2eeError"), 8000);
     },
     [tE2ee],
@@ -105,14 +112,27 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       if (err.message?.includes("Client initiated")) return;
 
       console.error("[VoiceProvider] LiveKit error:", err);
+      logToServer("error", "livekit_room_error", {
+        errorMessage: err.message?.slice(0, 200) ?? "",
+        errorName: err.name,
+        errorStack: err.stack ? err.stack.slice(0, 1024) : "",
+        hasLivekitUrl: !!livekitUrl,
+        isInVoice,
+        isNativeVoice,
+      });
       useToastStore.getState().addToast("error", t("livekitConnectionError"), 8000);
     },
-    [t],
+    [t, livekitUrl, isInVoice, isNativeVoice],
   );
 
   const handleEncryptionError = useCallback(
     (err: Error) => {
       console.error("[VoiceProvider] E2EE encryption error:", err);
+      logToServer("error", "livekit_e2ee_encryption_error", {
+        errorMessage: err.message?.slice(0, 200) ?? "",
+        errorName: err.name,
+        errorStack: err.stack ? err.stack.slice(0, 1024) : "",
+      });
       useToastStore.getState().addToast("error", tE2ee("voiceE2eeError"), 8000);
     },
     [tE2ee],

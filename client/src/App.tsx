@@ -46,6 +46,12 @@ function App() {
   // state — the IPC handler atomically reads+deletes the file, so a second
   // call sees null. The crash that triggered the previous shutdown is
   // ALWAYS reported here; live crashes never go through this path.
+  //
+  // The message embeds kind/reason/processType so the admin panel's list
+  // view (which shows the message column only) is self-describing —
+  // before this the row read `electron_crash` and you had to open the
+  // metadata blob to learn what actually died. Prefix stays
+  // `electron_crash:` so existing greps still match.
   useEffect(() => {
     if (!user || !isElectron()) return;
     const api = window.electronAPI;
@@ -56,13 +62,17 @@ function App() {
         if (!record) return;
         const level =
           record.kind === "render-process-gone" ? "error" : "warn";
-        logToServer(level, "electron_crash", {
+        const messageParts = ["electron_crash", record.kind, record.reason];
+        if (record.processType) messageParts.push(record.processType);
+        const message = messageParts.join(":");
+        logToServer(level, message, {
           kind: record.kind,
           reason: record.reason,
           exitCode: record.exitCode,
           serviceName: record.serviceName,
           processType: record.processType,
           occurredAt: record.occurredAt,
+          dumpFile: record.dumpFile,
         });
       })
       .catch(() => {

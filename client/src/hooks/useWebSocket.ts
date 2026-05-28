@@ -17,6 +17,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useCallback, useState } from "react";
 import { ensureFreshToken, apiClient } from "../api/client";
+import { logToServer } from "../api/clientLog";
 import { APP_RESUME_EVENT } from "../utils/nativePlugins";
 import { useP2PCallStore } from "../stores/p2pCallStore";
 import { useVoiceStore } from "../stores/voiceStore";
@@ -268,12 +269,28 @@ export function useWebSocket() {
 
       if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) {
         setConnectionStatus("disconnected");
+        logToServer("error", "ws_disconnected_final", {
+          attempts: reconnectAttemptRef.current,
+          maxAttempts: MAX_RECONNECT_ATTEMPTS,
+        });
         return;
       }
 
       const delay = getReconnectDelay();
       reconnectAttemptRef.current++;
       setReconnectAttempt(reconnectAttemptRef.current);
+
+      // Only the first attempt of an outage gets logged — final outcome
+      // is captured by ws_disconnected_final (gave up) or onopen success.
+      // Without this gate, a 7-attempt outage would burn the entire
+      // 10-token client-log bucket on reconnect telemetry alone.
+      if (reconnectAttemptRef.current === 1) {
+        logToServer("info", "ws_reconnect_attempt", {
+          attempt: reconnectAttemptRef.current,
+          delayMs: delay,
+          maxAttempts: MAX_RECONNECT_ATTEMPTS,
+        });
+      }
 
       reconnectTimeoutRef.current = setTimeout(() => {
         if (activeConnectionIdRef.current === myId) {
@@ -295,7 +312,16 @@ export function useWebSocket() {
       try {
         token = await ensureFreshToken();
       } catch {
-        // Server may be down — network error on refresh
+        // Server may be down — network error on refresh.
+        // Log only the first and last attempt of a flap cycle to stay
+        // under the 10-token per-user rate limit on /client-log.
+        const attempt = reconnectAttemptRef.current;
+        if (attempt === 0 || attempt === MAX_RECONNECT_ATTEMPTS - 1) {
+          logToServer("warn", "ws_connect_token_refresh_failed", {
+            attempt,
+            maxAttempts: MAX_RECONNECT_ATTEMPTS,
+          });
+        }
       }
 
       if (activeConnectionIdRef.current !== myId) return;
@@ -358,6 +384,11 @@ export function useWebSocket() {
             missedHeartbeatsRef.current++;
 
             if (missedHeartbeatsRef.current >= WS_HEARTBEAT_MAX_MISS) {
+              logToServer("warn", "ws_heartbeat_timeout", {
+                missedHeartbeats: missedHeartbeatsRef.current,
+                maxMissAllowed: WS_HEARTBEAT_MAX_MISS,
+                intervalMs: WS_HEARTBEAT_INTERVAL,
+              });
               socket.close();
             }
           }
@@ -382,6 +413,15 @@ export function useWebSocket() {
               break;
             } catch {
               console.warn(`[useWebSocket] Token refresh attempt ${attempt + 1} failed`);
+              // Server-side bucket is 10 burst / ~30/min — a 9-retry loop
+              // would absorb most of it. Log first attempt (initial failure
+              // signal) and last attempt (give-up signal) only.
+              if (attempt === 0 || attempt === TOKEN_REFRESH_MAX_RETRIES - 1) {
+                logToServer("warn", "ws_token_refresh_attempt_failed", {
+                  attempt: attempt + 1,
+                  maxRetries: TOKEN_REFRESH_MAX_RETRIES,
+                });
+              }
               if (attempt < TOKEN_REFRESH_MAX_RETRIES - 1) {
                 await new Promise((r) => setTimeout(r, TOKEN_REFRESH_RETRY_DELAY));
                 if (activeConnectionIdRef.current !== myId) return;
@@ -411,9 +451,23 @@ export function useWebSocket() {
       };
 
       // ─── onclose ───
-      socket.onclose = () => {
+      socket.onclose = (event: CloseEvent) => {
         // Stale socket guard — critical for StrictMode
         if (activeConnectionIdRef.current !== myId) return;
+
+        // Code 1000 (Normal) and 1001 (Going Away) are not interesting on
+        // their own. Log only when the close is unexpected (not clean) or
+        // when it happens on a fresh connection — repeated reconnect
+        // attempts would otherwise emit one ws_close per attempt.
+        if (!event.wasClean || reconnectAttemptRef.current <= 1) {
+          const isNormal = event.code === 1000 || event.code === 1001;
+          logToServer(isNormal ? "info" : "warn", "ws_close", {
+            wasClean: event.wasClean,
+            code: event.code,
+            reason: event.reason?.slice(0, 200) ?? "",
+            attempt: reconnectAttemptRef.current,
+          });
+        }
 
         setConnectionStatus("disconnected");
         cleanupTimers();
@@ -422,7 +476,14 @@ export function useWebSocket() {
 
       // ─── onerror ───
       socket.onerror = () => {
-        // onclose will fire — no additional handling needed
+        if (activeConnectionIdRef.current !== myId) return;
+        // The browser's WebSocket ErrorEvent carries no useful diagnostic
+        // info (security restriction); the real reason will follow in
+        // onclose. We still log the moment so we have evidence of a
+        // transport-level fault that is distinct from a clean close.
+        logToServer("warn", "ws_error", {
+          readyState: socket.readyState,
+        });
       };
     }
 

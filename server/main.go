@@ -254,16 +254,19 @@ func main() {
 		}
 		if f, openErr := frontendFS.Open(path); openErr == nil {
 			f.Close()
+			setStaticCacheHeaders(w, path)
 			http.FileServer(http.FS(frontendFS)).ServeHTTP(w, r)
 			return
 		}
 
-		// SPA fallback
+		// SPA fallback — index.html must never be cached or users miss new
+		// /assets/<hash>.js filenames after a deploy and run a broken half-old build.
 		if len(indexHTMLWeb) == 0 {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		w.Write(indexHTMLWeb)
 	})
 
@@ -606,11 +609,38 @@ func isHFSpace() bool {
 //
 // CSP policy notes:
 //   - script-src 'self': no inline scripts; bundled JS only
-//   - style-src 'self' 'unsafe-inline': Tailwind/CSS-in-JS injects inline styles
+//   - style-src 'self' 'unsafe-inline' fonts.googleapis.com: Tailwind/CSS-in-JS
+//     injects inline styles; fonts.googleapis.com hosts the Manrope/Source Code Pro
+//     stylesheet preloaded from index.html
+//   - font-src 'self' data: fonts.gstatic.com: woff2 font files served from gstatic
 //   - img-src includes data: + blob: for avatars/attachments/E2EE thumbnails
 //   - connect-src includes wss: for WebSocket + same-origin for API
 //   - frame-ancestors 'none' + X-Frame-Options DENY = double clickjacking defense
 //   - HSTS forces HTTPS for 2 years (production deployments behind Caddy/Nginx)
+// setStaticCacheHeaders applies cache lifetimes to embedded frontend assets.
+//
+// Vite emits content-hashed filenames under /assets/* — every rebuild changes
+// the hash, so a cached copy can never refer to stale content. That is a hard
+// invariant of Vite's build, which is why "immutable" is safe here without a
+// rotating query string. One year is the maximum well-respected by browsers
+// and CDNs.
+//
+// Everything outside /assets/ (index.html, hlogo.png, robots.txt, locales/…)
+// keeps its filename across deploys. We send no-cache so the client always
+// revalidates — index.html in particular MUST be fresh because it carries the
+// references to the current hashed asset bundle.
+//
+// Lighthouse "Use efficient cache lifetimes" was the largest single audit
+// finding (~1.5 MiB savings) — the prior `http.FileServer` send the embed FS
+// with no Cache-Control at all, so every visit re-downloaded the bundle.
+func setStaticCacheHeaders(w http.ResponseWriter, path string) {
+	if strings.HasPrefix(path, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+}
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -621,9 +651,9 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'wasm-unsafe-eval'; "+
-				"style-src 'self' 'unsafe-inline'; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"img-src 'self' data: blob: https:; "+
-				"font-src 'self' data:; "+
+				"font-src 'self' data: https://fonts.gstatic.com; "+
 				"media-src 'self' blob:; "+
 				"connect-src 'self' wss: https:; "+
 				"worker-src 'self' blob:; "+
