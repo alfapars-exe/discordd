@@ -130,6 +130,11 @@ function createSplashWindow(): BrowserWindow {
     alwaysOnTop: true,
     backgroundColor: "#111111",
     icon: path.join(__dirname, "../icons/hlogo.png"),
+    // Same fix as window.ts:107 — without this the frame-less splash still
+    // has a WM-level title that Alt+Tab/taskbar tooltips/screen readers
+    // query, defaulting to "Electron" until the HTML <title> tag below
+    // attaches to the DOM.
+    title: "HiChat!",
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
 
@@ -140,6 +145,7 @@ function createSplashWindow(): BrowserWindow {
   const html = `<!DOCTYPE html>
 <html>
 <head>
+  <title>HiChat!</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
