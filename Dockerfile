@@ -85,7 +85,11 @@ RUN set -eux; \
     # sqlite3 CLI is consumed by the backup service for `VACUUM INTO`
     # (the snapshot must be a single, page-aligned file independent of
     # any WAL sidecar). python3-pip is needed to install the hf CLI.
-    apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg python3 python3-pip sqlite3 curl; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates tzdata ffmpeg python3 python3-pip sqlite3 \
+      curl wget \
+      bash procps \
+      git git-lfs; \
     # hf CLI for backup snapshots to the configured HF Storage Bucket.
     # `--break-system-packages` is required on Debian Bookworm (PEP 668);
     # the image is dedicated to this app so the venv ceremony would add
@@ -100,8 +104,10 @@ RUN set -eux; \
     echo "${EXPECTED}  /usr/local/bin/yt-dlp" | sha256sum -c -; \
     chmod +x /usr/local/bin/yt-dlp; \
     rm /tmp/yt-dlp-sums; \
-    apt-get purge -y --auto-remove curl; \
     rm -rf /var/lib/apt/lists/*
+# NOTE: curl was previously purged here to shrink the image, but that
+# silently broke the HEALTHCHECK below (which calls curl) and blocked HF
+# Spaces Dev Mode's VS Code server from starting. curl now stays.
 
 # Sanity check — fail the image build immediately if any required CLI
 # isn't actually executable. Prevents shipping a Space where the music
@@ -112,6 +118,12 @@ RUN yt-dlp --version && ffmpeg -version | head -1 && python3 --version && \
 
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server
+
+# HF Spaces Dev Mode requires /app to be owned by uid 1000 so the SSH
+# session (which logs in as that uid) can edit files there. The container's
+# main process (the Go binary) still runs as root for HF /data mount compat
+# — only the directory ownership changes.
+RUN chown -R 1000:1000 /app
 
 # Default runtime is still root because the HF Spaces deployment mounts
 # /data with root-owned ownership and a non-root USER would fail mkdir
@@ -152,4 +164,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # USER hichat
 # -------------------------------------------------------------------
 
-ENTRYPOINT ["/app/hichat-server"]
+# CMD (not ENTRYPOINT) — HF Spaces Dev Mode requires CMD so its daemon
+# can start the app as a sub-process and restart it via the Refresh
+# button without killing the container. For production (Dev Mode off)
+# CMD behaves identically to ENTRYPOINT here since the binary takes no
+# extra argv.
+CMD ["/app/hichat-server"]
