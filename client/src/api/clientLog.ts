@@ -124,7 +124,16 @@ async function buildCommonMetadata(): Promise<Record<string, string>> {
     ...getScreenInfo(),
     ...getConnectionInfo(),
   };
-  if (electronVersion) base.appVersion = electronVersion;
+  // Prefer Electron's runtime app.getVersion() (authoritative for desktop
+  // builds) and fall back to the Vite-injected __APP_VERSION__ for the
+  // web bundle — without the fallback, browser-only users had no version
+  // tag in their logs and we couldn't tell "stuck on a cached old bundle"
+  // from "running latest".
+  if (electronVersion) {
+    base.appVersion = electronVersion;
+  } else if (typeof __APP_VERSION__ === "string" && __APP_VERSION__) {
+    base.appVersion = __APP_VERSION__;
+  }
 
   commonMetadataCache = base;
   return base;

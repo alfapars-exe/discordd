@@ -68,8 +68,23 @@ func (c *Client) ReadPump() {
 		_, rawMessage, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				// Branch on close code: 1006 (abnormal — no graceful close
+				// frame, usually a crashed renderer or a yanked cable),
+				// 1011 (server internal error reflected back), and 1012
+				// (service restart) are genuine anomalies and stay at WARN.
+				// Everything else (mobile background, OS sleep wake-up,
+				// router NAT timeout) is logged at INFO so the WARN feed
+				// reflects things worth investigating instead of normal
+				// session churn.
 				log.Printf("[ws] unexpected close for user %s: %v", c.userID, err)
-				c.hub.logEvent(models.LogLevelWarn, models.LogCategoryWS, &c.userID,
+				level := models.LogLevelInfo
+				if websocket.IsCloseError(err,
+					websocket.CloseAbnormalClosure,
+					websocket.CloseInternalServerErr,
+					websocket.CloseServiceRestart) {
+					level = models.LogLevelWarn
+				}
+				c.hub.logEvent(level, models.LogCategoryWS, &c.userID,
 					"WebSocket unexpected close", map[string]string{"error": err.Error()})
 			}
 			return
