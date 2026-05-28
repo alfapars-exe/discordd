@@ -1,9 +1,10 @@
 /**
- * VoiceProvider — owns the persistent LiveKitRoom at AppLayout level.
+ * VoiceProvider — owns the LiveKitRoom for the active voice session.
  *
- * LiveKitRoom lives here so tab switches don't unmount the WebRTC
- * connection. Visual components (VoiceParticipantGrid, ScreenShareView)
- * can mount/unmount freely; the LiveKit context stays alive in the parent.
+ * Visual components (VoiceParticipantGrid, ScreenShareView) can mount/unmount
+ * freely while voice is active; the LiveKit context stays alive in the
+ * parent. Tab switches inside the app don't unmount this provider as long as
+ * `isInVoice` stays true.
  *
  * The component is intentionally thin — every domain concern lives in its
  * own hook:
@@ -12,10 +13,18 @@
  *   - Publish defaults     — useScreenSharePublishDefaults
  *
  * Render rules:
- *   - LiveKitRoom is ALWAYS mounted; the `connect` prop toggles connection.
+ *   - LiveKitRoom is mounted ONLY while `isInVoice` is true. Outside of a
+ *     voice session the provider renders `children` directly so there's no
+ *     spurious Room instance. Previously LiveKitRoom was kept mounted with
+ *     `connect={false}` and only the prop toggled to true on join — that
+ *     `false→true` transition makes `@livekit/components-react` allocate a
+ *     second Room (see useVoiceAutoRejoin.ts:24-28 for the prior diagnosis),
+ *     producing duplicate SDK logs and a pair of "Client initiated
+ *     disconnect" errors before the real connection settled.
  *   - `display:contents` makes the wrapper invisible to flex/grid layout.
- *   - iOS native voice: JS SDK stays mounted (for context) but with
- *     connect=false. The Swift SDK handles the actual connection.
+ *   - iOS native voice: LiveKitRoom is still mounted while in voice (for
+ *     useRoomContext consumers) but with `connect=false`. The Swift SDK
+ *     drives the real connection.
  */
 
 import { useCallback, useMemo } from "react";
@@ -198,6 +207,16 @@ function VoiceProvider({ children }: VoiceProviderProps) {
 
     return base;
   }, [isConnected, audioCaptureDefaults, voiceAudioPreset, e2eePassphrase, keyProvider, e2eeWorker]);
+
+  // Skip LiveKitRoom entirely when not in a voice session. Mounting it with
+  // connect=false and then flipping the prop to true causes the SDK wrapper
+  // to allocate a second Room instance during the transition; rendering it
+  // only when isInVoice is already true means the initial mount happens
+  // straight at connect=true (or connect=false for iOS native), with no
+  // false→true thrash and no duplicate SDK logs.
+  if (!isInVoice) {
+    return <>{children}</>;
+  }
 
   return (
     <LiveKitRoom

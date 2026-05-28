@@ -51,6 +51,14 @@ export function useInitialRoomSync(
 ): void {
   useEffect(() => {
     function applyInitialState() {
+      // Defensive: RoomEvent.Connected fires in a microtask after the SDK
+      // flips its state, but by the time this handler runs the room may
+      // already have moved to Disconnecting/Disconnected (e.g. user left,
+      // auto-rejoin tore down the previous instance). Reading state here
+      // catches that race; without it the publish below would throw an
+      // "engine not connected within timeout" error that surfaces as noise.
+      if (room.state !== ConnectionState.Connected) return;
+
       const {
         isMuted: currentMuted,
         inputMode: currentMode,
@@ -65,6 +73,13 @@ export function useInitialRoomSync(
       const fullyDeaf = deaf || srvDeaf;
 
       localParticipant.setMicrophoneEnabled(shouldEnable).catch((err: unknown) => {
+        // Filter the engine-teardown race: between the room.state check
+        // above and the SDK reaching the publish path, the PeerConnection
+        // can still close. The error is harmless — the next Connected event
+        // re-fires this whole handler — so don't surface it as a console
+        // error. Anything else is a real failure worth seeing.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("engine not connected")) return;
         console.error("[useInitialRoomSync] Failed to set initial mic state:", err);
       });
 
@@ -104,7 +119,18 @@ export function useInitialRoomSync(
       // RemoteParticipant objects may have been recreated; volumes and
       // subscriptions need to be reapplied from scratch.
       setTimeout(() => {
+        // The 1s delay above creates a window where the room could leave the
+        // Connected state (user navigates away, voice service drops). Skip
+        // the whole reapply if we've fallen out of Connected — the next
+        // Reconnected event will re-fire this handler if needed.
+        if (room.state !== ConnectionState.Connected) return;
+
         localParticipant.setMicrophoneEnabled(shouldEnable).catch((err: unknown) => {
+          // Same engine-teardown race as applyInitialState; treat the
+          // "engine not connected" message as expected race fallout and
+          // suppress to keep the console signal-to-noise high.
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("engine not connected")) return;
           console.error(
             "[useInitialRoomSync] Failed to restore mic after reconnect:",
             err,
