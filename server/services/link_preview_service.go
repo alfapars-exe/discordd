@@ -16,6 +16,7 @@ package services
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -131,7 +132,22 @@ func (s *linkPreviewService) GetPreview(ctx context.Context, rawURL string) (*mo
 		}
 	}
 
-	preview, fetchErr := s.fetchAndParse(ctx, normalizedURL, parsed)
+	// YouTube actively serves consent-walled / JS-rendered HTML to bot
+	// User-Agents, so the generic OG scraper at fetchAndParse cannot
+	// recover a title for youtube.com/youtu.be URLs and returns an error
+	// that we'd then negative-cache for 24h. The public oEmbed endpoint
+	// has none of those problems — it is the official metadata channel
+	// and ignores UA. Branching here keeps the cache lookup + upsert
+	// behavior identical to the generic path.
+	var (
+		preview  *models.LinkPreview
+		fetchErr error
+	)
+	if isYouTubeHost(parsed.Host) {
+		preview, fetchErr = s.fetchYouTubeOEmbed(ctx, normalizedURL)
+	} else {
+		preview, fetchErr = s.fetchAndParse(ctx, normalizedURL, parsed)
+	}
 	if fetchErr != nil {
 		// Cache failed fetches to prevent retries
 		errPreview := &models.LinkPreview{URL: normalizedURL, Error: true}
@@ -144,6 +160,77 @@ func (s *linkPreviewService) GetPreview(ctx context.Context, rawURL string) (*mo
 		_ = err
 	}
 
+	return preview, nil
+}
+
+// isYouTubeHost identifies the URLs that should bypass the generic OG
+// scraper. Subdomains are stripped so apex, www, m, and music variants
+// all match; comparison is case-insensitive because RFC 3986 hosts are.
+func isYouTubeHost(host string) bool {
+	h := strings.ToLower(host)
+	h = strings.TrimPrefix(h, "www.")
+	h = strings.TrimPrefix(h, "m.")
+	h = strings.TrimPrefix(h, "music.")
+	return h == "youtube.com" || h == "youtu.be"
+}
+
+// fetchYouTubeOEmbed pulls metadata from YouTube's public oEmbed
+// endpoint. No auth, no bot UA gate, official API surface. Returns the
+// same LinkPreview shape as fetchAndParse so the caller cache path is
+// uniform. SSRF protection still applies — the SSRF-safe transport on
+// s.client resolves www.youtube.com to a public IP and refuses if not.
+func (s *linkPreviewService) fetchYouTubeOEmbed(ctx context.Context, originalURL string) (*models.LinkPreview, error) {
+	endpoint := "https://www.youtube.com/oembed?url=" + url.QueryEscape(originalURL) + "&format=json"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create oembed request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("oembed fetch failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// 401/404 here means the video is private / deleted / age-restricted
+		// (oEmbed refuses), or YouTube returned an error for a deformed URL.
+		// In every case the caller treats this as a fetch failure and falls
+		// into the negative-cache path — same shape as the generic scraper.
+		return nil, fmt.Errorf("oembed HTTP %d", resp.StatusCode)
+	}
+
+	limited := io.LimitReader(resp.Body, maxBodySize)
+	var data struct {
+		Title        string `json:"title"`
+		AuthorName   string `json:"author_name"`
+		ThumbnailURL string `json:"thumbnail_url"`
+	}
+	if err := json.NewDecoder(limited).Decode(&data); err != nil {
+		return nil, fmt.Errorf("oembed decode: %w", err)
+	}
+
+	if data.Title == "" {
+		// No title is the same shape as a failed scrape — surface as error
+		// so we don't cache a half-empty success.
+		return nil, fmt.Errorf("oembed: empty title")
+	}
+
+	preview := &models.LinkPreview{URL: originalURL, Error: false}
+	preview.Title = &data.Title
+	if data.AuthorName != "" {
+		// Channel name as description — no English-only prefix so the cached
+		// value stays locale-neutral. The UI degrades gracefully if absent.
+		preview.Description = &data.AuthorName
+	}
+	if data.ThumbnailURL != "" {
+		preview.ImageURL = &data.ThumbnailURL
+	}
+	siteName := "YouTube"
+	preview.SiteName = &siteName
+	favicon := "https://www.youtube.com/favicon.ico"
+	preview.FaviconURL = &favicon
 	return preview, nil
 }
 
