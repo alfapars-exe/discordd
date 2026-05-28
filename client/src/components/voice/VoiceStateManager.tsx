@@ -29,6 +29,7 @@ import { useVolumeSync } from "../../hooks/useVolumeSync";
 import { useAudioPlayoutTuning } from "../../hooks/useAudioPlayoutTuning";
 import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
 import { useScreenShareStats } from "../../hooks/useScreenShareStats";
+import { useScreenShareReceiverStats } from "../../hooks/useScreenShareReceiverStats";
 import { useMicSync } from "../../hooks/useMicSync";
 import { useOutputDeviceSync } from "../../hooks/useOutputDeviceSync";
 import { useTrackSubscriptions } from "../../hooks/useTrackSubscriptions";
@@ -68,6 +69,13 @@ function VoiceStateManager() {
   // the server so admins can correlate "quality dropped at T" with what
   // the local encoder was reporting. No-op while not sharing.
   useScreenShareStats(localParticipant);
+
+  // Viewer-side telemetry — polls RTCRtpReceiver.getStats() for every
+  // subscribed remote screen share, every 10 s. Captures freezes /
+  // jitter buffer delay / packet loss / decode drops with publisher
+  // attribution so admins can correlate publisher reports with what
+  // each viewer actually saw.
+  useScreenShareReceiverStats(room);
 
   // Mic enabled sync — isMuted, isServerMuted, inputMode, and PTT all flow
   // through here to drive localParticipant.setMicrophoneEnabled().
