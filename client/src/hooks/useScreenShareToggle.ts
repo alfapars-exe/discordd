@@ -114,6 +114,107 @@ function notifyServerStopped() {
   _wsSend?.("voice_state_update_request", { is_streaming: false });
 }
 
+// Symmetric counterpart fired AFTER setScreenShareEnabled succeeds, so the
+// is_streaming flag reaches other clients only once an actual track is
+// publishable. Does not touch the store — isStreaming was already flipped
+// to true at click time so the local hooks could start the publish flow.
+function notifyServerStarted() {
+  const { _wsSend } = useVoiceStore.getState();
+  _wsSend?.("voice_state_update_request", { is_streaming: true });
+}
+
+/**
+ * Read width/height from a video track. `dimensions` is declared on
+ * LocalVideoTrack / RemoteVideoTrack but not on the base Track, so we
+ * narrow via kind first and then read the property defensively (in case a
+ * future SDK version moves it). Returns null for audio tracks or anything
+ * without a populated dimensions object.
+ */
+function trackDimensions(
+  track: Track | null | undefined,
+): { width: number; height: number } | null {
+  if (!track || track.kind !== Track.Kind.Video) return null;
+  const dims = (track as unknown as { dimensions?: { width: number; height: number } }).dimensions;
+  if (!dims || typeof dims.width !== "number" || typeof dims.height !== "number") {
+    return null;
+  }
+  return { width: dims.width, height: dims.height };
+}
+
+/**
+ * Inspect the published ScreenShare track and emit diagnostic rows so the
+ * admin panel can tell "publish succeeded with real content" from "publish
+ * succeeded with a black/empty capture". Two emissions:
+ *
+ *   1. Immediate: trackSid, mimeType, muted, current dimensions. At this
+ *      point dimensions are typically still 0×0 — the first frame hasn't
+ *      arrived yet. The row exists to confirm a TrackPublication was
+ *      actually created (a missing row is itself a signal).
+ *   2. Deferred (~1500 ms): re-inspect dimensions. Real captures populate
+ *      within a few hundred ms; still 0×0 by 1.5 s means the OS returned a
+ *      source but no frames flow — common with Windows HW-overlay anti-cheat
+ *      (CS2/VAC, Valorant/Vanguard) when WGC isn't enabled, or when the
+ *      chosen source is a protected surface (DRM video, secure-input field).
+ *
+ * All failures swallowed — diagnostic emission must never break the publish.
+ */
+function logPublishedTrackDetails(
+  localParticipant: LocalParticipant,
+  branch: ShareBranch,
+): void {
+  try {
+    const pub = localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    if (!pub) {
+      logToServer("warn", "screen_share_publish_missing", { branch });
+      return;
+    }
+    const track = pub.track;
+    const dims = trackDimensions(track);
+    logToServer("info", "screen_share_publish_details", {
+      branch,
+      trackSid: pub.trackSid ?? "",
+      mimeType: pub.mimeType ?? "",
+      muted: track?.isMuted ?? null,
+      width: dims?.width ?? 0,
+      height: dims?.height ?? 0,
+      simulcasted: pub.simulcasted ?? null,
+    });
+
+    // Deferred re-check — gives the capture pipeline time to deliver the
+    // first frame. 1500 ms picked to be longer than the typical first-frame
+    // latency (~300 ms on Windows GDI) but shorter than the user's
+    // attention span if they're staring at "why isn't anyone seeing this".
+    setTimeout(() => {
+      try {
+        const laterPub = localParticipant.getTrackPublication(Track.Source.ScreenShare);
+        const laterTrack = laterPub?.track;
+        const laterDims = trackDimensions(laterTrack);
+        const w = laterDims?.width ?? 0;
+        const h = laterDims?.height ?? 0;
+        const level = w === 0 || h === 0 ? "warn" : "info";
+        const message =
+          w === 0 || h === 0
+            ? "screen_share_publish_no_frames"
+            : "screen_share_publish_first_frame";
+        logToServer(level, message, {
+          branch,
+          trackSid: laterPub?.trackSid ?? "",
+          muted: laterTrack?.isMuted ?? null,
+          width: w,
+          height: h,
+        });
+      } catch {
+        /* swallow — diagnostic only */
+      }
+    }, 1500);
+  } catch (err) {
+    logToServer("warn", "screen_share_publish_inspect_failed", {
+      branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /**
  * Which start/stop branch a given screen-share lifecycle should take.
  * Pulled out of the toggle effect so the restart watcher can recompute
@@ -245,6 +346,8 @@ export function useScreenShareToggle(
       }
 
       await startNativeScreenShare(response.data.url, response.data.token);
+      if (shouldCancel()) return;
+      notifyServerStarted();
       logToServer("info", "screen_share_success", {
         branch,
         durationMs: Date.now() - attemptStart,
@@ -265,6 +368,12 @@ export function useScreenShareToggle(
       }, opts.screenSharePublish);
 
       if (shouldCancel()) return;
+
+      // Video is published — tell the server now so viewers see is_streaming=true
+      // even if the audio capture below fails (which is logged as
+      // screen_share_success_no_audio).
+      notifyServerStarted();
+      logPublishedTrackDetails(localParticipant, branch);
 
       const audioTrack = await systemAudioCaptureRef.current.start();
       if (shouldCancel() || !audioTrack) {
@@ -314,6 +423,9 @@ export function useScreenShareToggle(
         resolution: resolutionFor(effQ, effFps, displayRef.current),
         contentHint: opts.screenShareCapture.contentHint,
       }, opts.screenSharePublish);
+      if (shouldCancel()) return;
+      notifyServerStarted();
+      logPublishedTrackDetails(localParticipant, branch);
       logToServer("info", "screen_share_success", {
         branch,
         durationMs: Date.now() - attemptStart,

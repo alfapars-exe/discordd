@@ -115,6 +115,15 @@ export async function handleVoiceEvent(
         if (!matches) {
           console.warn("[ws] voice_states_sync RE-ASSERT sendVoiceJoin", { channel: myVoiceChannel, liveKitStillConnected });
           ctx.sendVoiceJoin(myVoiceChannel);
+        } else if (vs.isStreaming && selfEntry && !selfEntry.is_streaming) {
+          // WS reconnected within the orphan grace; the server's
+          // onUserFullyDisconnected callback cleared our is_streaming flag
+          // (because the publisher tab usually goes with the WS). But we're
+          // still locally streaming — LiveKit publish survived. Re-assert
+          // so the server broadcasts is_streaming=true again and viewers
+          // get the indicator back.
+          console.warn("[ws] voice_states_sync RE-ASSERT is_streaming", { channel: myVoiceChannel });
+          vs._wsSend?.("voice_state_update_request", { is_streaming: true });
         }
       } else if (selfEntry) {
         // F5 recovery: backend still has us in voice (within the 35s orphan

@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { resolveUserId } from "../../utils/constants";
+import { logToServer } from "../../api/clientLog";
 import ScreenShareContextMenu from "./ScreenShareContextMenu";
 import ScreenShareViewerChip from "./ScreenShareViewerChip";
 import ScreenShareQualityBadge from "./ScreenShareQualityBadge";
@@ -50,6 +51,85 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
+
+  // Diagnostic: report when this viewer's panel actually has a track with
+  // non-zero dimensions (real frames are arriving), or when it stays at
+  // 0×0 by the timeout (publisher is sending, SFU forwarded, we subscribed
+  // — but the frames are empty). Skipped for the local user's panel because
+  // we deliberately don't render our own video back into the capture.
+  useEffect(() => {
+    if (isLocalUser) return;
+    const sourceTrack = trackRef.publication?.track;
+    if (!sourceTrack) return;
+
+    // `dimensions` lives on RemoteVideoTrack / LocalVideoTrack but not on
+    // the base Track. The cast is safe here: we only mount this panel for
+    // ScreenShare sources, which are always video. Returns undefined on a
+    // mismatched track to keep the diagnostic from throwing.
+    const readDims = (): { width: number; height: number } | undefined => {
+      const d = (sourceTrack as unknown as { dimensions?: { width: number; height: number } }).dimensions;
+      if (!d || typeof d.width !== "number" || typeof d.height !== "number") {
+        return undefined;
+      }
+      return d;
+    };
+
+    const mountedAt = Date.now();
+    let reported = false;
+    let cancelled = false;
+
+    function check(): boolean {
+      if (cancelled || reported) return true;
+      const dims = readDims();
+      const w = dims?.width ?? 0;
+      const h = dims?.height ?? 0;
+      if (w > 0 && h > 0) {
+        reported = true;
+        logToServer("info", "screen_share_view_first_frame", {
+          publisherIdentity: trackRef.participant.identity,
+          publisherUserId: realUserId,
+          trackSid: trackRef.publication?.trackSid ?? "",
+          width: w,
+          height: h,
+          msSinceMount: Date.now() - mountedAt,
+        });
+        return true;
+      }
+      return false;
+    }
+
+    if (check()) return;
+
+    const interval = window.setInterval(check, 500);
+    // 5 s budget — typical first frame on Windows GDI capture is <500 ms;
+    // a 5 s ceiling reliably distinguishes "slow path" from "stuck capture".
+    const timeout = window.setTimeout(() => {
+      if (!reported) {
+        const dims = readDims();
+        logToServer("warn", "screen_share_view_no_frames", {
+          publisherIdentity: trackRef.participant.identity,
+          publisherUserId: realUserId,
+          trackSid: trackRef.publication?.trackSid ?? "",
+          muted: sourceTrack?.isMuted ?? null,
+          width: dims?.width ?? 0,
+          height: dims?.height ?? 0,
+          msSinceMount: Date.now() - mountedAt,
+        });
+      }
+      window.clearInterval(interval);
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+    // We intentionally re-run when the underlying track identity changes
+    // (different publisher or new publication after a restart). publication
+    // and track are object refs, so React's referential equality is the
+    // right trigger here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackRef.publication, trackRef.publication?.track, isLocalUser]);
 
   const handleFullscreenToggle = useCallback(() => {
     if (!containerRef.current) return;

@@ -84,6 +84,22 @@ func registerHubCallbacks(
 		// LiveKit connection is separate; WS may reconnect shortly.
 		// Cleaned by explicit voice_leave or orphan cleanup sweep.
 
+		// is_streaming, however, IS cleared on full disconnect: the screen
+		// share publisher and the WS share the same browser tab, so when
+		// the WS dies the publishing track is gone too. Leaving the flag
+		// stale for the 35 s orphan grace gave viewers a "Ramses is
+		// streaming" indicator with no track to back it — UI would flip
+		// to compact strip mode showing only a blank video area. If the
+		// user reconnects within grace and is still publishing locally,
+		// the client re-asserts via voice_state_update_request on the new
+		// WS.
+		if vState := voiceService.GetUserVoiceState(userID); vState != nil && vState.IsStreaming {
+			falseVal := false
+			if updErr := voiceService.UpdateState(userID, nil, nil, &falseVal); updErr != nil {
+				log.Printf("[voice] failed to clear streaming on disconnect user=%s: %v", userID, updErr)
+			}
+		}
+
 		p2pCallService.HandleDisconnect(userID)
 	})
 

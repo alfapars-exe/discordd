@@ -172,3 +172,127 @@ describe("handleVoiceEvent — voice_state_update stream-stop cleanup", () => {
     expect(useVoiceStore.getState().watchingScreenShares.streamer1).toBe(true);
   });
 });
+
+describe("handleVoiceEvent — voice_states_sync streaming re-assert", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("re-asserts is_streaming=true via WS when client is streaming locally but server lost the flag", async () => {
+    const wsSend = vi.fn();
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isStreaming: true,
+      livekitToken: "tok",
+      _wsSend: wsSend,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_states_sync",
+        d: {
+          states: [
+            {
+              ...baseStateUpdate,
+              user_id: "me",
+              channel_id: "ch1",
+              is_streaming: false,
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+
+    expect(wsSend).toHaveBeenCalledWith("voice_state_update_request", { is_streaming: true });
+  });
+
+  it("does NOT re-assert when server already has is_streaming=true", async () => {
+    const wsSend = vi.fn();
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isStreaming: true,
+      livekitToken: "tok",
+      _wsSend: wsSend,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_states_sync",
+        d: {
+          states: [
+            {
+              ...baseStateUpdate,
+              user_id: "me",
+              channel_id: "ch1",
+              is_streaming: true,
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+
+    expect(wsSend).not.toHaveBeenCalled();
+  });
+
+  it("does NOT re-assert when client is not streaming locally", async () => {
+    const wsSend = vi.fn();
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isStreaming: false,
+      livekitToken: "tok",
+      _wsSend: wsSend,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_states_sync",
+        d: {
+          states: [
+            {
+              ...baseStateUpdate,
+              user_id: "me",
+              channel_id: "ch1",
+              is_streaming: false,
+            },
+          ],
+        },
+      },
+      ctx,
+    );
+
+    expect(wsSend).not.toHaveBeenCalled();
+  });
+
+  it("does NOT re-assert when channels mismatch — sendVoiceJoin handles that path instead", async () => {
+    const wsSend = vi.fn();
+    const sendVoiceJoin = vi.fn();
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isStreaming: true,
+      livekitToken: "tok",
+      _wsSend: wsSend,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_states_sync",
+        d: {
+          states: [
+            {
+              ...baseStateUpdate,
+              user_id: "me",
+              channel_id: "ch2",
+              is_streaming: false,
+            },
+          ],
+        },
+      },
+      { sendVoiceJoin },
+    );
+
+    expect(sendVoiceJoin).toHaveBeenCalledWith("ch1");
+    expect(wsSend).not.toHaveBeenCalled();
+  });
+});

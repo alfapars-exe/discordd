@@ -49,12 +49,14 @@ import {
   RoomEvent,
   Track,
   type RemoteParticipant,
+  type RemoteTrack,
   type RemoteTrackPublication,
   type Room,
 } from "livekit-client";
 
 import { useVoiceStore } from "../stores/voiceStore";
 import { resolveUserId } from "../utils/constants";
+import { logToServer } from "../api/clientLog";
 
 export function useTrackSubscriptions(room: Room): void {
   const isDeafened = useVoiceStore((s) => s.isDeafened);
@@ -78,6 +80,18 @@ export function useTrackSubscriptions(room: Room): void {
           useVoiceStore.getState().watchingScreenShares[
             resolveUserId(participant.identity)
           ] ?? false;
+        // Diagnostic — emit the publisher-side track arriving in our room.
+        // Pair against the publisher's screen_share_publish_details row to
+        // verify the SFU forwarded the publication. Absence of this row on
+        // any viewer means the publish never propagated (network / SFU
+        // misconfiguration), not a subscription bug.
+        logToServer("info", "screen_share_remote_track_published", {
+          publisherIdentity: participant.identity,
+          publisherUserId: resolveUserId(participant.identity),
+          source: publication.source,
+          trackSid: publication.trackSid ?? "",
+          watching,
+        });
         publication.setSubscribed(watching);
         return;
       }
@@ -196,6 +210,67 @@ export function useTrackSubscriptions(room: Room): void {
     return () => {
       room.off(RoomEvent.TrackUnpublished, handleRemoteTrackUnpublished);
       room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    };
+  }, [room]);
+
+  // Effect 5 (diagnostic only): emit when ScreenShare tracks actually arrive
+  // on this viewer's SFU connection. This is the final round-trip
+  // confirmation: publisher published, SFU forwarded, viewer subscribed
+  // AND the SDK has the live track in hand. Mismatch against the publisher's
+  // own screen_share_publish_details row tells us which leg of the path
+  // broke (publish vs. SFU vs. subscribe).
+  useEffect(() => {
+    function handleTrackSubscribed(
+      track: RemoteTrack,
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) {
+      if (
+        publication.source !== Track.Source.ScreenShare &&
+        publication.source !== Track.Source.ScreenShareAudio
+      ) {
+        return;
+      }
+      // dimensions is on RemoteVideoTrack only — narrow via kind. Audio
+      // tracks have no dimensions and return null here.
+      const dims = track.kind === Track.Kind.Video
+        ? (track as unknown as { dimensions?: { width: number; height: number } }).dimensions
+        : undefined;
+      logToServer("info", "screen_share_remote_track_subscribed", {
+        publisherIdentity: participant.identity,
+        publisherUserId: resolveUserId(participant.identity),
+        source: publication.source,
+        trackSid: publication.trackSid ?? "",
+        width: dims?.width ?? 0,
+        height: dims?.height ?? 0,
+        muted: track.isMuted ?? null,
+      });
+    }
+
+    function handleTrackUnsubscribed(
+      _track: RemoteTrack,
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) {
+      if (
+        publication.source !== Track.Source.ScreenShare &&
+        publication.source !== Track.Source.ScreenShareAudio
+      ) {
+        return;
+      }
+      logToServer("info", "screen_share_remote_track_unsubscribed", {
+        publisherIdentity: participant.identity,
+        publisherUserId: resolveUserId(participant.identity),
+        source: publication.source,
+        trackSid: publication.trackSid ?? "",
+      });
+    }
+
+    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    return () => {
+      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
     };
   }, [room]);
 }

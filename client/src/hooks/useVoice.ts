@@ -82,7 +82,20 @@ export function useVoice({
     const newStreaming = !isStreaming;
     storeSetStreaming(newStreaming);
 
-    sendVoiceStateUpdate({ is_streaming: newStreaming });
+    // Stop is announced immediately — the unpublish happens next via
+    // useScreenShareToggle effect 1, and viewers seeing the streaming flag
+    // drop a hair before the last frame is harmless.
+    //
+    // Start is NOT announced here: useScreenShareToggle.startShareInternal
+    // fires the WS update only after setScreenShareEnabled actually
+    // succeeds. Announcing optimistically created a phantom-share window —
+    // viewers got is_streaming=true the moment the button was clicked, and
+    // if the publisher's WS dropped during the OS source picker (heartbeat
+    // missed while the picker held focus) the flag stayed true for the
+    // 35 s orphan grace period with no track to back it.
+    if (!newStreaming) {
+      sendVoiceStateUpdate({ is_streaming: false });
+    }
   }, [storeSetStreaming, sendVoiceStateUpdate]);
 
   return { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreenShare };
