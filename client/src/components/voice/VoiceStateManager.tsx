@@ -28,6 +28,7 @@ import { useRttPolling } from "../../hooks/useRttPolling";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
 import { useAudioPlayoutTuning } from "../../hooks/useAudioPlayoutTuning";
 import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
+import { useScreenShareStats } from "../../hooks/useScreenShareStats";
 import { useMicSync } from "../../hooks/useMicSync";
 import { useOutputDeviceSync } from "../../hooks/useOutputDeviceSync";
 import { useTrackSubscriptions } from "../../hooks/useTrackSubscriptions";
@@ -61,6 +62,12 @@ function VoiceStateManager() {
   // Screen share lifecycle — store↔LiveKit forward sync + external-stop
   // detection (Capacitor native, OS-level "Stop sharing" dialog, SFU drops).
   useScreenShareToggle(room, localParticipant, initialSyncDone);
+
+  // Publisher-side telemetry — polls RTCRtpSender.getStats() every 10 s
+  // while screen-sharing, logs bitrate / fps / qualityLimitationReason to
+  // the server so admins can correlate "quality dropped at T" with what
+  // the local encoder was reporting. No-op while not sharing.
+  useScreenShareStats(localParticipant);
 
   // Mic enabled sync — isMuted, isServerMuted, inputMode, and PTT all flow
   // through here to drive localParticipant.setMicrophoneEnabled().
