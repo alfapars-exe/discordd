@@ -146,6 +146,7 @@ func main() {
 	svcs.Voice.SetAppLogger(svcs.AppLog)
 	svcs.P2PCall.SetAppLogger(svcs.AppLog)
 	svcs.Auth.SetAppLogger(svcs.AppLog)
+	svcs.Backup.SetAppLogger(svcs.AppLog)
 
 	// 9c. Wire audit logger into services that emit moderation events.
 	// Each service stores it as a nil-safe optional field; absent wiring
@@ -187,6 +188,11 @@ func main() {
 	// 10d. Audit log service — async writer + WS broadcast on moderation events.
 	// No auto-purge: audit history is kept indefinitely.
 	svcs.AuditLog.Start()
+
+	// 10e. Backup service — periodic snapshot of SQLite + uploads to an HF
+	// Storage Bucket. No-op when HF_TOKEN is unset (dev / self-host without
+	// HF credentials). See services/backup_service.go for the cycle details.
+	svcs.Backup.Start()
 
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey)
@@ -289,6 +295,7 @@ func main() {
 
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()
+	svcs.Backup.Stop()
 	metricsCollector.Stop()
 	hub.Shutdown()
 

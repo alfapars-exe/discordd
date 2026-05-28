@@ -82,7 +82,16 @@ ARG YT_DLP_VERSION=2024.11.04
 # should pin to a digest (debian:bookworm-slim@sha256:...).
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg python3 curl; \
+    # sqlite3 CLI is consumed by the backup service for `VACUUM INTO`
+    # (the snapshot must be a single, page-aligned file independent of
+    # any WAL sidecar). python3-pip is needed to install the hf CLI.
+    apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg python3 python3-pip sqlite3 curl; \
+    # hf CLI for backup snapshots to the configured HF Storage Bucket.
+    # `--break-system-packages` is required on Debian Bookworm (PEP 668);
+    # the image is dedicated to this app so the venv ceremony would add
+    # disk for no isolation gain. hf_transfer is a Rust-based parallel
+    # uploader that the backup service auto-enables via env var.
+    pip3 install --no-cache-dir --break-system-packages 'huggingface_hub[hf_transfer]>=0.20'; \
     BASE="https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}"; \
     curl -fsSL "${BASE}/yt-dlp" -o /usr/local/bin/yt-dlp; \
     curl -fsSL "${BASE}/SHA2-256SUMS" -o /tmp/yt-dlp-sums; \
@@ -94,10 +103,12 @@ RUN set -eux; \
     apt-get purge -y --auto-remove curl; \
     rm -rf /var/lib/apt/lists/*
 
-# Sanity check — fail the image build immediately if yt-dlp / ffmpeg /
-# python3 aren't actually executable. Prevents shipping a Space where the
-# music bot silently fails at runtime due to a missing PATH entry.
-RUN yt-dlp --version && ffmpeg -version | head -1 && python3 --version
+# Sanity check — fail the image build immediately if any required CLI
+# isn't actually executable. Prevents shipping a Space where the music
+# bot silently fails at runtime due to a missing PATH entry, or where
+# the backup service can't find `hf` / `sqlite3` and silently no-ops.
+RUN yt-dlp --version && ffmpeg -version | head -1 && python3 --version && \
+    sqlite3 --version && hf --version
 
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server
