@@ -688,7 +688,7 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 			imageURL = *preview.ServerIconURL
 		}
 	} else if appURL != "" {
-		imageURL = appURL + "/mqvi-icon-256.png"
+		imageURL = appURL + "/hlogo.png"
 	}
 
 	inviteURL := r.URL.Path
