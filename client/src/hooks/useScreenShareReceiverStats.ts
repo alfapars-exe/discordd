@@ -49,6 +49,32 @@ import {
 } from "livekit-client";
 
 import { logToServer } from "../api/clientLog";
+import { useVoiceStore } from "../stores/voiceStore";
+import { resolveUserId } from "../utils/constants";
+import type { ScreenShareQualityGrade } from "../stores/slices/voiceScreenShareSlice";
+
+/**
+ * Map this-window stats to a coarse quality grade for the per-panel
+ * badge. Thresholds are intentionally generous on the "fair" side so
+ * normal congestion blips don't paint everything red.
+ *
+ *   - poor: any of {packetLoss > 3%, freezeMs > 500, kbps < 200, fps < 5}
+ *   - fair: any of {packetLoss > 1%, freezeMs > 100, kbps < 800, fps < 15}
+ *   - good: otherwise
+ *
+ * fps + kbps are window deltas so the grade reacts within one cycle.
+ */
+function computeGrade(args: {
+  packetLossPct: number;
+  freezeMs: number;
+  kbps: number;
+  fps: number;
+}): ScreenShareQualityGrade {
+  const { packetLossPct, freezeMs, kbps, fps } = args;
+  if (packetLossPct > 3 || freezeMs > 500 || kbps < 200 || fps < 5) return "poor";
+  if (packetLossPct > 1 || freezeMs > 100 || kbps < 800 || fps < 15) return "fair";
+  return "good";
+}
 
 const STATS_INTERVAL_MS = 10_000;
 
@@ -276,6 +302,13 @@ export function useScreenShareReceiverStats(room: Room): void {
       const kbps = Math.round((dBytes * 8) / dtSec / 1000);
       const fps = Math.round(dDecoded / dtSec);
 
+      const quality = computeGrade({ packetLossPct, freezeMs: dFreezeMs, kbps, fps });
+      // Resolve the iOS native sub-participant identity ("<user>_ss") back to
+      // the real user ID so the badge on ScreenSharePanel (which uses
+      // resolveUserId) reads the same key the panel rendered for.
+      const realUserId = resolveUserId(participant.identity);
+      useVoiceStore.getState().setScreenShareQualityGrade(realUserId, quality);
+
       logToServer("info", "screen_share_receiver_stats", {
         publisherId: participant.identity,
         publisherName: participant.name || participant.identity,
@@ -295,6 +328,7 @@ export function useScreenShareReceiverStats(room: Room): void {
         nackDelta: dNack,
         firDelta: dFir,
         pliDelta: dPli,
+        quality,
       });
     }
 
@@ -313,8 +347,14 @@ export function useScreenShareReceiverStats(room: Room): void {
     ): void {
       // Drop the baseline so a future re-subscribe starts fresh (avoids a
       // delta spike when the user re-opens a tab that triggered a layer
-      // unsubscribe).
+      // unsubscribe). Also drop the cached quality grade so the panel
+      // badge fades back to neutral instead of showing a stale red dot.
       baselinesRef.current.delete(keyFor(participant, publication));
+      if (publication.source === Track.Source.ScreenShare) {
+        useVoiceStore.getState().clearScreenShareQualityGrade(
+          resolveUserId(participant.identity),
+        );
+      }
     }
 
     function handleDisconnected(participant: RemoteParticipant): void {
@@ -324,6 +364,9 @@ export function useScreenShareReceiverStats(room: Room): void {
       for (const key of baselinesRef.current.keys()) {
         if (key.startsWith(prefix)) baselinesRef.current.delete(key);
       }
+      useVoiceStore.getState().clearScreenShareQualityGrade(
+        resolveUserId(participant.identity),
+      );
     }
 
     room.on(RoomEvent.TrackUnsubscribed, handleUnsubscribed);

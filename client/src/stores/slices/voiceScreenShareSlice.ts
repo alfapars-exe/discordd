@@ -9,6 +9,17 @@ import type { StateCreator } from "zustand";
 import { playJoinSound, playLeaveSound } from "../../utils/sounds";
 import type { VoiceStore } from "../voiceStore";
 
+/**
+ * Per-publisher receiver-side quality grade, derived from
+ * useScreenShareReceiverStats every 10 s. Drives the colored badge on
+ * the screen-share panel so the viewer can tell "is this bad on my
+ * side or genuinely a bad stream" without reading logs.
+ *   - good: high bitrate, ~0 packet loss, no freezes
+ *   - fair: noticeable loss / occasional freeze
+ *   - poor: heavy loss, stalled jitter buffer, or major freezes
+ */
+export type ScreenShareQualityGrade = "good" | "fair" | "poor";
+
 export type VoiceScreenShareSlice = {
   /** streamer user IDs we're actively subscribed to */
   watchingScreenShares: Record<string, boolean>;
@@ -22,11 +33,21 @@ export type VoiceScreenShareSlice = {
    * is still trivially `viewers.length` for the existing sidebar badge.
    */
   screenShareViewers: Record<string, string[]>;
+  /**
+   * publisherUserID -> last observed quality grade. Written by
+   * useScreenShareReceiverStats; read by the per-panel badge.
+   * Not persisted — purely transient per-session derived state.
+   */
+  screenShareQualityGradeByPublisher: Record<string, ScreenShareQualityGrade>;
 
   toggleWatchScreenShare: (userId: string) => void;
   focusScreenShare: (userId: string) => void;
   /** Clear watch state for a streamer who has stopped sharing or disconnected. */
   removeWatchScreenShare: (userId: string) => void;
+  /** Called by the receiver-stats hook each cycle. */
+  setScreenShareQualityGrade: (publisherId: string, quality: ScreenShareQualityGrade) => void;
+  /** Drop a publisher's quality entry (called on Unsubscribe / Disconnect). */
+  clearScreenShareQualityGrade: (publisherId: string) => void;
 };
 
 export const createVoiceScreenShareSlice: StateCreator<
@@ -37,6 +58,7 @@ export const createVoiceScreenShareSlice: StateCreator<
 > = (set, get) => ({
   watchingScreenShares: {},
   screenShareViewers: {},
+  screenShareQualityGradeByPublisher: {},
 
   toggleWatchScreenShare: (userId: string) => {
     const { watchingScreenShares, _wsSend } = get();
@@ -66,6 +88,25 @@ export const createVoiceScreenShareSlice: StateCreator<
     const next = { ...watchingScreenShares };
     delete next[userId];
     set({ watchingScreenShares: next });
+  },
+
+  setScreenShareQualityGrade: (publisherId, quality) => {
+    const cur = get().screenShareQualityGradeByPublisher;
+    // Skip the set call when the grade hasn't changed — keeps React from
+    // re-rendering every panel on every 10 s tick when nothing meaningful
+    // moved. The badge only changes appearance on transitions.
+    if (cur[publisherId] === quality) return;
+    set({
+      screenShareQualityGradeByPublisher: { ...cur, [publisherId]: quality },
+    });
+  },
+
+  clearScreenShareQualityGrade: (publisherId) => {
+    const cur = get().screenShareQualityGradeByPublisher;
+    if (!(publisherId in cur)) return;
+    const next = { ...cur };
+    delete next[publisherId];
+    set({ screenShareQualityGradeByPublisher: next });
   },
 
   focusScreenShare: (userId: string) => {

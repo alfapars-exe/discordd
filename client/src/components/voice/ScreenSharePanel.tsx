@@ -15,6 +15,7 @@ import { useVoiceStore } from "../../stores/voiceStore";
 import { resolveUserId } from "../../utils/constants";
 import ScreenShareContextMenu from "./ScreenShareContextMenu";
 import ScreenShareViewerChip from "./ScreenShareViewerChip";
+import ScreenShareQualityBadge from "./ScreenShareQualityBadge";
 
 type ScreenSharePanelProps = {
   trackRef: TrackReferenceOrPlaceholder;
@@ -122,6 +123,11 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
       {/* Hover overlay with CSS opacity transition */}
       <div className="screen-share-panel-overlay">
         <span className="screen-share-panel-label">{displayName}</span>
+        {/* Receiver-side quality grade. Only renders when the remote
+            stream has been sampled at least once (~10 s after we start
+            watching). Local broadcaster panel shows nothing because we
+            don't measure our own outbound here. */}
+        {!isLocalUser && <ScreenShareQualityBadge publisherId={realUserId} />}
 
         <button
           onClick={handleFullscreenToggle}
