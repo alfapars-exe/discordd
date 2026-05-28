@@ -134,14 +134,14 @@ jobs:
         if: matrix.platform == 'windows-latest'
         # exe name comes from package.json:build.win.executableName ("HiChat").
         #
-        # Icon source: the multi-resolution .ico that electron-builder just
-        # generated at release\.icon-ico\icon.ico from package.json's
-        # win.icon (icons/hlogo.png). Using the freshly-derived file means
-        # every brand refresh of hlogo.png flows automatically into the
-        # embedded exe icon — no separate icons/hichat-icon.ico to keep
-        # in sync, no chance of the installer + taskbar icon drifting
-        # from the in-app sidebar/splash logo.
-        run: node_modules\rcedit\bin\rcedit-x64.exe release\win-unpacked\HiChat.exe --set-icon release\.icon-ico\icon.ico
+        # Icon source: icons\hlogo.ico — the same multi-resolution .ico
+        # electron-builder consumes via package.json's win.icon. Earlier
+        # this step pointed at release\.icon-ico\icon.ico, expecting
+        # electron-builder to derive a cached copy from a PNG source; that
+        # cache directory only materializes when win.icon is a PNG. Once
+        # win.icon switched to a .ico directly, electron-builder skipped
+        # the derivation and rcedit died with "Cannot open icon file".
+        run: node_modules\rcedit\bin\rcedit-x64.exe release\win-unpacked\HiChat.exe --set-icon icons\hlogo.ico
         shell: cmd
 
       - name: Generate app-update.yml
