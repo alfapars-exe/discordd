@@ -620,7 +620,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self'; "+
+				"script-src 'self' 'wasm-unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: blob: https:; "+
 				"font-src 'self' data:; "+

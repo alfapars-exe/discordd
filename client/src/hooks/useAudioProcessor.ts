@@ -133,6 +133,67 @@ async function setBrowserNoiseSuppression(
 }
 
 /**
+ * Internal LiveKit shape — `processor` and `sender` aren't in the public
+ * type but exist at runtime. Narrow cast surface is kept to one alias so
+ * future LiveKit upgrades only need to touch one line.
+ */
+type LocalAudioTrackInternals = LocalAudioTrack & {
+  processor?: { name?: string; processedTrack?: MediaStreamTrack };
+  sender?: RTCRtpSender;
+};
+
+/**
+ * Post-setProcessor sanity check + self-heal.
+ *
+ * Background: we keep seeing the "Gürültü Azaltma açınca sesim gitmiyor"
+ * symptom even after the energy-gate was removed from RNNoise/Speex. The
+ * symptom signature — local "speaking" ring lights up (LiveKit's local
+ * audioLevel analyser is on the source track, not the published one), but
+ * remote hears silence — is consistent with the RTCRtpSender holding a
+ * track that isn't the processor's `processedTrack`. That can happen if
+ * `setProcessor` resolves before the publish path attaches a sender, or if
+ * an intermediate `applyConstraints` reset interferes with the swap.
+ *
+ * This helper logs a structured warning when the invariant breaks and
+ * force-replaces the sender's track with the processor's output, so the
+ * call recovers in-place instead of needing the user to leave/rejoin.
+ */
+async function verifyProcessorPublished(
+  audioTrack: LocalAudioTrack,
+  label: string,
+): Promise<void> {
+  const internals = audioTrack as LocalAudioTrackInternals;
+  const procTrack = internals.processor?.processedTrack;
+  const sender = internals.sender;
+
+  if (!procTrack) {
+    console.warn(
+      `[useAudioProcessor:${label}] processor.processedTrack is undefined after setProcessor — engine likely failed to build its graph`,
+    );
+    return;
+  }
+
+  if (procTrack.readyState !== "live") {
+    console.warn(
+      `[useAudioProcessor:${label}] processedTrack readyState=${procTrack.readyState} (expected "live") — engine produced a dead track`,
+    );
+  }
+
+  const senderTrack = sender?.track;
+  if (sender && senderTrack && senderTrack !== procTrack) {
+    console.warn(
+      `[useAudioProcessor:${label}] sender.track !== processor.processedTrack — forcing replaceTrack`,
+      { senderTrackId: senderTrack.id, processedTrackId: procTrack.id },
+    );
+    try {
+      await sender.replaceTrack(procTrack);
+    } catch (err) {
+      console.error(`[useAudioProcessor:${label}] force replaceTrack failed:`, err);
+    }
+  }
+}
+
+/**
  * Single source of truth for "create the processor of type X and attach it
  * to the track". Used by both the runtime switch effect and the on-publish
  * effect so the Krisp fallback path isn't duplicated.
@@ -168,6 +229,7 @@ async function applyDesiredProcessor(
       const proc = KrispNoiseFilter();
       if (hooks.isCancelled()) return null;
       await audioTrack.setProcessor(proc);
+      await verifyProcessorPublished(audioTrack, "krisp");
       return proc as unknown as AudioProcessor;
     } catch (err) {
       console.warn("[useAudioProcessor] Krisp init failed, falling back to RNNoise:", err);
@@ -175,6 +237,7 @@ async function applyDesiredProcessor(
       if (hooks.isCancelled()) return null;
       const fallback = new RNNoiseProcessor(sens, vol, level);
       await audioTrack.setProcessor(fallback);
+      await verifyProcessorPublished(audioTrack, "rnnoise(krisp-fallback)");
       return fallback;
     }
   }
@@ -184,6 +247,7 @@ async function applyDesiredProcessor(
     try {
       const proc = new RNNoiseProcessor(sens, vol, level);
       await audioTrack.setProcessor(proc);
+      await verifyProcessorPublished(audioTrack, "rnnoise");
       return proc;
     } catch (err) {
       console.warn("[useAudioProcessor] RNNoise init failed, falling back to browser NS:", err);
@@ -199,6 +263,7 @@ async function applyDesiredProcessor(
     try {
       const proc = new SpeexProcessor(sens, vol, level);
       await audioTrack.setProcessor(proc);
+      await verifyProcessorPublished(audioTrack, "speex");
       return proc;
     } catch (err) {
       console.warn("[useAudioProcessor] Speex init failed, falling back to browser NS:", err);
@@ -219,26 +284,37 @@ async function applyDesiredProcessor(
       // `${cdnUrl}/v2/models/DeepFilterNet3_onnx.tar.gz` (see AssetLoader
       // in deepfilternet3-noise-filter/dist/index.js).
       //
-      // Default cdnUrl points at cdn.mezon.ai, which is blocked by our
-      // production CSP and was the root cause of "DeepFilterNet3 stays
-      // in Beta / never actually denoises" — fetchAsset() rejected, init
-      // failed, code silently fell back to RNNoise. Pointing at /deepfilter
-      // (served from client/public/deepfilter/) keeps everything same-origin
-      // and removes the third-party runtime dependency.
+      // Three invariants must all hold or init() silently rejects and we
+      // fall back to RNNoise:
+      //   1. cdnUrl must resolve same-origin (connect-src 'self'). The
+      //      package's default cdn.mezon.ai is blocked; /deepfilter is
+      //      served from client/public/deepfilter/.
+      //   2. script-src must include 'wasm-unsafe-eval' because the
+      //      package calls WebAssembly.compile(bytes) — synchronous byte
+      //      compile, not streaming. Configured in setupCSP()
+      //      (electron/main.ts) and securityHeaders() (server/main.go).
+      //   3. cdnUrl must respect Vite's `base`. In dev (base="/") an
+      //      absolute "/deepfilter" works; in Electron packaged build
+      //      (base="./", loaded via file://) an absolute "/deepfilter"
+      //      resolves to the filesystem root and 404s. Using
+      //      `import.meta.env.BASE_URL` gives "/" in dev and "./" in
+      //      prod so the same code path works in both environments.
       const proc = DeepFilterNoiseFilter({
         sampleRate: 48000,
         noiseReductionLevel: deepfilterSuppression,
         enabled: true,
-        assetConfig: { cdnUrl: "/deepfilter" },
+        assetConfig: { cdnUrl: `${import.meta.env.BASE_URL}deepfilter` },
       });
       await audioTrack.setProcessor(proc);
+      await verifyProcessorPublished(audioTrack, "deepfilter");
       return proc;
     } catch (err) {
-      console.warn("[useAudioProcessor] DeepFilterNet3 init failed, falling back to RNNoise:", err);
+      console.error("[useAudioProcessor] DeepFilterNet3 init failed, falling back to RNNoise:", err);
       hooks.onDeepFilterFallback();
       if (hooks.isCancelled()) return null;
       const fallback = new RNNoiseProcessor(sens, vol, level);
       await audioTrack.setProcessor(fallback);
+      await verifyProcessorPublished(audioTrack, "rnnoise(deepfilter-fallback)");
       return fallback;
     }
   }
@@ -248,6 +324,7 @@ async function applyDesiredProcessor(
     try {
       const proc = new DtlnProcessor(sens, vol);
       await audioTrack.setProcessor(proc);
+      await verifyProcessorPublished(audioTrack, "dtln");
       return proc;
     } catch (err) {
       console.warn("[useAudioProcessor] DTLN init failed, falling back to RNNoise:", err);
@@ -255,6 +332,7 @@ async function applyDesiredProcessor(
       if (hooks.isCancelled()) return null;
       const fallback = new RNNoiseProcessor(sens, vol, level);
       await audioTrack.setProcessor(fallback);
+      await verifyProcessorPublished(audioTrack, "rnnoise(dtln-fallback)");
       return fallback;
     }
   }
@@ -273,6 +351,7 @@ async function applyDesiredProcessor(
     await setBrowserNoiseSuppression(audioTrack, false);
     const proc = new VadGateProcessor(sens, vol, level);
     await audioTrack.setProcessor(proc);
+    await verifyProcessorPublished(audioTrack, "vadgate");
     return proc;
   }
 
