@@ -413,6 +413,8 @@ function ScreenShareQualityPopup({
   const setScreenShareAudio = useVoiceStore((s) => s.setScreenShareAudio);
   const lowLatency = useVoiceStore((s) => s.screenShareLowLatency);
   const setLowLatency = useVoiceStore((s) => s.setScreenShareLowLatency);
+  const screenShareMode = useVoiceStore((s) => s.screenShareMode);
+  const setScreenShareMode = useVoiceStore((s) => s.setScreenShareMode);
   const popupRef = useRef<HTMLDivElement>(null);
 
   const rect = anchorEl.getBoundingClientRect();
@@ -505,6 +507,25 @@ function ScreenShareQualityPopup({
             {fps === opt.value && <div className="adp-submenu-check" />}
           </button>
         ))}
+      </div>
+      <div className="adp-section">
+        <div className="adp-label">{t("screenShareMode")}</div>
+        <button
+          className={`adp-submenu-item${screenShareMode === "motion" ? " selected" : ""}`}
+          onClick={() => setScreenShareMode("motion")}
+          title={t("screenShareModeMotionHint")}
+        >
+          <span className="adp-submenu-label">{t("screenShareModeMotion")}</span>
+          {screenShareMode === "motion" && <div className="adp-submenu-check" />}
+        </button>
+        <button
+          className={`adp-submenu-item${screenShareMode === "detail" ? " selected" : ""}`}
+          onClick={() => setScreenShareMode("detail")}
+          title={t("screenShareModeDetailHint")}
+        >
+          <span className="adp-submenu-label">{t("screenShareModeDetail")}</span>
+          {screenShareMode === "detail" && <div className="adp-submenu-check" />}
+        </button>
       </div>
       <div className="adp-section">
         <button

@@ -255,6 +255,11 @@
   "screenShareAudioDescBrowser": "Share system audio when screen sharing. May cause echo in voice chat.",
   "screenShareLowLatency": "Low-Latency Mode",
   "screenShareLowLatencyHint": "Switches the codec from VP9 to H264. Lower encoder latency and smoother playback at the cost of some sharpness (especially on small text).",
+  "screenShareMode": "Share Profile",
+  "screenShareModeMotion": "Motion (game / video)",
+  "screenShareModeMotionHint": "When bandwidth tightens, preserve frame rate and soften resolution. Ideal for gameplay and video — no stuttering, slightly softer image.",
+  "screenShareModeDetail": "Presentation (text / code)",
+  "screenShareModeDetailHint": "When bandwidth tightens, preserve resolution and drop frame rate. Ideal for slides, code and docs — text stays sharp, motion may stutter.",
 
   "selectChannelToEdit": "Select a channel to edit its permissions",
   "selectRoleToEdit": "Select a role to edit overrides",

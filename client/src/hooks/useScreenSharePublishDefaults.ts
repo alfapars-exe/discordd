@@ -1,27 +1,42 @@
 /**
  * useScreenSharePublishDefaults — derive LiveKit publish-side encoding
- * settings (bitrate, simulcast layers, codec) from the user's chosen
- * resolution + frame rate.
+ * settings (bitrate, simulcast layers, codec, content hint, degradation
+ * preference) from the user's chosen resolution + frame rate + content
+ * profile + low-latency toggle.
  *
  * Bitrate ladder (motion content, VP9):
  *
  *   720p30:  1.5 Mbps   720p60:  2.5 Mbps
  *   1080p30:   5 Mbps   1080p60:   8 Mbps
  *   1440p30:   8 Mbps   1440p60:  12 Mbps
+ *   4K@60:    20 Mbps   4K@30:    14 Mbps
  *
- * The 1080p value was bumped from 3 → 5 Mbps because the previous ceiling
- * was visibly soft on motion-heavy content (gameplay, video). 1440p added
- * for users on high-DPI displays who want sharp text.
+ * Codec choice:
+ *   - Default: VP9 + SVC (Scalable Video Coding). LiveKit handles layered
+ *     bitstream natively; we do NOT supply screenShareSimulcastLayers for
+ *     VP9 because that option is for H264-style independent encoder
+ *     layers and is silently ignored / inconsistent under VP9 SVC. We
+ *     also wire `backupCodec: h264` so receivers that can't decode VP9
+ *     (older Safari, some Linux Firefox builds) still get a stream.
+ *   - Low-latency (game/video, hardware encoder): H264 + explicit
+ *     simulcast layers. H264 is hardware-encoded on every modern
+ *     platform (NVENC / QuickSync / VideoToolbox / MediaCodec) → ~50–150
+ *     ms lower encoder latency at the cost of ~30 % more bitrate for the
+ *     same perceived quality.
  *
- * Lower simulcast layers exist so subscribers on small viewports get a
- * cheaper stream — adaptiveStream + dynacast pick the right one based on
- * each subscriber's viewport size and connection quality.
+ * Content profile (motion vs detail) — see ScreenShareMode in the
+ * voice settings slice. Picks degradationPreference + contentHint so
+ * bandwidth-tight behaviour matches what the user is actually sharing:
  *
- * Codec: VP9 across the board. ~30% more efficient than H.264 at the same
- * quality (matters most for screen content with large flat regions and
- * text), and royalty-free so LiveKit Cloud doesn't add licensing cost.
+ *   - motion: maintain-framerate + contentHint "motion"
+ *     (Discord/Slack/Zoom default; smooth at the cost of softness)
+ *   - detail: maintain-resolution + contentHint "detail"
+ *     (text-heavy / slides / code; sharp at the cost of jitter)
  *
- * Was previously ~60 lines inline in VoiceProvider.tsx.
+ * These settings are now consumed by useScreenShareToggle and passed
+ * directly to localParticipant.setScreenShareEnabled(...) as capture +
+ * publish options, NOT through room-level publishDefaults. That lets the
+ * user change quality / FPS / mode mid-session without reconnecting.
  */
 
 import { useMemo } from "react";
@@ -31,32 +46,51 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { useDisplayInfo } from "./useDisplayInfo";
 
 /**
- * VP9 is the default codec — ~30% more efficient than H.264 for the
- * large flat regions + text typical of screen shares. H.264 is offered
- * via the `screenShareLowLatency` toggle: hardware-encoded on every
- * platform, encoder pipeline latency is ~50-150ms lower, at the cost
- * of bigger bitrate for the same perceived quality.
- *
- * `degradationPreference: "maintain-framerate"` (set at room level via
- * publishDefaults) tells the encoder to drop resolution before
- * dropping frame rate when bandwidth tightens. For screen content
- * that's the right trade: stuttering UI is more disruptive than a
- * slightly soft frame.
+ * Output of this hook — split into capture (browser getDisplayMedia
+ * hints) and publish (LiveKit RTC encoder) sides because they correspond
+ * to the two separate arg slots of `setScreenShareEnabled(enabled,
+ * captureOptions, publishOptions)`.
  */
 export type ScreenSharePublishDefaults = {
-  screenShareEncoding: {
-    maxBitrate: number;
-    maxFramerate: number;
+  /** Goes to setScreenShareEnabled's 2nd arg (ScreenShareCaptureOptions). */
+  screenShareCapture: {
+    /** Hint to the browser about content nature. Set on the
+     *  MediaStreamTrack before WebRTC sees it; affects rate-distortion
+     *  trade-off inside the encoder pipeline.
+     *  - "motion": video / games → smoothness over sharpness
+     *  - "detail": presentations / code → sharpness over smoothness
+     *  - "text" exists in the spec but Firefox support is partial; we
+     *    use "detail" for the text-heavy profile to stay portable. */
+    contentHint: "motion" | "detail";
   };
-  screenShareSimulcastLayers: VideoPreset[];
-  videoCodec: "vp9" | "h264";
-  degradationPreference: "maintain-framerate";
+  /** Goes to setScreenShareEnabled's 3rd arg (TrackPublishOptions). */
+  screenSharePublish: {
+    screenShareEncoding: {
+      maxBitrate: number;
+      maxFramerate: number;
+    };
+    /** Only populated for H264 (independent encoder layers). VP9 uses
+     *  internal SVC and silently misuses this option. */
+    screenShareSimulcastLayers?: VideoPreset[];
+    videoCodec: "vp9" | "h264";
+    /** Fallback codec for receivers that can't decode the primary.
+     *  Only set when primary is VP9 — H264 is universally decodeable. */
+    backupCodec?: {
+      codec: "h264";
+      encoding: {
+        maxBitrate: number;
+        maxFramerate: number;
+      };
+    };
+    degradationPreference: "maintain-framerate" | "maintain-resolution";
+  };
 };
 
 export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
   const screenShareQuality = useVoiceStore((s) => s.screenShareQuality);
   const screenShareFps = useVoiceStore((s) => s.screenShareFps);
   const lowLatency = useVoiceStore((s) => s.screenShareLowLatency);
+  const mode = useVoiceStore((s) => s.screenShareMode);
   const display = useDisplayInfo();
 
   return useMemo(() => {
@@ -89,7 +123,13 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
     const fps = resolvedFps;
     const lowerLayer = new VideoPreset(1280, 720, 800_000, 15);
     const codec: "vp9" | "h264" = lowLatency ? "h264" : "vp9";
-    const degradationPreference = "maintain-framerate" as const;
+
+    // Mode mapping. Low-latency users effectively want gameplay smoothness,
+    // so even if they pick "detail" we keep maintain-framerate — a stutter
+    // in low-latency mode defeats the purpose of choosing it.
+    const degradationPreference: "maintain-framerate" | "maintain-resolution" =
+      mode === "detail" && !lowLatency ? "maintain-resolution" : "maintain-framerate";
+    const contentHint: "motion" | "detail" = mode === "detail" ? "detail" : "motion";
 
     // 120-fps tier roughly doubles 60-fps bitrate at the same resolution
     // because high-frame-rate motion content benefits from extra headroom
@@ -104,60 +144,70 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
       return thirty;
     };
 
+    // Pick the tier-specific (maxBitrate, simulcast layers) tuple, then
+    // compose with the codec-aware fields at the bottom — keeps tier
+    // tables flat and avoids repeating the publish-opts shape per tier.
+    let maxBitrate: number;
+    let simulcastLayers: VideoPreset[];
+
     if (qualityTier === "4k") {
-      return {
-        screenShareEncoding: {
-          maxBitrate: bitrate(20_000_000, 14_000_000, 30_000_000),
-          maxFramerate: fps,
-        },
-        screenShareSimulcastLayers: [
-          new VideoPreset(2560, 1440, bitrate(8_000_000, 5_000_000, 12_000_000), fps),
-          new VideoPreset(1920, 1080, bitrate(3_500_000, 2_000_000, 5_000_000), fps),
-          lowerLayer,
-        ],
-        videoCodec: codec,
-        degradationPreference,
-      };
+      maxBitrate = bitrate(20_000_000, 14_000_000, 30_000_000);
+      simulcastLayers = [
+        new VideoPreset(2560, 1440, bitrate(8_000_000, 5_000_000, 12_000_000), fps),
+        new VideoPreset(1920, 1080, bitrate(3_500_000, 2_000_000, 5_000_000), fps),
+        lowerLayer,
+      ];
+    } else if (qualityTier === "1440p") {
+      maxBitrate = bitrate(12_000_000, 8_000_000, 18_000_000);
+      simulcastLayers = [
+        new VideoPreset(1920, 1080, bitrate(6_000_000, 4_000_000, 9_000_000), fps),
+        lowerLayer,
+      ];
+    } else if (qualityTier === "1080p") {
+      maxBitrate = bitrate(8_000_000, 5_000_000, 12_000_000);
+      simulcastLayers = [
+        new VideoPreset(1280, 720, bitrate(2_500_000, 1_500_000, 4_000_000), fps),
+        lowerLayer,
+      ];
+    } else {
+      maxBitrate = bitrate(2_500_000, 1_500_000, 4_000_000);
+      simulcastLayers = [lowerLayer];
     }
 
-    if (qualityTier === "1440p") {
-      return {
-        screenShareEncoding: {
-          maxBitrate: bitrate(12_000_000, 8_000_000, 18_000_000),
-          maxFramerate: fps,
-        },
-        screenShareSimulcastLayers: [
-          new VideoPreset(1920, 1080, bitrate(6_000_000, 4_000_000, 9_000_000), fps),
-          lowerLayer,
-        ],
-        videoCodec: codec,
-        degradationPreference,
-      };
-    }
+    // Backup codec for VP9 path only — receivers that can't decode VP9
+    // (older Safari, Linux Firefox without VP9 build flag) fall back to
+    // the H264 stream. Capped at ~half the primary bitrate; this is a
+    // graceful fallback, not a parallel high-quality path.
+    const backupCodec =
+      codec === "vp9"
+        ? {
+            codec: "h264" as const,
+            encoding: {
+              maxBitrate: Math.floor(maxBitrate / 2),
+              maxFramerate: Math.min(fps, 30),
+            },
+          }
+        : undefined;
 
-    if (qualityTier === "1080p") {
-      return {
-        screenShareEncoding: {
-          maxBitrate: bitrate(8_000_000, 5_000_000, 12_000_000),
-          maxFramerate: fps,
-        },
-        screenShareSimulcastLayers: [
-          new VideoPreset(1280, 720, bitrate(2_500_000, 1_500_000, 4_000_000), fps),
-          lowerLayer,
-        ],
-        videoCodec: codec,
-        degradationPreference,
-      };
-    }
+    // VP9 uses internal SVC; the simulcast layers option is for H264-style
+    // independent encoder runs and silently does nothing (or worse,
+    // conflicts) under VP9. Only ship it on the H264 path.
+    const screenShareSimulcastLayers = codec === "h264" ? simulcastLayers : undefined;
 
     return {
-      screenShareEncoding: {
-        maxBitrate: bitrate(2_500_000, 1_500_000, 4_000_000),
-        maxFramerate: fps,
+      screenShareCapture: {
+        contentHint,
       },
-      screenShareSimulcastLayers: [lowerLayer],
-      videoCodec: codec,
-      degradationPreference,
+      screenSharePublish: {
+        screenShareEncoding: {
+          maxBitrate,
+          maxFramerate: fps,
+        },
+        screenShareSimulcastLayers,
+        videoCodec: codec,
+        backupCodec,
+        degradationPreference,
+      },
     };
-  }, [screenShareQuality, screenShareFps, lowLatency, display]);
+  }, [screenShareQuality, screenShareFps, lowLatency, mode, display]);
 }

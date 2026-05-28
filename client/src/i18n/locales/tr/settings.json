@@ -255,6 +255,11 @@
   "screenShareAudioDescBrowser": "Ekran paylaşırken sistem sesini paylaş. Ses kanalında yankıya neden olabilir.",
   "screenShareLowLatency": "Düşük Gecikme Modu",
   "screenShareLowLatencyHint": "Codec'i VP9 yerine H264'e geçirir. Encoder gecikmesi düşer, akıcılık artar; kalite biraz feda (özellikle küçük metinde).",
+  "screenShareMode": "Paylaşım Profili",
+  "screenShareModeMotion": "Hareket (oyun / video)",
+  "screenShareModeMotionHint": "Bant genişliği daralırsa kareleri korur, çözünürlüğü düşürür. Oyun ve video paylaşımı için ideal — kare atlama olmaz, görüntü hafif yumuşar.",
+  "screenShareModeDetail": "Sunum (metin / kod)",
+  "screenShareModeDetailHint": "Bant genişliği daralırsa çözünürlüğü korur, kare hızını düşürür. Sunum, kod ve döküman paylaşımı için ideal — metin keskin kalır, hareket biraz takılabilir.",
 
   "selectChannelToEdit": "İzinlerini düzenlemek için bir kanal seçin",
   "selectRoleToEdit": "Override düzenlemek için bir rol seçin",

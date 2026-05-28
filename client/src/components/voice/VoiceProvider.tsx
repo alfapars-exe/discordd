@@ -41,7 +41,6 @@ import { useTranslation } from "react-i18next";
 import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useVoiceAutoRejoin } from "../../hooks/useVoiceAutoRejoin";
-import { useScreenSharePublishDefaults } from "../../hooks/useScreenSharePublishDefaults";
 import VoiceStateManager from "./VoiceStateManager";
 
 type VoiceProviderProps = {
@@ -136,8 +135,6 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     [inputDevice],
   );
 
-  const publishDefaults = useScreenSharePublishDefaults();
-
   // Stable AudioPreset reference — recomputes only when the resolved
   // bitrate changes. LiveKit applies this on first audio publish.
   const voiceAudioPreset: AudioPreset = useMemo(
@@ -148,13 +145,18 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const roomOptions: RoomOptions | undefined = useMemo(() => {
     if (!isConnected) return undefined;
 
+    // Screen-share encoder + simulcast + codec settings are deliberately
+    // NOT in publishDefaults — those room-level options are captured at
+    // connect() time and never re-applied. Mid-session quality / FPS /
+    // mode changes would silently no-op until the user reconnected.
+    // Instead useScreenShareToggle passes them as the 3rd arg of
+    // setScreenShareEnabled(), so each share start picks up the latest
+    // user choice. Only the per-channel Opus audio preset stays here
+    // because audio publish happens once at room join and that mid-call
+    // reconfiguration isn't expected.
     const base: RoomOptions = {
       audioCaptureDefaults,
       publishDefaults: {
-        ...publishDefaults,
-        // Per-channel Opus bitrate from the slider (8–384 kbps). Falls
-        // back to 384 kbps when the channel record isn't available —
-        // see voiceBitrate resolver above for the rationale.
         audioPreset: voiceAudioPreset,
       },
       webAudioMix: true,
@@ -175,7 +177,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     }
 
     return base;
-  }, [isConnected, audioCaptureDefaults, publishDefaults, voiceAudioPreset, e2eePassphrase, keyProvider, e2eeWorker]);
+  }, [isConnected, audioCaptureDefaults, voiceAudioPreset, e2eePassphrase, keyProvider, e2eeWorker]);
 
   return (
     <LiveKitRoom
