@@ -16,6 +16,8 @@
   "publisherWarningCpuHint": "Turn on Low-Latency Mode (switches to H264, uses hardware encode).",
   "publisherWarningBandwidthTitle": "Upload bandwidth tight",
   "publisherWarningBandwidthHint": "Try lowering the resolution or frame rate.",
+  "screenShareQualityHistoryTitle": "Last {{seconds}}s quality",
+  "screenShareQualityHistoryAvg": "Average: {{kbps}} kbps",
   "voiceConnected": "Voice Connected",
   "noOneInVoice": "No one is in this voice channel",
   "screenShareLimit": "Maximum of 2 screen shares reached",

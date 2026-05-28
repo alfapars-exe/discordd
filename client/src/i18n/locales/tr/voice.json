@@ -16,6 +16,8 @@
   "publisherWarningCpuHint": "Düşük Gecikme Modu'nu aç (codec'i H264'e geçirir, donanım encode kullanır).",
   "publisherWarningBandwidthTitle": "Yayın bandwidth'i düşük",
   "publisherWarningBandwidthHint": "Çözünürlüğü veya FPS'i düşürmeyi dene.",
+  "screenShareQualityHistoryTitle": "Son {{seconds}}s kalite",
+  "screenShareQualityHistoryAvg": "Ortalama: {{kbps}} kbps",
   "voiceConnected": "Ses Bağlı",
   "noOneInVoice": "Bu ses kanalında kimse yok",
   "screenShareLimit": "Maksimum 2 ekran paylaşımına ulaşıldı",
