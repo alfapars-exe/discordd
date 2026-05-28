@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -17,6 +18,7 @@ type Config struct {
 	Upload          UploadConfig
 	Email           EmailConfig
 	Klipy           KlipyConfig
+	Backup          BackupConfig
 	EncryptionKey   string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
 	HetznerAPIToken string // Hetzner Cloud API token (read-only) — optional
 	// TrustedProxies is the raw CIDR/IP list parsed from the
@@ -64,6 +66,27 @@ type UploadConfig struct {
 	MaxSize int64 // bytes (default: 25MB)
 }
 
+// BackupConfig — disaster-recovery snapshots to a Hugging Face Storage
+// Bucket. Disabled when HF_TOKEN is empty so dev / self-host deployments
+// without HF credentials boot without errors.
+//
+// Mirrored content:
+//   - SQLite DB via `sqlite3 VACUUM INTO` (consistent snapshot while open)
+//   - Upload directory via `hf sync --delete`
+//
+// The bucket path used is `hf://buckets/<HFBucket>/latest/{db,uploads}/...`.
+// Mutable overwrite-in-place — no per-cycle versioning yet. Add a dated
+// archive sync to a separate prefix if point-in-time recovery is needed.
+type BackupConfig struct {
+	Enabled   bool          // true when HFToken is set
+	HFToken   string        // HF API token with write access to HFBucket
+	HFBucket  string        // e.g. "argeinfina/discord"
+	Interval  time.Duration // backup frequency (default 24h)
+	DBPath    string        // SQLite source file
+	UploadDir string        // uploads root mirror target
+	WorkDir   string        // local staging area for the DB snapshot
+}
+
 // Load reads configuration from environment variables.
 // Falls back to .env file in development.
 func Load() (*Config, error) {
@@ -96,6 +119,18 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid UPLOAD_MAX_SIZE: %w", err)
 	}
+
+	// Backup config — disabled when HF_TOKEN is missing. Interval clamps
+	// to a minimum of 1h so a typo (e.g. "0" for the env) doesn't peg the
+	// HF API quota.
+	backupHours, err := strconv.Atoi(getEnv("BACKUP_INTERVAL_HOURS", "24"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid BACKUP_INTERVAL_HOURS: %w", err)
+	}
+	if backupHours < 1 {
+		backupHours = 1
+	}
+	hfToken := getEnv("HF_TOKEN", "")
 
 	jwtSecret := getEnv("JWT_SECRET", "")
 	if jwtSecret == "" {
@@ -147,6 +182,15 @@ func Load() (*Config, error) {
 		},
 		Klipy: KlipyConfig{
 			APIKey: getEnv("KLIPY_API_KEY", ""),
+		},
+		Backup: BackupConfig{
+			Enabled:   hfToken != "",
+			HFToken:   hfToken,
+			HFBucket:  getEnv("HF_BUCKET", "argeinfina/discord"),
+			Interval:  time.Duration(backupHours) * time.Hour,
+			DBPath:    firstNonEmpty(os.Getenv("DATABASE_URL"), getEnv("DATABASE_PATH", "./data/mqvi.db")),
+			UploadDir: getEnv("UPLOAD_DIR", "./data/uploads"),
+			WorkDir:   getEnv("BACKUP_WORKDIR", "/tmp/hichat-backup"),
 		},
 		EncryptionKey:   encKey,
 		HetznerAPIToken: getEnv("HETZNER_API_TOKEN", ""),
