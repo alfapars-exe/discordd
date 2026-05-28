@@ -72,6 +72,10 @@
       ],
       "icon": "icons/hlogo.png",
       "category": "Network;Chat"
+    },
+    "mac": {
+      "icon": "icons/icon.icns",
+      "category": "public.app-category.social-networking"
     }
   }
 }
