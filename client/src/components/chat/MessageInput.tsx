@@ -6,6 +6,7 @@ import { useChatContext } from "../../hooks/useChatContext";
 import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH } from "../../utils/constants";
+import { convertMentionTokens } from "../../utils/mention";
 import EmojiPicker from "../shared/EmojiPicker";
 import GifPicker from "../shared/GifPicker";
 import FilePreview from "./FilePreview";
@@ -88,20 +89,6 @@ function MessageInput() {
     }
   }, [replyingTo]);
 
-  /** Convert @name mentions to <@id>/<@&id> tokens before sending */
-  function convertMentionTokens(text: string): string {
-    let result = text;
-    // Sort longest name first to prevent partial matches
-    const sorted = [...mentionSelectionsRef.current].sort((a, b) => b.name.length - a.name.length);
-    for (const m of sorted) {
-      const token = m.type === "role" ? `<@&${m.id}>` : `<@${m.id}>`;
-      // Replace all occurrences of @name (case-insensitive)
-      const escaped = m.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      result = result.replace(new RegExp(`@${escaped}`, "gi"), token);
-    }
-    return result;
-  }
-
   /** Send message, passing replyToId if replying */
   const runMusicCommand = useMusicSlashCommand();
 
@@ -150,7 +137,7 @@ function MessageInput() {
       }
 
       const replyToId = replyingTo?.id;
-      const tokenized = convertMentionTokens(content.trim());
+      const tokenized = convertMentionTokens(content.trim(), mentionSelectionsRef.current);
       const success = await sendMessage(tokenized, files, replyToId);
       if (success) {
         resetInputAfterSend();
