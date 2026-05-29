@@ -40,6 +40,8 @@ function AppearanceSettings() {
   const setNeonEnabled = useSettingsStore((s) => s.setNeonEnabled);
   const neonIntensity = useSettingsStore((s) => s.neonIntensity);
   const setNeonIntensity = useSettingsStore((s) => s.setNeonIntensity);
+  const uiScale = useSettingsStore((s) => s.uiScale);
+  const setUiScale = useSettingsStore((s) => s.setUiScale);
   const setPendingWallpaperPreviewUrl = useSettingsStore((s) => s.setPendingWallpaperPreviewUrl);
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
@@ -201,6 +203,40 @@ function AppearanceSettings() {
           );
         })}
       </div>
+
+      {/* ─── App / UI scale — whole-interface zoom (Appearance request) ─── */}
+      <h2 className="settings-section-title" style={{ marginTop: 28 }}>
+        {t("uiScaleTitle", { defaultValue: "Uygulama olcegi" })}
+      </h2>
+      <p className="theme-section-desc">
+        {t("uiScaleDescription", { defaultValue: "Tum arayuzu tarayici yakinlastirmasi gibi olceklendirir." })}
+      </p>
+      <label className="settings-toggle-row" style={{ alignItems: "center", gap: 12 }}>
+        <span style={{ minWidth: 140 }}>{t("uiScaleLabel", { defaultValue: "Uygulama olcegi" })}</span>
+        <input
+          type="range"
+          min={100}
+          max={200}
+          step={10}
+          value={uiScale}
+          onChange={(e) => setUiScale(parseInt(e.target.value, 10))}
+          style={{ flex: 1, accentColor: "var(--primary)" }}
+          aria-label={t("uiScaleLabel", { defaultValue: "Uygulama olcegi" })}
+        />
+        <span style={{ minWidth: 38, textAlign: "right", color: "var(--t2)", fontVariantNumeric: "tabular-nums" }}>
+          {uiScale}%
+        </span>
+      </label>
+      {uiScale !== 100 && (
+        <button
+          type="button"
+          className="settings-btn settings-btn-secondary"
+          style={{ marginTop: 8 }}
+          onClick={() => setUiScale(100)}
+        >
+          {t("uiScaleReset", { defaultValue: "100%'e sifirla" })}
+        </button>
+      )}
 
       {/* ─── Wallpaper — drag-drop zone ─────────────────────────────── */}
       <h2 className="settings-section-title" style={{ marginTop: 28 }}>{t("wallpaperTitle")}</h2>

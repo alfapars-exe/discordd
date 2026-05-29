@@ -18,6 +18,7 @@ const LIGHTNING_ENABLED_KEY = "mqvi_lightning_enabled";
 const LIGHTNING_BLUR_KEY = "mqvi_lightning_blur";
 const NEON_ENABLED_KEY = "mqvi_neon_enabled";
 const NEON_INTENSITY_KEY = "mqvi_neon_intensity";
+const UI_SCALE_KEY = "mqvi_ui_scale";
 
 /** Default blur for the lightning bolts (px) — matches the original hard-coded value. */
 const LIGHTNING_BLUR_DEFAULT = 4;
@@ -28,6 +29,11 @@ const LIGHTNING_BLUR_MAX = 20;
 const NEON_INTENSITY_DEFAULT = 60;
 const NEON_INTENSITY_MIN = 0;
 const NEON_INTENSITY_MAX = 100;
+
+/** Whole-app UI scale (%). 100 = native size; whole interface zooms uniformly. */
+const UI_SCALE_DEFAULT = 100;
+const UI_SCALE_MIN = 100;
+const UI_SCALE_MAX = 200;
 
 function loadPersistedTheme(): ThemeId {
   try {
@@ -158,6 +164,31 @@ function applyNeonStyles(enabled: boolean, intensityPct: number): void {
   document.body.classList.toggle("neon-off", !enabled);
 }
 
+function loadPersistedUiScale(): number {
+  try {
+    const stored = localStorage.getItem(UI_SCALE_KEY);
+    if (stored !== null) {
+      const pct = parseInt(stored, 10);
+      if (Number.isFinite(pct) && pct >= UI_SCALE_MIN && pct <= UI_SCALE_MAX) return pct;
+    }
+  } catch {
+    /* localStorage access error */
+  }
+  return UI_SCALE_DEFAULT;
+}
+
+/**
+ * Whole-app UI scale. Writes the zoom factor (pct/100) to the --ui-scale
+ * custom property on :root; globals.css turns it into `html { zoom: var(--ui-scale) }`
+ * so text + icons + spacing + layout all scale uniformly (like browser zoom).
+ * Using a CSS variable (not inline style.zoom) matches the lightning/neon
+ * appliers and stays testable under jsdom (which ignores unknown style props).
+ */
+function applyUiScale(pct: number): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--ui-scale", String(pct / 100));
+}
+
 type SettingsTab =
   | "profile"
   | "appearance"
@@ -198,6 +229,8 @@ type SettingsState = {
   neonEnabled: boolean;
   /** Decorative neon intensity (0–100%) — scales opacity of the neon layers. */
   neonIntensity: number;
+  /** Whole-app UI scale (100-200%) - zoom factor for the entire interface. */
+  uiScale: number;
   /** Live preview blob URL — applied to the app background without persisting. */
   pendingWallpaperPreviewUrl: string | null;
 
@@ -212,6 +245,7 @@ type SettingsState = {
   setLightningBlur: (px: number) => void;
   setNeonEnabled: (enabled: boolean) => void;
   setNeonIntensity: (pct: number) => void;
+  setUiScale: (pct: number) => void;
   setPendingWallpaperPreviewUrl: (url: string | null) => void;
   /** Apply theme from server preferences (no re-sync to server) */
   applyFromServer: (themeId: string) => void;
@@ -227,6 +261,7 @@ const initialLightningEnabled = loadPersistedLightningEnabled();
 const initialLightningBlur = loadPersistedLightningBlur();
 const initialNeonEnabled = loadPersistedNeonEnabled();
 const initialNeonIntensity = loadPersistedNeonIntensity();
+const initialUiScale = loadPersistedUiScale();
 
 // Seed the CSS variable so .lightning-bolt's filter reads the user's
 // preferred blur from first paint — without this it would start at the
@@ -236,6 +271,9 @@ applyLightningBlur(initialLightningBlur);
 // load so the decorative layers paint at the user's preferred amount
 // from frame 1 instead of flashing in at 0.6 and then snapping.
 applyNeonStyles(initialNeonEnabled, initialNeonIntensity);
+// Seed --ui-scale so the whole UI paints at the user's chosen zoom from
+// frame 1 (no flash from 100% snapping to the saved value).
+applyUiScale(initialUiScale);
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   isOpen: false,
@@ -248,6 +286,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   lightningBlur: initialLightningBlur,
   neonEnabled: initialNeonEnabled,
   neonIntensity: initialNeonIntensity,
+  uiScale: initialUiScale,
   pendingWallpaperPreviewUrl: null,
 
   openSettings: (tab = "profile") => set({ isOpen: true, activeTab: tab }),
@@ -345,6 +384,17 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyNeonStyles(useSettingsStore.getState().neonEnabled, clamped);
     set({ neonIntensity: clamped });
+  },
+
+  setUiScale: (pct) => {
+    const clamped = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, Math.round(pct)));
+    try {
+      localStorage.setItem(UI_SCALE_KEY, String(clamped));
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    applyUiScale(clamped);
+    set({ uiScale: clamped });
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),
