@@ -12,8 +12,8 @@
  * Visual states: speaking = green ring, muted = mic-off overlay, deafened = headphone-off overlay.
  */
 
-import { useState, useCallback, useEffect } from "react";
-import { useIsSpeaking, useParticipantTracks, VideoTrack } from "@livekit/components-react";
+import { useState, useCallback } from "react";
+import { useParticipantTracks, VideoTrack } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import type { Participant } from "livekit-client";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -33,32 +33,18 @@ type VoiceParticipantProps = {
   videoInAvatar?: boolean;
 };
 
-/** Hold duration to avoid flickering between syllables (~Discord's 250-350ms) */
-const SPEAKING_HOLD_MS = 150;
-
 function VoiceParticipant({
   participant,
   compact = false,
   videoInAvatar = false,
 }: Readonly<VoiceParticipantProps>) {
-  // LOCAL: analyzed via local AnalyserNode (instant). REMOTE: from SFU speaker info.
-  const rawSpeaking = useIsSpeaking(participant);
-
-  // Snap to true on the way up (render-time state sync, no flicker);
-  // hold for SPEAKING_HOLD_MS on the way down so brief gaps between
-  // syllables don't toggle the indicator. If speech resumes within the
-  // window, the render-time branch flips back to true and the effect
-  // cleanup cancels the pending timeout.
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  if (rawSpeaking && !isSpeaking) {
-    setIsSpeaking(true);
-  }
-
-  useEffect(() => {
-    if (rawSpeaking) return;
-    const timer = globalThis.setTimeout(() => setIsSpeaking(false), SPEAKING_HOLD_MS);
-    return () => clearTimeout(timer);
-  }, [rawSpeaking]);
+  // Same source of truth as the sidebar (VoiceParticipantList) — populated by
+  // useSpeakingDetection's rAF analyser + LiveKit events, with an 80 ms OFF
+  // hold already baked in. Reading it here guarantees the two indicators
+  // always toggle together.
+  const isSpeaking = useVoiceStore(
+    (s) => s.activeSpeakers[participant.identity] ?? false,
+  );
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const voiceStates = useVoiceStore((s) => s.voiceStates);
   const currentUserId = useAuthStore((s) => s.user?.id);
