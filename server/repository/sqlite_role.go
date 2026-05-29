@@ -19,6 +19,17 @@ func NewSQLiteRoleRepo(db database.TxQuerier) RoleRepository {
 	return &sqliteRoleRepo{db: db}
 }
 
+// scanRole scans one roles row in the column order shared by the role list
+// queries (GetAllByServer, GetByUserIDAndServer).
+func scanRole(rows *sql.Rows) (models.Role, error) {
+	var role models.Role
+	err := rows.Scan(
+		&role.ID, &role.ServerID, &role.Name, &role.Color, &role.Position,
+		&role.Permissions, &role.IsDefault, &role.IsOwner, &role.Mentionable, &role.CreatedAt,
+	)
+	return role, err
+}
+
 // ─── Read ───
 
 func (r *sqliteRoleRepo) GetByID(ctx context.Context, id string) (*models.Role, error) {
@@ -51,25 +62,7 @@ func (r *sqliteRoleRepo) GetAllByServer(ctx context.Context, serverID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roles by server: %w", err)
 	}
-	defer rows.Close()
-
-	var roles []models.Role
-	for rows.Next() {
-		var role models.Role
-		if err := rows.Scan(
-			&role.ID, &role.ServerID, &role.Name, &role.Color, &role.Position,
-			&role.Permissions, &role.IsDefault, &role.IsOwner, &role.Mentionable, &role.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan role row: %w", err)
-		}
-		roles = append(roles, role)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating role rows: %w", err)
-	}
-
-	return roles, nil
+	return scanRows(rows, "role", scanRole)
 }
 
 func (r *sqliteRoleRepo) GetDefaultByServer(ctx context.Context, serverID string) (*models.Role, error) {
@@ -105,25 +98,7 @@ func (r *sqliteRoleRepo) GetByUserIDAndServer(ctx context.Context, userID, serve
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roles by user and server: %w", err)
 	}
-	defer rows.Close()
-
-	var roles []models.Role
-	for rows.Next() {
-		var role models.Role
-		if err := rows.Scan(
-			&role.ID, &role.ServerID, &role.Name, &role.Color, &role.Position,
-			&role.Permissions, &role.IsDefault, &role.IsOwner, &role.Mentionable, &role.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan role row: %w", err)
-		}
-		roles = append(roles, role)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating role rows: %w", err)
-	}
-
-	return roles, nil
+	return scanRows(rows, "role", scanRole)
 }
 
 func (r *sqliteRoleRepo) GetMaxPosition(ctx context.Context, serverID string) (int, error) {
