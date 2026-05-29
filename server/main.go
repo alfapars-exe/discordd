@@ -220,7 +220,7 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server)
+	initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum)
 
 	// 13. Static file serving
 	registerStaticAndUploads(mux, cfg)

@@ -10,15 +10,19 @@ import (
 // Client derives AES-256-GCM key from a recovery password (PBKDF2),
 // encrypts all E2EE keys, and uploads the blob. Server cannot read the keys.
 type E2EEKeyBackup struct {
-	ID            string    `json:"id"`
-	UserID        string    `json:"user_id"`
-	Version       int       `json:"version"`
-	Algorithm     string    `json:"algorithm"`
-	EncryptedData string    `json:"encrypted_data"`
-	Nonce         string    `json:"nonce"`
-	Salt          string    `json:"salt"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            string `json:"id"`
+	UserID        string `json:"user_id"`
+	Version       int    `json:"version"`
+	Algorithm     string `json:"algorithm"`
+	EncryptedData string `json:"encrypted_data"`
+	Nonce         string `json:"nonce"`
+	Salt          string `json:"salt"`
+	// BackupHMAC (P0-BD-01) is a server-side HMAC-SHA256 over the integrity-
+	// relevant fields, keyed by an HKDF subkey of the server master key. It
+	// detects at-rest tampering of the opaque blob and is never sent to clients.
+	BackupHMAC string    `json:"-"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // CreateKeyBackupRequest is a create/update request for key backup.

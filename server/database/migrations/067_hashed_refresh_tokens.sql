@@ -26,6 +26,16 @@
 -- "NOT NULL constraint failed: sessions.refresh_token". DELETE
 -- sidesteps the constraint and matches the semantic intent ("kill
 -- every old session") more directly.
+--
+-- ATOMICITY (audit P0-BD-03): do NOT wrap these statements in an explicit
+-- `BEGIN TRANSACTION;` / `COMMIT;`. The migration runner
+-- (database.applyMigrationFile) already runs every file inside a single
+-- transaction, so the ALTER + index + DELETE below commit — or roll back —
+-- as a unit; the "partial-failure window" that could leave a plaintext
+-- refresh_token behind cannot occur. An explicit BEGIN here would nest a
+-- transaction and fail on every boot with "cannot start a transaction
+-- within a transaction". Guaranteed by database_test.go (TestMigration067_*,
+-- TestApplyMigrationFile_RollsBackEntireFileOnError).
 
 ALTER TABLE sessions ADD COLUMN refresh_token_hash TEXT;
 

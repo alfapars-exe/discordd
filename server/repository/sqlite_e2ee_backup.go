@@ -17,10 +17,10 @@ func NewSQLiteE2EEBackupRepo(db database.TxQuerier) E2EEKeyBackupRepository {
 	return &sqliteE2EEBackupRepo{db: db}
 }
 
-func (r *sqliteE2EEBackupRepo) Upsert(ctx context.Context, userID string, req *models.CreateKeyBackupRequest) error {
+func (r *sqliteE2EEBackupRepo) Upsert(ctx context.Context, userID string, req *models.CreateKeyBackupRequest, backupHMAC string) error {
 	query := `
-		INSERT INTO e2ee_key_backups (user_id, version, algorithm, encrypted_data, nonce, salt)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO e2ee_key_backups (user_id, version, algorithm, encrypted_data, nonce, salt, backup_hmac)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id)
 		DO UPDATE SET
 			version = excluded.version,
@@ -28,10 +28,11 @@ func (r *sqliteE2EEBackupRepo) Upsert(ctx context.Context, userID string, req *m
 			encrypted_data = excluded.encrypted_data,
 			nonce = excluded.nonce,
 			salt = excluded.salt,
+			backup_hmac = excluded.backup_hmac,
 			updated_at = CURRENT_TIMESTAMP`
 
 	_, err := r.db.ExecContext(ctx, query,
-		userID, req.Version, req.Algorithm, req.EncryptedData, req.Nonce, req.Salt,
+		userID, req.Version, req.Algorithm, req.EncryptedData, req.Nonce, req.Salt, backupHMAC,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert key backup: %w", err)
@@ -41,14 +42,15 @@ func (r *sqliteE2EEBackupRepo) Upsert(ctx context.Context, userID string, req *m
 
 func (r *sqliteE2EEBackupRepo) GetByUser(ctx context.Context, userID string) (*models.E2EEKeyBackup, error) {
 	query := `
-		SELECT id, user_id, version, algorithm, encrypted_data, nonce, salt, created_at, updated_at
+		SELECT id, user_id, version, algorithm, encrypted_data, nonce, salt, backup_hmac, created_at, updated_at
 		FROM e2ee_key_backups
 		WHERE user_id = ?`
 
 	b := &models.E2EEKeyBackup{}
+	var backupHMAC sql.NullString
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&b.ID, &b.UserID, &b.Version, &b.Algorithm,
-		&b.EncryptedData, &b.Nonce, &b.Salt,
+		&b.EncryptedData, &b.Nonce, &b.Salt, &backupHMAC,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
@@ -57,6 +59,7 @@ func (r *sqliteE2EEBackupRepo) GetByUser(ctx context.Context, userID string) (*m
 		}
 		return nil, fmt.Errorf("failed to get key backup: %w", err)
 	}
+	b.BackupHMAC = backupHMAC.String
 	return b, nil
 }
 

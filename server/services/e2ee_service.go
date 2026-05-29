@@ -3,9 +3,11 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -36,6 +38,7 @@ type e2eeService struct {
 	hub              ws.Broadcaster
 	channelGetter    ChannelGetter
 	permResolver     ChannelPermResolver
+	backupHMACKey    []byte
 }
 
 func NewE2EEService(
@@ -44,6 +47,7 @@ func NewE2EEService(
 	hub ws.Broadcaster,
 	channelGetter ChannelGetter,
 	permResolver ChannelPermResolver,
+	backupHMACKey []byte,
 ) E2EEService {
 	return &e2eeService{
 		backupRepo:       backupRepo,
@@ -51,6 +55,7 @@ func NewE2EEService(
 		hub:              hub,
 		channelGetter:    channelGetter,
 		permResolver:     permResolver,
+		backupHMACKey:    backupHMACKey,
 	}
 }
 
@@ -58,7 +63,10 @@ func (s *e2eeService) UpsertKeyBackup(ctx context.Context, userID string, req *m
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 	}
-	if err := s.backupRepo.Upsert(ctx, userID, req); err != nil {
+	// P0-BD-01: stamp a server-side integrity MAC so at-rest tampering of the
+	// opaque blob is detectable on read.
+	mac := crypto.BackupHMAC(s.backupHMACKey, userID, req.Version, req.Algorithm, req.EncryptedData, req.Nonce, req.Salt)
+	if err := s.backupRepo.Upsert(ctx, userID, req, mac); err != nil {
 		return fmt.Errorf("failed to upsert key backup: %w", err)
 	}
 	return nil
@@ -68,6 +76,21 @@ func (s *e2eeService) GetKeyBackup(ctx context.Context, userID string) (*models.
 	backup, err := s.backupRepo.GetByUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key backup: %w", err)
+	}
+	if backup == nil {
+		return nil, nil
+	}
+	// Integrity check (P0-BD-01). Legacy rows predating the MAC column have an
+	// empty HMAC and are returned as-is (the client's AES-GCM tag still guards
+	// them); they get re-MAC'd on the next upsert. A present-but-mismatched MAC
+	// means the at-rest blob was tampered with — refuse to serve it and log.
+	if backup.BackupHMAC != "" && !crypto.VerifyBackupHMAC(
+		s.backupHMACKey, backup.BackupHMAC,
+		backup.UserID, backup.Version, backup.Algorithm,
+		backup.EncryptedData, backup.Nonce, backup.Salt,
+	) {
+		log.Printf("[e2ee] SECURITY: key backup HMAC mismatch for user %s — refusing tampered blob", userID)
+		return nil, fmt.Errorf("%w: key backup failed integrity check", pkg.ErrInternal)
 	}
 	return backup, nil
 }

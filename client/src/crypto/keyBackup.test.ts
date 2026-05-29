@@ -59,6 +59,8 @@ vi.mock("./dmEncryption", () => ({
 }));
 
 import { createBackup, restoreFromBackup } from "./keyBackup";
+import * as keyStorageMock from "./keyStorage";
+import * as dmEncryptionMock from "./dmEncryption";
 
 describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
   beforeEach(() => {
@@ -189,5 +191,35 @@ describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
     const tampered = { ...backup, algorithm: "aes-256-gcm+pbkdf2-100000000" };
     const ok = await restoreFromBackup(tampered, "password");
     expect(ok).toBe(false);
+  });
+});
+
+describe("keyBackup — self-fanout reset on restore (audit P0-FE-03)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("a successful restore arms self-fanout reset so post-restore sends re-handshake", async () => {
+    const backup = await createBackup("pw");
+    vi.clearAllMocks(); // drop createBackup's mock calls; measure only restore
+    const ok = await restoreFromBackup(backup, "pw");
+    expect(ok).toBe(true);
+    expect(dmEncryptionMock.markSelfFanoutNeedsReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("arms the reset BEFORE importing keys (no window where a restored session is usable but unflagged)", async () => {
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    await restoreFromBackup(backup, "pw");
+
+    // clearAllE2EEData is the first mutation importBackupContents performs.
+    const flagOrder =
+      vi.mocked(dmEncryptionMock.markSelfFanoutNeedsReset).mock.invocationCallOrder[0];
+    const importOrder =
+      vi.mocked(keyStorageMock.clearAllE2EEData).mock.invocationCallOrder[0];
+
+    expect(flagOrder).toBeDefined();
+    expect(importOrder).toBeDefined();
+    expect(flagOrder).toBeLessThan(importOrder);
   });
 });

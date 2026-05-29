@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
@@ -69,6 +70,10 @@ type RateLimiters struct {
 	// unrate-limited, so an attacker could spam ticket issuance to
 	// exhaust ws_ticket_service's in-memory map and degrade legit logins.
 	WSTicket *ratelimit.LoginRateLimiter
+	// DeviceEnum added 2026-05-29 (P0-BD-02): throttles per-IP enumeration of
+	// public E2EE key material (GET /api/users/{id}/devices and
+	// .../prekey-bundles), which expose identity keys for arbitrary users.
+	DeviceEnum *ratelimit.LoginRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -140,7 +145,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
 	deviceService := services.NewDeviceService(repos.Device, hub)
-	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, hub, repos.Channel, channelPermService)
+	// E2EE key-backup integrity MAC key (P0-BD-01): an HKDF subkey of the
+	// server master key, so a DB-only tamper of a stored backup is detectable.
+	backupHMACKey := crypto.DeriveBackupHMACKey(encryptionKey)
+	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, hub, repos.Channel, channelPermService, backupHMACKey)
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
 	adminServerService := services.NewAdminServerService(repos.Server, repos.User, repos.LiveKit, hub, emailSender)
@@ -182,6 +190,12 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// even on flaky mobile networks); 30 is generous enough to absorb
 	// reconnect storms while killing the brute-force / DoS scenario.
 	wsTicketLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
+
+	// DeviceEnum (P0-BD-02): the client fetches public device info / prekey
+	// bundles lazily (one bundle per new conversation), so 30/min/IP sits far
+	// above legitimate use while making bulk harvesting of the device-key
+	// database impractical from a single source.
+	deviceEnumLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
 
 	svcs := &Services{
 		Auth:              authService,
@@ -229,13 +243,14 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}
 
 	limiters := &RateLimiters{
-		Login:     loginLimiter,
-		Message:   messageLimiter,
-		Register:  registerLimiter,
-		ForgotPwd: forgotPwdLimiter,
-		ResetPwd:  resetPwdLimiter,
-		Feedback:  feedbackLimiter,
-		WSTicket:  wsTicketLimiter,
+		Login:      loginLimiter,
+		Message:    messageLimiter,
+		Register:   registerLimiter,
+		ForgotPwd:  forgotPwdLimiter,
+		ResetPwd:   resetPwdLimiter,
+		Feedback:   feedbackLimiter,
+		WSTicket:   wsTicketLimiter,
+		DeviceEnum: deviceEnumLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

@@ -19,6 +19,7 @@ func initRoutes(
 	userRepo repository.UserRepository,
 	roleRepo repository.RoleRepository,
 	serverRepo repository.ServerRepository,
+	deviceEnumLimiter middleware.IPRateLimiter,
 ) {
 	// Middleware
 	authMw := middleware.NewAuthMiddleware(authService, userRepo)
@@ -42,6 +43,10 @@ func initRoutes(
 	authAdmin := func(handler http.HandlerFunc) http.Handler {
 		return authMw.Require(platformAdminMw.Require(http.HandlerFunc(handler)))
 	}
+
+	// Per-IP throttle for public E2EE key-material enumeration (P0-BD-02):
+	// caps GET /api/users/{id}/devices and .../prekey-bundles.
+	deviceEnum := middleware.RateLimitByIP(deviceEnumLimiter)
 
 	// ╔══════════════════════════════════════════╗
 	// ║  GLOBAL ROUTES (server-independent)       ║
@@ -168,8 +173,8 @@ func initRoutes(
 	mux.Handle("DELETE /api/e2ee/key-backup", auth(h.E2EE.DeleteKeyBackup))
 
 	// E2EE User Devices / Prekey Bundles
-	mux.Handle("GET /api/users/{userId}/devices", auth(h.Device.ListPublicDevices))
-	mux.Handle("GET /api/users/{userId}/prekey-bundles", auth(h.Device.GetPrekeyBundles))
+	mux.Handle("GET /api/users/{userId}/devices", deviceEnum(auth(h.Device.ListPublicDevices)))
+	mux.Handle("GET /api/users/{userId}/prekey-bundles", deviceEnum(auth(h.Device.GetPrekeyBundles)))
 
 	// Channel mutes — literal path before {serverId} wildcard
 	mux.Handle("GET /api/channels/mutes", auth(h.ChannelMute.ListMuted))

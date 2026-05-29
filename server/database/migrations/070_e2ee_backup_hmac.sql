@@ -1,0 +1,18 @@
+-- 070 — Server-side integrity MAC for E2EE key backups (audit P0-BD-01).
+--
+-- e2ee_key_backups stores an opaque, client-encrypted blob. AES-GCM already
+-- authenticates it on the CLIENT at decrypt time, but the server had no way to
+-- detect at-rest tampering (a DB-admin edit, a swapped backup-restore). The
+-- user would just see "decryption failed", indistinguishable from a wrong
+-- recovery password, with no server-side signal or audit trail.
+--
+-- We now also store HMAC-SHA256 over (user_id, version, algorithm,
+-- encrypted_data, nonce, salt), keyed by an HKDF subkey of the server's
+-- ENCRYPTION_KEY — which lives OUTSIDE the DB, so a DB-only attacker can't
+-- recompute it. The server verifies it on read and refuses + logs a mismatch.
+--
+-- The column is nullable on purpose: pre-existing backups have no MAC and are
+-- returned as-is (still guarded by the client AES-GCM tag), then transparently
+-- re-MAC'd on their next upsert. Atomicity is provided by the migration runner
+-- (database.applyMigrationFile) — do NOT add an explicit BEGIN/COMMIT here.
+ALTER TABLE e2ee_key_backups ADD COLUMN backup_hmac TEXT;
