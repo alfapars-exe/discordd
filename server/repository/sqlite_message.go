@@ -93,6 +93,38 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 	return msg, nil
 }
 
+// scanMessage scans one channel-history row into a Message, attaching the
+// author (nullable via LEFT JOIN) and the reply reference (rm/ru, also via
+// LEFT JOIN) built by buildMessageReference.
+func scanMessage(rows *sql.Rows) (models.Message, error) {
+	var msg models.Message
+	var author models.User
+	var authorID sql.NullString
+
+	var refMsgID, refMsgContent sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL sql.NullString
+
+	if err := rows.Scan(
+		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt, &msg.ReplyToID,
+		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
+		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+		&refMsgID, &refMsgContent,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
+	); err != nil {
+		return msg, err
+	}
+
+	if authorID.Valid {
+		author.ID = authorID.String
+		author.PasswordHash = ""
+		msg.Author = &author
+	}
+
+	msg.ReferencedMessage = buildMessageReference(msg.ReplyToID, refMsgID, refMsgContent, refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL)
+
+	return msg, nil
+}
+
 // GetByChannelID returns messages with cursor-based pagination.
 // Reply references are loaded via LEFT JOIN (max 1 per message, so JOIN is preferred over batch).
 // Results are DESC-ordered (frontend reverses for display).
@@ -138,40 +170,10 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages by channel: %w", err)
 	}
-	defer rows.Close()
 
-	var messages []models.Message
-	for rows.Next() {
-		var msg models.Message
-		var author models.User
-		var authorID sql.NullString
-
-		var refMsgID, refMsgContent sql.NullString
-		var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL sql.NullString
-
-		if err := rows.Scan(
-			&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt, &msg.ReplyToID,
-			&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-			&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
-			&refMsgID, &refMsgContent,
-			&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan message row: %w", err)
-		}
-
-		if authorID.Valid {
-			author.ID = authorID.String
-			author.PasswordHash = ""
-			msg.Author = &author
-		}
-
-		msg.ReferencedMessage = buildMessageReference(msg.ReplyToID, refMsgID, refMsgContent, refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL)
-
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating message rows: %w", err)
+	messages, err := scanRows(rows, "message", scanMessage)
+	if err != nil {
+		return nil, err
 	}
 
 	return messages, nil

@@ -131,28 +131,17 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all users: %w", err)
 	}
-	defer rows.Close()
-
-	var users []models.User
-	for rows.Next() {
+	return scanRows(rows, "user", func(rows *sql.Rows) (models.User, error) {
 		var user models.User
-		if err := rows.Scan(
+		err := rows.Scan(
 			&user.ID, &user.Username, &user.DisplayName, &user.AvatarURL, &user.WallpaperURL,
 			&user.PasswordHash, &user.Status, &user.PrefStatus, &user.CustomStatus, &user.Email,
 			&user.Language, &user.DMPrivacy, &user.IsPlatformAdmin, &user.IsPlatformBanned, &user.HasSeenDownloadPrompt, &user.HasSeenWelcome,
 			&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 			&user.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan user row: %w", err)
-		}
-		users = append(users, user)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating user rows: %w", err)
-	}
-
-	return users, nil
+		)
+		return user, err
+	})
 }
 
 func (r *sqliteUserRepo) Update(ctx context.Context, user *models.User) error {
@@ -378,28 +367,17 @@ func (r *sqliteUserRepo) ListAllUsersWithStats(ctx context.Context) ([]models.Ad
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all users with stats: %w", err)
 	}
-	defer rows.Close()
-
-	var users []models.AdminUserListItem
-	for rows.Next() {
+	return scanRows(rows, "admin user", func(rows *sql.Rows) (models.AdminUserListItem, error) {
 		var u models.AdminUserListItem
-		if err := rows.Scan(
+		err := rows.Scan(
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL,
 			&u.IsPlatformAdmin, &u.IsPlatformBanned, &u.CreatedAt, &u.Status,
 			&u.LastActivity, &u.MessageCount, &u.StorageMB,
 			&u.OwnedSelfServers, &u.OwnedMqviServers,
 			&u.MemberServerCount, &u.BanCount,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan admin user row: %w", err)
-		}
-		users = append(users, u)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating admin user rows: %w", err)
-	}
-
-	return users, nil
+		)
+		return u, err
+	})
 }
 
 func (r *sqliteUserRepo) UpdateLastVoiceActivity(ctx context.Context, userID string) error {

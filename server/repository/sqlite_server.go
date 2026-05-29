@@ -118,22 +118,11 @@ func (r *sqliteServerRepo) GetUserServers(ctx context.Context, userID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user servers: %w", err)
 	}
-	defer rows.Close()
-
-	var servers []models.ServerListItem
-	for rows.Next() {
+	return scanRows(rows, "server", func(rows *sql.Rows) (models.ServerListItem, error) {
 		var s models.ServerListItem
-		if err := rows.Scan(&s.ID, &s.Name, &s.IconURL); err != nil {
-			return nil, fmt.Errorf("failed to scan server row: %w", err)
-		}
-		servers = append(servers, s)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating server rows: %w", err)
-	}
-
-	return servers, nil
+		err := rows.Scan(&s.ID, &s.Name, &s.IconURL)
+		return s, err
+	})
 }
 
 func (r *sqliteServerRepo) AddMember(ctx context.Context, serverID, userID string) error {
@@ -361,27 +350,16 @@ func (r *sqliteServerRepo) ListAllWithStats(ctx context.Context) ([]models.Admin
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all servers with stats: %w", err)
 	}
-	defer rows.Close()
-
-	var servers []models.AdminServerListItem
-	for rows.Next() {
+	return scanRows(rows, "admin server", func(rows *sql.Rows) (models.AdminServerListItem, error) {
 		var s models.AdminServerListItem
-		if err := rows.Scan(
+		err := rows.Scan(
 			&s.ID, &s.Name, &s.IconURL, &s.OwnerID, &s.OwnerUsername,
 			&s.CreatedAt, &s.IsPlatformManaged, &s.LiveKitInstanceID,
 			&s.MemberCount, &s.ChannelCount, &s.MessageCount,
 			&s.StorageMB, &s.LastActivity,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan admin server row: %w", err)
-		}
-		servers = append(servers, s)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating admin server rows: %w", err)
-	}
-
-	return servers, nil
+		)
+		return s, err
+	})
 }
 
 func (r *sqliteServerRepo) UpdateLastVoiceActivity(ctx context.Context, serverID string) error {

@@ -258,22 +258,11 @@ func (r *sqliteLiveKitRepo) ListPlatformInstances(ctx context.Context) ([]models
 	if err != nil {
 		return nil, fmt.Errorf("failed to list livekit instances: %w", err)
 	}
-	defer rows.Close()
-
-	var instances []models.LiveKitInstance
-	for rows.Next() {
+	return scanRows(rows, "livekit instance", func(rows *sql.Rows) (models.LiveKitInstance, error) {
 		var inst models.LiveKitInstance
-		if err := scanInstance(rows, &inst); err != nil {
-			return nil, fmt.Errorf("failed to scan livekit instance row: %w", err)
-		}
-		instances = append(instances, inst)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating livekit instance rows: %w", err)
-	}
-
-	return instances, nil
+		err := scanInstance(rows, &inst)
+		return inst, err
+	})
 }
 
 // ListAllInstances returns all LiveKit instances regardless of platform-managed flag.

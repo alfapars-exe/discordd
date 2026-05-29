@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,15 @@ func NewSQLiteChannelPermRepo(db database.TxQuerier) ChannelPermissionRepository
 	return &sqliteChannelPermRepo{db: db}
 }
 
+// scanChannelPermission scans one channel_permissions row in the column order
+// shared by every override list query (GetByChannel, GetByChannelAndRoles,
+// GetByRoles).
+func scanChannelPermission(rows *sql.Rows) (models.ChannelPermissionOverride, error) {
+	var o models.ChannelPermissionOverride
+	err := rows.Scan(&o.ChannelID, &o.RoleID, &o.Allow, &o.Deny)
+	return o, err
+}
+
 func (r *sqliteChannelPermRepo) GetByChannel(ctx context.Context, channelID string) ([]models.ChannelPermissionOverride, error) {
 	query := `SELECT channel_id, role_id, allow, deny FROM channel_permissions WHERE channel_id = ?`
 
@@ -24,22 +34,7 @@ func (r *sqliteChannelPermRepo) GetByChannel(ctx context.Context, channelID stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channel permissions: %w", err)
 	}
-	defer rows.Close()
-
-	var overrides []models.ChannelPermissionOverride
-	for rows.Next() {
-		var o models.ChannelPermissionOverride
-		if err := rows.Scan(&o.ChannelID, &o.RoleID, &o.Allow, &o.Deny); err != nil {
-			return nil, fmt.Errorf("failed to scan channel permission row: %w", err)
-		}
-		overrides = append(overrides, o)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating channel permission rows: %w", err)
-	}
-
-	return overrides, nil
+	return scanRows(rows, "channel permission", scanChannelPermission)
 }
 
 func (r *sqliteChannelPermRepo) GetByChannelAndRoles(ctx context.Context, channelID string, roleIDs []string) ([]models.ChannelPermissionOverride, error) {
@@ -64,22 +59,7 @@ func (r *sqliteChannelPermRepo) GetByChannelAndRoles(ctx context.Context, channe
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channel permissions by roles: %w", err)
 	}
-	defer rows.Close()
-
-	var overrides []models.ChannelPermissionOverride
-	for rows.Next() {
-		var o models.ChannelPermissionOverride
-		if err := rows.Scan(&o.ChannelID, &o.RoleID, &o.Allow, &o.Deny); err != nil {
-			return nil, fmt.Errorf("failed to scan channel permission row: %w", err)
-		}
-		overrides = append(overrides, o)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating channel permission rows: %w", err)
-	}
-
-	return overrides, nil
+	return scanRows(rows, "channel permission", scanChannelPermission)
 }
 
 // GetByRoles returns all channel overrides for the given roles (used for visibility filtering).
@@ -104,22 +84,7 @@ func (r *sqliteChannelPermRepo) GetByRoles(ctx context.Context, roleIDs []string
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channel permissions by roles: %w", err)
 	}
-	defer rows.Close()
-
-	var overrides []models.ChannelPermissionOverride
-	for rows.Next() {
-		var o models.ChannelPermissionOverride
-		if err := rows.Scan(&o.ChannelID, &o.RoleID, &o.Allow, &o.Deny); err != nil {
-			return nil, fmt.Errorf("failed to scan channel permission row: %w", err)
-		}
-		overrides = append(overrides, o)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating channel permission rows: %w", err)
-	}
-
-	return overrides, nil
+	return scanRows(rows, "channel permission", scanChannelPermission)
 }
 
 func (r *sqliteChannelPermRepo) Set(ctx context.Context, override *models.ChannelPermissionOverride) error {
