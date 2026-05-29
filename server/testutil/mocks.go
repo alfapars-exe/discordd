@@ -145,6 +145,26 @@ func (m *MockUserRepo) SetPlatformAdmin(ctx context.Context, userID string, isAd
 	return nil
 }
 
+// IncrementTokenVersion — stub; no test configures token-version bumps.
+func (m *MockUserRepo) IncrementTokenVersion(_ context.Context, _ string) error {
+	return nil
+}
+
+// SetDownloadPromptSeen — stub; download-prompt state isn't asserted in tests.
+func (m *MockUserRepo) SetDownloadPromptSeen(_ context.Context, _ string) error {
+	return nil
+}
+
+// SetWelcomeSeen — stub; welcome-seen state isn't asserted in tests.
+func (m *MockUserRepo) SetWelcomeSeen(_ context.Context, _ string) error {
+	return nil
+}
+
+// UpdatePrefStatus — stub; preferred-status updates aren't asserted in tests.
+func (m *MockUserRepo) UpdatePrefStatus(_ context.Context, _ string, _ models.UserStatus) error {
+	return nil
+}
+
 // ─── SessionRepository mock ───
 
 type MockSessionRepo struct {
@@ -652,6 +672,11 @@ func (m *MockAttachmentRepo) Delete(ctx context.Context, id string) error {
 		return m.DeleteFn(ctx, id)
 	}
 	return nil
+}
+
+// GetByFileURL — stub; no test exercises the upload-download lookup.
+func (m *MockAttachmentRepo) GetByFileURL(_ context.Context, _ string) (*models.Attachment, error) {
+	return nil, nil
 }
 
 // ─── MentionRepository mock ───

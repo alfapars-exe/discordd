@@ -129,7 +129,7 @@ func TestMessageCreate(t *testing.T) {
 			)
 
 			req := &models.CreateMessageRequest{Content: tt.content}
-			msg, err := svc.Create(context.Background(), "ch1", "u1", req)
+			msg, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
 
 			if tt.wantErr {
 				if err == nil {
@@ -188,7 +188,7 @@ func TestMessageCreate_MaxLength(t *testing.T) {
 	)
 
 	req := &models.CreateMessageRequest{Content: string(longContent)}
-	_, err := svc.Create(context.Background(), "ch1", "u1", req)
+	_, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
 	if err == nil {
 		t.Fatal("expected error for content exceeding max length")
 	}
@@ -246,7 +246,11 @@ func TestMessageGetByChannelID(t *testing.T) {
 					},
 				},
 				&testutil.MockAttachmentRepo{},
-				&testutil.MockChannelRepo{},
+				&testutil.MockChannelRepo{
+					GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+						return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+					},
+				},
 				&testutil.MockUserRepo{},
 				&testutil.MockMentionRepo{},
 				&testutil.MockRoleMentionRepo{},
@@ -260,7 +264,7 @@ func TestMessageGetByChannelID(t *testing.T) {
 				},
 			)
 
-			page, err := svc.GetByChannelID(context.Background(), "ch1", "u1", "", tt.limit)
+			page, err := svc.GetByChannelID(context.Background(), "srv1", "ch1", "u1", "", tt.limit)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -319,7 +323,11 @@ func TestMessageDelete(t *testing.T) {
 					},
 				},
 				&testutil.MockAttachmentRepo{},
-				&testutil.MockChannelRepo{},
+				&testutil.MockChannelRepo{
+					GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+						return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+					},
+				},
 				&testutil.MockUserRepo{},
 				&testutil.MockMentionRepo{},
 				&testutil.MockRoleMentionRepo{},
@@ -333,7 +341,7 @@ func TestMessageDelete(t *testing.T) {
 				&testutil.MockChannelPermResolver{},
 			)
 
-			err := svc.Delete(context.Background(), "m1", tt.delUserID, tt.delPerms)
+			err := svc.Delete(context.Background(), "srv1", "m1", tt.delUserID, tt.delPerms)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -361,7 +369,11 @@ func TestMessageUpdate_OnlyOwnerCanEdit(t *testing.T) {
 			},
 		},
 		&testutil.MockAttachmentRepo{},
-		&testutil.MockChannelRepo{},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
 		&testutil.MockUserRepo{},
 		&testutil.MockMentionRepo{},
 		&testutil.MockRoleMentionRepo{},
@@ -372,7 +384,7 @@ func TestMessageUpdate_OnlyOwnerCanEdit(t *testing.T) {
 	)
 
 	req := &models.UpdateMessageRequest{Content: "updated"}
-	_, err := svc.Update(context.Background(), "m1", "u2", req)
+	_, err := svc.Update(context.Background(), "srv1", "m1", "u2", req)
 	if err == nil {
 		t.Fatal("expected error when non-owner edits")
 	}
@@ -417,7 +429,7 @@ func TestMessageCreate_E2EE(t *testing.T) {
 		Ciphertext:        &cipher,
 		SenderDeviceID:    &deviceID,
 	}
-	msg, err := svc.Create(context.Background(), "ch1", "u1", req)
+	msg, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -463,7 +475,11 @@ func TestMessageUpdate_E2EE_PersistsNewCiphertext(t *testing.T) {
 			},
 		},
 		&testutil.MockAttachmentRepo{},
-		&testutil.MockChannelRepo{},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
 		&testutil.MockUserRepo{},
 		&testutil.MockMentionRepo{},
 		&testutil.MockRoleMentionRepo{},
@@ -482,7 +498,7 @@ func TestMessageUpdate_E2EE_PersistsNewCiphertext(t *testing.T) {
 		SenderDeviceID:    &newDevice,
 		E2EEMetadata:      &newMeta,
 	}
-	_, err := svc.Update(context.Background(), "m1", "u1", req)
+	_, err := svc.Update(context.Background(), "srv1", "m1", "u1", req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -528,7 +544,11 @@ func TestMessageUpdate_EncryptionVersionMismatch(t *testing.T) {
 			},
 		},
 		&testutil.MockAttachmentRepo{},
-		&testutil.MockChannelRepo{},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
 		&testutil.MockUserRepo{},
 		&testutil.MockMentionRepo{},
 		&testutil.MockRoleMentionRepo{},
@@ -545,7 +565,7 @@ func TestMessageUpdate_EncryptionVersionMismatch(t *testing.T) {
 		Ciphertext:        &cipher,
 		SenderDeviceID:    &device,
 	}
-	_, err := svc.Update(context.Background(), "m1", "u1", req)
+	_, err := svc.Update(context.Background(), "srv1", "m1", "u1", req)
 	if err == nil {
 		t.Fatal("expected error on encryption-version mismatch, got nil")
 	}

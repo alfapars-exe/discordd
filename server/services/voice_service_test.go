@@ -17,6 +17,22 @@ func (m *mockLiveKitGetter) GetByServerID(_ context.Context, _ string) (*models.
 	return nil, fmt.Errorf("no livekit instance in test")
 }
 
+func (m *mockLiveKitGetter) GetMonthlyUsage(_ context.Context, _ string, _, _ int) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockLiveKitGetter) IncrementMonthlyUsage(_ context.Context, _ string, _, _, _ int) error {
+	return nil
+}
+
+func (m *mockLiveKitGetter) GetNextAutoSwitchInstance(_ context.Context, _ string, _, _ int) (*models.LiveKitInstance, error) {
+	return nil, nil
+}
+
+func (m *mockLiveKitGetter) MigrateOneServer(_ context.Context, _, _ string) error {
+	return nil
+}
+
 func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
