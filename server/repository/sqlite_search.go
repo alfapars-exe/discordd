@@ -18,6 +18,30 @@ func NewSQLiteSearchRepo(db database.TxQuerier) SearchRepository {
 	return &sqliteSearchRepo{db: db}
 }
 
+// scanSearchResult scans one FTS search result row into a Message, attaching
+// the author (nullable via LEFT JOIN) and an empty attachments slice.
+func scanSearchResult(rows *sql.Rows) (models.Message, error) {
+	var msg models.Message
+	var author models.User
+	var authorID sql.NullString
+
+	if err := rows.Scan(
+		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
+		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+	); err != nil {
+		return msg, err
+	}
+
+	if authorID.Valid {
+		author.ID = authorID.String
+		author.PasswordHash = ""
+		msg.Author = &author
+	}
+	msg.Attachments = []models.Attachment{}
+
+	return msg, nil
+}
+
 // Search performs FTS5 full-text search with BM25 ranking.
 func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID string, channelID *string, limit, offset int) (*SearchResult, error) {
 	if limit <= 0 || limit > 100 {
@@ -95,33 +119,10 @@ func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID st
 	if err != nil {
 		return nil, fmt.Errorf("failed to search messages: %w", err)
 	}
-	defer rows.Close()
 
-	var messages []models.Message
-	for rows.Next() {
-		var msg models.Message
-		var author models.User
-		var authorID sql.NullString
-
-		if err := rows.Scan(
-			&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-			&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan search result row: %w", err)
-		}
-
-		if authorID.Valid {
-			author.ID = authorID.String
-			author.PasswordHash = ""
-			msg.Author = &author
-		}
-		msg.Attachments = []models.Attachment{}
-
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating search result rows: %w", err)
+	messages, err := scanRows(rows, "search result", scanSearchResult)
+	if err != nil {
+		return nil, err
 	}
 
 	if messages == nil {

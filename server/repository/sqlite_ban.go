@@ -19,6 +19,15 @@ func NewSQLiteBanRepo(db database.TxQuerier) BanRepository {
 	return &sqliteBanRepo{db: db}
 }
 
+// scanBan scans one bans row in the column order shared by the ban list query.
+func scanBan(rows *sql.Rows) (models.Ban, error) {
+	var ban models.Ban
+	err := rows.Scan(
+		&ban.ServerID, &ban.UserID, &ban.Username, &ban.Reason, &ban.BannedBy, &ban.CreatedAt, &ban.ExpiresAt,
+	)
+	return ban, err
+}
+
 // Create — INSERT OR REPLACE so re-banning an already-banned user (e.g.
 // extending an existing temp ban) refreshes the row instead of failing
 // on the PRIMARY KEY (server_id, user_id) conflict.
@@ -79,24 +88,7 @@ func (r *sqliteBanRepo) GetAllByServer(ctx context.Context, serverID string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bans by server: %w", err)
 	}
-	defer rows.Close()
-
-	var bans []models.Ban
-	for rows.Next() {
-		var ban models.Ban
-		if err := rows.Scan(
-			&ban.ServerID, &ban.UserID, &ban.Username, &ban.Reason, &ban.BannedBy, &ban.CreatedAt, &ban.ExpiresAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan ban row: %w", err)
-		}
-		bans = append(bans, ban)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating ban rows: %w", err)
-	}
-
-	return bans, nil
+	return scanRows(rows, "ban", scanBan)
 }
 
 func (r *sqliteBanRepo) Delete(ctx context.Context, serverID, userID string) error {

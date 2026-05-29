@@ -19,6 +19,14 @@ func NewSQLiteCategoryRepo(db database.TxQuerier) CategoryRepository {
 	return &sqliteCategoryRepo{db: db}
 }
 
+// scanCategory scans one categories row in the column order shared by the
+// category list query.
+func scanCategory(rows *sql.Rows) (models.Category, error) {
+	var cat models.Category
+	err := rows.Scan(&cat.ID, &cat.ServerID, &cat.Name, &cat.Position, &cat.CreatedAt)
+	return cat, err
+}
+
 func (r *sqliteCategoryRepo) Create(ctx context.Context, category *models.Category) error {
 	query := `
 		INSERT INTO categories (id, server_id, name, position)
@@ -65,22 +73,7 @@ func (r *sqliteCategoryRepo) GetAllByServer(ctx context.Context, serverID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to get categories by server: %w", err)
 	}
-	defer rows.Close()
-
-	var categories []models.Category
-	for rows.Next() {
-		var cat models.Category
-		if err := rows.Scan(&cat.ID, &cat.ServerID, &cat.Name, &cat.Position, &cat.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan category row: %w", err)
-		}
-		categories = append(categories, cat)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating category rows: %w", err)
-	}
-
-	return categories, nil
+	return scanRows(rows, "category", scanCategory)
 }
 
 func (r *sqliteCategoryRepo) Update(ctx context.Context, category *models.Category) error {
