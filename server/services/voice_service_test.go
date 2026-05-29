@@ -55,7 +55,7 @@ func TestVoiceJoinChannel(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
 	var broadcasts []ws.Event
-	hub.BroadcastToAllFn = func(event ws.Event) {
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
 		broadcasts = append(broadcasts, event)
 	}
 
@@ -89,7 +89,7 @@ func TestVoiceJoinChannel_SwitchChannels(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
 	var broadcasts []ws.Event
-	hub.BroadcastToAllFn = func(event ws.Event) {
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
 		broadcasts = append(broadcasts, event)
 	}
 
@@ -116,7 +116,7 @@ func TestVoiceJoinChannel_SameChannelRejoin(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
 	var broadcasts []ws.Event
-	hub.BroadcastToAllFn = func(event ws.Event) {
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
 		broadcasts = append(broadcasts, event)
 	}
 
@@ -146,7 +146,7 @@ func TestVoiceLeaveChannel(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
 	var broadcasts []ws.Event
-	hub.BroadcastToAllFn = func(event ws.Event) {
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
 		broadcasts = append(broadcasts, event)
 	}
 

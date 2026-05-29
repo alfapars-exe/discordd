@@ -80,7 +80,7 @@ func TestMessageCreate(t *testing.T) {
 		{
 			name:    "should create message successfully",
 			content: "hello world",
-			perms:   models.PermSendMessages | models.PermReadMessages,
+			perms:   models.PermSendMessages | models.PermReadMessages | models.PermViewChannel,
 		},
 		{
 			name:        "should fail when content is empty",
@@ -92,7 +92,7 @@ func TestMessageCreate(t *testing.T) {
 		{
 			name:        "should fail when missing send permission",
 			content:     "hello",
-			perms:       models.PermReadMessages, // no SendMessages
+			perms:       models.PermReadMessages | models.PermViewChannel, // no SendMessages
 			wantErr:     true,
 			errSentinel: pkg.ErrForbidden,
 		},
@@ -182,7 +182,7 @@ func TestMessageCreate_MaxLength(t *testing.T) {
 		&testutil.MockBroadcastAndOnline{},
 		&testutil.MockChannelPermResolver{
 			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
-				return models.PermSendMessages, nil
+				return models.PermSendMessages | models.PermViewChannel, nil
 			},
 		},
 	)
@@ -209,7 +209,7 @@ func TestMessageGetByChannelID(t *testing.T) {
 	}{
 		{
 			name:  "should return messages with pagination",
-			perms: models.PermReadMessages,
+			perms: models.PermReadMessages | models.PermViewChannel,
 			dbMsgs: []models.Message{
 				{ID: "m3"}, {ID: "m2"}, {ID: "m1"}, // DESC order from DB
 			},
@@ -219,7 +219,7 @@ func TestMessageGetByChannelID(t *testing.T) {
 		},
 		{
 			name:  "should return all when fewer than limit",
-			perms: models.PermReadMessages,
+			perms: models.PermReadMessages | models.PermViewChannel,
 			dbMsgs: []models.Message{
 				{ID: "m1"},
 			},
@@ -229,7 +229,7 @@ func TestMessageGetByChannelID(t *testing.T) {
 		},
 		{
 			name:    "should fail without read permission",
-			perms:   models.PermSendMessages, // no ReadMessages
+			perms:   models.PermSendMessages | models.PermViewChannel, // no ReadMessages
 			wantErr: true,
 		},
 	}
@@ -335,7 +335,7 @@ func TestMessageDelete(t *testing.T) {
 				&testutil.MockReactionRepo{},
 				&testutil.MockBroadcastAndOnline{
 					MockBroadcaster: testutil.MockBroadcaster{
-						BroadcastToAllFn: func(_ ws.Event) { broadcastCalled = true },
+						BroadcastToUsersFn: func(_ []string, _ ws.Event) { broadcastCalled = true },
 					},
 				},
 				&testutil.MockChannelPermResolver{},
@@ -419,7 +419,7 @@ func TestMessageCreate_E2EE(t *testing.T) {
 		&testutil.MockBroadcastAndOnline{},
 		&testutil.MockChannelPermResolver{
 			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
-				return models.PermSendMessages, nil
+				return models.PermSendMessages | models.PermViewChannel, nil
 			},
 		},
 	)
@@ -486,7 +486,11 @@ func TestMessageUpdate_E2EE_PersistsNewCiphertext(t *testing.T) {
 		&testutil.MockRoleRepo{},
 		&testutil.MockReactionRepo{},
 		&testutil.MockBroadcastAndOnline{},
-		&testutil.MockChannelPermResolver{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermViewChannel | models.PermReadMessages, nil
+			},
+		},
 	)
 
 	newCipher := "new-blob"
@@ -555,7 +559,11 @@ func TestMessageUpdate_EncryptionVersionMismatch(t *testing.T) {
 		&testutil.MockRoleRepo{},
 		&testutil.MockReactionRepo{},
 		&testutil.MockBroadcastAndOnline{},
-		&testutil.MockChannelPermResolver{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermViewChannel | models.PermReadMessages, nil
+			},
+		},
 	)
 
 	cipher := "blob"
