@@ -120,15 +120,35 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid UPLOAD_MAX_SIZE: %w", err)
 	}
 
-	// Backup config — disabled when HF_TOKEN is missing. Interval clamps
-	// to a minimum of 1h so a typo (e.g. "0" for the env) doesn't peg the
-	// HF API quota.
-	backupHours, err := strconv.Atoi(getEnv("BACKUP_INTERVAL_HOURS", "24"))
+	// Backup config — disabled when HF_TOKEN is missing.
+	//
+	// Default lowered from 24h → 1h after the HF Space restart-loses-data
+	// incident: /data is ephemeral on Spaces without paid Persistent Storage,
+	// so the worst-case "last successful snapshot" window directly maps to
+	// user-visible data loss (audit logs, messages, etc.). 1h keeps the loss
+	// window small while staying well below HF API throttling — Xet dedup
+	// means an unchanged DB uploads near-zero bytes.
+	//
+	// BACKUP_INTERVAL_MINUTES (optional) is a finer-grain override; when
+	// set to a valid integer >= 15 it wins over BACKUP_INTERVAL_HOURS. The
+	// 15-minute floor exists because anything tighter starts costing more
+	// in HF metadata round-trips than the marginal recovery-point gain.
+	backupHours, err := strconv.Atoi(getEnv("BACKUP_INTERVAL_HOURS", "1"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid BACKUP_INTERVAL_HOURS: %w", err)
 	}
 	if backupHours < 1 {
 		backupHours = 1
+	}
+	backupInterval := time.Duration(backupHours) * time.Hour
+	if mStr := getEnv("BACKUP_INTERVAL_MINUTES", ""); mStr != "" {
+		m, mErr := strconv.Atoi(mStr)
+		if mErr != nil {
+			return nil, fmt.Errorf("invalid BACKUP_INTERVAL_MINUTES: %w", mErr)
+		}
+		if m >= 15 {
+			backupInterval = time.Duration(m) * time.Minute
+		}
 	}
 	hfToken := getEnv("HF_TOKEN", "")
 
@@ -187,7 +207,7 @@ func Load() (*Config, error) {
 			Enabled:   hfToken != "",
 			HFToken:   hfToken,
 			HFBucket:  getEnv("HF_BUCKET", "argeinfina/discord"),
-			Interval:  time.Duration(backupHours) * time.Hour,
+			Interval:  backupInterval,
 			DBPath:    firstNonEmpty(os.Getenv("DATABASE_URL"), getEnv("DATABASE_PATH", "./data/mqvi.db")),
 			UploadDir: getEnv("UPLOAD_DIR", "./data/uploads"),
 			WorkDir:   getEnv("BACKUP_WORKDIR", "/tmp/hichat-backup"),

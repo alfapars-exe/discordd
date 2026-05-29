@@ -25,10 +25,15 @@ type DB struct {
 	Conn *sql.DB
 }
 
-// isRemoteLibSQL reports whether the DSN points to a remote libSQL/Turso server
+// IsRemoteLibSQL reports whether the DSN points to a remote libSQL/Turso server
 // rather than a local SQLite file. URLs starting with libsql://, http://, https://,
 // ws://, or wss:// are treated as remote.
-func isRemoteLibSQL(dsn string) bool {
+//
+// Exported so callers outside this package (e.g. backup_service) can skip
+// behaviours that only make sense for a local file path — for instance,
+// restore-on-boot is a no-op for remote DBs because Turso is already
+// persistent and the local /data/hichat.db is never read.
+func IsRemoteLibSQL(dsn string) bool {
 	for _, prefix := range []string{"libsql://", "https://", "http://", "wss://", "ws://"} {
 		if strings.HasPrefix(dsn, prefix) {
 			return true
@@ -43,7 +48,7 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	var conn *sql.DB
 	var err error
 
-	if isRemoteLibSQL(dbPath) {
+	if IsRemoteLibSQL(dbPath) {
 		// Turso/libSQL remote — connection-level pragmas don't apply (server manages WAL).
 		conn, err = sql.Open("libsql", dbPath)
 		if err != nil {

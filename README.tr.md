@@ -318,6 +318,38 @@ Install scripti makul varsayilanlar uretir. Degistirmek istersen `/opt/mqvi/.env
 | `LIVEKIT_URL` | `ws://127.0.0.1:7880` | Otomatik olusturulan yerel LiveKit instance |
 | `LIVEKIT_API_KEY` | *uretilir* | `livekit.yaml` ile eslesir |
 | `LIVEKIT_API_SECRET` | *uretilir* | `livekit.yaml` ile eslesir |
+| `HF_TOKEN` | *bos* | Hugging Face token. Ayarlandiginda backup servisi (SQLite + uploads → HF Bucket) ve boot-time restore aktiflesir. Kendi persistent diskinde calistiranlar bunu bos birakir. |
+| `HF_BUCKET` | `argeinfina/discord` | Hedef bucket (`hf://buckets/<HF_BUCKET>/latest/{db,uploads}/...`). |
+| `BACKUP_INTERVAL_HOURS` | `1` | Saatlik snapshot periyodu. Ucretsiz HF Space gibi ephemeral ortamlarda en kotu durum veri kayip penceresini kucuk tutmak icin 24 saatten 1 saate indirildi. |
+| `BACKUP_INTERVAL_MINUTES` | *bos* | Opsiyonel daha hassas override (minimum 15). Set edilirse `BACKUP_INTERVAL_HOURS`'u ezer. |
+| `BACKUP_FORCE_RESTORE` | *bos* | `1` yapildiginda yerel DB mevcut olsa bile boot'ta restore zorlanir. Sadece manuel kurtarma icin — mevcut durumu son snapshot ile degistirir. |
+
+---
+
+## Felaket Kurtarma (Disaster Recovery)
+
+`HF_TOKEN` ayarliyken backup servisi arka planda calisir:
+
+- Her dongude (default: 1 saat) SQLite veritabanini `sqlite3 VACUUM INTO` ile crash-consistent snapshot olarak alir, `hf://buckets/<HF_BUCKET>/latest/db/hichat.db` yoluna yukler, `UPLOAD_DIR` icerigini `hf sync --delete` ile mirror eder.
+- Boot'ta, migrationlardan ONCE, `BackupService.Restore` yerel DB yok veya 4 KiB'den kucukse `latest/db/hichat.db` snapshot'ini geri yukler. Bu, HF Spaces'in (paid Persistent Storage olmadan) her restart/rebuild'de `/data`'yi sifirladigi senaryolarda verileri kurtaran mekanizmadir.
+- Uploads DB sonrasinda background goroutine'de restore edilir; HTTP server hizla acilir, eksik dosyalar (avatar, attachment) kisa sure 404 dondurebilir.
+- Restore su durumlarda no-op'tur: `HF_TOKEN` bos, `DATABASE_URL` uzak `libsql://` (Turso zaten persistent), veya yerel DB dolu (4 KiB+) ise.
+
+### Restore'u dogrulama
+
+Factory Reboot (veya `docker compose down && docker compose up`) sonrasi boot log'da su satirlar gorulmeli:
+
+```
+[backup] restore start: bucket=argeinfina/discord force=false
+[backup] restore ok: /data/hichat.db (12345678 bytes)
+[database] connected and migrations applied
+```
+
+Eger `restore skipped: no snapshot in bucket yet` gorursen, bucket henuz bos demektir — boot'tan ~5 dakika sonra ilk dongunun tamamlanmasini bekle.
+
+### Manuel restore
+
+Space secrets'ina `BACKUP_FORCE_RESTORE=1` ekle ve restart et. Mevcut DB son snapshot ile degistirilir. Islem sonrasi env'i sil.
 
 ---
 

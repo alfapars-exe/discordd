@@ -1,0 +1,351 @@
+// backup_service_test.go — covers the Restore() decision tree.
+//
+// The body of Restore is mostly conditional logic + subprocess invocations;
+// the only piece we can't exercise here is the actual `hf` CLI behaviour
+// against a real bucket. We swap the runCmd field with a fake so the test
+// stays hermetic — no network, no /usr/bin/hf, no /usr/bin/sqlite3.
+//
+// Each test sets up a t.TempDir() workdir + dbpath so they're parallel-
+// safe and never collide with one another or with a developer's real
+// /tmp/hichat-backup leftovers.
+
+package services
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/argeinfina/hichat/config"
+)
+
+// newTestBackupService builds a BackupService wired with a fake runCmd
+// and tempdir-scoped paths. The fake captures every invocation so tests
+// can assert on what was called (and what wasn't).
+func newTestBackupService(t *testing.T, cfg config.BackupConfig) (*BackupService, *fakeRunner) {
+	t.Helper()
+	if cfg.WorkDir == "" {
+		cfg.WorkDir = filepath.Join(t.TempDir(), "workdir")
+	}
+	svc := NewBackupService(cfg)
+	fake := &fakeRunner{}
+	svc.runCmd = fake.run
+	return svc, fake
+}
+
+// fakeRunner records every subprocess call and lets each test program
+// a sequence of responses keyed by the executable name. Default response
+// is success with empty output.
+type fakeRunner struct {
+	calls     []fakeCall
+	responses map[string]fakeResponse // keyed by argv[0] ("hf", "sqlite3")
+	// handler, if non-nil, overrides the responses map and receives every
+	// call. Useful for tests that need to write a real file to a path
+	// taken from the args (e.g. the restore staging path).
+	handler func(call fakeCall) ([]byte, error)
+}
+
+type fakeCall struct {
+	name string
+	args []string
+	env  []string
+}
+
+type fakeResponse struct {
+	output []byte
+	err    error
+}
+
+func (f *fakeRunner) run(_ context.Context, env []string, name string, args ...string) ([]byte, error) {
+	f.calls = append(f.calls, fakeCall{name: name, args: append([]string(nil), args...), env: env})
+	if f.handler != nil {
+		return f.handler(fakeCall{name: name, args: args, env: env})
+	}
+	if resp, ok := f.responses[name]; ok {
+		return resp.output, resp.err
+	}
+	return nil, nil
+}
+
+func (f *fakeRunner) callsTo(name string) int {
+	n := 0
+	for _, c := range f.calls {
+		if c.name == name {
+			n++
+		}
+	}
+	return n
+}
+
+// ── Tests ──
+
+// TestRestore_DisabledNoOp: HF_TOKEN unset → no subprocesses, no error.
+// This is the self-host happy path — they don't want HF involvement.
+func TestRestore_DisabledNoOp(t *testing.T) {
+	t.Parallel()
+	dbDir := t.TempDir()
+	dbPath := filepath.Join(dbDir, "hichat.db")
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled: false,
+		DBPath:  dbPath,
+	})
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("expected zero subprocess calls, got %d (%v)", len(fake.calls), fake.calls)
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no DB file at %s, stat err = %v", dbPath, err)
+	}
+}
+
+// TestRestore_RemoteDSN_NoOp: DATABASE_URL=libsql://... should bypass
+// restore entirely; Turso is its own persistence story.
+func TestRestore_RemoteDSN_NoOp(t *testing.T) {
+	t.Parallel()
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:  true,
+		HFToken:  "fake-token",
+		HFBucket: "test/bucket",
+		DBPath:   "libsql://example.turso.io",
+	})
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("expected zero subprocess calls for remote DSN, got %d", len(fake.calls))
+	}
+}
+
+// TestRestore_ExistingNonEmptyDB_NoOp: warm boot — local DB already
+// populated, restore should not touch it. We also assert the file bytes
+// are unchanged so a future regression that overwrites with a dummy
+// won't slip through.
+func TestRestore_ExistingNonEmptyDB_NoOp(t *testing.T) {
+	t.Parallel()
+	dbDir := t.TempDir()
+	dbPath := filepath.Join(dbDir, "hichat.db")
+	original := make([]byte, 8192)
+	for i := range original {
+		original[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(dbPath, original, 0o640); err != nil {
+		t.Fatalf("seed DB: %v", err)
+	}
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:   true,
+		HFToken:   "fake-token",
+		HFBucket:  "test/bucket",
+		DBPath:    dbPath,
+		UploadDir: filepath.Join(dbDir, "uploads"), // empty -> uploads restore fires
+	})
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil", err)
+	}
+
+	// No DB download should have happened — the only allowed CLI call is
+	// the async uploads restore (`hf sync`). Give the goroutine a moment.
+	time.Sleep(50 * time.Millisecond)
+	for _, c := range fake.calls {
+		if c.name == "hf" && len(c.args) > 0 && c.args[0] == "buckets" {
+			t.Fatalf("did not expect `hf buckets cp` for warm-boot DB, got call %v", c)
+		}
+	}
+
+	got, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatalf("re-read DB: %v", err)
+	}
+	if len(got) != len(original) {
+		t.Fatalf("DB size changed: got %d want %d", len(got), len(original))
+	}
+	for i := range got {
+		if got[i] != original[i] {
+			t.Fatalf("DB content mutated at byte %d: got %d want %d", i, got[i], original[i])
+		}
+	}
+}
+
+// TestRestore_MissingDB_DownloadsSnapshot: cold boot after Space restart —
+// DB file does not exist. Restore must:
+//  1. Invoke `hf buckets cp` to download.
+//  2. Invoke `sqlite3 PRAGMA integrity_check`.
+//  3. Move the file into place at cfg.DBPath.
+func TestRestore_MissingDB_DownloadsSnapshot(t *testing.T) {
+	t.Parallel()
+	rootDir := t.TempDir()
+	dbPath := filepath.Join(rootDir, "data", "hichat.db")
+	workDir := filepath.Join(rootDir, "workdir")
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:  true,
+		HFToken:  "fake-token",
+		HFBucket: "test/bucket",
+		DBPath:   dbPath,
+		WorkDir:  workDir,
+	})
+
+	// Fake the hf download by writing a plausibly-sized payload to the
+	// staging path passed in argv. The integrity_check call returns "ok".
+	fake.handler = func(call fakeCall) ([]byte, error) {
+		switch call.name {
+		case "hf":
+			// argv: buckets cp hf://... <destPath>
+			if len(call.args) < 4 {
+				t.Fatalf("hf call had unexpected argv: %v", call.args)
+			}
+			destPath := call.args[len(call.args)-1]
+			payload := make([]byte, 16384)
+			for i := range payload {
+				payload[i] = byte(i % 256)
+			}
+			if err := os.WriteFile(destPath, payload, 0o640); err != nil {
+				t.Fatalf("fake hf write: %v", err)
+			}
+			return nil, nil
+		case "sqlite3":
+			return []byte("ok\n"), nil
+		}
+		return nil, nil
+	}
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil", err)
+	}
+
+	if got := fake.callsTo("hf"); got < 1 {
+		t.Fatalf("expected at least one hf call, got %d", got)
+	}
+	if got := fake.callsTo("sqlite3"); got != 1 {
+		t.Fatalf("expected exactly one sqlite3 integrity_check call, got %d", got)
+	}
+
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("expected restored DB at %s, stat err = %v", dbPath, err)
+	}
+	if info.Size() != 16384 {
+		t.Fatalf("restored DB size = %d, want 16384", info.Size())
+	}
+}
+
+// TestRestore_HFReturns404_FreshDeploy: bucket has no snapshot yet
+// (first-ever deploy). Restore must swallow the 404 silently and leave
+// no DB on disk; the caller continues with an empty DB.
+func TestRestore_HFReturns404_FreshDeploy(t *testing.T) {
+	t.Parallel()
+	rootDir := t.TempDir()
+	dbPath := filepath.Join(rootDir, "data", "hichat.db")
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:  true,
+		HFToken:  "fake-token",
+		HFBucket: "test/bucket",
+		DBPath:   dbPath,
+		WorkDir:  filepath.Join(rootDir, "workdir"),
+	})
+
+	fake.responses = map[string]fakeResponse{
+		"hf": {output: []byte("Error: 404 - Not Found"), err: errors.New("exit status 1")},
+	}
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil for 404", err)
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no DB file (fresh deploy), stat err = %v", err)
+	}
+	if got := fake.callsTo("sqlite3"); got != 0 {
+		t.Fatalf("integrity_check must not run when nothing downloaded, got %d calls", got)
+	}
+}
+
+// TestRestore_CorruptDownload: download succeeds but the sqlite3
+// integrity_check rejects it (or it's torn). Restore deletes the staging
+// file and returns nil — the caller boots with whatever was on disk (in
+// this test, nothing → empty DB).
+func TestRestore_CorruptDownload(t *testing.T) {
+	t.Parallel()
+	rootDir := t.TempDir()
+	dbPath := filepath.Join(rootDir, "data", "hichat.db")
+	workDir := filepath.Join(rootDir, "workdir")
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:  true,
+		HFToken:  "fake-token",
+		HFBucket: "test/bucket",
+		DBPath:   dbPath,
+		WorkDir:  workDir,
+	})
+
+	fake.handler = func(call fakeCall) ([]byte, error) {
+		switch call.name {
+		case "hf":
+			// Write a believable-size file so the < 4 KiB short-circuit
+			// doesn't fire; we want integrity_check to be what rejects it.
+			destPath := call.args[len(call.args)-1]
+			_ = os.WriteFile(destPath, make([]byte, 8192), 0o640)
+			return nil, nil
+		case "sqlite3":
+			return []byte("*** in database main ***\nPage 5: corrupt"), nil
+		}
+		return nil, nil
+	}
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil for corrupt download", err)
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("corrupt snapshot must not be promoted into place, stat err = %v", err)
+	}
+	tmpPath := filepath.Join(workDir, "restore-hichat.db")
+	if _, err := os.Stat(tmpPath); !os.IsNotExist(err) {
+		t.Fatalf("staging file should be cleaned up, stat err = %v", err)
+	}
+}
+
+// TestRestore_TooSmallDownload: hf "succeeded" but the file came down
+// truncated (e.g. partial transfer reported success). Anything under
+// 4 KiB can't be a valid SQLite DB even with an empty schema, so we
+// reject without bothering with PRAGMA integrity_check.
+func TestRestore_TooSmallDownload(t *testing.T) {
+	t.Parallel()
+	rootDir := t.TempDir()
+	dbPath := filepath.Join(rootDir, "data", "hichat.db")
+	workDir := filepath.Join(rootDir, "workdir")
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:  true,
+		HFToken:  "fake-token",
+		HFBucket: "test/bucket",
+		DBPath:   dbPath,
+		WorkDir:  workDir,
+	})
+
+	fake.handler = func(call fakeCall) ([]byte, error) {
+		if call.name == "hf" {
+			destPath := call.args[len(call.args)-1]
+			_ = os.WriteFile(destPath, []byte("partial"), 0o640) // 7 bytes
+		}
+		return nil, nil
+	}
+
+	if err := svc.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore err = %v, want nil for tiny download", err)
+	}
+	if got := fake.callsTo("sqlite3"); got != 0 {
+		t.Fatalf("integrity_check must be skipped for tiny files, got %d calls", got)
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("tiny snapshot must not be promoted into place, stat err = %v", err)
+	}
+}

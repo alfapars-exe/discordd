@@ -329,6 +329,38 @@ The install script generates sensible defaults. If you need to tweak them, edit 
 | `LIVEKIT_URL` | `ws://127.0.0.1:7880` | Auto-seeded local LiveKit instance |
 | `LIVEKIT_API_KEY` | *generated* | Matches `livekit.yaml` |
 | `LIVEKIT_API_SECRET` | *generated* | Matches `livekit.yaml` |
+| `HF_TOKEN` | *unset* | Hugging Face token. When set, enables the backup service (snapshot DB + uploads → HF Bucket) and boot-time restore. Self-host users on a persistent disk normally leave this unset. |
+| `HF_BUCKET` | `argeinfina/discord` | Target bucket (`hf://buckets/<HF_BUCKET>/latest/{db,uploads}/...`). |
+| `BACKUP_INTERVAL_HOURS` | `1` | Hourly snapshot cadence. Lowered from 24h to keep worst-case data-loss window small on ephemeral hosts like free-tier HF Spaces. |
+| `BACKUP_INTERVAL_MINUTES` | *unset* | Optional finer-grain override (minimum 15). Wins over `BACKUP_INTERVAL_HOURS` when set. |
+| `BACKUP_FORCE_RESTORE` | *unset* | Set to `1` to force boot-time restore even when a local DB already exists. Use only for manual recovery — replaces current state with the last snapshot. |
+
+---
+
+## Disaster Recovery
+
+The backup service runs in the background whenever `HF_TOKEN` is set:
+
+- Every cycle (default: 1 hour) it snapshots the SQLite DB with `sqlite3 VACUUM INTO` for a crash-consistent copy, uploads it to `hf://buckets/<HF_BUCKET>/latest/db/hichat.db`, and mirrors `UPLOAD_DIR` to `hf://buckets/<HF_BUCKET>/latest/uploads` with `hf sync --delete`.
+- On boot, before migrations run, `BackupService.Restore` pulls `latest/db/hichat.db` back into place when the local DB is missing or smaller than 4 KiB. This is what saves the data on HF Spaces without paid Persistent Storage, where `/data` is wiped on every restart/rebuild.
+- Uploads are restored asynchronously after the DB so the HTTP server can start promptly; attachments may 404 briefly while the goroutine catches up.
+- Restore is a no-op when `HF_TOKEN` is unset, when `DATABASE_URL` is a remote `libsql://` URL (Turso is its own persistence layer), or when a non-empty local DB already exists.
+
+### Verifying restore
+
+After a Factory Reboot (or `docker compose down && docker compose up`), the boot log should contain:
+
+```
+[backup] restore start: bucket=argeinfina/discord force=false
+[backup] restore ok: /data/hichat.db (12345678 bytes)
+[database] connected and migrations applied
+```
+
+If you see `restore skipped: no snapshot in bucket yet`, the bucket is empty — wait for the first cycle to complete (~5 minutes after boot) and try again.
+
+### Manual restore
+
+Set `BACKUP_FORCE_RESTORE=1` in the Space's secrets and restart. The current DB is replaced with the latest snapshot. Unset the variable again afterwards.
 
 ---
 

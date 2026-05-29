@@ -86,7 +86,28 @@ func main() {
 	// the boot log instead of buried inside per-track Enqueue failures.
 	logMusicBotDeps()
 
-	// 2. Database
+	// 2a. Boot-time restore from HF Bucket — runs BEFORE database.New so
+	//     migrations land on the recovered state, not a fresh schema.
+	//     No-op when (a) HF_TOKEN unset, (b) DSN is remote libSQL/Turso, or
+	//     (c) the local DB file already has data. See services/backup_service.go
+	//     for the exact predicate. Failure is logged but does not abort boot
+	//     — worst case we start with an empty DB and the next periodic
+	//     snapshot (10c below) takes over.
+	//
+	//     A throwaway BackupService instance is used here because
+	//     initServices builds the long-lived one a few steps down and
+	//     BackupService is stateless. Holding two for ~10 seconds is
+	//     cheaper than threading a parameter through initServices.
+	{
+		boot := services.NewBackupService(cfg.Backup)
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		if err := boot.Restore(restoreCtx); err != nil {
+			log.Printf("[main] backup restore failed (continuing with whatever DB is on disk): %v", err)
+		}
+		cancel()
+	}
+
+	// 2b. Database
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
 	if err != nil {
 		log.Fatalf("[main] failed to access embedded migrations: %v", err)
