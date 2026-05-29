@@ -132,48 +132,50 @@ func (r *sqliteReportRepo) listByStatus(ctx context.Context, status models.Repor
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list reports: %w", err)
 	}
-	defer rows.Close()
 
-	var reports []models.ReportWithUsers
-	for rows.Next() {
-		var rw models.ReportWithUsers
-		var resolvedBy sql.NullString
-		var resolvedAt sql.NullString
-		var reporterDisplay, reportedDisplay sql.NullString
-
-		if err := rows.Scan(
-			&rw.ID, &rw.ReporterID, &rw.ReportedUserID, &rw.Reason, &rw.Description,
-			&rw.Status, &resolvedBy, &resolvedAt, &rw.CreatedAt,
-			&rw.ReporterUsername, &reporterDisplay,
-			&rw.ReportedUsername, &reportedDisplay,
-		); err != nil {
-			return nil, 0, fmt.Errorf("failed to scan report row: %w", err)
-		}
-
-		if resolvedBy.Valid {
-			rw.ResolvedBy = &resolvedBy.String
-		}
-		if resolvedAt.Valid {
-			rw.ResolvedAt = &resolvedAt.String
-		}
-		if reporterDisplay.Valid {
-			rw.ReporterDisplay = &reporterDisplay.String
-		}
-		if reportedDisplay.Valid {
-			rw.ReportedDisplay = &reportedDisplay.String
-		}
-
-		reports = append(reports, rw)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("error iterating report rows: %w", err)
+	reports, err := scanRows(rows, "report", scanReport)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	if reports == nil {
 		reports = []models.ReportWithUsers{}
 	}
 	return reports, totalCount, nil
+}
+
+// scanReport scans one report list row into a ReportWithUsers, normalizing the
+// nullable resolved_by / resolved_at columns and the reporter/reported display
+// names (nullable via the joined users).
+func scanReport(rows *sql.Rows) (models.ReportWithUsers, error) {
+	var rw models.ReportWithUsers
+	var resolvedBy sql.NullString
+	var resolvedAt sql.NullString
+	var reporterDisplay, reportedDisplay sql.NullString
+
+	if err := rows.Scan(
+		&rw.ID, &rw.ReporterID, &rw.ReportedUserID, &rw.Reason, &rw.Description,
+		&rw.Status, &resolvedBy, &resolvedAt, &rw.CreatedAt,
+		&rw.ReporterUsername, &reporterDisplay,
+		&rw.ReportedUsername, &reportedDisplay,
+	); err != nil {
+		return rw, err
+	}
+
+	if resolvedBy.Valid {
+		rw.ResolvedBy = &resolvedBy.String
+	}
+	if resolvedAt.Valid {
+		rw.ResolvedAt = &resolvedAt.String
+	}
+	if reporterDisplay.Valid {
+		rw.ReporterDisplay = &reporterDisplay.String
+	}
+	if reportedDisplay.Valid {
+		rw.ReportedDisplay = &reportedDisplay.String
+	}
+
+	return rw, nil
 }
 
 func (r *sqliteReportRepo) UpdateStatus(ctx context.Context, id string, status models.ReportStatus, resolvedBy string) error {

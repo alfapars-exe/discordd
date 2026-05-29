@@ -19,6 +19,17 @@ func NewSQLiteChannelRepo(db database.TxQuerier) ChannelRepository {
 	return &sqliteChannelRepo{db: db}
 }
 
+// scanChannel scans one channels row in the column order shared by the channel
+// list queries (GetAllByServer, GetByCategoryID).
+func scanChannel(rows *sql.Rows) (models.Channel, error) {
+	var ch models.Channel
+	err := rows.Scan(
+		&ch.ID, &ch.ServerID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic,
+		&ch.Position, &ch.UserLimit, &ch.Bitrate, &ch.CreatedAt,
+	)
+	return ch, err
+}
+
 func (r *sqliteChannelRepo) Create(ctx context.Context, channel *models.Channel) error {
 	query := `
 		INSERT INTO channels (id, server_id, name, type, category_id, topic, position, user_limit, bitrate)
@@ -73,25 +84,7 @@ func (r *sqliteChannelRepo) GetAllByServer(ctx context.Context, serverID string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channels by server: %w", err)
 	}
-	defer rows.Close()
-
-	var channels []models.Channel
-	for rows.Next() {
-		var ch models.Channel
-		if err := rows.Scan(
-			&ch.ID, &ch.ServerID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic,
-			&ch.Position, &ch.UserLimit, &ch.Bitrate, &ch.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan channel row: %w", err)
-		}
-		channels = append(channels, ch)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating channel rows: %w", err)
-	}
-
-	return channels, nil
+	return scanRows(rows, "channel", scanChannel)
 }
 
 func (r *sqliteChannelRepo) GetByCategoryID(ctx context.Context, categoryID string) ([]models.Channel, error) {
@@ -103,25 +96,7 @@ func (r *sqliteChannelRepo) GetByCategoryID(ctx context.Context, categoryID stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channels by category: %w", err)
 	}
-	defer rows.Close()
-
-	var channels []models.Channel
-	for rows.Next() {
-		var ch models.Channel
-		if err := rows.Scan(
-			&ch.ID, &ch.ServerID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic,
-			&ch.Position, &ch.UserLimit, &ch.Bitrate, &ch.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan channel row: %w", err)
-		}
-		channels = append(channels, ch)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating channel rows: %w", err)
-	}
-
-	return channels, nil
+	return scanRows(rows, "channel", scanChannel)
 }
 
 func (r *sqliteChannelRepo) Update(ctx context.Context, channel *models.Channel) error {

@@ -20,6 +20,16 @@ func NewSQLiteAttachmentRepo(db database.TxQuerier) AttachmentRepository {
 	return &sqliteAttachmentRepo{db: db}
 }
 
+// scanAttachment scans one attachments row in the column order shared by the
+// attachment list queries (GetByMessageID, GetByMessageIDs).
+func scanAttachment(rows *sql.Rows) (models.Attachment, error) {
+	var a models.Attachment
+	err := rows.Scan(
+		&a.ID, &a.MessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+	)
+	return a, err
+}
+
 func (r *sqliteAttachmentRepo) Create(ctx context.Context, attachment *models.Attachment) error {
 	query := `
 		INSERT INTO attachments (id, message_id, filename, file_url, file_size, mime_type)
@@ -50,24 +60,7 @@ func (r *sqliteAttachmentRepo) GetByMessageID(ctx context.Context, messageID str
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attachments by message: %w", err)
 	}
-	defer rows.Close()
-
-	var attachments []models.Attachment
-	for rows.Next() {
-		var a models.Attachment
-		if err := rows.Scan(
-			&a.ID, &a.MessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan attachment row: %w", err)
-		}
-		attachments = append(attachments, a)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating attachment rows: %w", err)
-	}
-
-	return attachments, nil
+	return scanRows(rows, "attachment", scanAttachment)
 }
 
 // GetByMessageIDs batch-loads attachments for multiple messages (avoids N+1).
@@ -92,24 +85,7 @@ func (r *sqliteAttachmentRepo) GetByMessageIDs(ctx context.Context, messageIDs [
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attachments by message ids: %w", err)
 	}
-	defer rows.Close()
-
-	var attachments []models.Attachment
-	for rows.Next() {
-		var a models.Attachment
-		if err := rows.Scan(
-			&a.ID, &a.MessageID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan attachment row: %w", err)
-		}
-		attachments = append(attachments, a)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating attachment rows: %w", err)
-	}
-
-	return attachments, nil
+	return scanRows(rows, "attachment", scanAttachment)
 }
 
 // GetByFileURL resolves a /api/uploads/{name} download URL back to its

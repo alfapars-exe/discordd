@@ -19,6 +19,44 @@ func NewSQLitePinRepo(db database.TxQuerier) PinRepository {
 	return &sqlitePinRepo{db: db}
 }
 
+// scanPin scans one pinned-messages row (3-way JOIN: pinned_messages ->
+// messages -> users) into a PinnedMessageWithDetails, attaching the message,
+// its author (nullable via LEFT JOIN), an empty attachments slice, and the
+// pinning user (also nullable).
+func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
+	var pin models.PinnedMessageWithDetails
+	var msg models.Message
+	var author models.User
+	var authorID sql.NullString
+	var pinnedByUser models.User
+	var pinnedByID sql.NullString
+
+	if err := rows.Scan(
+		&pin.ID, &pin.MessageID, &pin.ChannelID, &pin.PinnedBy, &pin.CreatedAt,
+		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
+		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL,
+	); err != nil {
+		return pin, err
+	}
+
+	if authorID.Valid {
+		author.ID = authorID.String
+		author.PasswordHash = ""
+		msg.Author = &author
+	}
+	msg.Attachments = []models.Attachment{} // empty slice, not null
+	pin.Message = &msg
+
+	if pinnedByID.Valid {
+		pinnedByUser.ID = pinnedByID.String
+		pinnedByUser.PasswordHash = ""
+		pin.PinnedByUser = &pinnedByUser
+	}
+
+	return pin, nil
+}
+
 // GetByChannelID returns all pinned messages with message and author details.
 // 3-way JOIN: pinned_messages -> messages -> users.
 func (r *sqlitePinRepo) GetByChannelID(ctx context.Context, channelID string) ([]models.PinnedMessageWithDetails, error) {
@@ -38,45 +76,10 @@ func (r *sqlitePinRepo) GetByChannelID(ctx context.Context, channelID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pinned messages: %w", err)
 	}
-	defer rows.Close()
 
-	var pins []models.PinnedMessageWithDetails
-	for rows.Next() {
-		var pin models.PinnedMessageWithDetails
-		var msg models.Message
-		var author models.User
-		var authorID sql.NullString
-		var pinnedByUser models.User
-		var pinnedByID sql.NullString
-
-		if err := rows.Scan(
-			&pin.ID, &pin.MessageID, &pin.ChannelID, &pin.PinnedBy, &pin.CreatedAt,
-			&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-			&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
-			&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan pinned message row: %w", err)
-		}
-
-		if authorID.Valid {
-			author.ID = authorID.String
-			author.PasswordHash = ""
-			msg.Author = &author
-		}
-		msg.Attachments = []models.Attachment{} // empty slice, not null
-		pin.Message = &msg
-
-		if pinnedByID.Valid {
-			pinnedByUser.ID = pinnedByID.String
-			pinnedByUser.PasswordHash = ""
-			pin.PinnedByUser = &pinnedByUser
-		}
-
-		pins = append(pins, pin)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating pinned message rows: %w", err)
+	pins, err := scanRows(rows, "pinned message", scanPin)
+	if err != nil {
+		return nil, err
 	}
 
 	if pins == nil {
