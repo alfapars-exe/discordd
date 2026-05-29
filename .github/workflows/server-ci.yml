@@ -85,6 +85,40 @@ jobs:
           working-directory: server
           args: --timeout=5m
 
+  # ─── Go server: security scans (govulncheck gate + gosec advisory) ───
+  server-security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: server/go.sum
+
+      # govulncheck — call-graph-aware known-CVE scanner. HARD gate: it fails
+      # ONLY on vulnerabilities actually REACHABLE from our code, so the
+      # signal is high (transitive advisories we don't call are reported but
+      # don't fail the run). This is the gate that caught GO-2026-4945
+      # (go-jose JWE panic, reachable via the LiveKit webhook handler).
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+        working-directory: server
+
+      # gosec — static security analysis. Advisory for now (continue-on-error),
+      # matching the golangci-lint policy above: triage the baseline before
+      # flipping it to a hard gate.
+      - name: gosec
+        continue-on-error: true
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+        working-directory: server
+
   # ─── React client: lint + type check + test + build ───
   client-check:
     name: Client lint, type, test & build
@@ -114,4 +148,12 @@ jobs:
       # and production bundle in one step.
       - name: Build
         run: npm run build
+        working-directory: client
+
+      # npm audit — dependency advisories. Advisory (continue-on-error):
+      # transitive devDependency advisories are common and shouldn't block a
+      # PR. Dependabot (.github/dependabot.yml) opens the actual bump PRs.
+      - name: npm audit (advisory)
+        continue-on-error: true
+        run: npm audit --audit-level=high
         working-directory: client

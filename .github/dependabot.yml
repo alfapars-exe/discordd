@@ -1,0 +1,35 @@
+# Dependabot — automated dependency-update PRs.
+#
+# Recommended by the 2026-05 security reviews (guvenlik_raporu_2026-05-04,
+# SECURITY_PENTEST_2026-05-29 operator items). Weekly cadence keeps the
+# dependency surface current without flooding review. The Server CI
+# `server-security` job (govulncheck) is the companion gate: it decides
+# whether an outstanding bump actually matters (i.e. a *reachable* vuln),
+# so these PRs + that gate together close the "stale vulnerable dep" hole.
+version: 2
+updates:
+  # Go backend module.
+  - package-ecosystem: gomod
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # React/Vite client.
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Pin/refresh the GitHub Actions used by the workflows themselves.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
