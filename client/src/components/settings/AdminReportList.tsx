@@ -5,7 +5,7 @@
  * Only visible to platform admins (backend-protected).
  */
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -20,6 +20,12 @@ import PlatformActionDialog from "./PlatformActionDialog";
 import type { AdminReportListItem } from "../../types";
 import { resolveAssetUrl } from "../../utils/constants";
 import type { ContextMenuItem } from "../../hooks/useContextMenu";
+import AdminTable from "./AdminTable";
+import type { ColumnDef } from "./adminTableTypes";
+import { useTableFilter } from "../../hooks/useTableFilter";
+import { useTableSort } from "../../hooks/useTableSort";
+import { useColumnResize } from "../../hooks/useColumnResize";
+import { parseUTC, formatDateTime } from "../../utils/adminFormat";
 
 // --- Column Definition ---
 
@@ -32,16 +38,7 @@ type SortKey =
   | "created_at"
   | "status";
 
-type ColumnDef = {
-  key: SortKey;
-  labelKey: string;
-  defaultWidth: number;
-  minWidth: number;
-  sortable: boolean;
-  align: "left" | "center" | "right";
-};
-
-const COLUMNS: ColumnDef[] = [
+const COLUMNS: ColumnDef<SortKey>[] = [
   { key: "reporter_username", labelKey: "platformReportReporter", defaultWidth: 140, minWidth: 100, sortable: true, align: "left" },
   { key: "reported_username", labelKey: "platformReportReported", defaultWidth: 140, minWidth: 100, sortable: true, align: "left" },
   { key: "reason", labelKey: "platformReportReason", defaultWidth: 140, minWidth: 100, sortable: true, align: "left" },
@@ -51,17 +48,33 @@ const COLUMNS: ColumnDef[] = [
   { key: "status", labelKey: "platformReportStatus", defaultWidth: 180, minWidth: 140, sortable: true, align: "left" },
 ];
 
-function getDefaultWidths(): Record<string, number> {
-  const widths: Record<string, number> = {};
-  for (const col of COLUMNS) {
-    widths[col.key] = col.defaultWidth;
-  }
-  return widths;
-}
+// --- Status filter options ---
+const STATUS_OPTIONS = ["", "pending", "reviewed", "resolved", "dismissed"] as const;
 
-/** Parse backend SQLite timestamps as UTC. */
-function parseUTC(iso: string): number {
-  return new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
+// --- Reason -> i18n key map ---
+const REASON_KEY_MAP: Record<string, string> = {
+  spam: "platformReportReasonSpam",
+  harassment: "platformReportReasonHarassment",
+  inappropriate_content: "platformReportReasonInappropriate",
+  impersonation: "platformReportReasonImpersonation",
+  other: "platformReportReasonOther",
+};
+
+// --- Status -> i18n key map ---
+const STATUS_KEY_MAP: Record<string, string> = {
+  pending: "platformReportStatusPending",
+  reviewed: "platformReportStatusReviewed",
+  resolved: "platformReportStatusResolved",
+  dismissed: "platformReportStatusDismissed",
+};
+
+/** Search predicate — reporter, reported, or description (case-insensitive). */
+function matchesReport(r: AdminReportListItem, q: string): boolean {
+  return (
+    r.reporter_username.toLowerCase().includes(q) ||
+    r.reported_username.toLowerCase().includes(q) ||
+    r.description.toLowerCase().includes(q)
+  );
 }
 
 // --- Sort comparator ---
@@ -100,26 +113,6 @@ function compareSortValue(
   return dir === "desc" ? -result : result;
 }
 
-// --- Status filter options ---
-const STATUS_OPTIONS = ["", "pending", "reviewed", "resolved", "dismissed"] as const;
-
-// --- Reason -> i18n key map ---
-const REASON_KEY_MAP: Record<string, string> = {
-  spam: "platformReportReasonSpam",
-  harassment: "platformReportReasonHarassment",
-  inappropriate_content: "platformReportReasonInappropriate",
-  impersonation: "platformReportReasonImpersonation",
-  other: "platformReportReasonOther",
-};
-
-// --- Status -> i18n key map ---
-const STATUS_KEY_MAP: Record<string, string> = {
-  pending: "platformReportStatusPending",
-  reviewed: "platformReportStatusReviewed",
-  resolved: "platformReportStatusResolved",
-  dismissed: "platformReportStatusDismissed",
-};
-
 // --- Component ---
 
 function AdminReportList() {
@@ -138,33 +131,22 @@ function AdminReportList() {
   // --- Attachment modal state ---
   const [attachModalReport, setAttachModalReport] = useState<AdminReportListItem | null>(null);
 
-  // --- Table state ---
+  // --- Table state (search + status filter; shared sort/filter/resize hooks) ---
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(getDefaultWidths);
+  const { columnWidths, handleResizeStart } = useColumnResize(COLUMNS);
+  const filteredReports = useTableFilter(reports, searchQuery, matchesReport);
+  const { sortKey, sortDir, sortedRows, handleSort } = useTableSort(
+    filteredReports,
+    COLUMNS,
+    compareSortValue,
+    "created_at",
+    "desc",
+  );
 
   // --- Status inline edit state ---
   const [pendingStatusChanges, setPendingStatusChanges] = useState<Record<string, string>>({});
   const [savingReports, setSavingReports] = useState<Set<string>>(new Set());
-
-  // --- Column resize refs ---
-  const resizingRef = useRef<{
-    col: string;
-    startX: number;
-    startWidth: number;
-  } | null>(null);
-  const widthsRef = useRef(columnWidths);
-  // Latest-ref mirror — pointer-move handlers (registered once via
-  // useEffect, kept across renders) need to read the current widths
-  // map without re-subscribing every time the user resizes a column.
-  // Writing the ref directly in the render body trips
-  // react-hooks/refs; useLayoutEffect runs synchronously after commit
-  // before any subsequent event handler can fire.
-  useLayoutEffect(() => {
-    widthsRef.current = columnWidths;
-  });
 
   // --- Fetch ---
   // Kept as a useCallback so the post-mutation manual refresh paths
@@ -196,36 +178,6 @@ function AdminReportList() {
     })();
     return () => { cancelled = true; };
   }, [statusFilter, addToast, t]);
-
-  // --- Filtered + Sorted data ---
-  const filteredReports = useMemo(() => {
-    let list = reports;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (r) =>
-          r.reporter_username.toLowerCase().includes(q) ||
-          r.reported_username.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q),
-      );
-    }
-
-    return [...list].sort((a, b) => compareSortValue(a, b, sortKey, sortDir));
-  }, [reports, searchQuery, sortKey, sortDir]);
-
-  // --- Sort handler ---
-  function handleSort(key: SortKey) {
-    const col = COLUMNS.find((c) => c.key === key);
-    if (!col?.sortable) return;
-
-    if (sortKey === key) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }
 
   // --- Status inline edit ---
   function handleStatusChange(reportId: string, newStatus: string) {
@@ -347,82 +299,13 @@ function AdminReportList() {
     }
   }
 
-  // --- Column resize ---
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent, colKey: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      resizingRef.current = {
-        col: colKey,
-        startX: e.clientX,
-        startWidth: widthsRef.current[colKey] ?? 100,
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    [],
-  );
-
-  useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!resizingRef.current) return;
-
-      const { col, startX, startWidth } = resizingRef.current;
-      const colDef = COLUMNS.find((c) => c.key === col);
-      const minW = colDef?.minWidth ?? 50;
-      const newWidth = Math.max(minW, startWidth + (e.clientX - startX));
-
-      setColumnWidths((prev) => ({ ...prev, [col]: newWidth }));
-    }
-
-    function onMouseUp() {
-      if (!resizingRef.current) return;
-      resizingRef.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    }
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-  }, []);
-
   // --- Helpers ---
-
-  function formatDateTime(iso: string) {
-    try {
-      return new Date(iso.endsWith("Z") ? iso : iso + "Z").toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return iso;
-    }
-  }
 
   function formatFileSize(bytes: number | null) {
     if (bytes === null || bytes === 0) return "";
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${(bytes / 1048576).toFixed(1)} MB`;
-  }
-
-  // --- Sort indicator ---
-  function sortIndicator(key: SortKey) {
-    if (sortKey !== key) return null;
-    return (
-      <span className="admin-report-sort-icon">
-        {sortDir === "asc" ? "\u25B2" : "\u25BC"}
-      </span>
-    );
   }
 
   // --- Reason badge ---
@@ -434,8 +317,6 @@ function AdminReportList() {
       </span>
     );
   }
-
-  // --- Status badge (for non-editable display, not used in table but useful for reference) ---
 
   // --- Render cell ---
   function renderCell(report: AdminReportListItem, colKey: SortKey) {
@@ -467,7 +348,7 @@ function AdminReportList() {
       case "attachments": {
         const count = report.attachments.length;
         if (count === 0) {
-          return <span className="admin-report-text-muted">{"\u2014"}</span>;
+          return <span className="admin-report-text-muted">{"—"}</span>;
         }
         return (
           <button
@@ -483,7 +364,7 @@ function AdminReportList() {
       }
 
       case "created_at":
-        return formatDateTime(report.created_at);
+        return formatDateTime(report.created_at, { assumeUTC: true });
 
       case "status": {
         const hasPending = pendingStatusChanges[report.id] !== undefined;
@@ -514,7 +395,7 @@ function AdminReportList() {
                   disabled={isSaving}
                   title={t("save")}
                 >
-                  {isSaving ? "..." : "\u2713"}
+                  {isSaving ? "..." : "✓"}
                 </button>
                 <button
                   className="admin-report-cancel-btn"
@@ -522,7 +403,7 @@ function AdminReportList() {
                   disabled={isSaving}
                   title={t("cancel")}
                 >
-                  {"\u2715"}
+                  {"✕"}
                 </button>
               </>
             )}
@@ -535,102 +416,49 @@ function AdminReportList() {
     }
   }
 
+  // --- Status filter (toolbar extra) ---
+  const statusFilterSelect = (
+    <select
+      className="admin-report-status-filter"
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value)}
+    >
+      {STATUS_OPTIONS.map((s) => (
+        <option key={s} value={s}>
+          {s === "" ? t("platformReportStatusAll") : t(STATUS_KEY_MAP[s] ?? s)}
+        </option>
+      ))}
+    </select>
+  );
+
   // --- Render ---
-  if (isLoading) {
-    return (
-      <div className="admin-report-list">
-        <p className="no-channel">{t("loading")}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="admin-report-list">
-      {/* Toolbar: Search + Status Filter + Count */}
-      <div className="admin-report-toolbar">
-        <input
-          className="admin-report-search"
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t("platformReportSearchPlaceholder")}
-        />
-        <select
-          className="admin-report-status-filter"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s === "" ? t("platformReportStatusAll") : t(STATUS_KEY_MAP[s] ?? s)}
-            </option>
-          ))}
-        </select>
-        <span className="admin-report-count">
-          {filteredReports.length} / {reports.length}
-        </span>
-      </div>
-
-      {/* Table */}
-      {filteredReports.length === 0 ? (
-        <p className="no-channel">
-          {reports.length === 0
-            ? t("platformReportNoReports")
-            : t("platformReportNoResults")}
-        </p>
-      ) : (
-        <div className="admin-report-table-wrap">
-          <table className="admin-report-table">
-            <colgroup>
-              {COLUMNS.map((col) => (
-                <col key={col.key} style={{ width: columnWidths[col.key] }} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr>
-                {COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    className={col.sortable ? "sortable" : ""}
-                    onClick={() => handleSort(col.key)}
-                  >
-                    <div
-                      className="admin-report-th-content"
-                      style={{ justifyContent: col.align === "right" ? "flex-end" : col.align === "center" ? "center" : "flex-start" }}
-                    >
-                      <span>{t(col.labelKey)}</span>
-                      {sortIndicator(col.key)}
-                    </div>
-                    {/* Resize handle */}
-                    <div
-                      className="admin-report-resize-handle"
-                      onMouseDown={(e) => handleResizeStart(e, col.key)}
-                    />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredReports.map((report) => (
-                <tr
-                  key={report.id}
-                  onContextMenu={(e) => {
-                    const items = buildContextItems(report);
-                    if (items.length > 0) openMenu(e, items);
-                  }}
-                >
-                  {COLUMNS.map((col) => (
-                    <td key={col.key} style={{ textAlign: col.align }}>
-                      {renderCell(report, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
+    <AdminTable
+      classPrefix="admin-report"
+      columns={COLUMNS}
+      rows={sortedRows}
+      totalCount={reports.length}
+      isLoading={isLoading}
+      loadingText={t("loading")}
+      emptyText={t("platformReportNoReports")}
+      noResultsText={t("platformReportNoResults")}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder={t("platformReportSearchPlaceholder")}
+      toolbarExtra={statusFilterSelect}
+      columnWidths={columnWidths}
+      onResizeStart={handleResizeStart}
+      sortKey={sortKey}
+      sortDir={sortDir}
+      onSort={handleSort}
+      getColumnLabel={(col) => t(col.labelKey)}
+      getRowKey={(r) => r.id}
+      onRowContextMenu={(e, r) => {
+        const items = buildContextItems(r);
+        if (items.length > 0) openMenu(e, items);
+      }}
+      renderCell={renderCell}
+    >
       {/* Context Menu */}
       <ContextMenu state={menuState} onClose={closeMenu} />
 
@@ -693,7 +521,7 @@ function AdminReportList() {
           <p className="admin-report-no-attach">{t("platformReportNoAttachments")}</p>
         )}
       </Modal>
-    </div>
+    </AdminTable>
   );
 }
 

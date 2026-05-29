@@ -1,6 +1,6 @@
 /** AdminUserList — Platform admin user management table (sortable, filterable, resizable columns). */
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -17,6 +17,13 @@ import BadgeAssignModal from "../members/BadgeAssignModal";
 import type { AdminUserListItem } from "../../types";
 import { resolveAssetUrl } from "../../utils/constants";
 import type { ContextMenuItem } from "../../hooks/useContextMenu";
+import AdminTable from "./AdminTable";
+import type { ColumnDef } from "./adminTableTypes";
+import { useNowTick } from "../../hooks/useNowTick";
+import { useTableFilter } from "../../hooks/useTableFilter";
+import { useTableSort } from "../../hooks/useTableSort";
+import { useColumnResize } from "../../hooks/useColumnResize";
+import { parseUTC, formatStorage, formatDateTime, formatRelativeTime as relativeTime } from "../../utils/adminFormat";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 
@@ -37,16 +44,7 @@ type SortKey =
   | "member_server_count"
   | "ban_count";
 
-type ColumnDef = {
-  key: SortKey;
-  labelKey: string;
-  defaultWidth: number;
-  minWidth: number;
-  sortable: boolean;
-  align: "left" | "center" | "right";
-};
-
-const COLUMNS: ColumnDef[] = [
+const COLUMNS: ColumnDef<SortKey>[] = [
   { key: "username", labelKey: "platformUserUsername", defaultWidth: 150, minWidth: 100, sortable: true, align: "left" },
   { key: "display_name", labelKey: "platformUserDisplayName", defaultWidth: 140, minWidth: 100, sortable: true, align: "left" },
   { key: "id", labelKey: "platformUserID", defaultWidth: 110, minWidth: 80, sortable: false, align: "left" },
@@ -62,17 +60,13 @@ const COLUMNS: ColumnDef[] = [
   { key: "ban_count", labelKey: "platformUserBans", defaultWidth: 70, minWidth: 55, sortable: true, align: "right" },
 ];
 
-function getDefaultWidths(): Record<string, number> {
-  const widths: Record<string, number> = {};
-  for (const col of COLUMNS) {
-    widths[col.key] = col.defaultWidth;
-  }
-  return widths;
-}
-
-/** SQLite timestamps lack "Z" suffix — append it to ensure UTC parsing. */
-function parseUTC(iso: string): number {
-  return new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
+/** Search predicate — username, id, or display name (case-insensitive). */
+function matchesUser(u: AdminUserListItem, q: string): boolean {
+  return (
+    u.username.toLowerCase().includes(q) ||
+    u.id.toLowerCase().includes(q) ||
+    (u.display_name?.toLowerCase().includes(q) ?? false)
+  );
 }
 
 // ─── Sort comparator ───
@@ -159,34 +153,18 @@ function AdminUserList() {
   // ─── Delete dialog state ───
   const [deleteTarget, setDeleteTarget] = useState<AdminUserListItem | null>(null);
 
-  // ─── Table state ───
+  // ─── Table state (search + shared sort/filter/resize/now hooks) ───
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("username");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(getDefaultWidths);
-
-  // ─── Column resize refs ───
-  const resizingRef = useRef<{
-    col: string;
-    startX: number;
-    startWidth: number;
-  } | null>(null);
-  const widthsRef = useRef(columnWidths);
-  // Latest-ref mirror (post-commit) — pointer-move handler reads
-  // .current without re-subscribing each render. Render-time .current
-  // writes are flagged by react-hooks/refs as render-time side effects.
-  useLayoutEffect(() => {
-    widthsRef.current = columnWidths;
-  });
-
-  // Render purity: snapshot Date.now() once + refresh every 30s for
-  // the relative-time labels. Direct Date.now() during render trips
-  // react-hooks/purity because it's non-deterministic.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const nowMs = useNowTick();
+  const { columnWidths, handleResizeStart } = useColumnResize(COLUMNS);
+  const filteredUsers = useTableFilter(users, searchQuery, matchesUser);
+  const { sortKey, sortDir, sortedRows, handleSort } = useTableSort(
+    filteredUsers,
+    COLUMNS,
+    compareSortValue,
+    "username",
+    "asc",
+  );
 
   // ─── Fetch ───
   useEffect(() => {
@@ -203,36 +181,6 @@ function AdminUserList() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ─── Filtered + Sorted data ───
-  const filteredUsers = useMemo(() => {
-    let list = users;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (u) =>
-          u.username.toLowerCase().includes(q) ||
-          u.id.toLowerCase().includes(q) ||
-          (u.display_name?.toLowerCase().includes(q) ?? false),
-      );
-    }
-
-    return [...list].sort((a, b) => compareSortValue(a, b, sortKey, sortDir));
-  }, [users, searchQuery, sortKey, sortDir]);
-
-  // ─── Sort handler ───
-  function handleSort(key: SortKey) {
-    const col = COLUMNS.find((c) => c.key === key);
-    if (!col?.sortable) return;
-
-    if (sortKey === key) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }
 
   // ─── Context Menu ───
 
@@ -373,101 +321,17 @@ function AdminUserList() {
     }
   }
 
-  // ─── Column resize ───
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent, colKey: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      resizingRef.current = {
-        col: colKey,
-        startX: e.clientX,
-        startWidth: widthsRef.current[colKey] ?? 100,
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    [],
-  );
-
-  useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!resizingRef.current) return;
-
-      const { col, startX, startWidth } = resizingRef.current;
-      const colDef = COLUMNS.find((c) => c.key === col);
-      const minW = colDef?.minWidth ?? 50;
-      const newWidth = Math.max(minW, startWidth + (e.clientX - startX));
-
-      setColumnWidths((prev) => ({ ...prev, [col]: newWidth }));
-    }
-
-    function onMouseUp() {
-      if (!resizingRef.current) return;
-      resizingRef.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    }
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-  }, []);
-
   // ─── Helpers ───
 
-  function formatDateTime(iso: string) {
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return iso;
-    }
-  }
-
+  // formatStorage + formatDateTime come from utils/adminFormat (shared). This
+  // local wrapper binds the relative-time labels + fallback for the user list
+  // so renderCell's call sites stay unchanged.
   function formatRelativeTime(iso: string | null) {
-    if (!iso) return t("platformUserNever");
-    try {
-      // Snapshot-backed (see nowMs at the top of this component) to
-      // keep render pure for react-hooks/purity.
-      const diff = nowMs - parseUTC(iso);
-      const mins = Math.floor(diff / 60000);
-      if (mins < 1) return t("platformUserJustNow");
-      if (mins < 60) return `${mins}m`;
-      const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours}h`;
-      const days = Math.floor(hours / 24);
-      if (days < 30) return `${days}d`;
-      return formatDateTime(iso);
-    } catch {
-      return iso ?? "";
-    }
-  }
-
-  function formatStorage(mb: number) {
-    if (mb < 0.01) return "0 MB";
-    if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`;
-    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-    return `${mb.toFixed(1)} MB`;
-  }
-
-  // ─── Sort indicator ───
-  function sortIndicator(key: SortKey) {
-    if (sortKey !== key) return null;
-    return (
-      <span className="admin-user-sort-icon">
-        {sortDir === "asc" ? "\u25B2" : "\u25BC"}
-      </span>
-    );
+    return relativeTime(iso, nowMs, {
+      neverLabel: t("platformUserNever"),
+      justNowLabel: t("platformUserJustNow"),
+      fallback: formatDateTime,
+    });
   }
 
   // ─── Status badge ───
@@ -509,7 +373,7 @@ function AdminUserList() {
       case "display_name":
         return (
           <span className="admin-user-display-name" title={user.display_name ?? ""}>
-            {user.display_name ?? "\u2014"}
+            {user.display_name ?? "—"}
           </span>
         );
 
@@ -530,7 +394,7 @@ function AdminUserList() {
         return user.is_platform_admin ? (
           <span className="admin-user-admin-badge">{t("platformUserAdminYes")}</span>
         ) : (
-          <span className="admin-user-text-muted">\u2014</span>
+          <span className="admin-user-text-muted">—</span>
         );
 
       case "last_activity":
@@ -564,90 +428,33 @@ function AdminUserList() {
   }
 
   // ─── Render ───
-  if (isLoading) {
-    return (
-      <div className="admin-user-list">
-        <p className="no-channel">{t("loading")}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="admin-user-list">
-      {/* ── Toolbar: Search + Count ── */}
-      <div className="admin-user-toolbar">
-        <input
-          className="admin-user-search"
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t("platformUserSearchPlaceholder")}
-        />
-        <span className="admin-user-count">
-          {filteredUsers.length} / {users.length}
-        </span>
-      </div>
-
-      {/* ── Table ── */}
-      {filteredUsers.length === 0 ? (
-        <p className="no-channel">
-          {users.length === 0
-            ? t("platformUserNoUsers")
-            : t("platformUserNoResults")}
-        </p>
-      ) : (
-        <div className="admin-user-table-wrap">
-          <table className="admin-user-table">
-            <colgroup>
-              {COLUMNS.map((col) => (
-                <col key={col.key} style={{ width: columnWidths[col.key] }} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr>
-                {COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    className={col.sortable ? "sortable" : ""}
-                    onClick={() => handleSort(col.key)}
-                  >
-                    <div
-                      className="admin-user-th-content"
-                      style={{ justifyContent: col.align === "right" ? "flex-end" : col.align === "center" ? "center" : "flex-start" }}
-                    >
-                      <span>{t(col.labelKey)}</span>
-                      {sortIndicator(col.key)}
-                    </div>
-                    {/* Resize handle */}
-                    <div
-                      className="admin-user-resize-handle"
-                      onMouseDown={(e) => handleResizeStart(e, col.key)}
-                    />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className={user.is_platform_banned ? "admin-user-row-banned" : ""}
-                  onContextMenu={(e) => {
-                    const items = buildContextItems(user);
-                    if (items.length > 0) openMenu(e, items);
-                  }}
-                >
-                  {COLUMNS.map((col) => (
-                    <td key={col.key} style={{ textAlign: col.align }}>
-                      {renderCell(user, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <AdminTable
+      classPrefix="admin-user"
+      columns={COLUMNS}
+      rows={sortedRows}
+      totalCount={users.length}
+      isLoading={isLoading}
+      loadingText={t("loading")}
+      emptyText={t("platformUserNoUsers")}
+      noResultsText={t("platformUserNoResults")}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder={t("platformUserSearchPlaceholder")}
+      columnWidths={columnWidths}
+      onResizeStart={handleResizeStart}
+      sortKey={sortKey}
+      sortDir={sortDir}
+      onSort={handleSort}
+      getColumnLabel={(col) => t(col.labelKey)}
+      getRowKey={(u) => u.id}
+      getRowClassName={(u) => (u.is_platform_banned ? "admin-user-row-banned" : "")}
+      onRowContextMenu={(e, u) => {
+        const items = buildContextItems(u);
+        if (items.length > 0) openMenu(e, items);
+      }}
+      renderCell={renderCell}
+    >
       {/* Context Menu */}
       <ContextMenu state={menuState} onClose={closeMenu} />
 
@@ -690,7 +497,7 @@ function AdminUserList() {
           onClose={() => setBadgeTarget(null)}
         />
       )}
-    </div>
+    </AdminTable>
   );
 }
 

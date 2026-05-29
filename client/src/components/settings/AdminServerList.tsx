@@ -1,6 +1,6 @@
 /** AdminServerList — Platform admin server management table with LiveKit instance migration. */
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -18,6 +18,13 @@ import PlatformActionDialog from "./PlatformActionDialog";
 import type { LiveKitInstanceAdmin, AdminServerListItem } from "../../types";
 import type { ContextMenuItem } from "../../hooks/useContextMenu";
 import { resolveAssetUrl } from "../../utils/constants";
+import AdminTable from "./AdminTable";
+import type { ColumnDef } from "./adminTableTypes";
+import { useNowTick } from "../../hooks/useNowTick";
+import { useTableFilter } from "../../hooks/useTableFilter";
+import { useTableSort } from "../../hooks/useTableSort";
+import { useColumnResize } from "../../hooks/useColumnResize";
+import { parseUTC, formatStorage, formatDate, formatRelativeTime as relativeTime } from "../../utils/adminFormat";
 
 // ─── Column Definition ───
 
@@ -34,16 +41,7 @@ type SortKey =
   | "last_activity"
   | "instance";
 
-type ColumnDef = {
-  key: SortKey;
-  labelKey: string;
-  defaultWidth: number;
-  minWidth: number;
-  sortable: boolean;
-  align: "left" | "center" | "right";
-};
-
-const COLUMNS: ColumnDef[] = [
+const COLUMNS: ColumnDef<SortKey>[] = [
   { key: "name", labelKey: "platformServerName", defaultWidth: 180, minWidth: 120, sortable: true, align: "left" },
   { key: "id", labelKey: "platformServerID", defaultWidth: 110, minWidth: 80, sortable: false, align: "left" },
   { key: "owner_username", labelKey: "platformServerCreator", defaultWidth: 110, minWidth: 80, sortable: true, align: "left" },
@@ -57,17 +55,13 @@ const COLUMNS: ColumnDef[] = [
   { key: "instance", labelKey: "platformServerLiveKitInstance", defaultWidth: 210, minWidth: 150, sortable: false, align: "left" },
 ];
 
-function getDefaultWidths(): Record<string, number> {
-  const widths: Record<string, number> = {};
-  for (const col of COLUMNS) {
-    widths[col.key] = col.defaultWidth;
-  }
-  return widths;
-}
-
-/** SQLite timestamps lack "Z" suffix — append it to ensure UTC parsing. */
-function parseUTC(iso: string): number {
-  return new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
+/** Search predicate — name, id, or owner username (case-insensitive). */
+function matchesServer(s: AdminServerListItem, q: string): boolean {
+  return (
+    s.name.toLowerCase().includes(q) ||
+    s.id.toLowerCase().includes(q) ||
+    s.owner_username.toLowerCase().includes(q)
+  );
 }
 
 // ─── Sort comparator ───
@@ -133,40 +127,22 @@ function AdminServerList() {
   // ─── Delete dialog state ───
   const [deleteTarget, setDeleteTarget] = useState<AdminServerListItem | null>(null);
 
-  // ─── Table state ───
+  // ─── Table state (search + shared sort/filter/resize/now hooks) ───
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(getDefaultWidths);
+  const nowMs = useNowTick();
+  const { columnWidths, handleResizeStart } = useColumnResize(COLUMNS);
+  const filteredServers = useTableFilter(servers, searchQuery, matchesServer);
+  const { sortKey, sortDir, sortedRows, handleSort } = useTableSort(
+    filteredServers,
+    COLUMNS,
+    compareSortValue,
+    "name",
+    "asc",
+  );
 
   // ─── Migration state ───
   const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({});
   const [savingServers, setSavingServers] = useState<Set<string>>(new Set());
-
-  // ─── Time snapshot for formatRelativeTime ───
-  // Render must stay pure (no Date.now() during render — see
-  // react-hooks/purity). Snapshot once + refresh every 30s so the
-  // displayed "5m ago" / "2h ago" labels stay roughly current
-  // without triggering an impure read on each render.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // ─── Column resize refs ───
-  const resizingRef = useRef<{
-    col: string;
-    startX: number;
-    startWidth: number;
-  } | null>(null);
-  const widthsRef = useRef(columnWidths);
-  // Latest-ref mirror (post-commit) — pointer-move handler reads
-  // .current without re-subscribing each render. Render-time .current
-  // writes are flagged by react-hooks/refs as render-time side effects.
-  useLayoutEffect(() => {
-    widthsRef.current = columnWidths;
-  });
 
   // ─── Fetch ───
   useEffect(() => {
@@ -184,81 +160,6 @@ function AdminServerList() {
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ─── Filtered + Sorted data ───
-  const filteredServers = useMemo(() => {
-    let list = servers;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.id.toLowerCase().includes(q) ||
-          s.owner_username.toLowerCase().includes(q),
-      );
-    }
-
-    return [...list].sort((a, b) => compareSortValue(a, b, sortKey, sortDir));
-  }, [servers, searchQuery, sortKey, sortDir]);
-
-  // ─── Sort handler ───
-  function handleSort(key: SortKey) {
-    const col = COLUMNS.find((c) => c.key === key);
-    if (!col?.sortable) return;
-
-    if (sortKey === key) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }
-
-  // ─── Column resize ───
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent, colKey: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      resizingRef.current = {
-        col: colKey,
-        startX: e.clientX,
-        startWidth: widthsRef.current[colKey] ?? 100,
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    [],
-  );
-
-  useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!resizingRef.current) return;
-
-      const { col, startX, startWidth } = resizingRef.current;
-      const colDef = COLUMNS.find((c) => c.key === col);
-      const minW = colDef?.minWidth ?? 50;
-      const newWidth = Math.max(minW, startWidth + (e.clientX - startX));
-
-      setColumnWidths((prev) => ({ ...prev, [col]: newWidth }));
-    }
-
-    function onMouseUp() {
-      if (!resizingRef.current) return;
-      resizingRef.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    }
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
   }, []);
 
   // ─── Instance change ───
@@ -320,44 +221,16 @@ function AdminServerList() {
   }
 
   // ─── Helpers ───
-  function formatDate(iso: string) {
-    try {
-      return new Date(iso).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return iso;
-    }
-  }
 
+  // formatStorage + formatDate come from utils/adminFormat (shared). This
+  // local wrapper binds the relative-time labels + date-only fallback for the
+  // server list so renderCell's call sites stay unchanged.
   function formatRelativeTime(iso: string | null) {
-    if (!iso) return t("platformServerNever");
-    try {
-      // Render purity: read Date.now() via the `nowMs` snapshot state
-      // declared at the top of this component (auto-refreshes every
-      // 30s). Calling Date.now() directly during render tripped
-      // react-hooks/purity because it's a non-deterministic source.
-      const diff = nowMs - parseUTC(iso);
-      const mins = Math.floor(diff / 60000);
-      if (mins < 1) return t("platformServerJustNow");
-      if (mins < 60) return `${mins}m`;
-      const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours}h`;
-      const days = Math.floor(hours / 24);
-      if (days < 30) return `${days}d`;
-      return formatDate(iso);
-    } catch {
-      return iso ?? "";
-    }
-  }
-
-  function formatStorage(mb: number) {
-    if (mb < 0.01) return "0 MB";
-    if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`;
-    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-    return `${mb.toFixed(1)} MB`;
+    return relativeTime(iso, nowMs, {
+      neverLabel: t("platformServerNever"),
+      justNowLabel: t("platformServerJustNow"),
+      fallback: formatDate,
+    });
   }
 
   function instanceLabel(id: string) {
@@ -418,16 +291,6 @@ function AdminServerList() {
     } else {
       addToast("error", res.error ?? t("platformServerDeleteError"));
     }
-  }
-
-  // ─── Sort indicator ───
-  function sortIndicator(key: SortKey) {
-    if (sortKey !== key) return null;
-    return (
-      <span className="admin-server-sort-icon">
-        {sortDir === "asc" ? "\u25B2" : "\u25BC"}
-      </span>
-    );
   }
 
   // ─── Render cell ───
@@ -516,7 +379,7 @@ function AdminServerList() {
                   disabled={isSavingThis}
                   title={t("save")}
                 >
-                  {isSavingThis ? "..." : "\u2713"}
+                  {isSavingThis ? "..." : "✓"}
                 </button>
                 <button
                   className="admin-server-cancel-btn"
@@ -524,7 +387,7 @@ function AdminServerList() {
                   disabled={isSavingThis}
                   title={t("cancel")}
                 >
-                  {"\u2715"}
+                  {"✕"}
                 </button>
               </>
             )}
@@ -538,89 +401,32 @@ function AdminServerList() {
   }
 
   // ─── Render ───
-  if (isLoading) {
-    return (
-      <div className="admin-server-list">
-        <p className="no-channel">{t("loading")}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="admin-server-list">
-      {/* ── Toolbar: Search + Count ── */}
-      <div className="admin-server-toolbar">
-        <input
-          className="admin-server-search"
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t("platformServerSearchPlaceholder")}
-        />
-        <span className="admin-server-count">
-          {filteredServers.length} / {servers.length}
-        </span>
-      </div>
-
-      {/* ── Table ── */}
-      {filteredServers.length === 0 ? (
-        <p className="no-channel">
-          {servers.length === 0
-            ? t("platformServerNoServers")
-            : t("platformServerNoResults")}
-        </p>
-      ) : (
-        <div className="admin-server-table-wrap">
-          <table className="admin-server-table">
-            <colgroup>
-              {COLUMNS.map((col) => (
-                <col key={col.key} style={{ width: columnWidths[col.key] }} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr>
-                {COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    className={col.sortable ? "sortable" : ""}
-                    onClick={() => handleSort(col.key)}
-                  >
-                    <div
-                      className="admin-server-th-content"
-                      style={{ justifyContent: col.align === "right" ? "flex-end" : "flex-start" }}
-                    >
-                      <span>{t(col.labelKey)}</span>
-                      {sortIndicator(col.key)}
-                    </div>
-                    {/* Resize handle */}
-                    <div
-                      className="admin-server-resize-handle"
-                      onMouseDown={(e) => handleResizeStart(e, col.key)}
-                    />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredServers.map((srv) => (
-                <tr
-                  key={srv.id}
-                  onContextMenu={(e) => {
-                    const items = buildContextItems(srv);
-                    if (items.length > 0) openMenu(e, items);
-                  }}
-                >
-                  {COLUMNS.map((col) => (
-                    <td key={col.key} style={{ textAlign: col.align }}>
-                      {renderCell(srv, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <AdminTable
+      classPrefix="admin-server"
+      columns={COLUMNS}
+      rows={sortedRows}
+      totalCount={servers.length}
+      isLoading={isLoading}
+      loadingText={t("loading")}
+      emptyText={t("platformServerNoServers")}
+      noResultsText={t("platformServerNoResults")}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder={t("platformServerSearchPlaceholder")}
+      columnWidths={columnWidths}
+      onResizeStart={handleResizeStart}
+      sortKey={sortKey}
+      sortDir={sortDir}
+      onSort={handleSort}
+      getColumnLabel={(col) => t(col.labelKey)}
+      getRowKey={(s) => s.id}
+      onRowContextMenu={(e, s) => {
+        const items = buildContextItems(s);
+        if (items.length > 0) openMenu(e, items);
+      }}
+      renderCell={renderCell}
+    >
       {/* Context Menu */}
       <ContextMenu state={menuState} onClose={closeMenu} />
 
@@ -636,7 +442,7 @@ function AdminServerList() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
-    </div>
+    </AdminTable>
   );
 }
 
