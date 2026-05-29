@@ -57,6 +57,13 @@ func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewSer
 				return nil, fmt.Errorf("invalid address: %w", err)
 			}
 
+			// Only standard web ports — stops the preview fetcher from being
+			// used as a port scanner / open proxy against services listening
+			// on non-web ports of an otherwise-public host.
+			if port != "80" && port != "443" {
+				return nil, fmt.Errorf("SSRF blocked: port %s not allowed", port)
+			}
+
 			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 			if err != nil {
 				return nil, fmt.Errorf("DNS lookup failed: %w", err)
@@ -459,11 +466,42 @@ func readAttrs(t *html.Tokenizer) map[string]string {
 	return attrs
 }
 
+// ssrfReservedCIDRs are ranges the stdlib net.IP helpers don't classify as
+// private but which must still be blocked for SSRF: carrier-grade NAT,
+// IETF protocol assignments, test/benchmark nets, and class-E reserved.
+var ssrfReservedCIDRs = func() []*net.IPNet {
+	nets := make([]*net.IPNet, 0, 7)
+	for _, c := range []string{
+		"100.64.0.0/10",   // RFC 6598 carrier-grade NAT
+		"192.0.0.0/24",    // RFC 6890 IETF protocol assignments
+		"192.0.2.0/24",    // TEST-NET-1
+		"198.18.0.0/15",   // RFC 2544 benchmarking
+		"198.51.100.0/24", // TEST-NET-2
+		"203.0.113.0/24",  // TEST-NET-3
+		"240.0.0.0/4",     // reserved (class E)
+	} {
+		if _, n, err := net.ParseCIDR(c); err == nil {
+			nets = append(nets, n)
+		}
+	}
+	return nets
+}()
+
 // isPrivateIP checks if an IP is in a private/reserved range (SSRF protection).
 func isPrivateIP(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
 		return true
+	}
+	// Normalise IPv4-mapped IPv6 (::ffff:a.b.c.d) so a v6 literal can't
+	// smuggle a blocked v4 address (metadata/CGNAT) past the CIDR checks.
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	for _, n := range ssrfReservedCIDRs {
+		if n.Contains(ip) {
+			return true
+		}
 	}
 	return false
 }

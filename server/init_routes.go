@@ -12,6 +12,10 @@ import (
 // initRoutes registers all API endpoints.
 // Literal paths must be registered before parametric ones
 // (e.g. "/api/servers/join" before "/api/servers/{serverId}").
+//
+// Returns the constructed AuthMiddleware so main.go can wire its user-cache
+// invalidator into the admin user service (ban / delete / admin-change →
+// immediate HTTP enforcement instead of waiting out the cache TTL).
 func initRoutes(
 	mux *http.ServeMux,
 	h *Handlers,
@@ -20,7 +24,7 @@ func initRoutes(
 	roleRepo repository.RoleRepository,
 	serverRepo repository.ServerRepository,
 	deviceEnumLimiter middleware.IPRateLimiter,
-) {
+) *middleware.AuthMiddleware {
 	// Middleware
 	authMw := middleware.NewAuthMiddleware(authService, userRepo)
 	permMw := middleware.NewPermissionMiddleware(roleRepo)
@@ -90,27 +94,20 @@ func initRoutes(
 	// or DM), where the transaction binds the file to a message the caller
 	// just authored, and no client ever invoked the standalone form.
 
-	// Upload download — public, no auth gate.
+	// Upload download — attachments are access-controlled, the rest is public.
 	//
-	// A4 originally moved this behind auth + per-resource permission
-	// checks, but in practice every meaningful download path runs
-	// through a browser `<img src="...">` tag (avatars, attachments,
-	// badges, soundboard previews, landing branding). Native `<img>`
-	// can't attach a Bearer header, and we deliberately don't store
-	// the access token in a cookie any more (C3) — so auth-gating
-	// uploads simply made every image 401 across the whole app.
+	// F-1 (audit 2026-05-29): the earlier A4 auth boundary had been reverted to
+	// a fully-public serve because a native `<img>` can't carry a Bearer header.
+	// It's now restored via the "dedicated HttpOnly image-auth cookie" approach
+	// that was flagged as the proper fix: Serve authenticates channel/DM
+	// attachments with the hichat_media cookie (set on login/refresh) OR a
+	// Bearer header, while avatars/server icons/badges/soundboard stay public so
+	// they keep rendering in unauthenticated `<img>` contexts.
 	//
-	// Reverting to the public serve, which matches behaviour before
-	// A4. A follow-up will do this properly via fetch + blob URL on
-	// the client (or a dedicated HttpOnly image-auth cookie that
-	// never reaches JS) so the auth boundary can come back without
-	// breaking rendered images.
-	//
-	// The handler still rejects path traversal and uses SafeJoin, so
-	// the URL surface itself stays safe — it's only the per-resource
-	// authorization that's been removed.
-	publicUpload := http.HandlerFunc(h.UploadDownload.PublicDownload)
-	mux.Handle("GET /api/uploads/", publicUpload)
+	// Deliberately NOT behind auth middleware — Serve does its own cookie/Bearer
+	// extraction so the public categories don't 401. Path traversal is rejected
+	// in Serve and again in serveFile (path.Clean + SafeJoin).
+	mux.Handle("GET /api/uploads/", http.HandlerFunc(h.UploadDownload.Serve))
 
 	// DMs — literal paths before parametric
 	mux.Handle("GET /api/dms/settings", auth(h.DMSettings.GetSettings))
@@ -383,4 +380,6 @@ func initRoutes(
 
 	// WebSocket
 	mux.HandleFunc("GET /ws", h.WS.HandleConnection)
+
+	return authMw
 }

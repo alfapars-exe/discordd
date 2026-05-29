@@ -216,6 +216,15 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 	return tokens, nil
 }
 
+// dummyLoginHash is a valid bcrypt hash (cost 12) compared against the
+// supplied password when the username doesn't exist. Without it the
+// missing-user path returns almost instantly while the real path spends
+// ~80ms in bcrypt — a timing oracle that reveals which usernames are
+// registered. Running the same comparison on both paths equalizes the
+// response time. Generated once at package load; the input value is
+// irrelevant (it never matches a real password).
+var dummyLoginHash, _ = bcrypt.GenerateFromPassword([]byte("hichat-login-timing-equalizer"), 12)
+
 // Login authenticates a user. Platform-level ban checked here; server bans checked at WS connect.
 func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*AuthTokens, error) {
 	if err := req.Validate(); err != nil {
@@ -225,6 +234,9 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*Aut
 	user, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, pkg.ErrNotFound) {
+			// Equalize timing against the wrong-password path below so the
+			// response latency can't be used to enumerate valid usernames.
+			_ = bcrypt.CompareHashAndPassword(dummyLoginHash, []byte(req.Password))
 			return nil, fmt.Errorf("%w: invalid username or password", pkg.ErrUnauthorized)
 		}
 		return nil, err

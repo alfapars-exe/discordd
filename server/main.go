@@ -220,7 +220,13 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum)
+	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum)
+
+	// Wire the auth user-cache invalidator into the admin user service so a
+	// platform ban / hard-delete / admin-status change drops the cached user
+	// row immediately, instead of letting a just-banned account keep making
+	// authenticated REST calls until the ~30s cache TTL expires (F-7).
+	svcs.AdminUser.SetUserCacheInvalidator(authMw)
 
 	// 13. Static file serving
 	registerStaticAndUploads(mux, cfg)
@@ -571,8 +577,19 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	corsOrigins := []string{
 		"capacitor://localhost", // iOS Capacitor WKWebView
 		"ionic://localhost",     // iOS Capacitor (legacy scheme)
-		"http://localhost",      // Android Capacitor WebView (legacy)
-		"https://localhost",     // Android Capacitor WebView (Capacitor 6+)
+	}
+
+	// Android Capacitor's WebView uses http(s)://localhost as its page origin
+	// even in production, so with AllowCredentials=true these must be allowed
+	// for the Android shell to reach the API. They widen the credentialed-CORS
+	// surface (a process bound to localhost could issue credentialed requests),
+	// so web-only deployments that ship no mobile client can drop them by
+	// setting HICHAT_MOBILE_ORIGINS=off (F-8, audit 2026-05-29).
+	if !strings.EqualFold(os.Getenv("HICHAT_MOBILE_ORIGINS"), "off") {
+		corsOrigins = append(corsOrigins,
+			"http://localhost",  // Android Capacitor WebView (legacy)
+			"https://localhost", // Android Capacitor WebView (Capacitor 6+)
+		)
 	}
 
 	// Dev-only origins: the Vite proxy and Electron's hot-reload server.

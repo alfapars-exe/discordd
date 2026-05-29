@@ -58,6 +58,38 @@ func clearRefreshCookie(w http.ResponseWriter) {
 	})
 }
 
+// setMediaCookie writes the access token as an HttpOnly cookie scoped to
+// /api/uploads so browser <img>/<video> tags (which can't send an
+// Authorization header) can authenticate to the attachment download endpoint
+// (F-1). Scoped Path + HttpOnly + Secure + SameSite=Strict keep it out of JS
+// reach (XSS) and off cross-site requests (CSRF). The value mirrors the
+// short-lived access token and is refreshed on every token refresh. Consumer:
+// handlers/upload_download.go (mediaCookieName, Serve).
+func setMediaCookie(w http.ResponseWriter, accessToken string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     mediaCookieName,
+		Value:    accessToken,
+		Path:     "/api/uploads",
+		MaxAge:   int(refreshCookieTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// clearMediaCookie expires the media cookie on logout.
+func clearMediaCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     mediaCookieName,
+		Value:    "",
+		Path:     "/api/uploads",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
 // extractRefreshToken returns the refresh token from the request, preferring
 // the HttpOnly cookie over the body. Body fallback is retained so existing
 // mobile/native clients keep working through the migration window. Once all
@@ -173,6 +205,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setRefreshCookie(w, tokens.RefreshToken)
+	setMediaCookie(w, tokens.AccessToken)
 	pkg.JSON(w, http.StatusCreated, tokens)
 }
 
@@ -207,6 +240,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setRefreshCookie(w, tokens.RefreshToken)
+	setMediaCookie(w, tokens.AccessToken)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
 
@@ -239,6 +273,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	// Rotate the cookie with the new refresh token. Server-side rotation
 	// (old token invalidated) is handled by authService.RefreshToken.
 	setRefreshCookie(w, tokens.RefreshToken)
+	setMediaCookie(w, tokens.AccessToken)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
 
@@ -259,12 +294,14 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if refreshToken != "" {
 		if err := h.authService.Logout(r.Context(), refreshToken); err != nil {
 			clearRefreshCookie(w)
+			clearMediaCookie(w)
 			pkg.Error(w, err)
 			return
 		}
 	}
 
 	clearRefreshCookie(w)
+	clearMediaCookie(w)
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
 
@@ -383,17 +420,15 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cooldown, err := h.authService.ForgotPassword(r.Context(), req.Email)
-	if err != nil {
+	// The per-email cooldown is still enforced inside the service (it skips
+	// sending a second email), but we no longer surface it to the client.
+	// A distinct "cooldown active" response let an attacker distinguish a
+	// registered email (cooldown) from an unregistered one (generic message)
+	// with two requests — account enumeration. Always return the same
+	// generic response regardless of whether the email exists or is cooling
+	// down.
+	if _, err := h.authService.ForgotPassword(r.Context(), req.Email); err != nil {
 		pkg.Error(w, err)
-		return
-	}
-
-	if cooldown > 0 {
-		pkg.JSON(w, http.StatusOK, map[string]any{
-			"message":  "cooldown active",
-			"cooldown": cooldown,
-		})
 		return
 	}
 

@@ -16,12 +16,22 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
+// UserCacheInvalidator drops a cached authenticated-user row so a ban /
+// delete / admin-status change takes effect on the next HTTP request
+// instead of waiting out AuthMiddleware's user-cache TTL (~30s). Satisfied
+// by *middleware.AuthMiddleware; defined here (ISP) to avoid a
+// services -> middleware import cycle.
+type UserCacheInvalidator interface {
+	InvalidateUser(userID string)
+}
+
 // AdminUserService handles platform-level user ban and deletion.
 type AdminUserService interface {
 	PlatformBanUser(ctx context.Context, adminUserID, targetUserID, reason string, deleteMessages bool) error
 	PlatformUnbanUser(ctx context.Context, adminUserID, targetUserID string) error
 	HardDeleteUser(ctx context.Context, adminUserID, targetUserID, reason string) error
 	SetPlatformAdmin(ctx context.Context, adminUserID, targetUserID string, isAdmin bool) error
+	SetUserCacheInvalidator(inv UserCacheInvalidator)
 }
 
 type adminUserService struct {
@@ -29,6 +39,10 @@ type adminUserService struct {
 	hub         ws.ClientManager
 	voiceKit    VoiceDisconnecter // ISP defined in member_service.go
 	emailSender email.EmailSender // optional, nil = no emails
+	// userInvalidator drops the HTTP auth user-cache on ban/delete/admin
+	// change. Optional (nil-safe): absent wiring, the change still lands
+	// within the cache TTL — this just makes it immediate.
+	userInvalidator UserCacheInvalidator
 }
 
 func NewAdminUserService(
@@ -42,6 +56,20 @@ func NewAdminUserService(
 		hub:         hub,
 		voiceKit:    voiceKit,
 		emailSender: emailSender,
+	}
+}
+
+// SetUserCacheInvalidator wires the auth middleware's user-cache invalidator.
+// Called post-construction in main.go because the middleware is built after
+// the service layer (it depends on the auth service).
+func (s *adminUserService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
+	s.userInvalidator = inv
+}
+
+// invalidateUserCache is nil-safe — a no-op when the invalidator isn't wired.
+func (s *adminUserService) invalidateUserCache(userID string) {
+	if s.userInvalidator != nil {
+		s.userInvalidator.InvalidateUser(userID)
 	}
 }
 
@@ -75,6 +103,9 @@ func (s *adminUserService) PlatformBanUser(ctx context.Context, adminUserID, tar
 
 	s.voiceKit.DisconnectUser(targetUserID)
 	s.hub.DisconnectUser(targetUserID)
+	// Drop the HTTP auth cache so the ban is enforced on the next REST call
+	// rather than up to ~30s later. The WS path is already cut above.
+	s.invalidateUserCache(targetUserID)
 
 	// Best-effort email notification
 	if reason != "" && target.Email != nil && s.emailSender != nil {
@@ -103,6 +134,8 @@ func (s *adminUserService) PlatformUnbanUser(ctx context.Context, adminUserID, t
 	if err := s.userRepo.PlatformUnban(ctx, targetUserID); err != nil {
 		return fmt.Errorf("failed to unban user: %w", err)
 	}
+	// Clear the cached banned row so the user can authenticate immediately.
+	s.invalidateUserCache(targetUserID)
 
 	return nil
 }
@@ -137,6 +170,9 @@ func (s *adminUserService) HardDeleteUser(ctx context.Context, adminUserID, targ
 	if err := s.userRepo.HardDeleteUser(ctx, targetUserID); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
+	// Cached row now points at a deleted user — drop it so the next request
+	// re-reads (and 401s) instead of serving the stale identity for the TTL.
+	s.invalidateUserCache(targetUserID)
 
 	return nil
 }
@@ -153,6 +189,9 @@ func (s *adminUserService) SetPlatformAdmin(ctx context.Context, adminUserID, ta
 	if err := s.userRepo.SetPlatformAdmin(ctx, targetUserID, isAdmin); err != nil {
 		return fmt.Errorf("failed to update admin status: %w", err)
 	}
+	// Refresh the cached row so the new admin flag takes effect on the next
+	// request (grant or revoke) instead of after the cache TTL.
+	s.invalidateUserCache(targetUserID)
 
 	return nil
 }

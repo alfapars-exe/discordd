@@ -10,17 +10,19 @@
 // link; E2EE attachments are encrypted but still leak filename + size
 // metadata.
 //
-// UploadDownloadHandler closes that hole:
-//  1. Requires the standard auth middleware (Bearer access token).
+// UploadDownloadHandler.Serve closes that hole (F-1, audit 2026-05-29):
+//  1. Auth is accepted via the Authorization Bearer header (API clients) OR
+//     the hichat_media HttpOnly cookie (browser <img>/<video>, which can't set
+//     headers). The cookie is scoped to /api/uploads only.
 //  2. For requests that match a channel attachment, verifies the user
 //     has read access to the channel via ChannelPermResolver.
 //  3. For requests that match a DM attachment, verifies the user is one
 //     of the two participants in the DM channel.
 //  4. For requests that don't match either (avatars, server icons, badge
-//     icons, soundboard sounds, feedback/report screenshots), serves to
-//     any authenticated user — these resources are intentionally
-//     visible to all members and there's no per-resource scoping table
-//     to consult.
+//     icons, soundboard sounds, feedback/report screenshots), serves
+//     publicly — these resources are intentionally visible to everyone who
+//     can see the entity and there's no per-resource scoping table to
+//     consult, so they must load in unauthenticated <img> contexts too.
 package handlers
 
 import (
@@ -36,12 +38,27 @@ import (
 	"github.com/argeinfina/hichat/services"
 )
 
+// mediaCookieName is the HttpOnly cookie that carries the access token for
+// browser <img>/<video> requests to /api/uploads/*. A native <img> tag can't
+// send an Authorization header, so without this an auth-gated attachment would
+// never render. Scoped to Path=/api/uploads, HttpOnly + Secure + SameSite=Strict
+// so it can't be read by JS (XSS) or sent cross-site (CSRF). Set on
+// login/register/refresh by the auth handler (see setMediaCookie in auth.go).
+const mediaCookieName = "hichat_media"
+
+// AccessTokenValidator validates a JWT access token. Satisfied by
+// services.AuthService; a narrow interface keeps this handler decoupled.
+type AccessTokenValidator interface {
+	ValidateAccessToken(tokenString string) (*models.TokenClaims, error)
+}
+
 type UploadDownloadHandler struct {
 	uploadDir      string
 	attachmentRepo repository.AttachmentRepository
 	dmRepo         repository.DMRepository
 	messageRepo    repository.MessageRepository
 	permResolver   services.ChannelPermResolver
+	tokenValidator AccessTokenValidator
 }
 
 func NewUploadDownloadHandler(
@@ -50,6 +67,7 @@ func NewUploadDownloadHandler(
 	dmRepo repository.DMRepository,
 	messageRepo repository.MessageRepository,
 	permResolver services.ChannelPermResolver,
+	tokenValidator AccessTokenValidator,
 ) *UploadDownloadHandler {
 	return &UploadDownloadHandler{
 		uploadDir:      uploadDir,
@@ -57,49 +75,42 @@ func NewUploadDownloadHandler(
 		dmRepo:         dmRepo,
 		messageRepo:    messageRepo,
 		permResolver:   permResolver,
+		tokenValidator: tokenValidator,
 	}
 }
 
-// PublicDownload serves whitelisted upload subpaths without auth.
-//
-// Categories that need to load via `<img src="...">` (avatars, server
-// icons, badges, soundboard sounds, landing/branding) can't carry a
-// Bearer header — the browser refuses to set custom headers on a
-// native img request, and we deliberately don't put the access token
-// in a cookie any more (C3). Auth-gating these categories means every
-// rendered avatar 401s and the user sees initials placeholders forever.
-//
-// The whitelist lives in init_routes.go (only specific prefixes are
-// routed here); this handler just performs the SafeJoin + serve. The
-// route patterns prevent traversal at the mux level; serveFile
-// re-validates with path.Clean + SafeJoin as defense-in-depth.
-//
-// Real per-channel/per-DM attachments still go through Download and
-// require auth — that's where the security-meaningful check is.
-func (h *UploadDownloadHandler) PublicDownload(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimPrefix(r.URL.Path, "/api/uploads/")
-	if name == "" || strings.Contains(name, "..") || strings.Contains(name, "\\") {
-		http.NotFound(w, r)
-		return
+// authUserID extracts an authenticated user ID from either the Authorization
+// Bearer header (API clients) or the hichat_media cookie (browser <img>/<video>
+// tags, which can't set headers). Returns ("", false) when neither yields a
+// valid access token.
+func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
+	var token string
+	if ah := r.Header.Get("Authorization"); strings.HasPrefix(ah, "Bearer ") {
+		token = strings.TrimPrefix(ah, "Bearer ")
+	} else if c, err := r.Cookie(mediaCookieName); err == nil {
+		token = c.Value
 	}
-	h.serveFile(w, r, name)
+	if token == "" || h.tokenValidator == nil {
+		return "", false
+	}
+	claims, err := h.tokenValidator.ValidateAccessToken(token)
+	if err != nil {
+		return "", false
+	}
+	return claims.UserID, true
 }
 
-// Download serves a file from uploadDir after verifying the requester has
-// access. Paths are resolved as `uploadDir + <name>` where <name> may
-// contain one level of subdirectory (e.g. "soundboard/foo.wav"). Path
-// traversal is blocked at the handler boundary AND again by
-// filepath.Clean + prefix verification before any file open.
-func (h *UploadDownloadHandler) Download(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
-	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
-		return
-	}
-
-	// Path comes in as "/api/uploads/<name>". Strip the prefix and reject
-	// traversal markers up front; the per-file ServeFile call below
-	// further verifies containment inside uploadDir.
+// Serve handles GET /api/uploads/<name>.
+//
+// Channel and DM attachments are access-controlled (channel-read permission /
+// DM participation); auth is accepted via Bearer header OR the hichat_media
+// HttpOnly cookie so rendered <img>/<video> tags work without JS. Everything
+// else (avatars, server icons, badge icons, soundboard samples, branding) is
+// served publicly — it's already visible to everyone who can see the entity.
+//
+// Path traversal is blocked here (prefix reject) and again in serveFile
+// (path.Clean + SafeJoin) as defense-in-depth.
+func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/api/uploads/")
 	if name == "" || strings.Contains(name, "..") || strings.Contains(name, "\\") {
 		http.NotFound(w, r)
@@ -108,10 +119,14 @@ func (h *UploadDownloadHandler) Download(w http.ResponseWriter, r *http.Request)
 
 	fileURL := "/api/uploads/" + name
 
-	// Channel-attachment lookup. file_url is the unique disk URL we
-	// generated when the upload was saved, so the EQ lookup either hits
-	// at most one row or misses entirely.
+	// Channel-attachment lookup. file_url is the unique disk URL we generated
+	// when the upload was saved, so the EQ lookup hits at most one row.
 	if att, err := h.attachmentRepo.GetByFileURL(r.Context(), fileURL); err == nil {
+		userID, ok := h.authUserID(r)
+		if !ok {
+			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
 		msg, err := h.messageRepo.GetByID(r.Context(), att.MessageID)
 		if err != nil {
 			// Attachment row points to a deleted message — treat as 404
@@ -119,7 +134,7 @@ func (h *UploadDownloadHandler) Download(w http.ResponseWriter, r *http.Request)
 			http.NotFound(w, r)
 			return
 		}
-		perms, err := h.permResolver.ResolveChannelPermissions(r.Context(), user.ID, msg.ChannelID)
+		perms, err := h.permResolver.ResolveChannelPermissions(r.Context(), userID, msg.ChannelID)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -137,6 +152,11 @@ func (h *UploadDownloadHandler) Download(w http.ResponseWriter, r *http.Request)
 
 	// DM-attachment lookup.
 	if dmAtt, err := h.dmRepo.GetAttachmentByFileURL(r.Context(), fileURL); err == nil {
+		userID, ok := h.authUserID(r)
+		if !ok {
+			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
 		dmMsg, err := h.dmRepo.GetMessageByID(r.Context(), dmAtt.DMMessageID)
 		if err != nil {
 			http.NotFound(w, r)
@@ -147,7 +167,7 @@ func (h *UploadDownloadHandler) Download(w http.ResponseWriter, r *http.Request)
 			http.NotFound(w, r)
 			return
 		}
-		if dmChan.User1ID != user.ID && dmChan.User2ID != user.ID {
+		if dmChan.User1ID != userID && dmChan.User2ID != userID {
 			pkg.ErrorWithMessage(w, http.StatusForbidden, "not a participant of this DM")
 			return
 		}
@@ -158,10 +178,10 @@ func (h *UploadDownloadHandler) Download(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Neither attachment table claims this path — it's an avatar, server
-	// icon, badge icon, soundboard sample, or similar. Those are
-	// intentionally visible to every authenticated user (they're already
-	// rendered to all viewers of the entity), so auth-only is sufficient.
+	// Neither attachment table claims this path — it's an avatar, server icon,
+	// badge icon, soundboard sample, or branding. Intentionally public: these
+	// are already rendered to every viewer of the entity and must load in
+	// unauthenticated <img> contexts.
 	h.serveFile(w, r, name)
 }
 

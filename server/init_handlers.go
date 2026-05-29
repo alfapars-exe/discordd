@@ -88,7 +88,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog),
 		ClientLog:         handlers.NewClientLogHandler(svcs.AppLog),
-		UploadDownload:    handlers.NewUploadDownloadHandler(cfg.Upload.Dir, repos.Attachment, repos.DM, repos.Message, svcs.ChannelPermission),
+		UploadDownload:    handlers.NewUploadDownloadHandler(cfg.Upload.Dir, repos.Attachment, repos.DM, repos.Message, svcs.ChannelPermission, svcs.Auth),
 		WS:                ws.NewHandler(hub, svcs.Auth, svcs.WSTicket, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute),
 	}
 }

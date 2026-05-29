@@ -3,6 +3,7 @@ package pkg
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 )
 
@@ -28,15 +29,27 @@ func JSON(w http.ResponseWriter, status int, data any) {
 }
 
 // Error sends an error response, mapping domain errors to HTTP status codes.
+//
+// Domain (4xx) errors carry client-safe messages and are returned verbatim.
+// For 5xx the wrapped error chain often contains internal detail — DB driver
+// text, file paths, query fragments — that must not reach the client
+// (CWE-209: information exposure through an error message). Those are logged
+// server-side and replaced with a generic message in the response.
 func Error(w http.ResponseWriter, err error) {
 	status := mapErrorToStatus(err)
+
+	message := err.Error()
+	if status >= http.StatusInternalServerError {
+		log.Printf("[error] %d: %v", status, err)
+		message = "internal server error"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	resp := APIResponse{
 		Success: false,
-		Error:   err.Error(),
+		Error:   message,
 	}
 
 	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {

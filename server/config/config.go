@@ -156,6 +156,13 @@ func Load() (*Config, error) {
 	if jwtSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET environment variable is required")
 	}
+	// Reject trivially weak signing keys. A short secret is brute-forceable
+	// offline against any captured token, which would let an attacker forge
+	// access tokens for any user. 32 chars is the floor for an HS256 key.
+	// Generate a strong one with: openssl rand -base64 48
+	if len(jwtSecret) < 32 {
+		return nil, fmt.Errorf("JWT_SECRET must be at least 32 characters (got %d)", len(jwtSecret))
+	}
 
 	encKey := getEnv("ENCRYPTION_KEY", "")
 	if encKey == "" {
