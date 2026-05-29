@@ -41,25 +41,9 @@ import {
 
 import { useVoiceStore } from "../stores/voiceStore";
 import { resolveUserId } from "../utils/constants";
+import { isHarmlessVoiceRace } from "../utils/livekitErrors";
 
 const RECONNECT_REAPPLY_DELAY_MS = 1000;
-
-// Errors thrown by setMicrophoneEnabled when the underlying engine has
-// already torn down. These are the expected fallout from a room.state
-// check racing the actual SDK lifecycle; surfacing them as console
-// errors makes real failures hard to spot. Matched by error class name
-// (PublishTrackError / ConnectionError) AND substring (different SDK
-// versions phrase the message differently).
-function isHarmlessVoiceRace(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes("engine not connected") ||
-    msg.includes("client initiated disconnect") ||
-    err.name === "PublishTrackError" ||
-    err.name === "ConnectionError"
-  );
-}
 
 export function useInitialRoomSync(
   room: Room,
