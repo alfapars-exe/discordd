@@ -158,8 +158,7 @@ func (s *auditLogService) List(
 // canViewAudit. Mirrors message_service.allowedViewers — only iterates
 // the currently connected users for the given server so we don't scan
 // every member of every server on every event.
-func (s *auditLogService) allowedViewers(serverID string) []string {
-	ctx := context.Background()
+func (s *auditLogService) allowedViewers(ctx context.Context, serverID string) []string {
 	online := s.hubOnline.GetOnlineUserIDsForServer(serverID)
 	allowed := make([]string, 0, len(online))
 	for _, userID := range online {
@@ -190,7 +189,7 @@ func (s *auditLogService) Start() {
 				s.drain()
 				return
 			case entry := <-s.ch:
-				s.persistAndBroadcast(entry)
+				s.persistAndBroadcast(ctx, entry)
 			}
 		}
 	}()
@@ -210,15 +209,14 @@ func (s *auditLogService) drain() {
 	for {
 		select {
 		case entry := <-s.ch:
-			s.persistAndBroadcast(entry)
+			s.persistAndBroadcast(context.Background(), entry)
 		default:
 			return
 		}
 	}
 }
 
-func (s *auditLogService) persistAndBroadcast(entry models.AuditLog) {
-	ctx := context.Background()
+func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.AuditLog) {
 
 	if err := s.repo.Insert(ctx, &entry); err != nil {
 		log.Printf("[audit_log] failed to insert: %v event=%s server=%s", err, entry.EventType, entry.ServerID)
@@ -234,7 +232,7 @@ func (s *auditLogService) persistAndBroadcast(entry models.AuditLog) {
 		entry.CreatedAt = time.Now().UTC()
 	}
 
-	viewers := s.allowedViewers(entry.ServerID)
+	viewers := s.allowedViewers(ctx, entry.ServerID)
 	// Observability: log every persisted audit row + viewer count. The id is
 	// included so we can verify Track R's RETURNING fix at a glance — if we
 	// ever see id="" again, the repo regressed. Helps diagnose "I did X but

@@ -87,7 +87,7 @@ func (s *appLogService) Start() {
 				s.drain()
 				return
 			case entry := <-s.ch:
-				if err := s.repo.Insert(context.Background(), &entry); err != nil {
+				if err := s.repo.Insert(ctx, &entry); err != nil {
 					log.Printf("[app_log] failed to write: %v", err)
 				}
 			}
@@ -104,7 +104,7 @@ func (s *appLogService) Start() {
 				return
 			case <-ticker.C:
 				cutoff := time.Now().AddDate(0, 0, -30).UTC().Format("2006-01-02 15:04:05")
-				deleted, err := s.repo.DeleteBefore(context.Background(), cutoff)
+				deleted, err := s.repo.DeleteBefore(ctx, cutoff)
 				if err != nil {
 					log.Printf("[app_log] auto-purge error: %v", err)
 				} else if deleted > 0 {

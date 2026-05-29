@@ -295,7 +295,7 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 		mentionedIDs := s.extractMentions(ctx, req.Content)
 		if len(mentionedIDs) > 0 {
 			if err := s.mentionRepo.SaveMentions(ctx, message.ID, mentionedIDs); err != nil {
-				fmt.Printf("[mention] failed to save mentions for message %s: %v\n", message.ID, err)
+				log.Printf("[mention] failed to save mentions for message %s: %v\n", message.ID, err)
 			}
 		}
 		message.Mentions = mentionedIDs
@@ -303,7 +303,7 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 		roleMentionIDs := s.extractRoleMentions(ctx, req.Content, serverID)
 		if len(roleMentionIDs) > 0 {
 			if err := s.roleMentionRepo.SaveRoleMentions(ctx, message.ID, roleMentionIDs); err != nil {
-				fmt.Printf("[mention] failed to save role mentions for message %s: %v\n", message.ID, err)
+				log.Printf("[mention] failed to save role mentions for message %s: %v\n", message.ID, err)
 			}
 		}
 		message.RoleMentions = roleMentionIDs
@@ -418,23 +418,23 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 		}
 
 		if err := s.mentionRepo.DeleteByMessageID(ctx, id); err != nil {
-			fmt.Printf("[mention] failed to delete old mentions for message %s: %v\n", id, err)
+			log.Printf("[mention] failed to delete old mentions for message %s: %v\n", id, err)
 		}
 		mentionedIDs := s.extractMentions(ctx, req.Content)
 		if len(mentionedIDs) > 0 {
 			if err := s.mentionRepo.SaveMentions(ctx, id, mentionedIDs); err != nil {
-				fmt.Printf("[mention] failed to save mentions for message %s: %v\n", id, err)
+				log.Printf("[mention] failed to save mentions for message %s: %v\n", id, err)
 			}
 		}
 		message.Mentions = mentionedIDs
 
 		if err := s.roleMentionRepo.DeleteByMessageID(ctx, id); err != nil {
-			fmt.Printf("[mention] failed to delete old role mentions for message %s: %v\n", id, err)
+			log.Printf("[mention] failed to delete old role mentions for message %s: %v\n", id, err)
 		}
 		roleMentionIDs := s.extractRoleMentions(ctx, req.Content, serverID)
 		if len(roleMentionIDs) > 0 {
 			if err := s.roleMentionRepo.SaveRoleMentions(ctx, id, roleMentionIDs); err != nil {
-				fmt.Printf("[mention] failed to save role mentions for message %s: %v\n", id, err)
+				log.Printf("[mention] failed to save role mentions for message %s: %v\n", id, err)
 			}
 		}
 		message.RoleMentions = roleMentionIDs
