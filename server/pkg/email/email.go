@@ -14,6 +14,7 @@ type EmailSender interface {
 	SendPlatformBanNotification(ctx context.Context, toEmail, reason string) error
 	SendAccountDeleteNotification(ctx context.Context, toEmail, reason string) error
 	SendServerDeleteNotification(ctx context.Context, toEmail, serverName, reason string) error
+	SendDiagnosticsReport(ctx context.Context, toEmail, reporter, description, filename string, attachment []byte) error
 }
 
 type resendSender struct {
@@ -252,6 +253,32 @@ func (s *resendSender) SendServerDeleteNotification(ctx context.Context, toEmail
 	_, err := s.client.Emails.SendWithContext(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to send server delete notification: %w", err)
+	}
+
+	return nil
+}
+
+// SendDiagnosticsReport emails a user-submitted diagnostics bundle (gzip) to the
+// admin via Resend, with the bundle as an attachment. The /diagnostics-report
+// endpoint uses this because outbound SMTP is blocked on the HF Space (HTTP is
+// not), so Resend's HTTP API is the reliable carrier.
+func (s *resendSender) SendDiagnosticsReport(ctx context.Context, toEmail, reporter, description, filename string, attachment []byte) error {
+	text := fmt.Sprintf(
+		"Yeni tanılama raporu.\n\nBildiren: %s\n\nAçıklama:\n%s\n\n(Log paketi ektedir.)\n",
+		reporter, description,
+	)
+	params := &resend.SendEmailRequest{
+		From:    fmt.Sprintf("HiChat <%s>", s.fromEmail),
+		To:      []string{toEmail},
+		Subject: fmt.Sprintf("[HiChat Tanılama] %s", reporter),
+		Text:    text,
+		Attachments: []*resend.Attachment{
+			{Content: attachment, Filename: filename},
+		},
+	}
+
+	if _, err := s.client.Emails.SendWithContext(ctx, params); err != nil {
+		return fmt.Errorf("failed to send diagnostics report: %w", err)
 	}
 
 	return nil

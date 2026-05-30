@@ -84,7 +84,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Preferences:       handlers.NewPreferencesHandler(svcs.Preferences),
 		DownloadPrompt:    handlers.NewDownloadPromptHandler(repos.User),
 		Feedback:          handlers.NewFeedbackHandler(svcs.Feedback, svcs.FeedbackUpload, cfg.Upload.MaxSize, limiters.Feedback, svcs.AppLog),
-		Diagnostics:       handlers.NewDiagnosticsHandler(cfg.DiagSMTP, svcs.AppLog, cfg.Upload.MaxSize),
+		Diagnostics:       handlers.NewDiagnosticsHandler(svcs.Email, cfg.DiagSMTP.To, svcs.AppLog, cfg.Upload.MaxSize),
 		AuditLog:          handlers.NewAuditLogHandler(svcs.AuditLog),
 		Soundboard:        handlers.NewSoundboardHandler(svcs.Soundboard, cfg.Upload.MaxSize),
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),

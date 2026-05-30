@@ -50,6 +50,7 @@ type Services struct {
 	Badge             services.BadgeService
 	Preferences       services.PreferencesService
 	AppLog            services.AppLogService
+	Email             email.EmailSender
 	AuditLog          services.AuditLogService
 	Feedback          services.FeedbackService
 	FeedbackUpload    services.FeedbackUploadService
@@ -233,6 +234,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Badge:             badgeService,
 		Preferences:       preferencesService,
 		AppLog:            appLogService,
+		Email:             emailSender,
 		AuditLog:          auditLogService,
 		Feedback:          feedbackService,
 		FeedbackUpload:    feedbackUploadService,
