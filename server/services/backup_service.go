@@ -88,9 +88,10 @@ type BackupService struct {
 	runCmd cmdRunner
 	// uploadsRestoreWG tracks the in-flight async uploads-restore goroutine
 	// launched by Restore (see startUploadsRestoreAsync) so its completion
-	// is observable. Tests await it before asserting on recorded subprocess
-	// calls (otherwise the assertion races the goroutine); it's also a seam
-	// for Stop() to drain in-flight restores on shutdown if needed later.
+	// is observable: tests await it (via waitForUploadsRestore) before
+	// asserting on recorded subprocess calls, otherwise the assertion races
+	// the goroutine. Note: Stop() does NOT currently wait on or cancel this
+	// goroutine — it runs on its own 60-minute context, detached from b.stop.
 	uploadsRestoreWG sync.WaitGroup
 }
 

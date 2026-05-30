@@ -33,6 +33,14 @@ func newTestBackupService(t *testing.T, cfg config.BackupConfig) (*BackupService
 	svc := NewBackupService(cfg)
 	fake := &fakeRunner{}
 	svc.runCmd = fake.run
+	// Drain any async uploads-restore goroutine before the test's t.TempDir
+	// is torn down. Tests that assert on post-restore state wait explicitly
+	// mid-test; this fixture-level cleanup makes the no-leak guarantee
+	// structural for the rest, so a future test that sets UploadDir can't
+	// leave an orphaned goroutine touching the fake or a removed TempDir
+	// after the test completes. Cleanups run LIFO, so this drains before the
+	// TempDir removal registered above it.
+	t.Cleanup(svc.waitForUploadsRestore)
 	return svc, fake
 }
 
@@ -177,6 +185,14 @@ func TestRestore_ExistingNonEmptyDB_NoOp(t *testing.T) {
 	// finish so we observe *all* of its calls (and so the read below is
 	// synchronized against it), then assert none of them was `hf buckets`.
 	svc.waitForUploadsRestore()
+
+	// The warm-boot path must still fire the async uploads restore, so at
+	// least one `hf sync` call should be recorded. Assert that so the
+	// no-`hf buckets` check below can't pass vacuously (e.g. if a refactor
+	// stopped launching the uploads restore altogether).
+	if fake.callsTo("hf") == 0 {
+		t.Fatal("expected warm-boot to run the async uploads restore (`hf sync`), but no hf call was recorded")
+	}
 	for _, c := range fake.snapshot() {
 		if c.name == "hf" && len(c.args) > 0 && c.args[0] == "buckets" {
 			t.Fatalf("did not expect `hf buckets cp` for warm-boot DB, got call %v", c)
