@@ -16,8 +16,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/argeinfina/hichat/config"
 )
@@ -40,6 +40,12 @@ func newTestBackupService(t *testing.T, cfg config.BackupConfig) (*BackupService
 // a sequence of responses keyed by the executable name. Default response
 // is success with empty output.
 type fakeRunner struct {
+	// mu guards calls: run() appends to it from the async uploads-restore
+	// goroutine while the test goroutine reads it (via callsTo/snapshot).
+	// responses and handler are set during test setup before any goroutine
+	// starts (the `go` in startUploadsRestoreAsync happens-after that
+	// setup), so they need no lock.
+	mu        sync.Mutex
 	calls     []fakeCall
 	responses map[string]fakeResponse // keyed by argv[0] ("hf", "sqlite3")
 	// handler, if non-nil, overrides the responses map and receives every
@@ -60,7 +66,9 @@ type fakeResponse struct {
 }
 
 func (f *fakeRunner) run(_ context.Context, env []string, name string, args ...string) ([]byte, error) {
+	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{name: name, args: append([]string(nil), args...), env: env})
+	f.mu.Unlock()
 	if f.handler != nil {
 		return f.handler(fakeCall{name: name, args: args, env: env})
 	}
@@ -71,6 +79,8 @@ func (f *fakeRunner) run(_ context.Context, env []string, name string, args ...s
 }
 
 func (f *fakeRunner) callsTo(name string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	n := 0
 	for _, c := range f.calls {
 		if c.name == name {
@@ -78,6 +88,16 @@ func (f *fakeRunner) callsTo(name string) int {
 		}
 	}
 	return n
+}
+
+// snapshot returns a copy of the recorded calls under the lock, so the test
+// goroutine can range over them safely even if a background goroutine is
+// still invoking run. Each fakeCall's args/env slices are written once at
+// capture and never mutated afterward, so the shallow copy is safe to read.
+func (f *fakeRunner) snapshot() []fakeCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeCall(nil), f.calls...)
 }
 
 // ── Tests ──
@@ -153,9 +173,11 @@ func TestRestore_ExistingNonEmptyDB_NoOp(t *testing.T) {
 	}
 
 	// No DB download should have happened — the only allowed CLI call is
-	// the async uploads restore (`hf sync`). Give the goroutine a moment.
-	time.Sleep(50 * time.Millisecond)
-	for _, c := range fake.calls {
+	// the async uploads restore (`hf sync`). Wait for that goroutine to
+	// finish so we observe *all* of its calls (and so the read below is
+	// synchronized against it), then assert none of them was `hf buckets`.
+	svc.waitForUploadsRestore()
+	for _, c := range fake.snapshot() {
 		if c.name == "hf" && len(c.args) > 0 && c.args[0] == "buckets" {
 			t.Fatalf("did not expect `hf buckets cp` for warm-boot DB, got call %v", c)
 		}

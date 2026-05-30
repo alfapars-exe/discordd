@@ -47,6 +47,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/config"
@@ -85,6 +86,12 @@ type BackupService struct {
 	// (not a package var) so multiple BackupService instances in the
 	// same test process can have independent fakes.
 	runCmd cmdRunner
+	// uploadsRestoreWG tracks the in-flight async uploads-restore goroutine
+	// launched by Restore (see startUploadsRestoreAsync) so its completion
+	// is observable. Tests await it before asserting on recorded subprocess
+	// calls (otherwise the assertion races the goroutine); it's also a seam
+	// for Stop() to drain in-flight restores on shutdown if needed later.
+	uploadsRestoreWG sync.WaitGroup
 }
 
 // NewBackupService constructs a BackupService. Call Start() to begin the
@@ -264,8 +271,14 @@ func (b *BackupService) Restore(ctx context.Context) error {
 // goroutine — it's typically much larger than the DB, but the app stays
 // useful while it streams down (only attachments / avatars 404 until
 // they land). Errors are logged only.
+//
+// The goroutine is tracked by uploadsRestoreWG; Add(1) happens here
+// (synchronously, before the goroutine starts and before Restore returns)
+// so callers can Wait on completion without an Add-after-Wait race.
 func (b *BackupService) startUploadsRestoreAsync() {
+	b.uploadsRestoreWG.Add(1)
 	go func() {
+		defer b.uploadsRestoreWG.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 		defer cancel()
 		if err := b.restoreUploadsFromBucket(ctx); err != nil {
@@ -273,6 +286,15 @@ func (b *BackupService) startUploadsRestoreAsync() {
 			b.logError("uploads restore failed", map[string]string{"error": truncate(err.Error(), 256)})
 		}
 	}()
+}
+
+// waitForUploadsRestore blocks until the async uploads-restore goroutine
+// started by Restore has finished. It makes completion observable so the
+// caller can act on the post-restore state deterministically — tests await
+// it before asserting on recorded subprocess calls (avoiding a race with
+// the goroutine). Returns immediately when no restore is in flight.
+func (b *BackupService) waitForUploadsRestore() {
+	b.uploadsRestoreWG.Wait()
 }
 
 // restoreUploadsFromBucket mirrors the bucket's uploads/ subtree into
