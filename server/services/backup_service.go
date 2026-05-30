@@ -182,7 +182,7 @@ func (b *BackupService) Restore(ctx context.Context) error {
 		return nil
 	}
 	if database.IsRemoteLibSQL(b.cfg.DBPath) {
-		log.Printf("[backup] restore skipped: remote DSN (%s), upstream is already persistent", b.cfg.DBPath)
+		log.Printf("[backup] restore skipped: remote DSN (%s), upstream is already persistent", database.RedactDSN(b.cfg.DBPath))
 		return nil
 	}
 

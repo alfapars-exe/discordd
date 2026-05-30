@@ -42,6 +42,23 @@ func IsRemoteLibSQL(dsn string) bool {
 	return false
 }
 
+// RedactDSN masks the credential in a DSN — the Turso/libSQL `authToken=<jwt>`
+// query parameter — so the DSN is safe to log. Connection strings routinely
+// embed secrets; logging one raw leaks read-write database credentials into the
+// container logs, where anyone with log access then has full DB access. Always
+// pass a DSN through this before printing it.
+func RedactDSN(dsn string) string {
+	i := strings.Index(dsn, "authToken=")
+	if i < 0 {
+		return dsn
+	}
+	rest := dsn[i+len("authToken="):]
+	if amp := strings.IndexByte(rest, '&'); amp >= 0 {
+		return dsn[:i] + "authToken=***" + rest[amp:]
+	}
+	return dsn[:i] + "authToken=***"
+}
+
 // New opens a database connection and runs pending migrations.
 // Supports both local SQLite (file path) and remote Turso/libSQL (libsql://...).
 func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
