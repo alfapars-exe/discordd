@@ -148,6 +148,8 @@ func initRoutes(
 
 	// Client diagnostic logs (screen-share lifecycle, Electron crash dumps, etc.)
 	mux.Handle("POST /api/client-log", auth(h.ClientLog.Log))
+	// Diagnostics report — emails the gzipped bundle to the admin via SMTP.
+	mux.Handle("POST /api/diagnostics-report", auth(h.Diagnostics.Report))
 
 	// Feedback
 	mux.Handle("POST /api/feedback", auth(h.Feedback.CreateTicket))

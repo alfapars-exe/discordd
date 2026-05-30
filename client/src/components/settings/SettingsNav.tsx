@@ -95,6 +95,13 @@ function SettingsNav() {
           {t(item.labelKey)}
         </button>
       ))}
+      {/* Diagnostics / Tanılama — everyone (web uses the in-memory ring buffer) */}
+      <button
+        className={`settings-nav-item${activeTab === "diagnostics" ? " active" : ""}`}
+        onClick={() => setActiveTab("diagnostics")}
+      >
+        {t("diagnostics", { defaultValue: "Tanılama" })}
+      </button>
       {/* General (Desktop Settings) — Electron only */}
       {isElectron() && (
         <button

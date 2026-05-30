@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import * as authApi from "../api/auth";
 import { setTokens, clearTokens } from "../api/client";
+import { logToServer } from "../api/clientLog";
 import { changeLanguage, type Language, SUPPORTED_LANGUAGES } from "../i18n";
 import { useE2EEStore } from "./e2eeStore";
 import { usePreferencesStore } from "./preferencesStore";
@@ -92,11 +93,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       setTokens(res.data.access_token, res.data.refresh_token);
       syncLanguageFromUser(res.data.user);
       set({ user: res.data.user, isLoading: false });
+      logToServer("info", "auth_login", { userId: res.data.user.id });
       // Fetch server-side preferences and apply to stores
       usePreferencesStore.getState().fetchAndApply();
       return true;
     }
 
+    // Event + error message only — never the username/password.
+    logToServer("warn", "auth_login_failed", { error: res.error ?? "" });
     set({ error: res.error ?? "Login failed", isLoading: false });
     return false;
   },
@@ -126,6 +130,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       /* Network errors during logout are benign — clear local state anyway */
     }
     clearTokens();
+    logToServer("info", "auth_logout", {});
     // Close settings modal if open (SPA doesn't reload between logout → login)
     useSettingsStore.getState().closeSettings();
     set({ user: null });

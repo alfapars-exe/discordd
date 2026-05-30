@@ -25,6 +25,8 @@ import { setupCrashReporter } from "./crash-reporter";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { installScreenPicker } from "./screen-picker";
 import { promoteLeftoverBreadcrumb } from "./picker-safe-mode";
+import { initDiagnosticLog, setVerbose } from "./diagnostic-log";
+import { getSettings } from "./settings";
 import { shutdownPTT } from "./push-to-talk";
 import { createTray } from "./tray";
 import { createMainWindow, getMainWindow, setQuitting } from "./window";
@@ -206,6 +208,12 @@ setupCrashReporter();
 
 // ─── App ready ───
 app.whenReady().then(async () => {
+  // Always-on local diagnostic log — start it first so it captures everything
+  // from here on. The renderer tees its own logToServer events in via IPC, and
+  // crash-reporter / audio-capture write to the same rolling file.
+  initDiagnosticLog();
+  setVerbose(getSettings().diagnosticVerbose === true);
+
   // Self-heal: a leftover breadcrumb means the previous run's screen-picker
   // thumbnail capture crashed the process (the only crash signal that survives
   // a main-process death). Promote it to the sticky no-thumbnail flag BEFORE

@@ -149,6 +149,10 @@ func categoryForMessage(message string) models.LogCategory {
 		return models.LogCategoryVoice
 	case strings.HasPrefix(message, "livekit_"):
 		return models.LogCategoryLiveKit
+	case strings.HasPrefix(message, "auth_"):
+		return models.LogCategoryAuth
+	case strings.HasPrefix(message, "video_"):
+		return models.LogCategoryVideo
 	case strings.HasPrefix(message, "ws_"):
 		return models.LogCategoryWS
 	case strings.HasPrefix(message, "network_"),

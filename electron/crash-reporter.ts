@@ -29,6 +29,7 @@ import { app, crashReporter } from "electron";
 import { promises as fs } from "fs";
 import path from "path";
 import { disablePickerThumbnails, isThumbnailCaptureInFlight } from "./picker-safe-mode";
+import { appendDiagnostic, flushDiagnostics } from "./diagnostic-log";
 
 type CrashKind = "render-process-gone" | "child-process-gone";
 
@@ -169,6 +170,17 @@ export function setupCrashReporter(): void {
     if (isThumbnailCaptureInFlight()) {
       disablePickerThumbnails(`render-process-gone:${details.reason} during thumbnail capture`);
     }
+    // Record into the rolling diagnostic log and flush synchronously — this is
+    // the kind of event the export bundle exists for, and the renderer (which
+    // tees most events) is dead, so main has to write it.
+    appendDiagnostic({
+      level: "error",
+      source: "main",
+      category: "crash",
+      msg: "render_process_gone",
+      meta: { reason: details.reason, exitCode: details.exitCode },
+    });
+    flushDiagnostics();
     void writeCrashRecord({
       kind: "render-process-gone",
       reason: details.reason,
@@ -191,6 +203,19 @@ export function setupCrashReporter(): void {
         `child-process-gone:${details.type}:${details.reason} during thumbnail capture`,
       );
     }
+    appendDiagnostic({
+      level: "error",
+      source: "main",
+      category: "crash",
+      msg: "child_process_gone",
+      meta: {
+        reason: details.reason,
+        exitCode: details.exitCode,
+        processType: details.type,
+        serviceName: details.serviceName,
+      },
+    });
+    flushDiagnostics();
     void writeCrashRecord({
       kind: "child-process-gone",
       reason: details.reason,

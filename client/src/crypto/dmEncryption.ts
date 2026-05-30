@@ -16,6 +16,7 @@
 
 import * as signalProtocol from "./signalProtocol";
 import * as e2eeApi from "../api/e2ee";
+import { logToServer } from "../api/clientLog";
 import * as keyStorage from "./keyStorage";
 import * as deviceManager from "./deviceManager";
 import { decodePayload, type E2EEPayload } from "./e2eePayload";
@@ -343,6 +344,10 @@ export async function decryptDMMessage(
   }
 
   if (!myEnvelope) {
+    // No envelope addressed to this device — a common "can't read the other
+    // side's messages" cause (device mismatch after a recovery/restore). IDs
+    // only, no ciphertext/plaintext.
+    logToServer("warn", "dm_decrypt_no_envelope", { senderUserId, senderDeviceId });
     return null;
   }
 
@@ -369,6 +374,11 @@ export async function decryptDMMessage(
     return decodePayload(plaintext);
   } catch (err) {
     console.error("[dmEncryption] decrypt failed:", err);
+    logToServer("warn", "dm_decrypt_failed", {
+      senderUserId,
+      senderDeviceId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     throw err;
   }
 }

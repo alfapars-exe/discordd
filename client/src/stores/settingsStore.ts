@@ -233,7 +233,8 @@ type SettingsTab =
   | "platform-connections"
   | "platform-feedback"
   | "feedback"
-  | "blocked-users";
+  | "blocked-users"
+  | "diagnostics";
 
 type SettingsState = {
   isOpen: boolean;

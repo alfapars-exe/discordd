@@ -594,6 +594,7 @@ function VoiceSettings() {
                   setDeepfilterSuppression(Number(e.target.value))
                 }
                 className="vs-range"
+                style={sliderTrackStyle(deepfilterSuppression, 100)}
                 aria-label={t("deepfilterSuppressionLabel")}
               />
               <span className="vs-slider-value">{deepfilterSuppression}%</span>

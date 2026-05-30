@@ -32,6 +32,38 @@ contextBridge.exposeInMainWorld("electronAPI", {
     dumpFile?: string;
   } | null> => ipcRenderer.invoke("consume-last-crash"),
 
+  /**
+   * Append a structured entry to the always-on local diagnostic log
+   * (electron/diagnostic-log.ts). Fire-and-forget — the renderer tees every
+   * logToServer event here so it survives offline / pre-login / WS-down / crash.
+   */
+  appendDiagnostic: (entry: {
+    level?: "info" | "warn" | "error";
+    msg: string;
+    category?: string;
+    meta?: Record<string, unknown>;
+  }): void => {
+    ipcRenderer.send("diagnostic-log", entry);
+  },
+
+  /** Build the gzipped diagnostics bundle bytes (uploaded via the feedback API). */
+  buildDiagnosticUpload: (): Promise<{ filename: string; data: Uint8Array }> =>
+    ipcRenderer.invoke("build-diagnostic-upload"),
+
+  /** Save the diagnostics bundle to a user-chosen file (native save dialog). */
+  exportDiagnostics: (): Promise<{ saved: boolean; path?: string; dumpCopied?: boolean }> =>
+    ipcRenderer.invoke("export-diagnostics"),
+
+  /** Open the folder containing the rolling diagnostic logs. */
+  openLogsDir: (): Promise<string> => ipcRenderer.invoke("open-logs-dir"),
+
+  /** Read whether verbose diagnostic logging is enabled. */
+  getDiagnosticVerbose: (): Promise<boolean> => ipcRenderer.invoke("get-diagnostic-verbose"),
+
+  /** Enable/disable verbose diagnostic logging (persisted). */
+  setDiagnosticVerbose: (value: boolean): Promise<void> =>
+    ipcRenderer.invoke("set-diagnostic-verbose", value),
+
   /** Whether pre-launch update check ran — prevents duplicate checks in renderer */
   wasUpdateChecked: (): Promise<boolean> => ipcRenderer.invoke("was-update-checked"),
 

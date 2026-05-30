@@ -35,6 +35,7 @@ const GeneralSettings = lazy(() => import("./GeneralSettings"));
 const FeedbackSettings = lazy(() => import("./FeedbackSettings"));
 const BlockedUsersSettings = lazy(() => import("./BlockedUsersSettings"));
 const AdminFeedbackList = lazy(() => import("./AdminFeedbackList"));
+const DiagnosticsSettings = lazy(() => import("./DiagnosticsSettings"));
 
 function SettingsModal() {
   const { t } = useTranslation("settings");
@@ -161,6 +162,9 @@ function SettingsContent({ activeTab }: { activeTab: string }) {
 
     case "blocked-users":
       return <BlockedUsersSettings />;
+
+    case "diagnostics":
+      return <DiagnosticsSettings />;
 
     case "platform":
       return <PlatformSettings />;

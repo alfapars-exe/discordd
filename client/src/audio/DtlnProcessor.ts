@@ -36,9 +36,8 @@ import {
   createDtlnProcessorNode,
   sampleRate as DTLN_SAMPLE_RATE,
 } from "@sapphi-red/dtln-web";
-
-const DTLN_ASSET_BASE = "/dtln/";
-const DTLN_WASM_URL = `${DTLN_ASSET_BASE}tflite_web_api_cc_simd.wasm`;
+import { isNativeApp } from "../utils/constants";
+import { resolvePublicAssetBase } from "./publicAssetBase";
 
 let dtlnReadyPromise: Promise<void> | null = null;
 
@@ -50,8 +49,14 @@ let dtlnReadyPromise: Promise<void> | null = null;
 function ensureDtlnReady(): Promise<void> {
   if (!dtlnReadyPromise) {
     dtlnReadyPromise = (async () => {
-      await setupDtln(DTLN_WASM_URL);
-      await loadDtlnModel({ path: DTLN_ASSET_BASE, quant: "f16" });
+      // Web → "/dtln/" (origin-absolute, route-independent); native (Electron
+      // file://, Capacitor) → "./dtln/" relative to index.html. A hardcoded
+      // "/dtln/" 404s on native (filesystem/scheme root) → ensureDtlnReady
+      // throws → silent RNNoise fallback. Same web/native gotcha as DeepFilter,
+      // opposite sign — see resolvePublicAssetBase.
+      const base = `${resolvePublicAssetBase("dtln", isNativeApp(), import.meta.env.BASE_URL)}/`;
+      await setupDtln(`${base}tflite_web_api_cc_simd.wasm`);
+      await loadDtlnModel({ path: base, quant: "f16" });
     })().catch((err) => {
       // Reset on failure so a retry (user re-toggling the engine) re-attempts.
       dtlnReadyPromise = null;

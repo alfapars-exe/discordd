@@ -5,6 +5,7 @@ import type { DMSearchResult } from "../api/dm";
 import type { DMChannelWithUser, DMMessage } from "../types";
 import { useUIStore } from "./uiStore";
 import { useToastStore } from "./toastStore";
+import { logToServer } from "../api/clientLog";
 import { useE2EEStore } from "./e2eeStore";
 import { useAuthStore } from "./authStore";
 import {
@@ -237,6 +238,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
             handleRateLimitError(fallbackRes);
             return fallbackRes.success;
           }
+          // Event + reason only — never the message content. channelId + the
+          // error code help diagnose "my DM won't send" reports.
+          logToServer("warn", "dm_send_failed", {
+            channelId,
+            reason: errMsg || "encrypt_error",
+            hadFiles: !!(files && files.length),
+          });
           useToastStore.getState().addToast("error", i18n.t("e2ee:encryptionFailed"));
           return false;
         }

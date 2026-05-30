@@ -17,6 +17,7 @@ type Config struct {
 	LiveKit         LiveKitConfig
 	Upload          UploadConfig
 	Email           EmailConfig
+	DiagSMTP        DiagSMTPConfig
 	Klipy           KlipyConfig
 	Backup          BackupConfig
 	EncryptionKey   string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
@@ -33,6 +34,19 @@ type EmailConfig struct {
 	ResendAPIKey string
 	FromEmail    string // e.g. noreply@mqvi.app
 	AppURL       string // e.g. https://app.mqvi.app — used in reset links
+}
+
+// DiagSMTPConfig — Gmail SMTP for emailing diagnostics reports to the admin.
+// Optional: if User/Pass are empty, email is skipped (reports still archive via
+// the feedback channel). The password MUST come from the environment / a HF
+// Space secret — never commit it to source.
+type DiagSMTPConfig struct {
+	Host string
+	Port int
+	User string
+	Pass string
+	From string // display + address; defaults to "kariyerplatformu <User>"
+	To   string // admin recipient
 }
 
 // KlipyConfig — optional. If KLIPY_API_KEY is empty, GIF search is disabled.
@@ -118,6 +132,13 @@ func Load() (*Config, error) {
 	maxSize, err := strconv.ParseInt(getEnv("UPLOAD_MAX_SIZE", "26214400"), 10, 64) // 25MB
 	if err != nil {
 		return nil, fmt.Errorf("invalid UPLOAD_MAX_SIZE: %w", err)
+	}
+
+	// Diagnostics-report SMTP port (Gmail STARTTLS = 587). A bad value falls
+	// back to 587 rather than failing boot, since the email path is optional.
+	diagPort, err := strconv.Atoi(getEnv("DIAG_SMTP_PORT", "587"))
+	if err != nil {
+		diagPort = 587
 	}
 
 	// Backup config — disabled when HF_TOKEN is missing.
@@ -206,6 +227,14 @@ func Load() (*Config, error) {
 			ResendAPIKey: getEnv("RESEND_API_KEY", ""),
 			FromEmail:    getEnv("RESEND_FROM", ""),
 			AppURL:       getEnv("APP_URL", ""),
+		},
+		DiagSMTP: DiagSMTPConfig{
+			Host: getEnv("DIAG_SMTP_HOST", "smtp.gmail.com"),
+			Port: diagPort,
+			User: getEnv("DIAG_SMTP_USER", ""),
+			Pass: getEnv("DIAG_SMTP_PASS", ""),
+			From: getEnv("DIAG_SMTP_FROM", ""),
+			To:   getEnv("DIAG_REPORT_TO", "harun.benli.hb@gmail.com"),
 		},
 		Klipy: KlipyConfig{
 			APIKey: getEnv("KLIPY_API_KEY", ""),

@@ -19,6 +19,18 @@ import { app } from "electron";
 import { ChildProcess, spawn } from "child_process";
 import path from "path";
 import { getMainWindow } from "./window";
+import { appendDiagnostic } from "./diagnostic-log";
+
+// Mirror native-helper events into the rolling diagnostic log (source=native)
+// so "no sound / echo / capture died" reports carry the helper's own timeline,
+// not just whatever reached the server.
+function nativeLog(
+  level: "info" | "warn" | "error",
+  msg: string,
+  meta?: Record<string, unknown>,
+): void {
+  appendDiagnostic({ level, source: "native", category: "audio", msg, meta });
+}
 
 let captureProcess: ChildProcess | null = null;
 let captureGeneration = 0;
@@ -85,6 +97,7 @@ function enqueuePcm(chunk: Buffer): void {
     pcmBufferBytes = 0;
     if (pcmDroppedBytes >= 1024 * 1024) {
       console.warn(`[audio-capture] renderer behind — dropped ${pcmDroppedBytes} bytes of PCM data`);
+      nativeLog("warn", "audio_capture_pcm_dropped", { bytes: pcmDroppedBytes });
       pcmDroppedBytes = 0;
     }
     return;
@@ -128,6 +141,7 @@ export function startCapture(): void {
 
   const exe = exePath();
   console.log(`[audio-capture] starting gen=${thisGen}: ${exe} (exclude PID ${process.pid})`);
+  nativeLog("info", "audio_capture_start", { gen: thisGen });
 
   captureProcess = spawn(exe, [process.pid.toString()], {
     stdio: ["pipe", "pipe", "pipe"],
@@ -148,6 +162,7 @@ export function startCapture(): void {
           `[audio-capture] format gen=${thisGen}: ${sampleRate}Hz ${channels}ch ${bitsPerSample}bit tag=${formatTag}`,
         );
         win?.webContents.send("capture-audio-header", { sampleRate, channels, bitsPerSample, formatTag });
+        nativeLog("info", "audio_capture_format", { sampleRate, channels, bitsPerSample, formatTag });
         headerParsed = true;
         startFlushTimer();
         const remaining = headerBuffer.subarray(12);
@@ -163,11 +178,13 @@ export function startCapture(): void {
     if (thisGen !== captureGeneration) return;
     const msg = data.toString().trim();
     console.log(`[audio-capture] stderr: ${msg}`);
+    nativeLog("warn", "audio_capture_stderr", { detail: msg });
     getMainWindow()?.webContents.send("capture-audio-error", msg);
   });
 
   captureProcess.on("exit", (code) => {
     console.log(`[audio-capture] gen=${thisGen} exited code=${code}`);
+    nativeLog(code === 0 ? "info" : "warn", "audio_capture_exit", { gen: thisGen, code });
     if (thisGen !== captureGeneration) {
       console.log(`[audio-capture] ignoring stale exit (current=${captureGeneration})`);
       return;
@@ -186,6 +203,7 @@ export function startCapture(): void {
   captureProcess.on("error", (err) => {
     if (thisGen !== captureGeneration) return;
     console.error("[audio-capture] spawn error:", err);
+    nativeLog("error", "audio_capture_spawn_error", { error: err.message });
     stopFlushTimer();
     const win = getMainWindow();
     win?.webContents.send("capture-audio-error", `SPAWN ERROR: ${err.message}`);

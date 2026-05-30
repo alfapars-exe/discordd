@@ -68,6 +68,29 @@ interface ElectronAPI {
    */
   consumeLastCrash: () => Promise<ElectronCrashRecord | null>;
 
+  /**
+   * Append a structured entry to the always-on local diagnostic log
+   * (electron/diagnostic-log.ts). Fire-and-forget; the renderer tees every
+   * logToServer event here so it survives offline / pre-login / WS-down / crash.
+   */
+  appendDiagnostic: (entry: {
+    level?: "info" | "warn" | "error";
+    msg: string;
+    category?: string;
+    meta?: Record<string, unknown>;
+  }) => void;
+
+  /** Build the gzipped diagnostics bundle bytes (uploaded via the feedback API). */
+  buildDiagnosticUpload: () => Promise<{ filename: string; data: Uint8Array }>;
+  /** Save the diagnostics bundle to a user-chosen file (native save dialog). */
+  exportDiagnostics: () => Promise<{ saved: boolean; path?: string; dumpCopied?: boolean }>;
+  /** Open the folder containing the rolling diagnostic logs. */
+  openLogsDir: () => Promise<string>;
+  /** Read whether verbose diagnostic logging is enabled. */
+  getDiagnosticVerbose: () => Promise<boolean>;
+  /** Enable/disable verbose diagnostic logging (persisted). */
+  setDiagnosticVerbose: (value: boolean) => Promise<void>;
+
   /** Whether update check was already performed at splash */
   wasUpdateChecked: () => Promise<boolean>;
   checkUpdate: () => Promise<ElectronUpdateInfo | null>;

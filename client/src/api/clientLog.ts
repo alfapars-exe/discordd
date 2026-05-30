@@ -17,6 +17,7 @@
 
 import { apiClient } from "./client";
 import { isElectron, isCapacitor } from "../utils/constants";
+import { pushDiagnostic } from "./diagnosticBuffer";
 
 type LogLevel = "info" | "warn" | "error";
 
@@ -152,6 +153,21 @@ export async function logToServer(
   message: string,
   metadata: Metadata = {},
 ): Promise<void> {
+  // Local tee FIRST — persist to the always-on diagnostic log before the
+  // best-effort server send, so the event survives offline / pre-login /
+  // WS-down / crash (exactly when the server send drops). Electron → rotating
+  // file via IPC; web/Capacitor → in-memory ring. Event-specific metadata only;
+  // the env fingerprint lives in the diagnostic log's session_start row.
+  try {
+    if (isElectron() && window.electronAPI?.appendDiagnostic) {
+      window.electronAPI.appendDiagnostic({ level, msg: message, meta: metadata });
+    } else {
+      pushDiagnostic({ ts: new Date().toISOString(), level, msg: message, meta: metadata });
+    }
+  } catch {
+    /* swallow — local tee must never break the caller */
+  }
+
   try {
     const common = await buildCommonMetadata();
     const serialized: Record<string, string> = { ...common };
