@@ -32,8 +32,30 @@ const NEON_INTENSITY_MAX = 100;
 
 /** Whole-app UI scale (%). 100 = native size; whole interface zooms uniformly. */
 const UI_SCALE_DEFAULT = 100;
-const UI_SCALE_MIN = 100;
-const UI_SCALE_MAX = 200;
+export const UI_SCALE_MIN = 100;
+export const UI_SCALE_MAX = 200;
+export const UI_SCALE_STEP = 10;
+
+/**
+ * Pure mapping for the LIVE UI-scale slider: a pointer position (px from the
+ * track's left edge) → a clamped, step-rounded percentage. The slider sits
+ * INSIDE the zoomed UI, so its drag handler advances a "virtual position" by
+ * PHYSICAL pointer deltas (PointerEvent.movementX) that don't feed back through
+ * the zoomed track's reflow, then calls this on every move. Extracted + unit-
+ * tested so the no-oscillation guarantee (monotonic, clamped) is locked in.
+ */
+export function scaleFromPosition(
+  posPx: number,
+  trackPx: number,
+  min: number = UI_SCALE_MIN,
+  max: number = UI_SCALE_MAX,
+  step: number = UI_SCALE_STEP,
+): number {
+  if (!(trackPx > 0)) return min;
+  const frac = Math.max(0, Math.min(1, posPx / trackPx));
+  const stepped = Math.round((min + frac * (max - min)) / step) * step;
+  return Math.max(min, Math.min(max, stepped));
+}
 
 function loadPersistedTheme(): ThemeId {
   try {

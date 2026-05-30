@@ -13,7 +13,13 @@
 
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSettingsStore } from "../../stores/settingsStore";
+import {
+  useSettingsStore,
+  scaleFromPosition,
+  UI_SCALE_MIN,
+  UI_SCALE_MAX,
+  UI_SCALE_STEP,
+} from "../../stores/settingsStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useToastStore } from "../../stores/toastStore";
 import { uploadWallpaper, deleteWallpaper } from "../../api/profile";
@@ -58,6 +64,70 @@ function AppearanceSettings() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // UI-scale slider — LIVE synchronous scaling without flicker. The slider sits
+  // INSIDE the zoomed UI, so reading the value back from the (reflowing) native
+  // <input type=range> track during a live zoom oscillates between adjacent
+  // steps (the reported grow/shrink flicker). Instead we track a "virtual
+  // position" seeded at the pointer-down point and advanced by PHYSICAL pointer
+  // deltas (PointerEvent.movementX — immune to the zoom reflow), mapped to a
+  // percentage via scaleFromPosition(). No track-geometry feedback → smooth.
+  const uiScaleTrackRef = useRef<HTMLDivElement>(null);
+  const uiScaleDragRef = useRef<{ pos: number; trackPx: number } | null>(null);
+
+  function uiScalePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const track = uiScaleTrackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    const pos = e.clientX - rect.left;
+    uiScaleDragRef.current = { pos, trackPx: rect.width };
+    track.setPointerCapture(e.pointerId);
+    setUiScale(scaleFromPosition(pos, rect.width));
+  }
+  function uiScalePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = uiScaleDragRef.current;
+    if (!drag) return;
+    // movementX is a PHYSICAL pointer delta — it does not change when the live
+    // zoom reflows the track, so accumulating it cannot feed back into itself.
+    drag.pos += e.movementX;
+    setUiScale(scaleFromPosition(drag.pos, drag.trackPx));
+  }
+  function uiScalePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    uiScaleDragRef.current = null;
+    try {
+      uiScaleTrackRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer capture already released */
+    }
+  }
+  function uiScaleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    let next: number;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowUp":
+        next = uiScale + UI_SCALE_STEP;
+        break;
+      case "ArrowLeft":
+      case "ArrowDown":
+        next = uiScale - UI_SCALE_STEP;
+        break;
+      case "PageUp":
+        next = uiScale + UI_SCALE_STEP * 2;
+        break;
+      case "PageDown":
+        next = uiScale - UI_SCALE_STEP * 2;
+        break;
+      case "Home":
+        next = UI_SCALE_MIN;
+        break;
+      case "End":
+        next = UI_SCALE_MAX;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    setUiScale(next); // setUiScale clamps to [UI_SCALE_MIN, UI_SCALE_MAX]
+  }
 
   function acceptFile(file: File) {
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
@@ -211,22 +281,37 @@ function AppearanceSettings() {
       <p className="theme-section-desc">
         {t("uiScaleDescription", { defaultValue: "Tum arayuzu tarayici yakinlastirmasi gibi olceklendirir." })}
       </p>
-      <label className="settings-toggle-row" style={{ alignItems: "center", gap: 12 }}>
+      <div className="settings-toggle-row" style={{ alignItems: "center", gap: 12 }}>
         <span style={{ minWidth: 140 }}>{t("uiScaleLabel", { defaultValue: "Uygulama olcegi" })}</span>
-        <input
-          type="range"
-          min={100}
-          max={200}
-          step={10}
-          value={uiScale}
-          onChange={(e) => setUiScale(parseInt(e.target.value, 10))}
-          style={{ flex: 1, accentColor: "var(--primary)" }}
+        <div
+          ref={uiScaleTrackRef}
+          className="ui-scale-slider"
+          role="slider"
+          tabIndex={0}
           aria-label={t("uiScaleLabel", { defaultValue: "Uygulama olcegi" })}
-        />
+          aria-valuemin={UI_SCALE_MIN}
+          aria-valuemax={UI_SCALE_MAX}
+          aria-valuenow={uiScale}
+          aria-valuetext={`${uiScale}%`}
+          onPointerDown={uiScalePointerDown}
+          onPointerMove={uiScalePointerMove}
+          onPointerUp={uiScalePointerUp}
+          onPointerCancel={uiScalePointerUp}
+          onKeyDown={uiScaleKeyDown}
+        >
+          <div
+            className="ui-scale-slider-fill"
+            style={{ width: `${((uiScale - UI_SCALE_MIN) / (UI_SCALE_MAX - UI_SCALE_MIN)) * 100}%` }}
+          />
+          <div
+            className="ui-scale-slider-thumb"
+            style={{ left: `${((uiScale - UI_SCALE_MIN) / (UI_SCALE_MAX - UI_SCALE_MIN)) * 100}%` }}
+          />
+        </div>
         <span style={{ minWidth: 38, textAlign: "right", color: "var(--t2)", fontVariantNumeric: "tabular-nums" }}>
           {uiScale}%
         </span>
-      </label>
+      </div>
       {uiScale !== 100 && (
         <button
           type="button"

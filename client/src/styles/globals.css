@@ -1660,6 +1660,13 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* Theme picker (AppearanceSettings) */
 .theme-section-desc { font-size:13px;color:var(--t2);margin-bottom:20px;line-height:1.5; }
 .settings-toggle-row { display:flex;align-items:center;justify-content:space-between;padding:10px 0;font-size:14px;color:var(--t0); }
+/* UI-scale slider (custom, not native <input range>) — its drag is driven by
+   physical pointer deltas so live zoom never feeds back into the value. The
+   track must NOT scroll the page on touch-drag, hence touch-action:none. */
+.ui-scale-slider { position:relative;flex:1;height:6px;border-radius:3px;background:var(--bg-5);cursor:pointer;touch-action:none;align-self:center; }
+.ui-scale-slider:focus-visible { outline:2px solid var(--primary);outline-offset:4px; }
+.ui-scale-slider-fill { position:absolute;left:0;top:0;height:100%;border-radius:3px;background:var(--primary);pointer-events:none; }
+.ui-scale-slider-thumb { position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--primary);border:2px solid var(--t0);transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,0.4); }
 .wallpaper-row { display:flex;flex-direction:column;gap:12px;margin-bottom:8px; }
 .wallpaper-preview { width:100%;max-width:400px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--panel-border); }
 .wallpaper-actions { display:flex;gap:8px;margin-top:12px; }
