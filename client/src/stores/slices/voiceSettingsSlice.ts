@@ -103,11 +103,13 @@ export type VoiceSettings = {
   noiseReductionEngine: NoiseReductionEngine;
   noiseSuppressionLevel: NoiseSuppressionLevel;
   /**
-   * DeepFilterNet3 suppression strength, 0-100. Live-tunable through
-   * DeepFilterNoiseFilterProcessor.setSuppressionLevel without rebuilding
-   * the audio graph. Independent from noiseSuppressionLevel (which only
-   * applies to gate-only mode now). Default 70 matches the legacy
-   * "medium" preset for users migrating from preset-based settings.
+   * DeepFilterNet3 suppression strength as a 0-100 % (0 = passthrough,
+   * 100 = full suppression). NOT a raw dB value: useAudioProcessor maps it to
+   * upstream's attenuation-limit in dB via strengthToAttenLimDb (perceptual
+   * mix domain) before df_create / setSuppressionLevel, so the slider is
+   * linear in "% denoised". Live-tunable without rebuilding the audio graph.
+   * Independent from noiseSuppressionLevel (gate-only mode). Default 70 ≈ 70 %
+   * denoised (~10 dB) — a clean-but-natural medium preset.
    */
   deepfilterSuppression: number;
   screenShareVolumes: Record<string, number>;
@@ -446,7 +448,8 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     setDeepfilterSuppression: (value) => {
-      // Clamp to 0-100 — DeepFilterNet3's setSuppressionLevel API range.
+      // Clamp to 0-100 — this is a strength %, mapped to DeepFilterNet3's
+      // dB attenuation limit downstream (strengthToAttenLimDb), not raw dB.
       const clamped = Math.max(0, Math.min(100, value));
       set({ deepfilterSuppression: clamped });
       saveSettings(currentSettings(get()));

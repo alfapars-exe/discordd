@@ -171,7 +171,9 @@ function setupCSP(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const csp =
       "default-src 'self' file:; " +
-      "script-src 'self' 'wasm-unsafe-eval' file:; " +
+      // blob: — the deepfilter engine loads its AudioWorklet module from a
+      // URL.createObjectURL(blob); Chromium gates worklet loads on script-src.
+      "script-src 'self' 'wasm-unsafe-eval' file: blob:; " +
       "style-src 'self' 'unsafe-inline' file:; " +
       "img-src 'self' data: blob: file: https:; " +
       "font-src 'self' data: file:; " +

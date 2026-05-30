@@ -52,6 +52,9 @@ import {
   DeepFilterNoiseFilter,
   DeepFilterNoiseFilterProcessor,
 } from "deepfilternet3-noise-filter";
+import { isNativeApp } from "../utils/constants";
+import { resolveDeepFilterBase } from "../audio/deepfilterAssets";
+import { strengthToAttenLimDb } from "../audio/deepfilterSuppression";
 import type { NoiseSuppressionLevel, NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
 
 type ProcessorType =
@@ -289,21 +292,30 @@ async function applyDesiredProcessor(
       //   1. cdnUrl must resolve same-origin (connect-src 'self'). The
       //      package's default cdn.mezon.ai is blocked; /deepfilter is
       //      served from client/public/deepfilter/.
-      //   2. script-src must include 'wasm-unsafe-eval' because the
-      //      package calls WebAssembly.compile(bytes) — synchronous byte
-      //      compile, not streaming. Configured in setupCSP()
-      //      (electron/main.ts) and securityHeaders() (server/main.go).
-      //   3. cdnUrl must respect Vite's `base`. In dev (base="/") an
-      //      absolute "/deepfilter" works; in Electron packaged build
-      //      (base="./", loaded via file://) an absolute "/deepfilter"
-      //      resolves to the filesystem root and 404s. Using
-      //      `import.meta.env.BASE_URL` gives "/" in dev and "./" in
-      //      prod so the same code path works in both environments.
+      //   2. script-src must include 'wasm-unsafe-eval' (the package calls
+      //      WebAssembly.compile(bytes) — synchronous byte compile) AND
+      //      'blob:' (its AudioWorklet module is loaded from a
+      //      URL.createObjectURL(blob), which Chromium gates on script-src).
+      //      Configured in setupCSP() (electron/main.ts) and
+      //      securityHeaders() (server/main.go).
+      //   3. cdnUrl must be resolved relative to the ORIGIN, not the current
+      //      SPA route — see resolveDeepFilterBase(). The package feeds
+      //      `${cdnUrl}/v2/pkg/df_bg.wasm` straight to fetch(), so a relative
+      //      "./deepfilter" on a deep BrowserRouter route (e.g.
+      //      /channels/<id>) became /channels/<id>/deepfilter/… → 404 → SPA
+      //      fallback (index.html) → WebAssembly.compile(HTML) throws →
+      //      RNNoise fallback. Origin-absolute "/deepfilter" on web fixes it;
+      //      native keeps the relative base (HashRouter + Vite base "./").
       const proc = DeepFilterNoiseFilter({
         sampleRate: 48000,
-        noiseReductionLevel: deepfilterSuppression,
+        // The store holds a 0-100 strength %; upstream df_create wants an
+        // attenuation limit in dB. strengthToAttenLimDb maps % → dB in the
+        // perceptual mix domain so the slider isn't dead in its upper range.
+        noiseReductionLevel: strengthToAttenLimDb(deepfilterSuppression),
         enabled: true,
-        assetConfig: { cdnUrl: `${import.meta.env.BASE_URL}deepfilter` },
+        assetConfig: {
+          cdnUrl: resolveDeepFilterBase(isNativeApp(), import.meta.env.BASE_URL),
+        },
       });
       await audioTrack.setProcessor(proc);
       await verifyProcessorPublished(audioTrack, "deepfilter");
@@ -412,13 +424,14 @@ export function useAudioProcessor(
       // Same processor type — push live setting updates into the existing
       // processor instance instead of rebuilding the graph. Routing per
       // engine:
-      //   - DeepFilter: setSuppressionLevel (0-100) is live-tunable.
+      //   - DeepFilter: strength % is live-tunable, mapped to an attenuation
+      //     limit in dB (strengthToAttenLimDb) before setSuppressionLevel.
       //   - DTLN: model strength is fixed, only volume cached.
       //   - VadGateProcessor: full sens/vol/level retune (gate-only mode).
       //   - RNNoise/Speex: only inputVolume — gate removed in v2.11.80.
       const ref = processorRef.current;
       if (ref instanceof DeepFilterNoiseFilterProcessor) {
-        ref.setSuppressionLevel(deepfilterSuppression);
+        ref.setSuppressionLevel(strengthToAttenLimDb(deepfilterSuppression));
       } else if (ref instanceof DtlnProcessor) {
         ref.setInputVolume(inputVolume);
       } else if (ref instanceof VadGateProcessor) {

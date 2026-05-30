@@ -646,8 +646,10 @@ func isHFSpace() bool {
 // Applied to all responses (API + static + SPA).
 //
 // CSP policy notes:
-//   - script-src 'self' 'wasm-unsafe-eval': bundled JS only; wasm-unsafe-eval
-//     allows the deepfilter/dtln WASM noise filters to compile
+//   - script-src 'self' 'wasm-unsafe-eval' blob:: bundled JS only;
+//     wasm-unsafe-eval lets the deepfilter/dtln WASM filters compile; blob:
+//     lets the deepfilter AudioWorklet load from its createObjectURL() module
+//     (Chromium gates worklet module loads on script-src, not worker-src)
 //   - style-src 'self' 'unsafe-inline': React component <style> + tooltip libs
 //     inject inline styles. No external stylesheet hosts allowed after the
 //     Manrope/Source Code Pro fonts moved to self-hosted /fonts/* (Mayıs 28
@@ -672,7 +674,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'wasm-unsafe-eval'; "+
+				"script-src 'self' 'wasm-unsafe-eval' blob:; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: blob: https:; "+
 				"font-src 'self' data:; "+
