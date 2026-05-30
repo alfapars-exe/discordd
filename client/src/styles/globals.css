@@ -191,7 +191,13 @@ html {
   height: calc(100vh / var(--ui-scale, 1));
 }
 .transparent-bg { background:transparent !important; }
-.transparent-bg #root { background:rgba(5,6,11,0.55);border:1px solid var(--panel-border);border-radius:12px; }
+/* Desktop transparent mode: keep #root fairly opaque. Frosted panels'
+   backdrop-filter samples whatever is behind them; at low opacity the blur
+   reaches THROUGH the transparent Electron window to the OS desktop, which
+   Chromium's compositor ghosts/shifts on repaint (the faint "shadow" behind the
+   sidebar). A more-opaque in-window backing gives the blur a stable surface.
+   Trades window see-through for blur stability — keep this high. */
+.transparent-bg #root { background:rgba(5,6,11,0.85);border:1px solid var(--panel-border);border-radius:12px; }
 .transparent-bg .settings-overlay { background:rgba(5,6,11,0.6); }
 .transparent-bg .auth-page,
 .transparent-bg .landing-page { background:transparent !important; }
