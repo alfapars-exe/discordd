@@ -174,8 +174,22 @@ html, body { height:100%; width:100%; overflow:hidden;color-scheme:dark;backgrou
 /* App/UI scale: the Appearance slider writes --ui-scale (1.0-2.0) on :root;
    zoom on <html> scales the entire UI uniformly (like browser Ctrl++). Driven
    by a CSS var (not inline style.zoom) to match the neon/lightning pattern;
-   default 1 keeps native size when unset. */
-html { zoom: var(--ui-scale, 1); }
+   default 1 keeps native size when unset.
+
+   CRITICAL — counter-scale the root: `zoom` multiplies the *rendered* size,
+   but viewport units (vw/vh/dvh) and the height:100% chain still resolve to
+   the FULL viewport. So a bare `zoom:1.1` on a 100dvh shell paints 110% of
+   the viewport height into a 100% viewport; because the shell is
+   overflow:hidden, the overflowing bottom (UserBar / settings gear) gets
+   clipped off-screen and becomes unreachable — and the layout looks "broken
+   at scale". Dividing the root's own width/height by the same factor makes
+   rendered size == viewport at every scale. (dvh height is set in the
+   @supports block far below, also counter-scaled.) */
+html {
+  zoom: var(--ui-scale, 1);
+  width: calc(100vw / var(--ui-scale, 1));
+  height: calc(100vh / var(--ui-scale, 1));
+}
 .transparent-bg { background:transparent !important; }
 .transparent-bg #root { background:rgba(5,6,11,0.55);border:1px solid var(--panel-border);border-radius:12px; }
 .transparent-bg .settings-overlay { background:rgba(5,6,11,0.6); }
@@ -3089,6 +3103,10 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* Thumbnail wrapper — fixed 16:9 aspect ratio */
 .sp-thumbnail-wrap { width:100%;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--bg-0); }
 .sp-thumbnail { width:100%;height:100%;object-fit:contain; }
+/* Placeholder shown when no live thumbnail is available — picker safe mode after
+   a screen-picker crash on this machine (electron/picker-safe-mode.ts). */
+.sp-thumbnail-placeholder { width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--t3); }
+.sp-thumbnail-placeholder svg { width:38px;height:38px;opacity:.55; }
 
 /* Source name — single line, truncated, optional leading app icon */
 .sp-source-name { display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;min-width:0; }
@@ -3167,7 +3185,11 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
    visible). On stable-chrome desktop browsers 100dvh == 100vh == 100% so
    this is a no-op there. */
 @supports (height: 100dvh) {
-  html, body { height: 100dvh; }
+  /* Only <html> takes the dvh height — counter-scaled for the UI-scale zoom
+     (see the note on the `html` rule above). <body> stays at height:100%
+     (base rule) so it inherits the counter-scaled height instead of
+     re-expanding to the full 100dvh and overflowing the zoomed root. */
+  html { height: calc(100dvh / var(--ui-scale, 1)); }
 }
 
 /* Disable pull-to-refresh on mobile */

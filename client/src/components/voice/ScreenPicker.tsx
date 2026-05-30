@@ -33,6 +33,42 @@ function normalizeSources(
   }));
 }
 
+/**
+ * Source preview. Normally the live desktopCapturer thumbnail; when it's empty
+ * the picker is running in safe mode (electron/picker-safe-mode.ts disabled
+ * thumbnail capture after a screen-picker crash on this machine), so we draw a
+ * kind-appropriate glyph instead of a broken <img>.
+ */
+function SourceThumbnail({ source }: { source: PickerSource }) {
+  if (source.thumbnail) {
+    return (
+      <img
+        src={source.thumbnail}
+        alt={source.name}
+        className="sp-thumbnail"
+        draggable={false}
+      />
+    );
+  }
+  const isScreen = source.id.startsWith("screen:");
+  return (
+    <div className="sp-thumbnail-placeholder" aria-hidden="true">
+      {isScreen ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <line x1="3" y1="9" x2="21" y2="9" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 function ScreenPicker() {
   const { t } = useTranslation("voice");
   const [sources, setSources] = useState<PickerSource[] | null>(null);
@@ -172,12 +208,7 @@ function ScreenPicker() {
                 title={source.name}
               >
                 <div className="sp-thumbnail-wrap">
-                  <img
-                    src={source.thumbnail}
-                    alt={source.name}
-                    className="sp-thumbnail"
-                    draggable={false}
-                  />
+                  <SourceThumbnail source={source} />
                 </div>
                 <span className="sp-source-name">
                   {source.appIcon && (

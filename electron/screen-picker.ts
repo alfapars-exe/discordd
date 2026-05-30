@@ -18,6 +18,11 @@
 
 import { desktopCapturer, ipcMain, session } from "electron";
 import { getMainWindow } from "./window";
+import {
+  arePickerThumbnailsDisabled,
+  beginThumbnailCapture,
+  endThumbnailCapture,
+} from "./picker-safe-mode";
 
 type SerializedSource = {
   id: string;
@@ -32,6 +37,12 @@ type SerializedSource = {
 // which then locks up the renderer waiting for the picker IPC and
 // eventually crashes it. Race with a timeout so a hang surfaces as a
 // clean "no sources" instead of a renderer death.
+//
+// NOTE: this race only covers a *hang*. A native (C++) crash inside getSources
+// kills the process outright — the setTimeout dies with it, so no timeout/error
+// is ever emitted (the documented "app vanishes ~1 s after sources_query_start"
+// signature). That failure mode is handled separately by picker-safe-mode.ts:
+// a breadcrumb around the call flips a sticky no-thumbnail mode on next launch.
 //
 // Track P → Track Q (v2.11.94): lowered 5000 → 2500. Field reports show
 // renderers dying ~2 s after screen_share_attempt in CS2 sessions even
@@ -67,11 +78,21 @@ async function querySources() {
   // are the specific surface Electron has crashed on for users with
   // elevated/protected windows (Vanguard, EAC, some banking apps).
   const queryStart = Date.now();
-  emitPickerDiagnostic("sources_query_start");
+
+  // Safe mode (set after a prior screen-picker crash on this machine) skips
+  // thumbnail bitmap capture entirely: `{ 0, 0 }` enumerates ids + names only
+  // and never touches the GPU/compositor path that natively crashes. Healthy
+  // machines keep full thumbnails. See picker-safe-mode.ts.
+  const safe = arePickerThumbnailsDisabled();
+  emitPickerDiagnostic("sources_query_start", { thumbnails: !safe });
+
+  // Breadcrumb the crash-prone call so a process death during it self-heals on
+  // next launch. Only on the thumbnail path — the safe path can't crash here.
+  if (!safe) beginThumbnailCapture();
 
   const sourcesPromise = desktopCapturer.getSources({
     types: ["screen", "window"],
-    thumbnailSize: { width: 240, height: 135 },
+    thumbnailSize: safe ? { width: 0, height: 0 } : { width: 240, height: 135 },
     fetchWindowIcons: false,
   });
 
@@ -87,6 +108,7 @@ async function querySources() {
     emitPickerDiagnostic("sources_query_done", {
       durationMs: Date.now() - queryStart,
       sourceCount: sources.length,
+      thumbnails: !safe,
     });
     return sources;
   } catch (err) {
@@ -96,6 +118,9 @@ async function querySources() {
       timedOut: err instanceof Error && /timed out/.test(err.message),
     });
     throw err;
+  } finally {
+    // Clears the breadcrumb + in-flight flag. A no-op on the safe path.
+    if (!safe) endThumbnailCapture();
   }
 }
 
@@ -103,8 +128,11 @@ function serialize(s: Awaited<ReturnType<typeof querySources>>[number]): Seriali
   return {
     id: s.id,
     name: s.name,
-    thumbnail: s.thumbnail.toDataURL(),
-    appIcon: s.appIcon ? s.appIcon.toDataURL() : null,
+    // Empty in safe mode (thumbnailSize {0,0}) — send "" so the renderer draws a
+    // placeholder instead of a broken <img>. isEmpty() avoids the
+    // "data:image/png;base64," stub toDataURL() would return for an empty image.
+    thumbnail: s.thumbnail.isEmpty() ? "" : s.thumbnail.toDataURL(),
+    appIcon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
   };
 }
 
@@ -189,10 +217,17 @@ export function installScreenPicker(): void {
  * Used by the legacy "get-desktop-sources" IPC handler.
  */
 export async function getSerializedSources(): Promise<{ id: string; name: string; thumbnail: string }[]> {
-  const sources = await desktopCapturer.getSources({ types: ["window", "screen"] });
+  // Same crash surface as querySources: the default thumbnailSize captures a
+  // bitmap per source. Honor the machine's safe-mode flag so this legacy path
+  // can't reintroduce the native getSources crash on an already-flagged machine.
+  const safe = arePickerThumbnailsDisabled();
+  const sources = await desktopCapturer.getSources({
+    types: ["window", "screen"],
+    thumbnailSize: safe ? { width: 0, height: 0 } : { width: 150, height: 150 },
+  });
   return sources.map((s) => ({
     id: s.id,
     name: s.name,
-    thumbnail: s.thumbnail.toDataURL(),
+    thumbnail: s.thumbnail.isEmpty() ? "" : s.thumbnail.toDataURL(),
   }));
 }

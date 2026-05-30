@@ -28,6 +28,7 @@
 import { app, crashReporter } from "electron";
 import { promises as fs } from "fs";
 import path from "path";
+import { disablePickerThumbnails, isThumbnailCaptureInFlight } from "./picker-safe-mode";
 
 type CrashKind = "render-process-gone" | "child-process-gone";
 
@@ -161,6 +162,13 @@ export function setupCrashReporter(): void {
   // everything else.
   app.on("render-process-gone", (_event, _webContents, details) => {
     if (details.reason === "clean-exit") return;
+    // Renderer died while a thumbnail getSources was in flight → the picker is
+    // the prime suspect. Flip safe mode so the next attempt skips capture. This
+    // covers the render-crash path where MAIN survives; a main-process crash
+    // never reaches here — picker-safe-mode's breadcrumb catches that instead.
+    if (isThumbnailCaptureInFlight()) {
+      disablePickerThumbnails(`render-process-gone:${details.reason} during thumbnail capture`);
+    }
     void writeCrashRecord({
       kind: "render-process-gone",
       reason: details.reason,
@@ -175,6 +183,14 @@ export function setupCrashReporter(): void {
   // the reporter from this app's perspective.
   app.on("child-process-gone", (_event, details) => {
     if (details.reason === "clean-exit") return;
+    // GPU/utility child dying mid-capture → the picker thumbnail path is the
+    // prime suspect (this is the documented "GPU crash during screen share").
+    // Flip safe mode so the next screen share skips capture.
+    if (isThumbnailCaptureInFlight()) {
+      disablePickerThumbnails(
+        `child-process-gone:${details.type}:${details.reason} during thumbnail capture`,
+      );
+    }
     void writeCrashRecord({
       kind: "child-process-gone",
       reason: details.reason,
