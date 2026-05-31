@@ -144,6 +144,27 @@ func NewHandler(
 	}
 }
 
+// wsTokenRevoked reports whether a WS connection must be rejected because
+// the presented access token predates the user's current token_version —
+// the revocation signal bumped by "logout from all devices", password
+// change, and refresh-token-reuse detection.
+//
+// The ticket path is EXEMPT. A ticket is only ever minted by the
+// authenticated POST /api/auth/ws-ticket endpoint, which runs behind
+// AuthMiddleware and has therefore ALREADY applied this exact gate against
+// the caller's real token. HandleConnection synthesizes ticket claims with
+// no token_version (the int zero value), so applying the `<` check to them
+// would reject every user whose token_version has ever been incremented —
+// i.e. anyone who changed their password or logged out everywhere could
+// authenticate over HTTP yet never open a WebSocket. Only the legacy
+// ?token= path carries a real token_version that still needs gating here.
+func wsTokenRevoked(fromTicket bool, claimTokenVersion, userTokenVersion int) bool {
+	if fromTicket {
+		return false
+	}
+	return claimTokenVersion < userTokenVersion
+}
+
 // HandleConnection upgrades HTTP to WebSocket, validates auth, and starts the client.
 //
 // Preferred path: client POSTs /api/auth/ws-ticket, gets a one-time
@@ -245,7 +266,13 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		// re-check here against the live user row we just fetched
 		// (defense-in-depth: a banned/revoked user can't keep a WS
 		// open just because their JWT still parses).
-		if claims.TokenVersion < user.TokenVersion {
+		//
+		// The ticket path is exempt — see wsTokenRevoked. Its synthesized
+		// claims carry no token_version, and the ticket was already gated at
+		// mint time; without this exemption every user with a bumped
+		// token_version (password change / logout-all / reuse) could log in
+		// over HTTP yet never open a WebSocket.
+		if wsTokenRevoked(userIDFromTicket != "", claims.TokenVersion, user.TokenVersion) {
 			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: token revoked", nil)
 			http.Error(w, "token revoked", http.StatusUnauthorized)
 			return
