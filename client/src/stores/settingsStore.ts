@@ -154,7 +154,11 @@ function loadPersistedNeonEnabled(): boolean {
   } catch {
     /* localStorage access error */
   }
-  return true;
+  // Default OFF (user request, 2026-06-01): the decorative neon edge halo
+  // drifted a cloud-like glow across the sidebar that read as distracting.
+  // Opt in via Settings → Appearance → Neon. Anyone who explicitly enabled
+  // it before (localStorage "1") keeps it.
+  return false;
 }
 
 function loadPersistedNeonIntensity(): number {
@@ -248,7 +252,7 @@ type SettingsState = {
   lightningEnabled: boolean;
   /** Lightning bolt blur in pixels (0–20) — visual softness of the strikes */
   lightningBlur: number;
-  /** Decorative neon layers (edge halo + ambient aurora) on/off. */
+  /** Decorative neon edge halo on/off (default off). */
   neonEnabled: boolean;
   /** Decorative neon intensity (0–100%) — scales opacity of the neon layers. */
   neonIntensity: number;

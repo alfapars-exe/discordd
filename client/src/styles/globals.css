@@ -4708,14 +4708,11 @@ body.reduce-motion .electron-app-wrapper::after {
   animation: none;
 }
 
-/* Settings → Appearance → Neon effects = OFF. display:none drops the layers
- * out of the render tree entirely, killing the box-shadow paint and the
- * 14 s edge-cycle / 25–32 s aurora-drift animations — i.e. zero CPU cost
- * vs. opacity:0 which would still composite. The aurora rules below cover
- * the second neon layer (the blurred coloured blobs in .main-area). */
-body.neon-off .electron-app-wrapper::after,
-body.neon-off .main-area::before,
-body.neon-off .main-area::after {
+/* Settings → Appearance → Neon effects = OFF. display:none drops the edge
+ * halo out of the render tree entirely, killing the box-shadow paint and the
+ * 14 s edge-cycle animation — i.e. zero CPU cost vs. opacity:0 which would
+ * still composite. */
+body.neon-off .electron-app-wrapper::after {
   display: none;
 }
 
@@ -4759,68 +4756,10 @@ body.neon-off .main-area::after {
  * below the entire document instead of just below sibling chat content. */
 .main-area { z-index: 0; }
 
-/* ─── Ambient neon aurora (Track V) ──────────────────────────────────
- * The user asked for the dark central area to glow in the same neon
- * palette as the edge halo, not just flash during lightning strikes.
- * Two giant blurred coloured blobs (one cool, one warm) drift slowly
- * across the chat area at z-index:-2 — under the lightning (z-1) and
- * the content. Filter:blur is GPU-composited so 80–120 px blurs are
- * essentially free.
- *
- * Each blob's `top/left` is intentionally negative so the blob's bright
- * core sits OFF-screen at start; only the diffuse halo bleeds into the
- * visible chat area. The translate animation drags the core around so
- * different regions warm up over the 25–32 s cycle.
- *
- * opacity stays around 0.5 — high enough to read as neon ambience on
- * the very dark #111–#1a1a body gradient, low enough that avatars and
- * UI never need to fight for readability. */
-.main-area::before,
-.main-area::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  z-index: -2;
-  width: 70%;
-  height: 90%;
-  border-radius: 50%;
-  filter: blur(110px);
-  /* 0.5 was the original always-on alpha; --neon-intensity now scales it so
-   * Settings → Appearance → Neon intensity slider takes effect live. The 0.6
-   * fallback keeps the rule sensible if the variable hasn't been set yet. */
-  opacity: calc(0.5 * var(--neon-intensity, 0.6));
-  /* Transparent edges so neighbouring panels (sidebar, members) aren't
-   * tinted — only what bleeds inside .main-area's box matters. */
-  will-change: transform;
-}
-.main-area::before {
-  top: -20%;
-  left: -15%;
-  background: radial-gradient(circle, #3b82f6 0%, transparent 65%);
-  animation: aurora-drift-cool 26s ease-in-out infinite;
-}
-.main-area::after {
-  bottom: -25%;
-  right: -10%;
-  background: radial-gradient(circle, #a855f7 0%, transparent 65%);
-  animation: aurora-drift-warm 32s ease-in-out infinite;
-}
-
-@keyframes aurora-drift-cool {
-  0%, 100% { transform: translate(0%, 0%); }
-  33%      { transform: translate(40%, 25%); }
-  66%      { transform: translate(20%, 50%); }
-}
-@keyframes aurora-drift-warm {
-  0%, 100% { transform: translate(0%, 0%); }
-  33%      { transform: translate(-30%, -20%); }
-  66%      { transform: translate(-50%, -10%); }
-}
-
-body.reduce-motion .main-area::before,
-body.reduce-motion .main-area::after {
-  animation: none;
-}
+/* Ambient neon aurora (Track V) removed per user request (2026-06-01) — the
+ * drifting blurred blobs were a distracting decorative layer. The neon edge
+ * halo remains as the sole neon decoration, and is now OFF by default
+ * (settingsStore neonEnabled). */
 
 /* ─── ModDurationPicker (timeout / temp ban duration picker) ──────── */
 .mod-picker-overlay {

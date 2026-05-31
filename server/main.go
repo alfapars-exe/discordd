@@ -325,7 +325,14 @@ func main() {
 
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()
-	svcs.Backup.Stop()
+	// Final backup BEFORE exit: the AppLog/AuditLog Stop() calls above
+	// already drained pending rows into the local DB, so this snapshot
+	// captures the latest Denetim/audit events and uploads them to the HF
+	// bucket — closing the data-loss window on graceful (SIGTERM) restarts.
+	// Bounded by its own timeout, independent of the 5s HTTP-shutdown budget.
+	backupShutdownCtx, backupShutdownCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	svcs.Backup.Shutdown(backupShutdownCtx)
+	backupShutdownCancel()
 	metricsCollector.Stop()
 	hub.Shutdown()
 

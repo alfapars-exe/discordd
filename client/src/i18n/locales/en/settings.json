@@ -280,7 +280,7 @@
   "lightningDescription": "Animated neon lightning bolts flash in the main panel. Disable on weak hardware.",
   "lightningBlurLabel": "Lightning softness",
   "neonTitle": "Neon effects",
-  "neonDescription": "Edge glow and ambient aurora background in the main panel. Reduce intensity or turn off on low-end hardware.",
+  "neonDescription": "Neon edge glow around the window. Off by default; turn on or adjust intensity here.",
   "neonIntensityLabel": "Neon intensity",
   "uiScaleTitle": "App scale",
   "uiScaleDescription": "Scale the whole interface - text, icons and spacing - like browser zoom. Handy on high-resolution displays.",

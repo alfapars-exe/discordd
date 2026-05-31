@@ -16,6 +16,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -385,5 +386,183 @@ func TestRestore_TooSmallDownload(t *testing.T) {
 	}
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
 		t.Fatalf("tiny snapshot must not be promoted into place, stat err = %v", err)
+	}
+}
+
+// TestRunBackup_RemoteDSN_SkipsSnapshot: when DATABASE_URL is a remote
+// libSQL/Turso DSN, the hourly cycle must NOT shell out to the `sqlite3`
+// CLI — the CLI can only open local files and fails on a libsql:// URL,
+// which is the bug this guards (the snapshot step failed every cycle).
+// Mirrors the existing remote no-op in Restore (Turso is already
+// persistent). The uploads mirror is independent of the DB backend —
+// uploads live on ephemeral local /data regardless — so it must still run.
+func TestRunBackup_RemoteDSN_SkipsSnapshot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	uploadDir := filepath.Join(root, "uploads")
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		t.Fatalf("seed uploads dir: %v", err)
+	}
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:   true,
+		HFToken:   "fake-token",
+		HFBucket:  "test/bucket",
+		DBPath:    "libsql://example.turso.io?authToken=super-secret-jwt",
+		UploadDir: uploadDir,
+		WorkDir:   filepath.Join(root, "workdir"),
+	})
+
+	svc.runBackup()
+
+	if got := fake.callsTo("sqlite3"); got != 0 {
+		t.Fatalf("remote DSN must skip the sqlite3 snapshot, got %d sqlite3 call(s)", got)
+	}
+
+	var sawDBUpload, sawUploadsSync bool
+	for _, c := range fake.snapshot() {
+		if c.name != "hf" || len(c.args) == 0 {
+			continue
+		}
+		switch c.args[0] {
+		case "buckets": // `hf buckets cp <snapshot> db/hichat.db`
+			sawDBUpload = true
+		case "sync": // `hf sync <uploadDir> uploads --delete`
+			sawUploadsSync = true
+		}
+	}
+	if sawDBUpload {
+		t.Fatal("remote DSN must not upload a DB snapshot (`hf buckets cp`) — there is no snapshot")
+	}
+	if !sawUploadsSync {
+		t.Fatal("uploads mirror (`hf sync`) must still run in remote-DSN mode")
+	}
+}
+
+// TestSnapshotSQLite_RedactsAuthTokenInError: the sqlite3 CLI echoes the
+// database path it was given — including a libsql:// DSN's authToken=<jwt>
+// query parameter — verbatim in its error output. snapshotSQLite must not
+// let that credential reach the returned error (and therefore the logs and
+// the app-logger sinks). Regression guard for the DSN-token leak: commit
+// dd8ecdc redacted the DSN in other backup logs, but this CLI error-output
+// path still printed the token raw.
+func TestSnapshotSQLite_RedactsAuthTokenInError(t *testing.T) {
+	t.Parallel()
+	const secret = "eyJhbGciOiJSUPER-SECRET-TOKEN-eyJzdWIiOiIxMjM0"
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		DBPath:  "/data/hichat.db", // local path → exercises the sqlite3 branch
+		WorkDir: t.TempDir(),
+	})
+	fake.responses = map[string]fakeResponse{
+		"sqlite3": {
+			output: []byte(`Error: unable to open database "libsql://x.turso.io?authToken=` + secret + `": unable to open database file`),
+			err:    errors.New("exit status 1"),
+		},
+	}
+
+	err := svc.snapshotSQLite(filepath.Join(t.TempDir(), "snap.db"))
+	if err == nil {
+		t.Fatal("expected snapshotSQLite to surface the sqlite3 failure, got nil")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("snapshot error leaked the authToken JWT: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "authToken=***") {
+		t.Fatalf("expected redacted authToken marker in error, got %q", err.Error())
+	}
+}
+
+// TestShutdown_RunsFinalDBBackup: a graceful shutdown must take ONE final
+// DB-only snapshot+upload so writes since the last periodic cycle (e.g. a
+// fresh audit-log row drained into the DB by AuditLog.Stop()) reach the
+// bucket before the ephemeral container dies. The uploads mirror is
+// intentionally skipped on this path to fit HF's limited shutdown window.
+func TestShutdown_RunsFinalDBBackup(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	uploadDir := filepath.Join(root, "uploads")
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		t.Fatalf("seed uploads dir: %v", err)
+	}
+
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:   true,
+		HFToken:   "fake-token",
+		HFBucket:  "test/bucket",
+		DBPath:    filepath.Join(root, "data", "hichat.db"), // local → sqlite3 snapshot path
+		UploadDir: uploadDir,
+		WorkDir:   filepath.Join(root, "workdir"),
+	})
+
+	// The faked `sqlite3 VACUUM INTO '<snap>'` must actually create the
+	// snapshot file so the os.Stat gate lets the DB upload proceed.
+	fake.handler = func(call fakeCall) ([]byte, error) {
+		if call.name == "sqlite3" && len(call.args) > 0 {
+			stmt := call.args[len(call.args)-1]
+			if i := strings.Index(stmt, "'"); i >= 0 {
+				if j := strings.LastIndex(stmt, "'"); j > i {
+					_ = os.WriteFile(stmt[i+1:j], make([]byte, 8192), 0o640)
+				}
+			}
+		}
+		return nil, nil
+	}
+
+	svc.Shutdown(context.Background())
+
+	if got := fake.callsTo("sqlite3"); got != 1 {
+		t.Fatalf("shutdown must take exactly one VACUUM snapshot, got %d sqlite3 call(s)", got)
+	}
+	var sawDBUpload, sawUploadsSync bool
+	for _, c := range fake.snapshot() {
+		if c.name != "hf" || len(c.args) == 0 {
+			continue
+		}
+		switch c.args[0] {
+		case "buckets": // `hf buckets cp <snapshot> db/hichat.db`
+			sawDBUpload = true
+		case "sync": // `hf sync <uploadDir> uploads --delete`
+			sawUploadsSync = true
+		}
+	}
+	if !sawDBUpload {
+		t.Fatal("shutdown must upload the DB snapshot (`hf buckets cp`)")
+	}
+	if sawUploadsSync {
+		t.Fatal("shutdown backup is DB-only — it must NOT run the uploads mirror (`hf sync`)")
+	}
+}
+
+// TestShutdown_DisabledNoOp: HF_TOKEN unset → shutdown runs no subprocesses.
+func TestShutdown_DisabledNoOp(t *testing.T) {
+	t.Parallel()
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled: false,
+		DBPath:  filepath.Join(t.TempDir(), "hichat.db"),
+	})
+
+	svc.Shutdown(context.Background())
+
+	if len(fake.calls) != 0 {
+		t.Fatalf("disabled shutdown must run no subprocesses, got %d (%v)", len(fake.calls), fake.calls)
+	}
+}
+
+// TestShutdown_RemoteDSN_NoOp: a remote libSQL/Turso DSN is already
+// persistent upstream — shutdown must not shell out to sqlite3/hf at all.
+func TestShutdown_RemoteDSN_NoOp(t *testing.T) {
+	t.Parallel()
+	svc, fake := newTestBackupService(t, config.BackupConfig{
+		Enabled:  true,
+		HFToken:  "fake-token",
+		HFBucket: "test/bucket",
+		DBPath:   "libsql://example.turso.io?authToken=super-secret-jwt",
+	})
+
+	svc.Shutdown(context.Background())
+
+	if len(fake.calls) != 0 {
+		t.Fatalf("remote-DSN shutdown must run no subprocesses, got %d (%v)", len(fake.calls), fake.calls)
 	}
 }

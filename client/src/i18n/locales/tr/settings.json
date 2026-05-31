@@ -280,7 +280,7 @@
   "lightningDescription": "Ana panelde animasyonlu neon yıldırımlar çakar. Düşük donanımda kapatın.",
   "lightningBlurLabel": "Yıldırım yumuşaklığı",
   "neonTitle": "Neon efektleri",
-  "neonDescription": "Pencere kenarındaki ışıltı ve ana paneldeki aurora arka planı. Düşük donanımda yoğunluğu azaltın veya kapatın.",
+  "neonDescription": "Pencere kenarındaki neon ışıltı efekti. Varsayılan kapalı; açmak/yoğunluğu ayarlamak için kullanın.",
   "neonIntensityLabel": "Neon yoğunluğu",
   "uiScaleTitle": "Uygulama ölçeği",
   "uiScaleDescription": "Tüm arayüzü - yazı, ikon ve boşlukları - tarayıcı yakınlaştırması gibi ölçeklendirir. Yüksek çözünürlüklü ekranlarda kullanışlıdır.",

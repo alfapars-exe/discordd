@@ -93,6 +93,11 @@ type BackupService struct {
 	// the goroutine. Note: Stop() does NOT currently wait on or cancel this
 	// goroutine — it runs on its own 60-minute context, detached from b.stop.
 	uploadsRestoreWG sync.WaitGroup
+
+	// backupMu serializes backup cycles (single-flight) so the periodic
+	// ticker and a shutdown-triggered final backup never run VACUUM INTO
+	// against the same workdir snapshot path at the same time.
+	backupMu sync.Mutex
 }
 
 // NewBackupService constructs a BackupService. Call Start() to begin the
@@ -159,6 +164,49 @@ func (b *BackupService) Stop() {
 		// already closed
 	default:
 		close(b.stop)
+	}
+}
+
+// Shutdown stops the periodic ticker, then runs ONE final best-effort,
+// DB-only backup so data written since the last cycle reaches the bucket
+// before the ephemeral HF container is destroyed. This is what closes the
+// data-loss window on graceful (SIGTERM) restarts — e.g. fresh Denetim/audit
+// rows the async writer just drained into the local DB would otherwise never
+// be uploaded and would vanish on the next boot's restore.
+//
+// No-op when disabled (no HF_TOKEN) or on a remote libSQL/Turso DSN (already
+// durable upstream). The final cycle is DB-only: the DB carries the at-risk
+// data and is tiny, while the uploads mirror can be large and is reconciled
+// by the next boot's restore + periodic cycle — so it must not starve the
+// critical DB upload inside HF's limited shutdown grace window.
+//
+// The backup runs in a goroutine bounded by ctx: if the (single-flight)
+// cycle can't finish before the caller's deadline we log and return so
+// process teardown isn't blocked past HF's grace window. MUST be called AFTER
+// the audit/app-log services' Stop() has drained their buffers into the DB,
+// so the snapshot captures those rows.
+func (b *BackupService) Shutdown(ctx context.Context) {
+	b.Stop() // halt the periodic ticker first so it can't race this cycle
+	if !b.cfg.Enabled {
+		log.Printf("[backup] shutdown backup skipped: disabled (HF_TOKEN not set)")
+		return
+	}
+	if database.IsRemoteLibSQL(b.cfg.DBPath) {
+		log.Printf("[backup] shutdown backup skipped: remote DSN, already persistent")
+		return
+	}
+
+	log.Printf("[backup] shutdown backup: final DB snapshot before exit")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b.runBackupCore(true /* dbOnly */)
+	}()
+	select {
+	case <-done:
+		log.Printf("[backup] shutdown backup complete")
+	case <-ctx.Done():
+		log.Printf("[backup] shutdown backup did not finish before deadline: %v (process exiting)", ctx.Err())
 	}
 }
 
@@ -435,65 +483,96 @@ func copyFile(src, dst string) error {
 	return out.Sync()
 }
 
-// runBackup performs one full snapshot cycle: DB + uploads → HF Bucket.
-// Errors are logged but do not propagate; each step's failure is
-// independent of the others.
+// runBackup performs one full periodic snapshot cycle: DB + uploads → HF
+// Bucket. Thin wrapper over runBackupCore (full cycle, uploads included).
 func (b *BackupService) runBackup() {
+	b.runBackupCore(false /* dbOnly */)
+}
+
+// runBackupCore performs a single snapshot cycle. It is single-flight
+// (backupMu) so the periodic ticker and a shutdown-triggered final backup
+// can't run VACUUM INTO against the same workdir path concurrently. When
+// dbOnly is true the uploads-mirror step is skipped — used on shutdown,
+// where the DB carries the at-risk data and is tiny, and the (potentially
+// large) uploads dir is already reconciled by the next boot's restore +
+// periodic cycle, so it must not starve the critical DB upload inside HF's
+// shutdown grace window. Errors are logged but do not propagate; each step's
+// failure is independent of the others.
+func (b *BackupService) runBackupCore(dbOnly bool) {
+	b.backupMu.Lock()
+	defer b.backupMu.Unlock()
+
 	start := time.Now()
-	log.Printf("[backup] cycle start")
-	b.logInfo("backup cycle started", nil)
+	log.Printf("[backup] cycle start (dbOnly=%v)", dbOnly)
+	b.logInfo("backup cycle started", map[string]string{"db_only": fmt.Sprintf("%v", dbOnly)})
 
 	if err := os.MkdirAll(b.cfg.WorkDir, 0o755); err != nil {
 		b.fail("workdir mkdir", err)
 		return
 	}
 
-	// 1. SQLite snapshot via VACUUM INTO — produces a consistent file
-	//    even while the app continues writing. The output is a single
-	//    page-aligned DB; no WAL/SHM sidecar needed for restore.
-	snapshotPath := filepath.Join(b.cfg.WorkDir, "hichat-snapshot.db")
-	// VACUUM INTO refuses an existing destination — remove any leftover
-	// from a previous failed run before the new snapshot.
-	_ = os.Remove(snapshotPath)
-	dbStart := time.Now()
-	if err := b.snapshotSQLite(snapshotPath); err != nil {
-		b.fail("sqlite snapshot", err)
-		// Don't bail — still try to mirror uploads. DB snapshot might
-		// fail for a transient lock; uploads sync is independent.
+	// 1 & 2. SQLite snapshot + upload — only meaningful for a local DB
+	//    file. A remote libSQL/Turso DSN is independently persistent (this
+	//    mirrors the remote no-op in Restore above), and the `sqlite3` CLI
+	//    cannot open a libsql:// URL anyway — passing one made VACUUM fail
+	//    every cycle. So skip the DB snapshot entirely in remote mode; the
+	//    uploads mirror below still runs.
+	if database.IsRemoteLibSQL(b.cfg.DBPath) {
+		log.Printf("[backup] db snapshot skipped: remote DSN (%s), upstream is already persistent", database.RedactDSN(b.cfg.DBPath))
 	} else {
-		log.Printf("[backup] sqlite snapshot ok (%s)", time.Since(dbStart))
-	}
-
-	// 2. Upload DB snapshot — single file `cp` to the bucket's
-	//    `db/hichat.db` path. Overwrite-in-place; HF Buckets are mutable.
-	if _, err := os.Stat(snapshotPath); err == nil {
-		dbUploadStart := time.Now()
-		if err := b.hfCopy(snapshotPath, "db/hichat.db"); err != nil {
-			b.fail("hf cp db", err)
+		// SQLite snapshot via VACUUM INTO — produces a consistent file
+		// even while the app continues writing. The output is a single
+		// page-aligned DB; no WAL/SHM sidecar needed for restore.
+		snapshotPath := filepath.Join(b.cfg.WorkDir, "hichat-snapshot.db")
+		// VACUUM INTO refuses an existing destination — remove any leftover
+		// from a previous failed run before the new snapshot.
+		_ = os.Remove(snapshotPath)
+		dbStart := time.Now()
+		if err := b.snapshotSQLite(snapshotPath); err != nil {
+			b.fail("sqlite snapshot", err)
+			// Don't bail — still try to mirror uploads. DB snapshot might
+			// fail for a transient lock; uploads sync is independent.
 		} else {
-			log.Printf("[backup] db upload ok (%s)", time.Since(dbUploadStart))
+			log.Printf("[backup] sqlite snapshot ok (%s)", time.Since(dbStart))
 		}
+
+		// Upload DB snapshot — single file `cp` to the bucket's
+		// `db/hichat.db` path. Overwrite-in-place; HF Buckets are mutable.
+		if _, err := os.Stat(snapshotPath); err == nil {
+			dbUploadStart := time.Now()
+			if err := b.hfCopy(snapshotPath, "db/hichat.db"); err != nil {
+				b.fail("hf cp db", err)
+			} else {
+				log.Printf("[backup] db upload ok (%s)", time.Since(dbUploadStart))
+			}
+		}
+
+		// Cleanup: remove the local snapshot so it doesn't accumulate on
+		// /data between cycles. The next run rebuilds from scratch.
+		_ = os.Remove(snapshotPath)
 	}
 
 	// 3. Mirror uploads directory — `hf sync --delete` keeps the bucket
 	//    bit-for-bit aligned with the live tree. Xet deduplication means
-	//    unchanged files don't re-upload.
-	uploadsStart := time.Now()
-	if err := b.hfSyncDir(b.cfg.UploadDir, "uploads"); err != nil {
-		b.fail("hf sync uploads", err)
-	} else {
-		log.Printf("[backup] uploads sync ok (%s)", time.Since(uploadsStart))
+	//    unchanged files don't re-upload. Independent of the DB backend:
+	//    uploads live on ephemeral local /data even when the DB is remote.
+	//    Skipped on the shutdown (dbOnly) path so the critical DB upload
+	//    never starves inside HF's limited shutdown grace window.
+	if !dbOnly {
+		uploadsStart := time.Now()
+		if err := b.hfSyncDir(b.cfg.UploadDir, "uploads"); err != nil {
+			b.fail("hf sync uploads", err)
+		} else {
+			log.Printf("[backup] uploads sync ok (%s)", time.Since(uploadsStart))
+		}
 	}
-
-	// Cleanup: remove the local snapshot so it doesn't accumulate on
-	// /data between cycles. The next run rebuilds from scratch.
-	_ = os.Remove(snapshotPath)
 
 	total := time.Since(start)
 	log.Printf("[backup] cycle complete (%s)", total)
 	b.logInfo("backup cycle complete", map[string]string{
 		"duration_seconds": fmt.Sprintf("%.0f", total.Seconds()),
 		"bucket":           b.cfg.HFBucket,
+		"db_only":          fmt.Sprintf("%v", dbOnly),
 	})
 }
 
@@ -513,7 +592,11 @@ func (b *BackupService) snapshotSQLite(destPath string) error {
 	stmt := fmt.Sprintf("VACUUM INTO '%s'", destPath)
 	out, err := b.runCmd(ctx, nil, "sqlite3", b.cfg.DBPath, stmt)
 	if err != nil {
-		return fmt.Errorf("sqlite3 vacuum: %w (output: %s)", err, string(out))
+		// The sqlite3 CLI echoes the DB path it was handed in its error
+		// output; for a libsql:// DSN that path carries an authToken=<jwt>
+		// credential. Redact it before it reaches the error — otherwise it
+		// leaks verbatim through fail()'s log.Printf and the app-logger.
+		return fmt.Errorf("sqlite3 vacuum: %w (output: %s)", err, database.RedactDSN(string(out)))
 	}
 	return nil
 }
