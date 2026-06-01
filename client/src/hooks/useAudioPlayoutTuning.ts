@@ -17,7 +17,9 @@
  * typical RTT spike.
  *
  * Safari / Firefox quietly ignore the setter — no harm, no benefit.
- * Screen-share audio uses the same path since it's a normal audio track.
+ * Screen-share audio is deliberately EXCLUDED: it's paired with a screen-share
+ * video track, so an extra audio playout delay would desync the stream (audio
+ * lagging video). The hint is applied to conversational microphone audio only.
  *
  * Wired up by composing into VoiceStateManager next to useVolumeSync.
  */
@@ -38,8 +40,12 @@ import {
  */
 const PLAYOUT_DELAY_HINT_SECONDS = 0.1;
 
-function applyHintToTrack(track: RemoteTrack): void {
+function applyHintToTrack(track: RemoteTrack, source: Track.Source): void {
   if (track.kind !== Track.Kind.Audio) return;
+  // Skip screen-share audio: it's paired with a screen-share VIDEO track, and a
+  // forced 100 ms playout delay here would push the stream's audio behind its
+  // video. This jitter-smoothing is meant for conversational microphone audio.
+  if (source === Track.Source.ScreenShareAudio) return;
   // The receiver lives under the SDK's internal wrapper. Both `receiver`
   // and the `playoutDelayHint` setter are guarded — the property is
   // Chrome-only and the field name has been stable since Chrome 90, but
@@ -65,16 +71,16 @@ export function useAudioPlayoutTuning(room: Room): void {
     room.remoteParticipants.forEach((p) => {
       p.trackPublications.forEach((pub) => {
         const t = (pub as RemoteTrackPublication).track;
-        if (t) applyHintToTrack(t);
+        if (t) applyHintToTrack(t, (pub as RemoteTrackPublication).source);
       });
     });
 
     function handleTrackSubscribed(
       track: RemoteTrack,
-      _publication: RemoteTrackPublication,
+      publication: RemoteTrackPublication,
       _participant: RemoteParticipant,
     ): void {
-      applyHintToTrack(track);
+      applyHintToTrack(track, publication.source);
     }
 
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);

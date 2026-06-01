@@ -40,7 +40,7 @@
  */
 
 import { useMemo } from "react";
-import { VideoPreset } from "livekit-client";
+import { VideoPreset, type AudioPreset } from "livekit-client";
 
 import { useVoiceStore } from "../stores/voiceStore";
 import { useDisplayInfo } from "./useDisplayInfo";
@@ -84,6 +84,48 @@ export type ScreenSharePublishDefaults = {
     };
     degradationPreference: "maintain-framerate" | "maintain-resolution";
   };
+  /** Goes to the ScreenShareAudio publish call (publishTrack on Electron,
+   *  the merged setScreenShareEnabled publishOptions on browser). This is the
+   *  fix for "yayın sesi kalitesiz": screen-share audio carries music / game /
+   *  video, NOT speech, so it must NOT inherit the mic's mono + DTX-on Opus
+   *  profile. Forced stereo + DTX-off + a dedicated bitrate, decoupled from the
+   *  per-channel voice bitrate. Constant across quality/fps/mode — defined at
+   *  module scope below, not recomputed per render. */
+  screenShareAudioPublish: {
+    audioPreset: AudioPreset;
+    dtx: boolean;
+    red: boolean;
+    forceStereo: boolean;
+  };
+};
+
+/**
+ * Dedicated bitrate ceiling for screen-share audio. Opus treats maxBitrate as
+ * a CEILING (it uses only what the content needs), so this isn't "always 256k"
+ * — it's headroom for transparent stereo music. Independent of the voice
+ * channel's Opus bitrate so lowering a channel's voice quality can't silently
+ * degrade what viewers hear in a stream.
+ */
+const SCREEN_SHARE_AUDIO_PRESET: AudioPreset = { maxBitrate: 256_000 };
+
+/**
+ * The media-optimized publish profile applied to every ScreenShareAudio track.
+ *
+ *   - forceStereo: true  → LiveKit munges the Opus SDP to stereo=1;sprop-stereo=1
+ *     regardless of whether the source MediaStreamTrack reports channelCount.
+ *     This is what fixes the Electron path, whose WebAudio-destination track
+ *     often exposes an empty getSettings().channelCount → SDK would otherwise
+ *     fall back to mono.
+ *   - dtx: false         → no Discontinuous Transmission. DTX is a speech
+ *     feature that gates low-level passages as "silence"; on music it causes
+ *     audible pumping/warble.
+ *   - red: true          → Redundant Audio Data for packet-loss resilience.
+ */
+const SCREEN_SHARE_AUDIO_PUBLISH: ScreenSharePublishDefaults["screenShareAudioPublish"] = {
+  audioPreset: SCREEN_SHARE_AUDIO_PRESET,
+  dtx: false,
+  red: true,
+  forceStereo: true,
 };
 
 export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
@@ -208,6 +250,7 @@ export function useScreenSharePublishDefaults(): ScreenSharePublishDefaults {
         backupCodec,
         degradationPreference,
       },
+      screenShareAudioPublish: SCREEN_SHARE_AUDIO_PUBLISH,
     };
   }, [screenShareQuality, screenShareFps, lowLatency, mode, display]);
 }

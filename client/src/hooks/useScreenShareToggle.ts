@@ -216,6 +216,61 @@ function logPublishedTrackDetails(
 }
 
 /**
+ * Inspect the published ScreenShareAudio track ~1.5 s after publish (once SDP
+ * negotiation has settled) and emit the NEGOTIATED Opus parameters. This is the
+ * proof-of-fix for "yayın sesi kalitesiz": we want to SEE stereo + DTX-off on
+ * the wire, not just request them. Pairs with screen_share_publish_details
+ * (video) on the same share session.
+ *
+ * Key fields:
+ *   - opusChannels: 2 ⇒ stereo negotiated (fix working); 1 ⇒ still mono.
+ *   - sdpFmtpLine: should contain "stereo=1;sprop-stereo=1" and "usedtx=0".
+ *   - settingsChannelCount: what the source MediaStreamTrack reports — often 0
+ *     for the Electron WebAudio track, which is exactly why we force stereo at
+ *     publish instead of relying on auto-detection.
+ *
+ * All failures swallowed — diagnostics must never break a publish.
+ */
+function logPublishedAudioTrackDetails(
+  localParticipant: LocalParticipant,
+  branch: ShareBranch,
+): void {
+  setTimeout(() => {
+    try {
+      const pub = localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+      const track = pub?.track;
+      if (!pub || !track) {
+        logToServer("warn", "screen_share_audio_publish_missing", { branch });
+        return;
+      }
+      // `sender` is on the LocalTrack wrapper but not in the public type — same
+      // `as any` escape hatch the receiver-stats and playout hooks use.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sender = (track as any).sender as RTCRtpSender | undefined;
+      const params = sender?.getParameters();
+      const opus = params?.codecs?.find((c) => /opus/i.test(c.mimeType));
+      const settings = track.mediaStreamTrack?.getSettings?.() as
+        | { channelCount?: number }
+        | undefined;
+      logToServer("info", "screen_share_audio_publish_details", {
+        branch,
+        trackSid: pub.trackSid ?? "",
+        mimeType: opus?.mimeType ?? pub.mimeType ?? "",
+        opusChannels: opus?.channels ?? 0,
+        sdpFmtpLine: opus?.sdpFmtpLine ?? "",
+        maxBitrate: params?.encodings?.[0]?.maxBitrate ?? 0,
+        settingsChannelCount: settings?.channelCount ?? 0,
+      });
+    } catch (err) {
+      logToServer("warn", "screen_share_audio_publish_inspect_failed", {
+        branch,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, 1500);
+}
+
+/**
  * Which start/stop branch a given screen-share lifecycle should take.
  * Pulled out of the toggle effect so the restart watcher can recompute
  * the branch at restart time without duplicating the if/else cascade.
@@ -378,7 +433,9 @@ export function useScreenShareToggle(
         audio: false,
         resolution: resolutionFor(ssq, ssFps, displayRef.current),
         contentHint: opts.screenShareCapture.contentHint,
-      }, opts.screenSharePublish);
+        // Name the video's MediaStream so the separately-published WASAPI
+        // audio track (below) can join the same stream → A/V sync grouping.
+      }, { ...opts.screenSharePublish, stream: "screenshare" });
 
       if (shouldCancel()) return;
 
@@ -404,8 +461,17 @@ export function useScreenShareToggle(
       const lkTrack = new LKLocalAudioTrack(audioTrack, undefined, false);
       const pub = await localParticipant.publishTrack(lkTrack, {
         source: Track.Source.ScreenShareAudio,
+        // Media profile: forced stereo + DTX-off + dedicated bitrate (see
+        // useScreenSharePublishDefaults). Critical here because the track comes
+        // from a WebAudio MediaStreamDestination whose getSettings() often omits
+        // channelCount — without forceStereo the SDK publishes mono + DTX-on,
+        // which is the "yayın sesi kalitesiz" bug.
+        ...opts.screenShareAudioPublish,
+        // Same stream name as the video above → one MediaStream for A/V sync.
+        stream: "screenshare",
       });
       customAudioPubRef.current = pub;
+      logPublishedAudioTrackDetails(localParticipant, branch);
       logToServer("info", "screen_share_success", {
         branch,
         durationMs: Date.now() - attemptStart,
@@ -432,13 +498,28 @@ export function useScreenShareToggle(
       const effFps = isMobileBrowser() ? 30 : ssFps;
       const opts = publishOptsRef.current;
       await localParticipant.setScreenShareEnabled(true, {
-        audio: ss.screenShareAudio,
+        // Clean STEREO capture for media audio: voice DSP (echo cancellation /
+        // noise suppression / AGC) would mangle music/game audio, so disable it
+        // and request two channels. setScreenShareEnabled groups the
+        // screen_share + screen_share_audio tracks into one MediaStream by
+        // default, so no explicit stream name is needed on this path.
+        audio: ss.screenShareAudio
+          ? {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              channelCount: 2,
+            }
+          : false,
         resolution: resolutionFor(effQ, effFps, displayRef.current),
         contentHint: opts.screenShareCapture.contentHint,
-      }, opts.screenSharePublish);
+        // Audio publish profile (stereo + DTX-off) merged into the single
+        // publishOptions; the video track ignores audio-only fields and vice-versa.
+      }, { ...opts.screenSharePublish, ...opts.screenShareAudioPublish });
       if (shouldCancel()) return;
       notifyServerStarted();
       logPublishedTrackDetails(localParticipant, branch);
+      if (ss.screenShareAudio) logPublishedAudioTrackDetails(localParticipant, branch);
       logToServer("info", "screen_share_success", {
         branch,
         durationMs: Date.now() - attemptStart,
