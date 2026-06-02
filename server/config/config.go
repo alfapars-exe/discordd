@@ -20,6 +20,7 @@ type Config struct {
 	DiagSMTP        DiagSMTPConfig
 	Klipy           KlipyConfig
 	Backup          BackupConfig
+	Logging         LoggingConfig
 	EncryptionKey   string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
 	HetznerAPIToken string // Hetzner Cloud API token (read-only) — optional
 	// TrustedProxies is the raw CIDR/IP list parsed from the
@@ -99,6 +100,26 @@ type BackupConfig struct {
 	DBPath    string        // SQLite source file
 	UploadDir string        // uploads root mirror target
 	WorkDir   string        // local staging area for the DB snapshot
+}
+
+// LoggingConfig configures structured logging (slog) and optional Sentry
+// error tracking. Zero values are safe: an empty SentryDSN disables Sentry
+// entirely so local dev and self-host deployments boot without it.
+type LoggingConfig struct {
+	Level       string // debug | info | warn | error
+	Format      string // json | text
+	SentryDSN   string // empty disables Sentry
+	Environment string // e.g. production, staging, development
+	Release     string // version/commit tag attached to Sentry events
+}
+
+// defaultLogFormat picks text for human-friendly local development and JSON
+// everywhere else so log aggregation gets machine-parseable output by default.
+func defaultLogFormat(env string) string {
+	if env == "development" || env == "dev" || env == "local" {
+		return "text"
+	}
+	return "json"
 }
 
 // Load reads configuration from environment variables.
@@ -199,6 +220,22 @@ func Load() (*Config, error) {
 	// XFF and bypass per-IP rate limits.
 	trustedProxies := splitAndTrim(getEnv("TRUSTED_PROXIES", ""))
 
+	// Logging / observability. Validated here so a typo (e.g. LOG_LEVEL=infos)
+	// fails boot loudly instead of silently defaulting to a different verbosity.
+	environment := getEnv("ENVIRONMENT", "production")
+	logLevel := strings.ToLower(getEnv("LOG_LEVEL", "info"))
+	switch logLevel {
+	case "debug", "info", "warn", "error":
+	default:
+		return nil, fmt.Errorf("invalid LOG_LEVEL %q (want one of debug|info|warn|error)", logLevel)
+	}
+	logFormat := strings.ToLower(getEnv("LOG_FORMAT", defaultLogFormat(environment)))
+	switch logFormat {
+	case "json", "text":
+	default:
+		return nil, fmt.Errorf("invalid LOG_FORMAT %q (want one of json|text)", logFormat)
+	}
+
 	cfg := &Config{
 		Server: ServerConfig{
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
@@ -247,6 +284,13 @@ func Load() (*Config, error) {
 			DBPath:    firstNonEmpty(os.Getenv("DATABASE_URL"), getEnv("DATABASE_PATH", "./data/mqvi.db")),
 			UploadDir: getEnv("UPLOAD_DIR", "./data/uploads"),
 			WorkDir:   getEnv("BACKUP_WORKDIR", "/tmp/hichat-backup"),
+		},
+		Logging: LoggingConfig{
+			Level:       logLevel,
+			Format:      logFormat,
+			SentryDSN:   getEnv("SENTRY_DSN", ""),
+			Environment: environment,
+			Release:     getEnv("RELEASE", ""),
 		},
 		EncryptionKey:   encKey,
 		HetznerAPIToken: getEnv("HETZNER_API_TOKEN", ""),
