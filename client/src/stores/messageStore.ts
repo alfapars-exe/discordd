@@ -34,6 +34,11 @@ type MessageState = {
   /** channelId -> username[] */
   typingUsers: Record<string, string[]>;
 
+  /** Last WS-deleted message ref. Snapshot consumers (search panel results)
+   *  subscribe to this narrow field to drop rows that no longer exist,
+   *  without depending on the loaded message window. */
+  lastDeleted: { id: string; channel_id: string } | null;
+
   // ─── Reply State ───
   replyingTo: Message | null;
   scrollToMessageId: string | null;
@@ -96,6 +101,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   isLoading: false,
   isLoadingMore: false,
   typingUsers: {},
+  lastDeleted: null,
   replyingTo: null,
   scrollToMessageId: null,
 
@@ -390,6 +396,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       messagesByChannel: deleteMessageFromRecord(
         state.messagesByChannel, data.channel_id, data.id
       ),
+      lastDeleted: data,
     }));
   },
 

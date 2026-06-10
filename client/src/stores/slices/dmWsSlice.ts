@@ -12,6 +12,11 @@ import { sortChannelsByActivity } from "../shared/dmSort";
 import type { DMStore } from "../dmStore";
 
 export type DMWsSlice = {
+  /** Last WS-deleted DM message ref. Snapshot consumers (DM search panel
+   *  results) subscribe to this narrow field to drop rows that no longer
+   *  exist, without depending on the loaded message window. */
+  lastDeletedDM: { id: string; dm_channel_id: string } | null;
+
   handleDMChannelCreate: (channel: DMChannelWithUser) => void;
   handleDMMessageCreate: (message: DMMessage) => void;
   handleDMMessageUpdate: (message: DMMessage) => void;
@@ -34,6 +39,8 @@ export const createDMWsSlice: StateCreator<
   [],
   DMWsSlice
 > = (set, get) => ({
+  lastDeletedDM: null,
+
   handleDMChannelCreate: (channel) => {
     set((state) => {
       if (state.channels.some((ch) => ch.id === channel.id)) return state;
@@ -90,6 +97,7 @@ export const createDMWsSlice: StateCreator<
       messagesByChannel: deleteMessageFromRecord(
         state.messagesByChannel, data.dm_channel_id, data.id
       ),
+      lastDeletedDM: data,
     }));
   },
 

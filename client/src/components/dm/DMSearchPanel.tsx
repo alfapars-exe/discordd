@@ -43,6 +43,9 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [offset, setOffset] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id per doSearch call — a slow response for an abandoned query
+  // must not overwrite the results of the search started after it.
+  const searchSeqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus input on mount
@@ -50,8 +53,18 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
     inputRef.current?.focus();
   }, []);
 
+  // Clear any pending debounce on unmount — the timer would otherwise fire
+  // after close and call setState on an unmounted panel.
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
+      // Bumping before the empty-query early return also invalidates any
+      // in-flight search when the user clears the input.
+      const seq = ++searchSeqRef.current;
+
       if (searchQuery.trim().length < 1) {
         setResults(null);
         return;
@@ -63,6 +76,9 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
       if (useLocalSearch) {
         try {
           const cached = await searchCachedDMMessages(channelId, searchQuery.trim());
+          // A newer search started while this one was awaiting — its results
+          // (and spinner state) own the panel now.
+          if (seq !== searchSeqRef.current) return;
           const total = cached.length;
           const paged = cached
             .sort((a, b) => b.timestamp - a.timestamp)
@@ -87,6 +103,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
 
           setResults({ messages, totalCount: total });
         } catch {
+          if (seq !== searchSeqRef.current) return;
           setResults({ messages: [], totalCount: 0 });
         }
         setIsSearching(false);
@@ -95,6 +112,8 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
 
       // Plaintext — server-side FTS5 search
       const result = await searchMessages(channelId, searchQuery.trim(), LIMIT, searchOffset);
+      // Out-of-order guard — see the local-search path above.
+      if (seq !== searchSeqRef.current) return;
       setResults({
         messages: result.messages,
         totalCount: result.total_count,
@@ -131,6 +150,31 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
   }
 
   const addToast = useToastStore((s) => s.addToast);
+
+  // Live deletion while the panel is open: results are a snapshot, so a
+  // WS-deleted message would linger as a dead row. Subscribe to the narrow
+  // lastDeletedDM field (store subscription, not a selector hook — setState
+  // belongs in the callback per react-hooks/set-state-in-effect) and drop
+  // the row from our own snapshot, NOT the loaded message window — the
+  // result may live far outside it.
+  useEffect(() => {
+    const unsubscribe = useDMStore.subscribe((state, prev) => {
+      const deleted = state.lastDeletedDM;
+      if (!deleted || deleted === prev.lastDeletedDM) return;
+      setResults((prevResults) => {
+        if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
+          return prevResults;
+        }
+        return {
+          ...prevResults,
+          messages: prevResults.messages.filter((m) => m.id !== deleted.id),
+          totalCount: Math.max(0, prevResults.totalCount - 1),
+        };
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   /** Scroll to message on result click. Results are a snapshot — if
    *  the message has been deleted (other session, peer revocation),

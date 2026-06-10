@@ -35,6 +35,9 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [offset, setOffset] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id per doSearch call — a slow response for an abandoned query
+  // must not overwrite the results of the search started after it.
+  const searchSeqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const limit = 25;
@@ -44,8 +47,18 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     inputRef.current?.focus();
   }, []);
 
+  // Clear any pending debounce on unmount — the timer would otherwise fire
+  // after close and call setState on an unmounted panel.
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
+      // Bumping before the empty-query early return also invalidates any
+      // in-flight search when the user clears the input.
+      const seq = ++searchSeqRef.current;
+
       if (searchQuery.trim().length < 1) {
         setResults(null);
         return;
@@ -57,6 +70,9 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       if (useLocalSearch && channelId) {
         try {
           const cached = await searchCachedMessages(channelId, searchQuery.trim());
+          // A newer search started while this one was awaiting — its results
+          // (and spinner state) own the panel now.
+          if (seq !== searchSeqRef.current) return;
           // Simulate pagination (IndexedDB returns all results)
           const total = cached.length;
           const paged = cached
@@ -83,6 +99,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
 
           setResults({ messages, total_count: total });
         } catch {
+          if (seq !== searchSeqRef.current) return;
           setResults({ messages: [], total_count: 0 });
         }
         setIsSearching(false);
@@ -93,6 +110,8 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
       const serverId = useServerStore.getState().activeServerId;
       if (!serverId) return;
       const res = await searchMessages(serverId, searchQuery.trim(), channelId, limit, searchOffset);
+      // Out-of-order guard — see the local-search path above.
+      if (seq !== searchSeqRef.current) return;
       if (res.success && res.data) {
         setResults(res.data);
       } else {
@@ -130,6 +149,31 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
   }
 
   const addToast = useToastStore((s) => s.addToast);
+
+  // Live deletion while the panel is open: results are a snapshot, so a
+  // WS-deleted message would linger as a dead row. Subscribe to the narrow
+  // lastDeleted field (store subscription, not a selector hook — setState
+  // belongs in the callback per react-hooks/set-state-in-effect) and drop
+  // the row from our own snapshot, NOT the loaded message window — the
+  // result may live far outside it.
+  useEffect(() => {
+    const unsubscribe = useMessageStore.subscribe((state, prev) => {
+      const deleted = state.lastDeleted;
+      if (!deleted || deleted === prev.lastDeleted) return;
+      setResults((prevResults) => {
+        if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
+          return prevResults;
+        }
+        return {
+          ...prevResults,
+          messages: prevResults.messages.filter((m) => m.id !== deleted.id),
+          total_count: Math.max(0, prevResults.total_count - 1),
+        };
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   /** Clicking a result navigates to the original message, but the
    *  result list is a snapshot — if the message has been deleted in
