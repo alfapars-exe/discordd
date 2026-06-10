@@ -26,7 +26,7 @@ import { useServerStore } from "../../stores/serverStore";
 import ReportModal from "../shared/ReportModal";
 import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
-import { formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
+import { formatDate, formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 
@@ -202,7 +202,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   if (!target) return null;
 
   const sortedRoles = member ? [...member.roles].sort((a, b) => b.position - a.position) : [];
-  const joinDate = new Date(createdAt).toLocaleDateString();
+  const joinDate = formatDate(createdAt);
 
   async function handleKick() {
     const ok = await confirm({

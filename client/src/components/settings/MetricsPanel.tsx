@@ -22,6 +22,7 @@ import type {
   MetricsHistorySummary,
   MetricsTimeSeriesPoint,
 } from "../../types";
+import { formatDate, formatTime } from "../../utils/dateFormat";
 
 type MetricsPanelProps = {
   instanceId: string;
@@ -125,7 +126,7 @@ function MetricsPanel({ instanceId }: MetricsPanelProps) {
           <>
             <p className="metrics-timestamp">
               {t("platformMetricsLastUpdated", {
-                time: new Date(metrics.fetched_at).toLocaleTimeString(),
+                time: formatTime(metrics.fetched_at),
               })}
             </p>
 
@@ -601,12 +602,12 @@ function formatXAxis(ts: string, period: "24h" | "7d" | "30d"): string {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts;
   if (period === "24h") {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatTime(d, { hour: "2-digit", minute: "2-digit" });
   }
   return (
-    d.toLocaleDateString([], { month: "2-digit", day: "2-digit" }) +
+    formatDate(d, { month: "2-digit", day: "2-digit" }) +
     " " +
-    d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    formatTime(d, { hour: "2-digit", minute: "2-digit" })
   );
 }
 

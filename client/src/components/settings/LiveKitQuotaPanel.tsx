@@ -19,6 +19,9 @@ import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { getLiveKitQuota, updateLiveKitQuotaSettings } from "../../api/admin";
 import type { LiveKitInstanceQuotaView } from "../../types";
+// Aliased — this module already has a local formatDate wrapper (keeps the
+// try/fallback-to-raw-iso behaviour the quota rows rely on).
+import { formatDate as formatLocaleDate } from "../../utils/dateFormat";
 
 function formatMinutes(min: number): string {
   if (min <= 0) return "0";
@@ -31,7 +34,7 @@ function formatMinutes(min: number): string {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString();
+    return formatLocaleDate(iso);
   } catch {
     return iso;
   }

@@ -10,6 +10,7 @@ import { useToastStore } from "../../stores/toastStore";
 import { useConfirm } from "../../hooks/useConfirm";
 import { listAppLogs, clearAppLogs } from "../../api/admin";
 import type { AppLog, AppLogLevel } from "../../types";
+import { formatDateTime } from "../../utils/dateFormat";
 
 const PAGE_SIZE = 50;
 
@@ -47,8 +48,7 @@ function levelBadgeClass(level: AppLogLevel): string {
 
 /** Parse backend SQLite timestamps as UTC. */
 function formatTimestamp(iso: string): string {
-  const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
-  return d.toLocaleString();
+  return formatDateTime(iso.endsWith("Z") ? iso : iso + "Z");
 }
 
 function parseMetadata(raw: string): Record<string, string> | null {

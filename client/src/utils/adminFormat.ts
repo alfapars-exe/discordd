@@ -9,6 +9,8 @@
  * admin lists so the displayed values do not change.
  */
 
+import i18n from "../i18n";
+
 /** SQLite timestamps lack the "Z" suffix — append it so they parse as UTC. */
 export function parseUTC(iso: string): number {
   return new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
@@ -23,7 +25,9 @@ export function parseUTC(iso: string): number {
 export function formatDateTime(iso: string, opts?: { assumeUTC?: boolean }): string {
   try {
     const normalized = opts?.assumeUTC && !iso.endsWith("Z") ? iso + "Z" : iso;
-    return new Date(normalized).toLocaleString(undefined, {
+    // i18n.language (not undefined) — the default locale follows the OS, which
+    // rendered English-shaped dates for Turkish users (QA 2026-05-28 bug #4).
+    return new Date(normalized).toLocaleString(i18n.language, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -38,7 +42,7 @@ export function formatDateTime(iso: string, opts?: { assumeUTC?: boolean }): str
 /** Date-only label (no time) — used by the server table. */
 export function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
+    return new Date(iso).toLocaleDateString(i18n.language, {
       year: "numeric",
       month: "short",
       day: "numeric",

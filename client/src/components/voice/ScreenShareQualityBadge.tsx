@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatTime } from "../../utils/dateFormat";
 import { useVoiceStore } from "../../stores/voiceStore";
 import type {
   ScreenShareQualityGrade,
@@ -191,7 +192,7 @@ function ScreenShareQualityBadge({ publisherId }: Props) {
             {points.map((p, i) => (
               <span
                 key={i}
-                title={`${new Date(p.t).toLocaleTimeString()} — ${p.kbps} kbps`}
+                title={`${formatTime(p.t)} — ${p.kbps} kbps`}
                 style={{
                   flex: 1,
                   background: COLOR[p.grade],

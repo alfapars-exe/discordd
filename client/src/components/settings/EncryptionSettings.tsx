@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
 import * as keyStorage from "../../crypto/keyStorage";
+import { formatDateTime } from "../../utils/dateFormat";
 
 function EncryptionSettings() {
   const { t } = useTranslation("e2ee");
@@ -99,10 +100,9 @@ function EncryptionSettings() {
     );
   }
 
-  /** Format date for display */
+  /** Format date for display — locale follows the in-app language. */
   function formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString([], {
+    return formatDateTime(dateStr, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",

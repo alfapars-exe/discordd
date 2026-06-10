@@ -11,6 +11,7 @@ import {
 } from "../../api/feedback";
 import type { FeedbackTicket, FeedbackReply } from "../../types";
 import { resolveAssetUrl } from "../../utils/constants";
+import { formatDate, formatDateTime } from "../../utils/dateFormat";
 import FilePreview from "../chat/FilePreview";
 import FeedbackCreateForm from "./FeedbackCreateForm";
 
@@ -158,7 +159,7 @@ function FeedbackSettings() {
                 </span>
               )}
               <span className="feedback-ticket-date">
-                {new Date(ticket.created_at).toLocaleDateString()}
+                {formatDate(ticket.created_at)}
               </span>
             </button>
           ))}
@@ -189,7 +190,7 @@ function FeedbackSettings() {
               {t(`feedbackStatus_${activeTicket.status}`)}
             </span>
             <span className="feedback-ticket-date">
-              {new Date(activeTicket.created_at).toLocaleString()}
+              {formatDateTime(activeTicket.created_at)}
             </span>
             <button
               className="settings-btn settings-btn-danger"
@@ -233,7 +234,7 @@ function FeedbackSettings() {
                     {reply.is_admin && <span className="feedback-admin-badge">{t("feedbackAdminBadge")}</span>}
                   </span>
                   <span className="feedback-reply-date">
-                    {new Date(reply.created_at).toLocaleString()}
+                    {formatDateTime(reply.created_at)}
                   </span>
                 </div>
                 <p className="feedback-reply-content">{reply.content}</p>

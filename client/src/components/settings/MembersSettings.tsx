@@ -11,7 +11,7 @@ import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import { resolveAssetUrl } from "../../utils/constants";
-import { formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
+import { formatDate, formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
 import type { Ban } from "../../types";
 
 type Tab = "members" | "bans";
@@ -224,8 +224,7 @@ function MembersSettings() {
   const isSelf = selectedMemberId === currentUser?.id;
 
   function formatBanDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, {
+    return formatDate(dateStr, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -280,6 +279,8 @@ function MembersSettings() {
                       src={resolveAssetUrl(member.avatar_url)}
                       alt={member.username}
                       className="member-settings-avatar-img"
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <span className="member-settings-avatar-fallback">
@@ -367,6 +368,8 @@ function MembersSettings() {
                         src={resolveAssetUrl(selectedMember.avatar_url)}
                         alt={selectedMember.username}
                         className="member-settings-avatar-img"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <span className="member-settings-avatar-fallback">

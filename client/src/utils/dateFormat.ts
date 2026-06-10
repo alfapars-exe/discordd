@@ -11,6 +11,8 @@
  * Locale param comes from i18next.language — auto-localizes day/month names.
  */
 
+import i18n from "../i18n";
+
 function startOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -122,4 +124,35 @@ export function formatRelativeFuture(toIso: string, locale: string): string {
   // Past 28 days — fall back to absolute date so we don't say "in 2 months"
   // for a 30-day temp ban.
   return formatFullDateTime(toIso, locale);
+}
+
+// ─── Singleton-locale helpers (QA 2026-05-28 bug #4) ───
+//
+// Hardcoded/default-locale toLocale* calls rendered English-shaped dates for
+// Turkish users: with no locale argument the runtime falls back to the
+// OS/browser locale, ignoring the in-app language picker. These helpers read
+// i18n.language at call time so every timestamp follows the chosen language.
+
+/** Date-only label in the current UI language. */
+export function formatDate(
+  iso: string | number | Date,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  return new Date(iso).toLocaleDateString(i18n.language, options);
+}
+
+/** Date+time label in the current UI language. */
+export function formatDateTime(
+  iso: string | number | Date,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  return new Date(iso).toLocaleString(i18n.language, options);
+}
+
+/** Time-only label in the current UI language. */
+export function formatTime(
+  iso: string | number | Date,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  return new Date(iso).toLocaleTimeString(i18n.language, options);
 }
