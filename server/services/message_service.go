@@ -31,6 +31,7 @@ type messageService struct {
 	reactionRepo    repository.ReactionRepository
 	readStateRepo   repository.ReadStateRepository
 	timeoutRepo     repository.MemberTimeoutRepository
+	txRunner        repository.MessageTxRunner
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
 	auditLogger     AuditWriter
@@ -64,6 +65,7 @@ func NewMessageService(
 	reactionRepo repository.ReactionRepository,
 	readStateRepo repository.ReadStateRepository,
 	timeoutRepo repository.MemberTimeoutRepository,
+	txRunner repository.MessageTxRunner,
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
 ) MessageService {
@@ -78,6 +80,7 @@ func NewMessageService(
 		reactionRepo:    reactionRepo,
 		readStateRepo:   readStateRepo,
 		timeoutRepo:     timeoutRepo,
+		txRunner:        txRunner,
 		hub:             hub,
 		permResolver:    permResolver,
 	}
@@ -242,15 +245,49 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 		message.ReplyToID = req.ReplyToID
 	}
 
-	if err := s.messageRepo.Create(ctx, message); err != nil {
-		return nil, fmt.Errorf("failed to create message: %w", err)
+	// Extract mentions BEFORE the write transaction — extraction is read-only
+	// (user/role lookups) and keeping reads out of the tx keeps it short.
+	// channel.ServerID comes from validateChannelScope above (the old code
+	// refetched the channel here for the same value).
+	var mentionedIDs, roleMentionIDs []string
+	if req.EncryptionVersion == 0 {
+		mentionedIDs = s.extractMentions(ctx, req.Content)
+		roleMentionIDs = s.extractRoleMentions(ctx, req.Content, channel.ServerID)
 	}
 
-	// Bump denormalized unread_count for every user with a read-state row in
-	// this channel (author excluded). Non-fatal: unread badges may briefly
-	// diverge but the message itself is already persisted and delivered.
-	if err := s.readStateRepo.IncrementUnreadCounts(ctx, channelID, userID); err != nil {
-		log.Printf("[message] failed to increment unread counts for channel %s: %v", channelID, err)
+	// Atomic write set: message INSERT + unread bumps + mention rows commit
+	// or roll back together. Previously each ran auto-commit with failures
+	// only logged, which left drifting unread badges and missing mention
+	// rows next to an already-persisted message.
+	txErr := s.txRunner.InTx(ctx, func(r *repository.MessageTxRepos) error {
+		if err := r.Message.Create(ctx, message); err != nil {
+			return fmt.Errorf("failed to create message: %w", err)
+		}
+		if err := r.ReadState.IncrementUnreadCounts(ctx, channelID, userID); err != nil {
+			return fmt.Errorf("failed to increment unread counts: %w", err)
+		}
+		if len(mentionedIDs) > 0 {
+			if err := r.Mention.SaveMentions(ctx, message.ID, mentionedIDs); err != nil {
+				return fmt.Errorf("failed to save mentions: %w", err)
+			}
+		}
+		if len(roleMentionIDs) > 0 {
+			if err := r.RoleMention.SaveRoleMentions(ctx, message.ID, roleMentionIDs); err != nil {
+				return fmt.Errorf("failed to save role mentions: %w", err)
+			}
+		}
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+
+	if req.EncryptionVersion == 0 {
+		message.Mentions = mentionedIDs
+		message.RoleMentions = roleMentionIDs
+	} else {
+		message.Mentions = []string{}
+		message.RoleMentions = []string{}
 	}
 
 	author, err := s.userRepo.GetByID(ctx, userID)
@@ -273,34 +310,6 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 			}
 		}
 		// If deleted, ReferencedMessage stays nil
-	}
-
-	// Parse and save mentions (server can't read E2EE content)
-	if req.EncryptionVersion == 0 {
-		channel, _ := s.channelRepo.GetByID(ctx, channelID)
-		serverID := ""
-		if channel != nil {
-			serverID = channel.ServerID
-		}
-
-		mentionedIDs := s.extractMentions(ctx, req.Content)
-		if len(mentionedIDs) > 0 {
-			if err := s.mentionRepo.SaveMentions(ctx, message.ID, mentionedIDs); err != nil {
-				log.Printf("[mention] failed to save mentions for message %s: %v\n", message.ID, err)
-			}
-		}
-		message.Mentions = mentionedIDs
-
-		roleMentionIDs := s.extractRoleMentions(ctx, req.Content, serverID)
-		if len(roleMentionIDs) > 0 {
-			if err := s.roleMentionRepo.SaveRoleMentions(ctx, message.ID, roleMentionIDs); err != nil {
-				log.Printf("[mention] failed to save role mentions for message %s: %v\n", message.ID, err)
-			}
-		}
-		message.RoleMentions = roleMentionIDs
-	} else {
-		message.Mentions = []string{}
-		message.RoleMentions = []string{}
 	}
 
 	return message, nil

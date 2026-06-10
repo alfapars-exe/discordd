@@ -49,6 +49,19 @@ var (
 	_ repository.MemberTimeoutRepository = noopTimeoutRepo{}
 )
 
+// passthroughTxRunner satisfies repository.MessageTxRunner without a real
+// transaction: fn runs directly against the test's mock repos, so per-case
+// Fn overrides apply inside the "transaction" too. True rollback semantics
+// are covered by repository/message_tx_test.go against a real database.
+type passthroughTxRunner struct {
+	repos repository.MessageTxRepos
+}
+
+func (p passthroughTxRunner) InTx(_ context.Context, fn func(*repository.MessageTxRepos) error) error {
+	r := p.repos
+	return fn(&r)
+}
+
 func newTestMessageService(
 	msgRepo *testutil.MockMessageRepo,
 	attachRepo *testutil.MockAttachmentRepo,
@@ -61,11 +74,17 @@ func newTestMessageService(
 	hub *testutil.MockBroadcastAndOnline,
 	permResolver *testutil.MockChannelPermResolver,
 ) MessageService {
+	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
+		Message:     msgRepo,
+		Mention:     mentionRepo,
+		RoleMention: roleMentionRepo,
+		ReadState:   noopReadStateRepo{},
+	}}
 	return NewMessageService(
 		msgRepo, attachRepo, chanRepo, userRepo,
 		mentionRepo, roleMentionRepo, roleRepo, reactionRepo,
 		noopReadStateRepo{}, noopTimeoutRepo{},
-		hub, permResolver,
+		runner, hub, permResolver,
 	)
 }
 
@@ -579,5 +598,52 @@ func TestMessageUpdate_EncryptionVersionMismatch(t *testing.T) {
 	}
 	if !errors.Is(err, pkg.ErrBadRequest) {
 		t.Errorf("expected ErrBadRequest, got %v", err)
+	}
+}
+
+// ─── Transactional create: mention failure must fail the whole Create ───
+//
+// Before the tx refactor, a mention-save failure was only logged and the
+// message survived without its mention rows. Now the error propagates (and
+// repository/message_tx_test.go proves the DB-level rollback).
+
+func TestMessageCreate_MentionFailurePropagates(t *testing.T) {
+	sentinel := errors.New("mention insert exploded")
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{},
+		&testutil.MockAttachmentRepo{},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
+		&testutil.MockUserRepo{
+			GetByIDFn: func(_ context.Context, id string) (*models.User, error) {
+				return &models.User{ID: id, Username: "alice"}, nil
+			},
+			GetByUsernameFn: func(_ context.Context, _ string) (*models.User, error) {
+				return nil, pkg.ErrNotFound
+			},
+		},
+		&testutil.MockMentionRepo{
+			SaveMentionsFn: func(_ context.Context, _ string, _ []string) error {
+				return sentinel
+			},
+		},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		&testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
+			},
+		},
+	)
+
+	req := &models.CreateMessageRequest{Content: "selam <@deadbeef01>"}
+	_, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("Create error = %v, want the mention sentinel to propagate (atomic write set)", err)
 	}
 }

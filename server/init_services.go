@@ -9,6 +9,7 @@ import (
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -110,7 +111,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	messageService := services.NewMessageService(
 		repos.Message, repos.Attachment, repos.Channel, repos.User,
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
-		repos.MemberTimeout, hub, channelPermService,
+		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService,
 	)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService)
