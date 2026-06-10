@@ -1,15 +1,16 @@
 /** MemberCard — Unified user profile popover. Works in server context (with roles/mod)
  *  and global context (DM sidebar, friend list — no server-specific sections). */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { MemberWithRoles, User } from "../../types";
-import Avatar from "../shared/Avatar";
-import RoleBadge from "./RoleBadge";
 import RoleEditorPopup from "./RoleEditorPopup";
 import BadgeAssignModal from "./BadgeAssignModal";
-import BadgePill from "../shared/BadgePill";
+import MemberCardIdentity from "./memberCard/MemberCardIdentity";
+import MemberCardSelfStatus from "./memberCard/MemberCardSelfStatus";
+import MemberCardActions from "./memberCard/MemberCardActions";
+import MemberCardModeration from "./memberCard/MemberCardModeration";
 import { useUserBadges } from "../../hooks/useUserBadges";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -20,45 +21,16 @@ import { useFriendStore } from "../../stores/friendStore";
 import { useBlockStore } from "../../stores/blockStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useConfirm } from "../../hooks/useConfirm";
+import { useAnchoredCard } from "../../hooks/useAnchoredCard";
 import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import ReportModal from "../shared/ReportModal";
 import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
-import { formatDate, formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
+import { formatDate } from "../../utils/dateFormat";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
-
-// FriendIcon — module-scope so React/ESLint sees it as a stable
-// component identity. Defining it inside MemberCard's body would make
-// it a "fresh" component every render, defeating reconciliation and
-// triggering react-hooks/static-components.
-function FriendIcon({ isFriend }: { isFriend: boolean }) {
-  if (isFriend) {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="18" y1="11" x2="23" y2="11" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" />
-    </svg>
-  );
-}
-
-const SELF_STATUS_OPTIONS: {
-  value: "online" | "idle" | "dnd" | "offline";
-  labelKey: string;
-  colorClass: string;
-}[] = [
-  { value: "online", labelKey: "online", colorClass: "ub-sp-green" },
-  { value: "idle", labelKey: "idle", colorClass: "ub-sp-yellow" },
-  { value: "dnd", labelKey: "dnd", colorClass: "ub-sp-red" },
-  { value: "offline", labelKey: "invisible", colorClass: "ub-sp-gray" },
-];
 
 type MemberCardProps = {
   member?: MemberWithRoles;
@@ -68,10 +40,8 @@ type MemberCardProps = {
 };
 
 function MemberCard({ member, user: userProp, position, onClose }: MemberCardProps) {
-  const { t, i18n } = useTranslation("common");
+  const { t } = useTranslation("common");
   const confirm = useConfirm();
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [adjustedPos, setAdjustedPos] = useState(position);
   const currentUser = useAuthStore((s) => s.user);
 
   // Derive common fields from member or user prop. `target` may be null
@@ -144,55 +114,14 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const outReq = outgoing.find((r) => r.user_id === userId);
   const inReq = incoming.find((r) => r.user_id === userId);
 
-  const childModalOpenRef = useRef(false);
-  // Mirror the open-child-modal state into a ref so the click-outside
-  // handler (registered once in useEffect) can read the latest value
-  // without re-subscribing on every state change. useLayoutEffect runs
-  // synchronously after commit but before paint, so the ref is fresh
-  // by the time any pointer event fires.
-  useLayoutEffect(() => {
-    childModalOpenRef.current =
-      showBadgeAssign || showRoleEditor || showReport || pickerMode !== null;
-  });
-
-  useLayoutEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    const pad = 8;
-    let { top, left } = position;
-
-    if (top + rect.height > window.innerHeight - pad) {
-      top = window.innerHeight - rect.height - pad;
-    }
-    if (top < pad) top = pad;
-    if (left < pad) left = pad;
-    if (left + rect.width > window.innerWidth - pad) {
-      left = window.innerWidth - rect.width - pad;
-    }
-
-    if (top !== position.top || left !== position.left) {
-      setAdjustedPos({ top, left });
-    }
-  }, [position]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (childModalOpenRef.current) return;
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-
-    const frameId = requestAnimationFrame(() => {
-      document.addEventListener("mousedown", handleClick);
-    });
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      document.removeEventListener("mousedown", handleClick);
-    };
-  }, [onClose]);
+  // Anchored-card plumbing: viewport-clamped position + click-outside
+  // dismissal. Any open child modal suppresses click-outside so
+  // interacting with it doesn't close the card underneath.
+  const { cardRef, adjustedPos } = useAnchoredCard(
+    position,
+    onClose,
+    showBadgeAssign || showRoleEditor || showReport || pickerMode !== null
+  );
 
   // Early return AFTER every hook above — keeps React's hook call order
   // stable across renders. If we early-returned before the hooks (the
@@ -325,324 +254,67 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
         className="member-card"
         style={{ top: adjustedPos.top, left: adjustedPos.left }}
       >
-        {/* Header bar */}
-        <div className="mc-header">
-          <svg className="mc-header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-          </svg>
-          <span className="mc-header-title">{t("userProfile")}</span>
-          <button className="mc-header-close" onClick={onClose}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* User badges */}
-        {userBadges.length > 0 && (
-          <div className="mc-badges-top">
-            {userBadges.map((ub) => {
-              const badge = ub.badge;
-              if (!badge) return null;
-              return <BadgePill key={ub.id} badge={badge} size="md" />;
-            })}
-          </div>
-        )}
-
-        {/* Avatar area */}
-        <div className="mc-avatar-area">
-          <div className="mc-avatar-ring">
-            <Avatar
-              name={displayName ?? username}
-              avatarUrl={avatarUrl}
-              size={80}
-              isCircle
-            />
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="mc-body">
-          <div className="mc-identity">
-            {/* Per-server nickname takes precedence over the global
-                display name; falls back to display_name → username.
-                Edit pencil shows when the viewer is either renaming
-                themselves OR has ManageNicknames for others. */}
-            <div className="mc-name">
-              {member?.nickname || displayName || username}
-              {canEditNickname && nicknameDraft === null && (
-                <button
-                  className="mc-name-edit"
-                  onClick={openNicknameEditor}
-                  title={t("editNickname", { defaultValue: "Takma adı düzenle" })}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            {nicknameDraft !== null && (
-              <div className="mc-name-editor">
-                <input
-                  className="mc-name-input"
-                  autoFocus
-                  value={nicknameDraft}
-                  maxLength={32}
-                  onChange={(e) => setNicknameDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSaveNickname();
-                    if (e.key === "Escape") setNicknameDraft(null);
-                  }}
-                  placeholder={displayName ?? username}
-                />
-                <button className="mc-name-save" onClick={handleSaveNickname}>
-                  {t("save")}
-                </button>
-                <button className="mc-name-cancel" onClick={() => setNicknameDraft(null)}>
-                  {t("cancel")}
-                </button>
-              </div>
-            )}
-            {(displayName || member?.nickname) && <div className="mc-username">@{username}</div>}
-            {customStatus && <div className="mc-custom-status">{customStatus}</div>}
-            <div className="mc-join-date">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <span>{t("joinedAt", { date: joinDate })}</span>
-            </div>
-          </div>
-
-          {/* Active moderator timeout banner — visible to everyone (so
-              the target user themselves can see "you're muted until X"
-              if they open their own card), but the Remove button only
-              renders for mods with PermTimeoutMembers. */}
-          {isServerContext && timeoutExpiresAt && (
-            <div className="mc-timeout-banner" role="status">
-              <svg
-                className="mc-timeout-banner-icon"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <div className="mc-timeout-banner-text">
-                <strong>{t("timeoutActive")}</strong>
-                <span title={formatFullDateTime(timeoutExpiresAt, i18n.language)}>
-                  {t("timeoutExpiresIn", {
-                    rel: formatRelativeFuture(timeoutExpiresAt, i18n.language),
-                  })}
-                </span>
-              </div>
-              {canTimeout && (
-                <button
-                  className="mc-timeout-banner-action"
-                  onClick={handleRemoveTimeout}
-                  title={t("removeTimeoutTooltip")}
-                  type="button"
-                >
-                  {t("removeTimeout")}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Roles (server context only) */}
-          {sortedRoles.length > 0 && (
-            <div className="mc-roles">
-              {sortedRoles.map((role) => (
-                <RoleBadge key={role.id} role={role} />
-              ))}
-            </div>
-          )}
-
+        <MemberCardIdentity
+          member={member}
+          username={username}
+          displayName={displayName}
+          avatarUrl={avatarUrl}
+          customStatus={customStatus}
+          userBadges={userBadges}
+          joinDate={joinDate}
+          canEditNickname={canEditNickname}
+          nicknameDraft={nicknameDraft}
+          setNicknameDraft={setNicknameDraft}
+          openNicknameEditor={openNicknameEditor}
+          handleSaveNickname={handleSaveNickname}
+          isServerContext={isServerContext}
+          timeoutExpiresAt={timeoutExpiresAt}
+          canTimeout={canTimeout}
+          handleRemoveTimeout={handleRemoveTimeout}
+          sortedRoles={sortedRoles}
+          onClose={onClose}
+        >
           {/* Self status picker */}
           {isMe && (
-            <>
-              <div className="mc-divider" />
-              <div className="mc-section-title">{t("setStatus")}</div>
-              <div className="mc-status-list">
-                {SELF_STATUS_OPTIONS.map((opt) => {
-                  const isActive = manualStatus === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      className={`mc-status-item${isActive ? " active" : ""}`}
-                      onClick={() => handleSetStatus(opt.value)}
-                      type="button"
-                    >
-                      <span className={`ub-sp-dot ${opt.colorClass}`} />
-                      <span className="mc-status-label">{t(opt.labelKey)}</span>
-                      {isActive && (
-                        <svg className="mc-status-check" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
+            <MemberCardSelfStatus
+              manualStatus={manualStatus}
+              handleSetStatus={handleSetStatus}
+            />
           )}
 
-          {/* User Actions */}
-          {!isMe && (
-            <>
-              <div className="mc-divider" />
-              <div className="mc-section-title">{t("userActions")}</div>
-              <div className="mc-actions">
-                <button className="mc-btn mc-btn-primary" onClick={handleSendMessage}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
-                  </svg>
-                  <span>{t("sendMessage")}</span>
-                </button>
-                <button className="mc-btn mc-btn-default" onClick={handleVoiceCall}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
-                  </svg>
-                  <span>{t("voiceCall")}</span>
-                </button>
-                <button className="mc-btn mc-btn-default" onClick={handleVideoCall}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9.75a2.25 2.25 0 002.25-2.25V7.5a2.25 2.25 0 00-2.25-2.25H4.5A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-                  </svg>
-                  <span>{t("videoCall")}</span>
-                </button>
-                <button
-                  className={`mc-btn${isFriend ? " mc-btn-danger" : " mc-btn-default"}`}
-                  onClick={handleFriendAction}
-                >
-                  <FriendIcon isFriend={isFriend} />
-                  <span>{getFriendLabel()}</span>
-                </button>
-                {isBadgeAdmin && (
-                  <button
-                    className="mc-btn mc-btn-default"
-                    onClick={() => setShowBadgeAssign(true)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="8" r="7" /><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                    </svg>
-                    <span>{t("assignBadge")}</span>
-                  </button>
-                )}
-                <button
-                  className={`mc-btn${isBlocked ? " mc-btn-default" : " mc-btn-danger"}`}
-                  onClick={async () => {
-                    if (isBlocked) {
-                      await unblockUser(userId);
-                    } else {
-                      const ok = await confirm({
-                        message: t("confirmBlock", { username }),
-                        confirmLabel: t("block"),
-                        danger: true,
-                      });
-                      if (ok) await blockUser(userId);
-                    }
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                  </svg>
-                  <span>{isBlocked ? t("unblock") : t("block")}</span>
-                </button>
-                <button
-                  className="mc-btn mc-btn-danger"
-                  onClick={() => setShowReport(true)}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" />
-                  </svg>
-                  <span>{t("report")}</span>
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Badge admin action when viewing own card */}
-          {isBadgeAdmin && isMe && (
-            <>
-              <div className="mc-divider" />
-              <div className="mc-actions">
-                <button
-                  className="mc-btn mc-btn-default"
-                  style={{ gridColumn: "1/-1" }}
-                  onClick={() => setShowBadgeAssign(true)}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="8" r="7" /><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                  </svg>
-                  <span>{t("assignBadge")}</span>
-                </button>
-              </div>
-            </>
-          )}
+          <MemberCardActions
+            isMe={isMe}
+            isBadgeAdmin={isBadgeAdmin}
+            isFriend={isFriend}
+            isBlocked={isBlocked}
+            userId={userId}
+            username={username}
+            handleSendMessage={handleSendMessage}
+            handleVoiceCall={handleVoiceCall}
+            handleVideoCall={handleVideoCall}
+            handleFriendAction={handleFriendAction}
+            getFriendLabel={getFriendLabel}
+            blockUser={blockUser}
+            unblockUser={unblockUser}
+            confirm={confirm}
+            setShowBadgeAssign={setShowBadgeAssign}
+            setShowReport={setShowReport}
+          />
 
           {/* Moderation (server context only) */}
           {hasModActions && (
-            <>
-              <div className="mc-divider" />
-              <div className="mc-section-title-row">
-                <span className="mc-section-title">{t("moderation")}</span>
-                <span className="mc-admin-tag">{t("adminAccess")}</span>
-              </div>
-              <div className="mc-actions">
-                {canKick && (
-                  <button className="mc-btn mc-btn-default" onClick={handleKick}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                    <span>{t("kick")}</span>
-                  </button>
-                )}
-                {canTimeout && (
-                  <button className="mc-btn mc-btn-default" onClick={() => setPickerMode("timeout")}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span>{t("timeout")}</span>
-                  </button>
-                )}
-                {canBan && (
-                  <button className="mc-btn mc-btn-ban" onClick={handleBan}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                    </svg>
-                    <span>{t("ban")}</span>
-                  </button>
-                )}
-                {canBan && (
-                  <button className="mc-btn mc-btn-ban" onClick={() => setPickerMode("tempban")}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span>{t("tempBan")}</span>
-                  </button>
-                )}
-                {canManageRoles && (
-                  <button
-                    className="mc-btn mc-btn-roles-full"
-                    onClick={() => setShowRoleEditor(true)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                    </svg>
-                    <span>{t("editRoles")}</span>
-                  </button>
-                )}
-              </div>
-            </>
+            <MemberCardModeration
+              canKick={canKick}
+              canTimeout={canTimeout}
+              canBan={canBan}
+              canManageRoles={canManageRoles}
+              handleKick={handleKick}
+              handleBan={handleBan}
+              setPickerMode={setPickerMode}
+              setShowRoleEditor={setShowRoleEditor}
+            />
           )}
-        </div>
+        </MemberCardIdentity>
       </div>
 
       {showRoleEditor && member && (
