@@ -29,7 +29,9 @@ RUN npm run build
 # was linked against glibc (uses readdir64, fstat64, __res_init, mmap64,
 # etc.). Those symbols don't exist on Alpine/musl, so the link step fails
 # with "undefined reference to readdir64" if we stay on Alpine.
-FROM golang:1.25-bookworm AS backend
+# 1.25.11+: GO-2026-5037 (crypto/x509) and GO-2026-5039 (net/textproto)
+# stdlib fixes — both reachable from this codebase per govulncheck.
+FROM golang:1.25.11-bookworm AS backend
 WORKDIR /app
 
 # Module cache layer: download what's already in go.sum. We don't run
