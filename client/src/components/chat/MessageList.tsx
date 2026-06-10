@@ -29,10 +29,29 @@ function MessageList() {
     fetchOlderMessages,
     scrollToMessageId,
     setScrollToMessageId,
+    editMessage,
+    deleteMessage,
+    toggleReaction,
+    setReplyingTo,
+    pinMessage,
+    unpinMessage,
+    isMessagePinned,
+    canManageMessages,
+    showRoleColors,
+    members: ctxMembers,
   } = useChatContext();
 
   const currentUser = useAuthStore((s) => s.user);
   const members = useActiveMembers();
+
+  // Per-row props for the memoized Message rows. This component re-renders
+  // on every context change anyway; the rows only re-render when their own
+  // props change (see Message.tsx for the memo rationale).
+  const memberById = useMemo(
+    () => new Map(ctxMembers.map((m) => [m.id, m])),
+    [ctxMembers],
+  );
+  const currentMember = currentUser ? memberById.get(currentUser.id) : undefined;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -315,6 +334,19 @@ function MessageList() {
                 <Message
                   message={msg}
                   isCompact={isCompact(index)}
+                  isPinned={isMessagePinned(msg.id)}
+                  mode={mode}
+                  canManageMessages={canManageMessages}
+                  member={showRoleColors ? memberById.get(msg.user_id) : undefined}
+                  currentMember={currentMember}
+                  members={ctxMembers}
+                  editMessage={editMessage}
+                  deleteMessage={deleteMessage}
+                  toggleReaction={toggleReaction}
+                  setReplyingTo={setReplyingTo}
+                  setScrollToMessageId={setScrollToMessageId}
+                  pinMessage={pinMessage}
+                  unpinMessage={unpinMessage}
                 />
               </div>
             ))}

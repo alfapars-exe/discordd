@@ -5,15 +5,15 @@
  * State and pure logic live elsewhere:
  *   - useMessageEditing       — edit mode state machine + mention autocomplete
  *   - utils/messageParsers    — content rendering, role helpers, preview URLs
- *   - useChatContext          — channel/DM-agnostic data + actions
+ *   - MessageList             — reads ChatContext once and fans out per-row
+ *     props (this component is memoized; see the MessageProps comment)
  *   - useContextMenu / useLongPress — interaction primitives
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
-import { useChatContext } from "../../hooks/useChatContext";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
 import { formatFullDateTime, formatMessageTime } from "../../utils/dateFormat";
@@ -31,7 +31,7 @@ import {
   getRoleType,
   renderMessageContent,
 } from "../../utils/messageParsers";
-import type { User } from "../../types";
+import type { MemberWithRoles, User } from "../../types";
 import Avatar from "../shared/Avatar";
 import BadgePill from "../shared/BadgePill";
 import ContextMenu from "../shared/ContextMenu";
@@ -47,9 +47,50 @@ type MessageProps = {
   message: ChatMessage;
   /** Consecutive message from same author? (compact mode) */
   isCompact: boolean;
+  /**
+   * Everything below used to come from useChatContext(). Rows now receive
+   * plain props instead so React.memo can skip them: the provider's context
+   * value changes identity on every typing event / presence churn / reply
+   * state change, which re-rendered EVERY message row on each keystroke-
+   * adjacent event. MessageList (which re-renders anyway) reads the context
+   * once and fans out per-row props; the action callbacks are
+   * useCallback-stable in the providers.
+   */
+  isPinned: boolean;
+  mode: "channel" | "dm";
+  canManageMessages: boolean;
+  /** Author's member entry (role color/type) — undefined in DMs. */
+  member: MemberWithRoles | undefined;
+  /** Current user's member entry — role-mention highlight. */
+  currentMember: MemberWithRoles | undefined;
+  /** Full member list — mention tokens inside message content. */
+  members: MemberWithRoles[];
+  editMessage: (id: string, content: string) => Promise<boolean>;
+  deleteMessage: (id: string) => Promise<boolean>;
+  toggleReaction: (messageId: string, emoji: string) => void;
+  setReplyingTo: (msg: ChatMessage | null) => void;
+  setScrollToMessageId: (id: string | null) => void;
+  pinMessage: (messageId: string) => Promise<void>;
+  unpinMessage: (messageId: string) => Promise<void>;
 };
 
-function Message({ message, isCompact }: MessageProps) {
+function Message({
+  message,
+  isCompact,
+  isPinned,
+  mode,
+  canManageMessages,
+  member,
+  currentMember,
+  members,
+  editMessage,
+  deleteMessage,
+  toggleReaction,
+  setReplyingTo,
+  setScrollToMessageId,
+  pinMessage,
+  unpinMessage,
+}: MessageProps) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const currentUser = useAuthStore((s) => s.user);
@@ -60,20 +101,6 @@ function Message({ message, isCompact }: MessageProps) {
   const hasDecryptionError = useE2EEStore((s) =>
     s.decryptionErrors.some((e) => e.messageId === message.id),
   );
-  const {
-    mode,
-    editMessage,
-    deleteMessage,
-    toggleReaction,
-    setReplyingTo,
-    setScrollToMessageId,
-    pinMessage,
-    unpinMessage,
-    isMessagePinned,
-    canManageMessages,
-    showRoleColors,
-    members,
-  } = useChatContext();
 
   const roles = useActiveRoles();
   const isMobile = useIsMobile();
@@ -107,16 +134,13 @@ function Message({ message, isCompact }: MessageProps) {
 
   const isOwner = currentUser?.id === message.user_id;
 
-  // Role display info — skipped in DMs (showRoleColors=false, members=[])
-  const member = showRoleColors ? members.find((m) => m.id === message.user_id) : undefined;
+  // Role display info — member prop is undefined in DMs (showRoleColors=false)
   const roleType = getRoleType(member);
   const roleColor = getHighestRoleColor(member);
 
   const userBadges = useUserBadges(message.user_id);
-  const isPinned = isMessagePinned(message.id);
 
   // Highlight the message if the current user is mentioned (direct or via role).
-  const currentMember = members.find((m) => m.id === currentUser?.id);
   const isMentioned = useMemo(() => {
     if (!currentUser) return false;
     if (message.mentions?.includes(currentUser.id)) return true;
@@ -430,4 +454,9 @@ function Message({ message, isCompact }: MessageProps) {
   );
 }
 
-export default Message;
+// memo: rows skip re-renders for context-level churn (typing indicators,
+// reply state, other rows' reactions). Default shallow compare is correct —
+// callbacks are provider-stable, message/member identities only change when
+// the row's own data changes (or on wholesale member refresh, which must
+// re-render mention tokens anyway).
+export default memo(Message);
