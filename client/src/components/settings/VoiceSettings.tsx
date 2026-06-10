@@ -12,6 +12,7 @@ import rnnoiseWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise.wasm?url";
 import rnnoiseSimdWasmPath from "@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url";
 import vadGateWorkletPath from "../../audio/vadGateWorklet.js?url";
 import { postGateConfigToWorklet } from "../../audio/gateConfig";
+import VolumeSlider from "./VolumeSlider";
 
 
 /** Simplified MediaDeviceInfo for select options. */
@@ -49,14 +50,6 @@ function formatKeyCode(code: string): string {
   };
 
   return mapping[code] ?? code;
-}
-
-/** Inline gradient for slider filled portion (Chrome lacks ::-moz-range-progress). */
-function sliderTrackStyle(value: number, max: number): React.CSSProperties {
-  const pct = (value / max) * 100;
-  return {
-    background: `linear-gradient(to right, var(--primary) ${pct}%, var(--bg-5) ${pct}%)`,
-  };
 }
 
 function VoiceSettings() {
@@ -414,18 +407,12 @@ function VoiceSettings() {
       {inputMode === "voice_activity" && (
         <div className="vs-section">
           <div className="vs-label">{t("micSensitivity")}</div>
-          <div className="vs-slider-row">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={micSensitivity}
-              onChange={(e) => setMicSensitivity(Number(e.target.value))}
-              className="vs-range"
-              style={sliderTrackStyle(micSensitivity, 100)}
-            />
-            <span className="vs-slider-value">{micSensitivity}%</span>
-          </div>
+          <VolumeSlider
+            value={micSensitivity}
+            max={100}
+            onChange={setMicSensitivity}
+            ariaLabel={t("micSensitivity")}
+          />
         </div>
       )}
 
@@ -449,18 +436,12 @@ function VoiceSettings() {
       {/* ─── Input Volume ─── */}
       <div className="vs-section">
         <div className="vs-label">{t("inputVolume")}</div>
-        <div className="vs-slider-row">
-          <input
-            type="range"
-            min={0}
-            max={200}
-            value={inputVolume}
-            onChange={(e) => setInputVolume(Number(e.target.value))}
-            className="vs-range"
-            style={sliderTrackStyle(inputVolume, 200)}
-          />
-          <span className="vs-slider-value">{inputVolume}%</span>
-        </div>
+        <VolumeSlider
+          value={inputVolume}
+          max={200}
+          onChange={setInputVolume}
+          ariaLabel={t("inputVolume")}
+        />
       </div>
 
       {/* ─── Mic Test ─── */}
@@ -506,18 +487,12 @@ function VoiceSettings() {
       {/* ─── Master Volume ─── */}
       <div className="vs-section">
         <div className="vs-label">{t("masterVolume")}</div>
-        <div className="vs-slider-row">
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={masterVolume}
-            onChange={(e) => setMasterVolume(Number(e.target.value))}
-            className="vs-range"
-            style={sliderTrackStyle(masterVolume, 100)}
-          />
-          <span className="vs-slider-value">{masterVolume}%</span>
-        </div>
+        <VolumeSlider
+          value={masterVolume}
+          max={100}
+          onChange={setMasterVolume}
+          ariaLabel={t("masterVolume")}
+        />
       </div>
 
       {/* ─── Noise Reduction ─── */}
@@ -583,21 +558,13 @@ function VoiceSettings() {
               <div className="vs-label">{t("deepfilterSuppressionLabel")}</div>
               <div className="vs-desc">{t("deepfilterSuppressionDesc")}</div>
             </div>
-            <div className="vs-slider-row" style={{ marginTop: 8 }}>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
+            <div style={{ marginTop: 8 }}>
+              <VolumeSlider
                 value={deepfilterSuppression}
-                onChange={(e) =>
-                  setDeepfilterSuppression(Number(e.target.value))
-                }
-                className="vs-range"
-                style={sliderTrackStyle(deepfilterSuppression, 100)}
-                aria-label={t("deepfilterSuppressionLabel")}
+                max={100}
+                onChange={setDeepfilterSuppression}
+                ariaLabel={t("deepfilterSuppressionLabel")}
               />
-              <span className="vs-slider-value">{deepfilterSuppression}%</span>
             </div>
           </div>
         )}

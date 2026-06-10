@@ -256,13 +256,62 @@ export function loadSettings(): VoiceSettings {
   }
 }
 
-function saveSettings(settings: VoiceSettings): void {
+function persistNow(settings: VoiceSettings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
     /* localStorage full or inaccessible */
   }
   usePreferencesStore.getState().set({ voice_settings: settings });
+}
+
+/**
+ * Persistence is debounced: a slider drag fires a setter per pointer move,
+ * and each save used to do a synchronous localStorage JSON.stringify of the
+ * full settings object PLUS a second store update (preferences sync) — per
+ * pixel. A trailing debounce coalesces a whole drag into one write. The
+ * in-memory zustand state stays immediate, so live consumers (mic test
+ * gain, volume sync) are unaffected.
+ */
+const SAVE_DEBOUNCE_MS = 400;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSave: VoiceSettings | null = null;
+
+function saveSettings(settings: VoiceSettings): void {
+  pendingSave = settings;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    const toWrite = pendingSave;
+    pendingSave = null;
+    if (toWrite) persistNow(toWrite);
+  }, SAVE_DEBOUNCE_MS);
+}
+
+/** Drop a not-yet-written save — used when server data is authoritative. */
+function cancelPendingSave(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  pendingSave = null;
+}
+
+/** Write a pending save immediately (page unload — don't lose the last drag). */
+export function flushPendingVoiceSettingsSave(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (pendingSave) {
+    const toWrite = pendingSave;
+    pendingSave = null;
+    persistNow(toWrite);
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", flushPendingVoiceSettingsSave);
 }
 
 /** Extract settings-shaped subset from the current store state. */
@@ -489,6 +538,10 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     applyFromServer: (settings) => {
+      // Server payload is authoritative at this moment (login/preferences
+      // sync) — a debounced local save racing it would resurrect stale
+      // values, so drop it instead of flushing.
+      cancelPendingSave();
       const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...loadSettings() };
       const keys = Object.keys(settings) as (keyof VoiceSettings)[];
       for (const key of keys) {
