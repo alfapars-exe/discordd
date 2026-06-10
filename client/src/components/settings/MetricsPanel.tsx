@@ -1,6 +1,6 @@
 /** MetricsPanel — LiveKit instance monitoring: real-time metrics, history summary, time-series charts. */
 
-import { useEffect, useState, useCallback } from "react";
+import { memo, useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AreaChart,
@@ -321,7 +321,11 @@ type MetricsChartProps = {
   isLoading: boolean;
 };
 
-function MetricsChart({ data, period, isLoading }: MetricsChartProps) {
+// memo: the recharts tree is the most expensive subtree in settings — the
+// history data array is referentially stable between fetches, so card-side
+// state churn in the parent (live metrics refresh, loading flags elsewhere)
+// must not re-render four charts.
+const MetricsChart = memo(function MetricsChart({ data, period, isLoading }: MetricsChartProps) {
   const { t } = useTranslation("settings");
 
   if (isLoading && data.length === 0) {
@@ -552,7 +556,7 @@ function MetricsChart({ data, period, isLoading }: MetricsChartProps) {
       </div>
     </div>
   );
-}
+});
 
 
 type ChartTooltipProps = {
