@@ -1,70 +1,62 @@
-# golangci-lint config for mqvi/HiChat! server.
-#
-# Philosophy: enable the small set of high-signal default linters that flag
-# real bugs (unused, ineffassign, govet, staticcheck) without forcing a big
-# stylistic rewrite. Lint runs as `continue-on-error: true` in CI until the
-# baseline is clean — see .github/workflows/server-ci.yml.
-
+version: "2"
 run:
-  timeout: 5m
-  # Generated files (frontend bundle embedded into static/) are not Go,
-  # but if anything Go-generated appears in the future, exclude it here.
   go: "1.25"
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - errcheck       # unchecked errors
-    - govet          # standard go vet checks (already in CI as `go vet`, but
-                     # included so a single golangci-lint run covers it too)
-    - ineffassign    # ineffective assignments
-    - staticcheck    # comprehensive bug catcher (replaces deprecated gosimple, stylecheck)
-    - unused         # unused vars/funcs/types/fields
-    - misspell       # common typos in comments/identifiers
-    - gocritic       # opinionated style + perf hints (mild)
-    - gosec          # security issues (SQL injection, hardcoded creds, etc.)
-
-linters-settings:
-  gocritic:
-    # Start narrow — only the highest-signal checks. Expand later.
-    enabled-checks:
-      - appendAssign
-      - badRegexp
-      - boolExprSimplify
-      - dupArg
-      - dupCase
-      - emptyStringTest
-      - nilValReturn
-      - sloppyLen
-      - sloppyTypeAssert
-      - unnecessaryBlock
-  gosec:
-    # G104: errors not checked — already caught by errcheck, avoid duplicate noise.
-    # G304: file path from variable — false-positive heavy on upload handlers.
-    excludes:
-      - G104
-      - G304
-
+    - errcheck
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+  settings:
+    gocritic:
+      enabled-checks:
+        - appendAssign
+        - badRegexp
+        - boolExprSimplify
+        - dupArg
+        - dupCase
+        - emptyStringTest
+        - nilValReturn
+        - sloppyLen
+        - sloppyTypeAssert
+        - unnecessaryBlock
+    gosec:
+      excludes:
+        - G104
+        - G304
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - errcheck
+          - gosec
+        path: _test\.go
+      - linters:
+          - errcheck
+          - gocritic
+          - gosec
+          - govet
+          - ineffassign
+          - misspell
+          - staticcheck
+          - unused
+        path: static/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  # Don't auto-exclude common issues; we want to see the full picture during baseline cleanup.
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Test files: relax errcheck (test setup often ignores errors deliberately)
-    # and gosec (test fixtures may contain dummy secrets).
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-    # Embedded static/ directory: contains generated frontend assets.
-    - path: static/
-      linters:
-        - errcheck
-        - govet
-        - ineffassign
-        - staticcheck
-        - unused
-        - misspell
-        - gocritic
-        - gosec
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
