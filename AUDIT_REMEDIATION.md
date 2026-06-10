@@ -232,18 +232,18 @@ Save → Space otomatik restart.
 
 Aşağıdakiler P0-P1 değil ya da daha geniş kapsam gerektiriyor. Audit raporundaki ID'lerle:
 
-| ID | Açıklama | Tahmini efor |
-|---|---|---|
-| P0-FE-03 | self-fanout race fix (`dmEncryption.ts`) | Yarım gün |
-| P0-BD-01 | E2EE backup HMAC integrity check (migration + service) | 1 gün |
-| P0-BD-02 | Device key enumeration rate-limit endpoint-spesifik | Yarım gün |
-| P0-BD-03 | Migration 067 transaction guard + post-assertion | 2 saat |
-| P1-FE-04 | Legacy device fallback fail-loud (SPK signature 64-byte check) | Yarım gün |
-| P1-FE-05 | Sender key signing key IndexedDB HMAC seal | 1 gün |
-| P1-FE-06 | Backup restore identity re-verification flow | 1 gün |
-| P1-BD-04 | Session `DeleteExpired` cron (main.go background goroutine) | 1 saat |
-| P2-IN-12 | HEALTHCHECK derinleştir (DB+Redis+LiveKit gerçek check) | 3 saat |
-| P3-IN-09 | Caddy patch version pin | 5 dakika |
+| ID | Açıklama | Tahmini efor | Durum |
+|---|---|---|---|
+| P0-FE-03 | self-fanout race fix (`dmEncryption.ts`) | Yarım gün | Açık |
+| P0-BD-01 | E2EE backup HMAC integrity check (migration + service) | 1 gün | ✅ KAPANDI — migration `070_e2ee_backup_hmac.sql`, `pkg/crypto/hmac.go` (HKDF subkey + length-prefixed canonical encoding), verify-on-read `services/e2ee_service.go`; testler `pkg/crypto/hmac_test.go` + `services/e2ee_backup_test.go` |
+| P0-BD-02 | Device key enumeration rate-limit endpoint-spesifik | Yarım gün | ✅ KAPANDI — `deviceEnumLimiter` (30/dk/IP, `init_services.go`), `middleware.RateLimitByIP` her iki route'a uygulandı (`init_routes.go`) |
+| P0-BD-03 | Migration 067 transaction guard + post-assertion | 2 saat | ✅ KAPANDI — `applyMigrationFile` her migration dosyasını tek tx'te koşuyor (`database/database.go`); regresyon testleri `database/database_test.go` (`TestApplyMigrationFile_RollsBackEntireFileOnError`, `TestMigration067_*`) |
+| P1-FE-04 | Legacy device fallback fail-loud (SPK signature 64-byte check) | Yarım gün | Açık |
+| P1-FE-05 | Sender key signing key IndexedDB HMAC seal | 1 gün | Açık |
+| P1-FE-06 | Backup restore identity re-verification flow | 1 gün | Açık |
+| P1-BD-04 | Session `DeleteExpired` cron (main.go background goroutine) | 1 saat | ✅ KAPANDI (2026-06-11) — `server/maintenance.go` saatlik sweeper: session + link-preview `DeleteExpired`; boot'ta bir kez + saatlik; graceful shutdown'da durduruluyor; index desteği migration `071_hot_path_indexes.sql` (`idx_sessions_expires`) |
+| P2-IN-12 | HEALTHCHECK derinleştir (DB+Redis+LiveKit gerçek check) | 3 saat | Açık |
+| P3-IN-09 | Caddy patch version pin | 5 dakika | Açık |
 
 #### 2.9 P2 Önceki Rapor (`guvenlik_raporu_2026-05-04.md`) Kontrolü
 
