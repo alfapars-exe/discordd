@@ -77,7 +77,11 @@ func (r *sqliteAppLogRepo) List(ctx context.Context, filter models.AppLogFilter)
 		FROM app_logs a LEFT JOIN users u ON a.user_id = u.id` +
 		where + " ORDER BY a.created_at DESC LIMIT ? OFFSET ?"
 
-	pageArgs := append(args, limit, offset)
+	// Fresh slice — appending to args and assigning elsewhere risks aliasing
+	// args' backing array (gocritic appendAssign).
+	pageArgs := make([]interface{}, 0, len(args)+2)
+	pageArgs = append(pageArgs, args...)
+	pageArgs = append(pageArgs, limit, offset)
 	rows, err := r.db.QueryContext(ctx, query, pageArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list app logs: %w", err)

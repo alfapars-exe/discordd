@@ -40,8 +40,16 @@ func BackupHMAC(hmacKey []byte, userID string, version int, algorithm, encrypted
 	mac := hmac.New(sha256.New, hmacKey)
 	writeField(mac, []byte(userID))
 	var vbuf [8]byte
-	binary.BigEndian.PutUint64(vbuf[:], uint64(version))
-	mac.Write(vbuf[:]) // fixed width — no length prefix needed
+	// version is a non-negative schema version everywhere it is produced;
+	// clamp anyway so a negative value can't silently wrap in the int ->
+	// uint64 conversion (gosec G115). Encoding for version >= 0 is unchanged,
+	// so existing stored MACs keep verifying.
+	v := version
+	if v < 0 {
+		v = 0
+	}
+	binary.BigEndian.PutUint64(vbuf[:], uint64(v)) // #nosec G115 -- v clamped non-negative above
+	mac.Write(vbuf[:])                             // fixed width — no length prefix needed
 	writeField(mac, []byte(algorithm))
 	writeField(mac, []byte(encryptedData))
 	writeField(mac, []byte(nonce))

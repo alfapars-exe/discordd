@@ -276,7 +276,7 @@ func main() {
 			path = "index.html"
 		}
 		if f, openErr := frontendFS.Open(path); openErr == nil {
-			f.Close()
+			_ = f.Close() // existence probe only — nothing was read
 			setStaticCacheHeaders(w, path)
 			http.FileServer(http.FS(frontendFS)).ServeHTTP(w, r)
 			return

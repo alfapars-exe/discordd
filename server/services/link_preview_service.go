@@ -84,7 +84,7 @@ func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewSer
 
 			return safeDialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
 		},
-		TLSClientConfig:    &tls.Config{InsecureSkipVerify: false},
+		TLSClientConfig:    &tls.Config{InsecureSkipVerify: false, MinVersion: tls.VersionTLS12},
 		DisableKeepAlives:  true,
 		ForceAttemptHTTP2:  false,
 		MaxIdleConns:       10,

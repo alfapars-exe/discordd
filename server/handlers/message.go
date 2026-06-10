@@ -137,14 +137,12 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 			if em := r.FormValue("e2ee_metadata"); em != "" {
 				req.E2EEMetadata = &em
 			}
-		} else {
-			// Plaintext path: ensure no client smuggles half an E2EE payload
+		} else if r.FormValue("ciphertext") != "" || r.FormValue("sender_device_id") != "" {
+			// Plaintext path: a client must not smuggle half an E2EE payload
 			// (ciphertext without the version flag) past mass-assignment.
-			if r.FormValue("ciphertext") != "" || r.FormValue("sender_device_id") != "" {
-				pkg.ErrorWithMessage(w, http.StatusBadRequest,
-					"ciphertext/sender_device_id provided without encryption_version=1")
-				return
-			}
+			pkg.ErrorWithMessage(w, http.StatusBadRequest,
+				"ciphertext/sender_device_id provided without encryption_version=1")
+			return
 		}
 
 		if r.MultipartForm != nil && len(r.MultipartForm.File["files"]) > 0 {

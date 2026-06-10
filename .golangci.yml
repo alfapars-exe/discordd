@@ -13,17 +13,37 @@ linters:
     - staticcheck
     - unused
   settings:
+    errcheck:
+      # Idiomatic never-checked returns. Each entry silences a pattern the
+      # codebase uses deliberately, instead of littering `_ =` everywhere:
+      #   - Close on read paths (defer rows/resp.Body/file.Close) — the read
+      #     error is what matters; double-reporting Close adds nothing.
+      #   - Rollback in error/defer paths — the original error is returned.
+      #   - ResponseWriter writes — nothing useful to do when the peer is gone.
+      #   - os.Remove on best-effort cleanup; mime.AddExtensionType at init.
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*github.com/gorilla/websocket.Conn).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Tx).Rollback
+        - (net/http.ResponseWriter).Write
+        - fmt.Fprintf
+        - fmt.Fprint
+        - os.Remove
+        - mime.AddExtensionType
     gocritic:
+      # badRegexp etc. are additions; checks that are in gocritic's default
+      # enabled set (appendAssign, dupArg, dupCase, sloppyLen,
+      # sloppyTypeAssert) were dropped from this list — v2 warns on
+      # redundant entries.
       enabled-checks:
-        - appendAssign
         - badRegexp
         - boolExprSimplify
-        - dupArg
-        - dupCase
         - emptyStringTest
         - nilValReturn
-        - sloppyLen
-        - sloppyTypeAssert
         - unnecessaryBlock
     gosec:
       excludes:

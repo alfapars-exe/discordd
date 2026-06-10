@@ -61,14 +61,13 @@ jobs:
         run: go build -trimpath -o /tmp/mqvi-server .
         working-directory: server
 
-  # ─── Go server: lint (advisory until baseline is clean) ───
-  # Marked continue-on-error so first-pass lint findings don't block PRs
-  # while the team triages the baseline. Flip to a hard gate once the
-  # findings list is empty.
+  # ─── Go server: lint (hard gate — baseline cleaned 2026-06-11) ───
+  # Version pinned to the exact binary the baseline was verified with;
+  # `latest` previously broke the job structurally whenever a new major
+  # rejected the config schema (the v1→v2 incident).
   server-lint:
     name: golangci-lint
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +80,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.6.2
           working-directory: server
           args: --timeout=5m
 

@@ -142,7 +142,7 @@ func main() {
 			}
 		}
 
-		if err := os.WriteFile(newPath, resized, 0o640); err != nil {
+		if err := os.WriteFile(newPath, resized, 0o600); err != nil {
 			log.Printf("[resize] write %s: %v", newName, err)
 			stats.errors++
 			return nil
@@ -154,7 +154,7 @@ func main() {
 		// may or may not allow them depending on the backing store), so
 		// duplicate the bytes; the cost is a single small avatar's worth.
 		if newPath != path {
-			if err := os.WriteFile(path, resized, 0o640); err != nil {
+			if err := os.WriteFile(path, resized, 0o600); err != nil {
 				log.Printf("[resize] alias %s -> %s: %v", name, newName, err)
 				// The new file was written; the alias is best-effort.
 			}

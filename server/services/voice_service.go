@@ -220,13 +220,6 @@ func (s *voiceService) logError(category models.LogCategory, userID *string, mes
 	}
 }
 
-// logWarn writes a structured warning log if appLogger is set.
-func (s *voiceService) logWarn(category models.LogCategory, userID *string, message string, metadata map[string]string) {
-	if s.appLogger != nil {
-		s.appLogger.Log(models.LogLevelWarn, category, userID, nil, message, metadata)
-	}
-}
-
 // logInfo writes a structured info log if appLogger is set.
 // Used for expected-but-noteworthy lifecycle events (orphan cleanup,
 // idempotent participant removal) that previously logged as Warn and

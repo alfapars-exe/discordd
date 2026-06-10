@@ -117,8 +117,7 @@ func scaleToFit(img image.Image, maxDim int) image.Image {
 // For PNG / WebP / GIF the model carries alpha even when every pixel is
 // opaque, so we walk the bounds and bail on the first translucent pixel.
 func imageHasAlpha(img image.Image) bool {
-	switch img.ColorModel() {
-	case nil:
+	if img.ColorModel() == nil {
 		return true
 	}
 	// JPEG sources never carry transparency.

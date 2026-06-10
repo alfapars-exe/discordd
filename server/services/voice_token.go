@@ -171,7 +171,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 
 	// TTL controlled by voiceTokenTTL (15min as of 2026-05-27 audit).
 	// See voiceTokenTTL declaration for rationale.
-	at.AddGrant(grant).
+	at.SetVideoGrant(grant).
 		SetIdentity(userID).
 		SetName(participantName).
 		SetValidFor(voiceTokenTTL)
@@ -258,7 +258,7 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 	// Screen share token TTL matches voice token TTL (15min as of 2026-05-27
 	// audit) — long screen shares trigger ~4 refreshes/hour, but a stolen
 	// token can't outlive a moderation event by more than the TTL window.
-	at.AddGrant(grant).
+	at.SetVideoGrant(grant).
 		SetIdentity(ssIdentity).
 		SetName(participantName).
 		SetValidFor(voiceTokenTTL)

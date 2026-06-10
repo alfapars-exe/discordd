@@ -57,7 +57,7 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	canPublishData := false
 
 	at := auth.NewAccessToken(apiKey, apiSecret)
-	at.AddGrant(&auth.VideoGrant{
+	at.SetVideoGrant(&auth.VideoGrant{
 		RoomJoin:       true,
 		Room:           bot.roomName,
 		CanPublish:     &canPublish,
@@ -179,7 +179,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// the user's raw input if yt-dlp didn't return a webpage URL. Without
 	// the terminator a crafted URL would let the dequeue path inherit the
 	// same argument-injection risk fixed in extractTracks.
-	yt := exec.CommandContext(ctx, "yt-dlp",
+	yt := exec.CommandContext(ctx, "yt-dlp", // #nosec G204 -- fixed argv; track.URL is scheme-validated at the HTTP edge (handlers/music.go) and isolated behind `--`
 		"-f", "bestaudio",
 		"--no-warnings",
 		"-o", "-",

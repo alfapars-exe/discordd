@@ -37,11 +37,12 @@ func (h *Hub) addClient(client *Client) {
 	isFirstConnection := len(h.clients[client.userID]) == 0
 
 	// Set per-connection status from prefStatus or default to "online"
-	if client.prefStatus != "" && client.prefStatus != "offline" {
+	switch {
+	case client.prefStatus != "" && client.prefStatus != "offline":
 		client.status = client.prefStatus
-	} else if client.prefStatus == "offline" {
+	case client.prefStatus == "offline":
 		client.status = "offline"
-	} else {
+	default:
 		client.status = "online"
 	}
 

@@ -270,9 +270,10 @@ func TestGetAll_BulkLoadsTimeoutsViaListActive(t *testing.T) {
 
 	var muted, clean *models.MemberWithRoles
 	for i := range members {
-		if members[i].ID == "a" {
+		switch members[i].ID {
+		case "a":
 			muted = &members[i]
-		} else if members[i].ID == "b" {
+		case "b":
 			clean = &members[i]
 		}
 	}

@@ -310,7 +310,7 @@ func (r *sqliteUserRepo) Delete(ctx context.Context, id string) error {
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && (errors.Is(err, sql.ErrNoRows) == false) &&
+	return err != nil && !errors.Is(err, sql.ErrNoRows) &&
 		(containsString(err.Error(), "UNIQUE constraint failed"))
 }
 

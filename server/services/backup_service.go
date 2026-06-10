@@ -257,7 +257,8 @@ func (b *BackupService) Restore(ctx context.Context) error {
 	log.Printf("[backup] restore start: bucket=%s force=%v", b.cfg.HFBucket, force)
 	b.logInfo("restore start", map[string]string{"bucket": b.cfg.HFBucket})
 
-	if err := os.MkdirAll(b.cfg.WorkDir, 0o755); err != nil {
+	// 0o750 matches the DB-dir convention in database.go — no "other" access.
+	if err := os.MkdirAll(b.cfg.WorkDir, 0o750); err != nil {
 		return fmt.Errorf("restore workdir mkdir: %w", err)
 	}
 
@@ -472,7 +473,8 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o640)
+	// 0o600: snapshot copies carry the full DB — owner-only.
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -506,7 +508,7 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 	log.Printf("[backup] cycle start (dbOnly=%v)", dbOnly)
 	b.logInfo("backup cycle started", map[string]string{"db_only": fmt.Sprintf("%v", dbOnly)})
 
-	if err := os.MkdirAll(b.cfg.WorkDir, 0o755); err != nil {
+	if err := os.MkdirAll(b.cfg.WorkDir, 0o750); err != nil {
 		b.fail("workdir mkdir", err)
 		return
 	}
