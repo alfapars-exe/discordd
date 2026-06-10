@@ -33,6 +33,7 @@ function App() {
   const { t } = useTranslation("common");
   const initialize = useAuthStore((s) => s.initialize);
   const isInitialized = useAuthStore((s) => s.isInitialized);
+  const initPhase = useAuthStore((s) => s.initPhase);
   const user = useAuthStore((s) => s.user);
   const blurEnabled = useSettingsStore((s) => s.blurEnabled);
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
@@ -97,7 +98,9 @@ function App() {
       <div className="flex h-full items-center justify-center bg-background" style={{ flex: 1, minHeight: 0 }}>
         <div className="text-center">
           <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-surface border-t-brand" />
-          <p className="text-base text-text-muted">{t("loading")}</p>
+          <p className="text-base text-text-muted">
+            {initPhase === "waking" ? t("serverWaking", { defaultValue: t("loading") }) : t("loading")}
+          </p>
         </div>
       </div>
     );

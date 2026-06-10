@@ -1,6 +1,7 @@
 {
   "appName": "HiChat!",
   "loading": "Loading...",
+  "serverWaking": "Server is waking up, hang tight...",
   "save": "Save",
   "cancel": "Cancel",
   "delete": "Delete",

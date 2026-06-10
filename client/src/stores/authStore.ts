@@ -6,6 +6,7 @@ import { create } from "zustand";
 import * as authApi from "../api/auth";
 import { setTokens, clearTokens } from "../api/client";
 import { logToServer } from "../api/clientLog";
+import { pingServer } from "../utils/serverProbe";
 import { changeLanguage, type Language, SUPPORTED_LANGUAGES } from "../i18n";
 import { useE2EEStore } from "./e2eeStore";
 import { usePreferencesStore } from "./preferencesStore";
@@ -15,6 +16,23 @@ import type { User, UserStatus } from "../types";
 import { oneOf } from "../utils/validation";
 
 const MANUAL_STATUS_KEY = "mqvi_manual_status";
+
+/**
+ * Transient infra failures (HF Space cold start → 502/503/504 sentinel from
+ * api/client.ts, or a plain network error) must never destroy a valid
+ * session — only a definitive auth rejection may clear tokens. QA 2026-05-28
+ * bug #1: an F5 during a cold start bounced logged-in users to /login because
+ * initialize() treated every getMe() failure as "logged out".
+ */
+export function isTransientAuthError(error: string | null | undefined): boolean {
+  if (!error) return false;
+  if (error.startsWith("service_unavailable:")) return true;
+  return /network request failed|failed to fetch|load failed|networkerror/i.test(error);
+}
+
+const INIT_WAKE_MAX_ATTEMPTS = 8;
+const INIT_WAKE_BASE_DELAY_MS = 2_000;
+const INIT_WAKE_MAX_DELAY_MS = 30_000;
 
 /** Apply user's DB language preference to i18n (takes priority over browser locale). */
 function syncLanguageFromUser(user: User): void {
@@ -28,6 +46,12 @@ type AuthState = {
   isLoading: boolean;
   error: string | null;
   isInitialized: boolean;
+  /**
+   * Boot-time session restore phase: "waking" while we wait out a transient
+   * server failure (HF cold start), "failed" when the wake-up budget is
+   * exhausted (tokens left intact — next reload retries), "idle" otherwise.
+   */
+  initPhase: "idle" | "waking" | "failed";
 
   // ─── Actions ───
   register: (username: string, password: string, displayName?: string, email?: string) => Promise<boolean>;
@@ -52,6 +76,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: false,
   error: null,
   isInitialized: false,
+  initPhase: "idle",
   // localStorage values cross a trust boundary: an older version could have
   // written a status string that's no longer valid (e.g. removed enum value).
   // oneOf() narrows safely with "online" fallback so the store never holds
@@ -141,19 +166,58 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Access token lives in module memory only (see api/client.ts). On cold
     // reload the in-memory token starts null, getMe() returns 401, apiClient
     // transparently calls /auth/refresh via the HttpOnly cookie and retries.
-    // If the refresh cookie is invalid or missing, the retry fails too and we
-    // fall into the else branch — clearTokens + isInitialized=true bounces
-    // the user to /login. No localStorage gate: the legacy access_token key
-    // is swept at boot and would always read null, preventing this whole flow.
+    // If the refresh cookie is invalid or missing, the retry fails too and
+    // only THEN do we clear tokens and bounce to /login. Transient failures
+    // (HF cold start, network blip) wait the server out with exponential
+    // backoff instead — the refresh cookie is still valid, destroying the
+    // session over an infra hiccup was QA bug #1.
+    const applySession = (user: User) => {
+      syncLanguageFromUser(user);
+      set({ user, isInitialized: true, initPhase: "idle" });
+      usePreferencesStore.getState().fetchAndApply();
+    };
+
     const res = await authApi.getMe();
     if (res.success && res.data) {
-      syncLanguageFromUser(res.data);
-      set({ user: res.data, isInitialized: true });
-      usePreferencesStore.getState().fetchAndApply();
-    } else {
-      clearTokens();
-      set({ isInitialized: true });
+      applySession(res.data);
+      return;
     }
+
+    if (isTransientAuthError(res.error)) {
+      set({ initPhase: "waking" });
+      for (let attempt = 0; attempt < INIT_WAKE_MAX_ATTEMPTS; attempt++) {
+        const delay = Math.min(
+          INIT_WAKE_BASE_DELAY_MS * 2 ** attempt,
+          INIT_WAKE_MAX_DELAY_MS,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        // Cheap unauthenticated probe first — don't fire the auth+refresh
+        // machinery against a server that is still booting.
+        if (!(await pingServer())) continue;
+
+        const retry = await authApi.getMe();
+        if (retry.success && retry.data) {
+          applySession(retry.data);
+          return;
+        }
+        if (!isTransientAuthError(retry.error)) {
+          // Server is back and definitively rejected us — real logout.
+          clearTokens();
+          set({ isInitialized: true, initPhase: "idle" });
+          return;
+        }
+        // Server answered the probe but the API is still flaky — keep backing off.
+      }
+      // Budget exhausted (~2.5 min): give up WITHOUT clearing tokens so the
+      // next reload retries against a (hopefully) awake server.
+      logToServer("warn", "auth_init_wake_exhausted", {});
+      set({ isInitialized: true, initPhase: "failed" });
+      return;
+    }
+
+    clearTokens();
+    set({ isInitialized: true, initPhase: "idle" });
   },
 
   clearError: () => set({ error: null }),

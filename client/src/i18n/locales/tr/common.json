@@ -1,6 +1,7 @@
 {
   "appName": "HiChat!",
   "loading": "Yükleniyor...",
+  "serverWaking": "Sunucu uyanıyor, lütfen bekleyin...",
   "save": "Kaydet",
   "cancel": "İptal",
   "delete": "Sil",
