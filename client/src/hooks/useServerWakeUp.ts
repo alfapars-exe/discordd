@@ -15,7 +15,7 @@
  * Tasarım kararları:
  * - Probe + retry login çağrısının kendisi YERİNE yapılıyor: parola tekrar
  *   tekrar wire'a yazılmasın, DB'ye yük binmesin.
- * - Hook auth sayfasından çıkınca cleanup yapıyor (interval temizlenir).
+ * - Hook auth sayfasından çıkınca cleanup yapıyor (bekleyen timeout temizlenir).
  * - `lastAttempt` callback'i kapatma içinde tutuyoruz; her wake-up için tek
  *   bir retry yapılır (probe başarılı olunca).
  */
@@ -23,35 +23,34 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { pingServer } from "../utils/serverProbe";
 
-// ─────────────────────────────────────────────────────────────────────────
-// ★ TODO(harun): Retry politikasını sen belirle.
-//
-// HF Spaces cold start tipik olarak 30-90sn sürer. Aşağıdaki değerleri ve
-// shouldRetry mantığını ihtiyacına göre değiştir. Plan dosyasında üç seçenek
-// detaylı anlatıldı:
-//   1) Linear      → her denemede aynı bekleme (öngörülebilir, basit)
-//   2) Exponential → 1s, 2s, 4s, 8s, 16s, 32s (sunucu yükünü düşürür)
-//   3) Custom      → HF cold start eğrisine elle uydurulmuş
-//
-// Aynı zamanda hangi hata durumlarının "uyanıyor" sayılacağını shouldRetry
-// içinde belirle: sadece sentinel mi, yoksa network error'ları da mı?
-// ─────────────────────────────────────────────────────────────────────────
-
 const RETRY_POLICY = {
-  /** Toplam kaç ping denemesi yapılsın (0-indexed limit) */
-  maxAttempts: 12, // ← değiştir
-  /** Linear interval — her denemenin arasındaki bekleme (ms) */
-  intervalMs: 5_000, // ← değiştir
-  // Eğer exponential backoff istersen, intervalMs'i kaldırıp bunu kullan:
-  // backoff: (attempt: number) => Math.min(1000 * 2 ** attempt, 30_000),
+  /** Total probe budget — the 8th failed probe transitions to "failed". */
+  maxAttempts: 8,
+  /**
+   * Exponential backoff between probes: 2s, 4s, 8s, 16s, then capped at 30s.
+   * HF cold start typically takes 30-90s; with the 30s cap the full budget
+   * spans ~2min, which covers the slow tail without probing forever.
+   */
+  backoff: (attempt: number) => Math.min(2_000 * 2 ** attempt, 30_000),
 };
+
+/**
+ * ±20% jitter — a sleeping Space tends to fail many clients at the same
+ * instant, so without jitter their retry schedules stay synchronized and
+ * re-stampede the container exactly when it's trying to boot.
+ */
+function jitter(delayMs: number): number {
+  return delayMs * (0.8 + Math.random() * 0.4);
+}
 
 function shouldRetry(error: string | null): boolean {
   if (!error) return false;
   // Sentinel match — apiClient.ts'in 502/503/504 + HTML için döndürdüğü değer.
   if (error.startsWith("service_unavailable:")) return true;
-  // ← Network error'ları da retry'a almak istersen aşağıyı aç:
-  // if (/network request failed|failed to fetch/i.test(error)) return true;
+  // Cold start often surfaces as a plain fetch failure (connection refused,
+  // proxy not answering yet) before the 502 sentinel ever appears — treat
+  // those as "waking" too instead of dead-ending with a network error.
+  if (/network request failed|failed to fetch/i.test(error)) return true;
   return false;
 }
 
@@ -85,8 +84,12 @@ export type UseServerWakeUpResult = {
 export function useServerWakeUp(options: UseServerWakeUpOptions): UseServerWakeUpResult {
   const { error, onReady } = options;
   const [state, setState] = useState<WakeUpState>({ phase: "idle" });
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attemptRef = useRef(0);
+  // pingServer is async: a probe can resolve AFTER stopLoop already ran
+  // (unmount, reset). Without this flag the resolved tick would book a fresh
+  // timeout that no cleanup path can ever clear.
+  const activeRef = useRef(false);
   // onReady'i ref'te tutuyoruz ki tick içinde çağrı yaparken closure-stale
   // olmasın (kullanıcı render arasında callback'i değiştirmiş olabilir).
   const onReadyRef = useRef(onReady);
@@ -99,9 +102,10 @@ export function useServerWakeUp(options: UseServerWakeUpOptions): UseServerWakeU
   });
 
   const stopLoop = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    activeRef.current = false;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
   }, []);
 
@@ -111,39 +115,55 @@ export function useServerWakeUp(options: UseServerWakeUpOptions): UseServerWakeU
     setState({ phase: "idle" });
   }, [stopLoop]);
 
-  const tick = useCallback(async () => {
-    attemptRef.current += 1;
-    const attempt = attemptRef.current;
-
-    setState({ phase: "waking", attempt, max: RETRY_POLICY.maxAttempts });
-
-    const alive = await pingServer();
-
-    if (alive) {
-      stopLoop();
-      setState({ phase: "ready" });
-      // Son başarısız çağrıyı bir kez tekrar dene — bundan sonra normal
-      // hata akışı devreye girer (örn. yanlış şifre gibi gerçek hatalar
-      // wake-up değil regular error olarak gösterilir).
-      onReadyRef.current();
-      return;
-    }
-
-    if (attempt >= RETRY_POLICY.maxAttempts) {
-      stopLoop();
-      setState({ phase: "failed" });
-    }
-  }, [stopLoop]);
-
   const startLoop = useCallback(() => {
-    if (intervalRef.current) return; // zaten çalışıyor
+    if (activeRef.current) return; // zaten çalışıyor
+    activeRef.current = true;
     attemptRef.current = 0;
-    // İlk tick'i hemen çalıştır — kullanıcı 5sn beklemeden feedback alsın.
+
+    // tick is a local closure (not a useCallback) so it can re-schedule
+    // itself without appearing in its own dependency list.
+    const tick = async (): Promise<void> => {
+      timeoutRef.current = null;
+      attemptRef.current += 1;
+      const attempt = attemptRef.current;
+
+      setState({ phase: "waking", attempt, max: RETRY_POLICY.maxAttempts });
+
+      const alive = await pingServer();
+
+      // stopLoop may have fired while the probe was in flight — touching
+      // state or scheduling from here would leak past the cleanup.
+      if (!activeRef.current) return;
+
+      if (alive) {
+        stopLoop();
+        setState({ phase: "ready" });
+        // Son başarısız çağrıyı bir kez tekrar dene — bundan sonra normal
+        // hata akışı devreye girer (örn. yanlış şifre gibi gerçek hatalar
+        // wake-up değil regular error olarak gösterilir).
+        onReadyRef.current();
+        return;
+      }
+
+      if (attempt >= RETRY_POLICY.maxAttempts) {
+        stopLoop();
+        setState({ phase: "failed" });
+        return;
+      }
+
+      // Self-scheduling chain instead of setInterval: the next probe is
+      // booked only after the current one fails, so a slow probe can't pile
+      // up behind a fixed cadence, and the delay backs off exponentially
+      // while the Space is still booting. `attempt - 1` keeps the curve
+      // 0-indexed: the wait after the very first probe is backoff(0) = 2s.
+      timeoutRef.current = setTimeout(() => {
+        void tick();
+      }, jitter(RETRY_POLICY.backoff(attempt - 1)));
+    };
+
+    // İlk tick'i hemen çalıştır — kullanıcı beklemeden feedback alsın.
     void tick();
-    intervalRef.current = setInterval(() => {
-      void tick();
-    }, RETRY_POLICY.intervalMs);
-  }, [tick]);
+  }, [stopLoop]);
 
   // Error değiştikçe sentinel kontrolü — idle'dan waking'e geçişin tek yeri.
   useEffect(() => {
@@ -153,7 +173,7 @@ export function useServerWakeUp(options: UseServerWakeUpOptions): UseServerWakeU
     }
   }, [error, state.phase, startLoop]);
 
-  // Unmount cleanup — interval leak'ini önler (örn. user landing'e geri dönerse).
+  // Unmount cleanup — timeout leak'ini önler (örn. user landing'e geri dönerse).
   useEffect(() => {
     return () => stopLoop();
   }, [stopLoop]);
