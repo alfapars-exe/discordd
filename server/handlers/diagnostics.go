@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -19,15 +20,31 @@ import (
 
 const maxDiagnosticsDescriptionLen = 4000
 
+// maxConcurrentDiagnosticsEmails bounds the email goroutines: each one pins
+// the full diagnostics bundle (up to maxSize bytes) in memory, so an
+// unbounded spawn-per-request pattern is a memory-exhaustion vector.
+const maxConcurrentDiagnosticsEmails = 4
+
+// diagnosticsEmailTimeout caps a single Resend call so a hung upstream can't
+// pin a semaphore slot (and its bundle payload) forever.
+const diagnosticsEmailTimeout = 60 * time.Second
+
 type DiagnosticsHandler struct {
 	email     email.EmailSender
 	reportTo  string
 	appLogger services.AppLogService
 	maxSize   int64
+	emailSem  chan struct{}
 }
 
 func NewDiagnosticsHandler(emailSender email.EmailSender, reportTo string, appLogger services.AppLogService, maxSize int64) *DiagnosticsHandler {
-	return &DiagnosticsHandler{email: emailSender, reportTo: reportTo, appLogger: appLogger, maxSize: maxSize}
+	return &DiagnosticsHandler{
+		email:     emailSender,
+		reportTo:  reportTo,
+		appLogger: appLogger,
+		maxSize:   maxSize,
+		emailSem:  make(chan struct{}, maxConcurrentDiagnosticsEmails),
+	}
 }
 
 // Report handles POST /api/diagnostics-report (multipart: description + file).
@@ -73,18 +90,30 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Email is best-effort and shouldn't hold the response on send latency.
+	// Concurrency is bounded by emailSem; when all slots are busy we skip the
+	// email instead of piling up goroutines that each pin the full bundle —
+	// the feedback ticket the client also files is the durable copy.
 	if h.email != nil && h.reportTo != "" {
 		uid := user.ID
 		reporter := user.Username
-		go func() {
-			if sendErr := h.email.SendDiagnosticsReport(context.Background(), h.reportTo, reporter, description, filename, data); sendErr != nil {
-				h.appLogger.Log(models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
-					"diagnostics_email_failed", map[string]string{"error": sendErr.Error()})
-			} else {
-				h.appLogger.Log(models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
-					"diagnostics_email_sent", map[string]string{"to": h.reportTo, "bytes": strconv.Itoa(len(data))})
-			}
-		}()
+		select {
+		case h.emailSem <- struct{}{}:
+			go func() {
+				defer func() { <-h.emailSem }()
+				ctx, cancel := context.WithTimeout(context.Background(), diagnosticsEmailTimeout)
+				defer cancel()
+				if sendErr := h.email.SendDiagnosticsReport(ctx, h.reportTo, reporter, description, filename, data); sendErr != nil {
+					h.appLogger.Log(models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
+						"diagnostics_email_failed", map[string]string{"error": sendErr.Error()})
+				} else {
+					h.appLogger.Log(models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
+						"diagnostics_email_sent", map[string]string{"to": h.reportTo, "bytes": strconv.Itoa(len(data))})
+				}
+			}()
+		default:
+			h.appLogger.Log(models.LogLevelWarn, models.LogCategoryGeneral, &uid, nil,
+				"diagnostics_email_skipped_backpressure", map[string]string{"bytes": strconv.Itoa(len(data))})
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
