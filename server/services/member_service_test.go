@@ -360,3 +360,57 @@ func TestUnban_DeletesRow(t *testing.T) {
 		t.Errorf("banRepo.Delete called for %q, want %q", deletedFor, target)
 	}
 }
+
+// ─── UpdateProfile refreshes the hub userInfos cache ───
+
+func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
+	h := newMemberHarness()
+	const uid = "u1"
+
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: "alice"}, nil
+	}
+	h.userRepo.UpdateFn = func(_ context.Context, _ *models.User) error { return nil }
+	h.serverRepo.GetUserServersFn = func(_ context.Context, _ string) ([]models.ServerListItem, error) {
+		return nil, nil
+	}
+
+	var gotUserID, gotUsername, gotDisplay, gotAvatar string
+	h.hub.UpdateUserInfoFn = func(userID, username, displayName, avatarURL string) {
+		gotUserID, gotUsername, gotDisplay, gotAvatar = userID, username, displayName, avatarURL
+	}
+
+	display := "Alice Yeni"
+	avatar := "/uploads/new.png"
+	req := &models.UpdateProfileRequest{DisplayName: &display, AvatarURL: &avatar}
+	if _, err := h.svc.UpdateProfile(context.Background(), uid, req); err != nil {
+		t.Fatalf("UpdateProfile error: %v", err)
+	}
+
+	if gotUserID != uid || gotUsername != "alice" {
+		t.Errorf("UpdateUserInfo called with user=%q username=%q, want %q/%q", gotUserID, gotUsername, uid, "alice")
+	}
+	if gotDisplay != display || gotAvatar != avatar {
+		t.Errorf("UpdateUserInfo display/avatar = %q/%q, want %q/%q", gotDisplay, gotAvatar, display, avatar)
+	}
+}
+
+func TestUpdateProfile_NoCacheRefreshWhenUpdateFails(t *testing.T) {
+	h := newMemberHarness()
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: "alice"}, nil
+	}
+	h.userRepo.UpdateFn = func(_ context.Context, _ *models.User) error {
+		return errors.New("db down")
+	}
+	called := false
+	h.hub.UpdateUserInfoFn = func(_, _, _, _ string) { called = true }
+
+	display := "X"
+	if _, err := h.svc.UpdateProfile(context.Background(), "u1", &models.UpdateProfileRequest{DisplayName: &display}); err == nil {
+		t.Fatal("expected error from UpdateProfile")
+	}
+	if called {
+		t.Error("UpdateUserInfo must not be called when the DB update fails")
+	}
+}

@@ -92,6 +92,32 @@ func (h *Hub) SetUserInfo(userID, username, displayName, avatarURL string) {
 	}
 }
 
+// UpdateUserInfo refreshes the cached profile data for a connected user so
+// typing/voice broadcasts carry the new identity immediately after a profile
+// edit (the cache is otherwise only written at WS connect). No-op when the
+// user has no active connection — we must not plant entries for offline
+// users, since eviction only happens on full disconnect.
+func (h *Hub) UpdateUserInfo(userID, username, displayName, avatarURL string) {
+	h.userMu.Lock()
+	defer h.userMu.Unlock()
+	if _, ok := h.userInfos[userID]; !ok {
+		return
+	}
+	h.userInfos[userID] = cachedUserInfo{
+		Username:    username,
+		DisplayName: displayName,
+		AvatarURL:   avatarURL,
+	}
+}
+
+// evictUserInfo drops the cached profile entry when a user fully disconnects.
+// Without this the userInfos map grows monotonically for the process lifetime.
+func (h *Hub) evictUserInfo(userID string) {
+	h.userMu.Lock()
+	defer h.userMu.Unlock()
+	delete(h.userInfos, userID)
+}
+
 func (h *Hub) getUserUsername(userID string) string {
 	h.userMu.RLock()
 	defer h.userMu.RUnlock()

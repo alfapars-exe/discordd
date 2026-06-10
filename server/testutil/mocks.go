@@ -537,6 +537,7 @@ type MockEventPublisher struct {
 	DisconnectUserFn            func(userID string)
 	AddClientServerIDFn         func(userID, serverID string)
 	RemoveClientServerIDFn      func(userID, serverID string)
+	UpdateUserInfoFn            func(userID, username, displayName, avatarURL string)
 }
 
 func (m *MockEventPublisher) GetOnlineUserIDs() []string {
@@ -575,6 +576,11 @@ func (m *MockEventPublisher) AddClientServerID(userID, serverID string) {
 func (m *MockEventPublisher) RemoveClientServerID(userID, serverID string) {
 	if m.RemoveClientServerIDFn != nil {
 		m.RemoveClientServerIDFn(userID, serverID)
+	}
+}
+func (m *MockEventPublisher) UpdateUserInfo(userID, username, displayName, avatarURL string) {
+	if m.UpdateUserInfoFn != nil {
+		m.UpdateUserInfoFn(userID, username, displayName, avatarURL)
 	}
 }
 

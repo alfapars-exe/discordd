@@ -311,6 +311,20 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 		return nil, fmt.Errorf("failed to update user profile: %w", err)
 	}
 
+	// Refresh the hub's cached profile info so typing/voice events carry the
+	// new identity immediately — the cache is otherwise only written at WS
+	// connect, so without this the old username/avatar sticks until reconnect.
+	// Empty-string-when-nil mirrors the connect-time semantics (ws/handler.go).
+	displayName := ""
+	if user.DisplayName != nil {
+		displayName = *user.DisplayName
+	}
+	avatarURL := ""
+	if user.AvatarURL != nil {
+		avatarURL = *user.AvatarURL
+	}
+	s.hub.UpdateUserInfo(userID, user.Username, displayName, avatarURL)
+
 	// Broadcast to all servers the user belongs to (not BroadcastToAll)
 	member := models.ToMemberWithRoles(user, nil)
 	servers, srvErr := s.serverRepo.GetUserServers(ctx, userID)

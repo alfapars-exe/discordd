@@ -116,6 +116,13 @@ func (h *Hub) removeClient(client *Client) {
 
 	h.mu.Unlock()
 
+	// userMu is independent of h.mu (no lock ordering hazard) — evict the
+	// cached profile entry once the last connection is gone so userInfos
+	// doesn't grow unboundedly over the process lifetime.
+	if fullyDisconnected {
+		h.evictUserInfo(userID)
+	}
+
 	if fullyDisconnected && h.onUserFullyDisconnected != nil {
 		go h.onUserFullyDisconnected(userID, "")
 	} else if partialDisconnect && h.onPresenceManualUpdate != nil {

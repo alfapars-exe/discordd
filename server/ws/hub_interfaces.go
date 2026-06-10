@@ -35,6 +35,7 @@ type ClientManager interface {
 	DisconnectUser(userID string)
 	AddClientServerID(userID, serverID string)
 	RemoveClientServerID(userID, serverID string)
+	UpdateUserInfo(userID, username, displayName, avatarURL string)
 }
 
 // BroadcastAndOnline — used by MessageService, P2PCallService.
