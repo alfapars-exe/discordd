@@ -22,6 +22,7 @@ import TypingIndicator from "../chat/TypingIndicator";
 import PinnedMessages from "../chat/PinnedMessages";
 import SearchPanel from "../chat/SearchPanel";
 import FileDropOverlay from "../shared/FileDropOverlay";
+import SectionErrorBoundary from "../shared/SectionErrorBoundary";
 import type { Channel } from "../../types";
 
 type ChatAreaProps = {
@@ -40,7 +41,11 @@ function ChatArea({ channelId, channel, serverId, sendTyping }: ChatAreaProps) {
       serverId={serverId}
       sendTyping={sendTyping}
     >
-      <ChatAreaContent channelId={channelId} channel={channel} serverId={serverId} />
+      {/* Boundary sits inside the provider so a chat crash leaves the rest
+          of the layout (sidebar, voice, settings) alive. */}
+      <SectionErrorBoundary section="chat">
+        <ChatAreaContent channelId={channelId} channel={channel} serverId={serverId} />
+      </SectionErrorBoundary>
     </ChannelChatProvider>
   );
 }

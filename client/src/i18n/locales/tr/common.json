@@ -177,5 +177,12 @@
   "banExpiresIn": "{{rel}} sonra biter",
   "banPermanentLabel": "Kalıcı yasak",
   "editNickname": "Takma adı düzenle",
-  "nicknamePlaceholder": "Takma ad (boş bırak kaldır)"
+  "nicknamePlaceholder": "Takma ad (boş bırak kaldır)",
+  "errorBoundary": {
+    "stuckTitle": "Uygulama açılırken bir sorun oluştu",
+    "stuckBody": "Tekrar deneyelim. Bu, eski bir sekme durumunu temizleyip sayfayı yeniden yükler — oturumun kapanmaz.",
+    "retry": "Tekrar dene",
+    "reloading": "Yeniden yükleniyor...",
+    "sectionTitle": "Bu bölümde bir sorun oluştu ({{section}})"
+  }
 }

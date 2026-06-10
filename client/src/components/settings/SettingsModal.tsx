@@ -6,6 +6,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useAuthStore } from "../../stores/authStore";
 // SettingsNav stays eager — it's the always-visible left rail.
 import SettingsNav from "./SettingsNav";
+import SectionErrorBoundary from "../shared/SectionErrorBoundary";
 
 // Lazy-load each settings panel. The settings modal is rarely opened
 // and users typically visit a single tab per session, so loading
@@ -95,9 +96,14 @@ function SettingsModal() {
           ✕
         </button>
         <div className="settings-content">
-          <Suspense fallback={<SettingsPanelFallback />}>
-            <SettingsContent activeTab={activeTab} />
-          </Suspense>
+          {/* Boundary covers only the panel content — overlay chrome (close
+              button, ESC handler, nav) stays outside so a crashed panel can
+              still be closed. */}
+          <SectionErrorBoundary section="settings">
+            <Suspense fallback={<SettingsPanelFallback />}>
+              <SettingsContent activeTab={activeTab} />
+            </Suspense>
+          </SectionErrorBoundary>
         </div>
       </div>
     </div>

@@ -15,6 +15,10 @@
 import { Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { logToServer } from "../../api/clientLog";
+// i18n is a module singleton with bundled en/tr resources, so calling
+// i18n.t() here is safe even though this boundary mounts above the Router
+// (no provider/hook available in a class component this high in the tree).
+import i18n from "../../i18n";
 
 type Props = {
   children: ReactNode;
@@ -147,11 +151,15 @@ class ErrorBoundary extends Component<Props, State> {
           }}
         >
           <div style={{ fontSize: "16px", fontWeight: 600 }}>
-            Uygulama açılırken bir sorun oluştu
+            {i18n.t("common:errorBoundary.stuckTitle", {
+              defaultValue: "The app ran into a problem while loading",
+            })}
           </div>
           <div style={{ maxWidth: "320px", opacity: 0.8 }}>
-            Tekrar deneyelim. Bu, eski bir sekme durumunu temizleyip sayfayı
-            yeniden yükler — oturumun kapanmaz.
+            {i18n.t("common:errorBoundary.stuckBody", {
+              defaultValue:
+                "Let's try again. This clears stale tab state and reloads the page — you won't be signed out.",
+            })}
           </div>
           <button
             type="button"
@@ -167,7 +175,7 @@ class ErrorBoundary extends Component<Props, State> {
               color: "#fff",
             }}
           >
-            Tekrar dene
+            {i18n.t("common:errorBoundary.retry", { defaultValue: "Try again" })}
           </button>
         </div>
       );
@@ -186,7 +194,7 @@ class ErrorBoundary extends Component<Props, State> {
             fontSize: "15px",
           }}
         >
-          Reloading...
+          {i18n.t("common:errorBoundary.reloading", { defaultValue: "Reloading..." })}
         </div>
       );
     }

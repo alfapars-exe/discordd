@@ -48,6 +48,7 @@ import QuickSwitcher from "../shared/QuickSwitcher";
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
 import ConnectionBanner from "../shared/ConnectionBanner";
+import SectionErrorBoundary from "../shared/SectionErrorBoundary";
 import LightningOverlay from "../shared/LightningOverlay";
 import { useAuthStore } from "../../stores/authStore";
 import { resolveAssetUrl } from "../../utils/constants";
@@ -353,7 +354,11 @@ function AppLayout() {
 
     const mobileContent = isVoiceSessionActive ? (
       <Suspense fallback={mobileBody}>
-        <VoiceProvider>{mobileBody}</VoiceProvider>
+        {/* Voice-stack crashes recover via inline retry instead of taking the
+            whole app down to the reload pump in the root ErrorBoundary. */}
+        <SectionErrorBoundary section="voice">
+          <VoiceProvider>{mobileBody}</VoiceProvider>
+        </SectionErrorBoundary>
       </Suspense>
     ) : (
       mobileBody
@@ -391,7 +396,10 @@ function AppLayout() {
 
       {isVoiceSessionActive ? (
         <Suspense fallback={desktopBody}>
-          <VoiceProvider>{desktopBody}</VoiceProvider>
+          {/* Same voice-crash isolation as the mobile branch above. */}
+          <SectionErrorBoundary section="voice">
+            <VoiceProvider>{desktopBody}</VoiceProvider>
+          </SectionErrorBoundary>
         </Suspense>
       ) : (
         desktopBody

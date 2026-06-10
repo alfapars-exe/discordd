@@ -177,5 +177,12 @@
   "banExpiresIn": "Expires in {{rel}}",
   "banPermanentLabel": "Permanent ban",
   "editNickname": "Edit nickname",
-  "nicknamePlaceholder": "Nickname (leave blank to clear)"
+  "nicknamePlaceholder": "Nickname (leave blank to clear)",
+  "errorBoundary": {
+    "stuckTitle": "The app ran into a problem while loading",
+    "stuckBody": "Let's try again. This clears stale tab state and reloads the page — you won't be signed out.",
+    "retry": "Try again",
+    "reloading": "Reloading...",
+    "sectionTitle": "Something went wrong in this section ({{section}})"
+  }
 }
