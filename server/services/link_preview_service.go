@@ -40,9 +40,16 @@ const cacheTTL = 24 * time.Hour
 const maxBodySize = 512 * 1024
 const maxRedirects = 3
 
+// defaultOEmbedBase is YouTube's public oEmbed endpoint. Kept as a field on
+// the service (not inlined) so tests can point it at an httptest server —
+// the SSRF dialer rejects loopback addresses, making the production client
+// unable to reach local test fixtures.
+const defaultOEmbedBase = "https://www.youtube.com/oembed"
+
 type linkPreviewService struct {
-	repo   repository.LinkPreviewRepository
-	client *http.Client
+	repo       repository.LinkPreviewRepository
+	client     *http.Client
+	oembedBase string
 }
 
 // NewLinkPreviewService creates a service with an SSRF-safe HTTP client.
@@ -107,7 +114,14 @@ func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewSer
 		},
 	}
 
-	return &linkPreviewService{repo: repo, client: client}
+	return &linkPreviewService{repo: repo, client: client, oembedBase: defaultOEmbedBase}
+}
+
+// newLinkPreviewServiceForTest wires a custom HTTP client and oEmbed base —
+// required because the production SSRF dialer blocks loopback IPs and
+// non-80/443 ports, so httptest servers are unreachable through it.
+func newLinkPreviewServiceForTest(repo repository.LinkPreviewRepository, client *http.Client, oembedBase string) *linkPreviewService {
+	return &linkPreviewService{repo: repo, client: client, oembedBase: oembedBase}
 }
 
 func (s *linkPreviewService) GetPreview(ctx context.Context, rawURL string) (*models.LinkPreview, error) {
@@ -187,7 +201,7 @@ func isYouTubeHost(host string) bool {
 // uniform. SSRF protection still applies — the SSRF-safe transport on
 // s.client resolves www.youtube.com to a public IP and refuses if not.
 func (s *linkPreviewService) fetchYouTubeOEmbed(ctx context.Context, originalURL string) (*models.LinkPreview, error) {
-	endpoint := "https://www.youtube.com/oembed?url=" + url.QueryEscape(originalURL) + "&format=json"
+	endpoint := s.oembedBase + "?url=" + url.QueryEscape(originalURL) + "&format=json"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create oembed request: %w", err)
@@ -324,6 +338,11 @@ type ogData struct {
 // Priority: og:title > twitter:title > <title>, stops at <body>.
 func parseOGMetadata(r io.Reader) ogData {
 	var og ogData
+	// Twitter Card values are collected separately and merged after parsing
+	// so the documented priority (og:* > twitter:*) holds regardless of the
+	// order the <meta> tags appear in the document. Previously a
+	// twitter:title earlier in <head> would shadow a later og:title.
+	var twTitle, twDesc, twImage string
 	var htmlTitle string
 	var metaDesc string
 	var inTitle bool
@@ -387,16 +406,16 @@ func parseOGMetadata(r io.Reader) ogData {
 
 				switch name {
 				case "twitter:title":
-					if og.title == "" {
-						og.title = content
+					if twTitle == "" {
+						twTitle = content
 					}
 				case "twitter:description":
-					if og.description == "" {
-						og.description = content
+					if twDesc == "" {
+						twDesc = content
 					}
 				case "twitter:image":
-					if og.imageURL == "" {
-						og.imageURL = content
+					if twImage == "" {
+						twImage = content
 					}
 				case "description":
 					if metaDesc == "" {
@@ -435,11 +454,21 @@ func parseOGMetadata(r io.Reader) ogData {
 	}
 
 done:
+	// Merge in documented priority order: og:* > twitter:* > <title>/meta-desc.
+	if og.title == "" {
+		og.title = twTitle
+	}
 	if og.title == "" {
 		og.title = htmlTitle
 	}
 	if og.description == "" {
+		og.description = twDesc
+	}
+	if og.description == "" {
 		og.description = metaDesc
+	}
+	if og.imageURL == "" {
+		og.imageURL = twImage
 	}
 
 	if len(og.title) > 300 {
