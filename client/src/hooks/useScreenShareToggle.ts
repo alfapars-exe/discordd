@@ -413,6 +413,16 @@ export function useScreenShareToggle(
         return;
       }
 
+      // Race guard — the user may have left or switched voice channels while
+      // the token request was in flight; starting the native share with the
+      // stale token would publish into a room we already left.
+      if (useVoiceStore.getState().currentVoiceChannelId !== channelId) {
+        console.warn(
+          "[useScreenShareToggle] Discarding screen share token — voice channel changed during fetch",
+        );
+        return;
+      }
+
       await startNativeScreenShare(response.data.url, response.data.token);
       if (shouldCancel()) return;
       notifyServerStarted();

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
+import * as voiceApi from "../api/voice";
 
 // Mock external dependencies that voiceStore imports at module level
-vi.mock("../api/voice", () => ({}));
+vi.mock("../api/voice", () => ({ getVoiceToken: vi.fn() }));
 vi.mock("../api/client", () => ({ ensureFreshToken: vi.fn() }));
 vi.mock("../utils/sounds", () => ({
   playJoinSound: vi.fn(),
@@ -420,6 +421,34 @@ describe("voiceStore", () => {
         streamer_user_id: "u3",
         watching: false,
       });
+    });
+  });
+
+  // ─── Token Refresh Race Guard ───
+
+  describe("refreshVoiceToken", () => {
+    it("should discard a stale token when the channel changed mid-fetch", async () => {
+      // Deferred promise — lets the test flip channels while the token
+      // request is still in flight, reproducing the auto-rejoin race.
+      let resolveToken!: (value: Awaited<ReturnType<typeof voiceApi.getVoiceToken>>) => void;
+      vi.mocked(voiceApi.getVoiceToken).mockReturnValue(
+        new Promise((resolve) => {
+          resolveToken = resolve;
+        }),
+      );
+
+      useVoiceStore.setState({ currentVoiceChannelId: "ch1", livekitToken: "old-token" });
+      const refreshPromise = useVoiceStore.getState().refreshVoiceToken("ch1");
+
+      // User switches channels before the token response arrives.
+      useVoiceStore.setState({ currentVoiceChannelId: "ch2" });
+      resolveToken({
+        success: true,
+        data: { token: "stale-token", url: "wss://lk.example.com", channel_id: "ch1" },
+      });
+
+      await expect(refreshPromise).resolves.toBeNull();
+      expect(useVoiceStore.getState().livekitToken).toBe("old-token");
     });
   });
 });

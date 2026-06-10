@@ -305,6 +305,19 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       await ensureFreshToken();
       const response = await voiceApi.getVoiceToken(serverId, channelId);
 
+      // Race guard — callers (useVoiceAutoRejoin, systemEventHandlers
+      // re-register) fire this around suspend/resume, so the user may have
+      // left or switched channels while the token request was in flight.
+      // Applying the stale credentials would re-mount LiveKitRoom for a
+      // channel we're no longer in.
+      if (get().currentVoiceChannelId !== channelId) {
+        console.warn("[voiceStore] refreshVoiceToken STALE — channel changed during fetch", {
+          requestedChannelId: channelId,
+          currentVoiceChannelId: get().currentVoiceChannelId,
+        });
+        return null;
+      }
+
       if (!response.success || !response.data) {
         console.warn("[voiceStore] refreshVoiceToken FAILED", { error: response.error });
         return null;
