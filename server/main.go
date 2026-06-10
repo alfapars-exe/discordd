@@ -233,6 +233,11 @@ func main() {
 	// log stream (no external scraper on a single-instance HF Space).
 	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute)
 
+	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
+	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
+	// so both tables grew without bound).
+	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, time.Hour)
+
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey)
 
@@ -367,6 +372,7 @@ func main() {
 	svcs.Backup.Shutdown(backupShutdownCtx)
 	backupShutdownCancel()
 	stopRuntimeStats()
+	stopMaintenance()
 	metricsCollector.Stop()
 	hub.Shutdown()
 
