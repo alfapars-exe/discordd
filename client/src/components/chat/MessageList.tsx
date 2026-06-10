@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatContext } from "../../hooks/useChatContext";
 import { useAuthStore } from "../../stores/authStore";
 import { useActiveMembers } from "../../stores/memberStore";
@@ -73,6 +74,21 @@ function MessageList() {
    *  the body reads messages.length). */
   const restoredForChannelRef = useRef<string | null>(null);
 
+  /**
+   * Virtualized rows — only the visible window (+overscan) mounts to the DOM.
+   * Channels with 1000+ messages previously rendered every row (plus
+   * reactions/embeds), which made channel switches and scrolling crawl.
+   * measureElement handles dynamic heights (embeds/images/reactions expand
+   * asynchronously); getItemKey keeps measurements stable across prepends.
+   */
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 56,
+    overscan: 12,
+    getItemKey: (index) => messages[index].id,
+  });
+
   // ─── Mention Navigation State ───
   const seenMentions = useReadStateStore((s) => s.seenMentions[channelId]);
   const markMentionSeen = useReadStateStore((s) => s.markMentionSeen);
@@ -112,11 +128,18 @@ function MessageList() {
     // Mark as seen — removes from the list permanently (survives channel switch)
     markMentionSeen(channelId, msgId);
 
-    const el = document.getElementById(`msg-${msgId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("msg-highlight");
-      setTimeout(() => el.classList.remove("msg-highlight"), 2000);
+    // Virtualized rows may not be in the DOM yet — scroll by index, then
+    // apply the highlight once the row has mounted.
+    const idx = messages.findIndex((m) => m.id === msgId);
+    if (idx >= 0) {
+      virtualizer.scrollToIndex(idx, { align: "center" });
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) {
+          el.classList.add("msg-highlight");
+          setTimeout(() => el.classList.remove("msg-highlight"), 2000);
+        }
+      });
     }
   }
 
@@ -205,23 +228,28 @@ function MessageList() {
     prevMessageCountRef.current = messages.length;
   }, [isLoading, channelId, messages.length]);
 
-  /** Scroll-to-message effect — triggered when reply preview is clicked. */
+  /** Scroll-to-message effect — triggered when reply preview is clicked.
+   *  Index-based: with virtualization the target row may not be in the DOM
+   *  until scrollToIndex brings it into the window, so the highlight is
+   *  applied one frame later. */
   useEffect(() => {
     if (!scrollToMessageId) return;
 
-    const el = document.getElementById(`msg-${scrollToMessageId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("msg-highlight");
-      const timer = setTimeout(() => {
-        el.classList.remove("msg-highlight");
-      }, 2000);
-      setScrollToMessageId(null);
-      return () => clearTimeout(timer);
-    }
-
+    const targetId = scrollToMessageId;
+    const idx = messages.findIndex((m) => m.id === targetId);
     setScrollToMessageId(null);
-  }, [scrollToMessageId, setScrollToMessageId]);
+    if (idx < 0) return;
+
+    virtualizer.scrollToIndex(idx, { align: "center" });
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(`msg-${targetId}`);
+      if (el) {
+        el.classList.add("msg-highlight");
+        setTimeout(() => el.classList.remove("msg-highlight"), 2000);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [scrollToMessageId, setScrollToMessageId, messages, virtualizer]);
 
   /** Scroll handler — save position + update stick-to-bottom intent + trigger infinite scroll */
   const handleScroll = useCallback(() => {
@@ -329,27 +357,47 @@ function MessageList() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "8px 0" }}>
-            {messages.map((msg, index) => (
-              <div key={msg.id} id={`msg-${msg.id}`}>
-                <Message
-                  message={msg}
-                  isCompact={isCompact(index)}
-                  isPinned={isMessagePinned(msg.id)}
-                  mode={mode}
-                  canManageMessages={canManageMessages}
-                  member={showRoleColors ? memberById.get(msg.user_id) : undefined}
-                  currentMember={currentMember}
-                  members={ctxMembers}
-                  editMessage={editMessage}
-                  deleteMessage={deleteMessage}
-                  toggleReaction={toggleReaction}
-                  setReplyingTo={setReplyingTo}
-                  setScrollToMessageId={setScrollToMessageId}
-                  pinMessage={pinMessage}
-                  unpinMessage={unpinMessage}
-                />
-              </div>
-            ))}
+            {/* Spacer sized to the full (estimated+measured) list height;
+                rows are absolutely positioned inside and translate to their
+                virtual offsets. */}
+            <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+              {virtualizer.getVirtualItems().map((vi) => {
+                const msg = messages[vi.index];
+                return (
+                  <div
+                    key={String(vi.key)}
+                    id={`msg-${msg.id}`}
+                    data-index={vi.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${vi.start}px)`,
+                    }}
+                  >
+                    <Message
+                      message={msg}
+                      isCompact={isCompact(vi.index)}
+                      isPinned={isMessagePinned(msg.id)}
+                      mode={mode}
+                      canManageMessages={canManageMessages}
+                      member={showRoleColors ? memberById.get(msg.user_id) : undefined}
+                      currentMember={currentMember}
+                      members={ctxMembers}
+                      editMessage={editMessage}
+                      deleteMessage={deleteMessage}
+                      toggleReaction={toggleReaction}
+                      setReplyingTo={setReplyingTo}
+                      setScrollToMessageId={setScrollToMessageId}
+                      pinMessage={pinMessage}
+                      unpinMessage={unpinMessage}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
         </div>
