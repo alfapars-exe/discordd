@@ -4,7 +4,6 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useSidebarStore } from "../../stores/sidebarStore";
 import { useChannelStore } from "../../stores/channelStore";
@@ -18,17 +17,6 @@ import { useToastStore } from "../../stores/toastStore";
 import { hasPermission, Permissions, resolveChannelPermissions } from "../../utils/permissions";
 import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
 import { useMobileStore } from "../../stores/mobileStore";
-import ContextMenu from "../shared/ContextMenu";
-import VoiceUserContextMenu from "../voice/VoiceUserContextMenu";
-import MuteDurationPicker from "../servers/MuteDurationPicker";
-import MemberCard from "../members/MemberCard";
-import InviteFriendsModal from "../servers/InviteFriendsModal";
-import AddServerModal from "../servers/AddServerModal";
-import CreateChannelModal from "../channels/CreateChannelModal";
-import ChannelMuteDurationPicker from "../channels/ChannelMuteDurationPicker";
-import ChannelPermissionEditor from "../settings/ChannelPermissionEditor";
-import Modal from "../shared/Modal";
-import EmojiPicker from "../shared/EmojiPicker";
 import FriendsSection from "./FriendsSection";
 import DMSection from "./DMSection";
 import ServerList from "./ServerList";
@@ -36,10 +24,11 @@ import AdminSection from "./AdminSection";
 import CategoryItem from "./CategoryItem";
 import ChannelItem from "./ChannelItem";
 import VoiceParticipantList from "./VoiceParticipantList";
-import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
+import ChannelTreeOverlays from "./ChannelTreeOverlays";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useChannelInlineRename } from "../../hooks/useChannelInlineRename";
 import { useChannelTreeDragDrop } from "../../hooks/useChannelTreeDragDrop";
+import { useChannelTreeMenus } from "../../hooks/useChannelTreeMenus";
 import * as channelApi from "../../api/channels";
 import type { Channel, User } from "../../types";
 
@@ -66,10 +55,6 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
 
   const confirmDialog = useConfirm();
 
-  const { menuState: catMenuState, openMenu: openCatMenu, closeMenu: closeCatMenu } = useContextMenu();
-
-  // Channel context menu
-  const { menuState: chMenuState, openMenu: openChMenu, closeMenu: closeChMenu } = useContextMenu();
   // User profile card state (shared between sections)
   const [userCardTarget, setUserCardTarget] = useState<{
     user: User;
@@ -136,6 +121,21 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   const canMoveMembers = currentMember
     ? hasPermission(currentMember.effective_permissions, Permissions.MoveMembers)
     : false;
+
+  // ─── Context Menus ───
+  // Category + channel context-menu builders — the hook owns both menu
+  // states and renders the two ContextMenu instances via `menusJsx`.
+  const { openCategoryMenu, openChannelMenu, menusJsx } = useChannelTreeMenus({
+    canManageChannels,
+    activeServerId,
+    mutedChannelIds,
+    unmuteChannel,
+    addToast,
+    confirmDialog,
+    rename,
+    setPermModalChannel,
+    setChannelMutePicker,
+  });
 
   // Channel permission overrides for ConnectVoice check
   const overridesByChannel = useChannelPermissionStore((s) => s.overridesByChannel);
@@ -238,98 +238,6 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     setUserCardTarget({ user, top, left });
   }, []);
 
-  // ─── Category Context Menu ───
-
-  function handleCategoryContextMenu(e: React.MouseEvent, categoryId: string, categoryName: string) {
-    if (!canManageChannels) return;
-
-    const items: ContextMenuItem[] = [
-      {
-        label: tCh("renameCategory"),
-        onClick: () => rename.startCategoryRename(categoryId, categoryName),
-      },
-      {
-        label: tCh("deleteCategory"),
-        danger: true,
-        separator: true,
-        onClick: async () => {
-          const ok = await confirmDialog({
-            title: tCh("deleteCategory"),
-            message: tCh("deleteCategoryConfirm", { name: categoryName }),
-            confirmLabel: tCh("deleteCategory"),
-            danger: true,
-          });
-          if (!ok) return;
-          const res = await channelApi.deleteCategory(activeServerId!, categoryId);
-          if (res.success) {
-            addToast("success", tCh("categoryDeleted"));
-          } else {
-            addToast("error", tCh("categoryDeleteError"));
-          }
-        },
-      },
-    ];
-
-    openCatMenu(e, items);
-  }
-
-  // ─── Channel Context Menu ───
-
-  function handleChannelContextMenu(e: React.MouseEvent, ch: Channel) {
-    const items: ContextMenuItem[] = [];
-
-    if (canManageChannels) {
-      items.push({
-        label: tCh("renameChannel"),
-        onClick: () => rename.startChannelRename(ch.id, ch.name),
-      });
-      items.push({
-        label: tCh("channelPermissions"),
-        onClick: () => setPermModalChannel(ch),
-      });
-      items.push({
-        label: tCh("deleteChannel"),
-        danger: true,
-        separator: true,
-        onClick: async () => {
-          const ok = await confirmDialog({
-            title: tCh("deleteChannel"),
-            message: tCh("deleteConfirm", { name: ch.name }),
-            confirmLabel: tCh("deleteChannel"),
-            danger: true,
-          });
-          if (!ok) return;
-          const res = await channelApi.deleteChannel(activeServerId!, ch.id);
-          if (res.success) {
-            addToast("success", tCh("channelDeleted"));
-          } else {
-            addToast("error", tCh("channelDeleteError"));
-          }
-        },
-      });
-    }
-
-    // Mute/unmute — text channels only
-    if (ch.type === "text") {
-      const isMuted = mutedChannelIds.has(ch.id);
-      items.push({
-        label: isMuted ? tCh("unmuteChannel") : tCh("muteChannel"),
-        separator: items.length > 0,
-        onClick: async () => {
-          if (isMuted) {
-            const ok = await unmuteChannel(ch.id);
-            if (ok) addToast("success", tCh("channelUnmuted"));
-          } else {
-            setChannelMutePicker({ channelId: ch.id, x: e.clientX, y: e.clientY });
-          }
-        },
-      });
-    }
-
-    if (items.length === 0) return;
-    openChMenu(e, items);
-  }
-
   return (
     <div className="ch-tree">
       <FriendsSection onShowUserCard={handleShowUserCard} />
@@ -374,7 +282,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         expanded={catExpanded}
                         canManageChannels={canManageChannels}
                         onToggle={() => toggleSection(catKey)}
-                        onContextMenu={(e) => handleCategoryContextMenu(e, catId, cg.category.name)}
+                        onContextMenu={(e) => openCategoryMenu(e, catId, cg.category.name)}
                         onCreateChannel={() => {
                           setCreateModalMode("channel");
                           setCreateModalCategoryId(catId);
@@ -440,7 +348,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                             );
                           }
                         }}
-                        onContextMenu={(e) => handleChannelContextMenu(e, ch)}
+                        onContextMenu={(e) => openChannelMenu(e, ch)}
                         onDragStart={() => handleChannelDragStart(ch.id, cg.category.id)}
                         onDragOver={(e) => handleChannelDragOver(e, ch.id, ch.type, cg.category.id)}
                         onDragLeave={handleChannelDragLeave}
@@ -479,102 +387,30 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
         )}
       />
 
-      {/* Add Server Modal */}
-      {showAddServer && (
-        <AddServerModal
-          onClose={() => setShowAddServer(false)}
-        />
-      )}
+      <ChannelTreeOverlays
+        showAddServer={showAddServer}
+        setShowAddServer={setShowAddServer}
+        userCardTarget={userCardTarget}
+        setUserCardTarget={setUserCardTarget}
+        mutePicker={mutePicker}
+        setMutePicker={setMutePicker}
+        inviteTarget={inviteTarget}
+        setInviteTarget={setInviteTarget}
+        voiceCtxMenu={voiceCtxMenu}
+        setVoiceCtxMenu={setVoiceCtxMenu}
+        showCreateModal={showCreateModal}
+        setShowCreateModal={setShowCreateModal}
+        createModalMode={createModalMode}
+        createModalCategoryId={createModalCategoryId}
+        channelMutePicker={channelMutePicker}
+        setChannelMutePicker={setChannelMutePicker}
+        permModalChannel={permModalChannel}
+        setPermModalChannel={setPermModalChannel}
+        rename={rename}
+      />
 
-      {/* User Profile Card (shared between FriendsSection / DMSection / voice participants) */}
-      {userCardTarget && (
-        <MemberCard
-          user={userCardTarget.user}
-          position={{ top: userCardTarget.top, left: userCardTarget.left }}
-          onClose={() => setUserCardTarget(null)}
-        />
-      )}
-
-      {/* Mute Duration Picker */}
-      {mutePicker && (
-        <MuteDurationPicker
-          serverId={mutePicker.serverId}
-          x={mutePicker.x}
-          y={mutePicker.y}
-          onClose={() => setMutePicker(null)}
-        />
-      )}
-
-      {/* Invite Friends Modal */}
-      {inviteTarget && (
-        <InviteFriendsModal
-          serverId={inviteTarget.serverId}
-          serverName={inviteTarget.serverName}
-          onClose={() => setInviteTarget(null)}
-        />
-      )}
-
-      {/* Voice User Context Menu */}
-      {voiceCtxMenu && (
-        <VoiceUserContextMenu
-          userId={voiceCtxMenu.userId}
-          username={voiceCtxMenu.username}
-          displayName={voiceCtxMenu.displayName}
-          avatarUrl={voiceCtxMenu.avatarUrl}
-          position={{ x: voiceCtxMenu.x, y: voiceCtxMenu.y }}
-          onClose={() => setVoiceCtxMenu(null)}
-        />
-      )}
-
-      {/* Create Channel/Category Modal */}
-      {showCreateModal && (
-        <CreateChannelModal
-          onClose={() => setShowCreateModal(false)}
-          defaultMode={createModalMode}
-          defaultCategoryId={createModalCategoryId}
-        />
-      )}
-
-      {/* Category Context Menu */}
-      <ContextMenu state={catMenuState} onClose={closeCatMenu} />
-
-      {/* Channel Context Menu */}
-      <ContextMenu state={chMenuState} onClose={closeChMenu} />
-
-      {/* Channel Mute Duration Picker */}
-      {channelMutePicker && (
-        <ChannelMuteDurationPicker
-          channelId={channelMutePicker.channelId}
-          x={channelMutePicker.x}
-          y={channelMutePicker.y}
-          onClose={() => setChannelMutePicker(null)}
-        />
-      )}
-
-      {/* Channel Permission Modal */}
-      {permModalChannel && (
-        <Modal
-          isOpen
-          onClose={() => setPermModalChannel(null)}
-          title={tCh("channelPermissions")}
-        >
-          <ChannelPermissionEditor channel={permModalChannel} />
-        </Modal>
-      )}
-
-      {/* Emoji picker — portaled to body to escape sidebar overflow:hidden */}
-      {rename.showRenameEmoji && rename.emojiPickerPos && createPortal(
-        <div
-          className="ch-tree-rename-picker-portal"
-          style={{ position: "fixed", top: rename.emojiPickerPos.top, left: rename.emojiPickerPos.left, zIndex: 9999 }}
-        >
-          <EmojiPicker
-            onSelect={rename.insertEmoji}
-            onClose={rename.closeEmojiPicker}
-          />
-        </div>,
-        document.body
-      )}
+      {/* Category + Channel Context Menus */}
+      {menusJsx}
     </div>
   );
 }
