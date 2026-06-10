@@ -138,6 +138,8 @@ function PanelTabBar({ panelId }: PanelTabBarProps) {
                   <img
                     src={resolveAssetUrl(tab.serverInfo.serverIconUrl)}
                     alt={tab.serverInfo.serverName}
+                    loading="lazy"
+                    decoding="async"
                     className="tab-server-img"
                   />
                 ) : (

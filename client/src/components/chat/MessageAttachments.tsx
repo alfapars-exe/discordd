@@ -46,6 +46,7 @@ function MessageAttachments({ message }: MessageAttachmentsProps) {
                 alt={attachment.filename}
                 className="msg-attachment-img"
                 loading="lazy"
+                decoding="async"
               />
             </a>
           );

@@ -301,7 +301,7 @@ function AdminServerList() {
           <div className="admin-server-name-cell">
             <div className="admin-server-icon">
               {srv.icon_url ? (
-                <img src={resolveAssetUrl(srv.icon_url)} alt="" />
+                <img src={resolveAssetUrl(srv.icon_url)} alt="" loading="lazy" decoding="async" />
               ) : (
                 srv.name.charAt(0).toUpperCase()
               )}

@@ -39,6 +39,8 @@ function Avatar({ name, role, avatarUrl, size = 30, isCircle = true, hasAdjacent
         // role="presentation" reinforces empty alt for older assistive tech
         // when the adjacent label is the canonical announcement.
         {...(hasAdjacentLabel ? { role: "presentation" } : {})}
+        loading="lazy"
+        decoding="async"
         className={roundClass}
         style={{ width: size, height: size, objectFit: "cover" }}
       />

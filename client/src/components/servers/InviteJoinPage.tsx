@@ -83,6 +83,7 @@ function InviteJoinPage() {
         <img
           src={publicAsset("hlogo.png")}
           alt="HiChat!"
+          decoding="async"
           className="invite-join-logo"
         />
         <h1 className="invite-join-title">{t("inviteJoinTitle")}</h1>
@@ -106,6 +107,8 @@ function InviteJoinPage() {
                   <img
                     src={resolveAssetUrl(preview.server_icon_url)}
                     alt={preview.server_name}
+                    loading="lazy"
+                    decoding="async"
                     className="invite-join-img"
                   />
                 ) : (

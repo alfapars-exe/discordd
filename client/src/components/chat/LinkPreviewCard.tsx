@@ -83,6 +83,7 @@ function LinkPreviewCard({ url }: LinkPreviewCardProps) {
                 alt=""
                 className="link-preview-favicon"
                 loading="lazy"
+                decoding="async"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             )}
@@ -107,6 +108,7 @@ function LinkPreviewCard({ url }: LinkPreviewCardProps) {
             alt={preview.title ?? ""}
             className="link-preview-img"
             loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />

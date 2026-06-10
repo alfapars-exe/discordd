@@ -358,7 +358,7 @@ function AdminUserList() {
           <div className="admin-user-name-cell">
             <div className="admin-user-avatar">
               {user.avatar_url ? (
-                <img src={resolveAssetUrl(user.avatar_url)} alt="" />
+                <img src={resolveAssetUrl(user.avatar_url)} alt="" loading="lazy" decoding="async" />
               ) : (
                 user.username.charAt(0).toUpperCase()
               )}

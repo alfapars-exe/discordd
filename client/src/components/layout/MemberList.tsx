@@ -171,6 +171,8 @@ function MemberList() {
               <img
                 src={resolveAssetUrl(activeServer.icon_url)}
                 alt={activeServer.name}
+                loading="lazy"
+                decoding="async"
                 className="members-header-icon"
               />
             ) : activeServer ? (

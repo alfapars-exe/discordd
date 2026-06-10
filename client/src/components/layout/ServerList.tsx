@@ -299,6 +299,8 @@ function ServerList({
                         <img
                           src={resolveAssetUrl(srv.icon_url)}
                           alt={srv.name}
+                          loading="lazy"
+                          decoding="async"
                           className="ch-tree-server-icon"
                         />
                       ) : (

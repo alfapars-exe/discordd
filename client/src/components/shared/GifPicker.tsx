@@ -149,6 +149,7 @@ function GifPicker({ onSelect, onClose }: GifPickerProps) {
                   src={gif.preview_url}
                   alt={gif.title}
                   loading="lazy"
+                  decoding="async"
                 />
               </div>
             ))}

@@ -88,6 +88,8 @@ function InviteCard({ code }: InviteCardProps) {
           <img
             src={resolveAssetUrl(preview.server_icon_url)}
             alt={preview.server_name}
+            loading="lazy"
+            decoding="async"
             className="invite-card-img"
           />
         ) : (
