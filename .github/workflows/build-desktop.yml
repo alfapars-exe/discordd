@@ -116,10 +116,10 @@ jobs:
       # ─── Windows: compile native audio-capture.exe ───
       # Flags mirror native/build.bat (P0-EN-01 hardening, audit 2026-05-27):
       # /GS /sdl /guard:cf compile-side, /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA
-      # /GUARD:CF link-side. /WX deliberately omitted: the runner's MSVC is
-      # newer than the 2019 BuildTools pinned in build.bat, so a toolchain
-      # bump promoting new warnings would brick release builds — the verify
-      # step below asserts the hardening landed instead.
+      # /GUARD:CF link-side. /WX deliberately omitted: the runner's MSVC may
+      # be newer than the local toolchain build.bat discovers via vswhere, so
+      # a toolchain bump promoting new warnings would brick release builds —
+      # the verify step below asserts the hardening landed instead.
       - name: Compile audio-capture.exe
         if: matrix.platform == 'windows-latest'
         run: cl.exe /EHsc /O2 /W3 /GS /sdl /guard:cf native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib /link /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF
@@ -128,9 +128,8 @@ jobs:
       # Fail the build if any P0-EN-01 hardening flag is missing from the
       # produced binary. /loadconfig is included because CFG reports as
       # "CF Instrumented" there ("Control Flow Guard" in newer dumpbin
-      # /headers output). Each flag is asserted individually — build.bat's
-      # findstr check passes when ANY one pattern matches, which is why a
-      # regression here would otherwise go unnoticed.
+      # /headers output). Each flag is asserted individually — native/build.bat
+      # applies the same per-flag findstr check locally (aligned 2026-06-11).
       - name: Verify audio-capture.exe hardening flags
         if: matrix.platform == 'windows-latest'
         shell: pwsh

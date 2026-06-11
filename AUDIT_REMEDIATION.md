@@ -17,7 +17,7 @@ Bu döküman `CODE_AUDIT_2026-05-27.md` raporundaki bulgular için **uygulanan d
 | 0c | `livekit-oracle/config/.env.example` | Real credentials → placeholder, `openssl rand` komut örnekleri |
 | 0c | `livekit-oracle/DEPLOYED.md` | API Key/Secret cells redacted, audit uyarısı eklendi |
 | 0d | `tayfa-deploy/client/nginx.conf` | HSTS+CSP+X-Frame-Options+X-Content-Type-Options+Referrer-Policy+Permissions-Policy; WS proxy_read_timeout 3600s; dotfile block |
-| 0e | `tayfa-deploy/native/build.bat` | `/GS /sdl /guard:cf /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA` + dumpbin verify — **CI hizalandı 2026-06-11:** `.github/workflows/build-desktop.yml` aynı flag setiyle derliyor (`/WX` hariç, runner MSVC sürüm farkı) + her bayrağı tek tek assert eden `dumpbin /headers /loadconfig` doğrulama adımı eklendi |
+| 0e | `tayfa-deploy/native/build.bat` | `/GS /sdl /guard:cf /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA` + dumpbin verify — **CI hizalandı 2026-06-11:** `.github/workflows/build-desktop.yml` aynı flag setiyle derliyor (`/WX` hariç, runner MSVC sürüm farkı) + her bayrağı tek tek assert eden `dumpbin /headers /loadconfig` doğrulama adımı eklendi; **build.bat hizalandı 2026-06-11:** aynı per-flag doğrulama build.bat'a da taşındı + vcvars64 artık vswhere ile dinamik bulunuyor |
 | 0f | `tayfa-deploy/Dockerfile` | HEALTHCHECK on /api/health + self-host user comment block |
 | 0f | `tayfa-deploy/server/Dockerfile` | useradd UID 1000 + USER hichat + HEALTHCHECK |
 | 0f | `tayfa-deploy/client/Dockerfile` | wget healthcheck + apk add wget |
@@ -210,11 +210,23 @@ docker run --rm `
 ```powershell
 cd C:\Users\harun\OneDrive\Desktop\Discord\tayfa-deploy\native
 .\build.bat
+# build.bat her hardening flag'ini ayrı ayrı doğrular ve eksik flag'de exit 1 verir
+# (CI'daki "Verify audio-capture.exe hardening flags" adımıyla aynı mantık).
 
-# Hardening flag'lerini doğrula
-dumpbin.exe /headers audio-capture.exe | findstr /C:"NX" /C:"Dynamic" /C:"CF Guard" /C:"High Entropy"
-# Beklenen: 4 satır match — hepsi hardening flag'leri set
+# Manuel doğrulama (build.bat'ın yaptığının PowerShell karşılığı):
+$out = (dumpbin.exe /headers /loadconfig audio-capture.exe) -join "`n"
+$required = [ordered]@{
+  'NX compatible (DEP)'           = 'NX compatible'
+  'Dynamic base (ASLR)'           = 'Dynamic base'
+  'High Entropy VA (64-bit ASLR)' = 'High Entropy Virtual Addresses'
+  'Control Flow Guard (CFG)'      = 'Control Flow Guard|CF Instrumented'
+}
+$missing = @($required.GetEnumerator() | Where-Object { $out -notmatch $_.Value } | ForEach-Object { $_.Key })
+if ($missing.Count) { "EKSIK: $($missing -join ', ')" } else { "Tum hardening flag'leri mevcut" }
+# Beklenen: "Tum hardening flag'leri mevcut"
 ```
+
+> **Not (2026-06-11):** Buradaki eski tek satırlık `findstr /C:"NX" /C:"Dynamic" /C:"CF Guard" /C:"High Entropy"` komutu iki nedenle hatalıydı: (1) findstr çoklu `/C:` desenlerinde HERHANGİ biri eşleşince başarılı döner — tek tek eksik flag yakalanmaz; (2) `"CF Guard"` dizesi dumpbin çıktısında hiç geçmez — CFG, `/headers` çıktısında `Control Flow Guard`, `/loadconfig` çıktısında `CF Instrumented` olarak görünür. Dolayısıyla eski "4 satır match" beklentisi yanlıştı; CFG satırı hiçbir zaman eşleşemezdi.
 
 #### 2.7 HF Space Secret Rotation
 
