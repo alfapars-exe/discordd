@@ -178,17 +178,33 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: npx electron-builder --linux --publish never
 
-      # ─── Upload artifacts ───
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: artifacts-${{ matrix.label }}
-          # artifactName in package.json is hichat-setup.${ext} after the
-          # rebrand. Glob still matched the legacy mqvi-* name → upload
-          # picked up zero files → release had no installer.
-          path: |
-            release/hichat-setup.*
-            release/latest*.yml
+      # ─── Publish build outputs directly to the GitHub release ───
+      # Replaced actions/upload-artifact + a separate release job: installers
+      # only passed through Actions artifact storage to be re-downloaded one
+      # job later, and once enough ~120MB installers accumulated the account
+      # artifact quota hard-failed the whole pipeline ("Artifact storage
+      # quota has been hit", v2.11.101 attempt). Release assets do NOT count
+      # against Actions artifact storage, so each matrix leg uploads its own
+      # files straight to the release. Both legs race on `gh release create`;
+      # the loser falls through to upload (file sets are disjoint:
+      # latest.yml vs latest-linux.yml).
+      - name: Publish artifacts to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          NOTES=$(git tag -l --format='%(contents)' "$TAG")
+          [ -z "$NOTES" ] && NOTES="Release $TAG"
+          gh release create "$TAG" --title "$TAG" --notes "$NOTES" || echo "release exists; uploading assets"
+          shopt -s nullglob
+          FILES=(release/hichat-setup.* release/latest*.yml)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "ERROR: no build outputs matched release/hichat-setup.* — check artifactName"
+            exit 1
+          fi
+          gh release upload "$TAG" "${FILES[@]}" --clobber
 
   # ─── Self-host server: multi-arch Docker image to GHCR ───
   # Replaced the previous CGO_ENABLED=0 cross-compile that was marked
@@ -236,49 +252,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─── Create release and upload all artifacts ───
-  release:
-    # Only desktop builds gate the release. build-server is best-effort and
-    # marked continue-on-error; if it succeeds its artifacts are picked up
-    # via the merge-multiple download below.
-    needs: [build]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          # LFS objects must be pulled because icons/hlogo.ico (and the
-          # ios/electron icon assets) are stored in LFS — without this flag
-          # the working tree gets pointer files, rcedit chokes with
-          # "Reserved header is not 0", and the icon embed step dies.
-          lfs: true
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: List artifacts
-        run: find artifacts -type f | sort
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG=${{ github.ref_name }}
-          NOTES=$(git tag -l --format='%(contents)' "$TAG")
-          if [ -z "$NOTES" ]; then
-            NOTES="Release $TAG"
-          fi
-
-          # Create release with tag annotation as notes
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "$NOTES" \
-            artifacts/* \
-            || echo "Release may already exist, uploading assets..."
-
-          # If release already exists, just upload
-          gh release upload "$TAG" artifacts/* --clobber 2>/dev/null || true
+  # The former `release` job (download-artifact → gh release create) was
+  # removed: build legs publish directly to the release above, so nothing
+  # passes through Actions artifact storage anymore.
