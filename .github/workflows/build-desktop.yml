@@ -114,10 +114,40 @@ jobs:
         working-directory: client
 
       # ─── Windows: compile native audio-capture.exe ───
+      # Flags mirror native/build.bat (P0-EN-01 hardening, audit 2026-05-27):
+      # /GS /sdl /guard:cf compile-side, /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA
+      # /GUARD:CF link-side. /WX deliberately omitted: the runner's MSVC is
+      # newer than the 2019 BuildTools pinned in build.bat, so a toolchain
+      # bump promoting new warnings would brick release builds — the verify
+      # step below asserts the hardening landed instead.
       - name: Compile audio-capture.exe
         if: matrix.platform == 'windows-latest'
-        run: cl.exe /EHsc /O2 /W3 native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib
+        run: cl.exe /EHsc /O2 /W3 /GS /sdl /guard:cf native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib /link /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF
         shell: cmd
+
+      # Fail the build if any P0-EN-01 hardening flag is missing from the
+      # produced binary. /loadconfig is included because CFG reports as
+      # "CF Instrumented" there ("Control Flow Guard" in newer dumpbin
+      # /headers output). Each flag is asserted individually — build.bat's
+      # findstr check passes when ANY one pattern matches, which is why a
+      # regression here would otherwise go unnoticed.
+      - name: Verify audio-capture.exe hardening flags
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $out = (dumpbin.exe /headers /loadconfig native\audio-capture.exe) -join "`n"
+          $required = [ordered]@{
+            'NX compatible (DEP)'           = 'NX compatible'
+            'Dynamic base (ASLR)'           = 'Dynamic base'
+            'High Entropy VA (64-bit ASLR)' = 'High Entropy Virtual Addresses'
+            'Control Flow Guard (CFG)'      = 'Control Flow Guard|CF Instrumented'
+          }
+          $missing = @($required.GetEnumerator() | Where-Object { $out -notmatch $_.Value } | ForEach-Object { $_.Key })
+          if ($missing.Count) {
+            Write-Host "::error::audio-capture.exe is missing hardening flags: $($missing -join ', ')"
+            exit 1
+          }
+          Write-Host "All hardening flags present: $($required.Keys -join ', ')"
 
       # ─── Compile Electron TypeScript ───
       - name: Compile Electron TypeScript
@@ -214,6 +244,10 @@ jobs:
   # reproducibly from the same Dockerfile that HF Spaces builds from,
   # and gives self-hosters a single `docker run` UX.
   docker-publish:
+    # Tag pushes only: a tagless workflow_dispatch (CI smoke test) must not
+    # overwrite :latest on GHCR — and github.ref_name for a branch containing
+    # a slash would be an invalid docker tag anyway.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

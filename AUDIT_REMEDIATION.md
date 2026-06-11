@@ -17,7 +17,7 @@ Bu döküman `CODE_AUDIT_2026-05-27.md` raporundaki bulgular için **uygulanan d
 | 0c | `livekit-oracle/config/.env.example` | Real credentials → placeholder, `openssl rand` komut örnekleri |
 | 0c | `livekit-oracle/DEPLOYED.md` | API Key/Secret cells redacted, audit uyarısı eklendi |
 | 0d | `tayfa-deploy/client/nginx.conf` | HSTS+CSP+X-Frame-Options+X-Content-Type-Options+Referrer-Policy+Permissions-Policy; WS proxy_read_timeout 3600s; dotfile block |
-| 0e | `tayfa-deploy/native/build.bat` | `/GS /sdl /guard:cf /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA` + dumpbin verify |
+| 0e | `tayfa-deploy/native/build.bat` | `/GS /sdl /guard:cf /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA` + dumpbin verify — **CI hizalandı 2026-06-11:** `.github/workflows/build-desktop.yml` aynı flag setiyle derliyor (`/WX` hariç, runner MSVC sürüm farkı) + her bayrağı tek tek assert eden `dumpbin /headers /loadconfig` doğrulama adımı eklendi |
 | 0f | `tayfa-deploy/Dockerfile` | HEALTHCHECK on /api/health + self-host user comment block |
 | 0f | `tayfa-deploy/server/Dockerfile` | useradd UID 1000 + USER hichat + HEALTHCHECK |
 | 0f | `tayfa-deploy/client/Dockerfile` | wget healthcheck + apk add wget |
