@@ -86,6 +86,14 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 				pkg.ErrorWithMessage(w, http.StatusUnauthorized, "bot user not found")
 				return
 			}
+			// Parity with the human + WS paths: a platform-banned bot (admins
+			// can ban a bot user row directly) must not authenticate. The
+			// !IsBot check is defense-in-depth — a token row should only ever
+			// resolve to a bot user.
+			if !botUser.IsBot || botUser.IsPlatformBanned {
+				pkg.ErrorWithMessage(w, http.StatusUnauthorized, "account suspended")
+				return
+			}
 			botUser.PasswordHash = ""
 			ctx := context.WithValue(r.Context(), handlers.UserContextKey, botUser)
 			next.ServeHTTP(w, r.WithContext(ctx))
