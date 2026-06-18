@@ -53,7 +53,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id
 		FROM users WHERE id = ?`
 
 	user := &models.User{}
@@ -64,6 +64,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 		&user.TokenVersion,
 		&user.CreatedAt,
+		&user.IsBot, &user.OwnerUserID,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
