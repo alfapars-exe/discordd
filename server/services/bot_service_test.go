@@ -84,3 +84,84 @@ func TestBotService_CreateAndValidate(t *testing.T) {
 		t.Fatalf("expected one owned bot %s, got %+v", bot.ID, bots)
 	}
 }
+
+// TestBotService_RevokeIsolation_AcrossBots verifies that revoking one bot's
+// tokens leaves a sibling bot (same owner) fully usable.
+func TestBotService_RevokeIsolation_AcrossBots(t *testing.T) {
+	db := newBotTestDB(t)
+	ctx := context.Background()
+
+	if _, err := db.Conn.ExecContext(ctx,
+		`INSERT INTO users (id, username, password_hash) VALUES ('owner_1','owner','x')`); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+
+	svc := NewBotService(repository.NewBotRepository(db.Conn))
+
+	botA, tokenA, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
+		Username: "botalpha", DisplayName: "Alpha",
+	})
+	if err != nil {
+		t.Fatalf("CreateBot A: %v", err)
+	}
+	botB, tokenB, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
+		Username: "botbravo", DisplayName: "Bravo",
+	})
+	if err != nil {
+		t.Fatalf("CreateBot B: %v", err)
+	}
+
+	if err := svc.RevokeAllTokens(ctx, "owner_1", botB.ID); err != nil {
+		t.Fatalf("RevokeAllTokens B: %v", err)
+	}
+
+	gotA, err := svc.ValidateBotToken(ctx, tokenA)
+	if err != nil {
+		t.Fatalf("ValidateBotToken A after revoking B: %v", err)
+	}
+	if gotA != botA.ID {
+		t.Fatalf("validated wrong bot for A: %s != %s", gotA, botA.ID)
+	}
+
+	if _, err := svc.ValidateBotToken(ctx, tokenB); !errors.Is(err, ErrBotTokenInvalid) {
+		t.Fatalf("expected ErrBotTokenInvalid for revoked bot B, got %v", err)
+	}
+}
+
+// TestBotService_RevokeIsolation_AcrossOwners verifies that one owner cannot
+// revoke another owner's bot tokens: the call is a no-op and the token stays valid.
+func TestBotService_RevokeIsolation_AcrossOwners(t *testing.T) {
+	db := newBotTestDB(t)
+	ctx := context.Background()
+
+	if _, err := db.Conn.ExecContext(ctx,
+		`INSERT INTO users (id, username, password_hash) VALUES ('owner_1','owner1','x')`); err != nil {
+		t.Fatalf("seed owner_1: %v", err)
+	}
+	if _, err := db.Conn.ExecContext(ctx,
+		`INSERT INTO users (id, username, password_hash) VALUES ('owner_2','owner2','x')`); err != nil {
+		t.Fatalf("seed owner_2: %v", err)
+	}
+
+	svc := NewBotService(repository.NewBotRepository(db.Conn))
+
+	bot, token, err := svc.CreateBot(ctx, "owner_1", models.CreateBotRequest{
+		Username: "botcharlie", DisplayName: "Charlie",
+	})
+	if err != nil {
+		t.Fatalf("CreateBot: %v", err)
+	}
+
+	// owner_2 attempting to revoke owner_1's bot must be a harmless no-op.
+	if err := svc.RevokeAllTokens(ctx, "owner_2", bot.ID); err != nil {
+		t.Fatalf("RevokeAllTokens by wrong owner should be nil, got %v", err)
+	}
+
+	gotID, err := svc.ValidateBotToken(ctx, token)
+	if err != nil {
+		t.Fatalf("ValidateBotToken after cross-owner revoke attempt: %v", err)
+	}
+	if gotID != bot.ID {
+		t.Fatalf("validated wrong bot: %s != %s", gotID, bot.ID)
+	}
+}
