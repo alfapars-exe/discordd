@@ -210,11 +210,12 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	// Bot token validator: lets the auth middleware accept hb_-prefixed bot
-	// tokens and resolve them to their bot users row (outbound bot REST calls
-	// reuse the existing handlers, which read the caller from UserContextKey).
-	botValidator := services.NewBotService(repository.NewBotRepository(db.Conn))
-	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botValidator)
+	// Bot service: powers both the auth middleware (accept hb_-prefixed bot
+	// tokens and resolve them to their bot users row — outbound bot REST calls
+	// reuse the existing handlers, which read the caller from UserContextKey)
+	// and the owner-facing bot management endpoints (create/list/revoke).
+	botService := services.NewBotService(repository.NewBotRepository(db.Conn))
+	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botService)
 
 	// Wire the auth user-cache invalidator into the admin user service so a
 	// platform ban / hard-delete / admin-status change drops the cached user

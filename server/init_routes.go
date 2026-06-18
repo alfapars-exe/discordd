@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/argeinfina/hichat/handlers"
 	"github.com/argeinfina/hichat/middleware"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/repository"
@@ -24,10 +25,12 @@ func initRoutes(
 	roleRepo repository.RoleRepository,
 	serverRepo repository.ServerRepository,
 	deviceEnumLimiter middleware.IPRateLimiter,
-	botValidator middleware.BotTokenValidator,
+	botService *services.BotService,
 ) *middleware.AuthMiddleware {
-	// Middleware
-	authMw := middleware.NewAuthMiddleware(authService, userRepo, botValidator)
+	// Middleware. *services.BotService satisfies middleware.BotTokenValidator
+	// (ValidateBotToken), so the same instance powers token validation here and
+	// the owner-facing bot management handler below — one source of truth.
+	authMw := middleware.NewAuthMiddleware(authService, userRepo, botService)
 	permMw := middleware.NewPermissionMiddleware(roleRepo)
 	serverMw := middleware.NewServerMembershipMiddleware(serverRepo)
 	platformAdminMw := middleware.NewPlatformAdminMiddleware()
@@ -203,6 +206,15 @@ func initRoutes(
 	mux.Handle("DELETE /api/friends/requests/{id}", auth(h.Friendship.DeclineRequest))
 	mux.Handle("GET /api/friends", auth(h.Friendship.ListFriends))
 	mux.Handle("DELETE /api/friends/{userId}", auth(h.Friendship.RemoveFriend))
+
+	// Bots — owner-facing automation account management. The same botService
+	// that backs bot-token validation in the auth middleware also serves the
+	// management handler. The Create guard rejects bot callers (a bot can't
+	// mint bots); list/revoke are scoped to the caller inside the service.
+	botHandler := handlers.NewBotHandler(botService)
+	mux.Handle("POST /api/bots", auth(botHandler.Create))
+	mux.Handle("GET /api/bots", auth(botHandler.List))
+	mux.Handle("POST /api/bots/{botID}/revoke", auth(botHandler.Revoke))
 
 	// Platform Admin — LiveKit
 	mux.Handle("GET /api/admin/livekit/quota", authAdmin(h.Admin.GetLiveKitQuotaReport))
