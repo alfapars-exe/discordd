@@ -32,8 +32,9 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parity with the HTTP middleware (middleware/auth.go) and the human WS
-	// path: a platform-banned bot — or a token row that somehow resolves to a
+	// Rejection parity with the HTTP middleware (middleware/auth.go) and the
+	// human WS path (the bot paths use 401; the human WS path uses 403 — both
+	// reject): a platform-banned bot — or a token row that somehow resolves to a
 	// non-bot user — must not open the gateway. ValidateBotToken only proves
 	// the token row is unrevoked; it does not see the user's ban state.
 	if h.userInfoProvider != nil {

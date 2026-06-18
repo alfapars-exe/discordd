@@ -86,7 +86,8 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 				pkg.ErrorWithMessage(w, http.StatusUnauthorized, "bot user not found")
 				return
 			}
-			// Parity with the human + WS paths: a platform-banned bot (admins
+			// Rejection parity with the human + WS paths (bot paths use 401;
+			// the human WS path uses 403 — both reject): a platform-banned bot (admins
 			// can ban a bot user row directly) must not authenticate. The
 			// !IsBot check is defense-in-depth — a token row should only ever
 			// resolve to a bot user.
