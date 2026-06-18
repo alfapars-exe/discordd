@@ -32,6 +32,18 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parity with the HTTP middleware (middleware/auth.go) and the human WS
+	// path: a platform-banned bot — or a token row that somehow resolves to a
+	// non-bot user — must not open the gateway. ValidateBotToken only proves
+	// the token row is unrevoked; it does not see the user's ban state.
+	if h.userInfoProvider != nil {
+		botUser, e := h.userInfoProvider.GetByID(r.Context(), botUserID)
+		if e != nil || !botUser.IsBot || botUser.IsPlatformBanned {
+			http.Error(w, "bot unavailable", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	// Scope the bot to the servers it belongs to so BroadcastToServer reaches
 	// it (addClient indexes by client.serverIDs). Failures degrade gracefully:
 	// an empty serverIDs set means the bot only receives non-server-scoped
