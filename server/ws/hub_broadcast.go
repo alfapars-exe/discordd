@@ -10,6 +10,21 @@ import (
 // (full send buffer) get unregistered in a goroutine to avoid blocking the
 // loop. Each broadcast bumps event.Seq atomically before marshaling.
 
+// deliver enqueues pre-marshaled bytes to one client, applying the bot
+// read-only filter. This is the SINGLE place per-client delivery happens —
+// every broadcast method funnels through it so the bot allow-list cannot be
+// bypassed by a new broadcast path forgetting to filter.
+func (h *Hub) deliver(client *Client, op string, data []byte) {
+	if client.isBot && !BotReadableOps[op] {
+		return
+	}
+	select {
+	case client.send <- data:
+	default:
+		h.queueUnregister(client)
+	}
+}
+
 // BroadcastToAll sends an event to all connected clients.
 func (h *Hub) BroadcastToAll(event Event) {
 	event.Seq = h.seq.Add(1)
@@ -25,12 +40,7 @@ func (h *Hub) BroadcastToAll(event Event) {
 
 	for _, clients := range h.clients {
 		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-				// Buffer full — slow client, queue for disconnect
-				h.queueUnregister(client)
-			}
+			h.deliver(client, event.Op, data)
 		}
 	}
 }
@@ -62,11 +72,7 @@ func (h *Hub) BroadcastToUsers(userIDs []string, event Event) {
 			continue
 		}
 		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-				h.queueUnregister(client)
-			}
+			h.deliver(client, event.Op, data)
 		}
 	}
 }
@@ -89,11 +95,7 @@ func (h *Hub) BroadcastToAllExcept(excludeUserID string, event Event) {
 			continue
 		}
 		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-				h.queueUnregister(client)
-			}
+			h.deliver(client, event.Op, data)
 		}
 	}
 }
@@ -113,11 +115,7 @@ func (h *Hub) BroadcastToUser(userID string, event Event) {
 
 	if clients, ok := h.clients[userID]; ok {
 		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-				h.queueUnregister(client)
-			}
+			h.deliver(client, event.Op, data)
 		}
 	}
 }
@@ -140,20 +138,15 @@ func (h *Hub) BroadcastToServer(serverID string, event Event) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
+	// Match the rest of the broadcast methods — bounded queue instead of an
+	// ad-hoc `go func() { h.unregister <- c }`. Under a thundering-herd
+	// disconnect (e.g. server-wide announcement after a network blip), the
+	// goroutine form spawned one goroutine per slow client per broadcast and
+	// left them blocked on `h.unregister` until drained, stacking up
+	// unboundedly. deliver/queueUnregister are non-blocking and deduplicate
+	// internally (and deliver applies the bot read-only filter).
 	for client := range h.serverClients[serverID] {
-		select {
-		case client.send <- data:
-		default:
-			// Match the rest of the broadcast methods — bounded queue
-			// instead of an ad-hoc `go func() { h.unregister <- c }`.
-			// Under a thundering-herd disconnect (e.g. server-wide
-			// announcement after a network blip), the goroutine form
-			// spawned one goroutine per slow client per broadcast and
-			// left them blocked on `h.unregister` until drained,
-			// stacking up unboundedly. queueUnregister is non-blocking
-			// and deduplicates internally.
-			h.queueUnregister(client)
-		}
+		h.deliver(client, event.Op, data)
 	}
 }
 
@@ -175,11 +168,8 @@ func (h *Hub) BroadcastToServerExcept(serverID, excludeUserID string, event Even
 		if client.userID == excludeUserID {
 			continue
 		}
-		select {
-		case client.send <- data:
-		default:
-			// See BroadcastToServer above — same goroutine-leak fix.
-			h.queueUnregister(client)
-		}
+		// See BroadcastToServer above — same goroutine-leak fix; deliver also
+		// applies the bot read-only filter.
+		h.deliver(client, event.Op, data)
 	}
 }

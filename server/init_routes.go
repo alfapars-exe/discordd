@@ -395,6 +395,10 @@ func initRoutes(
 
 	// WebSocket
 	mux.HandleFunc("GET /ws", h.WS.HandleConnection)
+	// Read-only bot gateway: authenticates via the Authorization: Bearer hb_…
+	// header inside the handler (not the human ticket/JWT path), then streams
+	// the BotReadableOps subset scoped to the bot's servers.
+	mux.HandleFunc("GET /api/bot/gateway", h.WS.HandleBotConnection)
 
 	return authMw
 }

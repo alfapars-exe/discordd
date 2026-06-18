@@ -205,16 +205,19 @@ func main() {
 	// so both tables grew without bound).
 	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, time.Hour)
 
+	// Bot service: powers the auth middleware (accept hb_-prefixed bot tokens
+	// and resolve them to their bot users row — outbound bot REST calls reuse
+	// the existing handlers, which read the caller from UserContextKey), the
+	// owner-facing bot management endpoints (create/list/revoke), AND the
+	// read-only WS bot gateway (handler.go botValidator). Constructed before
+	// the handler layer so the WS handler can validate bot tokens.
+	botService := services.NewBotService(repository.NewBotRepository(db.Conn))
+
 	// 11. Handler layer
-	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey)
+	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey, botService)
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	// Bot service: powers both the auth middleware (accept hb_-prefixed bot
-	// tokens and resolve them to their bot users row — outbound bot REST calls
-	// reuse the existing handlers, which read the caller from UserContextKey)
-	// and the owner-facing bot management endpoints (create/list/revoke).
-	botService := services.NewBotService(repository.NewBotRepository(db.Conn))
 	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botService)
 
 	// Wire the auth user-cache invalidator into the admin user service so a

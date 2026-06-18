@@ -45,6 +45,10 @@ type Client struct {
 	// caps. Lazily initialized on first event in handleEvent so existing
 	// addClient paths don't need to know about it.
 	rateLimit *clientRateLimiter
+
+	// isBot restricts this connection to BotReadableOps (see hub.deliver).
+	// Bot connections are read-only consumers; they act via the REST API.
+	isBot bool
 }
 
 // ReadPump reads messages from the WebSocket and dispatches events.
