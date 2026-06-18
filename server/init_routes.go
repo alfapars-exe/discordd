@@ -24,9 +24,10 @@ func initRoutes(
 	roleRepo repository.RoleRepository,
 	serverRepo repository.ServerRepository,
 	deviceEnumLimiter middleware.IPRateLimiter,
+	botValidator middleware.BotTokenValidator,
 ) *middleware.AuthMiddleware {
 	// Middleware
-	authMw := middleware.NewAuthMiddleware(authService, userRepo)
+	authMw := middleware.NewAuthMiddleware(authService, userRepo, botValidator)
 	permMw := middleware.NewPermissionMiddleware(roleRepo)
 	serverMw := middleware.NewServerMembershipMiddleware(serverRepo)
 	platformAdminMw := middleware.NewPlatformAdminMiddleware()

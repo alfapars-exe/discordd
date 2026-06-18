@@ -22,10 +22,17 @@ import (
 // without caching every one hit the users row plus the JWT decode.
 const userCacheTTL = 30 * time.Second
 
+// BotTokenValidator resolves a bot bearer token to its bot user id.
+// Separate interface to avoid importing services into middleware wholesale.
+type BotTokenValidator interface {
+	ValidateBotToken(ctx context.Context, token string) (string, error)
+}
+
 // AuthMiddleware validates JWT tokens on incoming requests.
 type AuthMiddleware struct {
-	authService services.AuthService
-	userRepo    repository.UserRepository
+	authService  services.AuthService
+	userRepo     repository.UserRepository
+	botValidator BotTokenValidator
 
 	// userCache memoizes GetByID lookups keyed by user id. The cache is
 	// shared across all middleware instances (only one is constructed in
@@ -34,11 +41,12 @@ type AuthMiddleware struct {
 	userCache *cache.TTLCache[string, *models.User]
 }
 
-func NewAuthMiddleware(authService services.AuthService, userRepo repository.UserRepository) *AuthMiddleware {
+func NewAuthMiddleware(authService services.AuthService, userRepo repository.UserRepository, botValidator BotTokenValidator) *AuthMiddleware {
 	return &AuthMiddleware{
-		authService: authService,
-		userRepo:    userRepo,
-		userCache:   cache.New[string, *models.User](userCacheTTL, time.Minute),
+		authService:  authService,
+		userRepo:     userRepo,
+		botValidator: botValidator,
+		userCache:    cache.New[string, *models.User](userCacheTTL, time.Minute),
 	}
 }
 
@@ -63,6 +71,26 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			return
 		}
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		// Bot path: bot tokens are prefixed and resolve to a bot users row.
+		// They bypass JWT/token_version logic — revocation is enforced at the
+		// bot_tokens row (ValidateBotToken returns an error once revoked).
+		if m.botValidator != nil && strings.HasPrefix(tokenString, models.BotTokenPrefix) {
+			botUserID, err := m.botValidator.ValidateBotToken(r.Context(), tokenString)
+			if err != nil {
+				pkg.ErrorWithMessage(w, http.StatusUnauthorized, "invalid bot token")
+				return
+			}
+			botUser, err := m.userRepo.GetByID(r.Context(), botUserID)
+			if err != nil {
+				pkg.ErrorWithMessage(w, http.StatusUnauthorized, "bot user not found")
+				return
+			}
+			botUser.PasswordHash = ""
+			ctx := context.WithValue(r.Context(), handlers.UserContextKey, botUser)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 
 		claims, err := m.authService.ValidateAccessToken(tokenString)
 		if err != nil {

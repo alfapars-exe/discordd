@@ -20,6 +20,7 @@ import (
 	"github.com/argeinfina/hichat/pkg/i18n"
 	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -209,7 +210,11 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum)
+	// Bot token validator: lets the auth middleware accept hb_-prefixed bot
+	// tokens and resolve them to their bot users row (outbound bot REST calls
+	// reuse the existing handlers, which read the caller from UserContextKey).
+	botValidator := services.NewBotService(repository.NewBotRepository(db.Conn))
+	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botValidator)
 
 	// Wire the auth user-cache invalidator into the admin user service so a
 	// platform ban / hard-delete / admin-status change drops the cached user
