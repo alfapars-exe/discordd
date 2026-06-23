@@ -105,7 +105,7 @@ LIVEKIT_DOMAIN=79-76-123-59.sslip.io
 LIVEKIT_API_KEY=$NEW_API_KEY
 LIVEKIT_API_SECRET=$NEW_API_SECRET
 REDIS_PASSWORD=$NEW_REDIS_PWD
-HICHAT_WEBHOOK_URL=https://argeinfina-discord.hf.space/api/livekit/webhook
+HICHAT_WEBHOOK_URL=https://infinayazilim-discord.hf.space/api/livekit/webhook
 EOF
 chmod 600 .env
 
