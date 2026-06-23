@@ -3,7 +3,7 @@
   "lastUpdated": "Son güncelleme: 2 Nisan 2026",
 
   "introTitle": "Giriş",
-  "introDesc": "HiChat! açık kaynaklı bir iletişim platformudur. Hangi verileri topladığımız ve nasıl işlediğimiz konusunda şeffaf olmayı taahhüt ediyoruz. Bu politika argeinfina-discord.hf.space adresinde barındırılan HiChat! sunucusu için geçerlidir.",
+  "introDesc": "HiChat! açık kaynaklı bir iletişim platformudur. Hangi verileri topladığımız ve nasıl işlediğimiz konusunda şeffaf olmayı taahhüt ediyoruz. Bu politika infinayazilim-discord.hf.space adresinde barındırılan HiChat! sunucusu için geçerlidir.",
 
   "dataCollectedTitle": "Topladığımız Veriler",
   "dataItem1": "Hesap bilgileri: kullanıcı adı, görünen ad ve isteğe bağlı olarak e-posta adresiniz (yalnızca şifre sıfırlama için kullanılır).",
@@ -24,7 +24,7 @@
   "dataSharingDesc": "Verilerinizi üçüncü taraflarla satmıyor, kiralamıyor veya paylaşmıyoruz. Verilerinize yalnızca iletişim kurduğunuz alıcılar erişebilir.",
 
   "selfHostTitle": "Self-Hosted Sunucular",
-  "selfHostDesc": "HiChat! üzerinde self-hosted sunucu oluşturduğunuzda yalnızca ses ve görüntü altyapısı kendi LiveKit sunucunuzda çalışır. Mesajlarınız, direkt mesajlarınız, dosyalarınız ve hesap verileriniz argeinfina-discord.hf.space üzerinde saklanmaya devam eder ve bu politika kapsamındadır. Tüm veriler üzerinde tam kontrol istiyorsanız açık kaynak projeyi forklayarak kendi bağımsız kopyanızı çalıştırabilirsiniz — bu durumda gizlilik uygulamaları o sunucunun yöneticisi tarafından belirlenir.",
+  "selfHostDesc": "HiChat! üzerinde self-hosted sunucu oluşturduğunuzda yalnızca ses ve görüntü altyapısı kendi LiveKit sunucunuzda çalışır. Mesajlarınız, direkt mesajlarınız, dosyalarınız ve hesap verileriniz infinayazilim-discord.hf.space üzerinde saklanmaya devam eder ve bu politika kapsamındadır. Tüm veriler üzerinde tam kontrol istiyorsanız açık kaynak projeyi forklayarak kendi bağımsız kopyanızı çalıştırabilirsiniz — bu durumda gizlilik uygulamaları o sunucunun yöneticisi tarafından belirlenir.",
 
   "deletionTitle": "Veri Silme",
   "deletionDesc": "Uygulama ayarlarından hesap silme talebinde bulunabilirsiniz. 14 günlük bekleme süresinin ardından (bu süre içinde iptal edebilirsiniz) profil bilgileriniz, yüklediğiniz dosyalar ve kişisel verileriniz kalıcı olarak silinir. Mesajlarınız sohbet bütünlüğü için korunur ancak anonim olarak \"Silinmiş Kullanıcı\" şeklinde gösterilir. Direkt mesaj konuşmaları karşı taraf için görünür olmaya devam eder.",

@@ -6,7 +6,7 @@
   "acceptanceDesc": "By accessing or using HiChat!, you agree to be bound by these Terms of Service. If you do not agree, do not use the service. You must be at least 13 years old (or 16 in the European Union) to use HiChat!.",
 
   "serviceTitle": "Service Description",
-  "serviceDesc": "HiChat! is an open-source communication platform providing messaging, voice and video calls, and file sharing. These terms apply only to the official instance hosted at argeinfina-discord.hf.space. Self-hosted instances of the open-source software are the sole responsibility of their operators.",
+  "serviceDesc": "HiChat! is an open-source communication platform providing messaging, voice and video calls, and file sharing. These terms apply only to the official instance hosted at infinayazilim-discord.hf.space. Self-hosted instances of the open-source software are the sole responsibility of their operators.",
 
   "accountTitle": "Account Responsibilities",
   "accountDesc": "You are responsible for maintaining the security of your account credentials and for all activity that occurs under your account. You agree to provide accurate information during registration and to notify us immediately of any unauthorized use.",
@@ -41,7 +41,7 @@
   "copyrightDesc": "If you believe content on HiChat! infringes your copyright, please open an issue on our GitHub repository with the relevant details. We will review and take appropriate action.",
 
   "selfHostTitle": "Self-Hosted Instances",
-  "selfHostDesc": "The HiChat! software is available for self-hosting under its open-source license. These Terms of Service apply exclusively to the official argeinfina-discord.hf.space instance. We bear no responsibility for self-hosted instances operated by third parties, including their data handling, availability, or compliance with applicable laws.",
+  "selfHostDesc": "The HiChat! software is available for self-hosting under its open-source license. These Terms of Service apply exclusively to the official infinayazilim-discord.hf.space instance. We bear no responsibility for self-hosted instances operated by third parties, including their data handling, availability, or compliance with applicable laws.",
 
   "voiceTitle": "Voice & Video",
   "voiceDesc": "Voice and video features are provided through LiveKit infrastructure. We do not guarantee availability or quality of real-time communication. You are responsible for complying with local laws regarding recording of conversations.",

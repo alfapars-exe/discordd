@@ -3,7 +3,7 @@
   "lastUpdated": "Last updated: April 2, 2026",
 
   "introTitle": "Introduction",
-  "introDesc": "HiChat! is an open-source communication platform. We are committed to transparency about what data we collect and how we handle it. This policy applies to the HiChat! instance hosted at argeinfina-discord.hf.space.",
+  "introDesc": "HiChat! is an open-source communication platform. We are committed to transparency about what data we collect and how we handle it. This policy applies to the HiChat! instance hosted at infinayazilim-discord.hf.space.",
 
   "dataCollectedTitle": "What We Collect",
   "dataItem1": "Account information: username, display name, and optionally your email address (used only for password recovery).",
@@ -24,7 +24,7 @@
   "dataSharingDesc": "We do not sell, rent, or share your data with third parties. Your data is only accessible to the recipients you communicate with.",
 
   "selfHostTitle": "Self-Hosted Servers",
-  "selfHostDesc": "When you create a self-hosted server on HiChat!, only the voice and video infrastructure runs on your own LiveKit server. Your messages, direct messages, files, and account data are still stored on argeinfina-discord.hf.space and covered by this policy. If you want full control over all data, you can fork the open-source project and run your own independent instance — in that case, the privacy practices are determined by that instance's operator.",
+  "selfHostDesc": "When you create a self-hosted server on HiChat!, only the voice and video infrastructure runs on your own LiveKit server. Your messages, direct messages, files, and account data are still stored on infinayazilim-discord.hf.space and covered by this policy. If you want full control over all data, you can fork the open-source project and run your own independent instance — in that case, the privacy practices are determined by that instance's operator.",
 
   "deletionTitle": "Data Deletion",
   "deletionDesc": "You can request account deletion through the app settings. After a 14-day grace period (during which you can cancel), your profile information, uploaded files, and personal data are permanently removed. Your messages are preserved for conversation continuity but displayed anonymously as \"Deleted User\". Direct message conversations remain visible to the other participant.",
