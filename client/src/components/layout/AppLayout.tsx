@@ -44,6 +44,7 @@ import { useE2EE } from "../../hooks/useE2EE";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import RecoveryPasswordPrompt from "../shared/RecoveryPasswordPrompt";
 import IncomingCallOverlay from "../p2p/IncomingCallOverlay";
+import P2PAudioSink from "../p2p/P2PAudioSink";
 import QuickSwitcher from "../shared/QuickSwitcher";
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
@@ -155,8 +156,14 @@ function AppLayout() {
   const cascadeRefetch = useCallback(() => {
     const serverId = useServerStore.getState().activeServerId;
 
-    // Clear server-scoped store data (readState is global, no clear needed)
-    useChannelStore.getState().clearForServerSwitch();
+    // Channel tree: hydrate from per-server cache instead of wiping. This
+    // effect fires AFTER setActiveServer's switchToServer already painted
+    // the cached tree — a full clear here would blank the sidebar for a
+    // frame before fetchChannels revalidates. hydrateFromCache is a no-op
+    // when the cache is empty (new server), which matches the old behavior.
+    // Invite / soundboard stores stay stale-clear for now — their data is
+    // rarely visited so the paint-flash cost is negligible.
+    useChannelStore.getState().hydrateFromCache();
     useInviteStore.getState().clearForServerSwitch();
     useSoundboardStore.getState().clearForServerSwitch();
 
@@ -319,6 +326,11 @@ function AppLayout() {
 
       {/* P2P incoming call overlay */}
       <IncomingCallOverlay />
+
+      {/* Remote-call audio sink — lives here so it survives tab switches.
+          If it moved back into P2PCallScreen, opening any non-p2p tab would
+          unmount the <audio> and cut the caller off mid-sentence. */}
+      <P2PAudioSink />
 
       {/* Electron screen picker */}
       <ScreenPicker />
