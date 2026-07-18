@@ -13,6 +13,15 @@ import type {
 
 type ChannelState = {
   categories: CategoryWithChannels[];
+  /**
+   * Per-server channel-tree cache. Lets a re-visited server paint instantly
+   * from the last-known tree while a background fetch revalidates. Keyed by
+   * serverId; entries are dropped by evictServerCache when a server is left
+   * or deleted so this can't grow unbounded. Values are typed as
+   * `T | undefined` — noUncheckedIndexedAccess plus `delete` semantics both
+   * expose the undefined branch, and every consumer already handles it.
+   */
+  categoriesByServer: Record<string, CategoryWithChannels[] | undefined>;
   selectedChannelId: string | null;
   isLoading: boolean;
   mutedChannelIds: Set<string>;
@@ -20,6 +29,13 @@ type ChannelState = {
   // ─── Actions ───
   fetchChannels: () => Promise<void>;
   selectChannel: (channelId: string) => void;
+  /** Snapshot outgoing server's tree, then paint incoming from cache. */
+  switchToServer: (serverId: string | null) => void;
+  /** Paint current activeServer from cache — used when setActiveServer was
+   *  bypassed (route change, cascadeRefetch flow). */
+  hydrateFromCache: () => void;
+  /** Drop a server's cached tree — call after leave/delete. */
+  evictServerCache: (serverId: string) => void;
 
   // ─── Channel Mute ───
   setMutedChannelsFromReady: (ids: string[]) => void;
@@ -45,6 +61,7 @@ type ChannelState = {
 
 export const useChannelStore = create<ChannelState>((set, get) => ({
   categories: [],
+  categoriesByServer: {},
   selectedChannelId: null,
   isLoading: false,
   mutedChannelIds: new Set<string>(),
@@ -53,10 +70,30 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
 
-    set({ isLoading: true });
+    // Only show the loading state if we don't already have cached data to
+    // paint — otherwise the user sees a spinner briefly before the cached
+    // tree pops in, which is jarring for a revalidation.
+    const cached = get().categoriesByServer[serverId];
+    if (!cached) set({ isLoading: true });
 
     const res = await channelApi.getChannels(serverId);
     if (res.success && res.data) {
+      // Always update the cache — even if the user has already switched to
+      // another server by the time the response arrives. Next time they come
+      // back the freshest tree paints instantly.
+      set((state) => ({
+        categoriesByServer: {
+          ...state.categoriesByServer,
+          [serverId]: res.data,
+        },
+      }));
+
+      // Guard against a stale response clobbering the live categories.
+      // If the user switched away mid-flight, activeServerId has moved on
+      // — writing to `categories` now would paint the wrong server's tree.
+      const activeNow = useServerStore.getState().activeServerId;
+      if (activeNow !== serverId) return;
+
       const state = get();
       let selectedChannelId = state.selectedChannelId;
 
@@ -80,6 +117,47 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
 
   selectChannel: (channelId) => {
     set({ selectedChannelId: channelId });
+  },
+
+  switchToServer: (nextServerId) => {
+    set((state) => {
+      const prevServerId = useServerStore.getState().activeServerId;
+      const cacheUpdates: Record<string, CategoryWithChannels[]> = {};
+
+      // Snapshot the outgoing server's tree so a return trip paints
+      // instantly. Skip when categories is empty (nothing meaningful to
+      // remember) or when the prev server is the one we're switching to
+      // (setActiveServer no-op).
+      if (prevServerId && prevServerId !== nextServerId && state.categories.length > 0) {
+        cacheUpdates[prevServerId] = state.categories;
+      }
+
+      const cached = nextServerId ? state.categoriesByServer[nextServerId] : undefined;
+      return {
+        categoriesByServer: { ...state.categoriesByServer, ...cacheUpdates },
+        categories: cached ?? [],
+        selectedChannelId: null,
+        // Cached hit → skip the loading state entirely.
+        isLoading: !cached && nextServerId != null,
+      };
+    });
+  },
+
+  hydrateFromCache: () => {
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const cached = get().categoriesByServer[serverId];
+    if (!cached) return;
+    set({ categories: cached, isLoading: false });
+  },
+
+  evictServerCache: (serverId) => {
+    set((state) => {
+      if (!(serverId in state.categoriesByServer)) return state;
+      const next = { ...state.categoriesByServer };
+      delete next[serverId];
+      return { categoriesByServer: next };
+    });
   },
 
   // ─── WebSocket Event Handlers ───
