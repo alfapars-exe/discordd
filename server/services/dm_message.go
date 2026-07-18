@@ -85,14 +85,25 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 
 	if !isPlatformAdmin {
 		if channel.Status == models.DMStatusPending {
-			// Initiator already sent their 1 message
-			if channel.InitiatedBy != nil && *channel.InitiatedBy == userID {
-				return nil, fmt.Errorf("%w: dm_request_pending", pkg.ErrForbidden)
-			}
-			// Recipient must accept first
-			if channel.InitiatedBy != nil && *channel.InitiatedBy != userID {
+			// Fail-closed on a pending channel with a nil InitiatedBy:
+			// the earlier code checked "InitiatedBy != nil && …" in BOTH
+			// branches, so a pending row with InitiatedBy=NULL (data
+			// corruption, a failed SetInitiatedBy at line ~124, or a
+			// migration gap) fell through both guards and turned the
+			// channel into a normal-send row. Every write to the DB
+			// after that would land without ever triggering the
+			// request-accept flow, and the recipient still saw the
+			// channel as "pending" — the guard is only meaningful when
+			// it rejects the write.
+			if channel.InitiatedBy == nil {
 				return nil, fmt.Errorf("%w: dm_request_not_accepted", pkg.ErrForbidden)
 			}
+			// Initiator already sent their 1 message — must wait for accept.
+			if *channel.InitiatedBy == userID {
+				return nil, fmt.Errorf("%w: dm_request_pending", pkg.ErrForbidden)
+			}
+			// Recipient must accept before replying.
+			return nil, fmt.Errorf("%w: dm_request_not_accepted", pkg.ErrForbidden)
 		}
 
 		// First message on an accepted channel from a non-friend → transition to pending
