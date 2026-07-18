@@ -35,6 +35,15 @@ import type {
 } from "../../types";
 import type { WSHandlerContext } from "./types";
 
+/**
+ * Whether we've completed a `ready` handshake at least once in this tab.
+ * Distinguishes the initial connect (nothing to heal) from a re-connect
+ * (we were offline and may have missed message_create echoes). Module
+ * scope, like the voice/timer state elsewhere — it's connection lifecycle,
+ * not rendered state.
+ */
+let hadReadyBefore = false;
+
 export async function handleSystemEvent(
   msg: WSMessage,
   ctx: WSHandlerContext,
@@ -68,6 +77,24 @@ export async function handleSystemEvent(
       useBlockStore.getState().fetchBlocked();
 
       setConnectionStatus("connected");
+
+      // Message resync on RE-connect (not the first ready).
+      //
+      // While the socket was down we may have missed message_create echoes,
+      // including the echo for a message this client itself sent — channel
+      // messages are only inserted via that echo, so the user sees their
+      // message disappear and believes the send failed. Dropping the fetched
+      // flags lets the window be rebuilt from the API; the active channel is
+      // refetched eagerly, every other channel heals lazily the next time
+      // it's opened (its guard is no longer armed).
+      if (hadReadyBefore) {
+        useMessageStore.getState().invalidateFetchedFlags();
+        const activeChannelId = useChannelStore.getState().selectedChannelId;
+        if (activeChannelId) {
+          useMessageStore.getState().fetchMessages(activeChannelId);
+        }
+      }
+      hadReadyBefore = true;
 
       // Voice re-registration on WS reconnect.
       // LiveKit (WebRTC/UDP) is independent from WS (TCP). A WS blip doesn't

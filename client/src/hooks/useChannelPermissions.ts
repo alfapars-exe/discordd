@@ -7,7 +7,8 @@
 
 import { useMemo } from "react";
 import { useAuthStore } from "../stores/authStore";
-import { useActiveMembers } from "../stores/memberStore";
+import { useActiveMembers, useMemberStore } from "../stores/memberStore";
+import { useServerStore } from "../stores/serverStore";
 import { useChannelPermissionStore } from "../stores/channelPermissionStore";
 import {
   resolveChannelPermissions,
@@ -18,6 +19,7 @@ import {
 export function useChannelPermissions(channelID: string | null) {
   const currentUser = useAuthStore((s) => s.user);
   const members = useActiveMembers();
+  const activeServerId = useServerStore((s) => s.activeServerId);
   const getOverrides = useChannelPermissionStore((s) => s.getOverrides);
 
   const currentMember = useMemo(
@@ -51,5 +53,25 @@ export function useChannelPermissions(channelID: string | null) {
     };
   }, [channelPerms]);
 
-  return { channelPerms, hasChannelPerm };
+  /**
+   * Whether the permission bits above are actually KNOWN, as opposed to
+   * defaulted to 0 because the member list hasn't landed yet.
+   *
+   * `currentMember` is undefined during a channel/server switch and on a
+   * cold start, which makes `channelPerms` 0 and every hasChannelPerm()
+   * read false — indistinguishable from a real denial. Callers that gate a
+   * user action on a permission must consult this before treating `false`
+   * as "no": otherwise the action is silently dropped for the first few
+   * hundred ms after a switch. (This is the "first Enter doesn't send" bug.)
+   *
+   * Resolved means: we know which server we're in, its member list is
+   * present in the store, and it isn't mid-refetch.
+   */
+  const permsResolved = useMemberStore((s) => {
+    if (!activeServerId) return false;
+    if (s.loadingServers.has(activeServerId)) return false;
+    return s.membersByServer[activeServerId] !== undefined;
+  });
+
+  return { channelPerms, hasChannelPerm, permsResolved };
 }

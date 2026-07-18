@@ -210,3 +210,44 @@ describe("messageStore — in-flight fetch aborts", () => {
     expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
   });
 });
+
+describe("messageStore — invalidateFetchedFlags (WS reconnect)", () => {
+  it("allows a refetch but keeps the rendered messages in place", async () => {
+    getMessages.mockResolvedValueOnce(ok([makeMessage("m-1")]));
+    await useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    // Fetch guard is armed — a second fetch is a no-op.
+    await useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    useMessageStore.getState().invalidateFetchedFlags();
+
+    // Unlike invalidateFetchCache, the window survives — clearing it would
+    // blank the chat on every reconnect before the refetch lands.
+    expect(
+      useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)
+    ).toEqual(["m-1"]);
+
+    getMessages.mockResolvedValueOnce(ok([makeMessage("m-1"), makeMessage("m-2")]));
+    await useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+
+    expect(getMessages).toHaveBeenCalledTimes(2);
+    expect(
+      useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)
+    ).toEqual(["m-1", "m-2"]);
+  });
+
+  it("aborts an in-flight fetch so its late payload can't beat the refetch", async () => {
+    const stale = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(stale.promise);
+
+    const fetching = useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    useMessageStore.getState().invalidateFetchedFlags();
+
+    stale.resolve(ok([makeMessage("stale-1")]));
+    await fetching;
+
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+  });
+});
