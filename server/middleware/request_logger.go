@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/google/uuid"
 )
@@ -66,9 +67,21 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				return
 			}
 
-			reqID := uuid.NewString()
+			// Honor an inbound X-Request-Id if the client set one (edge
+			// proxies, curl scripts, retry loops that want to correlate
+			// their side). We still generate a fresh id when absent.
+			reqID := r.Header.Get("X-Request-Id")
+			if reqID == "" {
+				reqID = uuid.NewString()
+			}
 			w.Header().Set("X-Request-Id", reqID)
+			// Store into BOTH keys during the transition: the middleware
+			// package's private key (for existing middleware.RequestID
+			// callers) and pkg's shared key (so pkg.ErrorCtx can read it
+			// without importing middleware). Once all callers migrate to
+			// pkg.RequestIDFrom, the private key can go away.
 			ctx := context.WithValue(r.Context(), requestIDKey, reqID)
+			ctx = pkg.WithRequestID(ctx, reqID)
 
 			rec := &statusRecorder{ResponseWriter: w}
 			start := time.Now()

@@ -1,9 +1,11 @@
 package pkg
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -55,6 +57,37 @@ func Error(w http.ResponseWriter, err error) {
 	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
 		http.Error(w, "failed to encode error response", http.StatusInternalServerError)
 	}
+}
+
+// ErrorCtx is Error's context-aware sibling. Use it when the caller has
+// captured an internal err that shouldn't reach the client (unwrappable
+// domain errors have generic messages; DB text, sql error strings,
+// file paths, and stack fragments must stay server-side) but you still
+// want a searchable breadcrumb in the log.
+//
+// Behavior:
+//   - status ≥ 500: log err at Error with request_id + method/path if the
+//     ctx carries a *http.Request (via RequestFrom, not yet wired) and
+//     return a generic userMsg. If userMsg is empty, defaults to
+//     "internal server error" — same shape as Error() so ops parsers
+//     don't have to branch.
+//   - status < 500: userMsg is returned verbatim (already client-safe).
+//
+// The err argument is optional. Passing nil is fine — used when the
+// caller detected a bad state without a wrapped error.
+func ErrorCtx(ctx context.Context, w http.ResponseWriter, status int, userMsg string, err error) {
+	if status >= http.StatusInternalServerError {
+		reqID := RequestIDFrom(ctx)
+		slog.LogAttrs(ctx, slog.LevelError, "server error",
+			slog.Int("status", status),
+			slog.String("request_id", reqID),
+			slog.Any("err", err),
+		)
+		if userMsg == "" {
+			userMsg = "internal server error"
+		}
+	}
+	ErrorWithMessage(w, status, userMsg)
 }
 
 func ErrorWithMessage(w http.ResponseWriter, status int, message string) {

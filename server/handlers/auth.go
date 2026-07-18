@@ -188,7 +188,7 @@ func (h *AuthHandler) WSTicket(w http.ResponseWriter, r *http.Request) {
 	}
 	ticket, err := h.wsTicketService.Issue(user.ID)
 	if err != nil {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to issue ws ticket")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to issue ws ticket", err)
 		return
 	}
 	pkg.JSON(w, http.StatusOK, map[string]string{"ticket": ticket})

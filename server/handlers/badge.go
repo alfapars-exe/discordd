@@ -222,7 +222,7 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	// operator, closed to "other" so a shared host can't enumerate badges.
 	badgesDir := filepath.Join(h.uploadDir, "badges")
 	if err := os.MkdirAll(badgesDir, 0o750); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to create badges directory")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to create badges directory", err)
 		return
 	}
 
@@ -236,13 +236,13 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	}
 	dest, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
 	if err != nil {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to save icon")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to save icon", err)
 		return
 	}
 	defer dest.Close()
 
 	if _, err := io.Copy(dest, file); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to write icon")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", err)
 		return
 	}
 

@@ -150,7 +150,7 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.serveFile(w, r, name)
 		return
 	} else if !errors.Is(err, pkg.ErrNotFound) {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "attachment lookup failed")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "attachment lookup failed", err)
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.serveFile(w, r, name)
 		return
 	} else if !errors.Is(err, pkg.ErrNotFound) {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "dm attachment lookup failed")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "dm attachment lookup failed", err)
 		return
 	}
 
