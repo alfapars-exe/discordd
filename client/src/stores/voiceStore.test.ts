@@ -31,6 +31,7 @@ function resetStore() {
     watchingScreenShares: {},
     screenShareViewers: {},
     preMuteVolumes: {},
+    connectionQuality: {},
     rtt: 0,
     wasReplaced: false,
     _onLeaveCallback: null,
@@ -336,6 +337,86 @@ describe("voiceStore", () => {
     it("should set RTT value", () => {
       useVoiceStore.getState().setRtt(42);
       expect(useVoiceStore.getState().rtt).toBe(42);
+    });
+  });
+
+  // ─── Per-Participant Connection Quality ───
+  //
+  // Mirrors the `rtt` lifecycle: written while connected, wiped on every
+  // exit path. A stale map would paint phantom bars on the next join.
+
+  describe("connectionQuality", () => {
+    it("should set quality for a participant", () => {
+      useVoiceStore.getState().setConnectionQuality("u1", "excellent");
+      expect(useVoiceStore.getState().connectionQuality["u1"]).toBe("excellent");
+    });
+
+    it("should overwrite the previous quality for the same participant", () => {
+      useVoiceStore.getState().setConnectionQuality("u1", "excellent");
+      useVoiceStore.getState().setConnectionQuality("u1", "poor");
+      expect(useVoiceStore.getState().connectionQuality["u1"]).toBe("poor");
+    });
+
+    it("should keep other participants untouched when one changes", () => {
+      useVoiceStore.getState().setConnectionQuality("u1", "good");
+      useVoiceStore.getState().setConnectionQuality("u2", "lost");
+      useVoiceStore.getState().setConnectionQuality("u1", "poor");
+      const map = useVoiceStore.getState().connectionQuality;
+      expect(map).toEqual({ u1: "poor", u2: "lost" });
+    });
+
+    it("should drop only the disconnected participant's entry", () => {
+      useVoiceStore.setState({
+        connectionQuality: { u1: "good", u2: "excellent" },
+      });
+      useVoiceStore.getState().clearConnectionQuality("u1");
+      expect(useVoiceStore.getState().connectionQuality).toEqual({
+        u2: "excellent",
+      });
+    });
+
+    it("should be a no-op when clearing an unknown participant", () => {
+      const before = { u1: "good" as const };
+      useVoiceStore.setState({ connectionQuality: before });
+      useVoiceStore.getState().clearConnectionQuality("nobody");
+      // Same object identity — no needless re-render for every subscriber.
+      expect(useVoiceStore.getState().connectionQuality).toBe(before);
+    });
+
+    it("should clear the whole map on leaveVoiceChannel", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "ch1",
+        connectionQuality: { u1: "good", u2: "poor" },
+      });
+      useVoiceStore.getState().leaveVoiceChannel();
+      expect(useVoiceStore.getState().connectionQuality).toEqual({});
+    });
+
+    it("should clear the whole map on handleForceDisconnect", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "ch1",
+        connectionQuality: { u1: "good" },
+      });
+      useVoiceStore.getState().handleForceDisconnect();
+      expect(useVoiceStore.getState().connectionQuality).toEqual({});
+    });
+
+    it("should clear the whole map on handleVoiceReplaced", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "ch1",
+        connectionQuality: { u1: "good" },
+      });
+      useVoiceStore.getState().handleVoiceReplaced();
+      expect(useVoiceStore.getState().connectionQuality).toEqual({});
+    });
+
+    it("should clear the whole map on handleAFKKick", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "ch1",
+        connectionQuality: { u1: "good" },
+      });
+      useVoiceStore.getState().handleAFKKick("Genel", "Sunucu");
+      expect(useVoiceStore.getState().connectionQuality).toEqual({});
     });
   });
 

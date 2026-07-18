@@ -21,6 +21,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { IconHeadphonesMuted, IconSpeakerMuted } from "../shared/Icons";
 import VoiceUserContextMenu from "./VoiceUserContextMenu";
+import ConnectionQualityIndicator from "./ConnectionQualityIndicator";
 import { resolveAssetUrl } from "../../utils/constants";
 
 type VoiceParticipantProps = {
@@ -167,6 +168,8 @@ function VoiceParticipant({
         <div className={avatarClass}>
           {avatarContent}
           {overlay}
+          {/* Renders null until LiveKit reports a quality for this identity. */}
+          <ConnectionQualityIndicator identity={participant.identity} />
         </div>
         <span className="voice-participant-name">{displayName}</span>
       </button>

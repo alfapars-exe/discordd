@@ -10,6 +10,7 @@
  *   - Audio processor (RNNoise / Krisp / VadGate) — useAudioProcessor
  *   - Speaking detection (sidebar green ring)     — useSpeakingDetection
  *   - RTT polling (status indicator)              — useRttPolling
+ *   - Per-participant quality (tile signal bars)  — useConnectionQualitySync
  *   - Per-user / master volume + retries          — useVolumeSync
  *   - Screen share lifecycle (3 paths)            — useScreenShareToggle
  *   - Local mic enabled (mute, server mute, PTT)  — useMicSync
@@ -26,6 +27,7 @@ import { useAudioProcessor } from "../../hooks/useAudioProcessor";
 import { useCameraPublishDefaults } from "../../hooks/useCameraPublishDefaults";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
+import { useConnectionQualitySync } from "../../hooks/useConnectionQualitySync";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
 import { useAudioPlayoutTuning } from "../../hooks/useAudioPlayoutTuning";
 import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
@@ -56,6 +58,10 @@ function VoiceStateManager() {
 
   // RTT polling — drives the "Ses Bağlı / NN ms" connection indicator.
   useRttPolling(room);
+
+  // Per-participant network quality — one room-level listener feeds the
+  // signal-bar badge on every participant tile (local participant included).
+  useConnectionQualitySync(room);
 
   // Volume sync — per-user, screen share, master, deafen → setVolume() on
   // every remote participant + retry-on-subscribe + retry-on-reconnect.

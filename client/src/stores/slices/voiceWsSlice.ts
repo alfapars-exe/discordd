@@ -167,6 +167,7 @@ export const createVoiceWsSlice: StateCreator<
       watchingScreenShares: {},
       screenShareViewers: {},
       rtt: 0,
+      connectionQuality: {},
     });
   },
 
@@ -184,6 +185,7 @@ export const createVoiceWsSlice: StateCreator<
       watchingScreenShares: {},
       screenShareViewers: {},
       rtt: 0,
+      connectionQuality: {},
       afkKickInfo: { channelName, serverName },
     });
   },
@@ -206,6 +208,7 @@ export const createVoiceWsSlice: StateCreator<
       watchingScreenShares: {},
       screenShareViewers: {},
       rtt: 0,
+      connectionQuality: {},
     });
   },
 

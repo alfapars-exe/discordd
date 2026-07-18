@@ -60,6 +60,14 @@ export type {
   MicProfile,
 };
 
+/**
+ * Renderable subset of LiveKit's ConnectionQuality enum. "unknown" is
+ * deliberately excluded: the UI must show nothing rather than an empty
+ * indicator when there's no measurement yet, so the absence of a map entry
+ * — not a sentinel value — is how "no data" is represented.
+ */
+export type ConnectionQualityLevel = "excellent" | "good" | "poor" | "lost";
+
 // Lazy getter for the current user's id. Used to scrub our own voice entry
 // on leave — circular import avoided via getState().
 function getOwnUserId(): string | null {
@@ -129,6 +137,18 @@ type VoiceCoreState = {
   /** LiveKit signal server round-trip time (ms) */
   rtt: number;
 
+  /**
+   * Per-participant network quality, keyed by LiveKit participant identity
+   * (= our user id). Fed by useConnectionQualitySync from the room-level
+   * ConnectionQualityChanged event, which covers remote participants AND
+   * the local one.
+   *
+   * A missing key means "no measurement" — the indicator renders nothing.
+   * Shares the `rtt` lifecycle: cleared on leave, force-disconnect, AFK
+   * kick and session replacement, so a rejoin never inherits stale bars.
+   */
+  connectionQuality: Record<string, ConnectionQualityLevel>;
+
   /** Set when another session takes over voice — prevents auto-rejoin loop */
   wasReplaced: boolean;
 
@@ -148,6 +168,9 @@ type VoiceCoreActions = {
   setStreaming: (isStreaming: boolean) => void;
   setCameraEnabled: (isCameraEnabled: boolean) => void;
   setRtt: (rtt: number) => void;
+  setConnectionQuality: (identity: string, quality: ConnectionQualityLevel) => void;
+  /** Drop one participant's entry — on disconnect or on an "unknown" reading. */
+  clearConnectionQuality: (identity: string) => void;
   setActiveSpeakers: (speakerIds: string[]) => void;
   registerOnLeave: (fn: (() => void) | null) => void;
   registerWsSend: (fn: ((op: string, data?: unknown) => void) | null) => void;
@@ -187,6 +210,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   _joinGeneration: 0,
   activeSpeakers: {},
   rtt: 0,
+  connectionQuality: {},
   wasReplaced: false,
   _onLeaveCallback: null,
   _wsSend: null,
@@ -411,6 +435,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       watchingScreenShares: {},
       screenShareViewers: {},
       rtt: 0,
+      connectionQuality: {},
       _joinGeneration: get()._joinGeneration + 1,
     });
 
@@ -478,6 +503,24 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   },
 
   setRtt: (rtt) => set({ rtt }),
+
+  setConnectionQuality: (identity, quality) =>
+    set((state) =>
+      // Skip the write when nothing changed. LiveKit re-emits the same
+      // quality on a fixed cadence, and a fresh object every tick would
+      // re-render every participant tile subscribed to this map.
+      state.connectionQuality[identity] === quality
+        ? {}
+        : { connectionQuality: { ...state.connectionQuality, [identity]: quality } },
+    ),
+
+  clearConnectionQuality: (identity) =>
+    set((state) => {
+      if (!(identity in state.connectionQuality)) return {};
+      const next = { ...state.connectionQuality };
+      delete next[identity];
+      return { connectionQuality: next };
+    }),
 
   setActiveSpeakers: (speakerIds) => {
     const map: Record<string, boolean> = {};
