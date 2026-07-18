@@ -19,10 +19,11 @@
  *   - Verbose debug tracing (off by default)      — useLiveKitDebugTracer
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
+import { useCameraPublishDefaults } from "../../hooks/useCameraPublishDefaults";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
@@ -108,12 +109,34 @@ function VoiceStateManager() {
   // Errors are toast-free: LiveKit logs its own permission/device failures
   // and the UI button stays in its previous state if publish fails.
   const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
+
+  // Resolution / fps / simulcast ladder for the camera, passed per-publish as
+  // the 2nd and 3rd args of setCameraEnabled. They are NOT in
+  // RoomOptions.publishDefaults for the same reason the screen-share options
+  // aren't (see VoiceProvider.tsx:177-185): room-level publishDefaults are
+  // captured at connect() and never re-applied.
+  //
+  // Held in a latest-ref rather than an effect dependency on purpose: a
+  // mid-session quality change must NOT re-fire the toggle effect and cycle a
+  // live camera. New settings take effect on the NEXT camera toggle — the same
+  // semantics the screen share has.
+  const cameraOpts = useCameraPublishDefaults();
+  const cameraOptsRef = useRef(cameraOpts);
+  useLayoutEffect(() => {
+    cameraOptsRef.current = cameraOpts;
+  });
+
   useEffect(() => {
     if (!initialSyncDone.current) return;
     let cancelled = false;
     (async () => {
       try {
-        await localParticipant.setCameraEnabled(isCameraEnabled);
+        const { cameraCapture, cameraPublish } = cameraOptsRef.current;
+        await localParticipant.setCameraEnabled(
+          isCameraEnabled,
+          cameraCapture,
+          cameraPublish,
+        );
       } catch (err) {
         if (!cancelled) {
           console.error("[VoiceStateManager] camera toggle failed:", err);

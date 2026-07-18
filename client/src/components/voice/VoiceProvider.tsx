@@ -44,6 +44,7 @@ import type { AudioCaptureOptions, AudioPreset, RoomOptions } from "livekit-clie
 const DEFAULT_VOICE_BITRATE = 384_000;
 
 import { useVoiceStore } from "../../stores/voiceStore";
+import { micCaptureFor, micPublishFor } from "../../audio/micProfile";
 import { useChannelStore } from "../../stores/channelStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useTranslation } from "react-i18next";
@@ -147,22 +148,32 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     [tE2ee],
   );
 
+  // Capture + publish profile for the mic (Konuşma / Müzik). These feed the
+  // room-level defaults, which is what the FIRST mic publish uses — the one
+  // useInitialRoomSync makes at connect time, with no per-publish options.
+  // Mid-session profile changes are handled separately by useMicSync, which
+  // republishes the track with explicit options (room-level defaults are
+  // captured at connect() and never re-applied).
+  //
+  // Speech profile: mono capture with AEC/NS/AGC on, Opus DTX + RED on.
+  // Mono matters beyond the profile — some USB / virtual mics expose two
+  // channels with one silent, and without channelCount:1 that silent channel
+  // feeds half the playback graph on remotes ("audio only in one ear").
+  // Music profile inverts all of it; see audio/micProfile.ts.
+  const micProfile = useVoiceStore((s) => s.micProfile);
+
   // Stable reference — LiveKitRoom uses identity comparison on its props.
   const audioCaptureDefaults: AudioCaptureOptions = useMemo(
-    () => ({
-      noiseSuppression: true,
-      autoGainControl: true,
-      echoCancellation: true,
-      // Mono capture across the board. Some USB / virtual mics expose two
-      // channels with one silent; without this, the silent channel feeds
-      // half the playback graph on remotes and shows up as "audio only in
-      // one ear". Forcing mono at capture eliminates that whole class of
-      // bug regardless of downstream processor (RNNoise, VadGate, none).
-      channelCount: 1,
-      ...(inputDevice ? { deviceId: inputDevice } : {}),
-    }),
-    [inputDevice],
+    () => micCaptureFor(micProfile, inputDevice),
+    [micProfile, inputDevice],
   );
+
+  // dtx / red / forceStereo, explicit rather than inherited from the SDK's
+  // implicit mono defaults. Stating them documents the speech path next to
+  // the contrasting screen-share audio profile and makes it assertable.
+  // The music profile also carries its own audioPreset, which deliberately
+  // overrides the per-channel voice bitrate below.
+  const micPublishDefaults = useMemo(() => micPublishFor(micProfile), [micProfile]);
 
   // Stable AudioPreset reference — recomputes only when the resolved
   // bitrate changes. LiveKit applies this on first audio publish.
@@ -187,6 +198,10 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       audioCaptureDefaults,
       publishDefaults: {
         audioPreset: voiceAudioPreset,
+        // Spread last: the music profile's own 256 kbps preset must win over
+        // the per-channel voice bitrate, and the speech profile omits
+        // audioPreset entirely so voiceAudioPreset survives.
+        ...micPublishDefaults,
       },
       webAudioMix: true,
       // adaptiveStream: SFU sends the lower simulcast layer when a
@@ -206,7 +221,15 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     }
 
     return base;
-  }, [isConnected, audioCaptureDefaults, voiceAudioPreset, e2eePassphrase, keyProvider, e2eeWorker]);
+  }, [
+    isConnected,
+    audioCaptureDefaults,
+    voiceAudioPreset,
+    micPublishDefaults,
+    e2eePassphrase,
+    keyProvider,
+    e2eeWorker,
+  ]);
 
   // Skip LiveKitRoom entirely when not in a voice session. Mounting it with
   // connect=false and then flipping the prop to true causes the SDK wrapper

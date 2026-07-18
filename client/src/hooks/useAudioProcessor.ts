@@ -30,6 +30,10 @@
  * Browser-native NS is also explicitly *disabled* whenever a custom
  * processor is attached — running both layers can phase-cancel speech
  * components and over-suppress quiet talkers.
+ *
+ * The whole chain is gated on the mic profile: with micProfile === "muzik"
+ * every engine above is bypassed ("none"), because they are speech models
+ * and destroy music. See audio/micProfile.ts.
  */
 
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -55,7 +59,12 @@ import {
 import { isNativeApp } from "../utils/constants";
 import { resolveDeepFilterBase } from "../audio/deepfilterAssets";
 import { strengthToAttenLimDb } from "../audio/deepfilterSuppression";
-import type { NoiseSuppressionLevel, NoiseReductionEngine } from "../stores/slices/voiceSettingsSlice";
+import type {
+  NoiseSuppressionLevel,
+  NoiseReductionEngine,
+  MicProfile,
+} from "../stores/slices/voiceSettingsSlice";
+import { shouldRunNoiseProcessor } from "../audio/micProfile";
 
 type ProcessorType =
   | "krisp"
@@ -91,7 +100,15 @@ function getDesiredProcessor(
   nr: boolean,
   engine: NoiseReductionEngine,
   sens: number,
+  profile: MicProfile,
 ): ProcessorType {
+  // Müzik profile bypasses the entire chain. RNNoise, DeepFilterNet3, DTLN
+  // and Speex are all speech-trained/tuned: they read a sustained instrument
+  // tone as stationary noise and gut it, and the VAD gate closes on quiet
+  // passages. See audio/micProfile.ts. This overrides the noiseReduction
+  // toggle on purpose — picking "Müzik" is the stronger signal.
+  if (!shouldRunNoiseProcessor(profile)) return "none";
+
   if (nr) {
     if (engine === "krisp") return "krisp";
     if (engine === "webrtc") return "webrtc";
@@ -385,6 +402,7 @@ export function useAudioProcessor(
   const inputVolume = useVoiceStore((s) => s.inputVolume);
   const noiseSuppressionLevel = useVoiceStore((s) => s.noiseSuppressionLevel);
   const deepfilterSuppression = useVoiceStore((s) => s.deepfilterSuppression);
+  const micProfile = useVoiceStore((s) => s.micProfile);
   const addToast = useToastStore((s) => s.addToast);
 
   // The currently attached processor, or null if "none".
@@ -400,6 +418,7 @@ export function useAudioProcessor(
   const inputVolumeRef = useRef(inputVolume);
   const noiseSuppressionLevelRef = useRef(noiseSuppressionLevel);
   const deepfilterSuppressionRef = useRef(deepfilterSuppression);
+  const micProfileRef = useRef(micProfile);
   useLayoutEffect(() => {
     noiseReductionRef.current = noiseReduction;
     noiseReductionEngineRef.current = noiseReductionEngine;
@@ -407,6 +426,7 @@ export function useAudioProcessor(
     inputVolumeRef.current = inputVolume;
     noiseSuppressionLevelRef.current = noiseSuppressionLevel;
     deepfilterSuppressionRef.current = deepfilterSuppression;
+    micProfileRef.current = micProfile;
   });
 
   // Effect A: switch processor when settings change at runtime.
@@ -417,7 +437,12 @@ export function useAudioProcessor(
     const audioTrack = pub?.track as LocalAudioTrack | undefined;
     if (!audioTrack) return;
 
-    const desired = getDesiredProcessor(noiseReduction, noiseReductionEngine, micSensitivity);
+    const desired = getDesiredProcessor(
+      noiseReduction,
+      noiseReductionEngine,
+      micSensitivity,
+      micProfile,
+    );
     const current = getCurrentProcessorType(processorRef.current);
 
     if (desired === current) {
@@ -490,6 +515,7 @@ export function useAudioProcessor(
     inputVolume,
     noiseSuppressionLevel,
     deepfilterSuppression,
+    micProfile,
     localParticipant,
     addToast,
     setNoiseReductionEngine,
@@ -510,6 +536,7 @@ export function useAudioProcessor(
         noiseReductionRef.current,
         noiseReductionEngineRef.current,
         micSensitivityRef.current,
+        micProfileRef.current,
       );
       if (desired === "none") return;
 

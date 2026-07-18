@@ -34,6 +34,35 @@ export type ScreenShareQuality = "720p" | "1080p" | "1440p" | "native";
 export type ScreenShareFps = 30 | 60 | 120 | -1;
 
 /**
+ * Camera resolution preset. Maps to VideoPresets.h360 / h720 / h1080 in
+ * useCameraPublishDefaults, which also derives the simulcast ladder from it.
+ * Default "720p": the sweet spot for a webcam tile — noticeably sharper than
+ * the SDK's unconfigured default without the upstream cost of 1080p.
+ */
+export type CameraQuality = "360p" | "720p" | "1080p";
+
+/**
+ * Camera frame rate. 30 is the default (natural motion); 15 halves the frame
+ * budget and spends the same bitrate ceiling on fewer, sharper frames —
+ * useful on weak uplinks or laptop encoders.
+ */
+export type CameraFps = 15 | 30;
+
+/**
+ * Microphone profile — picks the whole capture + publish + processor chain.
+ *
+ *   - "konusma" (speech, default): mono capture, browser AEC/NS/AGC on, the
+ *     RNNoise-family processor attached, Opus DTX + RED on.
+ *   - "muzik" (music): stereo capture, all voice DSP off, noise-suppression
+ *     processor bypassed, Opus DTX + RED off with forced stereo.
+ *
+ * The full rationale and the exact option objects live in audio/micProfile.ts.
+ * Changing this republishes the mic track (via useMicSync) rather than
+ * reconnecting the room.
+ */
+export type MicProfile = "konusma" | "muzik";
+
+/**
  * Noise suppression level — controls the post-RNNoise VAD gate's open/close
  * dB thresholds + hold time. Layered with the existing micSensitivity slider:
  * the level sets a base curve, sensitivity offsets it ±6 dB. sensitivity=100
@@ -153,6 +182,20 @@ export type VoiceSettings = {
    * useScreenShareToggle).
    */
   screenShareMode: ScreenShareMode;
+  /**
+   * Camera resolution + frame rate. Applied per-publish by
+   * useCameraPublishDefaults → setCameraEnabled(enabled, capture, publish).
+   * Mid-session changes take effect on the NEXT camera toggle, matching the
+   * screen-share semantics (LiveKit doesn't re-encode a live publication).
+   */
+  cameraQuality: CameraQuality;
+  cameraFps: CameraFps;
+  /**
+   * Microphone profile. "muzik" disables noise suppression entirely — see
+   * audio/micProfile.ts. Changing it triggers a mic republish cycle in
+   * useMicSync, not a room reconnect.
+   */
+  micProfile: MicProfile;
 };
 
 /** Display profile that shapes encoder degradation + content hint. */
@@ -211,6 +254,9 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   screenShareShowCursor: true,
   screenShareLowLatency: false,
   screenShareMode: "motion",
+  cameraQuality: "720p",
+  cameraFps: 30,
+  micProfile: "konusma",
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -338,6 +384,9 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     screenShareShowCursor: s.screenShareShowCursor,
     screenShareLowLatency: s.screenShareLowLatency,
     screenShareMode: s.screenShareMode,
+    cameraQuality: s.cameraQuality,
+    cameraFps: s.cameraFps,
+    micProfile: s.micProfile,
   };
 }
 
@@ -361,6 +410,9 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareShowCursor: (enabled: boolean) => void;
   setScreenShareLowLatency: (enabled: boolean) => void;
   setScreenShareMode: (mode: ScreenShareMode) => void;
+  setCameraQuality: (quality: CameraQuality) => void;
+  setCameraFps: (fps: CameraFps) => void;
+  setMicProfile: (profile: MicProfile) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
@@ -399,6 +451,9 @@ export const createVoiceSettingsSlice: StateCreator<
     screenShareShowCursor: initial.screenShareShowCursor,
     screenShareLowLatency: initial.screenShareLowLatency,
     screenShareMode: initial.screenShareMode,
+    cameraQuality: initial.cameraQuality,
+    cameraFps: initial.cameraFps,
+    micProfile: initial.micProfile,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -478,6 +533,21 @@ export const createVoiceSettingsSlice: StateCreator<
 
     setScreenShareMode: (mode: ScreenShareMode) => {
       set({ screenShareMode: mode });
+      saveSettings(currentSettings(get()));
+    },
+
+    setCameraQuality: (quality: CameraQuality) => {
+      set({ cameraQuality: quality });
+      saveSettings(currentSettings(get()));
+    },
+
+    setCameraFps: (fps: CameraFps) => {
+      set({ cameraFps: fps });
+      saveSettings(currentSettings(get()));
+    },
+
+    setMicProfile: (profile: MicProfile) => {
+      set({ micProfile: profile });
       saveSettings(currentSettings(get()));
     },
 
@@ -574,6 +644,9 @@ export const createVoiceSettingsSlice: StateCreator<
         noiseSuppressionLevel: merged.noiseSuppressionLevel,
         deepfilterSuppression: merged.deepfilterSuppression,
         screenShareVolumes: merged.screenShareVolumes,
+        cameraQuality: merged.cameraQuality,
+        cameraFps: merged.cameraFps,
+        micProfile: merged.micProfile,
       });
     },
   };
