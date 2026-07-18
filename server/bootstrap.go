@@ -58,6 +58,15 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	corsOrigins := []string{
 		"capacitor://localhost", // iOS Capacitor WKWebView
 		"ionic://localhost",     // iOS Capacitor (legacy scheme)
+		// Electron desktop shell — the renderer runs under the custom
+		// app:// scheme registered in electron/main.ts. Origin is exactly
+		// "app://hichat" (host=hichat, no port). Without this entry the
+		// desktop app can't register or log in — the CORS preflight is
+		// rejected, and the HttpOnly refresh cookie is never received.
+		// This is a first-party origin baked into a signed installer; it
+		// can't be spoofed by web content and doesn't rely on the
+		// CORS_ORIGINS env var (which the ops team may forget to set).
+		"app://hichat",
 	}
 
 	// Android Capacitor's WebView uses http(s)://localhost as its page origin
