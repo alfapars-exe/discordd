@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -89,9 +90,12 @@ type UploadConfig struct {
 //   - SQLite DB via `sqlite3 VACUUM INTO` (consistent snapshot while open)
 //   - Upload directory via `hf sync --delete`
 //
-// The bucket path used is `hf://buckets/<HFBucket>/latest/{db,uploads}/...`.
-// Mutable overwrite-in-place — no per-cycle versioning yet. Add a dated
-// archive sync to a separate prefix if point-in-time recovery is needed.
+// The live mirror lives at `hf://buckets/<HFBucket>/latest/{db,uploads}/...`
+// and is overwritten in place every cycle. Point-in-time recovery comes from
+// a second, dated copy of the DB at `hf://buckets/<HFBucket>/daily/<YYYY-MM-DD>/
+// hichat.db` (one per UTC day, pruned to DailyKeep). Uploads are deliberately
+// NOT versioned — a dated copy of a multi-GB media tree per day would multiply
+// the bucket budget by the retention window.
 type BackupConfig struct {
 	Enabled   bool          // true when HFToken is set
 	HFToken   string        // HF API token with write access to HFBucket
@@ -100,7 +104,18 @@ type BackupConfig struct {
 	DBPath    string        // SQLite source file
 	UploadDir string        // uploads root mirror target
 	WorkDir   string        // local staging area for the DB snapshot
+	// DailyKeep is how many dated DB snapshots to retain under `daily/`.
+	// Values <= 0 fall back to the 7-day default rather than pruning
+	// everything — "keep zero backups" is never the intent behind a
+	// missing or malformed env var.
+	DailyKeep int
 }
+
+// defaultBackupDailyKeep is a week of dated DB snapshots. A week covers the
+// realistic detection window for silent corruption (long enough that someone
+// notices over a weekend, short enough that the retained copies stay cheap —
+// the DB is small and Xet dedups unchanged pages).
+const defaultBackupDailyKeep = 7
 
 // LoggingConfig configures structured logging (slog) and optional Sentry
 // error tracking. Zero values are safe: an empty SentryDSN disables Sentry
@@ -192,6 +207,21 @@ func Load() (*Config, error) {
 			backupInterval = time.Duration(m) * time.Minute
 		}
 	}
+	// BACKUP_DAILY_KEEP (optional) is the number of dated DB snapshots kept
+	// under the bucket's `daily/` prefix. A malformed or non-positive value
+	// falls back to the 7-day default instead of erroring the boot: this
+	// knob is retention tuning, not a correctness input, and a typo here
+	// must never be the reason the process refuses to start (or, worse,
+	// the reason history gets pruned to nothing).
+	dailyKeep := defaultBackupDailyKeep
+	if kStr := getEnv("BACKUP_DAILY_KEEP", ""); kStr != "" {
+		if k, kErr := strconv.Atoi(kStr); kErr == nil && k > 0 {
+			dailyKeep = k
+		} else {
+			log.Printf("[config] ignoring invalid BACKUP_DAILY_KEEP=%q, using %d", kStr, dailyKeep)
+		}
+	}
+
 	hfToken := getEnv("HF_TOKEN", "")
 
 	jwtSecret := getEnv("JWT_SECRET", "")
@@ -284,6 +314,7 @@ func Load() (*Config, error) {
 			DBPath:    firstNonEmpty(os.Getenv("DATABASE_URL"), getEnv("DATABASE_PATH", "./data/mqvi.db")),
 			UploadDir: getEnv("UPLOAD_DIR", "./data/uploads"),
 			WorkDir:   getEnv("BACKUP_WORKDIR", "/tmp/hichat-backup"),
+			DailyKeep: dailyKeep,
 		},
 		Logging: LoggingConfig{
 			Level:       logLevel,
