@@ -9,7 +9,8 @@
     "electron:dev": "concurrently \"npm run dev --prefix client\" \"npx tsc -p electron/tsconfig.json && electron .\"",
     "clean:release": "node -e \"require('fs').rmSync('release',{recursive:true,force:true})\"",
     "electron:build": "npm run clean:release && npm run build --prefix client && npx tsc -p electron/tsconfig.json && electron-builder",
-    "electron:dist": "npm run electron:build"
+    "electron:dist": "npm run electron:build",
+    "electron:test": "npx tsc -p electron/tsconfig.json && node --test dist-electron/*.test.js"
   },
   "dependencies": {
     "electron-updater": "^6",

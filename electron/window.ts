@@ -164,11 +164,20 @@ export function createMainWindow(): BrowserWindow {
 
   Menu.setApplicationMenu(null);
 
-  const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+  // ELECTRON_FORCE_PROD=1 exercises the app:// production loading path
+  // even from a dev checkout (needed to smoke-test the protocol handler
+  // without a full electron:build cycle). Otherwise dev uses Vite HMR.
+  const isDev =
+    process.env.ELECTRON_FORCE_PROD !== "1" &&
+    (process.env.NODE_ENV === "development" || !app.isPackaged);
   if (isDev) {
     mainWindow.loadURL("http://localhost:3030");
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../client/dist/index.html"));
+    // app://hichat/index.html serves out of client/dist via the protocol
+    // handler in main.ts:setupAppProtocol. loadFile with file:// no longer
+    // works — file:// is a null origin and the server-side CORS + cookie
+    // flow rejects it. See T1.4/T1.5 for the full rationale.
+    mainWindow.loadURL("app://hichat/index.html");
   }
 
   // F12 toggles DevTools — only in development. Leaving DevTools accessible
