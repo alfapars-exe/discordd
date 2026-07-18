@@ -415,3 +415,69 @@ func TestUpdateProfile_NoCacheRefreshWhenUpdateFails(t *testing.T) {
 		t.Error("UpdateUserInfo must not be called when the DB update fails")
 	}
 }
+
+// ─── ModifyRoles N+1 regression pin ───
+
+// TestModifyRoles_AvoidsN_Plus_1_UsesSingleGetAllByServer locks the T3.3
+// fix. Before the refactor ModifyRoles called roleRepo.GetByID once per
+// requested roleID for validation AND once more inside the assignment
+// loop for the audit metadata — two N+1 loops in one function. The fix
+// pulls the server's full role list once and uses an in-memory map for
+// both loops. If a future edit brings GetByID back, this test flips
+// counters and fails loudly.
+func TestModifyRoles_AvoidsN_Plus_1_UsesSingleGetAllByServer(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "s-1", "actor", "target"
+
+	// Actor outranks everything (Position=100); target starts with no
+	// roles so both requested assignments are novel and hit the
+	// assignment branch (the second former N+1 point).
+	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, uid, _ string) ([]models.Role, error) {
+		if uid == actor {
+			return []models.Role{{ID: "actor-top", ServerID: srv, Position: 100}}, nil
+		}
+		return nil, nil
+	}
+
+	all := []models.Role{
+		{ID: "r-1", ServerID: srv, Name: "r-1", Position: 10},
+		{ID: "r-2", ServerID: srv, Name: "r-2", Position: 20},
+		{ID: "r-3", ServerID: srv, Name: "r-3", Position: 30},
+	}
+
+	var getByIDCalls, getAllServerCalls int
+	h.roleRepo.GetByIDFn = func(_ context.Context, id string) (*models.Role, error) {
+		getByIDCalls++
+		for i := range all {
+			if all[i].ID == id {
+				return &all[i], nil
+			}
+		}
+		return nil, nil
+	}
+	h.roleRepo.GetAllByServerFn = func(_ context.Context, _ string) ([]models.Role, error) {
+		getAllServerCalls++
+		out := make([]models.Role, len(all))
+		copy(out, all)
+		return out, nil
+	}
+	// GetByID on member (post-modify enrichment) is unrelated to the N+1.
+	// UserRepo returns a plain user so member enrichment succeeds.
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: id}, nil
+	}
+
+	if _, err := h.svc.ModifyRoles(context.Background(), srv, actor, target,
+		[]string{"r-1", "r-2"}); err != nil {
+		t.Fatalf("ModifyRoles: %v", err)
+	}
+
+	if getByIDCalls != 0 {
+		t.Errorf("GetByID calls = %d, want 0 (N+1 regression — validation "+
+			"or audit metadata is doing per-role lookups again)", getByIDCalls)
+	}
+	if getAllServerCalls != 1 {
+		t.Errorf("GetAllByServer calls = %d, want 1 (fetched once and reused "+
+			"across validation + audit)", getAllServerCalls)
+	}
+}
