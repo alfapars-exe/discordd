@@ -612,7 +612,7 @@ func TestGenerateMediaToken(t *testing.T) {
 	// Expiry lands at issue time + MediaTokenTTL, with slack for the clock
 	// ticking between our issuedAt sample and the one inside the service.
 	wantExp := issuedAt.Add(MediaTokenTTL)
-	if delta := claims.ExpiresAt.Time.Sub(wantExp); delta > time.Minute || delta < -time.Minute {
+	if delta := claims.ExpiresAt.Sub(wantExp); delta > time.Minute || delta < -time.Minute {
 		t.Errorf("ExpiresAt = %v, want ~%v (delta %v)", claims.ExpiresAt.Time, wantExp, delta)
 	}
 

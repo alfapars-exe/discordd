@@ -23,7 +23,6 @@ import (
 var (
 	pngMagic = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	oggMagic = []byte("OggS\x00\x02")
-	pdfMagic = []byte("%PDF-1.4\n")
 )
 
 // buildUpload creates an in-memory multipart file + header pair as if a

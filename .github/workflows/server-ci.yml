@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11" # >=1.25.11: GO-2026-5037/5039 stdlib fixes
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -73,7 +73,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11" # >=1.25.11: GO-2026-5037/5039 stdlib fixes
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -96,7 +96,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11" # >=1.25.11: GO-2026-5037/5039 stdlib fixes
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
