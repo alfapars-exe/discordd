@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -19,22 +20,82 @@ import (
 // running in the renderer can read it).
 const refreshCookieName = "hichat_refresh"
 
+// clientHintHeader is sent by every official HiChat client on every API
+// call, carrying "electron", "capacitor", or "web". It has two jobs:
+//
+//  1. It tells setRefreshCookie whether the caller is a native shell, which
+//     decides the cookie's SameSite attribute (see below).
+//  2. Its mere PRESENCE is the CSRF gate on the cookie path — see
+//     extractRefreshToken.
+//
+// It must be listed in the CORS AllowedHeaders (server/bootstrap.go) or the
+// preflight rejects it and no client can send it.
+const clientHintHeader = "X-HiChat-Client"
+
+// isNativeClient reports whether the request came from one of our packaged
+// native shells, which run under custom schemes (app://hichat for Electron,
+// capacitor://localhost and friends for mobile) and therefore talk to the
+// API cross-site.
+//
+// Unknown values deliberately fall through to false: this header is a hint
+// from our own clients, and an unrecognised value must never be able to
+// downgrade a web session's cookie to a weaker SameSite.
+func isNativeClient(r *http.Request) bool {
+	switch strings.ToLower(strings.TrimSpace(r.Header.Get(clientHintHeader))) {
+	case "electron", "capacitor":
+		return true
+	default:
+		return false
+	}
+}
+
+// refreshCookieSameSite picks the SameSite attribute for the refresh cookie.
+//
+// Native shells get None; browsers get Strict. This is not a preference, it
+// is a hard requirement for the desktop app to work at all: the packaged
+// Electron renderer's origin is app://hichat while the API is on a different
+// host, so every response that sets this cookie is a CROSS-SITE response,
+// and Chromium rejects SameSite=Strict cookies at SET time on those. The
+// desktop app was never storing hichat_refresh — registration and login
+// appeared to succeed (the access token arrives in the JSON body) but the
+// next launch had no refresh cookie, so /api/users/me 401'd, /api/auth/refresh
+// had nothing to send, and the user was bounced to /login. That is the
+// ".exe registration doesn't persist" report.
+//
+// The same reasoning already forced the media cookie to None — see the long
+// rationale on setMediaCookie.
+//
+// Cookie identity is (name, domain, path); SameSite is not part of it, so
+// both variants coexist under one name and each client's jar simply holds
+// whichever variant it was served.
+//
+// The CSRF exposure that SameSite=None normally reopens is closed by the
+// header gate in extractRefreshToken.
+func refreshCookieSameSite(r *http.Request) http.SameSite {
+	if isNativeClient(r) {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteStrictMode
+}
+
 // refreshCookieTTL keeps the cookie alive as long as the server-side refresh
 // token. Setting a Max-Age here lets browsers proactively expire it; the
 // server still revokes via the sessions table when the user logs out.
 const refreshCookieTTL = 30 * 24 * time.Hour
 
-// setRefreshCookie writes the refresh token as an HttpOnly + SameSite=Strict
-// cookie. The token is still echoed in the JSON body so non-cookie clients
-// (mobile native, automated tests, the iOS Capacitor shell which sometimes
-// strips set-cookie) keep working — this is a graceful migration, not a
-// hard cutover. The browser/Electron client is expected to ignore the body
-// value and rely on the cookie.
+// setRefreshCookie writes the refresh token as an HttpOnly cookie whose
+// SameSite attribute depends on the calling client (see
+// refreshCookieSameSite). The token is still echoed in the JSON body so
+// non-cookie clients (mobile native, automated tests, the iOS Capacitor
+// shell which sometimes strips set-cookie) keep working — this is a graceful
+// migration, not a hard cutover. The browser/Electron client is expected to
+// ignore the body value and rely on the cookie.
 //
 // Secure is set unconditionally: production traffic terminates at HTTPS
 // (Caddy in the install script), and on plain http://localhost browsers
-// already exempt secure-only cookies for development.
-func setRefreshCookie(w http.ResponseWriter, refreshToken string) {
+// already exempt secure-only cookies for development. It is also a hard
+// prerequisite for SameSite=None, which browsers reject without it.
+func setRefreshCookie(w http.ResponseWriter, r *http.Request, refreshToken string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    refreshToken,
@@ -42,21 +103,35 @@ func setRefreshCookie(w http.ResponseWriter, refreshToken string) {
 		MaxAge:   int(refreshCookieTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: refreshCookieSameSite(r),
 	})
 }
 
 // clearRefreshCookie expires the refresh cookie on logout.
+//
+// It emits BOTH SameSite variants. A clearing cookie is still a Set-Cookie,
+// so it is subject to the same browser acceptance rules as the original: a
+// Strict-only clear is rejected outright on a cross-site logout response,
+// which would leave a live refresh cookie sitting in the desktop app's jar
+// after the user pressed "log out". Emitting both means whichever variant
+// the jar accepts performs the deletion, and since both are deletions
+// (empty value, negative Max-Age) the order they land in is irrelevant.
+//
+// Emitting both unconditionally — rather than mirroring the request — also
+// covers a client whose stored variant does not match what it would be
+// served today (e.g. a shell upgraded across this change).
 func clearRefreshCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     refreshCookieName,
-		Value:    "",
-		Path:     "/api/auth",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	for _, sameSite := range []http.SameSite{http.SameSiteNoneMode, http.SameSiteStrictMode} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     refreshCookieName,
+			Value:    "",
+			Path:     "/api/auth",
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: sameSite,
+		})
+	}
 }
 
 // mediaCookieTTL is the media cookie's Max-Age. It MUST equal
@@ -150,9 +225,34 @@ func clearMediaCookie(w http.ResponseWriter) {
 // the HttpOnly cookie over the body. Body fallback is retained so existing
 // mobile/native clients keep working through the migration window. Once all
 // official clients are updated, the body path can be removed.
+//
+// ─── CSRF gate ───
+//
+// The COOKIE is only honoured when the request carries an X-HiChat-Client
+// header (any value). This is what makes SameSite=None safe for this cookie.
+//
+// A cross-site attacker page can cause the victim's browser to send a
+// SameSite=None cookie on a "simple" request — a form POST, an <img>, a
+// no-header fetch. What it cannot do is attach a CUSTOM header to one:
+// adding X-HiChat-Client promotes the request out of the simple-request
+// category and forces a CORS preflight, and our preflight only answers for
+// the first-party origins in the allowlist (server/bootstrap.go). So a
+// third-party page can never get past this check.
+//
+// That closes the two classic SameSite=None risks on these endpoints:
+//   - forced rotation: an attacker silently burning the victim's refresh
+//     token (RefreshToken rotates and invalidates the old one), logging
+//     them out of the desktop app.
+//   - logout-CSRF: an attacker terminating the victim's session at will.
+//
+// The BODY fallback stays deliberately ungated. An attacker cannot read the
+// victim's refresh token, so they cannot put one in a request body — the
+// body path carries its own proof of possession and needs no origin check.
 func extractRefreshToken(r *http.Request, bodyToken string) string {
-	if cookie, err := r.Cookie(refreshCookieName); err == nil && cookie.Value != "" {
-		return cookie.Value
+	if r.Header.Get(clientHintHeader) != "" {
+		if cookie, err := r.Cookie(refreshCookieName); err == nil && cookie.Value != "" {
+			return cookie.Value
+		}
 	}
 	return bodyToken
 }
@@ -260,7 +360,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshCookie(w, tokens.RefreshToken)
+	setRefreshCookie(w, r, tokens.RefreshToken)
 	h.issueMediaCookie(w, tokens.User.ID)
 	pkg.JSON(w, http.StatusCreated, tokens)
 }
@@ -295,7 +395,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.loginLimiter.Reset(ip)
 	}
 
-	setRefreshCookie(w, tokens.RefreshToken)
+	setRefreshCookie(w, r, tokens.RefreshToken)
 	h.issueMediaCookie(w, tokens.User.ID)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
@@ -328,7 +428,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	// Rotate the cookie with the new refresh token. Server-side rotation
 	// (old token invalidated) is handled by authService.RefreshToken.
-	setRefreshCookie(w, tokens.RefreshToken)
+	setRefreshCookie(w, r, tokens.RefreshToken)
 	h.issueMediaCookie(w, tokens.User.ID)
 	pkg.JSON(w, http.StatusOK, tokens)
 }

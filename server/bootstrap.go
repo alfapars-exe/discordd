@@ -113,7 +113,14 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	return cors.New(cors.Options{
 		AllowedOrigins:   corsOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		// X-HiChat-Client identifies the shell the request came from
+		// ("electron" / "capacitor" / "web"). It drives two things in
+		// handlers/auth.go: the SameSite attribute of the refresh cookie,
+		// and the CSRF gate that decides whether the cookie is honoured at
+		// all. It MUST be allow-listed here — a header the preflight
+		// rejects is a header the browser refuses to send, which would
+		// break login for every client rather than just the desktop one.
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-HiChat-Client"},
 		AllowCredentials: true,
 	}), corsOrigins
 }

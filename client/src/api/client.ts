@@ -7,11 +7,14 @@
  *   - Access token:  in-memory only (module variable below). Short-lived,
  *     re-issued on every refresh. XSS that exfiltrates this gets at most a
  *     few minutes of access.
- *   - Refresh token: HttpOnly + SameSite=Strict cookie set by the server.
- *     The browser sends it automatically on /api/auth/refresh requests
- *     (via `credentials: 'include'`), but JavaScript cannot read it — so
- *     even a stored XSS in any rendered field cannot lift the long-lived
+ *   - Refresh token: HttpOnly cookie set by the server. The browser sends
+ *     it automatically on /api/auth/refresh requests (via
+ *     `credentials: 'include'`), but JavaScript cannot read it — so even a
+ *     stored XSS in any rendered field cannot lift the long-lived
  *     credential. localStorage is no longer used for refresh tokens.
+ *     Its SameSite attribute is Strict for web and None for the native
+ *     shells (which are cross-site with the API and would otherwise have
+ *     the cookie rejected outright) — see clientHint() below.
  *
  * A `legacyMigrate` pass on first load drains any pre-C2 refresh token from
  * localStorage and clears it — the server will set the HttpOnly cookie on
@@ -19,7 +22,41 @@
  */
 
 import type { APIResponse } from "../types";
-import { API_BASE_URL } from "../utils/constants";
+import { API_BASE_URL, isCapacitor, isElectron } from "../utils/constants";
+
+/**
+ * Identifies the shell this build is running in, sent as X-HiChat-Client on
+ * EVERY request (including the refresh call).
+ *
+ * The server uses it for two things:
+ *
+ *  1. Choosing the refresh cookie's SameSite attribute. Native shells run at
+ *     a custom-scheme origin (app://hichat for Electron, capacitor:// for
+ *     mobile) while the API lives on a different host, so their requests are
+ *     cross-site — and Chromium REJECTS a SameSite=Strict cookie at set time
+ *     on a cross-site response. Native clients therefore need SameSite=None
+ *     or the refresh cookie is silently never stored, which is exactly why
+ *     desktop registrations appeared to "not persist": login succeeded, but
+ *     the next launch had no cookie to refresh with.
+ *
+ *  2. Gating the cookie path against CSRF. The server only reads the refresh
+ *     cookie when this header is present, because a cross-site attacker
+ *     cannot attach a custom header to a simple request without triggering a
+ *     preflight that our origin allowlist rejects.
+ *
+ * Because of (2) the WEB build must send it too — "web" is a real value, not
+ * a no-op. Omitting it would lock the browser client out of the cookie path.
+ */
+function clientHint(): "electron" | "capacitor" | "web" {
+  // Electron wins if both somehow report true: an Electron build that also
+  // pulls in the Capacitor shim is still an Electron shell.
+  if (isElectron()) return "electron";
+  if (isCapacitor()) return "capacitor";
+  return "web";
+}
+
+/** Header name — must match handlers.clientHintHeader and the CORS allowlist. */
+const CLIENT_HINT_HEADER = "X-HiChat-Client";
 
 // Access token lives in module memory only — no localStorage read/write.
 //
@@ -101,7 +138,13 @@ async function doRefresh(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Required, not decorative: the server ignores the refresh cookie
+        // entirely on requests without this header (CSRF gate). Dropping it
+        // here would break session restore on every platform.
+        [CLIENT_HINT_HEADER]: clientHint(),
+      },
       credentials: "include",
       body: JSON.stringify({}),
     });
@@ -160,6 +203,9 @@ export async function apiClient<T>(
 
   const headers: Record<string, string> = {
     ...extraHeaders,
+    // Set after the spread so a caller-supplied header can never drop or
+    // spoof the client hint — the server's cookie handling depends on it.
+    [CLIENT_HINT_HEADER]: clientHint(),
   };
 
   // Proactive refresh — if the access token is inside the 5-minute pre-

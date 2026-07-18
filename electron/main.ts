@@ -326,6 +326,22 @@ app.on("before-quit", (e) => {
   setQuitting(true);
   shutdownPTT();
 
+  // Force the cookie store to disk before we die.
+  //
+  // Chromium persists cookies LAZILY — a Set-Cookie is applied to the
+  // in-memory jar immediately but flushed to the profile on a timer. A
+  // refresh-token rotation followed by a hard exit (user quits right after
+  // launch, OS kills us during shutdown, crash) can therefore lose the NEW
+  // refresh token while the OLD one has already been invalidated
+  // server-side by the rotation. The user reopens the app and is logged
+  // out — indistinguishable, from their side, from "the app forgot me".
+  //
+  // Fire-and-forget: this must never block or reject the quit path, so the
+  // rejection is swallowed. Worst case we're back to the lazy flush.
+  session.defaultSession.cookies.flushStore().catch((err) => {
+    console.warn("[shutdown] cookie flush failed:", err);
+  });
+
   if (shutdownStarted) return;
   const captureShutdown = shutdownCapture();
   if (!captureShutdown) return; // nothing to wait for
