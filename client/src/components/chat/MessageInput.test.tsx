@@ -207,7 +207,6 @@ describe("MessageInput", () => {
       fireEvent.keyDown(textarea, {
         key: "Enter",
         code: "Enter",
-        // @ts-expect-error — jsdom KeyboardEvent accepts extra props
         isComposing: true,
       });
     });

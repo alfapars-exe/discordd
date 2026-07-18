@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { normalizeServerUrl } from "./ServerUrlPicker";
+import { normalizeServerUrl } from "../../utils/serverUrl";
 
 // isNativeApp() is checked at render time; force it true so the picker
 // actually renders during tests. Web-mode-hides-the-picker is covered

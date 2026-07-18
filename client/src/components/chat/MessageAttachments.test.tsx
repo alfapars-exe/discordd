@@ -108,11 +108,13 @@ describe("MessageAttachments", () => {
       encryption_version: 1,
       e2ee_file_keys: [
         {
-          mimeType: "image/png",
-          nonce: "n",
           key: "k",
-          size: 1,
-        } as ChatMessage["e2ee_file_keys"] extends (infer T)[] | undefined ? T : never,
+          iv: "n",
+          filename: "example.png",
+          mimeType: "image/png",
+          originalSize: 1,
+          digest: "d",
+        },
       ],
     });
     render(<MessageAttachments message={msg} />);

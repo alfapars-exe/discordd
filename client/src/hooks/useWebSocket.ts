@@ -60,8 +60,12 @@ export type ConnectionStatus =
 const RECONNECT_BASE_DELAY = 1_500;
 const RECONNECT_MAX_DELAY = 20_000;
 
-/** Max reconnect attempts before showing "disconnected" */
-const MAX_RECONNECT_ATTEMPTS = 7;
+/**
+ * Max reconnect attempts before showing "disconnected".
+ * Exported so ConnectionBanner renders the same N in its retry counter —
+ * the two drifted once (5 vs 7) when this was duplicated there.
+ */
+export const MAX_RECONNECT_ATTEMPTS = 7;
 
 /** Typing throttle (ms) — prevents flooding same channel */
 const TYPING_THROTTLE = 3_000;

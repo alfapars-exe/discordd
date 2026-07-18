@@ -1,12 +1,10 @@
-/** ConnectionBanner — WebSocket connection status indicator (connecting/disconnected). */
+/** ConnectionBanner — WebSocket connection status indicator (connecting/disconnected/offline). */
 
 import { useTranslation } from "react-i18next";
-
-/** Must match MAX_RECONNECT_ATTEMPTS in useWebSocket */
-const MAX_RECONNECT_ATTEMPTS = 5;
+import { MAX_RECONNECT_ATTEMPTS, type ConnectionStatus } from "../../hooks/useWebSocket";
 
 type ConnectionBannerProps = {
-  status: "connected" | "connecting" | "disconnected";
+  status: ConnectionStatus;
   /** Current reconnect attempt (0 = initial connect or connected) */
   reconnectAttempt: number;
 };
@@ -20,8 +18,11 @@ function ConnectionBanner({ status, reconnectAttempt }: ConnectionBannerProps) {
     window.location.reload();
   }
 
-  /** Banner text with retry count or disconnected message */
+  /** Banner text with retry count or disconnected/offline message */
   function getBannerText(): string {
+    if (status === "offline") {
+      return t("connectionOffline");
+    }
     if (status === "disconnected") {
       return t("connectionFailed");
     }
@@ -37,9 +38,13 @@ function ConnectionBanner({ status, reconnectAttempt }: ConnectionBannerProps) {
       <span className="connection-banner-text">
         {getBannerText()}
       </span>
-      <button className="connection-banner-btn" onClick={handleRefresh}>
-        {t("connectionRefresh")}
-      </button>
+      {/* Refresh is pointless while the client itself is offline — the
+          reconnect resumes automatically on the browser "online" event. */}
+      {status !== "offline" && (
+        <button className="connection-banner-btn" onClick={handleRefresh}>
+          {t("connectionRefresh")}
+        </button>
+      )}
     </div>
   );
 }
