@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -99,6 +100,55 @@ func (r *sqliteRoleRepo) GetByUserIDAndServer(ctx context.Context, userID, serve
 		return nil, fmt.Errorf("failed to get roles by user and server: %w", err)
 	}
 	return scanRows(rows, "role", scanRole)
+}
+
+// GetRolesForUsers batch-loads roles for multiple users in one server (avoids
+// the per-user N+1 that broadcast fan-out used to run). Same join, filter and
+// ordering as GetByUserIDAndServer, plus ur.user_id in the projection so the
+// rows can be grouped. Users with no roles are absent from the map.
+func (r *sqliteRoleRepo) GetRolesForUsers(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error) {
+	if len(userIDs) == 0 {
+		return map[string][]models.Role{}, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(userIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+
+	query := fmt.Sprintf(`
+		SELECT ur.user_id, r.id, r.server_id, r.name, r.color, r.position, r.permissions, r.is_default, r.is_owner, r.mentionable, r.created_at
+		FROM roles r
+		INNER JOIN user_roles ur ON r.id = ur.role_id
+		WHERE ur.server_id = ? AND ur.user_id IN (%s)
+		ORDER BY r.position DESC`, placeholders)
+
+	args := make([]any, 0, len(userIDs)+1)
+	args = append(args, serverID)
+	for _, id := range userIDs {
+		args = append(args, id)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get roles for users: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string][]models.Role, len(userIDs))
+	for rows.Next() {
+		var userID string
+		var role models.Role
+		if err := rows.Scan(
+			&userID, &role.ID, &role.ServerID, &role.Name, &role.Color, &role.Position,
+			&role.Permissions, &role.IsDefault, &role.IsOwner, &role.Mentionable, &role.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan role for users row: %w", err)
+		}
+		out[userID] = append(out[userID], role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating roles for users rows: %w", err)
+	}
+	return out, nil
 }
 
 func (r *sqliteRoleRepo) GetMaxPosition(ctx context.Context, serverID string) (int, error) {

@@ -319,8 +319,16 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 // permission on the given channel. Used to filter all channel-scoped WS broadcasts.
 // Scoped to the channel's server members so permission checks don't iterate every
 // user on the platform.
+//
+// One bulk resolve, not one per member: the per-user loop this replaces cost 3
+// queries per online member on a cold cache, so a 100-member server paid ~300
+// round trips per broadcast every time the permission cache expired.
+//
+// Runs post-commit from a broadcast goroutine with no request context to
+// inherit, hence the bounded background context.
 func (s *messageService) allowedViewers(channelID string) []string {
-	ctx := context.Background()
+	ctx, cancel := BroadcastContext()
+	defer cancel()
 
 	channel, err := s.channelRepo.GetByID(ctx, channelID)
 	if err != nil || channel == nil {
@@ -328,14 +336,17 @@ func (s *messageService) allowedViewers(channelID string) []string {
 	}
 
 	onlineUsers := s.hub.GetOnlineUserIDsForServer(channel.ServerID)
-	var allowed []string
+	perms, err := s.permResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
+	if err != nil {
+		// Fail closed — better a missed broadcast (clients refetch) than
+		// leaking a message into a channel someone may not read.
+		log.Printf("[message] bulk permission resolve failed channel=%s: %v", channelID, err)
+		return nil
+	}
 
+	allowed := make([]string, 0, len(onlineUsers))
 	for _, userID := range onlineUsers {
-		perms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
-		if err != nil {
-			continue
-		}
-		if perms.Has(models.PermViewChannel) && perms.Has(models.PermReadMessages) {
+		if perms[userID].Has(models.PermViewChannel) && perms[userID].Has(models.PermReadMessages) {
 			allowed = append(allowed, userID)
 		}
 	}

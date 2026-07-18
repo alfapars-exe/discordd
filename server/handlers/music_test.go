@@ -41,6 +41,14 @@ func (stubPermResolver) ResolveChannelPermissions(_ context.Context, _, _ string
 	return models.PermAll, nil
 }
 
+func (stubPermResolver) ResolveChannelPermissionsBulk(_ context.Context, _ string, userIDs []string) (map[string]models.Permission, error) {
+	out := make(map[string]models.Permission, len(userIDs))
+	for _, userID := range userIDs {
+		out[userID] = models.PermAll
+	}
+	return out, nil
+}
+
 // Compile-time interface conformance assertions.
 var (
 	_ services.MusicBotService     = (*stubMusicService)(nil)

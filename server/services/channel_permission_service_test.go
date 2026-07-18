@@ -3,6 +3,9 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/argeinfina/hichat/models"
@@ -478,4 +481,488 @@ func TestInvalidateAll_DropsEveryEntry(t *testing.T) {
 	if counter.count != 4 {
 		t.Fatalf("post-invalidate-all: expected 4 total hits, got %d", counter.count)
 	}
+}
+
+// ─── ResolveChannelPermissionsBulk ───
+//
+// The bulk resolver exists to kill the fan-out N+1: broadcasting one message
+// used to resolve permissions once per online member, and each cold-cache
+// resolve costs 3 queries (channel + roles + overrides). These tests pin the
+// query count *and* prove the answer is byte-identical to the single-user
+// path, because a faster resolver that disagrees with the slow one is a
+// security bug, not an optimisation.
+
+// bulkRepoCounter counts every repository round trip the resolver makes, split
+// by query, so a test can state the N+1 claim in concrete numbers.
+type bulkRepoCounter struct {
+	channelByID        int // channelGetter.GetByID          (both paths)
+	rolesForUsers      int // roleRepo.GetRolesForUsers       (bulk only)
+	overridesByChannel int // permRepo.GetByChannel           (bulk only)
+	rolesByUser        int // roleRepo.GetByUserIDAndServer   (single only)
+	overridesByRoles   int // permRepo.GetByChannelAndRoles   (single only)
+}
+
+func (c *bulkRepoCounter) total() int {
+	return c.channelByID + c.rolesForUsers + c.overridesByChannel + c.rolesByUser + c.overridesByRoles
+}
+
+func (c *bulkRepoCounter) reset() { *c = bulkRepoCounter{} }
+
+// permFixture is one channel's worth of RBAC state, served to either
+// resolution path through counting mocks.
+type permFixture struct {
+	serverID  string
+	channelID string
+	roles     map[string][]models.Role // userID -> roles
+	overrides []models.ChannelPermissionOverride
+}
+
+// newService wires the fixture into a real channelPermService (not a mock —
+// the point is to exercise the production resolution code) with every repo
+// call counted.
+func (f permFixture) newService(c *bulkRepoCounter) ChannelPermissionService {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			c.channelByID++
+			return &models.Channel{ID: f.channelID, ServerID: f.serverID}, nil
+		},
+	}
+	roleRepo := &testutil.MockRoleRepo{
+		GetByUserIDAndServerFn: func(_ context.Context, userID, _ string) ([]models.Role, error) {
+			c.rolesByUser++
+			return f.roles[userID], nil
+		},
+		GetRolesForUsersFn: func(_ context.Context, _ string, userIDs []string) (map[string][]models.Role, error) {
+			c.rolesForUsers++
+			out := make(map[string][]models.Role, len(userIDs))
+			for _, uid := range userIDs {
+				if rs := f.roles[uid]; len(rs) > 0 {
+					out[uid] = rs
+				}
+			}
+			return out, nil
+		},
+	}
+	permRepo := &testutil.MockChannelPermRepo{
+		GetByChannelFn: func(_ context.Context, _ string) ([]models.ChannelPermissionOverride, error) {
+			c.overridesByChannel++
+			return f.overrides, nil
+		},
+		GetByChannelAndRolesFn: func(_ context.Context, _ string, roleIDs []string) ([]models.ChannelPermissionOverride, error) {
+			c.overridesByRoles++
+			// Mirrors the real SQL: filter this channel's overrides to the
+			// caller's role set.
+			set := make(map[string]bool, len(roleIDs))
+			for _, id := range roleIDs {
+				set[id] = true
+			}
+			var out []models.ChannelPermissionOverride
+			for _, o := range f.overrides {
+				if set[o.RoleID] {
+					out = append(out, o)
+				}
+			}
+			return out, nil
+		},
+	}
+	return newTestChannelPermService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+}
+
+// TestResolveChannelPermissionsBulk_QueryCount is the headline regression
+// guard: the same 100-member fan-out that costs 300 queries one user at a time
+// must cost exactly 3 in bulk, regardless of member count.
+func TestResolveChannelPermissionsBulk_QueryCount(t *testing.T) {
+	const memberCount = 100
+
+	fixture := permFixture{serverID: "srv-1", channelID: "chan-1", roles: map[string][]models.Role{}}
+	users := make([]string, memberCount)
+	for i := range users {
+		users[i] = fmt.Sprintf("user-%d", i)
+		fixture.roles[users[i]] = []models.Role{
+			{ID: "r1", Permissions: models.PermViewChannel | models.PermReadMessages},
+		}
+	}
+
+	// Baseline: the loop this change replaces.
+	singleCounter := &bulkRepoCounter{}
+	singleSvc := fixture.newService(singleCounter)
+	for _, uid := range users {
+		if _, err := singleSvc.ResolveChannelPermissions(context.Background(), uid, fixture.channelID); err != nil {
+			t.Fatalf("single resolve: %v", err)
+		}
+	}
+	if singleCounter.total() != 3*memberCount {
+		t.Fatalf("single-user loop baseline: got %d queries, want %d (%+v)",
+			singleCounter.total(), 3*memberCount, *singleCounter)
+	}
+
+	// Bulk: constant, and specifically one of each query.
+	bulkCounter := &bulkRepoCounter{}
+	bulkSvc := fixture.newService(bulkCounter)
+	got, err := bulkSvc.ResolveChannelPermissionsBulk(context.Background(), fixture.channelID, users)
+	if err != nil {
+		t.Fatalf("bulk resolve: %v", err)
+	}
+	if len(got) != memberCount {
+		t.Fatalf("bulk returned %d entries, want %d", len(got), memberCount)
+	}
+	if bulkCounter.total() > 3 {
+		t.Errorf("bulk issued %d queries, want at most 3 (%+v)", bulkCounter.total(), *bulkCounter)
+	}
+	if bulkCounter.channelByID != 1 || bulkCounter.rolesForUsers != 1 || bulkCounter.overridesByChannel != 1 {
+		t.Errorf("bulk query shape = %+v, want exactly one of each batched query", *bulkCounter)
+	}
+	if bulkCounter.rolesByUser != 0 || bulkCounter.overridesByRoles != 0 {
+		t.Errorf("bulk must not fall back to the per-user queries: %+v", *bulkCounter)
+	}
+}
+
+func TestResolveChannelPermissionsBulk_EmptyUserIDs(t *testing.T) {
+	counter := &bulkRepoCounter{}
+	svc := permFixture{serverID: "srv-1", channelID: "chan-1"}.newService(counter)
+
+	for _, users := range [][]string{nil, {}} {
+		got, err := svc.ResolveChannelPermissionsBulk(context.Background(), "chan-1", users)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("expected empty result, got %v", got)
+		}
+	}
+	if counter.total() != 0 {
+		t.Errorf("empty input must not touch the database, got %+v", *counter)
+	}
+}
+
+func TestResolveChannelPermissionsBulk_MixedCacheHitsAndMisses(t *testing.T) {
+	fixture := permFixture{
+		serverID:  "srv-1",
+		channelID: "chan-1",
+		roles: map[string][]models.Role{
+			"alice": {{ID: "r1", Permissions: models.PermReadMessages}},
+			"bob":   {{ID: "r1", Permissions: models.PermReadMessages}},
+			"carol": {{ID: "r1", Permissions: models.PermReadMessages}},
+		},
+	}
+	counter := &bulkRepoCounter{}
+	svc := fixture.newService(counter)
+	ctx := context.Background()
+
+	// Warm alice through the single-user path — the caches must be shared.
+	if _, err := svc.ResolveChannelPermissions(ctx, "alice", "chan-1"); err != nil {
+		t.Fatalf("warm alice: %v", err)
+	}
+	counter.reset()
+
+	var askedFor []string
+	svcImpl := svc.(*channelPermService)
+	inner := svcImpl.roleRepo.(*testutil.MockRoleRepo)
+	prev := inner.GetRolesForUsersFn
+	inner.GetRolesForUsersFn = func(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error) {
+		askedFor = append([]string(nil), userIDs...)
+		return prev(ctx, serverID, userIDs)
+	}
+
+	got, err := svc.ResolveChannelPermissionsBulk(ctx, "chan-1", []string{"alice", "bob", "carol"})
+	if err != nil {
+		t.Fatalf("bulk: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected all 3 users in the result, got %v", got)
+	}
+	if counter.total() > 3 {
+		t.Errorf("bulk with a warm entry issued %d queries, want at most 3 (%+v)", counter.total(), *counter)
+	}
+	// The cached user must not be re-fetched.
+	if len(askedFor) != 2 || askedFor[0] != "bob" || askedFor[1] != "carol" {
+		t.Errorf("GetRolesForUsers asked for %v, want only the cache misses [bob carol]", askedFor)
+	}
+}
+
+// TestResolveChannelPermissionsBulk_SharesCacheKeysWithSinglePath is the
+// critical compatibility assertion: bulk must write the *same* cache keys the
+// single path reads, so every existing invalidation hook keeps working without
+// being taught about bulk.
+func TestResolveChannelPermissionsBulk_SharesCacheKeysWithSinglePath(t *testing.T) {
+	fixture := permFixture{
+		serverID:  "srv-1",
+		channelID: "chan-1",
+		roles: map[string][]models.Role{
+			"alice": {{ID: "r1", Permissions: models.PermReadMessages}},
+			"bob":   {{ID: "r1", Permissions: models.PermReadMessages}},
+		},
+	}
+	counter := &bulkRepoCounter{}
+	svc := fixture.newService(counter)
+	ctx := context.Background()
+
+	if _, err := svc.ResolveChannelPermissionsBulk(ctx, "chan-1", []string{"alice", "bob"}); err != nil {
+		t.Fatalf("bulk: %v", err)
+	}
+	counter.reset()
+
+	// A single-user resolve must now be a pure cache read.
+	if _, err := svc.ResolveChannelPermissions(ctx, "alice", "chan-1"); err != nil {
+		t.Fatalf("single after bulk: %v", err)
+	}
+	if counter.total() != 0 {
+		t.Errorf("single resolve after bulk should hit the cache, issued %+v", *counter)
+	}
+
+	// And the existing invalidation hooks must still reach bulk-written entries.
+	svc.InvalidateUser("alice")
+	if _, err := svc.ResolveChannelPermissions(ctx, "alice", "chan-1"); err != nil {
+		t.Fatalf("single after invalidate: %v", err)
+	}
+	if counter.total() == 0 {
+		t.Error("InvalidateUser did not drop the bulk-written cache entry")
+	}
+
+	// bob's entry survives, and a full wipe reaches it too.
+	counter.reset()
+	if _, err := svc.ResolveChannelPermissions(ctx, "bob", "chan-1"); err != nil {
+		t.Fatalf("bob after alice invalidate: %v", err)
+	}
+	if counter.total() != 0 {
+		t.Errorf("InvalidateUser(alice) must not drop bob's bulk-written entry, issued %+v", *counter)
+	}
+	svc.InvalidateAll()
+	counter.reset()
+	if _, err := svc.ResolveChannelPermissions(ctx, "bob", "chan-1"); err != nil {
+		t.Fatalf("bob after InvalidateAll: %v", err)
+	}
+	if counter.total() == 0 {
+		t.Error("InvalidateAll did not drop the bulk-written cache entry")
+	}
+}
+
+func TestResolveChannelPermissionsBulk_Semantics(t *testing.T) {
+	const channelID = "chan-1"
+
+	tests := []struct {
+		name      string
+		roles     map[string][]models.Role
+		overrides []models.ChannelPermissionOverride
+		want      map[string]models.Permission
+	}{
+		{
+			name:  "user with zero roles resolves to 0",
+			roles: map[string][]models.Role{"u1": nil},
+			want:  map[string]models.Permission{"u1": 0},
+		},
+		{
+			name: "admin bypasses every override",
+			roles: map[string][]models.Role{
+				"admin": {{ID: "r-admin", Permissions: models.PermAdmin}},
+			},
+			overrides: []models.ChannelPermissionOverride{
+				{ChannelID: channelID, RoleID: "r-admin", Deny: models.PermAll},
+			},
+			want: map[string]models.Permission{"admin": models.PermAll},
+		},
+		{
+			name: "deny override strips a base bit for the affected user only",
+			roles: map[string][]models.Role{
+				"muted":  {{ID: "r-muted", Permissions: models.PermSendMessages | models.PermReadMessages}},
+				"normal": {{ID: "r-normal", Permissions: models.PermSendMessages | models.PermReadMessages}},
+			},
+			overrides: []models.ChannelPermissionOverride{
+				{ChannelID: channelID, RoleID: "r-muted", Deny: models.PermSendMessages},
+			},
+			want: map[string]models.Permission{
+				"muted":  models.PermReadMessages,
+				"normal": models.PermSendMessages | models.PermReadMessages,
+			},
+		},
+		{
+			name: "allow override grants a bit missing from base",
+			roles: map[string][]models.Role{
+				"guest": {{ID: "r-guest", Permissions: models.PermReadMessages}},
+			},
+			overrides: []models.ChannelPermissionOverride{
+				{ChannelID: channelID, RoleID: "r-guest", Allow: models.PermSendMessages},
+			},
+			want: map[string]models.Permission{
+				"guest": models.PermReadMessages | models.PermSendMessages,
+			},
+		},
+		{
+			name: "overrides OR across a user's roles and allow wins over deny",
+			roles: map[string][]models.Role{
+				"u1": {
+					{ID: "r1", Permissions: models.PermSendMessages | models.PermReadMessages | models.PermConnectVoice},
+					{ID: "r2", Permissions: 0},
+				},
+			},
+			overrides: []models.ChannelPermissionOverride{
+				{ChannelID: channelID, RoleID: "r1", Deny: models.PermSendMessages | models.PermConnectVoice},
+				{ChannelID: channelID, RoleID: "r2", Allow: models.PermSendMessages},
+				// Belongs to a role u1 does not hold — must be ignored.
+				{ChannelID: channelID, RoleID: "r-other", Deny: models.PermReadMessages},
+			},
+			want: map[string]models.Permission{
+				"u1": models.PermReadMessages | models.PermSendMessages,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := permFixture{
+				serverID: "srv-1", channelID: channelID,
+				roles: tt.roles, overrides: tt.overrides,
+			}
+			svc := fixture.newService(&bulkRepoCounter{})
+
+			users := make([]string, 0, len(tt.want))
+			for uid := range tt.want {
+				users = append(users, uid)
+			}
+			sort.Strings(users)
+
+			got, err := svc.ResolveChannelPermissionsBulk(context.Background(), channelID, users)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			for _, uid := range users {
+				if got[uid] != tt.want[uid] {
+					t.Errorf("user %s: got %d, want %d", uid, got[uid], tt.want[uid])
+				}
+			}
+		})
+	}
+}
+
+// TestResolveChannelPermissionsBulk_ParityWithSinglePath is the property test
+// that stops the two resolution formulas from silently forking. For randomised
+// role/override fixtures, bulk(users) must equal a loop of the single-user
+// resolver over the same users — every time.
+func TestResolveChannelPermissionsBulk_ParityWithSinglePath(t *testing.T) {
+	rng := rand.New(rand.NewSource(20260719))
+
+	for iteration := 0; iteration < 200; iteration++ {
+		// Random role catalogue for the server.
+		roleCount := 1 + rng.Intn(5)
+		roleIDs := make([]string, roleCount)
+		catalogue := make([]models.Role, roleCount)
+		for i := range catalogue {
+			roleIDs[i] = fmt.Sprintf("r%d", i)
+			perms := models.Permission(rng.Int63n(int64(models.PermAll) + 1))
+			if rng.Intn(10) == 0 { // ~10% of roles are admin
+				perms |= models.PermAdmin
+			}
+			catalogue[i] = models.Role{ID: roleIDs[i], Permissions: perms}
+		}
+
+		// Random overrides — including ones for roles nobody holds, and
+		// several rows for the same role so the OR path is exercised.
+		var overrides []models.ChannelPermissionOverride
+		for _, rid := range roleIDs {
+			for n := rng.Intn(3); n > 0; n-- {
+				overrides = append(overrides, models.ChannelPermissionOverride{
+					ChannelID: "chan-1",
+					RoleID:    rid,
+					Allow:     models.Permission(rng.Int63n(int64(models.PermAll) + 1)),
+					Deny:      models.Permission(rng.Int63n(int64(models.PermAll) + 1)),
+				})
+			}
+		}
+		if rng.Intn(2) == 0 {
+			overrides = append(overrides, models.ChannelPermissionOverride{
+				ChannelID: "chan-1", RoleID: "r-nobody", Deny: models.PermAll,
+			})
+		}
+
+		// Random per-user role assignment; some users deliberately get none.
+		userCount := 1 + rng.Intn(8)
+		users := make([]string, userCount)
+		rolesByUser := make(map[string][]models.Role, userCount)
+		for i := range users {
+			users[i] = fmt.Sprintf("u%d", i)
+			var held []models.Role
+			for _, role := range catalogue {
+				if rng.Intn(2) == 0 {
+					held = append(held, role)
+				}
+			}
+			rolesByUser[users[i]] = held
+		}
+
+		fixture := permFixture{
+			serverID: "srv-1", channelID: "chan-1",
+			roles: rolesByUser, overrides: overrides,
+		}
+
+		// Separate service instances so neither path warms the other's cache.
+		bulkSvc := fixture.newService(&bulkRepoCounter{})
+		singleSvc := fixture.newService(&bulkRepoCounter{})
+
+		bulk, err := bulkSvc.ResolveChannelPermissionsBulk(context.Background(), "chan-1", users)
+		if err != nil {
+			t.Fatalf("iteration %d: bulk: %v", iteration, err)
+		}
+		for _, uid := range users {
+			want, err := singleSvc.ResolveChannelPermissions(context.Background(), uid, "chan-1")
+			if err != nil {
+				t.Fatalf("iteration %d: single %s: %v", iteration, uid, err)
+			}
+			if bulk[uid] != want {
+				t.Fatalf("iteration %d: user %s: bulk=%d single=%d\nroles=%+v\noverrides=%+v",
+					iteration, uid, bulk[uid], want, rolesByUser[uid], overrides)
+			}
+		}
+	}
+}
+
+func TestResolveChannelPermissionsBulk_RepoErrors(t *testing.T) {
+	boom := errors.New("db error")
+
+	t.Run("channel lookup failure", func(t *testing.T) {
+		svc := newTestChannelPermService(
+			&testutil.MockChannelPermRepo{},
+			&testutil.MockRoleRepo{},
+			&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return nil, boom
+			}},
+			&testutil.MockBroadcaster{},
+		)
+		if _, err := svc.ResolveChannelPermissionsBulk(context.Background(), "c1", []string{"u1"}); err == nil {
+			t.Fatal("expected error when the channel lookup fails")
+		}
+	})
+
+	t.Run("role lookup failure", func(t *testing.T) {
+		svc := newTestChannelPermService(
+			&testutil.MockChannelPermRepo{},
+			&testutil.MockRoleRepo{GetRolesForUsersFn: func(_ context.Context, _ string, _ []string) (map[string][]models.Role, error) {
+				return nil, boom
+			}},
+			&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "c1", ServerID: "s1"}, nil
+			}},
+			&testutil.MockBroadcaster{},
+		)
+		if _, err := svc.ResolveChannelPermissionsBulk(context.Background(), "c1", []string{"u1"}); err == nil {
+			t.Fatal("expected error when the bulk role lookup fails")
+		}
+	})
+
+	t.Run("override lookup failure", func(t *testing.T) {
+		svc := newTestChannelPermService(
+			&testutil.MockChannelPermRepo{GetByChannelFn: func(_ context.Context, _ string) ([]models.ChannelPermissionOverride, error) {
+				return nil, boom
+			}},
+			&testutil.MockRoleRepo{GetRolesForUsersFn: func(_ context.Context, _ string, _ []string) (map[string][]models.Role, error) {
+				return map[string][]models.Role{"u1": {{ID: "r1"}}}, nil
+			}},
+			&testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "c1", ServerID: "s1"}, nil
+			}},
+			&testutil.MockBroadcaster{},
+		)
+		if _, err := svc.ResolveChannelPermissionsBulk(context.Background(), "c1", []string{"u1"}); err == nil {
+			t.Fatal("expected error when the override lookup fails")
+		}
+	})
 }

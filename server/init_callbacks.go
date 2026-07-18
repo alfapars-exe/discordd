@@ -226,25 +226,33 @@ func registerHubCallbacks(
 	// Validates sender has ReadMessages permission, then broadcasts to server members only.
 
 	hub.OnChannelTyping(func(senderUserID, senderUsername, channelID string) {
-		ctx := context.Background()
+		// Typing fires on every keystroke burst; a bounded context keeps a
+		// wedged database from pinning WS reader goroutines.
+		ctx, cancel := services.BroadcastContext()
+		defer cancel()
+
 		ch, chErr := channelRepo.GetByID(ctx, channelID)
 		if chErr != nil {
 			return
 		}
 
 		// Filter recipients to server members who have ViewChannel + ReadMessages
-		// on this channel (respects per-channel permission overrides).
+		// on this channel (respects per-channel permission overrides). One bulk
+		// resolve — the per-user loop this replaces ran up to 3 queries per
+		// online member per typing event.
 		onlineUsers := hub.GetOnlineUserIDsForServer(ch.ServerID)
+		perms, permErr := channelPermResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
+		if permErr != nil {
+			log.Printf("[typing] bulk permission resolve failed channel=%s: %v", channelID, permErr)
+			return
+		}
+
 		recipients := make([]string, 0, len(onlineUsers))
 		for _, uid := range onlineUsers {
 			if uid == senderUserID {
 				continue
 			}
-			perms, err := channelPermResolver.ResolveChannelPermissions(ctx, uid, channelID)
-			if err != nil {
-				continue
-			}
-			if perms.Has(models.PermViewChannel) && perms.Has(models.PermReadMessages) {
+			if perms[uid].Has(models.PermViewChannel) && perms[uid].Has(models.PermReadMessages) {
 				recipients = append(recipients, uid)
 			}
 		}

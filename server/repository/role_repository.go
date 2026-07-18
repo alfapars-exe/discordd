@@ -13,6 +13,12 @@ type RoleRepository interface {
 	GetAllByServer(ctx context.Context, serverID string) ([]models.Role, error)
 	GetDefaultByServer(ctx context.Context, serverID string) (*models.Role, error)
 	GetByUserIDAndServer(ctx context.Context, userID, serverID string) ([]models.Role, error)
+	// GetRolesForUsers batch-loads the roles held by many users in one server,
+	// keyed by user id. Same join and ordering as GetByUserIDAndServer — it
+	// exists so broadcast fan-out can resolve permissions for every online
+	// member in one round trip instead of one per member. Users holding no
+	// role in the server are simply absent from the map.
+	GetRolesForUsers(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error)
 	GetMaxPosition(ctx context.Context, serverID string) (int, error)
 
 	// ─── Write ───

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -72,7 +73,7 @@ func newTestMessageService(
 	roleRepo *testutil.MockRoleRepo,
 	reactionRepo *testutil.MockReactionRepo,
 	hub *testutil.MockBroadcastAndOnline,
-	permResolver *testutil.MockChannelPermResolver,
+	permResolver ChannelPermResolver,
 ) MessageService {
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
 		Message:     msgRepo,
@@ -645,5 +646,127 @@ func TestMessageCreate_MentionFailurePropagates(t *testing.T) {
 	_, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("Create error = %v, want the mention sentinel to propagate (atomic write set)", err)
+	}
+}
+
+// ─── Broadcast fan-out ───
+
+// TestBroadcastCreate_RecipientsMatchBulkResolver wires the *real*
+// ChannelPermissionService behind the message service and proves two things
+// about the fan-out after the N+1 removal:
+//
+//   - the recipient set is exactly the users the resolver says may view + read
+//     the channel (a permission answer must not change just because it now
+//     comes from the batched query), and
+//   - the whole broadcast costs a constant number of queries instead of one
+//     resolve per online member.
+func TestBroadcastCreate_RecipientsMatchBulkResolver(t *testing.T) {
+	const (
+		channelID = "ch1"
+		serverID  = "srv1"
+	)
+
+	// viewer-1/viewer-2 may read; muted-1 holds the same base bits but a deny
+	// override strips ReadMessages; stranger-1 has no roles at all.
+	rolesByUser := map[string][]models.Role{
+		"viewer-1":   {{ID: "r-member", Permissions: models.PermViewChannel | models.PermReadMessages}},
+		"viewer-2":   {{ID: "r-member", Permissions: models.PermViewChannel | models.PermReadMessages}},
+		"muted-1":    {{ID: "r-muted", Permissions: models.PermViewChannel | models.PermReadMessages}},
+		"stranger-1": nil,
+	}
+	overrides := []models.ChannelPermissionOverride{
+		{ChannelID: channelID, RoleID: "r-muted", Deny: models.PermReadMessages},
+	}
+	online := []string{"viewer-1", "viewer-2", "muted-1", "stranger-1"}
+
+	var queries int
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			queries++
+			return &models.Channel{ID: channelID, ServerID: serverID}, nil
+		},
+	}
+	roleRepo := &testutil.MockRoleRepo{
+		GetByUserIDAndServerFn: func(_ context.Context, userID, _ string) ([]models.Role, error) {
+			queries++
+			return rolesByUser[userID], nil
+		},
+		GetRolesForUsersFn: func(_ context.Context, _ string, userIDs []string) (map[string][]models.Role, error) {
+			queries++
+			out := make(map[string][]models.Role, len(userIDs))
+			for _, uid := range userIDs {
+				if rs := rolesByUser[uid]; len(rs) > 0 {
+					out[uid] = rs
+				}
+			}
+			return out, nil
+		},
+	}
+	permRepo := &testutil.MockChannelPermRepo{
+		GetByChannelFn: func(_ context.Context, _ string) ([]models.ChannelPermissionOverride, error) {
+			queries++
+			return overrides, nil
+		},
+		GetByChannelAndRolesFn: func(_ context.Context, _ string, roleIDs []string) ([]models.ChannelPermissionOverride, error) {
+			queries++
+			set := make(map[string]bool, len(roleIDs))
+			for _, id := range roleIDs {
+				set[id] = true
+			}
+			var out []models.ChannelPermissionOverride
+			for _, o := range overrides {
+				if set[o.RoleID] {
+					out = append(out, o)
+				}
+			}
+			return out, nil
+		},
+	}
+	resolver := NewChannelPermissionService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+
+	var got []string
+	hub := &testutil.MockBroadcastAndOnline{
+		MockBroadcaster: testutil.MockBroadcaster{
+			BroadcastToUsersFn: func(userIDs []string, _ ws.Event) {
+				got = append([]string(nil), userIDs...)
+			},
+		},
+		GetOnlineUserIDsForServerFn: func(_ string) []string { return online },
+	}
+
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{},
+		&testutil.MockAttachmentRepo{},
+		channelRepo,
+		&testutil.MockUserRepo{},
+		&testutil.MockMentionRepo{},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		hub,
+		resolver,
+	)
+
+	svc.BroadcastCreate(&models.Message{ID: "m1", ChannelID: channelID})
+
+	want := []string{"viewer-1", "viewer-2"}
+	if len(got) != len(want) {
+		t.Fatalf("broadcast recipients = %v, want %v", got, want)
+	}
+	sort.Strings(got)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("broadcast recipients = %v, want %v", got, want)
+		}
+	}
+
+	// One channel lookup in allowedViewers, one inside the resolver, one
+	// batched role query, one override query. The per-user loop this replaces
+	// would have cost 1 + 3*len(online) = 13.
+	if queries > 4 {
+		t.Errorf("broadcast issued %d queries for %d online members, want at most 4", queries, len(online))
+	}
+	if queries >= 1+3*len(online) {
+		t.Errorf("broadcast still scales with member count: %d queries", queries)
 	}
 }

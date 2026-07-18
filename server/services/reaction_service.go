@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"unicode/utf8"
 
 	"github.com/argeinfina/hichat/models"
@@ -88,14 +89,18 @@ func (s *reactionService) ToggleReaction(ctx context.Context, messageID, userID,
 		return nil
 	}
 
+	// One bulk resolve for the whole recipient list — resolving per online
+	// member cost 3 queries each on a cold permission cache.
 	onlineUsers := s.hub.GetOnlineUserIDsForServer(channel.ServerID)
-	var allowed []string
+	perms, permErr := s.permResolver.ResolveChannelPermissionsBulk(ctx, message.ChannelID, onlineUsers)
+	if permErr != nil {
+		log.Printf("[reaction] bulk permission resolve failed channel=%s: %v", message.ChannelID, permErr)
+		return nil
+	}
+
+	allowed := make([]string, 0, len(onlineUsers))
 	for _, uid := range onlineUsers {
-		perms, permErr := s.permResolver.ResolveChannelPermissions(ctx, uid, message.ChannelID)
-		if permErr != nil {
-			continue
-		}
-		if perms.Has(models.PermViewChannel) && perms.Has(models.PermReadMessages) {
+		if perms[uid].Has(models.PermViewChannel) && perms[uid].Has(models.PermReadMessages) {
 			allowed = append(allowed, uid)
 		}
 	}
