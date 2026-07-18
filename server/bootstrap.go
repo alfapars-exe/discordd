@@ -111,8 +111,8 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	}
 	log.Printf("[cors] allowed origins: %v", corsOrigins)
 	return cors.New(cors.Options{
-		AllowedOrigins:   corsOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedOrigins: corsOrigins,
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		// X-HiChat-Client identifies the shell the request came from
 		// ("electron" / "capacitor" / "web"). It drives two things in
 		// handlers/auth.go: the SameSite attribute of the refresh cookie,

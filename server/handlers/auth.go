@@ -169,15 +169,15 @@ const mediaCookieTTL = services.MediaTokenTTL
 // the tile for a generic file card — the exact symptom reported in-app.
 //
 // The CSRF exposure this reopens is negligible for this specific cookie:
-//  - Path=/api/uploads narrows the cookie to a single GET-only handler.
-//  - Serve is idempotent (no side effects) — the classic CSRF risk of
-//    "attacker forces a state change with victim's credentials" doesn't apply.
-//  - Upload URLs carry an 8-byte random prefix so they're not enumerable.
-//  - Serve re-checks channel-read / DM-participant permissions before
-//    streaming bytes, so leaking the cookie to a cross-site fetch still
-//    can't reach content the user wasn't authorized to see.
-//  - Cross-origin JS can't read the response body (no ACAO for this handler),
-//    so an attacker page can at most cause a bandwidth burn on a known URL.
+//   - Path=/api/uploads narrows the cookie to a single GET-only handler.
+//   - Serve is idempotent (no side effects) — the classic CSRF risk of
+//     "attacker forces a state change with victim's credentials" doesn't apply.
+//   - Upload URLs carry an 8-byte random prefix so they're not enumerable.
+//   - Serve re-checks channel-read / DM-participant permissions before
+//     streaming bytes, so leaking the cookie to a cross-site fetch still
+//     can't reach content the user wasn't authorized to see.
+//   - Cross-origin JS can't read the response body (no ACAO for this handler),
+//     so an attacker page can at most cause a bandwidth burn on a known URL.
 func setMediaCookie(w http.ResponseWriter, mediaToken string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     mediaCookieName,
