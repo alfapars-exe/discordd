@@ -5,9 +5,10 @@
 // connection). State is in-memory only and resets on backend restart.
 //
 // Files in this group:
-//   music_bot_service.go   — interface, struct, public commands (this file)
-//   music_bot_pipeline.go  — yt-dlp + ffmpeg + Ogg/Opus → LiveKit publish loop
-//   music_bot_metadata.go  — yt-dlp metadata + playlist extraction
+//
+//	music_bot_service.go   — interface, struct, public commands (this file)
+//	music_bot_pipeline.go  — yt-dlp + ffmpeg + Ogg/Opus → LiveKit publish loop
+//	music_bot_metadata.go  — yt-dlp metadata + playlist extraction
 package services
 
 import (
@@ -39,6 +40,13 @@ type MusicBotService interface {
 	Stop(channelID string) error
 	GetState(channelID string) *models.MusicBotChannelState
 	StopAllForChannel(channelID string) // alias of Stop, named for cross-package clarity
+}
+
+// MusicBotStopper — the shutdown-path contract, kept separate from
+// MusicBotService so main.go can drain the bots without every handler-level
+// stub having to implement it.
+type MusicBotStopper interface {
+	StopAll()
 }
 
 // botInstance — one music bot, one voice channel.
@@ -86,6 +94,15 @@ type musicBotService struct {
 	encryptionKey []byte
 	appLogger     VoiceAppLogger
 	users         MusicBotUserGetter
+
+	// playTrackFn is the per-track work seam (mirrors BackupService.runCmd):
+	// nil in production, where playLoop falls back to s.playTrack; tests set
+	// it so the loop can be driven without real subprocesses.
+	playTrackFn func(bot *botInstance, track *models.MusicTrack) error
+	// stallTimeoutOverride / stallPollOverride shrink the stall watchdog's
+	// timings for tests. Zero means "use the trackStall* consts".
+	stallTimeoutOverride time.Duration
+	stallPollOverride    time.Duration
 }
 
 // MusicBotUserGetter — narrow contract for fetching the requester's display
@@ -292,6 +309,31 @@ func (s *musicBotService) StopAllForChannel(channelID string) {
 	_ = s.Stop(channelID)
 }
 
+// StopAll — stop every active bot. Called from main.go's graceful-shutdown
+// sequence (before hub.Shutdown, since Stop broadcasts a final state) so
+// LiveKit rooms disconnect and the yt-dlp/ffmpeg pairs die on SIGTERM instead
+// of being SIGKILLed mid-write when the container runtime reaps the process
+// group.
+//
+// The channel IDs are snapshotted under the read lock first: Stop takes the
+// write lock itself, so iterating the map while calling it would deadlock.
+func (s *musicBotService) StopAll() {
+	s.mu.RLock()
+	channelIDs := make([]string, 0, len(s.bots))
+	for channelID := range s.bots {
+		channelIDs = append(channelIDs, channelID)
+	}
+	s.mu.RUnlock()
+
+	if len(channelIDs) == 0 {
+		return
+	}
+	log.Printf("[music] stopping %d active bot(s) for shutdown", len(channelIDs))
+	for _, channelID := range channelIDs {
+		_ = s.Stop(channelID)
+	}
+}
+
 func (s *musicBotService) GetState(channelID string) *models.MusicBotChannelState {
 	bot := s.lookupBot(channelID)
 	if bot == nil {
@@ -376,6 +418,23 @@ func (s *musicBotService) broadcastState(bot *botInstance) {
 			"channel_id": bot.channelID,
 			"server_id":  bot.serverID,
 			"state":      state,
+		},
+	})
+}
+
+// broadcastPlaybackError — one-shot event telling clients WHY the bot is about
+// to disappear. Sent before Stop()'s IsActive=false state push so the UI has
+// the reason in hand when the panel goes away; otherwise the queue would just
+// silently vanish.
+func (s *musicBotService) broadcastPlaybackError(bot *botInstance, cause error, failures int) {
+	s.hub.BroadcastToServer(bot.serverID, ws.Event{
+		Op: "music_bot_error",
+		Data: map[string]any{
+			"channel_id": bot.channelID,
+			"server_id":  bot.serverID,
+			"reason":     "consecutive_failures",
+			"failures":   failures,
+			"error":      cause.Error(),
 		},
 	})
 }
