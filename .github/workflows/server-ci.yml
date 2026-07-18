@@ -159,3 +159,28 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
         working-directory: client
+
+  # ─── Electron main-process tests ───
+  # The resolve-path module is the ONLY barrier between an evil
+  # app://hichat/ URL and local disk (T1.4). node:test suite pins the
+  # traversal defense. Zero new deps — pure node --test.
+  electron-test:
+    name: Electron main-process tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Root package.json owns the electron compile chain. tsc + electron
+      # test scripts don't need the client's transitive tree, but they
+      # do need typescript from the root devDependencies.
+      - name: Install root deps
+        run: npm ci
+
+      - name: electron:test (resolve-path + regression suite)
+        run: npm run electron:test
