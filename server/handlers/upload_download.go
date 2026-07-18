@@ -86,7 +86,23 @@ func NewUploadDownloadHandler(
 // authUserID extracts an authenticated user ID from either the Authorization
 // Bearer header (API clients) or the hichat_media cookie (browser <img>/<video>
 // tags, which can't set headers). Returns ("", false) when neither yields a
-// valid access token.
+// usable token.
+//
+// Accepted scopes — this endpoint is the ONLY one that takes a scoped token:
+//
+//   - models.TokenScopeMedia — what setMediaCookie writes today.
+//   - "" (unscoped) — two callers. API clients presenting a real access token
+//     in the Authorization header, and browsers still holding a media cookie
+//     minted before the scope claim existed. That second case is why empty is
+//     allowed rather than required-to-be-media: on the deploy that ships this,
+//     every logged-in browser is carrying an old cookie, and rejecting those
+//     would break attachments for every open session until the user logged in
+//     again. They age out on their own as clients refresh (the cookie is
+//     re-set on every login/register/refresh) and this allowance can be
+//     dropped once the old 30-day cookies have all expired.
+//
+// Anything else is refused: a token bearing a scope this build doesn't
+// recognise fails closed rather than being waved through.
 func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
 	var token string
 	if ah := r.Header.Get("Authorization"); strings.HasPrefix(ah, "Bearer ") {
@@ -99,6 +115,9 @@ func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
 	}
 	claims, err := h.tokenValidator.ValidateAccessToken(token)
 	if err != nil {
+		return "", false
+	}
+	if claims.Scope != "" && claims.Scope != models.TokenScopeMedia {
 		return "", false
 	}
 	return claims.UserID, true
@@ -210,5 +229,15 @@ func (h *UploadDownloadHandler) serveFile(w http.ResponseWriter, r *http.Request
 	}
 	// Filepath separator normalisation for cross-platform safety.
 	full = filepath.FromSlash(full)
+
+	// `private` is load-bearing: the paths above decide per-user whether the
+	// caller may see these bytes, so a SHARED cache (corporate proxy, CDN)
+	// must never store a response and replay it to a different requester —
+	// that would hand one user's attachment to the next person who asks for
+	// the URL, bypassing the permission check entirely. The browser's own
+	// per-profile cache is safe and desirable: without it every re-render of
+	// a channel refetches every image.
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+
 	http.ServeFile(w, r, full)
 }

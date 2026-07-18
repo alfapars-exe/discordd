@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -58,10 +59,30 @@ func clearRefreshCookie(w http.ResponseWriter) {
 	})
 }
 
-// setMediaCookie writes the access token as an HttpOnly cookie scoped to
+// mediaCookieTTL is the media cookie's Max-Age. It MUST equal
+// services.MediaTokenTTL — the cookie's whole job is to deliver that token,
+// so a cookie outliving its contents is a cookie that authenticates nothing.
+//
+// It previously reused refreshCookieTTL (30 days) while carrying an access
+// token that expires far sooner (JWT_ACCESS_EXPIRY_MINUTES, 24h by default,
+// and operators are encouraged to tighten it). The mismatch is the
+// file-preview bug: a tab idle past the
+// access token's expiry still had the cookie, still sent it, and every
+// attachment came back 401 — the client's <img onError> then swapped each
+// image for a generic file card.
+const mediaCookieTTL = services.MediaTokenTTL
+
+// setMediaCookie writes a media-scoped token as an HttpOnly cookie scoped to
 // /api/uploads so browser <img>/<video> tags (which can't send an
 // Authorization header) can authenticate to the attachment download endpoint
 // (F-1). Consumer: handlers/upload_download.go (mediaCookieName, Serve).
+//
+// The value is deliberately NOT the API access token. Because this cookie is
+// SameSite=None (see below) it travels on cross-site subresource loads and is
+// correspondingly easy to leak; carrying the access token meant a leak was a
+// full API credential, replayable as `Authorization: Bearer` or a WebSocket
+// `?token=`. It now carries a scope=media JWT, which AuthMiddleware and the WS
+// upgrade path both reject — see services.AuthService.GenerateMediaToken.
 //
 // SameSite=None is deliberate here (was Strict before). The Electron desktop
 // renderer runs under the `app://hichat` custom scheme and the Capacitor
@@ -82,16 +103,34 @@ func clearRefreshCookie(w http.ResponseWriter) {
 //    can't reach content the user wasn't authorized to see.
 //  - Cross-origin JS can't read the response body (no ACAO for this handler),
 //    so an attacker page can at most cause a bandwidth burn on a known URL.
-func setMediaCookie(w http.ResponseWriter, accessToken string) {
+func setMediaCookie(w http.ResponseWriter, mediaToken string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     mediaCookieName,
-		Value:    accessToken,
+		Value:    mediaToken,
 		Path:     "/api/uploads",
-		MaxAge:   int(refreshCookieTTL.Seconds()),
+		MaxAge:   int(mediaCookieTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteNoneMode,
 	})
+}
+
+// issueMediaCookie mints a fresh media token for userID and writes it as the
+// media cookie. Called on login, register, and refresh so an active session's
+// cookie is continuously renewed and never reaches MediaTokenTTL.
+//
+// A signing failure is logged and swallowed: the media cookie is a
+// convenience for inline <img> rendering, and failing the whole login over it
+// would turn a degraded-images problem into a can't-sign-in problem. The user
+// lands authenticated with a working API session; attachments fall back to
+// the client's authenticated-fetch path.
+func (h *AuthHandler) issueMediaCookie(w http.ResponseWriter, userID string) {
+	mediaToken, err := h.authService.GenerateMediaToken(userID)
+	if err != nil {
+		log.Printf("[auth] media token generation failed for user %s: %v", userID, err)
+		return
+	}
+	setMediaCookie(w, mediaToken)
 }
 
 // clearMediaCookie expires the media cookie on logout.
@@ -222,7 +261,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setRefreshCookie(w, tokens.RefreshToken)
-	setMediaCookie(w, tokens.AccessToken)
+	h.issueMediaCookie(w, tokens.User.ID)
 	pkg.JSON(w, http.StatusCreated, tokens)
 }
 
@@ -257,7 +296,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setRefreshCookie(w, tokens.RefreshToken)
-	setMediaCookie(w, tokens.AccessToken)
+	h.issueMediaCookie(w, tokens.User.ID)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
 
@@ -290,7 +329,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	// Rotate the cookie with the new refresh token. Server-side rotation
 	// (old token invalidated) is handled by authService.RefreshToken.
 	setRefreshCookie(w, tokens.RefreshToken)
-	setMediaCookie(w, tokens.AccessToken)
+	h.issueMediaCookie(w, tokens.User.ID)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
 

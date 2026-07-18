@@ -569,6 +569,91 @@ func TestValidateAccessToken_NoDBReadForBumpedVersion(t *testing.T) {
 	}
 }
 
+// TestGenerateMediaToken pins the shape of the media-scoped token that the
+// hichat_media cookie carries: same signing key/method as the access token
+// (so ValidateAccessToken accepts it) but marked scope=media and given the
+// media TTL rather than the ~15min access TTL.
+//
+// The TTL alignment is half the bug this fixes: the cookie used to outlive
+// the access token inside it by weeks, so an idle tab kept presenting a
+// long-expired credential and every image 401'd.
+func TestGenerateMediaToken(t *testing.T) {
+	svc := newTestAuthService(&testutil.MockUserRepo{}, &testutil.MockSessionRepo{})
+
+	issuedAt := time.Now()
+	token, err := svc.GenerateMediaToken("user-media")
+	if err != nil {
+		t.Fatalf("GenerateMediaToken: %v", err)
+	}
+	if token == "" {
+		t.Fatal("GenerateMediaToken returned an empty token")
+	}
+
+	// Must validate through the ordinary validator — the media cookie is
+	// verified by handlers.UploadDownloadHandler via the same entry point.
+	claims, err := svc.ValidateAccessToken(token)
+	if err != nil {
+		t.Fatalf("media token must pass ValidateAccessToken, got: %v", err)
+	}
+
+	if claims.UserID != "user-media" {
+		t.Errorf("UserID = %q, want %q", claims.UserID, "user-media")
+	}
+	if claims.Scope != models.TokenScopeMedia {
+		t.Errorf("Scope = %q, want %q", claims.Scope, models.TokenScopeMedia)
+	}
+	if claims.Issuer != "mqvi" {
+		t.Errorf("Issuer = %q, want %q", claims.Issuer, "mqvi")
+	}
+	if claims.ExpiresAt == nil {
+		t.Fatal("media token must carry an expiry")
+	}
+
+	// Expiry lands at issue time + MediaTokenTTL, with slack for the clock
+	// ticking between our issuedAt sample and the one inside the service.
+	wantExp := issuedAt.Add(MediaTokenTTL)
+	if delta := claims.ExpiresAt.Time.Sub(wantExp); delta > time.Minute || delta < -time.Minute {
+		t.Errorf("ExpiresAt = %v, want ~%v (delta %v)", claims.ExpiresAt.Time, wantExp, delta)
+	}
+
+	// The cookie Max-Age is derived from this constant; if someone retunes
+	// the TTL they must retune the cookie in handlers/auth.go with it.
+	if MediaTokenTTL != 7*24*time.Hour {
+		t.Errorf("MediaTokenTTL = %v, want 7 days (keep handlers.mediaCookieTTL in sync)", MediaTokenTTL)
+	}
+}
+
+// TestGenerateTokens_AccessTokenHasEmptyScope is the regression pin for the
+// other side of the scope gate. AuthMiddleware and the WS upgrade path now
+// reject any token with a non-empty scope; if the access-token generator
+// ever started stamping a scope, every authenticated request would 401.
+func TestGenerateTokens_AccessTokenHasEmptyScope(t *testing.T) {
+	userRepo := &testutil.MockUserRepo{
+		IsEmailPlatformBannedFn: func(_ context.Context, _ string) (bool, error) { return false, nil },
+		CreateFn: func(_ context.Context, user *models.User) error {
+			user.ID = "user-1"
+			return nil
+		},
+	}
+	svc := newTestAuthService(userRepo, &testutil.MockSessionRepo{})
+
+	tokens, err := svc.Register(context.Background(), &models.CreateUserRequest{
+		Username: "scopeless",
+		Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	claims, err := svc.ValidateAccessToken(tokens.AccessToken)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken: %v", err)
+	}
+	if claims.Scope != "" {
+		t.Errorf("access token Scope = %q, want empty — a scoped access token would be rejected by AuthMiddleware", claims.Scope)
+	}
+}
+
 func TestChangePassword(t *testing.T) {
 	hashedPassword := preHashPassword(t, "currentpass1")
 
