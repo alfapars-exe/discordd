@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatContext } from "../../hooks/useChatContext";
 import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
+import { useAttachmentRejectionToast } from "../../hooks/useAttachmentRejectionToast";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH } from "../../utils/constants";
 import { convertMentionTokens } from "../../utils/mention";
@@ -15,6 +16,7 @@ import ReplyBar from "./ReplyBar";
 
 function MessageInput() {
   const { t } = useTranslation("chat");
+  const reportRejections = useAttachmentRejectionToast();
   const {
     mode,
     channelId,
@@ -322,10 +324,11 @@ function MessageInput() {
 
     if (pastedFiles.length > 0) {
       e.preventDefault();
-      const valid = validateFiles(pastedFiles);
+      const { valid, rejected } = validateFiles(pastedFiles);
       if (valid.length > 0) {
         setFiles((prev) => [...prev, ...valid]);
       }
+      reportRejections(rejected);
     }
   }
 
@@ -333,10 +336,11 @@ function MessageInput() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
 
-    const valid = validateFiles(e.target.files);
+    const { valid, rejected } = validateFiles(e.target.files);
     if (valid.length > 0) {
       setFiles((prev) => [...prev, ...valid]);
     }
+    reportRejections(rejected);
     e.target.value = "";
   }
 

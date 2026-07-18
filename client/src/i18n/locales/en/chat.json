@@ -12,6 +12,7 @@
   "edited": "(edited)",
   "uploadFile": "Upload File",
   "fileTooLarge": "File is too large (max {{max}}MB)",
+  "fileTypeNotAllowed": "File type not allowed",
   "noChannel": "Select a channel",
   "editCancel": "cancel",
   "editSave": "save",

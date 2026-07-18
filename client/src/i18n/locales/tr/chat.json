@@ -12,6 +12,7 @@
   "edited": "(düzenlendi)",
   "uploadFile": "Dosya Yükle",
   "fileTooLarge": "Dosya çok büyük (maks. {{max}}MB)",
+  "fileTypeNotAllowed": "Bu dosya tipi kabul edilmiyor",
   "noChannel": "Bir kanal seçin",
   "editCancel": "iptal",
   "editSave": "kaydet",

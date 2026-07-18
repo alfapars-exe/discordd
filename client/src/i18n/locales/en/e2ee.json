@@ -21,6 +21,8 @@
   "recoveryPasswordSaved": "Recovery password backup saved",
   "recoveryPasswordSaveError": "Failed to save recovery password",
   "recoveryPasswordNotSet": "Not set",
+  "e2eeKeyMissing": "Encryption key missing — cannot decrypt",
+
   "setRecoveryPassword": "Set Recovery Password",
   "changeRecoveryPassword": "Change Recovery Password",
 
