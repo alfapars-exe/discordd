@@ -169,6 +169,11 @@ body.blur-disabled {
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
+
+  /* Android soft-keyboard height above the nav bar. MainActivity.java pushes
+     live values into this via evaluateJavascript on every IME animation frame.
+     Web/Electron/iOS keep the 0px fallback — WKWebView handles its own IME. */
+  --keyboard-inset: 0px;
 }
 html, body { height:100%; width:100%; overflow:hidden;color-scheme:dark;background:linear-gradient(rgba(5,6,11,0.55),rgba(5,6,11,0.55)),var(--wallpaper) center/cover no-repeat,var(--bg-0); }
 /* App/UI scale: the Appearance slider writes --ui-scale (1.0-2.0) on :root;
@@ -189,7 +194,12 @@ html {
   zoom: var(--ui-scale, 1);
   width: calc(100vw / var(--ui-scale, 1));
   height: calc(100vh / var(--ui-scale, 1));
+  -webkit-tap-highlight-color: transparent;
 }
+/* Kill the 300ms double-tap-zoom delay on interactive controls so buttons
+   feel native under a finger. Elements that need their own touch semantics
+   (sliders, drag handles) set touch-action:none at a more specific selector. */
+button, a, [role="button"] { touch-action: manipulation; }
 .transparent-bg { background:transparent !important; }
 /* Desktop transparent mode: keep #root fairly opaque. Frosted panels'
    backdrop-filter samples whatever is behind them; at low opacity the blur
@@ -3500,12 +3510,17 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
     height: var(--mobile-touch-target);
   }
 
-  /* Keyboard avoidance: useMobileKeyboardOffset writes the soft-keyboard's
-     height into --keyboard-offset (visualViewport API). Shrink the app
-     container by that amount so the bottom-anchored composer stays above
-     the keyboard instead of being covered by it. */
+  /* Keyboard avoidance: two independent producers feed the app-shell shrink.
+     iOS/WKWebView: useMobileKeyboardOffset (visualViewport API) writes
+       --keyboard-offset — reliable on iOS, silent on Android (adjustNothing
+       manifest mode suppresses the resize signal visualViewport listens for).
+     Android/WebView: MainActivity.java's WindowInsetsAnimationCompat callback
+       writes --keyboard-inset per animation frame — the only reliable source
+       on Android under adjustNothing.
+     max() picks whichever producer is active on the current platform without
+     either one having to know the other exists. Desktop: both remain 0px. */
   .mqvi-app.mobile {
-    height: calc(100dvh - var(--keyboard-offset, 0px));
+    height: calc(100dvh - max(var(--keyboard-offset, 0px), var(--keyboard-inset, 0px)));
     transition: height 0.15s ease-out;
   }
 

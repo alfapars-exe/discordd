@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useChatContext } from "../../hooks/useChatContext";
 import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
 import { useAttachmentRejectionToast } from "../../hooks/useAttachmentRejectionToast";
+import { useIsTouch } from "../../hooks/useMediaQuery";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH } from "../../utils/constants";
 import { convertMentionTokens } from "../../utils/mention";
@@ -17,6 +18,11 @@ import ReplyBar from "./ReplyBar";
 function MessageInput() {
   const { t } = useTranslation("chat");
   const reportRejections = useAttachmentRejectionToast();
+  // On a touch device, calling textarea.focus() summons the soft keyboard
+  // uninvited (channel switch, reply, post-send restore). Gate every
+  // programmatic focus below on !isTouch so mobile users decide when the
+  // keyboard shows up.
+  const isTouch = useIsTouch();
   const {
     mode,
     channelId,
@@ -82,14 +88,15 @@ function MessageInput() {
 
   /** Auto-focus textarea when channel changes or reply is selected */
   useEffect(() => {
+    if (isTouch) return;
     textareaRef.current?.focus();
-  }, [channelId]);
+  }, [channelId, isTouch]);
 
   useEffect(() => {
-    if (replyingTo) {
+    if (replyingTo && !isTouch) {
       textareaRef.current?.focus();
     }
-  }, [replyingTo]);
+  }, [replyingTo, isTouch]);
 
   /** Send message, passing replyToId if replying */
   const runMusicCommand = useMusicSlashCommand();
@@ -149,10 +156,14 @@ function MessageInput() {
     } finally {
       isSendingRef.current = false;
       setIsSending(false);
-      // Restore focus after send — disabled={isSending} causes browser to drop focus.
-      requestAnimationFrame(() => textareaRef.current?.focus());
+      // Restore focus after send. With readOnly={isSending} the textarea keeps
+      // focus during the round-trip, but tapping the send button on desktop
+      // still shifts focus to the button — restore it there. On touch we
+      // skip: the mobile IME would either already be up (fine) or the user
+      // dismissed it deliberately, and forcing focus would reopen it.
+      if (!isTouch) requestAnimationFrame(() => textareaRef.current?.focus());
     }
-  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend]);
+  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend, isTouch]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -303,7 +314,8 @@ function MessageInput() {
     } finally {
       isSendingRef.current = false;
       setIsSending(false);
-      requestAnimationFrame(() => {
+      // Skip focus restore on touch — see handleSend for rationale.
+      if (!isTouch) requestAnimationFrame(() => {
         textareaRef.current?.focus();
       });
     }
@@ -422,7 +434,12 @@ function MessageInput() {
           placeholder={placeholder}
           rows={1}
           maxLength={MAX_MESSAGE_LENGTH}
-          disabled={isSending}
+          /* readOnly (not disabled) so the mobile soft keyboard stays open
+             during the send round-trip — disabled drops focus and collapses
+             the IME, which is jarring when sending back-to-back messages.
+             Edits are still blocked; handleSend also short-circuits on the
+             isSendingRef guard so no submission slips through. */
+          readOnly={isSending}
         />
 
         {/* Emoji button + picker */}

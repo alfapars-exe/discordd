@@ -9,12 +9,15 @@ import { useEffect, useState } from "react";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => {
-    if (typeof window === "undefined") return false;
+    // Guard both SSR (no window) and jsdom test env (window but no matchMedia
+    // shim). Falling back to false is safe: it collapses to the desktop /
+    // no-touch / non-mobile branch, which is the strictest superset.
+    if (typeof window === "undefined" || !window.matchMedia) return false;
     return window.matchMedia(query).matches;
   });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !window.matchMedia) return;
 
     const mql = window.matchMedia(query);
 
@@ -44,4 +47,13 @@ function useIsTablet(): boolean {
   return useMediaQuery("(max-width: 1024px)");
 }
 
-export { useMediaQuery, useIsMobile, useIsTablet };
+/** True when the primary input is coarse (finger). Preferred over UA sniffing
+ *  or `ontouchstart` — hybrid laptops with touchscreens correctly report
+ *  `fine` when a mouse is attached, so we only get `coarse` on real touch-
+ *  first devices. Used to gate touch-only UX tweaks (skipping auto-focus that
+ *  would summon the soft keyboard, blurring inputs before opening overlays). */
+function useIsTouch(): boolean {
+  return useMediaQuery("(pointer: coarse)");
+}
+
+export { useMediaQuery, useIsMobile, useIsTablet, useIsTouch };

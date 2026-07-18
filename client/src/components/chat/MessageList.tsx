@@ -195,6 +195,28 @@ function MessageList() {
     return () => observer.disconnect();
   }, []);
 
+  // Re-pin when the SCROLL VIEWPORT shrinks (as opposed to the content growing
+  // — that's the observer above). The Android soft keyboard opens by lifting
+  // the app-shell height (see .mqvi-app.mobile in globals.css); scrollRef's
+  // clientHeight drops while its content stays put, and without this hook the
+  // newest message and the composer end up hidden behind the keyboard.
+  // We only re-pin on SHRINK — growth (keyboard closes) shouldn't yank a
+  // user who scrolled up back down.
+  useEffect(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    let prevHeight = viewport.clientHeight;
+    const observer = new ResizeObserver(() => {
+      const h = viewport.clientHeight;
+      if (h < prevHeight && stickToBottomRef.current) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+      prevHeight = h;
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
   /**
    * Restore scroll position — runs before paint via useLayoutEffect.
    *
