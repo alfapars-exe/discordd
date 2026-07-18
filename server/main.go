@@ -94,6 +94,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("[main] failed to initialize database: %v", err)
 	}
+
+	// Is referential integrity actually enforced? We could not previously
+	// answer that for production: foreign_keys(1) is only set on the local
+	// SQLite DSN, the remote libSQL/Turso branch sets nothing, and the
+	// migration runner strips every PRAGMA because Turso rejects them. The
+	// probe answers it behaviorally (attempt an FK-violating insert, always
+	// roll back). Visibility only — deliberately never fatal, so a surprising
+	// answer surfaces in the logs instead of taking the deployment down.
+	if enforced, probeErr := database.ProbeForeignKeys(db.Conn); probeErr != nil {
+		log.Printf("[main] foreign key enforcement: UNKNOWN — probe inconclusive: %v", probeErr)
+	} else if enforced {
+		log.Printf("[main] foreign key enforcement: ENABLED")
+	} else {
+		log.Printf("[main] foreign key enforcement: DISABLED — the database accepted a row referencing a nonexistent parent; referential integrity is application-enforced only")
+	}
 	// Closed explicitly at the end of the graceful-shutdown sequence — a
 	// defer here never ran anyway on the log.Fatalf boot-failure paths
 	// (gocritic exitAfterDefer), and on those paths process exit reclaims
@@ -201,8 +216,9 @@ func main() {
 
 	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
-	// so both tables grew without bound).
-	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, time.Hour)
+	// so both tables grew without bound). The same pass runs a read-only
+	// orphan census; it logs a warning per affected table and deletes nothing.
+	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour)
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and
 	// caches the verdict. /api/health reads that cache so monitors can see
