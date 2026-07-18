@@ -481,3 +481,97 @@ func TestModifyRoles_AvoidsN_Plus_1_UsesSingleGetAllByServer(t *testing.T) {
 			"across validation + audit)", getAllServerCalls)
 	}
 }
+
+// ─── Permission-cache invalidation contract pins (T3.4) ───
+
+// memberInvalidator mirrors role_service_test.go's countingInvalidator.
+// Kept locally because Go's package-private types can't cross _test.go
+// files in different packages, and both suites test different services
+// with slightly different assertions.
+type memberInvalidator struct {
+	allCount    int
+	userCalls   []string
+}
+
+func (m *memberInvalidator) InvalidateAll()             { m.allCount++ }
+func (m *memberInvalidator) InvalidateUser(uid string)  { m.userCalls = append(m.userCalls, uid) }
+
+func TestKick_InvalidatesTargetPermissions(t *testing.T) {
+	// A kicked user's cached permissions must drop within milliseconds,
+	// not after the 30s TTL. Otherwise any in-flight request they made
+	// before eviction can still hit protected endpoints for up to half
+	// a minute — a small but real security window.
+	h := newMemberHarness()
+	const srv, actor, target = "s-1", "mod", "victim"
+	h.stubHierarchy(actor, target, srv)
+	inv := &memberInvalidator{}
+	h.svc.SetPermInvalidator(inv)
+
+	if err := h.svc.Kick(context.Background(), srv, actor, target); err != nil {
+		t.Fatalf("Kick: %v", err)
+	}
+	if len(inv.userCalls) != 1 || inv.userCalls[0] != target {
+		t.Errorf("InvalidateUser calls = %v, want [%q]", inv.userCalls, target)
+	}
+	if inv.allCount != 0 {
+		t.Errorf("InvalidateAll = %d, want 0 — Kick affects one user only "+
+			"and shouldn't blow the whole cache", inv.allCount)
+	}
+}
+
+func TestBan_InvalidatesTargetPermissions(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "s-1", "mod", "victim"
+	h.stubHierarchy(actor, target, srv)
+	inv := &memberInvalidator{}
+	h.svc.SetPermInvalidator(inv)
+
+	// Ban reads target user, then removes membership. Stub user repo so
+	// GetByID(target) succeeds.
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: id}, nil
+	}
+
+	if err := h.svc.Ban(context.Background(), srv, actor, target, "spam", nil); err != nil {
+		t.Fatalf("Ban: %v", err)
+	}
+	if len(inv.userCalls) != 1 || inv.userCalls[0] != target {
+		t.Errorf("InvalidateUser calls = %v, want [%q]", inv.userCalls, target)
+	}
+}
+
+func TestModifyRoles_InvalidatesTargetPermissions(t *testing.T) {
+	// ModifyRoles is the highest-volume permission-affecting op (used
+	// every time an admin edits someone's roles from the member list).
+	// The cache invalidation must land — otherwise the target keeps
+	// their old permissions for up to 30s despite the UI showing the
+	// new role set.
+	h := newMemberHarness()
+	const srv, actor, target = "s-1", "actor", "target"
+	inv := &memberInvalidator{}
+	h.svc.SetPermInvalidator(inv)
+
+	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, uid, _ string) ([]models.Role, error) {
+		if uid == actor {
+			return []models.Role{{ID: "top", ServerID: srv, Position: 100}}, nil
+		}
+		return nil, nil
+	}
+	h.roleRepo.GetAllByServerFn = func(_ context.Context, _ string) ([]models.Role, error) {
+		return []models.Role{
+			{ID: "r-1", ServerID: srv, Name: "r-1", Position: 10},
+		}, nil
+	}
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: id}, nil
+	}
+
+	if _, err := h.svc.ModifyRoles(context.Background(), srv, actor, target,
+		[]string{"r-1"}); err != nil {
+		t.Fatalf("ModifyRoles: %v", err)
+	}
+
+	if len(inv.userCalls) != 1 || inv.userCalls[0] != target {
+		t.Errorf("InvalidateUser calls = %v, want [%q]", inv.userCalls, target)
+	}
+}
