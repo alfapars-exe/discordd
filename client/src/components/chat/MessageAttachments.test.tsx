@@ -1,7 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import MessageAttachments from "./MessageAttachments";
+import { ensureFreshToken } from "../../api/client";
 import type { ChatMessage, ChatAttachment } from "../../hooks/useChatContext";
+
+vi.mock("../../api/client", () => ({
+  ensureFreshToken: vi.fn(async () => "fresh-token"),
+}));
 
 vi.mock("./EncryptedAttachment", () => ({
   default: ({ attachment }: { attachment: ChatAttachment }) => (
@@ -50,6 +55,10 @@ function makeMessage(over: Partial<ChatMessage> = {}): ChatMessage {
 }
 
 describe("MessageAttachments", () => {
+  beforeEach(() => {
+    vi.mocked(ensureFreshToken).mockClear();
+  });
+
   it("renders nothing when there are no attachments", () => {
     const { container } = render(<MessageAttachments message={makeMessage()} />);
     expect(container.firstChild).toBeNull();
@@ -93,13 +102,62 @@ describe("MessageAttachments", () => {
     expect(screen.getByText("notes.pdf")).toBeInTheDocument();
   });
 
-  it("falls back to file-card when the <img> fires onError", () => {
+  /**
+   * A single onError is usually a stale `hichat_media` cookie (its value is the
+   * access token, but its Max-Age far outlives that token). Refresh the token
+   * and re-request with a busted URL instead of latching to a file card — the
+   * old latch-on-first-error made the tile stick as a generic file card for the
+   * life of the render even once the cookie was refreshed.
+   */
+  it("refreshes the token and retries with a busted src on the first onError", async () => {
     const msg = makeMessage({ attachments: [makeAttachment()] });
     render(<MessageAttachments message={msg} />);
     const img = screen.getByRole("img", { name: "example.png" });
+    const originalSrc = img.getAttribute("src");
     fireEvent.error(img);
+
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "example.png" }).getAttribute("src")).not.toBe(
+        originalSrc
+      );
+    });
+    expect(ensureFreshToken).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("img", { name: "example.png" })).toBeInTheDocument();
+  });
+
+  it("latches to the file card when the retried <img> also fires onError", async () => {
+    const msg = makeMessage({ attachments: [makeAttachment()] });
+    render(<MessageAttachments message={msg} />);
+    const img = screen.getByRole("img", { name: "example.png" });
+    const originalSrc = img.getAttribute("src");
+    fireEvent.error(img);
+
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "example.png" }).getAttribute("src")).not.toBe(
+        originalSrc
+      );
+    });
+    fireEvent.error(screen.getByRole("img", { name: "example.png" }));
+
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByText("example.png")).toBeInTheDocument();
+    expect(ensureFreshToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the image inline when the retry succeeds", async () => {
+    const msg = makeMessage({ attachments: [makeAttachment()] });
+    render(<MessageAttachments message={msg} />);
+    fireEvent.error(screen.getByRole("img", { name: "example.png" }));
+
+    await waitFor(() => expect(ensureFreshToken).toHaveBeenCalledTimes(1));
+
+    const retried = screen.getByRole("img", { name: "example.png" });
+    expect(retried).toBeInTheDocument();
+    expect(retried.closest("a")).toHaveAttribute(
+      "href",
+      "https://cdn.test//files/example.png"
+    );
+    expect(screen.queryByText("1.0 KB")).toBeNull();
   });
 
   it("renders EncryptedAttachment when encryption_version=1 and key present", () => {

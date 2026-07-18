@@ -1,7 +1,8 @@
 /** MessageAttachments — Renders file/image attachments for a message. */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ensureFreshToken } from "../../api/client";
 import { resolveAssetUrl } from "../../utils/constants";
 import { mimeTypeFromExtension } from "../../utils/fileValidation";
 import EncryptedAttachment from "./EncryptedAttachment";
@@ -54,20 +55,50 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
   );
 }
 
+/**
+ * `/api/uploads/*` is auth-gated, and an <img> can't carry an Authorization
+ * header — it authenticates with the `hichat_media` cookie, whose value is the
+ * access token but whose Max-Age (30d) far outlives it. A tab left idle past
+ * the access TTL therefore serves a stale cookie and the image 401s.
+ *
+ * So the first error is treated as "probably stale token": refresh once, then
+ * re-request with a busted URL (the browser would otherwise replay the cached
+ * failure). Only a second error means the file is genuinely unrenderable and
+ * we degrade to the file card. Latching on the *first* error was the bug —
+ * the tile stayed a generic card for the life of the render even after the
+ * next API call had already refreshed the cookie.
+ */
 function PlaintextAttachment({ attachment }: Readonly<{ attachment: ChatAttachment }>) {
-  const [imgFailed, setImgFailed] = useState(false);
   const url = resolveAssetUrl(attachment.file_url);
+  const [imgFailed, setImgFailed] = useState(false);
+  const [src, setSrc] = useState(url);
+  const retriedRef = useRef(false);
+
+  const handleError = () => {
+    if (retriedRef.current) {
+      setImgFailed(true);
+      return;
+    }
+    retriedRef.current = true;
+    // ensureFreshToken() no-ops when the in-memory token is still valid and
+    // collapses concurrent callers onto one shared refresh, so a screenful of
+    // simultaneously-failing images costs a single /auth/refresh. A failed
+    // refresh still gets the one retry; a second error then latches.
+    void ensureFreshToken()
+      .catch(() => undefined)
+      .then(() => setSrc(`${url}${url.includes("?") ? "&" : "?"}r=1`));
+  };
 
   if (isImageAttachment(attachment) && !imgFailed) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer">
         <img
-          src={url}
+          src={src}
           alt={attachment.filename}
           className="msg-attachment-img"
           loading="lazy"
           decoding="async"
-          onError={() => setImgFailed(true)}
+          onError={handleError}
         />
       </a>
     );
