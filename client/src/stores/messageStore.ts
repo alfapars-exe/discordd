@@ -17,13 +17,13 @@ import type { Message, ReactionGroup } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
   encryptFilesForE2EE,
-  handleRateLimitError,
   createTypingHandler,
   updateMessageInRecord,
   deleteMessageFromRecord,
   updateReactionInRecord,
   updateAuthorInRecord,
 } from "./shared/messageUtils";
+import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 
 type MessageState = {
   /** channelId -> Message[] */
@@ -252,17 +252,17 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             distribution_id: senderKeyMsg.distributionId,
           });
 
-          const res = await messageApi.sendEncryptedMessage(
-            serverId,
-            channelId,
-            ciphertext,
-            e2eeState.localDeviceId,
-            metadata,
-            encryptedFiles,
-            replyToId
+          const res = await sendWithRetryAndToast(() =>
+            messageApi.sendEncryptedMessage(
+              serverId,
+              channelId,
+              ciphertext,
+              e2eeState.localDeviceId!,
+              metadata,
+              encryptedFiles,
+              replyToId
+            )
           );
-
-          handleRateLimitError(res);
           return res.success;
         } catch (err) {
           console.error("[messageStore] E2EE encryption failed:", err);
@@ -273,8 +273,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     }
 
     // Plaintext fallback
-    const res = await messageApi.sendMessage(serverId, channelId, content, files, replyToId);
-    handleRateLimitError(res);
+    const res = await sendWithRetryAndToast(() =>
+      messageApi.sendMessage(serverId, channelId, content, files, replyToId)
+    );
     return res.success;
   },
 

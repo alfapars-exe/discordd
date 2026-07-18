@@ -202,7 +202,9 @@ export async function apiClient<T>(
     const message =
       err instanceof Error ? err.message : "Network request failed";
     console.error(`[apiClient] ${method} ${endpoint}:`, message);
-    return { success: false, error: message } as APIResponse<T>;
+    // isNetworkError lets sendWithRetryAndToast decide "worth retrying"
+    // vs "give up" without string-matching the error message.
+    return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
   }
 
   // 401 — attempt token refresh.
@@ -237,7 +239,7 @@ export async function apiClient<T>(
         if (isDev) {
           console.error(`[apiClient] ${method} ${endpoint} (retry):`, message);
         }
-        return { success: false, error: message } as APIResponse<T>;
+        return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
       }
     } else if (isDev) {
       console.warn(`[apiClient] refresh FAILED on ${method} ${endpoint} — returning original 401`);
@@ -246,7 +248,7 @@ export async function apiClient<T>(
 
   // 204 No Content — no body to parse
   if (res.status === 204) {
-    return { success: true, data: undefined as T };
+    return { success: true, data: undefined as T, status: 204 };
   }
 
   // HF Space "uyku" veya boot durumunda HF edge katmanı 502/503/504 + HTML
@@ -258,11 +260,15 @@ export async function apiClient<T>(
     return {
       success: false,
       error: `service_unavailable: HTTP ${res.status}`,
+      status: res.status,
     } as APIResponse<T>;
   }
 
   try {
     const data: APIResponse<T> = await res.json();
+    // Tag status on the JSON envelope so downstream helpers (retry, rate
+    // limit toast) can branch on the HTTP code without string-matching.
+    data.status = res.status;
     return data;
   } catch {
     // text/html dönmüşse büyük ihtimalle HF/proxy hata sayfasıdır — yine
@@ -273,12 +279,14 @@ export async function apiClient<T>(
       return {
         success: false,
         error: `service_unavailable: HTTP ${res.status}`,
+        status: res.status,
       } as APIResponse<T>;
     }
     console.error(`[apiClient] ${method} ${endpoint}: invalid JSON (HTTP ${res.status})`);
     return {
       success: false,
       error: `HTTP ${res.status}: ${res.statusText}`,
+      status: res.status,
     } as APIResponse<T>;
   }
 }
