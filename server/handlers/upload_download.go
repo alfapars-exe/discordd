@@ -41,9 +41,13 @@ import (
 // mediaCookieName is the HttpOnly cookie that carries the access token for
 // browser <img>/<video> requests to /api/uploads/*. A native <img> tag can't
 // send an Authorization header, so without this an auth-gated attachment would
-// never render. Scoped to Path=/api/uploads, HttpOnly + Secure + SameSite=Strict
-// so it can't be read by JS (XSS) or sent cross-site (CSRF). Set on
-// login/register/refresh by the auth handler (see setMediaCookie in auth.go).
+// never render. Scoped to Path=/api/uploads, HttpOnly + Secure + SameSite=None
+// — the None (rather than Strict) is required so the desktop shell
+// (app://hichat origin) and mobile shells (capacitor://) can still receive
+// the cookie on cross-site <img> subresource loads. CSRF surface is capped
+// by the GET-only + permission-checked Serve handler and unguessable URLs
+// (see setMediaCookie in auth.go for the full rationale). Set on
+// login/register/refresh by the auth handler.
 const mediaCookieName = "hichat_media"
 
 // AccessTokenValidator validates a JWT access token. Satisfied by

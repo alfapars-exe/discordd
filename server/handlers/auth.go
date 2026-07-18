@@ -61,10 +61,27 @@ func clearRefreshCookie(w http.ResponseWriter) {
 // setMediaCookie writes the access token as an HttpOnly cookie scoped to
 // /api/uploads so browser <img>/<video> tags (which can't send an
 // Authorization header) can authenticate to the attachment download endpoint
-// (F-1). Scoped Path + HttpOnly + Secure + SameSite=Strict keep it out of JS
-// reach (XSS) and off cross-site requests (CSRF). The value mirrors the
-// short-lived access token and is refreshed on every token refresh. Consumer:
-// handlers/upload_download.go (mediaCookieName, Serve).
+// (F-1). Consumer: handlers/upload_download.go (mediaCookieName, Serve).
+//
+// SameSite=None is deliberate here (was Strict before). The Electron desktop
+// renderer runs under the `app://hichat` custom scheme and the Capacitor
+// mobile shells under `capacitor://`/`ionic://`; a chat message that carries
+// an `<img src="https://<api-host>/api/uploads/…">` is a cross-site
+// SUBRESOURCE from Chromium's point of view, and SameSite=Strict (and even
+// Lax, post-Chrome 91) blocks cookies on those. That silently 401s every
+// channel/DM image attachment so the client's <img onError> handler swaps
+// the tile for a generic file card — the exact symptom reported in-app.
+//
+// The CSRF exposure this reopens is negligible for this specific cookie:
+//  - Path=/api/uploads narrows the cookie to a single GET-only handler.
+//  - Serve is idempotent (no side effects) — the classic CSRF risk of
+//    "attacker forces a state change with victim's credentials" doesn't apply.
+//  - Upload URLs carry an 8-byte random prefix so they're not enumerable.
+//  - Serve re-checks channel-read / DM-participant permissions before
+//    streaming bytes, so leaking the cookie to a cross-site fetch still
+//    can't reach content the user wasn't authorized to see.
+//  - Cross-origin JS can't read the response body (no ACAO for this handler),
+//    so an attacker page can at most cause a bandwidth burn on a known URL.
 func setMediaCookie(w http.ResponseWriter, accessToken string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     mediaCookieName,
@@ -73,7 +90,7 @@ func setMediaCookie(w http.ResponseWriter, accessToken string) {
 		MaxAge:   int(refreshCookieTTL.Seconds()),
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 	})
 }
 
@@ -86,7 +103,7 @@ func clearMediaCookie(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 	})
 }
 
