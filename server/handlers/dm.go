@@ -14,11 +14,14 @@ import (
 
 // DMHandler handles DM endpoints.
 // messageLimiter is shared with MessageHandler (user-based total rate).
+// uploadLimiter is a separate per-user cap that only fires on multipart
+// requests (20/min); text-only DMs don't touch it.
 type DMHandler struct {
 	dmService       services.DMService
 	dmUploadService services.DMUploadService
 	maxUploadSize   int64
 	messageLimiter  *ratelimit.MessageRateLimiter
+	uploadLimiter   *ratelimit.MessageRateLimiter
 }
 
 func NewDMHandler(
@@ -26,12 +29,14 @@ func NewDMHandler(
 	dmUploadService services.DMUploadService,
 	maxUploadSize int64,
 	messageLimiter *ratelimit.MessageRateLimiter,
+	uploadLimiter *ratelimit.MessageRateLimiter,
 ) *DMHandler {
 	return &DMHandler{
 		dmService:       dmService,
 		dmUploadService: dmUploadService,
 		maxUploadSize:   maxUploadSize,
 		messageLimiter:  messageLimiter,
+		uploadLimiter:   uploadLimiter,
 	}
 }
 
@@ -165,6 +170,19 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentType := r.Header.Get("Content-Type")
+
+	// Upload-specific throttle (T3.5) — same rationale as message.go: message
+	// limiter stops text-burst spam, upload limiter stops sustained
+	// storage/bandwidth abuse. Only fires on multipart.
+	if isMultipart(contentType) && h.uploadLimiter != nil && !h.uploadLimiter.Allow(user.ID) {
+		retryAfter := h.uploadLimiter.CooldownSeconds(user.ID)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many uploads, please wait %s",
+				ratelimit.FormatRetryMessage(retryAfter)))
+		return
+	}
+
 	var req models.CreateDMMessageRequest
 
 	if isMultipart(contentType) {

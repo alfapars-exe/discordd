@@ -14,11 +14,14 @@ import (
 
 // MessageHandler handles message endpoints.
 // messageLimiter is shared with DMHandler (user-based, controls total message rate).
+// uploadLimiter is a separate per-user cap that only fires on multipart requests
+// (20/min); text-only sends don't touch it.
 type MessageHandler struct {
 	messageService services.MessageService
 	uploadService  services.UploadService
 	maxUploadSize  int64
 	messageLimiter *ratelimit.MessageRateLimiter
+	uploadLimiter  *ratelimit.MessageRateLimiter
 }
 
 func NewMessageHandler(
@@ -26,12 +29,14 @@ func NewMessageHandler(
 	uploadService services.UploadService,
 	maxUploadSize int64,
 	messageLimiter *ratelimit.MessageRateLimiter,
+	uploadLimiter *ratelimit.MessageRateLimiter,
 ) *MessageHandler {
 	return &MessageHandler{
 		messageService: messageService,
 		uploadService:  uploadService,
 		maxUploadSize:  maxUploadSize,
 		messageLimiter: messageLimiter,
+		uploadLimiter:  uploadLimiter,
 	}
 }
 
@@ -95,6 +100,19 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentType := r.Header.Get("Content-Type")
+
+	// Upload-specific throttle (T3.5): the message limiter above (5/5s)
+	// stops a burst; the upload limiter (20/min) stops sustained
+	// storage/bandwidth abuse. Applied ONLY to multipart requests so a
+	// user pounding text messages doesn't exhaust the upload budget.
+	if isMultipart(contentType) && h.uploadLimiter != nil && !h.uploadLimiter.Allow(user.ID) {
+		retryAfter := h.uploadLimiter.CooldownSeconds(user.ID)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many uploads, please wait %s",
+				ratelimit.FormatRetryMessage(retryAfter)))
+		return
+	}
 
 	var req models.CreateMessageRequest
 
