@@ -103,3 +103,63 @@ func (e *MIMETypeError) Error() string {
 	}
 	return "file type not allowed: declared " + e.Claimed + " but bytes are " + e.Detected
 }
+
+// extensionMIME is the controlled fallback map for filename-based
+// classification. Kept small and explicit so we can't accidentally accept
+// something http.DetectContentType and the allowlist both would reject.
+//
+// The real-world need: DetectContentType returns "application/ogg" for
+// OGG containers (not "audio/ogg" per our allowlist) and
+// "application/octet-stream" for raw MP3s without an ID3 tag. Without
+// this fallback, valid uploads get 400ed.
+var extensionMIME = map[string]string{
+	"jpg":  "image/jpeg",
+	"jpeg": "image/jpeg",
+	"png":  "image/png",
+	"gif":  "image/gif",
+	"webp": "image/webp",
+	"mp4":  "video/mp4",
+	"webm": "video/webm",
+	"mp3":  "audio/mpeg",
+	"ogg":  "audio/ogg",
+	"pdf":  "application/pdf",
+	"txt":  "text/plain",
+}
+
+func extFromName(filename string) string {
+	dot := strings.LastIndexByte(filename, '.')
+	if dot < 0 || dot == len(filename)-1 {
+		return ""
+	}
+	return strings.ToLower(filename[dot+1:])
+}
+
+// SniffOrExtension is SniffAndValidate with a controlled filename-extension
+// fallback for cases where http.DetectContentType is technically correct
+// but the resulting MIME isn't in the allowlist (OGG, raw MP3). Sniffing
+// still wins whenever the bytes resolve to an allowed type — extension is
+// only consulted when the sniffed type would otherwise be rejected.
+func SniffOrExtension(
+	src io.Reader,
+	filename string,
+	claimedMIME string,
+	allowlist map[string]bool,
+) (realMIME string, body io.Reader, err error) {
+	sniffed, body, err := SniffContentType(src)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if allowlist[sniffed] {
+		return sniffed, body, nil
+	}
+
+	if candidate, ok := extensionMIME[extFromName(filename)]; ok && allowlist[candidate] {
+		return candidate, body, nil
+	}
+
+	return sniffed, body, &MIMETypeError{
+		Detected: sniffed,
+		Claimed:  claimedMIME,
+	}
+}

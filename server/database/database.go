@@ -11,8 +11,11 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/tursodatabase/go-libsql" // CGO-based libSQL driver for remote Turso (registers "libsql")
-	_ "modernc.org/sqlite"                 // pure-Go SQLite driver for local files (registers "sqlite")
+	_ "modernc.org/sqlite" // pure-Go SQLite driver for local files (registers "sqlite")
+	// Remote libSQL/Turso driver is imported in database_libsql.go under a
+	// non-Windows build tag — go-libsql requires CGO and is not buildable
+	// on Windows without a C toolchain. Local SQLite still works via the
+	// pure-Go driver above, so tests can run cross-platform.
 )
 
 // recoverableErrors lists error patterns that can be safely skipped

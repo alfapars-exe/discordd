@@ -209,18 +209,37 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Silent `continue` on upload errors used to hide "your file didn't
+	// make it" from users. Collect per-file failures and echo them back
+	// in a 207 Multi-Status response so the client can render "message
+	// posted but attachment X failed with reason Y" — matches the
+	// channel-message contract in handlers/message.go.
+	type uploadFailure struct {
+		Filename string `json:"filename"`
+		Error    string `json:"error"`
+	}
+	var uploadFailures []uploadFailure
+
 	if isMultipart(contentType) && r.MultipartForm != nil {
 		isEncrypted := req.EncryptionVersion == 1
 		files := r.MultipartForm.File["files"]
 		for _, fileHeader := range files {
 			file, err := fileHeader.Open()
 			if err != nil {
+				uploadFailures = append(uploadFailures, uploadFailure{
+					Filename: fileHeader.Filename,
+					Error:    fmt.Sprintf("could not open file: %v", err),
+				})
 				continue
 			}
 
 			attachment, err := h.dmUploadService.Upload(r.Context(), msg.ID, file, fileHeader, isEncrypted)
-			file.Close()
+			_ = file.Close()
 			if err != nil {
+				uploadFailures = append(uploadFailures, uploadFailure{
+					Filename: fileHeader.Filename,
+					Error:    err.Error(),
+				})
 				continue
 			}
 
@@ -230,6 +249,14 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast after uploads so clients see attachments
 	h.dmService.BroadcastCreate(msg)
+
+	if len(uploadFailures) > 0 {
+		pkg.JSON(w, http.StatusMultiStatus, map[string]any{
+			"message":         msg,
+			"upload_failures": uploadFailures,
+		})
+		return
+	}
 
 	pkg.JSON(w, http.StatusCreated, msg)
 }

@@ -73,15 +73,15 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	mimeForRecord := claimedType
 	body := io.Reader(file)
 	if !isEncrypted {
-		// Sniff the actual content type from the first 512 bytes instead
-		// of trusting header.Header (client-controlled). A request that
-		// labels a .js shell or .html XSS payload as image/png used to
-		// sail through the previous allowlist check; sniffing closes
-		// that and surfaces the mismatch in MIMETypeError so logs can
-		// show "claimed X, bytes are Y".
+		// SniffOrExtension inspects the first 512 bytes (source of truth)
+		// and falls back to a controlled filename-extension map when the
+		// sniff result is technically correct but rejected by the
+		// allowlist. Example: DetectContentType returns "application/ogg"
+		// for OGG containers, not "audio/ogg"; without the fallback,
+		// valid audio uploads 400ed.
 		var realMIME string
 		var err error
-		realMIME, body, err = pkg.SniffAndValidate(file, claimedType, allowedMimeTypes)
+		realMIME, body, err = pkg.SniffOrExtension(file, header.Filename, claimedType, allowedMimeTypes)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 		}
@@ -108,14 +108,22 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
-	defer destFile.Close()
 
 	// `body` is either the original file reader (E2EE branch) or the
 	// SniffAndValidate replay reader (sniff buffer + remaining file).
 	// Either way, copying it drains the whole upload to disk.
-	if _, err := io.Copy(destFile, body); err != nil {
+	_, copyErr := io.Copy(destFile, body)
+	// Windows keeps the file handle exclusive: os.Remove fails while
+	// destFile is still open. Close explicitly BEFORE any cleanup path
+	// so error branches actually delete the orphan.
+	closeErr := destFile.Close()
+	if copyErr != nil {
 		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
+		return nil, fmt.Errorf("failed to save file: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(destPath)
+		return nil, fmt.Errorf("failed to finalize file: %w", closeErr)
 	}
 
 	fileSize := header.Size
