@@ -32,7 +32,8 @@ if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Client build failed" }
 Pop-Location
 
 # Compile native audio capture exe (WASAPI process-exclusive loopback)
-# Uses MSVC 2019 Build Tools — required for WASAPI COM headers.
+# build.bat locates MSVC via vswhere (any VS 2019/2022 edition with C++
+# tools) — MSVC is required for WASAPI COM headers.
 Write-Host "Compiling native audio-capture.exe..." -ForegroundColor Cyan
 cmd /c "native\build.bat"
 if ($LASTEXITCODE -ne 0) { throw "Native audio-capture.exe compilation failed" }

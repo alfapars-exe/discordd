@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/handlers"
+	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -50,7 +51,7 @@ type Handlers struct {
 	WS                *ws.Handler
 }
 
-func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, hub *ws.Hub, cfg *config.Config, encryptionKey []byte) *Handlers {
+func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, hub *ws.Hub, cfg *config.Config, encryptionKey []byte, botService *services.BotService) *Handlers {
 	return &Handlers{
 		Auth:              handlers.NewAuthHandler(svcs.Auth, svcs.WSTicket, limiters.Login, limiters.Register, limiters.ForgotPwd, limiters.ResetPwd, limiters.WSTicket),
 		Channel:           handlers.NewChannelHandler(svcs.Channel),
@@ -91,6 +92,6 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog),
 		ClientLog:         handlers.NewClientLogHandler(svcs.AppLog),
 		UploadDownload:    handlers.NewUploadDownloadHandler(cfg.Upload.Dir, repos.Attachment, repos.DM, repos.Message, svcs.ChannelPermission, svcs.Auth),
-		WS:                ws.NewHandler(hub, svcs.Auth, svcs.WSTicket, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute),
+		WS:                ws.NewHandler(hub, svcs.Auth, svcs.WSTicket, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute, botService),
 	}
 }

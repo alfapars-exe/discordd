@@ -118,6 +118,7 @@ type Handler struct {
 	serverListProvider  ServerListProvider
 	muteChecker         MuteChecker
 	channelMuteChecker  ChannelMuteChecker
+	botValidator        BotTokenValidator
 }
 
 func NewHandler(
@@ -130,6 +131,7 @@ func NewHandler(
 	serverListProvider ServerListProvider,
 	muteChecker MuteChecker,
 	channelMuteChecker ChannelMuteChecker,
+	botValidator BotTokenValidator,
 ) *Handler {
 	return &Handler{
 		hub:                 hub,
@@ -141,6 +143,7 @@ func NewHandler(
 		serverListProvider:  serverListProvider,
 		muteChecker:         muteChecker,
 		channelMuteChecker:  channelMuteChecker,
+		botValidator:        botValidator,
 	}
 }
 

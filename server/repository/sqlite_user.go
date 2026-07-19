@@ -53,7 +53,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id
 		FROM users WHERE id = ?`
 
 	user := &models.User{}
@@ -64,6 +64,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 		&user.TokenVersion,
 		&user.CreatedAt,
+		&user.IsBot, &user.OwnerUserID,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -80,7 +81,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id
 		FROM users WHERE username = ? COLLATE NOCASE`
 
 	user := &models.User{}
@@ -91,6 +92,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 		&user.TokenVersion,
 		&user.CreatedAt,
+		&user.IsBot, &user.OwnerUserID,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -124,7 +126,7 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, created_at, is_bot, owner_user_id
 		FROM users ORDER BY username`
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -139,6 +141,7 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 			&user.Language, &user.DMPrivacy, &user.IsPlatformAdmin, &user.IsPlatformBanned, &user.HasSeenDownloadPrompt, &user.HasSeenWelcome,
 			&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 			&user.CreatedAt,
+			&user.IsBot, &user.OwnerUserID,
 		)
 		return user, err
 	})
@@ -259,7 +262,7 @@ func (r *sqliteUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, created_at
+			platform_ban_reason, platform_banned_by, platform_banned_at, created_at, is_bot, owner_user_id
 		FROM users WHERE email = ?`
 
 	user := &models.User{}
@@ -269,6 +272,7 @@ func (r *sqliteUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 		&user.Language, &user.DMPrivacy, &user.IsPlatformAdmin, &user.IsPlatformBanned, &user.HasSeenDownloadPrompt, &user.HasSeenWelcome,
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 		&user.CreatedAt,
+		&user.IsBot, &user.OwnerUserID,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {

@@ -48,6 +48,10 @@ type User struct {
 	// access token in one DB write. Never exposed to clients (the live
 	// session reads it via the access token claim, not the user payload).
 	TokenVersion      int        `json:"-"`
+	// Bot identity (migration 072). IsBot marks an automated account whose
+	// password is disabled; OwnerUserID is the human who created it.
+	IsBot       bool    `json:"is_bot"`
+	OwnerUserID *string `json:"owner_user_id,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
 

@@ -28,7 +28,10 @@ func newTestAuthMiddleware(userRepo *testutil.MockUserRepo) *AuthMiddleware {
 		15,
 		7,
 	)
-	return NewAuthMiddleware(svc, userRepo)
+	// nil bot validator: these tests cover the JWT/scope path only.
+	// Require checks botValidator != nil before consulting it, so nil is
+	// the correct "no bot support in this fixture" value, not a stub.
+	return NewAuthMiddleware(svc, userRepo, nil)
 }
 
 // signTestToken mints a JWT with the given scope, signed with the same secret

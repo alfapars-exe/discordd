@@ -151,6 +151,27 @@ const (
 	OpBadgeUnassign = "badge_unassign"
 )
 
+// BotReadableOps is the curated subset of server->client events a bot
+// connection receives. Deliberately minimal for the MVP: message lifecycle,
+// reactions, member join/leave, typing, and channel lifecycle. Voice/screen,
+// DM, E2EE/device, presence, audit, and friend events are withheld — bots
+// have no use for them and broadcasting them widens the exfiltration surface.
+var BotReadableOps = map[string]bool{
+	OpMessageCreate:  true,
+	OpMessageUpdate:  true,
+	OpMessageDelete:  true,
+	OpReactionUpdate: true,
+	OpMessagePin:     true,
+	OpMessageUnpin:   true,
+	OpMemberJoin:     true,
+	OpMemberLeave:    true,
+	OpMemberUpdate:   true,
+	OpTypingStart:    true,
+	OpChannelCreate:  true,
+	OpChannelUpdate:  true,
+	OpChannelDelete:  true,
+}
+
 // ReadyData is the payload sent to a client on initial connection.
 type ReadyData struct {
 	OnlineUserIDs   []string          `json:"online_user_ids"`
