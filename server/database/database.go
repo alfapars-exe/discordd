@@ -12,10 +12,13 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver for local files (registers "sqlite")
-	// Remote libSQL/Turso driver is imported in database_libsql.go under a
-	// non-Windows build tag — go-libsql requires CGO and is not buildable
-	// on Windows without a C toolchain. Local SQLite still works via the
-	// pure-Go driver above, so tests can run cross-platform.
+	// Remote libSQL/Turso driver is imported in database_libsql.go behind
+	// `!windows && cgo` — go-libsql is a cgo package and needs a C toolchain,
+	// which Windows dev machines and pure-Go Linux builds don't have. Local
+	// SQLite still works via the pure-Go driver above, so tests and the
+	// self-host image run cross-platform. A build without that driver that is
+	// then pointed at a libsql:// DSN fails at sql.Open with "unknown driver",
+	// which is the intended, legible outcome — see New below.
 )
 
 // recoverableErrors lists error patterns that can be safely skipped
