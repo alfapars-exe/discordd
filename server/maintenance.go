@@ -77,6 +77,38 @@ var orphanChecks = []struct {
 		query: `SELECT COUNT(*) FROM attachments a
 			WHERE NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = a.message_id)`,
 	},
+	// roles and bans got the same server_id-with-no-FK treatment as
+	// channels/invites/categories above (018_multi_server.sql) but were
+	// never added to this census — a 2026-07-19 audit found this gap after
+	// production accumulated orphans in exactly the tables checked above and
+	// nowhere else, purely because nowhere else was being looked at.
+	{
+		table:  "roles",
+		detail: "missing server",
+		query: `SELECT COUNT(*) FROM roles r
+			WHERE NOT EXISTS (SELECT 1 FROM servers s WHERE s.id = r.server_id)`,
+	},
+	{
+		table:  "bans",
+		detail: "missing server",
+		query: `SELECT COUNT(*) FROM bans b
+			WHERE NOT EXISTS (SELECT 1 FROM servers s WHERE s.id = b.server_id)`,
+	},
+	// messages.channel_id -> channels(id) IS a real enforced foreign key, so
+	// a message can only be orphaned transitively: its channel's server_id
+	// itself points nowhere (the exact "channels" orphan checked above).
+	// Included because that channel-owns-messages relationship is where the
+	// real blast radius lives — a handful of orphaned channel rows can carry
+	// an arbitrary amount of message history nothing else here measures.
+	{
+		table:  "messages",
+		detail: "channel's server missing",
+		query: `SELECT COUNT(*) FROM messages m
+			WHERE EXISTS (
+				SELECT 1 FROM channels c
+				WHERE c.id = m.channel_id
+				  AND NOT EXISTS (SELECT 1 FROM servers s WHERE s.id = c.server_id))`,
+	},
 }
 
 // censusOrphans counts rows whose parent is gone, returning only the tables
