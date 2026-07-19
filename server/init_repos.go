@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/repository"
 )
 
@@ -48,44 +49,51 @@ type Repositories struct {
 }
 
 // initRepositories creates all repositories from the shared DB connection pool.
+//
+// The pool is wrapped so a statement that fails to PREPARE because Turso
+// dropped its Hrana stream is retried on a fresh connection instead of
+// surfacing as a 500 — see database/retry.go for why that is safe and why
+// registration was the path that exposed it. Transactions deliberately keep
+// using the raw connection.
 func initRepositories(conn *sql.DB) *Repositories {
+	db := database.NewRetryingQuerier(conn)
 	return &Repositories{
-		User:              repository.NewSQLiteUserRepo(conn),
-		Session:           repository.NewSQLiteSessionRepo(conn),
-		Role:              repository.NewSQLiteRoleRepo(conn),
-		Channel:           repository.NewSQLiteChannelRepo(conn),
-		Category:          repository.NewSQLiteCategoryRepo(conn),
-		Message:           repository.NewSQLiteMessageRepo(conn),
-		Attachment:        repository.NewSQLiteAttachmentRepo(conn),
-		Ban:               repository.NewSQLiteBanRepo(conn),
-		MemberTimeout:     repository.NewSQLiteMemberTimeoutRepo(conn),
-		Server:            repository.NewSQLiteServerRepo(conn),
-		Invite:            repository.NewSQLiteInviteRepo(conn),
-		Pin:               repository.NewSQLitePinRepo(conn),
-		Search:            repository.NewSQLiteSearchRepo(conn),
-		ReadState:         repository.NewSQLiteReadStateRepo(conn),
-		Mention:           repository.NewSQLiteMentionRepo(conn),
-		DM:                repository.NewSQLiteDMRepo(conn),
-		Reaction:          repository.NewSQLiteReactionRepo(conn),
-		ChannelPermission: repository.NewSQLiteChannelPermRepo(conn),
-		Friendship:        repository.NewSQLiteFriendshipRepo(conn),
-		LiveKit:           repository.NewSQLiteLiveKitRepo(conn),
-		ResetToken:        repository.NewSQLiteResetTokenRepo(conn),
-		MetricsHistory:    repository.NewSQLiteMetricsHistoryRepo(conn),
-		ServerMute:        repository.NewSQLiteServerMuteRepo(conn),
-		ChannelMute:       repository.NewSQLiteChannelMuteRepo(conn),
-		DMSettings:        repository.NewSQLiteDMSettingsRepo(conn),
-		Report:            repository.NewSQLiteReportRepo(conn),
-		Device:            repository.NewSQLiteDeviceRepo(conn),
-		E2EEBackup:        repository.NewSQLiteE2EEBackupRepo(conn),
-		GroupSession:      repository.NewSQLiteGroupSessionRepo(conn),
-		LinkPreview:       repository.NewSQLiteLinkPreviewRepo(conn),
-		Badge:             repository.NewSQLiteBadgeRepo(conn),
-		Preferences:       repository.NewSQLitePreferencesRepo(conn),
-		RoleMention:       repository.NewSQLiteRoleMentionRepo(conn),
-		AppLog:            repository.NewSQLiteAppLogRepo(conn),
-		AuditLog:          repository.NewSQLiteAuditLogRepo(conn),
-		Feedback:          repository.NewSQLiteFeedbackRepo(conn),
-		Soundboard:        repository.NewSQLiteSoundboardRepo(conn),
+		User:              repository.NewSQLiteUserRepo(db),
+		Session:           repository.NewSQLiteSessionRepo(db),
+		Role:              repository.NewSQLiteRoleRepo(db),
+		Channel:           repository.NewSQLiteChannelRepo(db),
+		Category:          repository.NewSQLiteCategoryRepo(db),
+		Message:           repository.NewSQLiteMessageRepo(db),
+		Attachment:        repository.NewSQLiteAttachmentRepo(db),
+		Ban:               repository.NewSQLiteBanRepo(db),
+		MemberTimeout:     repository.NewSQLiteMemberTimeoutRepo(db),
+		Server:            repository.NewSQLiteServerRepo(db),
+		Invite:            repository.NewSQLiteInviteRepo(db),
+		Pin:               repository.NewSQLitePinRepo(db),
+		Search:            repository.NewSQLiteSearchRepo(db),
+		ReadState:         repository.NewSQLiteReadStateRepo(db),
+		Mention:           repository.NewSQLiteMentionRepo(db),
+		DM:                repository.NewSQLiteDMRepo(db),
+		Reaction:          repository.NewSQLiteReactionRepo(db),
+		ChannelPermission: repository.NewSQLiteChannelPermRepo(db),
+		Friendship:        repository.NewSQLiteFriendshipRepo(db),
+		LiveKit:           repository.NewSQLiteLiveKitRepo(db),
+		ResetToken:        repository.NewSQLiteResetTokenRepo(db),
+		MetricsHistory:    repository.NewSQLiteMetricsHistoryRepo(db),
+		ServerMute:        repository.NewSQLiteServerMuteRepo(db),
+		ChannelMute:       repository.NewSQLiteChannelMuteRepo(db),
+		DMSettings:        repository.NewSQLiteDMSettingsRepo(db),
+		Report:            repository.NewSQLiteReportRepo(db),
+		Device:            repository.NewSQLiteDeviceRepo(db),
+		E2EEBackup:        repository.NewSQLiteE2EEBackupRepo(db),
+		GroupSession:      repository.NewSQLiteGroupSessionRepo(db),
+		LinkPreview:       repository.NewSQLiteLinkPreviewRepo(db),
+		Badge:             repository.NewSQLiteBadgeRepo(db),
+		Preferences:       repository.NewSQLitePreferencesRepo(db),
+		RoleMention:       repository.NewSQLiteRoleMentionRepo(db),
+		AppLog:            repository.NewSQLiteAppLogRepo(db),
+		AuditLog:          repository.NewSQLiteAuditLogRepo(db),
+		Feedback:          repository.NewSQLiteFeedbackRepo(db),
+		Soundboard:        repository.NewSQLiteSoundboardRepo(db),
 	}
 }
