@@ -26,7 +26,13 @@ func TestGenerateBotToken_FormatAndHash(t *testing.T) {
 }
 
 func TestHashBotToken_Stable(t *testing.T) {
-	if HashBotToken("hb_abc") != HashBotToken("hb_abc") {
+	// Bind both results before comparing. Inlining the two calls makes the
+	// comparison read as `f(x) != f(x)`, which staticcheck flags as SA4000
+	// (identical operands) — it can't tell a determinism check from the
+	// copy-paste bug that rule exists to catch.
+	first := HashBotToken("hb_abc")
+	second := HashBotToken("hb_abc")
+	if first != second {
 		t.Fatal("hash must be deterministic")
 	}
 }

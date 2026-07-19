@@ -22,7 +22,13 @@
  */
 
 import type { APIResponse } from "../types";
-import { API_BASE_URL, isCapacitor, isElectron } from "../utils/constants";
+import {
+  API_BASE_URL,
+  SERVER_URL,
+  isAppProtocolPage,
+  isCapacitor,
+  isElectron,
+} from "../utils/constants";
 
 /**
  * Identifies the shell this build is running in, sent as X-HiChat-Client on
@@ -57,6 +63,50 @@ function clientHint(): "electron" | "capacitor" | "web" {
 
 /** Header name — must match handlers.clientHintHeader and the CORS allowlist. */
 const CLIENT_HINT_HEADER = "X-HiChat-Client";
+
+/**
+ * Same-origin API proxy for the packaged Electron shell.
+ *
+ * The production backend sits behind Hugging Face's edge proxy, which
+ * answers every CORS preflight (OPTIONS) itself — our server never sees
+ * them — and its synthesized response omits
+ * Access-Control-Allow-Credentials. Chromium rejects any credentialed
+ * preflighted request on that omission, and from app://hichat every API
+ * call is both credentialed (refresh cookie) and preflighted (this JSON +
+ * custom-header traffic). Result: the desktop app could not even log in
+ * ("Ağ hatası").
+ *
+ * Fix: when the page actually runs at app://hichat, talk to our OWN origin
+ * (app://hichat/api/...) — same-origin means no preflight exists at all —
+ * and let electron/api-proxy.ts relay the request to the real server from
+ * the main process, where CORS doesn't apply. The real server origin rides
+ * in X-HiChat-Upstream so the server picker stays the single source of
+ * truth. Web, Capacitor, and the Vite-dev Electron shell (page origin
+ * http://localhost:3030) keep talking to the server directly.
+ */
+const UPSTREAM_HEADER = "X-HiChat-Upstream";
+const PROXY_API_BASE = "app://hichat/api";
+
+// Not named use* — the React hooks lint rule treats any use-prefixed
+// function as a hook and rejects calls from plain helpers.
+function viaSameOriginProxy(): boolean {
+  return isElectron() && isAppProtocolPage();
+}
+
+/** Builds the fetch URL for an API endpoint, routing via the proxy when packaged. */
+function apiUrl(endpoint: string): string {
+  return viaSameOriginProxy()
+    ? `${PROXY_API_BASE}${endpoint}`
+    : `${API_BASE_URL}${endpoint}`;
+}
+
+/** Adds the proxy routing header when (and only when) the proxy is in use. */
+function withUpstreamHeader(headers: Record<string, string>): Record<string, string> {
+  if (viaSameOriginProxy()) {
+    headers[UPSTREAM_HEADER] = SERVER_URL;
+  }
+  return headers;
+}
 
 // Access token lives in module memory only — no localStorage read/write.
 //
@@ -136,15 +186,15 @@ async function doRefresh(): Promise<boolean> {
   // server-side handler reads the cookie (legacy clients can still pass
   // refresh_token in the body if they don't manage cookies).
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const res = await fetch(apiUrl("/auth/refresh"), {
       method: "POST",
-      headers: {
+      headers: withUpstreamHeader({
         "Content-Type": "application/json",
         // Required, not decorative: the server ignores the refresh cookie
         // entirely on requests without this header (CSRF gate). Dropping it
         // here would break session restore on every platform.
         [CLIENT_HINT_HEADER]: clientHint(),
-      },
+      }),
       credentials: "include",
       body: JSON.stringify({}),
     });
@@ -201,12 +251,12 @@ export async function apiClient<T>(
 ): Promise<APIResponse<T>> {
   const { method = "GET", body, headers: extraHeaders } = options;
 
-  const headers: Record<string, string> = {
+  const headers: Record<string, string> = withUpstreamHeader({
     ...extraHeaders,
     // Set after the spread so a caller-supplied header can never drop or
     // spoof the client hint — the server's cookie handling depends on it.
     [CLIENT_HINT_HEADER]: clientHint(),
-  };
+  });
 
   // Proactive refresh — if the access token is inside the 5-minute pre-
   // expiry window, refresh BEFORE issuing the request rather than waiting
@@ -243,7 +293,7 @@ export async function apiClient<T>(
   let res: Response;
 
   try {
-    res = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions);
+    res = await fetch(apiUrl(endpoint), fetchOptions);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Network request failed";
@@ -272,7 +322,7 @@ export async function apiClient<T>(
     if (refreshed) {
       headers["Authorization"] = `Bearer ${getAccessToken()}`;
       try {
-        res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        res = await fetch(apiUrl(endpoint), {
           ...fetchOptions,
           headers,
         });
