@@ -21,13 +21,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const API_BASE_URL = "https://api.test.local/api";
 
+const SERVER_URL = "https://api.test.local";
+
 // Hoisted so the vi.mock factory (which is lifted above imports) can see them.
-const platform = vi.hoisted(() => ({ electron: false, capacitor: false }));
+const platform = vi.hoisted(() => ({
+  electron: false,
+  capacitor: false,
+  appProtocolPage: false,
+}));
 
 vi.mock("../utils/constants", () => ({
   API_BASE_URL: "https://api.test.local/api",
+  SERVER_URL: "https://api.test.local",
   isElectron: () => platform.electron,
   isCapacitor: () => platform.capacitor,
+  isAppProtocolPage: () => platform.appProtocolPage,
 }));
 
 const HEADER = "X-HiChat-Client";
@@ -68,6 +76,7 @@ async function loadClient() {
 beforeEach(() => {
   platform.electron = false;
   platform.capacitor = false;
+  platform.appProtocolPage = false;
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -179,5 +188,83 @@ describe("doRefresh client-hint header", () => {
     await apiClient("/users/me");
 
     expect(fetchMock.mock.calls[1][0]).toBe(`${API_BASE_URL}/auth/refresh`);
+  });
+});
+
+describe("same-origin proxy (packaged Electron shell)", () => {
+  /**
+   * The HF edge answers CORS preflights itself WITHOUT
+   * Access-Control-Allow-Credentials, so any credentialed preflighted fetch
+   * from app://hichat dies in Chromium before reaching the server. When the
+   * page runs at app://, every API call must therefore target our own
+   * origin (app://hichat/api/...) — same-origin generates no preflight —
+   * and carry X-HiChat-Upstream so the main-process relay knows the real
+   * server. See electron/api-proxy.ts.
+   */
+  function enablePackagedElectron() {
+    platform.electron = true;
+    platform.appProtocolPage = true;
+  }
+
+  it("routes requests through app://hichat and sends the upstream header", async () => {
+    enablePackagedElectron();
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValue(jsonResponse({ success: true, data: null }));
+
+    await apiClient("/users/me");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("app://hichat/api/users/me");
+    const headers = initOf(fetchMock.mock.calls[0])?.headers as Record<string, string>;
+    expect(headers["X-HiChat-Upstream"]).toBe(SERVER_URL);
+    // The client hint must survive alongside the routing header — the
+    // server's cookie SameSite + CSRF gate still depend on it.
+    expect(headers[HEADER]).toBe("electron");
+    expect(initOf(fetchMock.mock.calls[0])?.credentials).toBe("include");
+  });
+
+  it("routes the refresh call through the proxy too", async () => {
+    enablePackagedElectron();
+    const { apiClient } = await loadClient();
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ success: false }, 401))
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, data: { access_token: "new-access", refresh_token: "" } }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: null }));
+
+    await apiClient("/users/me");
+
+    expect(fetchMock.mock.calls[1][0]).toBe("app://hichat/api/auth/refresh");
+    const headers = initOf(fetchMock.mock.calls[1])?.headers as Record<string, string>;
+    expect(headers["X-HiChat-Upstream"]).toBe(SERVER_URL);
+  });
+
+  it("does NOT proxy in the Vite-dev Electron shell (page origin is http)", async () => {
+    // electron:dev loads from http://localhost:3030 where app://hichat
+    // fetches would be cross-origin to an unhandled scheme — dev must keep
+    // talking to the server directly.
+    platform.electron = true;
+    platform.appProtocolPage = false;
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValue(jsonResponse({ success: true, data: null }));
+
+    await apiClient("/users/me");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE_URL}/users/me`);
+    const headers = initOf(fetchMock.mock.calls[0])?.headers as Record<string, string>;
+    expect(headers["X-HiChat-Upstream"]).toBeUndefined();
+  });
+
+  it("does NOT proxy on web even if the page protocol check somehow passes", async () => {
+    // Defense in depth: web builds have no main process to answer app://.
+    platform.electron = false;
+    platform.appProtocolPage = true;
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValue(jsonResponse({ success: true, data: null }));
+
+    await apiClient("/users/me");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE_URL}/users/me`);
   });
 });

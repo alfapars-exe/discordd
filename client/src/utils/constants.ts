@@ -39,6 +39,17 @@ export function isNativeApp(): boolean {
 }
 
 /**
+ * True when the page itself was served from the packaged app:// scheme
+ * (the production Electron shell). The Vite-dev Electron shell loads from
+ * http://localhost:3030 and returns false. apiClient uses this to decide
+ * whether the same-origin main-process API proxy is available — the proxy
+ * URL (app://hichat/api/...) only resolves when the page origin is app://.
+ */
+export function isAppProtocolPage(): boolean {
+  return typeof window !== "undefined" && window.location.protocol === "app:";
+}
+
+/**
  * Detects a *mobile browser* — Android Chrome, iOS Safari, Samsung Internet, etc.
  * Specifically: NOT Electron, NOT Capacitor, but a phone-class touch device.
  * Used by useScreenShareToggle to clamp resolution constraints (no 1440p on a

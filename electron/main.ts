@@ -22,6 +22,7 @@ import { app, BrowserWindow, net, protocol, session } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { APP_HOST, APP_SCHEME, resolveAppPath } from "./resolve-path";
+import { isProxyableUrl, proxyApiRequest } from "./api-proxy";
 import { checkForUpdateBeforeLaunch, setupAutoUpdater } from "./auto-updater";
 import { shutdownCapture } from "./audio-capture";
 import { setupCrashReporter } from "./crash-reporter";
@@ -219,6 +220,16 @@ function setupAppProtocol(): void {
   const distRoot = path.join(__dirname, "..", "client", "dist");
 
   protocol.handle(APP_SCHEME.replace(/:$/, ""), (request) => {
+    // app://hichat/api/* is relayed to the real backend from the main
+    // process (see api-proxy.ts). Same-origin from the renderer's point of
+    // view, so no CORS preflight ever exists — which is the whole point:
+    // the HF edge answers preflights itself without
+    // Access-Control-Allow-Credentials, killing every credentialed
+    // cross-origin call from the desktop shell.
+    if (isProxyableUrl(request.url)) {
+      return proxyApiRequest(request, (input, init) => net.fetch(input, init));
+    }
+
     const resolved = resolveAppPath(request.url, distRoot);
     if (!resolved.ok) {
       console.warn(`[app-protocol] rejected ${request.url}: ${resolved.reason}`);
