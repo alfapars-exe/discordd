@@ -94,6 +94,105 @@ func repairCorruptIDs(db *database.DB) {
 	}
 }
 
+// repairOrphanedServerData purges rows left behind by past server deletions
+// that predate the transactional cascade delete (see
+// repository.deleteServerCascade / sqliteServerRepo.Delete). Those old
+// deletions only removed the servers row, so channels/categories/roles/
+// invites/user_roles/bans — and everything under channels/roles — could be
+// stranded with no owning server. New deletions no longer produce these;
+// this is a one-time backfill for damage that already happened.
+//
+// Deepest-first, same ordering and same reasoning as the live cascade: don't
+// assume ON DELETE CASCADE fires reliably on the remote libSQL/Turso
+// connection this database runs on (see deleteServerCascade's comment).
+// Every predicate is `NOT EXISTS (SELECT 1 FROM servers ...)`, so once a
+// server's rows are gone the corresponding statement matches nothing —
+// idempotent, safe to run on every boot, and silent when the database is
+// already clean (only tables actually purged get a log line).
+func repairOrphanedServerData(db *database.DB) {
+	ctx := context.Background()
+
+	stmts := []struct {
+		table string
+		query string
+	}{
+		{"attachments", `DELETE FROM attachments WHERE message_id IN (
+			SELECT id FROM messages WHERE channel_id IN (
+				SELECT id FROM channels c WHERE NOT EXISTS (
+					SELECT 1 FROM servers s WHERE s.id = c.server_id)))`},
+		{"reactions", `DELETE FROM reactions WHERE message_id IN (
+			SELECT id FROM messages WHERE channel_id IN (
+				SELECT id FROM channels c WHERE NOT EXISTS (
+					SELECT 1 FROM servers s WHERE s.id = c.server_id)))`},
+		{"message_mentions", `DELETE FROM message_mentions WHERE message_id IN (
+			SELECT id FROM messages WHERE channel_id IN (
+				SELECT id FROM channels c WHERE NOT EXISTS (
+					SELECT 1 FROM servers s WHERE s.id = c.server_id)))`},
+		{"message_role_mentions", `DELETE FROM message_role_mentions
+			WHERE message_id IN (
+				SELECT id FROM messages WHERE channel_id IN (
+					SELECT id FROM channels c WHERE NOT EXISTS (
+						SELECT 1 FROM servers s WHERE s.id = c.server_id)))
+			   OR role_id IN (
+				SELECT id FROM roles r WHERE NOT EXISTS (
+					SELECT 1 FROM servers s WHERE s.id = r.server_id))`},
+		{"pinned_messages", `DELETE FROM pinned_messages WHERE channel_id IN (
+			SELECT id FROM channels c WHERE NOT EXISTS (
+				SELECT 1 FROM servers s WHERE s.id = c.server_id))`},
+		{"messages", `DELETE FROM messages WHERE channel_id IN (
+			SELECT id FROM channels c WHERE NOT EXISTS (
+				SELECT 1 FROM servers s WHERE s.id = c.server_id))`},
+		{"channel_permissions", `DELETE FROM channel_permissions
+			WHERE channel_id IN (
+				SELECT id FROM channels c WHERE NOT EXISTS (
+					SELECT 1 FROM servers s WHERE s.id = c.server_id))
+			   OR role_id IN (
+				SELECT id FROM roles r WHERE NOT EXISTS (
+					SELECT 1 FROM servers s WHERE s.id = r.server_id))`},
+		{"channel_reads", `DELETE FROM channel_reads WHERE channel_id IN (
+			SELECT id FROM channels c WHERE NOT EXISTS (
+				SELECT 1 FROM servers s WHERE s.id = c.server_id))`},
+		{"channel_group_sessions", `DELETE FROM channel_group_sessions WHERE channel_id IN (
+			SELECT id FROM channels c WHERE NOT EXISTS (
+				SELECT 1 FROM servers s WHERE s.id = c.server_id))`},
+		// The DELETE target itself is referenced by its real table name, not
+		// an alias — this SQLite build rejects `DELETE FROM table alias`.
+		{"channels", `DELETE FROM channels WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = channels.server_id)`},
+		{"user_roles", `DELETE FROM user_roles WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = user_roles.server_id)`},
+		{"roles", `DELETE FROM roles WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = roles.server_id)`},
+		{"categories", `DELETE FROM categories WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = categories.server_id)`},
+		{"invites", `DELETE FROM invites WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = invites.server_id)`},
+		{"bans", `DELETE FROM bans WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = bans.server_id)`},
+	}
+
+	var totalRows int64
+	for _, stmt := range stmts {
+		result, err := db.Conn.ExecContext(ctx, stmt.query)
+		if err != nil {
+			log.Printf("[main] warning: orphaned-server-data repair failed on %s: %v", stmt.table, err)
+			continue
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			log.Printf("[main] warning: failed to check rows affected repairing %s: %v", stmt.table, err)
+			continue
+		}
+		if affected > 0 {
+			log.Printf("[main] repaired %d orphaned row(s) in %s (deleted server, pre-cascade-fix)", affected, stmt.table)
+			totalRows += affected
+		}
+	}
+	if totalRows > 0 {
+		log.Printf("[main] orphaned-server-data repair complete: %d row(s) removed", totalRows)
+	}
+}
+
 // resetStalePresence flips any user marked as online/idle back to offline.
 // Required because the WebSocket disconnect handler is the source of truth
 // for presence transitions, and it doesn't run if the process was killed.
