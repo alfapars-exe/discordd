@@ -2,68 +2,33 @@
 // the proof that a failure inside the message-create write set leaves no
 // orphan rows behind (the service-level tests use a mock runner and only
 // verify error propagation).
+//
+// The DB harness (newTestDB, countRows, execSeed) lives in testdb_test.go and
+// is shared with the other repository tests.
 package repository
 
 import (
 	"context"
 	"errors"
-	"io/fs"
-	"path/filepath"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
-// newTxTestDB boots a throwaway file-backed DB with the full embedded
-// migration set so repo SQL runs against the real schema. File path (not
-// :memory:) because the pool can hold several connections.
-func newTxTestDB(t *testing.T) *database.DB {
-	t.Helper()
-	// runMigrations expects the FS rooted at the migrations dir (main.go does
-	// the same fs.Sub before calling database.New).
-	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-	db, err := database.New(filepath.Join(t.TempDir(), "tx_test.db"), migrationsFS)
-	if err != nil {
-		t.Fatalf("database.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 func txTestSeed(t *testing.T, db *database.DB) (channelID string, authorID string, readerID string) {
 	t.Helper()
-	seed := []struct {
-		q    string
-		args []any
-	}{
+	execSeed(t, db, []seedStmt{
 		{`INSERT INTO users (id, username, password_hash) VALUES (?, ?, 'x')`, []any{"author-1", "author"}},
 		{`INSERT INTO users (id, username, password_hash) VALUES (?, ?, 'x')`, []any{"reader-1", "reader"}},
 		{`INSERT INTO channels (id, name, type, server_id) VALUES (?, ?, 'text', 'default')`, []any{"chan-1", "genel"}},
 		{`INSERT INTO channel_reads (user_id, channel_id, unread_count) VALUES (?, ?, 0)`, []any{"reader-1", "chan-1"}},
-	}
-	for _, s := range seed {
-		if _, err := db.Conn.Exec(s.q, s.args...); err != nil {
-			t.Fatalf("seed %q: %v", s.q, err)
-		}
-	}
+	})
 	return "chan-1", "author-1", "reader-1"
 }
 
-func countRows(t *testing.T, db *database.DB, query string, args ...any) int {
-	t.Helper()
-	var n int
-	if err := db.Conn.QueryRow(query, args...).Scan(&n); err != nil {
-		t.Fatalf("count %q: %v", query, err)
-	}
-	return n
-}
-
 func TestMessageTxRunner_CommitsWholeWriteSet(t *testing.T) {
-	db := newTxTestDB(t)
+	db := newTestDB(t)
 	channelID, authorID, readerID := txTestSeed(t, db)
 	runner := NewMessageTxRunner(db.Conn)
 	ctx := context.Background()
@@ -98,7 +63,7 @@ func TestMessageTxRunner_CommitsWholeWriteSet(t *testing.T) {
 // step in the write set fails, the already-inserted message and unread bump
 // must vanish with the rollback.
 func TestMessageTxRunner_RollsBackOnError(t *testing.T) {
-	db := newTxTestDB(t)
+	db := newTestDB(t)
 	channelID, authorID, readerID := txTestSeed(t, db)
 	runner := NewMessageTxRunner(db.Conn)
 	ctx := context.Background()

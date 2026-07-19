@@ -35,6 +35,8 @@ import (
 // records nothing else. Following the testutil idiom of optional *Fn hooks
 // with inert defaults.
 type stubAuthService struct {
+	registerFn     func(ctx context.Context, req *models.CreateUserRequest) (*services.AuthTokens, error)
+	loginFn        func(ctx context.Context, req *models.LoginRequest) (*services.AuthTokens, error)
 	refreshTokenFn func(ctx context.Context, refreshToken string) (*services.AuthTokens, error)
 	logoutFn       func(ctx context.Context, refreshToken string) error
 }
@@ -53,11 +55,17 @@ func stubTokens() *services.AuthTokens {
 	}
 }
 
-func (s *stubAuthService) Register(_ context.Context, _ *models.CreateUserRequest) (*services.AuthTokens, error) {
+func (s *stubAuthService) Register(ctx context.Context, req *models.CreateUserRequest) (*services.AuthTokens, error) {
+	if s.registerFn != nil {
+		return s.registerFn(ctx, req)
+	}
 	return stubTokens(), nil
 }
 
-func (s *stubAuthService) Login(_ context.Context, _ *models.LoginRequest) (*services.AuthTokens, error) {
+func (s *stubAuthService) Login(ctx context.Context, req *models.LoginRequest) (*services.AuthTokens, error) {
+	if s.loginFn != nil {
+		return s.loginFn(ctx, req)
+	}
 	return stubTokens(), nil
 }
 

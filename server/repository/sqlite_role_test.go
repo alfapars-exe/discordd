@@ -76,7 +76,7 @@ func equalStrings(a, b []string) bool {
 }
 
 func TestGetRolesForUsers_EmptyInput(t *testing.T) {
-	db := newTxTestDB(t)
+	db := newTestDB(t)
 	repo := NewSQLiteRoleRepo(db.Conn)
 
 	got, err := repo.GetRolesForUsers(context.Background(), "srv-1", nil)
@@ -89,7 +89,7 @@ func TestGetRolesForUsers_EmptyInput(t *testing.T) {
 }
 
 func TestGetRolesForUsers_GroupsByUserAndScopesToServer(t *testing.T) {
-	db := newTxTestDB(t)
+	db := newTestDB(t)
 	roleTestSeed(t, db)
 	repo := NewSQLiteRoleRepo(db.Conn)
 
@@ -129,7 +129,7 @@ func TestGetRolesForUsers_GroupsByUserAndScopesToServer(t *testing.T) {
 // the bulk query honest: for every user, the batched result must be identical
 // (same roles, same order) to what the per-user query it replaces returns.
 func TestGetRolesForUsers_ParityWithSingleUserQuery(t *testing.T) {
-	db := newTxTestDB(t)
+	db := newTestDB(t)
 	roleTestSeed(t, db)
 	repo := NewSQLiteRoleRepo(db.Conn)
 	ctx := context.Background()
