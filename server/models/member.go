@@ -32,6 +32,10 @@ type MemberWithRoles struct {
 	// the "timed out until X" banner + clock badge without a separate
 	// API call.
 	TimeoutExpiresAt *time.Time `json:"timeout_expires_at,omitempty"`
+	// LastSeenAt is the offline-transition timestamp from users.last_seen_at.
+	// nil for currently-online members or users never yet stamped. Used by
+	// the client to render "last seen X ago" under offline member names.
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 }
 
 // ToMemberWithRoles builds a MemberWithRoles from a User and their roles.
@@ -49,6 +53,19 @@ func ToMemberWithRoles(user *User, roles []Role) MemberWithRoles {
 		effectivePerms |= role.Permissions
 	}
 
+	lastSeenAt := user.LastSeenAt
+	if user.PrefStatus == UserStatusOffline {
+		// Invisible mode: don't let the offline-transition timestamp leak
+		// through the member list — that would deanonymize the exact
+		// moment a user went invisible, defeating the point of the
+		// pref_status="offline" privacy feature (see ws handler /
+		// init_callbacks SetInvisible path, which treats pref_status
+		// offline as "hide from online users"). The DB column itself is
+		// still stamped so the user's own history is intact when they
+		// come back online — only the API-facing value is suppressed.
+		lastSeenAt = nil
+	}
+
 	return MemberWithRoles{
 		ID:                   user.ID,
 		Username:             user.Username,
@@ -59,6 +76,7 @@ func ToMemberWithRoles(user *User, roles []Role) MemberWithRoles {
 		CreatedAt:            user.CreatedAt,
 		Roles:                roles,
 		EffectivePermissions: effectivePerms,
+		LastSeenAt:           lastSeenAt,
 	}
 }
 
