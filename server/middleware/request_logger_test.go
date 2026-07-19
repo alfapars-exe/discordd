@@ -3,9 +3,11 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/google/uuid"
 )
 
 func TestRequestLogger_SetsRequestIDAndCapturesStatus(t *testing.T) {
@@ -68,6 +70,70 @@ func TestRequestLogger_HonorsInboundXRequestId(t *testing.T) {
 	}
 	if got := rec.Header().Get("X-Request-Id"); got != "edge-supplied-42" {
 		t.Errorf("response X-Request-Id = %q, want the inbound value", got)
+	}
+}
+
+func TestRequestLogger_RejectsUnsafeInboundXRequestId(t *testing.T) {
+	// The inbound value is echoed into a response header and into every log
+	// line for the request, so it has to be treated as untrusted input. A
+	// rejected id must be REPLACED by a generated one, never truncated or
+	// passed through — and the same value must reach the handler, the
+	// response header and (by construction) the log.
+	cases := []struct {
+		name string
+		id   string
+	}{
+		{"newline would split a log entry", "abc\ndef"},
+		{"carriage return", "abc\rdef"},
+		{"NUL byte", "abc\x00def"},
+		{"space is not in the id alphabet", "abc def"},
+		{"non-ASCII", "abcé"},
+		{"over the length bound", strings.Repeat("a", maxInboundRequestIDLen+1)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotReqID string
+			h := RequestLogger(discardLogger())(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				gotReqID = RequestID(r.Context())
+			}))
+
+			req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+			// Set directly on the map: http.Header.Set would be fine here,
+			// but bypassing it documents that we are modelling a hostile
+			// client, not a well-behaved one.
+			req.Header["X-Request-Id"] = []string{tc.id}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			if gotReqID == tc.id {
+				t.Fatalf("unsafe inbound id was accepted verbatim: %q", gotReqID)
+			}
+			if !isSafeRequestID(gotReqID) {
+				t.Errorf("generated fallback id is itself unsafe: %q", gotReqID)
+			}
+			if got := rec.Header().Get("X-Request-Id"); got != gotReqID {
+				t.Errorf("response header %q disagrees with context id %q", got, gotReqID)
+			}
+		})
+	}
+}
+
+func TestIsSafeRequestID_AcceptsRealWorldIDs(t *testing.T) {
+	// The bound exists to stop abuse, not to reject legitimate correlation
+	// ids. These are the shapes we actually expect to see.
+	for _, id := range []string{
+		"edge-supplied-42",
+		uuid.NewString(),
+		"4bf92f3577b34da6a3ce929d0e0e4736", // W3C trace-id
+		"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", // traceparent
+		"req_1a2b3c",
+		"host.example:1234",
+		strings.Repeat("a", maxInboundRequestIDLen), // exactly at the bound
+	} {
+		if !isSafeRequestID(id) {
+			t.Errorf("isSafeRequestID(%q) = false, want true", id)
+		}
 	}
 }
 
