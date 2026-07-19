@@ -37,6 +37,11 @@ export type MemberWithRoles = {
    *  can render "muted until X" + a clock badge without comparing
    *  timestamps. */
   timeout_expires_at?: string | null;
+  /** RFC3339 timestamp of when this member was last seen online. Set by
+   *  the server when presence transitions to offline; absent / null
+   *  while online or if never tracked. Drives the "last seen X ago"
+   *  label under offline members in the member list. */
+  last_seen_at?: string | null;
 };
 
 /** Badge template created by the badge admin. */
