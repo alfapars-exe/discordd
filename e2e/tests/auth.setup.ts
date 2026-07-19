@@ -40,6 +40,11 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   // stay unambiguous.
   await page.getByLabel(/^Password/i).fill(password);
   await page.getByLabel(/^Confirm Password/i).fill(password);
+  // Email is never filled in — it's optional (models.CreateUserRequest
+  // .Validate() and the register form both leave it unrequired). This run
+  // doubles as the end-to-end proof that registration succeeds without one;
+  // see server/models/user_test.go and RegisterPage.test.tsx for the
+  // layer-by-layer unit coverage of the same contract.
 
   // The submit button is disabled until the ToS checkbox is ticked.
   await page.getByRole("checkbox").check();

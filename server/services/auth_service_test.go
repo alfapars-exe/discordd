@@ -79,6 +79,33 @@ func TestRegister(t *testing.T) {
 			errIs:   pkg.ErrBadRequest,
 		},
 		{
+			// Email is optional at every layer — this pins Register()'s side
+			// of that contract: a blank email must not block registration,
+			// and must not even reach the ban-list check (there's nothing to
+			// check), matching CreateUserRequest.Validate() and the client
+			// form, which never require it.
+			name: "should register successfully with no email, without checking the ban list",
+			req: &models.CreateUserRequest{
+				Username: "testuser",
+				Password: "password123",
+				Email:    "",
+			},
+			setupRepo: func(ur *testutil.MockUserRepo, sr *testutil.MockSessionRepo) {
+				ur.IsEmailPlatformBannedFn = func(ctx context.Context, email string) (bool, error) {
+					t.Fatal("IsEmailPlatformBanned must not be called for a blank email")
+					return false, nil
+				}
+				ur.CreateFn = func(ctx context.Context, user *models.User) error {
+					if user.Email != nil {
+						t.Errorf("expected user.Email to stay nil for a blank registration email, got %v", *user.Email)
+					}
+					user.ID = "user-1"
+					return nil
+				}
+			},
+			wantErr: false,
+		},
+		{
 			name: "should fail when email is platform banned",
 			req: &models.CreateUserRequest{
 				Username: "testuser",
