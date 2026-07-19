@@ -86,20 +86,16 @@ func (r *sqliteServerRepo) Update(ctx context.Context, server *models.Server) er
 	return nil
 }
 
+// Delete removes the server and every row scoped to it (see
+// deleteServerCascade for why that isn't just `DELETE FROM servers` —
+// several child tables have no enforced foreign key). Callers that need
+// this atomic with other work should bind the repo to a *sql.Tx first
+// (NewSQLiteServerRepo(tx)), matching the database.WithTx pattern
+// CreateServer already uses.
 func (r *sqliteServerRepo) Delete(ctx context.Context, serverID string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM servers WHERE id = ?`, serverID)
-	if err != nil {
+	if err := deleteServerCascade(ctx, r.db, serverID); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if affected == 0 {
-		return pkg.ErrNotFound
-	}
-
 	return nil
 }
 
