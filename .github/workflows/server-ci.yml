@@ -83,7 +83,7 @@ jobs:
         # is how the config-schema breakage slipped in).
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.6.2
+          version: v2.12.2
           working-directory: server
           args: --timeout=5m
 
