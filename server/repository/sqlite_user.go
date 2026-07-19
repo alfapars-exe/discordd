@@ -491,7 +491,12 @@ func (r *sqliteUserRepo) DeleteAllMessagesByUser(ctx context.Context, userID str
 //
 // Manual cleanup needed:
 // - bans: no FK, username stored as text — orphans are harmless
-// - servers.owner_id: no CASCADE — caller must clean up owned servers first
+// - servers.owner_id: no CASCADE — caller must clean up owned servers first,
+//   and each owned server needs the SAME cascade sqliteServerRepo.Delete
+//   uses (channels/categories/roles/invites/user_roles/bans have no FK to
+//   servers either — see deleteServerCascade), not a bare
+//   `DELETE FROM servers`, or those tables leak exactly like they did
+//   before that fix.
 func (r *sqliteUserRepo) HardDeleteUser(ctx context.Context, userID string) error {
 	// bans has no FK — manual cleanup
 	_, err := r.db.ExecContext(ctx, `DELETE FROM bans WHERE user_id = ?`, userID)
@@ -499,10 +504,16 @@ func (r *sqliteUserRepo) HardDeleteUser(ctx context.Context, userID string) erro
 		return fmt.Errorf("failed to clean up bans for user: %w", err)
 	}
 
-	// servers.owner_id has no CASCADE — delete owned servers first
-	_, err = r.db.ExecContext(ctx, `DELETE FROM servers WHERE owner_id = ?`, userID)
+	// servers.owner_id has no CASCADE — delete each owned server through the
+	// same cascade sqliteServerRepo.Delete uses, not a bare bulk delete.
+	ownedIDs, err := r.ownedServerIDs(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("failed to delete owned servers: %w", err)
+		return fmt.Errorf("failed to list owned servers: %w", err)
+	}
+	for _, serverID := range ownedIDs {
+		if err := deleteServerCascade(ctx, r.db, serverID); err != nil {
+			return fmt.Errorf("failed to delete owned server %s: %w", serverID, err)
+		}
 	}
 
 	// Main delete — CASCADE handles all related data
@@ -520,6 +531,26 @@ func (r *sqliteUserRepo) HardDeleteUser(ctx context.Context, userID string) erro
 	}
 
 	return nil
+}
+
+// ownedServerIDs lists the servers a user owns, for HardDeleteUser to
+// cascade-delete individually before the bans/user row cleanup.
+func (r *sqliteUserRepo) ownedServerIDs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM servers WHERE owner_id = ?`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query owned servers: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan owned server id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (r *sqliteUserRepo) SetDownloadPromptSeen(ctx context.Context, userID string) error {
