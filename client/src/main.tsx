@@ -13,7 +13,9 @@ import { installGlobalErrorLogger } from "./api/globalErrorLogger";
 import { installScreenPickerDiagnosticForwarder } from "./api/screenPickerDiagnostic";
 
 // Native shells (Electron file://, Capacitor capacitor://) don't support HTML5 History API.
-// Web uses BrowserRouter for clean URLs.
+// Web uses BrowserRouter for clean URLs. Capitalized (JSX requires it for <Router>) but
+// never exported or Fast-Refreshed -- this is the app entry point, mounted once.
+// eslint-disable-next-line react-refresh/only-export-components
 const Router = isNativeApp() ? HashRouter : BrowserRouter;
 
 // Configure mobile-specific UI (safe area insets, status bar, keyboard) — no-op on web/Electron
