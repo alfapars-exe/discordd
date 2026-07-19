@@ -434,7 +434,14 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		Data: map[string]string{"id": serverID},
 	})
 
-	if err := s.serverRepo.Delete(ctx, serverID); err != nil {
+	// Transactional so the cascade (channels, roles, messages, ...) and the
+	// server row either all go or none do — Delete alone, called on the
+	// pool-bound repo, would run each table's delete as its own
+	// auto-committed statement and could strand a half-cleaned server on a
+	// mid-cascade failure.
+	if err := database.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		return repository.NewSQLiteServerRepo(tx).Delete(ctx, serverID)
+	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
 
