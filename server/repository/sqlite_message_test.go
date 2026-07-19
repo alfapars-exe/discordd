@@ -109,8 +109,6 @@ func TestMessageRepo_CreateGetDelete(t *testing.T) {
 		// JOIN as "message stays visible even if author is deleted", but the
 		// scan targets for the joined user columns are plain strings, so a
 		// NULL author makes the whole query error instead.
-		t.Skip("KNOWN BUG: NULL author columns are scanned into non-nullable targets; unskip when the scan targets are fixed")
-
 		// database.New enforces foreign keys, so the dangling reference has to
 		// be planted through a second connection with enforcement off — which
 		// is also the realistic provenance of such a row.
@@ -288,17 +286,6 @@ func TestMessageRepo_UpdateRoutesOnEncryptionVersion(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("plaintext edit writes content and stamps edited_at", func(t *testing.T) {
-		// The filler messages are load-bearing, unfortunately: the FIRST
-		// content UPDATE against a freshly migrated database fails outright
-		// with SQLITE_CORRUPT_VTAB. That is a real defect in the FTS sync
-		// triggers, reproduced and documented in
-		// TestMessageRepo_FTSTriggers_KnownBug below. Seeding some history
-		// first keeps THIS test about what it claims to be about (which
-		// column the Update branch writes) instead of re-failing on the
-		// trigger bug.
-		newMessage(t, ctx, repo, msgChannel, msgAuthor, "gecmis bir")
-		newMessage(t, ctx, repo, msgChannel, msgAuthor, "gecmis iki")
-
 		msg := newMessage(t, ctx, repo, msgChannel, msgAuthor, "ilk hali")
 		updated := "duzeltilmis"
 		msg.Content = &updated
@@ -488,9 +475,11 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KNOWN BUG — FTS5 sync triggers use an unsupported delete form.
+// REGRESSION GUARD — FTS5 sync triggers used an unsupported delete form.
+// Fixed by migration 073_fts5_external_content_delete.sql; these tests are the
+// acceptance criteria and must keep passing.
 //
-// Migrations 006 → 034 → 057 keep recreating the message search triggers with
+// Migrations 006 → 034 → 057 kept recreating the message search triggers with
 // this body:
 //
 //	CREATE TRIGGER messages_au AFTER UPDATE OF content ON messages
@@ -511,7 +500,7 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 //	INSERT INTO messages_fts(messages_fts, rowid, content)
 //	    VALUES('delete', OLD.rowid, OLD.content);
 //
-// Two observable consequences, both reproduced below:
+// Three observable consequences, all reproduced below:
 //
 //  1. Stale index — an edited message stays findable by text it no longer
 //     contains. Deterministic. Editing a message to redact something does
@@ -519,20 +508,24 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 //  2. SQLITE_CORRUPT_VTAB — the bogus delete drives the doclist accounting
 //     negative and the first content UPDATE on a freshly migrated database
 //     fails with "database disk image is malformed (267)". Reproduced 8/8.
+//  3. Deleted text resurfacing on an unrelated message — see below.
 //
 // Both trigger pairs (messages_au and dm_messages_au) carry the same body, so
-// channel and DM edits are equally affected. The DELETE-path triggers
-// (messages_ad / dm_messages_ad) happen to behave, because by the time an
-// AFTER DELETE trigger runs the content row is gone.
+// channel and DM edits are equally affected.
 //
-// These tests are SKIPPED, not deleted: they are the acceptance criteria for
-// the fix. Remove the t.Skip lines once the migration lands.
+// The DELETE-path triggers (messages_ad / dm_messages_ad) were originally
+// written off here as "happen to behave, because by the time an AFTER DELETE
+// trigger runs the content row is gone". That was wrong, and backwards: the
+// content row being gone is exactly why the plain DELETE cannot recompute the
+// tokens, so it removed nothing at all. Measured on a migrated database, the
+// index entry outlived the message; SQLite then reuses the freed rowid for the
+// next insert, so searching a deleted message's text returned the unrelated
+// newer message that landed on that rowid. Migration 073 fixes all six
+// triggers, and the delete cases are pinned below.
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 	t.Run("editing a message leaves its old text searchable", func(t *testing.T) {
-		t.Skip("KNOWN BUG: messages_au deletes from an external-content FTS table with a plain DELETE; unskip when the trigger is fixed")
-
 		db := newTestDB(t)
 		seedMessageWorld(t, db)
 		repo := NewSQLiteMessageRepo(db.Conn)
@@ -577,8 +570,6 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 	})
 
 	t.Run("the first content edit on a fresh database errors", func(t *testing.T) {
-		t.Skip("KNOWN BUG: first UPDATE OF content after migration fails with SQLITE_CORRUPT_VTAB (267); unskip when the trigger is fixed")
-
 		db := newTestDB(t)
 		seedMessageWorld(t, db)
 		repo := NewSQLiteMessageRepo(db.Conn)
@@ -591,31 +582,133 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 			t.Fatalf("first edit on a fresh database failed: %v", err)
 		}
 	})
+
+	// The AFTER DELETE triggers were assumed to be safe on the grounds that the
+	// content row is already gone by the time they run. Measured on a migrated
+	// database, that is exactly backwards: "the row is gone" is why the plain
+	// DELETE cannot recompute the tokens, so it removed nothing and the entry
+	// outlived the message. SQLite then hands the freed rowid to the next
+	// insert, which is what makes it observable through the product's own
+	// search API rather than merely as index litter.
+	t.Run("deleting a message takes its text out of the index", func(t *testing.T) {
+		db := newTestDB(t)
+		seedMessageWorld(t, db)
+		repo := NewSQLiteMessageRepo(db.Conn)
+		search := NewSQLiteSearchRepo(db.Conn)
+		ctx := context.Background()
+
+		msg := newMessage(t, ctx, repo, msgChannel, msgAuthor, "silinecek gizli metin")
+
+		if n := countRows(t, db,
+			`SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'gizli'`); n != 1 {
+			t.Fatalf("precondition: index hits before delete = %d, want 1", n)
+		}
+
+		if err := repo.Delete(ctx, msg.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+
+		// Straight at the index: the JOIN in Search would hide an orphan entry
+		// whose message row no longer exists.
+		if n := countRows(t, db,
+			`SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'gizli'`); n != 0 {
+			t.Errorf("index still holds %d entr(ies) for a deleted message's text", n)
+		}
+
+		// Rowid reuse is what turns that litter into a wrong search result: the
+		// next message inserted lands on the freed rowid and inherits the
+		// deleted message's tokens.
+		fresh := newMessage(t, ctx, repo, msgChannel, msgAuthor, "tamamen alakasiz")
+		res, err := search.Search(ctx, "gizli", "srv-1", nil, 25, 0)
+		if err != nil {
+			t.Fatalf("search after delete: %v", err)
+		}
+		if res.TotalCount != 0 {
+			t.Errorf("searching a deleted message's text returned %d hit(s); first is %+v (the new message is %s)",
+				res.TotalCount, res.Messages, fresh.ID)
+		}
+
+		// The replacement message must still be findable by its OWN text.
+		own, err := search.Search(ctx, "alakasiz", "srv-1", nil, 25, 0)
+		if err != nil {
+			t.Fatalf("search for the new message: %v", err)
+		}
+		if own.TotalCount != 1 {
+			t.Errorf("the message occupying the reused rowid is not searchable: hits = %d, want 1", own.TotalCount)
+		}
+	})
+
+	// The 'delete' command may only be issued for rows the _ai trigger actually
+	// indexed. E2EE rows (content NULL) are deliberately unindexed, so deleting
+	// one must be a no-op rather than a delete against an absent doclist —
+	// which would drive the accounting negative, i.e. re-create the corruption.
+	t.Run("deleting an unindexed E2EE message leaves the index intact", func(t *testing.T) {
+		db := newTestDB(t)
+		seedMessageWorld(t, db)
+		repo := NewSQLiteMessageRepo(db.Conn)
+		search := NewSQLiteSearchRepo(db.Conn)
+		ctx := context.Background()
+
+		keep := newMessage(t, ctx, repo, msgChannel, msgAuthor, "kalici duz metin")
+
+		ct, dev := "cipher-x", "dev-x"
+		enc := &models.Message{
+			ChannelID: msgChannel, UserID: msgAuthor,
+			EncryptionVersion: 1, Ciphertext: &ct, SenderDeviceID: &dev,
+		}
+		if err := repo.Create(ctx, enc); err != nil {
+			t.Fatalf("Create E2EE: %v", err)
+		}
+		if err := repo.Delete(ctx, enc.ID); err != nil {
+			t.Fatalf("Delete E2EE: %v", err)
+		}
+
+		if _, err := db.Conn.Exec(`INSERT INTO messages_fts(messages_fts) VALUES('integrity-check')`); err != nil {
+			t.Errorf("FTS integrity-check after deleting an unindexed message: %v", err)
+		}
+
+		res, err := search.Search(ctx, "kalici", "srv-1", nil, 25, 0)
+		if err != nil {
+			t.Fatalf("search: %v", err)
+		}
+		if res.TotalCount != 1 {
+			t.Errorf("plaintext message hits = %d, want 1 — the E2EE delete disturbed the index", res.TotalCount)
+		}
+
+		// And the index must still be writable afterwards.
+		edited := "kalici duz metin duzenlendi"
+		keep.Content = &edited
+		if err := repo.Update(ctx, keep); err != nil {
+			t.Errorf("edit after an unindexed delete: %v", err)
+		}
+	})
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KNOWN BUG — the author LEFT JOIN cannot actually tolerate a NULL author.
+// REGRESSION GUARD — the author LEFT JOIN could not tolerate a NULL author.
+// Fixed by widening the scan targets in sqlite_message.go / sqlite_dm.go.
 //
 // sqlite_message.go opens GetByID with:
 //
 //	// LEFT JOIN: message stays visible even if author is deleted.
 //
-// but the scan list only makes the author's ID nullable:
+// but the scan list used to make only the author's ID nullable:
 //
 //	var author models.User
 //	var authorID sql.NullString
 //	... Scan(..., &authorID, &author.Username, &author.DisplayName, ...)
 //
-// author.Username is a plain string. When the LEFT JOIN yields no user row,
-// every joined column comes back NULL and the scan fails with
+// author.Username is a plain string (and so is author.Status). When the LEFT
+// JOIN yields no user row, every joined column comes back NULL and the scan
+// failed with
 //
 //	sql: Scan error on column index 12, name "username":
 //	converting NULL to string is unsupported
 //
-// so GetByID returns an error and — because the same scan shape is used by
-// scanMessage — GetByChannelID fails for the WHOLE PAGE, not just the one
-// message. The nil-author branch (`if authorID.Valid`) below it is therefore
-// dead code today.
+// so GetByID returned an error and — because the same scan shape is used by
+// scanMessage — GetByChannelID failed for the WHOLE PAGE, not just the one
+// message. The nil-author branch (`if authorID.Valid`) below it was therefore
+// dead code. It is live now.
 //
 // Reachability: messages.user_id is `REFERENCES users(id) ON DELETE CASCADE`,
 // so with foreign keys enforced a message cannot outlive its author — which
@@ -626,14 +719,15 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 // a remote Turso DSN. This repo also already ships an orphan census
 // (maintenance.go) because dangling rows are a known production condition.
 //
-// So: either the comment is wrong and the LEFT JOIN should be an INNER JOIN,
-// or the scan targets should be nullable. The test below encodes the second
-// reading, which is what the surrounding code clearly intends.
+// So: either the comment was wrong and the LEFT JOIN should be an INNER JOIN,
+// or the scan targets should be nullable. The tests here encode the second
+// reading, which is what the surrounding code clearly intends, and the scan
+// targets in sqlite_message.go / sqlite_dm.go were widened to match: a missing
+// author now yields Author == nil on a message that still renders, rather than
+// an error that takes the page down with it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestMessageRepo_NilAuthorScan_KnownBug(t *testing.T) {
-	t.Skip("KNOWN BUG: see the note above — NULL author columns are scanned into plain strings")
-
 	db, dbPath := newTestDBWithPath(t)
 	seedMessageWorld(t, db)
 	repo := NewSQLiteMessageRepo(db.Conn)

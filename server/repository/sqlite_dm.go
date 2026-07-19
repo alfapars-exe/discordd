@@ -308,7 +308,9 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 
 	var msg models.DMMessage
 	var author models.User
-	var authorID sql.NullString
+	// Nullable across every joined author column, not just the id — see
+	// scanDMMessageRow.
+	var authorID, authorUsername, authorStatus sql.NullString
 	var content sql.NullString
 	var editedAt sql.NullTime
 	var displayName, avatarURL sql.NullString
@@ -321,7 +323,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		&msg.ID, &msg.DMChannelID, &msg.UserID, &content, &editedAt, &msg.CreatedAt,
 		&msg.ReplyToID, &isPinned,
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-		&authorID, &author.Username, &displayName, &avatarURL, &author.Status,
+		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus,
 		&refMsgID, &refMsgContent,
 		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
 	)
@@ -342,6 +344,8 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 	}
 	if authorID.Valid {
 		author.ID = authorID.String
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
 		if displayName.Valid {
 			author.DisplayName = &displayName.String
 		}
@@ -766,10 +770,17 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 // ─── Scan Helpers ───
 
 // scanDMMessageRow parses a standard DM message query row including author and reply reference.
+//
+// The author columns come back through NullStrings because the users LEFT JOIN
+// can legitimately produce no row (a dangling user_id), in which case ALL of
+// them are NULL — not just the id. A NULL scanned into a plain string fails the
+// row, and every DM listing/pin/search path funnels through here, so one
+// authorless message would fail the whole page instead of only itself. Mirrors
+// scanMessage in sqlite_message.go.
 func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 	var msg models.DMMessage
 	var author models.User
-	var authorID sql.NullString
+	var authorID, authorUsername, authorStatus sql.NullString
 	var content sql.NullString
 	var editedAt sql.NullTime
 	var displayName, avatarURL sql.NullString
@@ -782,7 +793,7 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 		&msg.ID, &msg.DMChannelID, &msg.UserID, &content, &editedAt, &msg.CreatedAt,
 		&msg.ReplyToID, &isPinned,
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-		&authorID, &author.Username, &displayName, &avatarURL, &author.Status,
+		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus,
 		&refMsgID, &refMsgContent,
 		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
 	); err != nil {
@@ -798,6 +809,8 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 	}
 	if authorID.Valid {
 		author.ID = authorID.String
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
 		if displayName.Valid {
 			author.DisplayName = &displayName.String
 		}

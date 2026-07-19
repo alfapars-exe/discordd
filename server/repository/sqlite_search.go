@@ -23,17 +23,24 @@ func NewSQLiteSearchRepo(db database.TxQuerier) SearchRepository {
 func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 	var msg models.Message
 	var author models.User
-	var authorID sql.NullString
+	// Every joined author column must be nullable, not just the id: a dangling
+	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL landing
+	// in a plain string fails the row scan — which here would drop the whole
+	// page of search results, not just the one message. Same defect and same
+	// fix as sqlite_message.go's scanMessage.
+	var authorID, authorUsername, authorStatus sql.NullString
 
 	if err := rows.Scan(
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus,
 	); err != nil {
 		return msg, err
 	}
 
 	if authorID.Valid {
 		author.ID = authorID.String
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
 		author.PasswordHash = ""
 		msg.Author = &author
 	}
