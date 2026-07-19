@@ -95,6 +95,16 @@ func TestCensusOrphans_DetectsSeededOrphans(t *testing.T) {
 		// attachments: message_id points nowhere.
 		`INSERT INTO attachments (id, message_id, filename, file_url)
 			VALUES ('orphan-attachment', 'ghost-message', 'a.png', '/api/uploads/deadbeef_a.png')`,
+		// roles / bans: server_id points nowhere, same shape as channels above.
+		`INSERT INTO roles (id, name, server_id) VALUES ('orphan-role', 'ghost-role-name', 'ghost-server')`,
+		`INSERT INTO bans (server_id, user_id, banned_by, reason)
+			VALUES ('ghost-server', 'ghost-banned-user', 'ghost-banner', 'test')`,
+		// messages: channel_id points at a channel whose own server_id is
+		// itself dangling — the transitive case, not a direct FK break.
+		`INSERT INTO channels (id, name, type, server_id)
+			VALUES ('orphan-channel-2', 'muzik', 'text', 'ghost-server-2')`,
+		`INSERT INTO messages (id, channel_id, user_id, content)
+			VALUES ('orphan-message', 'orphan-channel-2', 'ghost-user-2', 'hello from nowhere')`,
 	)
 
 	reports, err := censusOrphans(context.Background(), db.Conn)
@@ -106,13 +116,19 @@ func TestCensusOrphans_DetectsSeededOrphans(t *testing.T) {
 	for _, r := range reports {
 		got[r.table] = r.rows
 	}
-	for _, table := range []string{"user_roles", "channels", "invites", "categories", "attachments"} {
-		if got[table] != 1 {
-			t.Errorf("orphan count for %s = %d, want 1 (reports: %+v)", table, got[table], reports)
+	// "channels" now has 2 orphans (orphan-channel + orphan-channel-2, both
+	// server-less) — every other seeded table has exactly 1.
+	want := map[string]int64{
+		"user_roles": 1, "channels": 2, "invites": 1, "categories": 1,
+		"attachments": 1, "roles": 1, "bans": 1, "messages": 1,
+	}
+	for table, wantRows := range want {
+		if got[table] != wantRows {
+			t.Errorf("orphan count for %s = %d, want %d (reports: %+v)", table, got[table], wantRows, reports)
 		}
 	}
-	if len(reports) != 5 {
-		t.Errorf("expected exactly 5 affected tables, got %d: %+v", len(reports), reports)
+	if len(reports) != len(want) {
+		t.Errorf("expected exactly %d affected tables, got %d: %+v", len(want), len(reports), reports)
 	}
 }
 
