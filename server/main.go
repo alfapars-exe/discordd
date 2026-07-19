@@ -146,6 +146,7 @@ func main() {
 	// reason to change. Run order matters: ID repair has to happen before
 	// LiveKit seeding so an orphan empty-ID instance isn't seeded over.
 	repairCorruptIDs(db)
+	repairOrphanedServerData(db)
 	resetStalePresence(db)
 	seedPlatformLiveKit(db, repos, cfg, encryptionKey)
 	// PLATFORM_ADMIN_USERNAME is read from env so the "who's admin?"
