@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -73,7 +73,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -83,7 +83,7 @@ jobs:
         # is how the config-schema breakage slipped in).
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.6.2
+          version: v2.12.2
           working-directory: server
           args: --timeout=5m
 
@@ -96,7 +96,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -177,7 +177,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
