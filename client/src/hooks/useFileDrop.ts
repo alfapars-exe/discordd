@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { validateFiles } from "../utils/fileValidation";
+import { useAttachmentRejectionToast } from "./useAttachmentRejectionToast";
 
 type FileDropHandlers = {
   onDragEnter: (e: React.DragEvent) => void;
@@ -29,6 +30,7 @@ function hasFiles(e: React.DragEvent): boolean {
 export function useFileDrop(onDrop: (files: File[]) => void): UseFileDropReturn {
   const [isDragging, setIsDragging] = useState(false);
   const enterCountRef = useRef(0);
+  const reportRejections = useAttachmentRejectionToast();
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     if (!hasFiles(e)) return;
@@ -65,12 +67,13 @@ export function useFileDrop(onDrop: (files: File[]) => void): UseFileDropReturn 
       const droppedFiles = e.dataTransfer.files;
       if (!droppedFiles || droppedFiles.length === 0) return;
 
-      const valid = validateFiles(droppedFiles);
+      const { valid, rejected } = validateFiles(droppedFiles);
       if (valid.length > 0) {
         onDrop(valid);
       }
+      reportRejections(rejected);
     },
-    [onDrop]
+    [onDrop, reportRejections]
   );
 
   return {

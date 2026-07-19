@@ -129,8 +129,10 @@ export async function decryptFile(
   url: string,
   meta: EncryptedFileMeta
 ): Promise<File> {
-  // Download encrypted file
-  const response = await fetch(url);
+  // Download encrypted file. `credentials: "include"` is required in the
+  // Electron/Capacitor shells, where the upload host is a different origin and
+  // the default credentials mode would drop the `hichat_media` auth cookie.
+  const response = await fetch(url, { credentials: "include" });
   if (!response.ok) {
     throw new Error(`Failed to download encrypted file: HTTP ${response.status}`);
   }
@@ -252,7 +254,9 @@ export async function decryptThumbnail(
   fileKey: string,
   thumbnailIV: string
 ): Promise<string> {
-  const response = await fetch(url);
+  // See decryptFile: cross-origin in the native shells, so cookies must be
+  // sent explicitly.
+  const response = await fetch(url, { credentials: "include" });
   if (!response.ok) {
     throw new Error(`Failed to download thumbnail: HTTP ${response.status}`);
   }

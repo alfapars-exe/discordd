@@ -14,11 +14,14 @@ import (
 
 // DMHandler handles DM endpoints.
 // messageLimiter is shared with MessageHandler (user-based total rate).
+// uploadLimiter is a separate per-user cap that only fires on multipart
+// requests (20/min); text-only DMs don't touch it.
 type DMHandler struct {
 	dmService       services.DMService
 	dmUploadService services.DMUploadService
 	maxUploadSize   int64
 	messageLimiter  *ratelimit.MessageRateLimiter
+	uploadLimiter   *ratelimit.MessageRateLimiter
 }
 
 func NewDMHandler(
@@ -26,12 +29,14 @@ func NewDMHandler(
 	dmUploadService services.DMUploadService,
 	maxUploadSize int64,
 	messageLimiter *ratelimit.MessageRateLimiter,
+	uploadLimiter *ratelimit.MessageRateLimiter,
 ) *DMHandler {
 	return &DMHandler{
 		dmService:       dmService,
 		dmUploadService: dmUploadService,
 		maxUploadSize:   maxUploadSize,
 		messageLimiter:  messageLimiter,
+		uploadLimiter:   uploadLimiter,
 	}
 }
 
@@ -165,6 +170,19 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentType := r.Header.Get("Content-Type")
+
+	// Upload-specific throttle (T3.5) — same rationale as message.go: message
+	// limiter stops text-burst spam, upload limiter stops sustained
+	// storage/bandwidth abuse. Only fires on multipart.
+	if isMultipart(contentType) && h.uploadLimiter != nil && !h.uploadLimiter.Allow(user.ID) {
+		retryAfter := h.uploadLimiter.CooldownSeconds(user.ID)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many uploads, please wait %s",
+				ratelimit.FormatRetryMessage(retryAfter)))
+		return
+	}
+
 	var req models.CreateDMMessageRequest
 
 	if isMultipart(contentType) {
@@ -209,18 +227,37 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Silent `continue` on upload errors used to hide "your file didn't
+	// make it" from users. Collect per-file failures and echo them back
+	// in a 207 Multi-Status response so the client can render "message
+	// posted but attachment X failed with reason Y" — matches the
+	// channel-message contract in handlers/message.go.
+	type uploadFailure struct {
+		Filename string `json:"filename"`
+		Error    string `json:"error"`
+	}
+	var uploadFailures []uploadFailure
+
 	if isMultipart(contentType) && r.MultipartForm != nil {
 		isEncrypted := req.EncryptionVersion == 1
 		files := r.MultipartForm.File["files"]
 		for _, fileHeader := range files {
 			file, err := fileHeader.Open()
 			if err != nil {
+				uploadFailures = append(uploadFailures, uploadFailure{
+					Filename: fileHeader.Filename,
+					Error:    fmt.Sprintf("could not open file: %v", err),
+				})
 				continue
 			}
 
 			attachment, err := h.dmUploadService.Upload(r.Context(), msg.ID, file, fileHeader, isEncrypted)
-			file.Close()
+			_ = file.Close()
 			if err != nil {
+				uploadFailures = append(uploadFailures, uploadFailure{
+					Filename: fileHeader.Filename,
+					Error:    err.Error(),
+				})
 				continue
 			}
 
@@ -230,6 +267,14 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast after uploads so clients see attachments
 	h.dmService.BroadcastCreate(msg)
+
+	if len(uploadFailures) > 0 {
+		pkg.JSON(w, http.StatusMultiStatus, map[string]any{
+			"message":         msg,
+			"upload_failures": uploadFailures,
+		})
+		return
+	}
 
 	pkg.JSON(w, http.StatusCreated, msg)
 }

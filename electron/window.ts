@@ -13,21 +13,11 @@ import { app, BrowserWindow, Menu, screen, shell } from "electron";
 import path from "path";
 import { getSettings, getWindowBounds, saveWindowBounds, WindowBounds } from "./settings";
 
-// Origins the renderer is allowed to navigate to in-place. Anything else
-// (an external link in a message, a phishing redirect, a misconfigured
-// invite URL) is opened in the user's default browser instead of being
-// rendered inside the chromeless Electron window — where the URL bar is
-// hidden and a malicious site can convincingly impersonate the app.
-const allowedNavigationOrigins: ReadonlyArray<string> = [
-  // Production bundle loads from disk; preserves SPA history navigation.
-  "file://",
-  // Local dev server (electron:dev runs Vite on 3030).
-  "http://localhost:3030",
-];
-
-function isInternalNavigation(target: string): boolean {
-  return allowedNavigationOrigins.some((o) => target.startsWith(o));
-}
+// Which origins the renderer may navigate to in-place lives in a pure,
+// unit-tested module (navigation-policy.ts) — importing `electron` here
+// makes this file unloadable outside the Electron runtime, so the policy
+// itself is kept separate the same way resolve-path.ts is.
+import { isInternalNavigation } from "./navigation-policy";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -164,11 +154,20 @@ export function createMainWindow(): BrowserWindow {
 
   Menu.setApplicationMenu(null);
 
-  const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+  // ELECTRON_FORCE_PROD=1 exercises the app:// production loading path
+  // even from a dev checkout (needed to smoke-test the protocol handler
+  // without a full electron:build cycle). Otherwise dev uses Vite HMR.
+  const isDev =
+    process.env.ELECTRON_FORCE_PROD !== "1" &&
+    (process.env.NODE_ENV === "development" || !app.isPackaged);
   if (isDev) {
     mainWindow.loadURL("http://localhost:3030");
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../client/dist/index.html"));
+    // app://hichat/index.html serves out of client/dist via the protocol
+    // handler in main.ts:setupAppProtocol. loadFile with file:// no longer
+    // works — file:// is a null origin and the server-side CORS + cookie
+    // flow rejects it. See T1.4/T1.5 for the full rationale.
+    mainWindow.loadURL("app://hichat/index.html");
   }
 
   // F12 toggles DevTools — only in development. Leaving DevTools accessible

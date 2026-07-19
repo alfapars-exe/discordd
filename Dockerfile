@@ -29,9 +29,10 @@ RUN npm run build
 # was linked against glibc (uses readdir64, fstat64, __res_init, mmap64,
 # etc.). Those symbols don't exist on Alpine/musl, so the link step fails
 # with "undefined reference to readdir64" if we stay on Alpine.
-# 1.25.11+: GO-2026-5037 (crypto/x509) and GO-2026-5039 (net/textproto)
-# stdlib fixes — both reachable from this codebase per govulncheck.
-FROM golang:1.25.11-bookworm AS backend
+# 1.25.12+: GO-2026-5856 (crypto/tls), plus the earlier GO-2026-5037
+# (crypto/x509) and GO-2026-5039 (net/textproto) stdlib fixes — all
+# reachable from this codebase per govulncheck.
+FROM golang:1.25.12-bookworm AS backend
 WORKDIR /app
 
 # Module cache layer: download what's already in go.sum. We don't run
@@ -145,15 +146,25 @@ ENV SERVER_HOST=0.0.0.0 \
 
 EXPOSE 7860
 
-# HEALTHCHECK — hits the shallow /api/health endpoint. Note this only
-# verifies the HTTP layer; DB/Redis/LiveKit are NOT validated here.
-# A future deeper /health endpoint should validate downstream deps.
+# HEALTHCHECK — deliberately targets /api/health, the LIVENESS endpoint, which
+# always answers 200 while the HTTP layer is up. Dependency health is reported
+# in that response BODY ("status": "ok" | "degraded", plus a "checks" object
+# refreshed every 30s by the background readiness checker), and /api/ready is
+# the strict readiness probe that answers 503.
+#
+# This split is intentional: Docker restarts the container when this check
+# fails, and a restart cannot heal a remote-Turso outage — gating it on deep
+# readiness would only produce restart flapping during a transient blip. Deep
+# status belongs to monitors (which read the body or poll /api/ready), not to
+# the restart gate.
 # Tunables:
 #   --interval=30s : how often the check fires
 #   --timeout=5s   : per-check timeout (curl exits non-zero on timeout)
-#   --start-period=20s : Go binary + DB migration cold-start grace window
+#   --start-period=60s : cold-start grace window. Boot-time HF Bucket restore
+#                        plus DB migrations regularly exceed the old 20s on a
+#                        cold Space start, which restarted a healthy boot.
 #   --retries=3    : N consecutive failures = container "unhealthy"
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -fsS http://localhost:${SERVER_PORT}/api/health || exit 1
 
 # --- Self-host hardening (commented out for HF Space compatibility) ---

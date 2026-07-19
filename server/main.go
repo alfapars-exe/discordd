@@ -94,6 +94,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("[main] failed to initialize database: %v", err)
 	}
+
+	// Is referential integrity actually enforced? We could not previously
+	// answer that for production: foreign_keys(1) is only set on the local
+	// SQLite DSN, the remote libSQL/Turso branch sets nothing, and the
+	// migration runner strips every PRAGMA because Turso rejects them. The
+	// probe answers it behaviorally (attempt an FK-violating insert, always
+	// roll back). Visibility only — deliberately never fatal, so a surprising
+	// answer surfaces in the logs instead of taking the deployment down.
+	if enforced, probeErr := database.ProbeForeignKeys(db.Conn); probeErr != nil {
+		log.Printf("[main] foreign key enforcement: UNKNOWN — probe inconclusive: %v", probeErr)
+	} else if enforced {
+		log.Printf("[main] foreign key enforcement: ENABLED")
+	} else {
+		log.Printf("[main] foreign key enforcement: DISABLED — the database accepted a row referencing a nonexistent parent; referential integrity is application-enforced only")
+	}
 	// Closed explicitly at the end of the graceful-shutdown sequence — a
 	// defer here never ran anyway on the log.Fatalf boot-failure paths
 	// (gocritic exitAfterDefer), and on those paths process exit reclaims
@@ -201,8 +216,17 @@ func main() {
 
 	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
-	// so both tables grew without bound).
-	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, time.Hour)
+	// so both tables grew without bound). The same pass runs a read-only
+	// orphan census; it logs a warning per affected table and deletes nothing.
+	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour)
+
+	// 10h. Readiness checker — polls the deep dependency checks every 30s and
+	// caches the verdict. /api/health reads that cache so monitors can see
+	// "degraded" in the body while the endpoint keeps returning 200 (audit
+	// P2-IN-12). Started before the routes below because healthHandler needs
+	// the cache.
+	readiness := &readinessCache{}
+	stopReadiness := startReadinessChecker(db.Conn, cfg, readiness, readinessCheckInterval, logx.Component("readiness"))
 
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey)
@@ -221,10 +245,11 @@ func main() {
 	registerStaticAndUploads(mux, cfg)
 
 	// 13b. Health & readiness, registered here (not in registerStaticAndUploads)
-	// because the readiness probe needs the DB handle. /api/health stays a
-	// shallow liveness check (the Docker HEALTHCHECK uses it); /api/ready does
-	// the deep DB check and may return 503.
-	mux.HandleFunc("GET /api/health", healthHandler())
+	// because the readiness probe needs the DB handle. /api/health always
+	// returns 200 (the Docker HEALTHCHECK restarts on it, and a restart can't
+	// fix a remote-DB outage) but reports the cached deep-check verdict in its
+	// body; /api/ready does the request-time DB check and may return 503.
+	mux.HandleFunc("GET /api/health", healthHandler(readiness))
 	mux.HandleFunc("GET /api/ready", readyHandler(db.Conn, cfg))
 
 	// 14. SPA frontend serving
@@ -327,6 +352,17 @@ func main() {
 	<-done
 	log.Println("[main] shutting down...")
 
+	// Music bots first, and specifically BEFORE the (up to 3 minute) backup
+	// below: each Stop() disconnects the LiveKit room and kills that track's
+	// yt-dlp/ffmpeg pair, and the container runtime's SIGTERM grace period is
+	// far shorter than the backup budget — leaving this until the end would
+	// let the runtime SIGKILL the subprocesses mid-write anyway. Must still
+	// run before hub.Shutdown(), since Stop broadcasts a final
+	// IsActive=false state over the hub.
+	if stopper, ok := svcs.MusicBot.(services.MusicBotStopper); ok {
+		stopper.StopAll()
+	}
+
 	svcs.AppLog.Stop()
 	svcs.AuditLog.Stop()
 	// Final backup BEFORE exit: the AppLog/AuditLog Stop() calls above
@@ -339,6 +375,7 @@ func main() {
 	backupShutdownCancel()
 	stopRuntimeStats()
 	stopMaintenance()
+	stopReadiness()
 	metricsCollector.Stop()
 	hub.Shutdown()
 

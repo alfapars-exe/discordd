@@ -25,7 +25,7 @@ func NewStatsHandler(userRepo repository.UserRepository) *StatsHandler {
 func (h *StatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Request) {
 	count, err := h.userRepo.Count(r.Context())
 	if err != nil {
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to get stats")
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to get stats", err)
 		return
 	}
 

@@ -10,14 +10,18 @@
 # builder) keeps the two images on the same glibc baseline so behaviour
 # debugging in one transfers to the other.
 #
-# Why CGO_ENABLED=0 still works?
-# The libsql import (database/database.go) has build constraints excluding
-# all Go files when CGO is off. Go emits a "build constraints exclude all
-# Go files" warning to stderr and silently continues — the second import
-# (modernc.org/sqlite, pure-Go) supplies the driver, so DATABASE_PATH=...
-# (local SQLite file) keeps working. Remote Turso/libSQL is unavailable
-# from this image — operators using libsql:// URLs should run the root
-# Dockerfile (CGO + libsql) instead.
+# Why CGO_ENABLED=0 works?
+# The libsql driver import lives in database/database_libsql.go behind
+# `//go:build !windows && cgo`, so with CGO off it is excluded and the
+# pure-Go modernc.org/sqlite driver supplies DATABASE_PATH=... Remote
+# Turso/libSQL is unavailable from this image — operators using libsql://
+# URLs should run the root Dockerfile (CGO + libsql) instead.
+#
+# That build tag used to be `!windows` only, and this comment used to claim
+# Go merely warned and continued. It does not: the file was still compiled on
+# Linux, go-libsql's own sources are all cgo-gated, and the build failed hard
+# with "build constraints exclude all Go files in .../go-libsql". This image
+# could not be built at all until that tag was corrected.
 
 # ─── Builder Stage ───
 FROM golang:1.25-bookworm AS builder

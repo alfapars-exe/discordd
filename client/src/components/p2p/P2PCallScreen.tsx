@@ -113,14 +113,10 @@ function P2PCallScreen() {
   const currentUserId = useAuthStore((s) => s.user?.id);
 
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  // Hidden audio element — always plays remote stream audio regardless of video state
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
-
-  useEffect(() => {
-    if (remoteAudioRef.current && remoteStream) {
-      remoteAudioRef.current.srcObject = remoteStream;
-    }
-  }, [remoteStream]);
+  // Remote audio lives in P2PAudioSink, mounted at the AppLayout level so it
+  // survives tab switches (this component unmounts when the user opens any
+  // non-p2p tab). Only video is kept here since there's nothing to render
+  // off-screen anyway.
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
@@ -145,11 +141,8 @@ function P2PCallScreen() {
   const hasRemoteVideo = remoteStream?.getVideoTracks().some((tr) => tr.enabled);
   const hasLocalVideo = localStream?.getVideoTracks().some((tr) => tr.enabled);
 
-  // Single return to keep hidden <audio> always in DOM
   return (
     <>
-      <audio ref={remoteAudioRef} autoPlay playsInline />
-
       {!activeCall ? (
         <div className="p2p-call-screen p2p-empty">
           <span className="p2p-status-text">{t("callEnded")}</span>

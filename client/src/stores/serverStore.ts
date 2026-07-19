@@ -92,9 +92,11 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   setActiveServer: (serverId) => {
-    // Clear server-scoped stores immediately to prevent stale data flash
-    // (useEffect runs after render, but we need the clear before).
-    useChannelStore.getState().clearForServerSwitch();
+    // switchToServer snapshots the outgoing tree into the per-server cache
+    // and paints the incoming server from cache (empty if never visited).
+    // Called BEFORE the set() below so it reads the still-current
+    // activeServerId as the "outgoing" id.
+    useChannelStore.getState().switchToServer(serverId);
     useReadStateStore.getState().clearForServerSwitch();
 
     set({ activeServerId: serverId, activeServer: null });
@@ -233,6 +235,11 @@ export const useServerStore = create<ServerState>((set, get) => ({
 
     // Close any open tabs (text / voice / screen) that belong to this server.
     useUIStore.getState().closeTabsForServer(serverId);
+
+    // The server is gone from our POV — drop its cached channel tree so a
+    // rejoined-under-the-same-id (rare, but possible) doesn't paint the old
+    // shape before revalidation, and so the cache can't grow unbounded.
+    useChannelStore.getState().evictServerCache(serverId);
 
     const prevActive = get().activeServerId;
 

@@ -12,6 +12,7 @@
   "edited": "(düzenlendi)",
   "uploadFile": "Dosya Yükle",
   "fileTooLarge": "Dosya çok büyük (maks. {{max}}MB)",
+  "fileTypeNotAllowed": "Bu dosya tipi kabul edilmiyor",
   "noChannel": "Bir kanal seçin",
   "editCancel": "iptal",
   "editSave": "kaydet",
@@ -57,6 +58,7 @@
   "dropFilesHere": "Yüklemek için dosyaları bırakın",
   "longPressForActions": "Mesaj işlemleri için uzun basın",
   "tooManyMessages": "Çok hızlı mesaj gönderiyorsunuz. Lütfen biraz bekleyin.",
+  "sendFailed": "Mesaj gönderilemedi. Lütfen tekrar deneyin.",
   "messageTooLong": "Mesaj en fazla {{max}} karakter olmalı",
 
   "gif": "GIF",

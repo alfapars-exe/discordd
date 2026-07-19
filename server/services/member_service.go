@@ -377,12 +377,23 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 		return nil, fmt.Errorf("%w: cannot modify roles of a user with equal or higher role", pkg.ErrForbidden)
 	}
 
+	// One list-scan per ModifyRoles call (bounded by server role count,
+	// typically <50) replaces two N+1 loops: the validation walk below
+	// and the audit-metadata lookup further down. Fetching every role in
+	// the request via GetByID meant 2*N sequential DB round-trips per
+	// role-modification request.
+	allServerRoles, err := s.roleRepo.GetAllByServer(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load server roles: %w", err)
+	}
+	rolesByID := make(map[string]*models.Role, len(allServerRoles))
+	for i := range allServerRoles {
+		rolesByID[allServerRoles[i].ID] = &allServerRoles[i]
+	}
+
 	for _, roleID := range roleIDs {
-		role, err := s.roleRepo.GetByID(ctx, roleID)
-		if err != nil {
-			return nil, fmt.Errorf("role %s not found: %w", roleID, err)
-		}
-		if role.ServerID != serverID {
+		role, ok := rolesByID[roleID]
+		if !ok {
 			return nil, fmt.Errorf("%w: role %s does not belong to this server", pkg.ErrForbidden, roleID)
 		}
 		if role.Position >= actorMaxPos {
@@ -410,7 +421,9 @@ func (s *memberService) ModifyRoles(ctx context.Context, serverID, actorID, targ
 			if err := s.roleRepo.AssignToUser(ctx, targetID, id, serverID); err != nil {
 				return nil, fmt.Errorf("failed to assign role: %w", err)
 			}
-			if role, _ := s.roleRepo.GetByID(ctx, id); role != nil {
+			// Reuse the map from the validation pass — the same role was
+			// already loaded above; a second GetByID here was pure N+1.
+			if role := rolesByID[id]; role != nil {
 				s.audit(models.AuditLog{
 					ServerID:     serverID,
 					ActorUserID:  &actor,

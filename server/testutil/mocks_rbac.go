@@ -13,6 +13,7 @@ type MockRoleRepo struct {
 	GetAllByServerFn       func(ctx context.Context, serverID string) ([]models.Role, error)
 	GetDefaultByServerFn   func(ctx context.Context, serverID string) (*models.Role, error)
 	GetByUserIDAndServerFn func(ctx context.Context, userID, serverID string) ([]models.Role, error)
+	GetRolesForUsersFn     func(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error)
 	GetMaxPositionFn       func(ctx context.Context, serverID string) (int, error)
 	CreateFn               func(ctx context.Context, role *models.Role) error
 	UpdateFn               func(ctx context.Context, role *models.Role) error
@@ -43,6 +44,12 @@ func (m *MockRoleRepo) GetDefaultByServer(ctx context.Context, serverID string) 
 func (m *MockRoleRepo) GetByUserIDAndServer(ctx context.Context, userID, serverID string) ([]models.Role, error) {
 	if m.GetByUserIDAndServerFn != nil {
 		return m.GetByUserIDAndServerFn(ctx, userID, serverID)
+	}
+	return nil, nil
+}
+func (m *MockRoleRepo) GetRolesForUsers(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error) {
+	if m.GetRolesForUsersFn != nil {
+		return m.GetRolesForUsersFn(ctx, serverID, userIDs)
 	}
 	return nil, nil
 }
@@ -140,7 +147,8 @@ func (m *MockChannelPermRepo) DeleteAllByChannel(ctx context.Context, channelID 
 // ─── ChannelPermResolver mock ───
 
 type MockChannelPermResolver struct {
-	ResolveChannelPermissionsFn func(ctx context.Context, userID, channelID string) (models.Permission, error)
+	ResolveChannelPermissionsFn     func(ctx context.Context, userID, channelID string) (models.Permission, error)
+	ResolveChannelPermissionsBulkFn func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error)
 }
 
 func (m *MockChannelPermResolver) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
@@ -148,4 +156,23 @@ func (m *MockChannelPermResolver) ResolveChannelPermissions(ctx context.Context,
 		return m.ResolveChannelPermissionsFn(ctx, userID, channelID)
 	}
 	return 0, nil
+}
+
+// ResolveChannelPermissionsBulk falls back to ResolveChannelPermissionsFn when
+// no bulk fn is set, so the many tests that only configure the single-user
+// answer keep describing the same permission world after a call site moves to
+// the bulk resolver.
+func (m *MockChannelPermResolver) ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+	if m.ResolveChannelPermissionsBulkFn != nil {
+		return m.ResolveChannelPermissionsBulkFn(ctx, channelID, userIDs)
+	}
+	out := make(map[string]models.Permission, len(userIDs))
+	for _, userID := range userIDs {
+		perm, err := m.ResolveChannelPermissions(ctx, userID, channelID)
+		if err != nil {
+			return nil, err
+		}
+		out[userID] = perm
+	}
+	return out, nil
 }

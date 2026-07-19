@@ -72,6 +72,12 @@ type RateLimiters struct {
 	// unrate-limited, so an attacker could spam ticket issuance to
 	// exhaust ws_ticket_service's in-memory map and degrade legit logins.
 	WSTicket *ratelimit.LoginRateLimiter
+	// Upload added T3.5: per-user upload rate limit is a separate concern
+	// from the message rate limit. Message limit (5/5s) protects against
+	// text spam bursts; upload limit (20/min) protects storage/bandwidth
+	// from a legitimate user who could otherwise drop hundreds of files
+	// per hour without hitting the burst gate.
+	Upload *ratelimit.MessageRateLimiter
 	// DeviceEnum added 2026-05-29 (P0-BD-02): throttles per-IP enumeration of
 	// public E2EE key material (GET /api/users/{id}/devices and
 	// .../prekey-bundles), which expose identity keys for arbitrary users.
@@ -193,6 +199,13 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// reconnect storms while killing the brute-force / DoS scenario.
 	wsTicketLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
 
+	// Uploads: 20 per minute per user, 30s cooldown once exceeded.
+	// Sizing rationale: a photo drop of 10 files at once is fine
+	// (nowhere near 20/min); a legit chat rarely posts even 5 uploads
+	// per minute. 30s cooldown is short enough to not annoy legit users
+	// but long enough to make a scripted spam cost noticeable.
+	uploadLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
+
 	// DeviceEnum (P0-BD-02): the client fetches public device info / prekey
 	// bundles lazily (one bundle per new conversation), so 30/min/IP sits far
 	// above legitimate use while making bulk harvesting of the device-key
@@ -254,6 +267,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Feedback:   feedbackLimiter,
 		WSTicket:   wsTicketLimiter,
 		DeviceEnum: deviceEnumLimiter,
+		Upload:     uploadLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

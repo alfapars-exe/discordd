@@ -29,12 +29,32 @@ import (
 const (
 	permCacheTTL     = 30 * time.Second
 	permCacheCleanup = 5 * time.Minute
+
+	// broadcastResolveTimeout bounds permission resolution that runs after the
+	// originating request has already committed — WS fan-out happens in
+	// goroutines with no request context to inherit, so without a bound a
+	// wedged connection would pin the goroutine forever. 5s sits just above
+	// the DB busy_timeout (5000ms) so a legitimate lock wait is not cancelled
+	// a moment before it would have succeeded.
+	broadcastResolveTimeout = 5 * time.Second
 )
+
+// BroadcastContext returns a bounded background context for post-commit
+// broadcast fan-out work (permission resolution for the recipient list).
+// Exported so package main's WS callbacks share the same bound as the services.
+// Callers must call the returned cancel func.
+func BroadcastContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), broadcastResolveTimeout)
+}
 
 // ChannelPermResolver is an ISP interface for permission resolution only.
 // Used by MessageService and VoiceService to avoid depending on the full ChannelPermissionService.
 type ChannelPermResolver interface {
 	ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error)
+	// ResolveChannelPermissionsBulk resolves many users at once in a constant
+	// number of queries. Use it for broadcast fan-out; the single-user method
+	// is for request-scoped checks.
+	ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error)
 }
 
 // ChannelPermissionService manages per-channel permission overrides.
@@ -45,6 +65,9 @@ type ChannelPermissionService interface {
 	DeleteOverride(ctx context.Context, serverID, channelID, roleID string) error
 	// ResolveChannelPermissions computes effective permissions for a user in a channel.
 	ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error)
+	// ResolveChannelPermissionsBulk computes effective permissions for many
+	// users in one channel using a constant number of queries.
+	ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error)
 	// BuildVisibilityFilter builds a per-user channel visibility filter for ViewChannel checks.
 	BuildVisibilityFilter(ctx context.Context, userID, serverID string) (*ChannelVisibilityFilter, error)
 
@@ -273,8 +296,34 @@ func (s *channelPermService) BuildVisibilityFilter(ctx context.Context, userID, 
 	}, nil
 }
 
+// permCacheKey is the single source of truth for the permission cache key
+// format. invalidateChannelCache and InvalidateUser match on the two halves of
+// this string, so every code path that writes the cache MUST build its key
+// here — a divergent key would be invisible to invalidation and let a revoked
+// permission survive.
+func permCacheKey(userID, channelID string) string {
+	return userID + ":" + channelID
+}
+
+// effectiveChannelPermission applies the Discord resolution formula shared by
+// the single-user and bulk paths.
+//
+// base is the OR of the user's role permission bits; allow/deny are the OR of
+// the channel overrides attached to those roles. Admin short-circuits to
+// PermAll before any override is considered. Otherwise allow wins over deny
+// for the same bit, because it is OR'd back in after the deny mask is applied.
+//
+// Both paths call this — do not inline the formula anywhere else, or the fast
+// path can silently disagree with the slow one about who may read a channel.
+func effectiveChannelPermission(base, allow, deny models.Permission) models.Permission {
+	if base.Has(models.PermAdmin) {
+		return models.PermAll
+	}
+	return (base &^ deny) | allow
+}
+
 func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
-	cacheKey := userID + ":" + channelID
+	cacheKey := permCacheKey(userID, channelID)
 	if cached, ok := s.permCache.Get(cacheKey); ok {
 		return cached, nil
 	}
@@ -313,18 +362,117 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 	}
 
 	// OR all override allow/deny bits across user's roles.
-	// In the formula (base & ~deny) | allow, allow overrides deny for the same bit.
 	var channelAllow, channelDeny models.Permission
 	for _, o := range overrides {
 		channelAllow |= o.Allow
 		channelDeny |= o.Deny
 	}
 
-	effective := (base & ^channelDeny) | channelAllow
+	effective := effectiveChannelPermission(base, channelAllow, channelDeny)
 
 	s.permCache.Set(cacheKey, effective)
 
 	return effective, nil
+}
+
+// ResolveChannelPermissionsBulk resolves effective permissions for many users
+// in one channel using a bounded number of queries.
+//
+// The single-user path costs 3 queries on a cache miss (channel + roles +
+// overrides), so filtering a broadcast to the online members of a server used
+// to cost 3N round trips — ~300 for a 100-member server every time the 30s
+// cache expired, each one a network hop against remote Turso over a
+// 4-connection pool. This collapses that to at most 3 regardless of N:
+//
+//  1. one channelGetter.GetByID for the server id
+//  2. one roleRepo.GetRolesForUsers for the cache misses
+//  3. one permRepo.GetByChannel, filtered per user's role set in memory
+//
+// Cache keys, TTL and the resolution formula are shared with the single-user
+// path, so existing invalidation hooks cover bulk-written entries unchanged
+// and the two paths cannot disagree. Users holding no roles resolve to 0,
+// matching the single-user behaviour.
+func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+	resolved := make(map[string]models.Permission, len(userIDs))
+	if len(userIDs) == 0 {
+		return resolved, nil
+	}
+
+	// Probe the cache first; only the misses reach the database. Duplicates in
+	// the caller's list (shouldn't happen, but the online-user list is built
+	// from connections) are collapsed here.
+	misses := make([]string, 0, len(userIDs))
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		if _, dup := seen[userID]; dup {
+			continue
+		}
+		seen[userID] = struct{}{}
+
+		if cached, ok := s.permCache.Get(permCacheKey(userID, channelID)); ok {
+			resolved[userID] = cached
+			continue
+		}
+		misses = append(misses, userID)
+	}
+	if len(misses) == 0 {
+		return resolved, nil
+	}
+
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel for bulk permission resolution: %w", err)
+	}
+
+	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, channel.ServerID, misses)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get roles for users: %w", err)
+	}
+
+	// Every override on the channel, fetched once. The single-user path asks
+	// the database to filter by role id; here we fetch the channel's full
+	// (small — one row per role with an override) set and filter in memory,
+	// which is what turns N queries into one.
+	overrides, err := s.permRepo.GetByChannel(ctx, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel overrides for bulk resolution: %w", err)
+	}
+
+	type overrideBits struct{ allow, deny models.Permission }
+	byRole := make(map[string]overrideBits, len(overrides))
+	for _, o := range overrides {
+		bits := byRole[o.RoleID]
+		bits.allow |= o.Allow
+		bits.deny |= o.Deny
+		byRole[o.RoleID] = bits
+	}
+
+	for _, userID := range misses {
+		roles := rolesByUser[userID]
+
+		var base, channelAllow, channelDeny models.Permission
+		for _, role := range roles {
+			base |= role.Permissions
+		}
+		// Admin ignores overrides entirely, so skip the lookup for them —
+		// effectiveChannelPermission would discard the bits anyway.
+		if !base.Has(models.PermAdmin) {
+			for _, role := range roles {
+				bits, ok := byRole[role.ID]
+				if !ok {
+					continue
+				}
+				channelAllow |= bits.allow
+				channelDeny |= bits.deny
+			}
+		}
+
+		effective := effectiveChannelPermission(base, channelAllow, channelDeny)
+		s.permCache.Set(permCacheKey(userID, channelID), effective)
+		resolved[userID] = effective
+	}
+
+	return resolved, nil
 }
 
 // invalidateChannelCache clears all cached permissions for a given channel.

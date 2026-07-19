@@ -5,8 +5,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/config"
@@ -18,10 +20,6 @@ import (
 // processStart records process boot time, surfaced as uptime in /api/health.
 var processStart = time.Now()
 
-// healthHandler reports liveness/readiness. It pings the database (the one hard
-// dependency) within a short timeout: reachable → 200, otherwise 503 so a load
-// balancer / orchestrator can act on it. The legacy {"status":"ok"} shape is
-// preserved and extended with per-check detail and process uptime.
 // writeHealthJSON writes v as a raw JSON object with the given status. The
 // health/ready endpoints use their own schema rather than the pkg.APIResponse
 // envelope so external monitors and the Docker HEALTHCHECK see a stable,
@@ -32,19 +30,165 @@ func writeHealthJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// healthHandler is a SHALLOW liveness check: it returns 200 whenever the HTTP
-// layer is up and intentionally does NOT touch the DB/LiveKit. The Docker
-// HEALTHCHECK (curl -fsS /api/health) gates container restarts off this, so
-// coupling it to a transient remote-DB blip would cause restart flapping.
-// Deep dependency status lives on /api/ready instead.
-func healthHandler() http.HandlerFunc {
+// healthHandler is the liveness endpoint, and it ALWAYS returns 200 whenever
+// the HTTP layer is up. The Docker HEALTHCHECK (curl -fsS /api/health) gates
+// container restarts off this, and a restart cannot heal a remote-Turso
+// outage — coupling the status code to dependency health would only produce
+// restart flapping on a transient blip.
+//
+// The handler itself still does no I/O: it reports the last snapshot taken by
+// the background readiness checker, so `status` degrades to "degraded" (with
+// per-check detail) for monitors that read the body, while the restart gate
+// stays deliberately shallow. /api/ready remains the strict, request-time
+// probe that answers with 503.
+func healthHandler(cache *readinessCache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		status := "ok"
+		snap, polled := cache.load()
+		checks := map[string]any{"readiness_polled": polled}
+		if polled {
+			checks["database"] = snap.DBOK
+			checks["livekit_configured"] = snap.LiveKitOK
+			checks["last_checked_seconds_ago"] = int(time.Since(snap.CheckedAt).Seconds())
+			if !snap.Ready {
+				status = "degraded"
+			}
+		}
 		writeHealthJSON(w, http.StatusOK, map[string]any{
-			"status":         "ok",
+			"status":         status,
 			"service":        "hichat",
 			"uptime_seconds": int(time.Since(processStart).Seconds()),
+			"checks":         checks,
 		})
 	}
+}
+
+// readinessSnapshot is one deep-check result: what was probed, the verdict, and
+// when it was taken (so /api/health can report snapshot age and a reader can
+// tell "healthy" from "stale").
+type readinessSnapshot struct {
+	Ready     bool // overall verdict — currently DBOK, the one hard dependency
+	DBOK      bool
+	LiveKitOK bool
+	CheckedAt time.Time
+}
+
+// readinessCache holds the most recent snapshot produced by
+// startReadinessChecker. Written by exactly one goroutine, read by every
+// /api/health request, so a plain RWMutex is both sufficient and cheaper to
+// reason about than an atomic dance over a multi-field struct.
+//
+// The zero value is valid and reports "not polled yet".
+type readinessCache struct {
+	mu     sync.RWMutex
+	snap   readinessSnapshot
+	polled bool
+}
+
+func (c *readinessCache) store(snap readinessSnapshot) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.snap, c.polled = snap, true
+}
+
+// load returns the cached snapshot and whether a poll has ever completed.
+// Nil-safe so a handler wired without a checker degrades to "not polled"
+// instead of panicking.
+func (c *readinessCache) load() (readinessSnapshot, bool) {
+	if c == nil {
+		return readinessSnapshot{}, false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.snap, c.polled
+}
+
+const (
+	// readinessProbeTimeout bounds a single dependency probe. Matches the
+	// request-time budget in readyHandler.
+	readinessProbeTimeout = 2 * time.Second
+	// readinessCheckInterval — how often the background checker re-probes.
+	// Fast enough that /api/health reflects an outage within a monitor's
+	// scrape window, slow enough to be free.
+	readinessCheckInterval = 30 * time.Second
+)
+
+// probeReadiness runs one deep dependency check. LiveKit is reported but does
+// not gate the verdict: a Space with no LiveKit credentials serves text chat
+// perfectly well, so only the DB is a hard dependency (same rule as readyHandler).
+func probeReadiness(db dbPinger, cfg *config.Config) readinessSnapshot {
+	ctx, cancel := context.WithTimeout(context.Background(), readinessProbeTimeout)
+	defer cancel()
+
+	dbOK := db.PingContext(ctx) == nil
+	return readinessSnapshot{
+		Ready:     dbOK,
+		DBOK:      dbOK,
+		LiveKitOK: cfg.LiveKit.APIKey != "" && cfg.LiveKit.APISecret != "",
+		CheckedAt: time.Now(),
+	}
+}
+
+// startReadinessChecker polls the deep readiness checks on `interval` and
+// publishes each result into cache, where /api/health picks it up without
+// doing any request-time I/O. Mirrors startRuntimeStatsLogger's shape.
+//
+// Only readiness TRANSITIONS are logged: a line every interval would be pure
+// noise in the slog stream, which is the alert source on a single-instance HF
+// Space. Boot is assumed ready, so a healthy start is silent and a start that
+// comes up degraded reports itself once.
+//
+// Returns a stop func that blocks until the goroutine has exited (bounded by
+// readinessProbeTimeout if a probe is in flight), so shutdown never races a
+// half-finished poll.
+func startReadinessChecker(db dbPinger, cfg *config.Config, cache *readinessCache, interval time.Duration, logger *slog.Logger) func() {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		wasReady := true
+		poll := func() {
+			snap := probeReadiness(db, cfg)
+			cache.store(snap)
+			wasReady = logReadinessTransition(logger, wasReady, snap)
+		}
+
+		// Prime the cache before the first tick so /api/health carries real
+		// data within milliseconds of boot rather than one interval later.
+		poll()
+
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				poll()
+			}
+		}
+	}()
+
+	return func() {
+		close(stop)
+		<-done
+	}
+}
+
+// logReadinessTransition emits a line only when the verdict flips, and returns
+// the value to compare the next poll against.
+func logReadinessTransition(logger *slog.Logger, wasReady bool, snap readinessSnapshot) bool {
+	if wasReady == snap.Ready {
+		return wasReady
+	}
+	if snap.Ready {
+		logger.Info("readiness recovered", "database", snap.DBOK, "livekit_configured", snap.LiveKitOK)
+	} else {
+		logger.Warn("readiness degraded", "database", snap.DBOK, "livekit_configured", snap.LiveKitOK)
+	}
+	return snap.Ready
 }
 
 // dbPinger is the subset of *sql.DB the readiness probe needs, declared as an

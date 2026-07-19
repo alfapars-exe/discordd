@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/google/uuid"
 )
@@ -20,6 +21,39 @@ const requestIDKey ctxKey = "request_id"
 func RequestID(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDKey).(string)
 	return id
+}
+
+// maxInboundRequestIDLen bounds a client-supplied X-Request-Id. Comfortably
+// above the 36 characters of the UUIDs we generate, and above the ~32-byte
+// trace ids of the common tracing formats, so a legitimate correlation id
+// still survives; short enough that it can't bloat a response header or a
+// log line.
+const maxInboundRequestIDLen = 128
+
+// isSafeRequestID reports whether a client-supplied request id may be echoed
+// into a response header and a structured log line.
+//
+// The alphabet is deliberately narrow — alphanumerics plus the separators
+// real-world ids actually use. It excludes every control character (CR and LF
+// above all, which would let a caller inject or split log entries and, in a
+// header, risk response splitting on a less careful writer) and every
+// non-ASCII byte, since nothing that correlates requests needs them.
+func isSafeRequestID(id string) bool {
+	if id == "" || len(id) > maxInboundRequestIDLen {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9',
+			c == '-', c == '_', c == '.', c == ':':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // statusRecorder wraps http.ResponseWriter to capture the response status code
@@ -66,9 +100,29 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				return
 			}
 
-			reqID := uuid.NewString()
+			// Honor an inbound X-Request-Id if the client set one (edge
+			// proxies, curl scripts, retry loops that want to correlate
+			// their side) — but only if it looks like an id. The value is
+			// echoed back in a response header AND written into every log
+			// line for the request, so an unvalidated one lets any caller
+			// inflate our response headers and log volume, and smuggle
+			// control characters into the log stream to forge or split
+			// entries. Anything oversized or outside the safe alphabet is
+			// discarded in favour of a generated id rather than truncated:
+			// a mangled id correlates to nothing anyway, and silently
+			// reshaping a caller's value is worse than ignoring it.
+			reqID := r.Header.Get("X-Request-Id")
+			if !isSafeRequestID(reqID) {
+				reqID = uuid.NewString()
+			}
 			w.Header().Set("X-Request-Id", reqID)
+			// Store into BOTH keys during the transition: the middleware
+			// package's private key (for existing middleware.RequestID
+			// callers) and pkg's shared key (so pkg.ErrorCtx can read it
+			// without importing middleware). Once all callers migrate to
+			// pkg.RequestIDFrom, the private key can go away.
 			ctx := context.WithValue(r.Context(), requestIDKey, reqID)
+			ctx = pkg.WithRequestID(ctx, reqID)
 
 			rec := &statusRecorder{ResponseWriter: w}
 			start := time.Now()

@@ -19,8 +19,8 @@ import {
 import { encodePayload } from "../crypto/e2eePayload";
 import {
   encryptFilesForE2EE,
-  handleRateLimitError,
 } from "./shared/messageUtils";
+import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 import {
   createDMSettingsSlice,
   type DMSettingsSlice,
@@ -205,13 +205,15 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
           pushSentPlaintext(channelId, { content, file_keys: fileMetas });
 
-          const res = await dmApi.sendEncryptedDMMessage(
-            channelId,
-            ciphertext,
-            e2eeState.localDeviceId,
-            metadata,
-            encryptedFiles,
-            replyToId
+          const res = await sendWithRetryAndToast(() =>
+            dmApi.sendEncryptedDMMessage(
+              channelId,
+              ciphertext,
+              e2eeState.localDeviceId!,
+              metadata,
+              encryptedFiles,
+              replyToId
+            )
           );
 
           if (res.success && res.data) {
@@ -224,7 +226,6 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
           if (!res.success) {
             discardLastSentPlaintext(channelId);
-            handleRateLimitError(res);
           }
 
           return res.success;
@@ -234,8 +235,9 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
           const errMsg = err instanceof Error ? err.message : "";
           if (errMsg === "RECIPIENT_NO_KEYS") {
-            const fallbackRes = await dmApi.sendDMMessage(channelId, content, files, replyToId);
-            handleRateLimitError(fallbackRes);
+            const fallbackRes = await sendWithRetryAndToast(() =>
+              dmApi.sendDMMessage(channelId, content, files, replyToId)
+            );
             return fallbackRes.success;
           }
           // Event + reason only — never the message content. channelId + the
@@ -251,8 +253,9 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       }
     }
 
-    const res = await dmApi.sendDMMessage(channelId, content, files, replyToId);
-    handleRateLimitError(res);
+    const res = await sendWithRetryAndToast(() =>
+      dmApi.sendDMMessage(channelId, content, files, replyToId)
+    );
     return res.success;
   },
 

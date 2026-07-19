@@ -115,6 +115,7 @@
   "connectionRetrying": "Connecting to server... (attempt {{attempt}}/{{max}})",
   "connectionFailed": "Could not connect to server",
   "connectionLost": "Connection lost",
+  "connectionOffline": "No internet connection — will reconnect automatically",
   "connectionRefresh": "Refresh",
   "userProfile": "User Profile",
   "userActions": "User Actions",

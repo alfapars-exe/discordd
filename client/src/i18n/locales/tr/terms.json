@@ -6,7 +6,7 @@
   "acceptanceDesc": "HiChat!'ye erişerek veya kullanarak bu Kullanım Koşulları'na bağlı olmayı kabul edersiniz. Kabul etmiyorsanız hizmeti kullanmayın. HiChat!'yi kullanmak için en az 13 yaşında (Avrupa Birliği'nde 16) olmanız gerekmektedir.",
 
   "serviceTitle": "Hizmet Tanımı",
-  "serviceDesc": "HiChat!, mesajlaşma, sesli ve görüntülü aramalar ve dosya paylaşımı sunan açık kaynaklı bir iletişim platformudur. Bu koşullar yalnızca argeinfina-discord.hf.space adresinde barındırılan resmi sunucu için geçerlidir. Açık kaynak yazılımın self-hosted kopyaları tamamen kendi operatörlerinin sorumluluğundadır.",
+  "serviceDesc": "HiChat!, mesajlaşma, sesli ve görüntülü aramalar ve dosya paylaşımı sunan açık kaynaklı bir iletişim platformudur. Bu koşullar yalnızca infinayazilim-discord.hf.space adresinde barındırılan resmi sunucu için geçerlidir. Açık kaynak yazılımın self-hosted kopyaları tamamen kendi operatörlerinin sorumluluğundadır.",
 
   "accountTitle": "Hesap Sorumluluğu",
   "accountDesc": "Hesap bilgilerinizin güvenliğinden ve hesabınız altında gerçekleşen tüm etkinliklerden siz sorumlusunuz. Kayıt sırasında doğru bilgi vermeyi ve yetkisiz erişim durumunda bizi derhal bilgilendirmeyi kabul edersiniz.",
@@ -41,7 +41,7 @@
   "copyrightDesc": "HiChat!'deki bir içeriğin telif hakkınızı ihlal ettiğini düşünüyorsanız lütfen ilgili detaylarla GitHub deposunda bir issue açın. İnceleyip gerekli işlemi yapacağız.",
 
   "selfHostTitle": "Self-Hosted Kopyalar",
-  "selfHostDesc": "HiChat! yazılımı açık kaynak lisansı altında self-hosting için kullanılabilir. Bu Kullanım Koşulları yalnızca resmi argeinfina-discord.hf.space sunucusu için geçerlidir. Üçüncü taraflarca işletilen self-hosted kopyalardan, bunların veri işleme, erişilebilirlik veya yasal uyumluluk dahil hiçbir konusunda sorumluluk kabul etmiyoruz.",
+  "selfHostDesc": "HiChat! yazılımı açık kaynak lisansı altında self-hosting için kullanılabilir. Bu Kullanım Koşulları yalnızca resmi infinayazilim-discord.hf.space sunucusu için geçerlidir. Üçüncü taraflarca işletilen self-hosted kopyalardan, bunların veri işleme, erişilebilirlik veya yasal uyumluluk dahil hiçbir konusunda sorumluluk kabul etmiyoruz.",
 
   "voiceTitle": "Ses ve Görüntü",
   "voiceDesc": "Ses ve görüntü özellikleri LiveKit altyapısı aracılığıyla sağlanmaktadır. Gerçek zamanlı iletişimin kullanılabilirliğini veya kalitesini garanti etmiyoruz. Konuşmaların kaydedilmesiyle ilgili yerel yasalara uymak sizin sorumluluğunuzdadır.",

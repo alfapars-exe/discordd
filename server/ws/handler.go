@@ -165,6 +165,25 @@ func wsTokenRevoked(fromTicket bool, claimTokenVersion, userTokenVersion int) bo
 	return claimTokenVersion < userTokenVersion
 }
 
+// wsScopeRejected reports whether a token must be refused at the WebSocket
+// upgrade because it carries a scope claim.
+//
+// Only unscoped access tokens may open a WS. The media-scoped token in the
+// hichat_media cookie exists solely to authenticate GET /api/uploads/*; it is
+// SameSite=None and therefore comparatively easy to leak, and a WS connection
+// is one of the most privileged things on this server — it streams every
+// message, DM, and presence event the user can see. Letting a media token
+// open one would undo the scoping entirely.
+//
+// Unknown scopes are rejected as well: fail closed against a token whose
+// meaning this binary predates.
+//
+// The ticket path never reaches this check — it synthesizes claims with no
+// scope, and Consume already authenticated the user at mint time.
+func wsScopeRejected(scope string) bool {
+	return scope != ""
+}
+
 // HandleConnection upgrades HTTP to WebSocket, validates auth, and starts the client.
 //
 // Preferred path: client POSTs /api/auth/ws-ticket, gets a one-time
@@ -239,6 +258,19 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
+
+		// Scope gate — a media cookie must not become a WebSocket session.
+		// See wsScopeRejected for the rationale.
+		if wsScopeRejected(claims.Scope) {
+			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID,
+				"WS connect blocked: scoped token presented", map[string]string{
+					"scope":       claims.Scope,
+					"remote_addr": r.RemoteAddr,
+				})
+			http.Error(w, "token scope not valid for websocket", http.StatusUnauthorized)
+			return
+		}
+
 		h.hub.logEvent(models.LogLevelInfo, models.LogCategoryAuth, &claims.UserID,
 			"WS connect via legacy ?token= path (opted-in via HICHAT_ALLOW_LEGACY_WS_TOKEN)",
 			map[string]string{

@@ -17,13 +17,13 @@ import type { Message, ReactionGroup } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
   encryptFilesForE2EE,
-  handleRateLimitError,
   createTypingHandler,
   updateMessageInRecord,
   deleteMessageFromRecord,
   updateReactionInRecord,
   updateAuthorInRecord,
 } from "./shared/messageUtils";
+import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 
 type MessageState = {
   /** channelId -> Message[] */
@@ -48,6 +48,12 @@ type MessageState = {
   fetchOlderMessages: (channelId: string, serverId?: string) => Promise<void>;
   /** Clear fetch cache — forces re-fetch + re-decrypt (E2EE restore) */
   invalidateFetchCache: () => void;
+  /**
+   * Drop the fetched-guard only, keeping every loaded message on screen.
+   * For WS reconnects, where the window may have missed echoes but is not
+   * otherwise wrong — see the action body.
+   */
+  invalidateFetchedFlags: () => void;
   sendMessage: (channelId: string, content: string, files?: File[], replyToId?: string, serverId?: string) => Promise<boolean>;
   editMessage: (messageId: string, content: string, serverId?: string) => Promise<boolean>;
   deleteMessage: (messageId: string, serverId?: string) => Promise<boolean>;
@@ -115,6 +121,24 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     inflightFetches.clear();
     fetchedChannels.clear();
     set({ messagesByChannel: {}, hasMoreByChannel: {} });
+  },
+
+  invalidateFetchedFlags: () => {
+    // Reconnect variant of invalidateFetchCache. A dropped socket can lose
+    // the message_create echo for a message we successfully POSTed — and
+    // since channel messages have no optimistic insert, that message is
+    // simply absent, which reads to the user as "the send failed". The
+    // fetchedChannels guard would otherwise keep the channel from ever
+    // being fetched again for the life of the tab.
+    //
+    // Deliberately does NOT touch messagesByChannel: the cached window is
+    // stale, not wrong, and clearing it would blank every open channel on
+    // each reconnect before the refetch lands. The refetch merges over it.
+    for (const ctrl of inflightFetches.values()) {
+      ctrl.abort();
+    }
+    inflightFetches.clear();
+    fetchedChannels.clear();
   },
 
   fetchMessages: async (channelId, explicitServerId?) => {
@@ -252,17 +276,17 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             distribution_id: senderKeyMsg.distributionId,
           });
 
-          const res = await messageApi.sendEncryptedMessage(
-            serverId,
-            channelId,
-            ciphertext,
-            e2eeState.localDeviceId,
-            metadata,
-            encryptedFiles,
-            replyToId
+          const res = await sendWithRetryAndToast(() =>
+            messageApi.sendEncryptedMessage(
+              serverId,
+              channelId,
+              ciphertext,
+              e2eeState.localDeviceId!,
+              metadata,
+              encryptedFiles,
+              replyToId
+            )
           );
-
-          handleRateLimitError(res);
           return res.success;
         } catch (err) {
           console.error("[messageStore] E2EE encryption failed:", err);
@@ -273,8 +297,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     }
 
     // Plaintext fallback
-    const res = await messageApi.sendMessage(serverId, channelId, content, files, replyToId);
-    handleRateLimitError(res);
+    const res = await sendWithRetryAndToast(() =>
+      messageApi.sendMessage(serverId, channelId, content, files, replyToId)
+    );
     return res.success;
   },
 

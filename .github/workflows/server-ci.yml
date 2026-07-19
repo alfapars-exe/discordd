@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11" # >=1.25.11: GO-2026-5037/5039 stdlib fixes
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -73,7 +73,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11" # >=1.25.11: GO-2026-5037/5039 stdlib fixes
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -96,7 +96,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.11" # >=1.25.11: GO-2026-5037/5039 stdlib fixes
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -159,3 +159,89 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
         working-directory: client
+
+  # ─── Playwright E2E: real Go binary + Vite dev client ───
+  # No Docker and no services block: server/Dockerfile documents that with
+  # CGO_ENABLED=0 the go-libsql import is excluded by build constraints and
+  # modernc.org/sqlite (pure Go) drives a local DATABASE_PATH. So this runs
+  # the same binary a developer runs, against a throwaway SQLite file that
+  # e2e/scripts/start-server.mjs creates per run.
+  #
+  # Playwright's `webServer` owns both processes (Go on :9090, Vite on :3030),
+  # so there is nothing to start or tear down here.
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.12" # >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          cache: true
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            e2e/package-lock.json
+
+      # The suite drives the Vite dev server, so the client only needs its
+      # dependencies — no production bundle build.
+      - name: Install client deps
+        run: npm ci
+        working-directory: client
+
+      - name: Install e2e deps
+        run: npm ci
+        working-directory: e2e
+
+      # Chromium only — the suite pins one project, and downloading the other
+      # engines would dominate the job's runtime.
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Playwright test
+        run: npx playwright test
+        working-directory: e2e
+        env:
+          CGO_ENABLED: "0"
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+
+  # ─── Electron main-process tests ───
+  # The resolve-path module is the ONLY barrier between an evil
+  # app://hichat/ URL and local disk (T1.4). node:test suite pins the
+  # traversal defense. Zero new deps — pure node --test.
+  electron-test:
+    name: Electron main-process tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Root package.json owns the electron compile chain. tsc + electron
+      # test scripts don't need the client's transitive tree, but they
+      # do need typescript from the root devDependencies.
+      - name: Install root deps
+        run: npm ci
+
+      - name: electron:test (resolve-path + regression suite)
+        run: npm run electron:test

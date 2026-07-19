@@ -1,6 +1,47 @@
 package ws
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/argeinfina/hichat/models"
+)
+
+// TestWsScopeRejected locks the WebSocket half of the scoped-media-token
+// change. The hichat_media cookie is a media-scoped token; a leaked one must
+// not be usable to open a WebSocket (which would hand the holder the full
+// realtime event stream — messages, DMs, presence). Only unscoped access
+// tokens may authenticate an upgrade.
+func TestWsScopeRejected(t *testing.T) {
+	tests := []struct {
+		name       string
+		scope      string
+		wantReject bool
+	}{
+		{
+			name:       "unscoped access token is the only accepted kind",
+			scope:      "",
+			wantReject: false,
+		},
+		{
+			name:       "media-scoped token cannot open a WebSocket",
+			scope:      models.TokenScopeMedia,
+			wantReject: true,
+		},
+		{
+			name:       "any future scope is rejected until explicitly allowed",
+			scope:      "some-future-scope",
+			wantReject: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := wsScopeRejected(tt.scope); got != tt.wantReject {
+				t.Errorf("wsScopeRejected(%q) = %v, want %v", tt.scope, got, tt.wantReject)
+			}
+		})
+	}
+}
 
 // TestWsTokenRevoked locks the fix for the ticket-path token_version lockout.
 //

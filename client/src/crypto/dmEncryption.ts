@@ -52,6 +52,37 @@ const preSendQueue = new Map<string, E2EEPayload[]>();
 /** In-memory cache for edit operations. messageId is known, so a direct Map suffices. */
 const editCache = new Map<string, E2EEPayload>();
 
+// ──────────────────────────────────
+// Self-Fanout Reset Lock
+// ──────────────────────────────────
+
+/**
+ * Serializes the self-fanout reset block (audit P0-FE-03).
+ *
+ * The "self_fanout_reset" flag drives a read-check-act sequence: read the
+ * flag → delete every self-device session → re-handshake → clear the flag.
+ * Two overlapping sends would both observe the armed flag, so the second
+ * would delete the session the first just re-established — yielding an
+ * envelope the sibling device cannot decrypt and burning a second one-time
+ * prekey. Serializing makes the whole sequence atomic w.r.t. other sends.
+ *
+ * Deliberately NOT covered (each would need a different mechanism):
+ * - Cross-tab races. The flag lives in IndexedDB, shared by every tab; this
+ *   lock is per-JS-context. Closing that needs the Web Locks API.
+ * - Recipient-session ratchet races. Concurrent sends to the same recipient
+ *   device still advance the Double Ratchet in an arbitrary order; that
+ *   needs per-conversation serialization, which would also cost the
+ *   parallelism of encrypting for many recipient devices at once.
+ */
+let selfFanoutLock: Promise<unknown> = Promise.resolve();
+
+function withSelfFanoutLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = selfFanoutLock.catch(() => {}).then(fn);
+  // Chain on the swallowed form: one failed send must not poison the queue.
+  selfFanoutLock = run.catch(() => {});
+  return run;
+}
+
 /** Push plaintext to FIFO queue before API call, so WS echo can find it. */
 export function pushSentPlaintext(dmChannelId: string, payload: E2EEPayload): void {
   const queue = preSendQueue.get(dmChannelId);
@@ -185,32 +216,44 @@ export async function encryptDMMessage(
   // The recovery-aware flag is tracked in metadata under "self_fanout_reset".
   // After one successful re-handshake the flag clears and subsequent sends
   // re-use the Double Ratchet session.
-  const needsReset = (await keyStorage.getMetadata<boolean>("self_fanout_reset")) === true;
-  const selfBundles = await e2eeApi.fetchPreKeyBundles(currentUserId);
-  if (selfBundles.success && selfBundles.data) {
-    for (const bundle of selfBundles.data) {
-      // Skip own device
-      if (bundle.device_id === localDeviceId) continue;
+  //
+  // The flag read, the per-device delete + re-handshake, and the flag clear
+  // form one read-check-act sequence, so they run under selfFanoutLock —
+  // see its doc comment for what that does and does not protect. Only this
+  // block is serialized; encrypting for recipient devices above stays
+  // parallel-friendly.
+  const selfEnvelopes = await withSelfFanoutLock(async () => {
+    const produced: EncryptedEnvelope[] = [];
+    const needsReset =
+      (await keyStorage.getMetadata<boolean>("self_fanout_reset")) === true;
+    const selfBundles = await e2eeApi.fetchPreKeyBundles(currentUserId);
+    if (selfBundles.success && selfBundles.data) {
+      for (const bundle of selfBundles.data) {
+        // Skip own device
+        if (bundle.device_id === localDeviceId) continue;
 
-      if (needsReset) {
-        await keyStorage.deleteSession(currentUserId, bundle.device_id);
+        if (needsReset) {
+          await keyStorage.deleteSession(currentUserId, bundle.device_id);
+        }
+
+        const envelope = await encryptForDevice(
+          currentUserId,
+          bundle,
+          localDeviceId,
+          plaintext
+        );
+        produced.push(envelope);
       }
-
-      const envelope = await encryptForDevice(
-        currentUserId,
-        bundle,
-        localDeviceId,
-        plaintext
-      );
-      envelopes.push(envelope);
+      if (needsReset) {
+        // Clear the flag — we've done the expensive handshake for every
+        // self-device. Subsequent sends use the established Double Ratchet
+        // session, getting forward secrecy without per-message cost.
+        await keyStorage.setMetadata("self_fanout_reset", false);
+      }
     }
-    if (needsReset) {
-      // Clear the flag — we've done the expensive handshake for every
-      // self-device. Subsequent sends use the established Double Ratchet
-      // session, getting forward secrecy without per-message cost.
-      await keyStorage.setMetadata("self_fanout_reset", false);
-    }
-  }
+    return produced;
+  });
+  envelopes.push(...selfEnvelopes);
 
   return envelopes;
 }

@@ -70,6 +70,28 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			return
 		}
 
+		// Scope gate — deny by default.
+		//
+		// Only unscoped tokens (full API access tokens) may authenticate an
+		// API route. The one scoped token the server issues today is the
+		// media token in the hichat_media cookie, which authenticates
+		// GET /api/uploads/* and nothing else.
+		//
+		// This is the point of the scoped-token change. Because that cookie
+		// is SameSite=None and rides along on cross-site subresource loads,
+		// it is materially easier to leak than a header-borne token; before
+		// scoping, its value was the access token itself, so a leak handed
+		// the holder the entire API. Rejecting every non-empty scope here
+		// means such a leak reaches attachments only.
+		//
+		// Rejecting UNKNOWN scopes (not just "media") is deliberate: a token
+		// minted by a future, more privileged-looking scope must fail closed
+		// against an older binary that has no idea what it means.
+		if claims.Scope != "" {
+			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "token scope not valid for this endpoint")
+			return
+		}
+
 		// Cache hit: skip the users-row read entirely. Cache miss: read,
 		// scrub the password hash, store the scrubbed copy. Storing the
 		// scrubbed pointer means subsequent hits can't leak the hash

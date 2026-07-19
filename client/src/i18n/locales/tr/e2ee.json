@@ -21,6 +21,8 @@
   "recoveryPasswordSaved": "Kurtarma parolası yedeği kaydedildi",
   "recoveryPasswordSaveError": "Kurtarma parolası kaydedilemedi",
   "recoveryPasswordNotSet": "Ayarlanmadı",
+  "e2eeKeyMissing": "Şifreleme anahtarı eksik — çözülemez",
+
   "setRecoveryPassword": "Kurtarma Parolası Belirle",
   "changeRecoveryPassword": "Kurtarma Parolasını Değiştir",
 

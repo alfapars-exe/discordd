@@ -18,7 +18,10 @@
  * new module is needed instead.
  */
 
-import { app, BrowserWindow, session } from "electron";
+import { app, BrowserWindow, net, protocol, session } from "electron";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { APP_HOST, APP_SCHEME, resolveAppPath } from "./resolve-path";
 import { checkForUpdateBeforeLaunch, setupAutoUpdater } from "./auto-updater";
 import { shutdownCapture } from "./audio-capture";
 import { setupCrashReporter } from "./crash-reporter";
@@ -87,6 +90,34 @@ if (process.platform === "win32") {
   app.setAppUserModelId("net.hichat.app");
 }
 
+// ─── Custom app:// scheme registration ───
+// Must run BEFORE app.whenReady() so the scheme is available when the
+// window loads its first URL. The privileges flip the scheme from an
+// opaque blob (default for custom schemes) to a real origin:
+//   - standard: registered as a "special" scheme so it participates in
+//     origin comparisons, cookie storage, and same-origin fetch. Without
+//     this, HttpOnly refresh cookies set by the server are silently
+//     dropped because file:// is a null origin.
+//   - secure: satisfies "secure context" for the WebCrypto API, service
+//     workers, and geolocation without HTTPS. Required by the E2EE crypto
+//     code that assumes a secure origin.
+//   - supportFetchAPI: renderer can fetch() app:// URLs (Vite modules use
+//     this for HMR-style loading of split chunks).
+//   - corsEnabled: apps:// origin can be listed in CORS allowlists —
+//     the server-side change for T1.5 pairs with this.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
+
 // ─── Single-instance lock ───
 // Second launch of HiChat! brings the existing window forward instead of
 // starting a duplicate process — required for tray + global PTT to work
@@ -120,6 +151,7 @@ if (app.requestSingleInstanceLock()) {
 function setupPermissions(): void {
   const allowedPermissions = ["media", "display-capture", "mediaKeySystem", "fullscreen"];
   const allowedOriginPrefixes = [
+    "app://hichat",
     "file://",
     "http://localhost:3030",
     "https://hichat.app",
@@ -170,18 +202,52 @@ function setupUserAgent(): void {
  * talks to arbitrary user-configured LiveKit endpoints (self-host) plus
  * the central mqvi.net API.
  */
+/**
+ * Serves app://hichat/<path> from the packaged client/dist directory.
+ *
+ * The renderer used to load via file://, which Chromium treats as a null
+ * origin: HttpOnly refresh cookies set by the server were silently dropped
+ * because file:// isn't a real origin. Switching to a custom scheme with
+ * `standard: true` gives the renderer a real origin ("app://hichat") that
+ * participates in cookie storage AND is listed in the server CORS
+ * allowlist (T1.5).
+ *
+ * Path resolution lives in resolve-path.ts (pure function, unit-tested
+ * for traversal defense) so this handler just does the fs read.
+ */
+function setupAppProtocol(): void {
+  const distRoot = path.join(__dirname, "..", "client", "dist");
+
+  protocol.handle(APP_SCHEME.replace(/:$/, ""), (request) => {
+    const resolved = resolveAppPath(request.url, distRoot);
+    if (!resolved.ok) {
+      console.warn(`[app-protocol] rejected ${request.url}: ${resolved.reason}`);
+      return new Response("Not Found", { status: 404 });
+    }
+    // net.fetch understands file:// URLs and streams — avoids reading
+    // the whole asset into memory. pathToFileURL handles Windows path
+    // separators + drive letters correctly.
+    return net.fetch(pathToFileURL(resolved.absolutePath).toString());
+  });
+
+  console.warn(`[app-protocol] serving ${APP_SCHEME}//${APP_HOST}/ from ${distRoot}`);
+}
+
 function setupCSP(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // `app:` is the custom scheme registered in registerSchemesAsPrivileged.
+    // `file:` stays alongside for dev and any lingering absolute-file asset
+    // references; both are same-machine only.
     const csp =
-      "default-src 'self' file:; " +
+      "default-src 'self' app: file:; " +
       // blob: — the deepfilter engine loads its AudioWorklet module from a
       // URL.createObjectURL(blob); Chromium gates worklet loads on script-src.
-      "script-src 'self' 'wasm-unsafe-eval' file: blob:; " +
-      "style-src 'self' 'unsafe-inline' file:; " +
-      "img-src 'self' data: blob: file: https:; " +
-      "font-src 'self' data: file:; " +
-      "media-src 'self' blob: file:; " +
-      "connect-src 'self' file: ws: wss: https:; " +
+      "script-src 'self' 'wasm-unsafe-eval' app: file: blob:; " +
+      "style-src 'self' 'unsafe-inline' app: file:; " +
+      "img-src 'self' data: blob: app: file: https:; " +
+      "font-src 'self' data: app: file:; " +
+      "media-src 'self' blob: app: file:; " +
+      "connect-src 'self' app: file: ws: wss: https:; " +
       "worker-src 'self' blob:; " +
       "frame-ancestors 'none'; " +
       "frame-src 'none'; " +
@@ -220,6 +286,7 @@ app.whenReady().then(async () => {
   // the picker is installed, so the next share skips the crashing path.
   promoteLeftoverBreadcrumb();
 
+  setupAppProtocol();
   setupUserAgent();
   setupPermissions();
   setupCSP();
@@ -258,6 +325,22 @@ let shutdownStarted = false;
 app.on("before-quit", (e) => {
   setQuitting(true);
   shutdownPTT();
+
+  // Force the cookie store to disk before we die.
+  //
+  // Chromium persists cookies LAZILY — a Set-Cookie is applied to the
+  // in-memory jar immediately but flushed to the profile on a timer. A
+  // refresh-token rotation followed by a hard exit (user quits right after
+  // launch, OS kills us during shutdown, crash) can therefore lose the NEW
+  // refresh token while the OLD one has already been invalidated
+  // server-side by the rotation. The user reopens the app and is logged
+  // out — indistinguishable, from their side, from "the app forgot me".
+  //
+  // Fire-and-forget: this must never block or reject the quit path, so the
+  // rejection is swallowed. Worst case we're back to the lazy flush.
+  session.defaultSession.cookies.flushStore().catch((err) => {
+    console.warn("[shutdown] cookie flush failed:", err);
+  });
 
   if (shutdownStarted) return;
   const captureShutdown = shutdownCapture();

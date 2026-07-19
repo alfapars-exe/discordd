@@ -47,7 +47,7 @@ func TestMaintenanceSweeper_SweepsImmediatelyAndStops(t *testing.T) {
 		},
 	}
 
-	stop := startMaintenanceSweeper(sessions, previews, time.Hour)
+	stop := startMaintenanceSweeper(sessions, previews, nil, time.Hour)
 	defer stop()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -81,7 +81,7 @@ func TestMaintenanceSweeper_ErrorsAreNonFatal(t *testing.T) {
 	}
 
 	// Must not panic; the sweep keeps going on the next tick.
-	stop := startMaintenanceSweeper(sessions, previews, 20*time.Millisecond)
+	stop := startMaintenanceSweeper(sessions, previews, nil, 20*time.Millisecond)
 	defer stop()
 
 	deadline := time.Now().Add(2 * time.Second)

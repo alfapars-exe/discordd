@@ -3,9 +3,7 @@
  * to eliminate duplication in message CRUD, typing, and WS handlers.
  */
 
-import i18n from "../../i18n";
 import { encryptFile } from "../../crypto/fileEncryption";
-import { useToastStore } from "../toastStore";
 import type { EncryptedFileMeta } from "../../crypto/fileEncryption";
 import type { ReactionGroup } from "../../types";
 
@@ -37,25 +35,6 @@ export async function encryptFilesForE2EE(
   }
 
   return { files: encrypted, metas };
-}
-
-// ─── Rate Limit Toast ───
-
-/**
- * Shows a toast warning if the API response indicates rate limiting.
- * Returns true if rate limited.
- */
-export function handleRateLimitError(res: {
-  success: boolean;
-  error?: string;
-}): boolean {
-  if (!res.success && res.error?.includes("too many")) {
-    useToastStore
-      .getState()
-      .addToast("warning", i18n.t("chat:tooManyMessages"));
-    return true;
-  }
-  return false;
 }
 
 // ─── Typing Indicator ───

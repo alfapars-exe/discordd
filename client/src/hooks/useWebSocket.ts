@@ -34,6 +34,24 @@ import { handleSystemEvent } from "./ws/systemEventHandlers";
 import type { WSHandlerContext } from "./ws/types";
 
 /**
+ * ConnectionStatus — Public status enum for the WS connection.
+ *
+ *   - "connecting"   — handshake in flight, initial or after reconnect
+ *   - "connected"    — socket open + heartbeat healthy
+ *   - "disconnected" — server-side dropout, reconnect scheduled
+ *   - "offline"      — client-side network loss (navigator.onLine=false),
+ *                      reconnect paused until "online" event fires
+ *
+ * Exported so consumers can render distinct UX per state without
+ * duplicating the literal union.
+ */
+export type ConnectionStatus =
+  | "connected"
+  | "connecting"
+  | "disconnected"
+  | "offline";
+
+/**
  * Exponential backoff reconnect schedule (ms).
  * Fast first attempt catches brief network blips before the server-side
  * orphan grace period (35s) expires. Later attempts back off to avoid
@@ -42,8 +60,12 @@ import type { WSHandlerContext } from "./ws/types";
 const RECONNECT_BASE_DELAY = 1_500;
 const RECONNECT_MAX_DELAY = 20_000;
 
-/** Max reconnect attempts before showing "disconnected" */
-const MAX_RECONNECT_ATTEMPTS = 7;
+/**
+ * Max reconnect attempts before showing "disconnected".
+ * Exported so ConnectionBanner renders the same N in its retry counter —
+ * the two drifted once (5 vs 7) when this was duplicated there.
+ */
+export const MAX_RECONNECT_ATTEMPTS = 7;
 
 /** Typing throttle (ms) — prevents flooding same channel */
 const TYPING_THROTTLE = 3_000;
@@ -63,9 +85,13 @@ export function useWebSocket() {
    */
   const activeConnectionIdRef = useRef<number>(0);
 
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connected" | "connecting" | "disconnected"
-  >("connecting");
+  // "offline" is distinct from "disconnected" — offline means the client
+  // itself lost the network (navigator went offline / OS reports no
+  // connectivity), so the reconnect loop should pause instead of burning
+  // exponential-backoff attempts against a socket that CAN'T reach a
+  // reachable server. UI can differentiate too: "You're offline" vs
+  // "Reconnecting…" are different messages a user acts on differently.
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
 
   const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
 
@@ -503,6 +529,35 @@ export function useWebSocket() {
 
     window.addEventListener(APP_RESUME_EVENT, onAppResume);
 
+    // Client-side network loss (navigator.onLine flipped false): close the
+    // socket eagerly so we don't sit here waiting on the 90-second heartbeat
+    // to notice. Flag connectionStatus so the UI can render a specific
+    // "You're offline" state instead of the generic reconnecting spinner.
+    function onOffline() {
+      if (activeConnectionIdRef.current !== myId) return;
+      cleanupTimers();
+      setConnectionStatus("offline");
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    }
+
+    // Network came back — reset backoff and reconnect immediately. Skipping
+    // the delay is intentional: the browser only flips "online" after the
+    // OS reports connectivity, so waiting further would be sluggish for no
+    // reason. If the WS host is still unreachable, the normal onerror path
+    // in doConnect resumes the backoff sequence.
+    function onOnline() {
+      if (activeConnectionIdRef.current !== myId) return;
+      reconnectAttemptRef.current = 0;
+      setReconnectAttempt(0);
+      doConnect();
+    }
+
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+
     return () => {
       // Increment from the snapshotted myId so the lint rule
       // react-hooks/exhaustive-deps doesn't flag a cleanup-time
@@ -513,6 +568,8 @@ export function useWebSocket() {
       activeConnectionIdRef.current = myId + 1;
       cleanupTimers();
       window.removeEventListener(APP_RESUME_EVENT, onAppResume);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
 
       if (wsRef.current) {
         wsRef.current.close();

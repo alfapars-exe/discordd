@@ -9,6 +9,8 @@ import { useMicTest } from "../../hooks/useMicTest";
 import VolumeSlider from "./VolumeSlider";
 import PTTKeySection from "./voice/PTTKeySection";
 import NoiseReductionSection from "./voice/NoiseReductionSection";
+import MicProfileSection from "./voice/MicProfileSection";
+import CameraSection from "./voice/CameraSection";
 
 function VoiceSettings() {
   const { t } = useTranslation("settings");
@@ -171,6 +173,12 @@ function VoiceSettings() {
 
       {/* ─── Noise Reduction ─── */}
       <NoiseReductionSection />
+
+      {/* ─── Microphone Profile (Konuşma / Müzik) ─── */}
+      <MicProfileSection />
+
+      {/* ─── Camera quality ─── */}
+      <CameraSection />
 
       {/* ─── Join/Leave Sounds ─── */}
       <div className="vs-section">

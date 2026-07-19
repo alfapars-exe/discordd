@@ -77,7 +77,7 @@ export function canBrowserScreenShare(): boolean {
  * can never drift between "what resolveServerUrl falls back to" and
  * "what the Settings → Connections list shows as the Default row."
  */
-export const DEFAULT_SERVER_URL = "https://argeinfina-discord.hf.space";
+export const DEFAULT_SERVER_URL = "https://infinayazilim-discord.hf.space";
 
 /**
  * Resolves the server base URL based on runtime environment.
@@ -111,7 +111,7 @@ export const API_BASE_URL = `${SERVER_URL}/api`;
 
 /**
  * Generates a public invite URL for sharing outside the app.
- * Result: "https://argeinfina-discord.hf.space/invite/{code}" (or web origin)
+ * Result: "https://infinayazilim-discord.hf.space/invite/{code}" (or web origin)
  */
 export function getInviteUrl(code: string): string {
   const base = SERVER_URL || window.location.origin;

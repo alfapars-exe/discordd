@@ -12,6 +12,7 @@
   "edited": "(edited)",
   "uploadFile": "Upload File",
   "fileTooLarge": "File is too large (max {{max}}MB)",
+  "fileTypeNotAllowed": "File type not allowed",
   "noChannel": "Select a channel",
   "editCancel": "cancel",
   "editSave": "save",
@@ -57,6 +58,7 @@
   "dropFilesHere": "Drop files to upload",
   "longPressForActions": "Long press for message actions",
   "tooManyMessages": "You're sending messages too fast. Please wait a moment.",
+  "sendFailed": "Message couldn't be sent. Please try again.",
   "messageTooLong": "Message must be at most {{max}} characters",
 
   "gif": "GIF",

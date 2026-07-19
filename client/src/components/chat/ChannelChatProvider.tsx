@@ -63,13 +63,22 @@ function ChannelChatProvider({
   const membersByServer = useMemberStore((s) => s.membersByServer);
   const members = targetServerId ? (membersByServer[targetServerId] ?? EMPTY_MEMBERS) : EMPTY_MEMBERS;
   const currentUser = useAuthStore((s) => s.user);
-  const { hasChannelPerm } = useChannelPermissions(channelId);
+  const { hasChannelPerm, permsResolved } = useChannelPermissions(channelId);
 
   // ─── File drop ref — forwards drag-drop files from ChatArea to MessageInput ───
   const addFilesRef = useRef<((files: File[]) => void) | null>(null);
 
   // ─── Permission calculation ───
-  const canSend = hasChannelPerm(Permissions.SendMessages);
+  // Optimistic while permissions are still unknown (member list in flight on
+  // a channel/server switch or a cold start). A pessimistic default here is
+  // what made the first Enter after a switch a no-op: MessageInput returns
+  // early on !canSend, so the keystroke vanished with no feedback.
+  //
+  // Allowing the attempt is safe — the server enforces SendMessages and
+  // answers 403, and the existing failure path toasts and preserves the
+  // draft. Worst case the user sees an error; best case (the common one)
+  // the message just sends.
+  const canSend = !permsResolved || hasChannelPerm(Permissions.SendMessages);
   const currentMember = members.find((m) => m.id === currentUser?.id);
   const canManageMessages = currentMember
     ? hasPermission(currentMember.effective_permissions, Permissions.ManageMessages)

@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -113,6 +115,21 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	return nil
 }
 
+const (
+	// trackStallTimeout — how long the pipeline may produce no Ogg page before
+	// the watchdog declares the track wedged. Generous relative to the ~20 ms
+	// page cadence of a healthy stream, so buffering hiccups never trip it.
+	trackStallTimeout = 45 * time.Second
+	// trackStallPollInterval — how often the watchdog compares last-progress
+	// against the timeout.
+	trackStallPollInterval = 5 * time.Second
+	// maxConsecutiveTrackFailures — back-to-back playTrack failures tolerated
+	// before the bot gives up on the channel. A missing/broken yt-dlp fails
+	// instantly on every track, so an uncapped "continue to the next one"
+	// burns the entire queue in a tight loop.
+	maxConsecutiveTrackFailures = 3
+)
+
 // playLoop — the per-bot driver goroutine. Dequeues tracks one at a time and
 // drives the yt-dlp → ffmpeg → Opus → LiveKit pipeline for each. When the
 // queue empties, schedules an idle-leave timer; another Enqueue arriving
@@ -120,9 +137,18 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 //
 // Exits when:
 //   - bot.stopFlag is set (Stop() was called) — bot already disconnected
-//   - context cancelled
-//   - playTrack returns an unrecoverable error AND queue is empty
+//   - the queue drains (idle-leave timer armed)
+//   - maxConsecutiveTrackFailures tracks fail back to back
 func (s *musicBotService) playLoop(bot *botInstance) {
+	// Seam for tests (mirrors BackupService.runCmd): production runs the real
+	// subprocess pipeline, tests substitute a stub so the loop's control flow
+	// can be exercised without yt-dlp/ffmpeg.
+	play := s.playTrackFn
+	if play == nil {
+		play = s.playTrack
+	}
+
+	consecutiveFailures := 0
 	for {
 		bot.mu.Lock()
 		if bot.stopFlag {
@@ -147,11 +173,27 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 
 		s.broadcastState(bot)
 
-		if err := s.playTrack(bot, &next); err != nil {
-			s.logErr(models.LogCategoryVoice, bot.channelID, "music playback failed", map[string]string{
-				"video_id": next.VideoID, "error": err.Error(),
-			})
-			// Continue to next track regardless of single-track error.
+		err := play(bot, &next)
+		if err == nil {
+			// Only CONSECUTIVE failures count — one good track means the
+			// pipeline works and the earlier errors were per-video duds.
+			consecutiveFailures = 0
+			continue
+		}
+
+		consecutiveFailures++
+		s.logErr(models.LogCategoryVoice, bot.channelID, "music playback failed", map[string]string{
+			"video_id":             next.VideoID,
+			"error":                err.Error(),
+			"consecutive_failures": strconv.Itoa(consecutiveFailures),
+		})
+		if consecutiveFailures >= maxConsecutiveTrackFailures {
+			// Something systemic is broken (missing binary, dead network,
+			// wedged pipeline). Stop rather than spinning the queue, and tell
+			// the users why before the panel disappears.
+			s.broadcastPlaybackError(bot, err, consecutiveFailures)
+			_ = s.Stop(bot.channelID)
+			return
 		}
 	}
 }
@@ -241,27 +283,122 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		_ = ff.Wait()
 	}()
 
-	if err := pumpOggToTrack(ffOut, bot.audioTrack); err != nil {
-		bot.mu.Lock()
-		skipped := bot.skipFlag
-		stopped := bot.stopFlag
-		bot.mu.Unlock()
-		if skipped || stopped {
-			return nil
-		}
-		return err
+	// Stall watchdog. Without it, a hung yt-dlp that neither writes nor exits
+	// leaves pumpOggToTrack blocked on a read forever: the deferred Wait()s
+	// above never run, so both subprocesses and this goroutine leak until
+	// someone calls Skip/Stop. Cancelling the track context makes
+	// CommandContext kill the pair, which returns the read and runs the defers.
+	stallTimeout, stallPoll := s.stallThresholds()
+	watchdog := newStallWatchdog(ctx, cancel, stallTimeout, stallPoll, bot.channelID)
+	defer watchdog.close()
+
+	pumpErr := pumpOggToTrack(ffOut, bot.audioTrack, watchdog.progress)
+
+	bot.mu.Lock()
+	skipped := bot.skipFlag
+	stopped := bot.stopFlag
+	bot.mu.Unlock()
+	if skipped || stopped {
+		// Killed on purpose — not a playback failure.
+		return nil
 	}
-	return nil
+	if watchdog.stalled() {
+		// Killing the subprocess usually surfaces as a clean EOF, so without
+		// this the caller would count a wedged track as a successful one and
+		// the consecutive-failure cap would never trip.
+		return fmt.Errorf("playback stalled: no audio progress for %s", stallTimeout)
+	}
+	return pumpErr
+}
+
+// stallThresholds returns the live watchdog timings — the consts above unless
+// a test shrank them on the service instance.
+func (s *musicBotService) stallThresholds() (timeout, poll time.Duration) {
+	timeout, poll = trackStallTimeout, trackStallPollInterval
+	if s.stallTimeoutOverride > 0 {
+		timeout = s.stallTimeoutOverride
+	}
+	if s.stallPollOverride > 0 {
+		poll = s.stallPollOverride
+	}
+	return timeout, poll
+}
+
+// stallWatchdog cancels a track's context when the pipeline stops making
+// progress. Progress is a unix-nano timestamp bumped per Ogg page, so the
+// check is a cheap atomic load off the audio path.
+type stallWatchdog struct {
+	last  atomic.Int64
+	fired atomic.Bool
+	stop  chan struct{}
+	done  chan struct{}
+}
+
+// newStallWatchdog arms the watchdog and starts its ticker goroutine. Progress
+// is seeded at arm time, so a pipeline that never emits a single page — the
+// common yt-dlp wedge — is caught by the same timeout.
+func newStallWatchdog(ctx context.Context, cancel context.CancelFunc, timeout, poll time.Duration, channelID string) *stallWatchdog {
+	w := &stallWatchdog{stop: make(chan struct{}), done: make(chan struct{})}
+	w.last.Store(time.Now().UnixNano())
+
+	go func() {
+		defer close(w.done)
+		ticker := time.NewTicker(poll)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-w.stop:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if time.Since(time.Unix(0, w.last.Load())) < timeout {
+					continue
+				}
+				// Order matters: mark first, then cancel. playTrack reads
+				// stalled() only after the cancel has unblocked its read.
+				w.fired.Store(true)
+				log.Printf("[music] stall watchdog: no audio progress for %s, killing pipeline channel=%s",
+					timeout, channelID)
+				cancel()
+				return
+			}
+		}
+	}()
+	return w
+}
+
+// progress records that the pipeline is still producing audio.
+func (w *stallWatchdog) progress() { w.last.Store(time.Now().UnixNano()) }
+
+// stalled reports whether the watchdog cancelled the track.
+func (w *stallWatchdog) stalled() bool { return w.fired.Load() }
+
+// close halts the ticker and waits for the goroutine to exit.
+func (w *stallWatchdog) close() {
+	close(w.stop)
+	<-w.done
+}
+
+// sampleWriter is the subset of *lksdk.LocalSampleTrack that pumpOggToTrack
+// needs, declared as an interface so the Ogg loop is unit-testable without a
+// LiveKit connection.
+type sampleWriter interface {
+	WriteSample(sample media.Sample, opts *lksdk.SampleWriteOptions) error
 }
 
 // pumpOggToTrack — read Ogg/Opus pages off ffmpeg's stdout, write each as a
 // 20 ms Opus sample to the LiveKit track. Returns nil on clean EOF, error
 // on parse / write failure.
 //
+// onPage (nil-safe) fires once per successfully parsed page; playTrack wires
+// it to the stall watchdog so a wedged pipeline can be detected from outside
+// this blocking loop.
+//
 // Assumes ffmpeg's Ogg muxer is configured (`-page_duration 20000`) so each
 // Ogg page contains exactly one Opus packet. Pion's oggreader returns the
 // page payload — for single-packet pages this is one Opus frame.
-func pumpOggToTrack(reader io.Reader, track *lksdk.LocalSampleTrack) error {
+func pumpOggToTrack(reader io.Reader, track sampleWriter, onPage func()) error {
 	ogg, _, err := oggreader.NewWith(reader)
 	if err != nil {
 		log.Printf("[music] pumpOggToTrack: oggreader init failed err=%v", err)
@@ -278,6 +415,10 @@ func pumpOggToTrack(reader io.Reader, track *lksdk.LocalSampleTrack) error {
 		if perr != nil {
 			log.Printf("[music] pumpOggToTrack: ogg parse err after %d sample(s): %v", samplesWritten, perr)
 			return fmt.Errorf("ogg parse: %w", perr)
+		}
+		// A parsed page is proof the pipeline is alive, even an empty one.
+		if onPage != nil {
+			onPage()
 		}
 		if len(page) == 0 {
 			continue

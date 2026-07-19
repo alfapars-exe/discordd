@@ -53,7 +53,7 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	mimeForRecord := claimedType
 	body := io.Reader(file)
 	if !isEncrypted {
-		realMIME, replay, err := pkg.SniffAndValidate(file, claimedType, allowedMimeTypes)
+		realMIME, replay, err := pkg.SniffOrExtension(file, header.Filename, claimedType, allowedMimeTypes)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
 		}
@@ -76,11 +76,18 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
-	defer destFile.Close()
 
-	if _, err := io.Copy(destFile, body); err != nil {
+	// Explicit close before any error path — os.Remove fails on Windows
+	// while the handle is open, leaving orphans behind.
+	_, copyErr := io.Copy(destFile, body)
+	closeErr := destFile.Close()
+	if copyErr != nil {
 		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
+		return nil, fmt.Errorf("failed to save file: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(destPath)
+		return nil, fmt.Errorf("failed to finalize file: %w", closeErr)
 	}
 
 	fileSize := header.Size

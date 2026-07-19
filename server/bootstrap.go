@@ -58,6 +58,15 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	corsOrigins := []string{
 		"capacitor://localhost", // iOS Capacitor WKWebView
 		"ionic://localhost",     // iOS Capacitor (legacy scheme)
+		// Electron desktop shell — the renderer runs under the custom
+		// app:// scheme registered in electron/main.ts. Origin is exactly
+		// "app://hichat" (host=hichat, no port). Without this entry the
+		// desktop app can't register or log in — the CORS preflight is
+		// rejected, and the HttpOnly refresh cookie is never received.
+		// This is a first-party origin baked into a signed installer; it
+		// can't be spoofed by web content and doesn't rely on the
+		// CORS_ORIGINS env var (which the ops team may forget to set).
+		"app://hichat",
 	}
 
 	// Android Capacitor's WebView uses http(s)://localhost as its page origin
@@ -102,9 +111,16 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 	}
 	log.Printf("[cors] allowed origins: %v", corsOrigins)
 	return cors.New(cors.Options{
-		AllowedOrigins:   corsOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowedOrigins: corsOrigins,
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		// X-HiChat-Client identifies the shell the request came from
+		// ("electron" / "capacitor" / "web"). It drives two things in
+		// handlers/auth.go: the SameSite attribute of the refresh cookie,
+		// and the CSRF gate that decides whether the cookie is honoured at
+		// all. It MUST be allow-listed here — a header the preflight
+		// rejects is a header the browser refuses to send, which would
+		// break login for every client rather than just the desktop one.
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-HiChat-Client"},
 		AllowCredentials: true,
 	}), corsOrigins
 }

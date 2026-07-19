@@ -40,9 +40,11 @@ type AuditLogService interface {
 
 // ServerRoleResolver — narrow ISP interface so audit_log_service doesn't
 // depend on the full role service. Only needs "what perms does user X
-// have on server Y".
+// have on server Y", one user at a time for the read gate and in bulk for
+// the broadcast recipient filter.
 type ServerRoleResolver interface {
 	GetByUserIDAndServer(ctx context.Context, userID, serverID string) ([]models.Role, error)
+	GetRolesForUsers(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error)
 }
 
 type auditLogService struct {
@@ -158,16 +160,26 @@ func (s *auditLogService) List(
 // canViewAudit. Mirrors message_service.allowedViewers — only iterates
 // the currently connected users for the given server so we don't scan
 // every member of every server on every event.
+//
+// Roles come from one batched query. Asking per user cost one round trip per
+// online member on every single audit event; audit events are emitted from a
+// background drain loop, so that latency compounded behind the queue.
 func (s *auditLogService) allowedViewers(ctx context.Context, serverID string) []string {
 	online := s.hubOnline.GetOnlineUserIDsForServer(serverID)
+	if len(online) == 0 {
+		return nil
+	}
+
+	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, serverID, online)
+	if err != nil {
+		log.Printf("[audit_log] bulk role resolve failed server=%s: %v", serverID, err)
+		return nil
+	}
+
 	allowed := make([]string, 0, len(online))
 	for _, userID := range online {
-		roles, err := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
-		if err != nil {
-			continue
-		}
 		var perms models.Permission
-		for _, r := range roles {
+		for _, r := range rolesByUser[userID] {
 			perms |= r.Permissions
 		}
 		if canViewAudit(perms) {

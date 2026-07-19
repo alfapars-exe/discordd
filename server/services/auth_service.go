@@ -31,6 +31,12 @@ type AuthService interface {
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
 	Logout(ctx context.Context, refreshToken string) error
 	ValidateAccessToken(tokenString string) (*models.TokenClaims, error)
+
+	// GenerateMediaToken mints a scope=media JWT for the hichat_media
+	// cookie. See the implementation for why the media cookie can't just
+	// carry the access token.
+	GenerateMediaToken(userID string) (string, error)
+
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
 	ChangeEmail(ctx context.Context, userID, password, newEmail string) error
 
@@ -407,6 +413,22 @@ func (s *authService) ValidateAccessToken(tokenString string) (*models.TokenClai
 	return claims, nil
 }
 
+// MediaTokenTTL is the lifetime of a media-scoped token AND of the
+// hichat_media cookie that carries it — the two must stay equal.
+//
+// The bug this replaces: the cookie had a 30-day Max-Age while its value was
+// a ~15-minute access token. A tab left open (or reopened from history) past
+// the access token's expiry kept sending a cookie the server had long since
+// stopped honouring, so every <img src="/api/uploads/…"> 401'd and the client
+// fell back to a generic file card. Aligning the two means the cookie is
+// valid for exactly as long as the credential inside it.
+//
+// 7 days is the trade-off: long enough that an ordinary user never sees an
+// image break between sessions, short enough that a leaked cookie ages out
+// on its own. Refreshed on every login/register/refresh, so an active user's
+// cookie is continuously renewed and never approaches the deadline.
+const MediaTokenTTL = 7 * 24 * time.Hour
+
 // ─── Password Reset ───
 
 const resetCooldown = 90 * time.Second
@@ -422,6 +444,50 @@ const resetTokenExpiry = 20 * time.Minute
 // users at peak). Multi-instance deploys should move this map to Redis —
 // the threshold is a per-instance memory guard, not a global rate limit.
 const usedRefreshEmergencyThreshold = 10_000
+
+// GenerateMediaToken mints a narrowly-scoped JWT for the hichat_media cookie.
+//
+// Why a separate token rather than reusing the access token: a native <img>
+// tag can't set an Authorization header, so attachment loads authenticate via
+// a cookie — and a cookie is attached automatically to cross-site subresource
+// requests (the cookie is deliberately SameSite=None so the Electron and
+// Capacitor shells receive it; see setMediaCookie in handlers/auth.go). That
+// makes it far more exposed than a header-borne token. When its value WAS the
+// access token, anyone who obtained the cookie held a complete API credential
+// they could replay as `Authorization: Bearer` or as a WebSocket `?token=`.
+//
+// The scope=media claim collapses that blast radius: AuthMiddleware.Require
+// and the WS upgrade path reject any token carrying a scope, so a stolen
+// media cookie can do nothing beyond re-fetching attachments its owner was
+// already permitted to fetch — every /api/uploads response is still
+// permission-checked per request.
+//
+// Signed with the same key and method as the access token so the existing
+// ValidateAccessToken path verifies it with no extra plumbing.
+//
+// Note on revocation: the token carries no token_version, matching the
+// download handler, which has never applied a version gate. A media token
+// therefore survives a "logout from all devices" until it expires. That is
+// bounded by MediaTokenTTL and limited to attachment reads; the API and WS
+// surfaces still revoke immediately.
+func (s *authService) GenerateMediaToken(userID string) (string, error) {
+	now := time.Now()
+	claims := &models.TokenClaims{
+		UserID: userID,
+		Scope:  models.TokenScopeMedia,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(MediaTokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    "mqvi",
+		},
+	}
+
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.jwtSecret)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign media token: %w", err)
+	}
+	return signed, nil
+}
 
 // ─── Private Helpers ───
 

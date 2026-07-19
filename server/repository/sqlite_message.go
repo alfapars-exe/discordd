@@ -62,7 +62,10 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 
 	msg := &models.Message{}
 	var author models.User
-	var authorID sql.NullString
+	// Every joined author column must be nullable, not just the id: a dangling
+	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL landing
+	// in a plain string fails the whole row scan. See scanMessage.
+	var authorID, authorUsername, authorStatus sql.NullString
 
 	var refMsgID, refMsgContent sql.NullString
 	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL sql.NullString
@@ -70,7 +73,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt, &msg.ReplyToID,
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus,
 		&refMsgID, &refMsgContent,
 		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
 	)
@@ -84,6 +87,8 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 
 	if authorID.Valid {
 		author.ID = authorID.String
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
 		author.PasswordHash = "" // never expose password hash
 		msg.Author = &author
 	}
@@ -96,10 +101,19 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 // scanMessage scans one channel-history row into a Message, attaching the
 // author (nullable via LEFT JOIN) and the reply reference (rm/ru, also via
 // LEFT JOIN) built by buildMessageReference.
+//
+// The author columns are scanned through NullStrings because the LEFT JOIN
+// really can come back empty: messages.user_id has ON DELETE CASCADE, but FKs
+// are enforced only on the local SQLite branch of database.New — the remote
+// libSQL/Turso branch production runs on sets no pragmas at all, and the repo
+// already ships an orphan census because dangling rows are a known production
+// condition. Scanning a NULL into a plain string fails the row, and since
+// GetByChannelID funnels every row through here, one authorless message would
+// otherwise take down the entire page rather than just itself.
 func scanMessage(rows *sql.Rows) (models.Message, error) {
 	var msg models.Message
 	var author models.User
-	var authorID sql.NullString
+	var authorID, authorUsername, authorStatus sql.NullString
 
 	var refMsgID, refMsgContent sql.NullString
 	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL sql.NullString
@@ -107,7 +121,7 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 	if err := rows.Scan(
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt, &msg.ReplyToID,
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus,
 		&refMsgID, &refMsgContent,
 		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
 	); err != nil {
@@ -116,6 +130,8 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 
 	if authorID.Valid {
 		author.ID = authorID.String
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
 		author.PasswordHash = ""
 		msg.Author = &author
 	}

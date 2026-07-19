@@ -46,8 +46,13 @@ func NewPinService(
 
 // allowedViewers returns online user IDs that have ViewChannel + ReadMessages on the channel.
 // Scoped to the channel's server members.
+//
+// Mirrors messageService.allowedViewers: one bulk resolve instead of one per
+// online member, under a bounded background context because this runs after
+// the pin write has already committed.
 func (s *pinService) allowedViewers(channelID string) []string {
-	ctx := context.Background()
+	ctx, cancel := BroadcastContext()
+	defer cancel()
 
 	channel, err := s.channelRepo.GetByID(ctx, channelID)
 	if err != nil || channel == nil {
@@ -55,13 +60,15 @@ func (s *pinService) allowedViewers(channelID string) []string {
 	}
 
 	onlineUsers := s.hub.GetOnlineUserIDsForServer(channel.ServerID)
-	var allowed []string
+	perms, err := s.permResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
+	if err != nil {
+		log.Printf("[pin] bulk permission resolve failed channel=%s: %v", channelID, err)
+		return nil
+	}
+
+	allowed := make([]string, 0, len(onlineUsers))
 	for _, uid := range onlineUsers {
-		perms, err := s.permResolver.ResolveChannelPermissions(ctx, uid, channelID)
-		if err != nil {
-			continue
-		}
-		if perms.Has(models.PermViewChannel) && perms.Has(models.PermReadMessages) {
+		if perms[uid].Has(models.PermViewChannel) && perms[uid].Has(models.PermReadMessages) {
 			allowed = append(allowed, uid)
 		}
 	}

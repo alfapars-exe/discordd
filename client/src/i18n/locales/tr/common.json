@@ -115,6 +115,7 @@
   "connectionRetrying": "Sunucuya bağlanılıyor... (deneme {{attempt}}/{{max}})",
   "connectionFailed": "Sunucuya bağlanılamadı",
   "connectionLost": "Bağlantı koptu",
+  "connectionOffline": "İnternet bağlantısı yok — bağlantı gelince otomatik bağlanılacak",
   "connectionRefresh": "Yenile",
   "userProfile": "Kullanıcı Profili",
   "userActions": "Kullanıcı İşlemleri",

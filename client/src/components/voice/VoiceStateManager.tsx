@@ -10,6 +10,7 @@
  *   - Audio processor (RNNoise / Krisp / VadGate) — useAudioProcessor
  *   - Speaking detection (sidebar green ring)     — useSpeakingDetection
  *   - RTT polling (status indicator)              — useRttPolling
+ *   - Per-participant quality (tile signal bars)  — useConnectionQualitySync
  *   - Per-user / master volume + retries          — useVolumeSync
  *   - Screen share lifecycle (3 paths)            — useScreenShareToggle
  *   - Local mic enabled (mute, server mute, PTT)  — useMicSync
@@ -19,12 +20,14 @@
  *   - Verbose debug tracing (off by default)      — useLiveKitDebugTracer
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAudioProcessor } from "../../hooks/useAudioProcessor";
+import { useCameraPublishDefaults } from "../../hooks/useCameraPublishDefaults";
 import { useSpeakingDetection } from "../../hooks/useSpeakingDetection";
 import { useRttPolling } from "../../hooks/useRttPolling";
+import { useConnectionQualitySync } from "../../hooks/useConnectionQualitySync";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
 import { useAudioPlayoutTuning } from "../../hooks/useAudioPlayoutTuning";
 import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
@@ -55,6 +58,10 @@ function VoiceStateManager() {
 
   // RTT polling — drives the "Ses Bağlı / NN ms" connection indicator.
   useRttPolling(room);
+
+  // Per-participant network quality — one room-level listener feeds the
+  // signal-bar badge on every participant tile (local participant included).
+  useConnectionQualitySync(room);
 
   // Volume sync — per-user, screen share, master, deafen → setVolume() on
   // every remote participant + retry-on-subscribe + retry-on-reconnect.
@@ -108,12 +115,34 @@ function VoiceStateManager() {
   // Errors are toast-free: LiveKit logs its own permission/device failures
   // and the UI button stays in its previous state if publish fails.
   const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
+
+  // Resolution / fps / simulcast ladder for the camera, passed per-publish as
+  // the 2nd and 3rd args of setCameraEnabled. They are NOT in
+  // RoomOptions.publishDefaults for the same reason the screen-share options
+  // aren't (see VoiceProvider.tsx:177-185): room-level publishDefaults are
+  // captured at connect() and never re-applied.
+  //
+  // Held in a latest-ref rather than an effect dependency on purpose: a
+  // mid-session quality change must NOT re-fire the toggle effect and cycle a
+  // live camera. New settings take effect on the NEXT camera toggle — the same
+  // semantics the screen share has.
+  const cameraOpts = useCameraPublishDefaults();
+  const cameraOptsRef = useRef(cameraOpts);
+  useLayoutEffect(() => {
+    cameraOptsRef.current = cameraOpts;
+  });
+
   useEffect(() => {
     if (!initialSyncDone.current) return;
     let cancelled = false;
     (async () => {
       try {
-        await localParticipant.setCameraEnabled(isCameraEnabled);
+        const { cameraCapture, cameraPublish } = cameraOptsRef.current;
+        await localParticipant.setCameraEnabled(
+          isCameraEnabled,
+          cameraCapture,
+          cameraPublish,
+        );
       } catch (err) {
         if (!cancelled) {
           console.error("[VoiceStateManager] camera toggle failed:", err);
