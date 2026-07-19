@@ -18,15 +18,18 @@
 
 import { test as setup, expect } from "@playwright/test";
 import {
-  TEST_PASSWORD,
   dismissOnboardingOverlays,
   forceEnglish,
+  generateTestPassword,
   uniqueUsername,
   writeTestAccount,
 } from "./helpers";
 
 setup("register a fresh account, then log back in", async ({ page }) => {
   const username = uniqueUsername();
+  // Generated per run and handed to the specs through ACCOUNT_FILE below, so
+  // no credential is written down in the repo.
+  const password = generateTestPassword();
   await forceEnglish(page);
 
   // ─── Register ──────────────────────────────────────────────────────────
@@ -35,8 +38,8 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   await page.getByLabel(/^Username/i).fill(username);
   // "Password" is a prefix of "Confirm Password"; anchor so the two fields
   // stay unambiguous.
-  await page.getByLabel(/^Password/i).fill(TEST_PASSWORD);
-  await page.getByLabel(/^Confirm Password/i).fill(TEST_PASSWORD);
+  await page.getByLabel(/^Password/i).fill(password);
+  await page.getByLabel(/^Confirm Password/i).fill(password);
 
   // The submit button is disabled until the ToS checkbox is ticked.
   await page.getByRole("checkbox").check();
@@ -62,7 +65,7 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   await forceEnglish(page);
   await page.goto("/login");
   await page.getByLabel(/^Username/i).fill(username);
-  await page.getByLabel(/^Password/i).fill(TEST_PASSWORD);
+  await page.getByLabel(/^Password/i).fill(password);
   await page.getByRole("button", { name: /^Log In$/ }).click();
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
@@ -70,5 +73,5 @@ setup("register a fresh account, then log back in", async ({ page }) => {
     timeout: 20_000,
   });
 
-  writeTestAccount({ username, password: TEST_PASSWORD });
+  writeTestAccount({ username, password });
 });

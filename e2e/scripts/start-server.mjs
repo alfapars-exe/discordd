@@ -70,14 +70,34 @@ function pruneOldRuns(keep = 3) {
   }
 }
 
+/**
+ * Absolute path to the Go toolchain when we can determine one.
+ *
+ * Resolving beats a bare "go" lookup: PATH is per-shell and writable, so a
+ * stale or shadowing entry earlier on it decides which compiler builds the
+ * binary under test. GOROOT is set by actions/setup-go on CI and by most
+ * local installs; when it isn't, fall back to the PATH lookup rather than
+ * guessing at install locations, since a wrong absolute path fails harder
+ * and less legibly than no path at all.
+ */
+function resolveGo() {
+  const goroot = process.env.GOROOT;
+  if (goroot) {
+    const candidate = join(goroot, "bin", process.platform === "win32" ? "go.exe" : "go");
+    if (existsSync(candidate)) return candidate;
+  }
+  return "go";
+}
+
 function buildServer() {
   const binName = process.platform === "win32" ? "hichat-e2e.exe" : "hichat-e2e";
   const binPath = join(TMP_ROOT, "bin", binName);
   mkdirSync(dirname(binPath), { recursive: true });
 
-  console.log(`[e2e-server] go build (CGO_ENABLED=0) -> ${binPath}`);
+  const goBin = resolveGo();
+  console.log(`[e2e-server] ${goBin} build (CGO_ENABLED=0) -> ${binPath}`);
   const started = Date.now();
-  const res = spawnSync("go", ["build", "-o", binPath, "."], {
+  const res = spawnSync(goBin, ["build", "-o", binPath, "."], {
     cwd: SERVER_DIR,
     stdio: "inherit",
     // CGO off is what excludes go-libsql and selects the pure-Go driver.

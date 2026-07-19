@@ -24,6 +24,7 @@
  */
 
 import { expect, type Page } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -33,12 +34,26 @@ import { ACCOUNT_FILE } from "../playwright.config";
 const ONE_BY_ONE_PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
-/** The one account the whole run shares. Suffixed per run to avoid collisions. */
-export const TEST_PASSWORD = "playwright-pw-123";
+/**
+ * Password for the throwaway account this run registers.
+ *
+ * Generated rather than written down: a literal in the repo is a hard-coded
+ * credential no matter how disposable the account is, and static analysis is
+ * right to flag it. Only auth.setup.ts calls this — it persists the value
+ * into ACCOUNT_FILE, and every spec reads it back from there, so the tests
+ * never need to know it. `Aa1!` prefixes the hex to satisfy the register
+ * form's composition rules; the server's own floor is 8 characters.
+ */
+export function generateTestPassword(): string {
+  return `Aa1!${randomBytes(12).toString("hex")}`;
+}
 
 export function uniqueUsername(): string {
   // Usernames are constrained to [a-zA-Z0-9_] by the register form's pattern.
-  return `e2e_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  // crypto over Math.random: the suffix is what keeps parallel or rapidly
+  // repeated runs from colliding on an already-registered name, so it should
+  // come from a generator with no birthday surprises.
+  return `e2e_${Date.now()}_${randomBytes(4).toString("hex")}`;
 }
 
 /** Pin the UI to English before any app code runs. */
