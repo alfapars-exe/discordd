@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
 import { isNativeApp } from "../../utils/constants";
-import ServerUrlPicker from "./ServerUrlPicker";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
@@ -404,8 +403,6 @@ function RegisterPage() {
             {t("backToHome")}
           </Link>
         )}
-
-        <ServerUrlPicker />
       </div>
     </main>
   );
