@@ -50,12 +50,42 @@ test("accepts https origins and reduces them to bare origin", () => {
   assert.equal(sanitizeUpstreamOrigin("https://example.com:8443/"), "https://example.com:8443");
 });
 
-test("allows plain-http loopback for local dev servers only", () => {
-  assert.equal(sanitizeUpstreamOrigin("http://localhost:9090"), "http://localhost:9090");
-  assert.equal(sanitizeUpstreamOrigin("http://127.0.0.1:9090"), "http://127.0.0.1:9090");
-  // Non-loopback http would widen the renderer's reach beyond its own CSP.
-  assert.equal(sanitizeUpstreamOrigin("http://192.168.1.10"), null);
-  assert.equal(sanitizeUpstreamOrigin("http://example.com"), null);
+test("allows plain-http loopback ONLY when explicitly enabled (dev builds)", () => {
+  const dev = { allowLoopback: true };
+  assert.equal(sanitizeUpstreamOrigin("http://localhost:9090", dev), "http://localhost:9090");
+  assert.equal(sanitizeUpstreamOrigin("http://127.0.0.1:9090", dev), "http://127.0.0.1:9090");
+  // Non-loopback http is refused even in dev.
+  assert.equal(sanitizeUpstreamOrigin("http://192.168.1.10", dev), null);
+  assert.equal(sanitizeUpstreamOrigin("http://example.com", dev), null);
+});
+
+test("packaged builds refuse loopback — main is not bound by the renderer CSP", () => {
+  // The one capability this relay could genuinely add over a compromised
+  // renderer is reaching services on the user's own machine. Default off.
+  assert.equal(sanitizeUpstreamOrigin("http://localhost:9090"), null);
+  assert.equal(sanitizeUpstreamOrigin("http://127.0.0.1:9090"), null);
+  assert.equal(sanitizeUpstreamOrigin("http://[::1]:9090"), null);
+  // https still works, loopback or not — that's the production path.
+  assert.equal(sanitizeUpstreamOrigin("https://example.com"), "https://example.com");
+});
+
+test("a packaged build falls back to the default upstream when handed a loopback URL", async () => {
+  const { calls, impl } = fakeFetch(new Response("{}", { status: 200 }));
+  await proxyApiRequest(
+    new Request("app://hichat/api/health", { headers: { [UPSTREAM_HEADER]: "http://localhost:9090" } }),
+    impl
+  );
+  assert.equal(calls[0].input, `${DEFAULT_UPSTREAM}/api/health`);
+});
+
+test("dev builds honour a loopback upstream", async () => {
+  const { calls, impl } = fakeFetch(new Response("{}", { status: 200 }));
+  await proxyApiRequest(
+    new Request("app://hichat/api/health", { headers: { [UPSTREAM_HEADER]: "http://localhost:9090" } }),
+    impl,
+    { allowLoopback: true }
+  );
+  assert.equal(calls[0].input, "http://localhost:9090/api/health");
 });
 
 test("rejects credential smuggling, exotic schemes, and garbage", () => {

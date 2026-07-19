@@ -227,7 +227,12 @@ function setupAppProtocol(): void {
     // Access-Control-Allow-Credentials, killing every credentialed
     // cross-origin call from the desktop shell.
     if (isProxyableUrl(request.url)) {
-      return proxyApiRequest(request, (input, init) => net.fetch(input, init));
+      // Loopback upstreams are a dev-only affordance (electron:dev talks to
+      // a local Go server over http). Packaged builds refuse them so this
+      // relay can't be used to reach services on the user's own machine.
+      return proxyApiRequest(request, (input, init) => net.fetch(input, init), {
+        allowLoopback: !app.isPackaged,
+      });
     }
 
     const resolved = resolveAppPath(request.url, distRoot);

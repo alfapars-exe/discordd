@@ -59,15 +59,28 @@ export function isProxyableUrl(rawUrl: string): boolean {
 /**
  * Validates the renderer-supplied upstream and reduces it to a bare origin.
  *
- * The renderer is our own code, but this value still steers where the main
- * process sends requests, so it gets the same treatment as any input:
- *  - https only, except plain-http loopback for local dev servers. The
- *    renderer CSP (connect-src) never allowed plain http either, so this
- *    widens nothing.
+ * The renderer is our own code, but this value steers where the MAIN process
+ * sends requests, and main is not bound by the renderer's CSP. Treat it as
+ * untrusted input:
+ *  - https only, so a packaged build cannot be aimed at plain-http hosts.
  *  - no embedded credentials (user:pass@host smuggling).
- *  - path/query/fragment are discarded — only the origin survives.
+ *  - path/query/fragment discarded — only the origin survives.
+ *
+ * `allowLoopback` exists solely for `npm run electron:dev`, which talks to a
+ * local Go server over http. Packaged builds pass false: allowing loopback
+ * there would let a compromised renderer reach services bound to the user's
+ * own machine — a reach the renderer does not otherwise have, since main
+ * ignores the CSP. That is the one capability this relay could genuinely
+ * add, so it is off wherever it isn't needed.
+ *
+ * Note what an attacker still cannot obtain by pointing this at their own
+ * host: cookies are stored per-host by the network layer, so a foreign
+ * origin receives no HiChat credentials.
  */
-export function sanitizeUpstreamOrigin(raw: string | null): string | null {
+export function sanitizeUpstreamOrigin(
+  raw: string | null,
+  { allowLoopback = false }: { allowLoopback?: boolean } = {}
+): string | null {
   if (!raw) return null;
   let parsed: URL;
   try {
@@ -76,14 +89,15 @@ export function sanitizeUpstreamOrigin(raw: string | null): string | null {
     return null;
   }
   if (parsed.username !== "" || parsed.password !== "") return null;
+  if (parsed.protocol === "https:") return parsed.origin;
   const isLoopback =
     parsed.hostname === "localhost" ||
     parsed.hostname === "127.0.0.1" ||
     parsed.hostname === "[::1]";
-  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback)) {
-    return null;
+  if (allowLoopback && parsed.protocol === "http:" && isLoopback) {
+    return parsed.origin;
   }
-  return parsed.origin;
+  return null;
 }
 
 /** app://hichat/api/x?y=1 + https://host → https://host/api/x?y=1 */
@@ -114,10 +128,12 @@ export function buildUpstreamUrl(rawUrl: string, upstreamOrigin: string): string
  */
 export async function proxyApiRequest(
   request: Request,
-  fetchImpl: FetchLike
+  fetchImpl: FetchLike,
+  { allowLoopback = false }: { allowLoopback?: boolean } = {}
 ): Promise<Response> {
   const upstreamOrigin =
-    sanitizeUpstreamOrigin(request.headers.get(UPSTREAM_HEADER)) ?? DEFAULT_UPSTREAM;
+    sanitizeUpstreamOrigin(request.headers.get(UPSTREAM_HEADER), { allowLoopback }) ??
+    DEFAULT_UPSTREAM;
   const target = buildUpstreamUrl(request.url, upstreamOrigin);
 
   const headers = new Headers(request.headers);
