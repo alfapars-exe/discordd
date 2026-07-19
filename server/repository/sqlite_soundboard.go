@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/google/uuid"
 )
 
 type sqliteSoundboardRepo struct {
-	db *sql.DB
+	db database.TxQuerier
 }
 
-func NewSQLiteSoundboardRepo(db *sql.DB) SoundboardRepository {
+func NewSQLiteSoundboardRepo(db database.TxQuerier) SoundboardRepository {
 	return &sqliteSoundboardRepo{db: db}
 }
 

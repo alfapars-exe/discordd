@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
@@ -20,10 +21,10 @@ type LinkPreviewRepository interface {
 }
 
 type sqliteLinkPreviewRepo struct {
-	db *sql.DB
+	db database.TxQuerier
 }
 
-func NewSQLiteLinkPreviewRepo(db *sql.DB) LinkPreviewRepository {
+func NewSQLiteLinkPreviewRepo(db database.TxQuerier) LinkPreviewRepository {
 	return &sqliteLinkPreviewRepo{db: db}
 }
 
