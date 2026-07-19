@@ -5,15 +5,20 @@
 // Deletion order:
 // 1. LiveKit instance cleanup (platform -> decrement, self-hosted -> delete)
 // 2. server_delete broadcast (BEFORE DB delete — member list is needed for broadcast)
-// 3. DB delete (CASCADE removes channels, messages, members, etc.)
+// 3. Transactional cascade delete: channels, categories, roles, invites,
+//    user_roles, bans, and everything under channels/roles have no enforced
+//    foreign key to servers (see repository.deleteServerCascade) and are
+//    deleted explicitly here, then the servers row itself.
 // 4. Optional email notification to server owner
 package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
@@ -25,6 +30,7 @@ type AdminServerService interface {
 }
 
 type adminServerService struct {
+	db          *sql.DB // for WithTx around the cascade delete, mirrors ServerService
 	serverRepo  repository.ServerRepository
 	userRepo    repository.UserRepository
 	livekitRepo repository.LiveKitRepository
@@ -33,6 +39,7 @@ type adminServerService struct {
 }
 
 func NewAdminServerService(
+	db *sql.DB,
 	serverRepo repository.ServerRepository,
 	userRepo repository.UserRepository,
 	livekitRepo repository.LiveKitRepository,
@@ -40,6 +47,7 @@ func NewAdminServerService(
 	emailSender email.EmailSender,
 ) AdminServerService {
 	return &adminServerService{
+		db:          db,
 		serverRepo:  serverRepo,
 		userRepo:    userRepo,
 		livekitRepo: livekitRepo,
@@ -76,7 +84,11 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 		Data: map[string]string{"id": serverID},
 	})
 
-	if err := s.serverRepo.Delete(ctx, serverID); err != nil {
+	// Transactional so the cascade and the server row either all go or none
+	// do — see the package comment above and repository.deleteServerCascade.
+	if err := database.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		return repository.NewSQLiteServerRepo(tx).Delete(ctx, serverID)
+	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
 
