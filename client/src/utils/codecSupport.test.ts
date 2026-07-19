@@ -4,6 +4,7 @@ import {
   canSendAV1,
   canSendH264,
   canSendVP9,
+  pickScreenShareCodec,
   preferredScreenShareCodec,
 } from "./codecSupport";
 
@@ -117,5 +118,85 @@ describe("preferredScreenShareCodec", () => {
     // opt-in path (future settings toggle) should route to AV1.
     installGetCapabilities({ codecs: [{ mimeType: "video/AV1" }] });
     expect(preferredScreenShareCodec()).toBeUndefined();
+  });
+});
+
+describe("pickScreenShareCodec (policy)", () => {
+  const AllCodecs = {
+    codecs: [
+      { mimeType: "video/VP9" },
+      { mimeType: "video/H264" },
+      { mimeType: "video/AV1" },
+    ],
+  };
+
+  it("low-latency + H264 available → h264 regardless of AV1 opt-in / tier", () => {
+    installGetCapabilities(AllCodecs);
+    // Even with AV1 requested and a 4k tier, low-latency wins.
+    expect(
+      pickScreenShareCodec({ lowLatency: true, av1OptIn: true, qualityTier: "4k" }),
+    ).toBe("h264");
+  });
+
+  it("low-latency without H264 falls through to the default picker", () => {
+    // Extreme edge case: a browser that can send VP9 but not H264. Rather
+    // than lying about "low-latency vp9", the policy defers to the
+    // preferred fallback (which returns vp9 here).
+    installGetCapabilities({ codecs: [{ mimeType: "video/VP9" }] });
+    expect(
+      pickScreenShareCodec({ lowLatency: true, av1OptIn: false, qualityTier: "1080p" }),
+    ).toBe("vp9");
+  });
+
+  it("AV1 opt-in + AV1 available + 1440p tier → av1", () => {
+    installGetCapabilities(AllCodecs);
+    expect(
+      pickScreenShareCodec({ lowLatency: false, av1OptIn: true, qualityTier: "1440p" }),
+    ).toBe("av1");
+  });
+
+  it("AV1 opt-in + AV1 available + 4k tier → av1", () => {
+    installGetCapabilities(AllCodecs);
+    expect(
+      pickScreenShareCodec({ lowLatency: false, av1OptIn: true, qualityTier: "4k" }),
+    ).toBe("av1");
+  });
+
+  it.each(["720p", "1080p"] as const)(
+    "AV1 opt-in blocked on low tier (%s) — falls back to vp9",
+    (tier) => {
+      // Rationale pin: the AV1 encoder cost is the same at 720p as at
+      // 1440p, but the bitrate savings are marginal below 1440p. Auto-
+      // ship at low tiers would torch CPU with no visible benefit.
+      installGetCapabilities(AllCodecs);
+      expect(
+        pickScreenShareCodec({ lowLatency: false, av1OptIn: true, qualityTier: tier }),
+      ).toBe("vp9");
+    },
+  );
+
+  it("AV1 opt-in but AV1 not sendable → falls back to vp9", () => {
+    installGetCapabilities({
+      codecs: [{ mimeType: "video/VP9" }, { mimeType: "video/H264" }],
+    });
+    expect(
+      pickScreenShareCodec({ lowLatency: false, av1OptIn: true, qualityTier: "1440p" }),
+    ).toBe("vp9");
+  });
+
+  it("no opt-in, no low-latency → default picker (vp9 preferred)", () => {
+    installGetCapabilities(AllCodecs);
+    expect(
+      pickScreenShareCodec({ lowLatency: false, av1OptIn: false, qualityTier: "1080p" }),
+    ).toBe("vp9");
+  });
+
+  it("no RTCRtpSender at all → undefined (LiveKit picks)", () => {
+    // Sanity: the policy stays null-safe end-to-end. In practice the
+    // caller falls back to LiveKit's default codec selection when
+    // undefined comes out.
+    expect(
+      pickScreenShareCodec({ lowLatency: false, av1OptIn: false, qualityTier: "1080p" }),
+    ).toBeUndefined();
   });
 });

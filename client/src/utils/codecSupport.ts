@@ -76,3 +76,47 @@ export function preferredScreenShareCodec(): "vp9" | "h264" | undefined {
   if (canSendH264()) return "h264";
   return undefined;
 }
+
+/**
+ * Screen-share codec-picker policy — encapsulates the "what should we
+ * actually publish with?" decision so useScreenSharePublishDefaults
+ * (which hardcodes vp9/h264 today) can drop this in without leaking
+ * the browser-support fallback logic into the bitrate-ladder code.
+ *
+ * Rules, in priority order:
+ *   1. If low-latency is on and H264 is sendable → h264. Low-latency
+ *      mode exists precisely because H264 has hardware encoders
+ *      everywhere; forcing something else would defeat the toggle.
+ *   2. If AV1 opt-in AND canSendAV1 AND tier is 1440p+ → av1. Skipping
+ *      lower tiers avoids torching CPU on 720p where the bitrate gain
+ *      is marginal but the encoder cost is the same.
+ *   3. Otherwise → preferredScreenShareCodec() (VP9 preferred, H264
+ *      fallback, undefined last).
+ *
+ * The tier check happens here (not in the caller) so a future edit
+ * that adds a new AV1-enabled path in a different component can't
+ * accidentally ship AV1 at 720p — the policy is single-sourced.
+ */
+export type ScreenShareCodecPolicyInput = {
+  lowLatency: boolean;
+  av1OptIn: boolean;
+  qualityTier: "720p" | "1080p" | "1440p" | "4k";
+};
+
+export function pickScreenShareCodec(
+  input: ScreenShareCodecPolicyInput,
+): "av1" | "vp9" | "h264" | undefined {
+  if (input.lowLatency) {
+    if (canSendH264()) return "h264";
+    // Low-latency requested but H264 is missing — extreme edge case
+    // (would need a browser without H264 encoder). Fall through to
+    // the default picker rather than lie about "low-latency vp9".
+  }
+
+  const highTier = input.qualityTier === "1440p" || input.qualityTier === "4k";
+  if (input.av1OptIn && highTier && canSendAV1()) {
+    return "av1";
+  }
+
+  return preferredScreenShareCodec();
+}
