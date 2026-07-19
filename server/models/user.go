@@ -43,6 +43,10 @@ type User struct {
 	PlatformBanReason     string     `json:"-"`
 	PlatformBannedBy  string     `json:"-"`
 	PlatformBannedAt  *time.Time `json:"-"`
+	// LastSeenAt is stamped at the offline transition (ws disconnect,
+	// manual invisible, stale-presence reset on boot). NULL until the
+	// user's first recorded offline transition post-migration.
+	LastSeenAt        *time.Time `json:"last_seen_at"`
 	// TokenVersion is the revocation counter embedded in JWT "tv" claims.
 	// Bumped by "logout from all devices" to invalidate every outstanding
 	// access token in one DB write. Never exposed to clients (the live

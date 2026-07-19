@@ -212,16 +212,22 @@ export const useMemberStore = create<MemberState>((set, get) => ({
         newOnline.add(userId);
       }
 
-      // Update status across all cached servers
+      // Update status across all cached servers. Offline transitions also
+      // stamp last_seen_at locally so the member list can render a live
+      // "last seen X ago" label without waiting for a full refetch.
       const updated: Record<string, MemberWithRoles[]> = {};
       let changed = false;
       for (const [sid, members] of Object.entries(state.membersByServer)) {
         const idx = members.findIndex((m) => m.id === userId);
         if (idx >= 0) {
           changed = true;
-          updated[sid] = members.map((m) =>
-            m.id === userId ? { ...m, status } : m
-          );
+          updated[sid] = members.map((m) => {
+            if (m.id !== userId) return m;
+            if (status === "offline") {
+              return { ...m, status, last_seen_at: new Date().toISOString() };
+            }
+            return { ...m, status };
+          });
         }
       }
 

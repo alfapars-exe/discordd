@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import i18n from "../i18n";
-import { formatDate, formatDateTime, formatTime } from "./dateFormat";
+import { formatDate, formatDateTime, formatTime, lastSeenLabel } from "./dateFormat";
 
 // Noon, local time — keeps the calendar day stable in every CI timezone.
 // December so the short month name differs between tr ("Ara") and en ("Dec").
@@ -63,5 +63,83 @@ describe("with English active", () => {
   it("passes options through (en short month)", () => {
     const label = formatDate(sample, { year: "numeric", month: "short", day: "numeric" });
     expect(label).toContain("Dec");
+  });
+});
+
+describe("lastSeenLabel", () => {
+  // Fixed "now" so each case just needs a delta rather than real wall-clock time.
+  const now = Date.parse("2026-07-19T12:00:00Z");
+  const minutesAgo = (n: number) => now - n * 60_000;
+  const hoursAgo = (n: number) => now - n * 3_600_000;
+  const daysAgo = (n: number) => now - n * 86_400_000;
+
+  it("30 seconds ago renders 'just now'", () => {
+    expect(lastSeenLabel(now - 30_000, now, "en")).toEqual({ key: "lastSeenJustNow" });
+  });
+
+  it("20 minutes ago renders exact minutes", () => {
+    expect(lastSeenLabel(minutesAgo(20), now, "en")).toEqual({
+      key: "lastSeenMinutes",
+      values: { count: 20 },
+    });
+  });
+
+  it("59 minutes ago renders exact minutes (upper bound)", () => {
+    expect(lastSeenLabel(minutesAgo(59), now, "en")).toEqual({
+      key: "lastSeenMinutes",
+      values: { count: 59 },
+    });
+  });
+
+  it("1h20m ago renders exact hours+minutes", () => {
+    expect(lastSeenLabel(minutesAgo(80), now, "en")).toEqual({
+      key: "lastSeenHoursMinutes",
+      values: { hours: 1, minutes: 20 },
+    });
+  });
+
+  it("exactly 2 hours ago renders exact hours (no minutes remainder)", () => {
+    expect(lastSeenLabel(hoursAgo(2), now, "en")).toEqual({
+      key: "lastSeenHours",
+      values: { count: 2 },
+    });
+  });
+
+  it("2h59m ago still renders exact hours+minutes (below the 3h threshold)", () => {
+    expect(lastSeenLabel(minutesAgo(179), now, "en")).toEqual({
+      key: "lastSeenHoursMinutes",
+      values: { hours: 2, minutes: 59 },
+    });
+  });
+
+  it("3 hours ago switches to rounded approximation", () => {
+    expect(lastSeenLabel(hoursAgo(3), now, "en")).toEqual({
+      key: "lastSeenApproxHours",
+      values: { count: 3 },
+    });
+  });
+
+  it("exactly 1 day ago renders the singular day key", () => {
+    expect(lastSeenLabel(daysAgo(1), now, "en")).toEqual({ key: "lastSeenDaySingular" });
+  });
+
+  it("2 days ago renders exact days", () => {
+    expect(lastSeenLabel(daysAgo(2), now, "en")).toEqual({
+      key: "lastSeenDays",
+      values: { count: 2 },
+    });
+  });
+
+  it("29 days ago still renders exact days (below the 30d threshold)", () => {
+    expect(lastSeenLabel(daysAgo(29), now, "en")).toEqual({
+      key: "lastSeenDays",
+      values: { count: 29 },
+    });
+  });
+
+  it("31 days ago falls back to an absolute date", () => {
+    const result = lastSeenLabel(daysAgo(31), now, "en");
+    expect(result.key).toBe("lastSeenAbsoluteDate");
+    expect(typeof result.values?.date).toBe("string");
   });
 });

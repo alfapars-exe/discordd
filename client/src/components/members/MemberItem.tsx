@@ -22,7 +22,7 @@ import type { MemberWithRoles } from "../../types";
 import MemberCard from "./MemberCard";
 import RoleEditorPopup from "./RoleEditorPopup";
 import BadgeAssignModal from "./BadgeAssignModal";
-import { formatFullDateTime } from "../../utils/dateFormat";
+import { formatFullDateTime, lastSeenLabel } from "../../utils/dateFormat";
 
 /** The user ID that can assign badges to other users. */
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
@@ -30,6 +30,10 @@ const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 type MemberItemProps = {
   member: MemberWithRoles;
   isOnline: boolean;
+  /** Ticking "now" snapshot (from MemberList's single useNowTick) used to
+   *  render a live "last seen X ago" label for offline members. Only
+   *  needed when isOnline is false. */
+  nowMs?: number;
 };
 
 function getHighestRole(member: MemberWithRoles) {
@@ -81,7 +85,7 @@ function getRowStatusClass(status: string, isOnline: boolean): string {
   }
 }
 
-function MemberItem({ member, isOnline }: MemberItemProps) {
+function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
   const { t, i18n } = useTranslation("common");
   const { menuState, openMenu, closeMenu } = useContextMenu();
   const confirm = useConfirm();
@@ -104,6 +108,19 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
   const itemRef = useRef<HTMLDivElement>(null);
   const roleType = getRoleType(member);
   const displayName = member.display_name ?? member.username;
+
+  // Graduated "last seen X ago" label for offline members — replaces the
+  // custom-status slot since a stale status is less useful than knowing
+  // when they were last around. Only computed when we have a valid
+  // last_seen_at and the live "now" tick from MemberList.
+  let lastSeenText: string | null = null;
+  if (!isOnline && member.last_seen_at && typeof nowMs === "number") {
+    const lastSeenMs = Date.parse(member.last_seen_at);
+    if (!Number.isNaN(lastSeenMs)) {
+      const label = lastSeenLabel(lastSeenMs, nowMs, i18n.language);
+      lastSeenText = t(label.key, label.values);
+    }
+  }
 
   /** Right-click context menu */
   const handleContextMenu = useCallback(
@@ -337,10 +354,14 @@ function MemberItem({ member, isOnline }: MemberItemProps) {
             )}
           </span>
 
-          {member.custom_status && (
-            <span className="member-activity">
-              {member.custom_status}
-            </span>
+          {lastSeenText ? (
+            <span className="member-activity">{lastSeenText}</span>
+          ) : (
+            member.custom_status && (
+              <span className="member-activity">
+                {member.custom_status}
+              </span>
+            )
           )}
         </div>
       </div>

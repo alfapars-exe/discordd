@@ -156,3 +156,61 @@ export function formatTime(
 ): string {
   return new Date(iso).toLocaleTimeString(i18n.language, options);
 }
+
+// ─── Offline "last seen" relative label ───
+
+/** i18n key + interpolation values for a `lastSeenLabel` result; the
+ *  caller renders it via `t(key, values)` since this module stays
+ *  i18next-free (pure formatting logic, easy to unit test). */
+export type LastSeenLabel = { key: string; values?: Record<string, number | string> };
+
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+/** Below this, hours+minutes render exact; at/above it, hours are rounded ("about X hours ago"). */
+const APPROX_HOUR_THRESHOLD_MS = 3 * HOUR_MS;
+/** At/above this many days, fall back to an absolute date instead of a relative count. */
+const ABSOLUTE_DATE_THRESHOLD_DAYS = 30;
+
+/**
+ * Builds a graduated relative "last seen" label from a past timestamp:
+ * <1min "just now" → exact minutes → exact hours+minutes (<3h) →
+ * rounded hours (3h-24h) → exact days (<30d) → absolute date (30d+).
+ *
+ * @param lastSeenMs - the last-seen timestamp, epoch ms
+ * @param nowMs      - current time, epoch ms (pass a ticking snapshot from
+ *                     useNowTick so this stays a pure function of its args)
+ * @param locale     - i18next language code, used only for the 30+ day
+ *                     absolute-date branch
+ */
+export function lastSeenLabel(lastSeenMs: number, nowMs: number, locale: string): LastSeenLabel {
+  const diffMs = nowMs - lastSeenMs;
+  if (diffMs < 60_000) return { key: "lastSeenJustNow" };
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return { key: "lastSeenMinutes", values: { count: minutes } };
+
+  if (diffMs < APPROX_HOUR_THRESHOLD_MS) {
+    const hours = Math.floor(diffMs / HOUR_MS);
+    const remMinutes = minutes % 60;
+    if (remMinutes === 0) return { key: "lastSeenHours", values: { count: hours } };
+    return { key: "lastSeenHoursMinutes", values: { hours, minutes: remMinutes } };
+  }
+
+  if (diffMs < DAY_MS) {
+    const hours = Math.round(diffMs / HOUR_MS);
+    return { key: "lastSeenApproxHours", values: { count: hours } };
+  }
+
+  const days = Math.floor(diffMs / DAY_MS);
+  if (days < ABSOLUTE_DATE_THRESHOLD_DAYS) {
+    if (days === 1) return { key: "lastSeenDaySingular" };
+    return { key: "lastSeenDays", values: { count: days } };
+  }
+
+  const formatted = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(lastSeenMs));
+  return { key: "lastSeenAbsoluteDate", values: { date: formatted } };
+}

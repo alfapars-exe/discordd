@@ -11,6 +11,7 @@ import { useMobileStore } from "../../stores/mobileStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { useResizeHandle } from "../../hooks/useResizeHandle";
+import { useNowTick } from "../../hooks/useNowTick";
 import { resolveAssetUrl } from "../../utils/constants";
 import MemberItem from "../members/MemberItem";
 import { MemberSkeleton } from "../shared/Skeleton";
@@ -97,6 +98,9 @@ function MemberList() {
   const closeRightDrawer = useMobileStore((s) => s.closeRightDrawer);
   const isMobile = useIsMobile();
   const activeServer = useServerStore((s) => s.activeServer);
+  // Single ticking clock for the whole list — shared by every offline
+  // MemberItem's "last seen X ago" label instead of one interval each.
+  const nowMs = useNowTick(60_000);
 
   // Collapsible sections — persisted in localStorage
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
@@ -257,6 +261,7 @@ function MemberList() {
                   key={member.id}
                   member={member}
                   isOnline={false}
+                  nowMs={nowMs}
                 />
               ))}
             </div>
