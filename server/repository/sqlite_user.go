@@ -53,7 +53,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id
+			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id, last_seen_at
 		FROM users WHERE id = ?`
 
 	user := &models.User{}
@@ -64,7 +64,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 		&user.TokenVersion,
 		&user.CreatedAt,
-		&user.IsBot, &user.OwnerUserID,
+		&user.IsBot, &user.OwnerUserID, &user.LastSeenAt,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -126,7 +126,7 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	query := `
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
-			platform_ban_reason, platform_banned_by, platform_banned_at, created_at, is_bot, owner_user_id
+			platform_ban_reason, platform_banned_by, platform_banned_at, created_at, is_bot, owner_user_id, last_seen_at
 		FROM users ORDER BY username`
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -141,7 +141,7 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 			&user.Language, &user.DMPrivacy, &user.IsPlatformAdmin, &user.IsPlatformBanned, &user.HasSeenDownloadPrompt, &user.HasSeenWelcome,
 			&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 			&user.CreatedAt,
-			&user.IsBot, &user.OwnerUserID,
+			&user.IsBot, &user.OwnerUserID, &user.LastSeenAt,
 		)
 		return user, err
 	})
@@ -171,7 +171,15 @@ func (r *sqliteUserRepo) Update(ctx context.Context, user *models.User) error {
 }
 
 func (r *sqliteUserRepo) UpdateStatus(ctx context.Context, userID string, status models.UserStatus) error {
-	query := `UPDATE users SET status = ? WHERE id = ?`
+	// Stamp last_seen_at only on the offline transition — it's meant to
+	// answer "when did this user last go offline", not track every status
+	// flip (online/idle/dnd churn while active shouldn't move the marker).
+	var query string
+	if status == models.UserStatusOffline {
+		query = `UPDATE users SET status = ?, last_seen_at = CURRENT_TIMESTAMP WHERE id = ?`
+	} else {
+		query = `UPDATE users SET status = ? WHERE id = ?`
+	}
 
 	result, err := r.db.ExecContext(ctx, query, status, userID)
 	if err != nil {
