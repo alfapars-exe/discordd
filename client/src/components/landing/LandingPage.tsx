@@ -21,6 +21,25 @@ const SHOWCASE = [
   { img: "ss-dm", key: "sc4" },
 ] as const;
 
+/**
+ * The demo video and showcase screenshots live under /static/landing and are
+ * uploaded per deployment rather than committed — a deployment that hasn't
+ * had them uploaded yet serves 404s for all five. Without a fallback the
+ * marketing page, which is the first thing a visitor ever sees, renders
+ * broken-image glyphs and an empty video frame.
+ *
+ * Anything that 404s is dropped from the layout instead: the showcase row
+ * keeps its copy and the video block disappears entirely. Assets are also
+ * per-language (…-tr.png / …-en.png), so the set is keyed by full URL and
+ * re-evaluated when the language changes.
+ */
+function useMissingAssets() {
+  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
+  const markMissing = (url: string) =>
+    setMissing((prev) => (prev.has(url) ? prev : new Set(prev).add(url)));
+  return { isMissing: (url: string) => missing.has(url), markMissing };
+}
+
 function LandingPage() {
   const { t, i18n } = useTranslation("landing");
   const navigate = useNavigate();
@@ -39,6 +58,8 @@ function LandingPage() {
 
   const currentLang = i18n.language?.startsWith("tr") ? "tr" : "en";
   const lang = currentLang;
+  const { isMissing, markMissing } = useMissingAssets();
+  const demoVideoUrl = `${LANDING_ASSETS}/demo-${lang}.mp4`;
   const osInfo = detectOS();
   const { url: downloadUrl, i18nKey: downloadKey } = osInfo;
   const isWindows = osInfo.os === "windows";
@@ -130,17 +151,20 @@ function LandingPage() {
             </a>
           )}
 
-          {/* Demo Video */}
-          <div className="lp-hero-video-wrap">
-            <video
-              className="lp-hero-video"
-              src={`${LANDING_ASSETS}/demo-${lang}.mp4`}
-              autoPlay
-              muted
-              loop
-              playsInline
-            />
-          </div>
+          {/* Demo Video — omitted entirely when the asset isn't deployed */}
+          {!isMissing(demoVideoUrl) && (
+            <div className="lp-hero-video-wrap">
+              <video
+                className="lp-hero-video"
+                src={demoVideoUrl}
+                autoPlay
+                muted
+                loop
+                playsInline
+                onError={() => markMissing(demoVideoUrl)}
+              />
+            </div>
+          )}
         </section>
 
         {/* ═══ SHOWCASE ═══ */}
@@ -149,22 +173,28 @@ function LandingPage() {
             <div className="lp-section-label lp-section--center">{t("showcase_label")}</div>
           </RevealOnScroll>
 
-          {SHOWCASE.map((item, i) => (
-            <RevealOnScroll key={item.key}>
-              <div className={`lp-showcase-row ${i % 2 === 1 ? "lp-showcase-row--reverse" : ""}`}>
-                <img
-                  className="lp-showcase-img"
-                  src={`${LANDING_ASSETS}/${item.img}-${lang}.png`}
-                  alt={t(`${item.key}_title`)}
-                  loading="lazy"
-                />
-                <div className="lp-showcase-text">
-                  <h3>{t(`${item.key}_title`)}</h3>
-                  <p>{t(`${item.key}_desc`)}</p>
+          {SHOWCASE.map((item, i) => {
+            const src = `${LANDING_ASSETS}/${item.img}-${lang}.png`;
+            return (
+              <RevealOnScroll key={item.key}>
+                <div className={`lp-showcase-row ${i % 2 === 1 ? "lp-showcase-row--reverse" : ""}`}>
+                  {!isMissing(src) && (
+                    <img
+                      className="lp-showcase-img"
+                      src={src}
+                      alt={t(`${item.key}_title`)}
+                      loading="lazy"
+                      onError={() => markMissing(src)}
+                    />
+                  )}
+                  <div className="lp-showcase-text">
+                    <h3>{t(`${item.key}_title`)}</h3>
+                    <p>{t(`${item.key}_desc`)}</p>
+                  </div>
                 </div>
-              </div>
-            </RevealOnScroll>
-          ))}
+              </RevealOnScroll>
+            );
+          })}
         </section>
 
         {/* ═══ FEATURES ═══ */}
