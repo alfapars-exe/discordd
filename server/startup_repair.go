@@ -199,7 +199,7 @@ func repairOrphanedServerData(db *database.DB) {
 // Callers' first WS connect after this will set them online again normally.
 func resetStalePresence(db *database.DB) {
 	result, err := db.Conn.ExecContext(context.Background(),
-		`UPDATE users SET status = 'offline' WHERE status IN ('online', 'idle')`)
+		`UPDATE users SET status = 'offline', last_seen_at = CURRENT_TIMESTAMP WHERE status IN ('online', 'idle')`)
 	if err != nil {
 		log.Printf("[main] warning: failed to reset stale presence: %v", err)
 		return
