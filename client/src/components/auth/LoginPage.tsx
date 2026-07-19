@@ -8,7 +8,6 @@ import { isElectron, isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
-import ServerUrlPicker from "./ServerUrlPicker";
 
 function LoginPage() {
   // ─── Hooks ───
@@ -238,8 +237,6 @@ function LoginPage() {
             {t("backToHome")}
           </Link>
         )}
-
-        <ServerUrlPicker />
       </div>
     </main>
   );
