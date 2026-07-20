@@ -10,10 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log"
 	"strings"
 	"sync"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
+
+var logger = logx.Component("i18n")
 
 var SupportedLanguages = []string{"en", "tr"}
 
@@ -53,7 +56,7 @@ func Load(localesFS fs.FS) error {
 			flattenMap("", nested, flat)
 			translations[lang] = flat
 
-			log.Printf("[i18n] loaded %d keys for language: %s", len(flat), lang)
+			logger.Info("loaded translation keys", "language", lang, "key_count", len(flat))
 		}
 	})
 

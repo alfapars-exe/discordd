@@ -2,12 +2,14 @@
 package ws
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"runtime/debug"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // eventHandlers maps WS operation codes to client handler functions.
@@ -59,8 +61,16 @@ func (c *Client) handleEvent(event Event) {
 			return
 		}
 		stack := debug.Stack()
-		log.Printf("[ws] PANIC in handler user=%s op=%s recovered=%v\n%s",
-			c.userID, event.Op, r, stack)
+		// slog, not log.Printf: this reaches Sentry (>= Error is forwarded,
+		// see pkg/logx/sentry.go) and event.Op — client-controlled — goes in
+		// as a structured attr instead of into a format string, so a
+		// malicious op value can't forge or split log lines (G706).
+		slog.LogAttrs(context.Background(), slog.LevelError, "ws handler panic recovered",
+			slog.String("user_id", c.userID),
+			slog.String("op", event.Op),
+			slog.String("panic", fmt.Sprintf("%v", r)),
+			slog.String("stack", string(stack)),
+		)
 		c.hub.logEvent(
 			models.LogLevelError, models.LogCategoryWS, &c.userID,
 			fmt.Sprintf("WS handler panic recovered (op=%s)", event.Op),
@@ -85,7 +95,9 @@ func (c *Client) handleEvent(event Event) {
 		// logging every one would flood the log. Only log every Nth or
 		// at a sampled rate in production — for now we keep it visible
 		// while the limits are being tuned.
-		log.Printf("[ws] RATE LIMIT user=%s op=%s (event dropped)", c.userID, event.Op)
+		// event.Op is client-controlled — passed as a structured attr, not
+		// interpolated into the message, so it can't forge or split log lines (G706).
+		dispatchLogger.Warn("rate limit exceeded, event dropped", "user_id", c.userID, "op", event.Op)
 		return
 	}
 
@@ -93,13 +105,13 @@ func (c *Client) handleEvent(event Event) {
 		handler(c, event)
 		return
 	}
-	log.Printf("[ws] unknown op from user %s: %s", c.userID, event.Op)
+	dispatchLogger.Warn("unknown op from client", "user_id", c.userID, "op", event.Op)
 }
 
 // handleHeartbeat resets the read deadline and acks the client's heartbeat.
 func (c *Client) handleHeartbeat(_ Event) {
 	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		log.Printf("[ws] failed to set read deadline for user %s: %v", c.userID, err)
+		dispatchLogger.Error("failed to set read deadline", "user_id", c.userID, "err", pkg.ErrText(err))
 		return
 	}
 	c.sendEvent(Event{Op: OpHeartbeatAck})

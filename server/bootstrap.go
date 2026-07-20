@@ -10,9 +10,15 @@ import (
 	"strings"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/static"
 	"github.com/rs/cors"
 )
+
+// bootLogger tags every boot-sequence log line originating from this file
+// (music-bot dependency checks, embedded frontend detection, CORS setup).
+var bootLogger = logx.Component("boot")
 
 // logMusicBotDeps — runs `yt-dlp --version` and `ffmpeg -version` at boot.
 // Output goes to the runtime log so a missing/broken install is obvious
@@ -21,15 +27,15 @@ import (
 // server still works without the music bot.
 func logMusicBotDeps() {
 	if out, err := exec.Command("yt-dlp", "--version").Output(); err != nil {
-		log.Printf("[main] WARN yt-dlp not available — music bot will fail: %v", err)
+		bootLogger.Warn("yt-dlp not available — music bot will fail", "err", pkg.ErrText(err))
 	} else {
-		log.Printf("[main] yt-dlp version: %s", strings.TrimSpace(string(out)))
+		bootLogger.Info("yt-dlp version detected", "version", strings.TrimSpace(string(out)))
 	}
 	if out, err := exec.Command("ffmpeg", "-version").Output(); err != nil {
-		log.Printf("[main] WARN ffmpeg not available — music bot will fail: %v", err)
+		bootLogger.Warn("ffmpeg not available — music bot will fail", "err", pkg.ErrText(err))
 	} else {
 		first := strings.SplitN(string(out), "\n", 2)[0]
-		log.Printf("[main] ffmpeg version: %s", strings.TrimSpace(first))
+		bootLogger.Info("ffmpeg version detected", "version", strings.TrimSpace(first))
 	}
 }
 
@@ -43,9 +49,9 @@ func initFrontendFS() (fs.FS, bool) {
 	hasFrontend := false
 	if f, checkErr := frontendFS.(fs.ReadFileFS).ReadFile("index.html"); checkErr == nil && len(f) > 0 {
 		hasFrontend = true
-		log.Println("[main] embedded frontend detected, SPA serving enabled")
+		bootLogger.Info("embedded frontend detected, SPA serving enabled")
 	} else {
-		log.Println("[main] no embedded frontend, API-only mode (use Vite dev server for frontend)")
+		bootLogger.Info("no embedded frontend, API-only mode (use Vite dev server for frontend)")
 	}
 
 	return frontendFS, hasFrontend
@@ -109,7 +115,7 @@ func initCORS(cfg *config.Config) (*cors.Cors, []string) {
 			}
 		}
 	}
-	log.Printf("[cors] allowed origins: %v", corsOrigins)
+	bootLogger.Info("CORS allowed origins configured", "origins", corsOrigins)
 	return cors.New(cors.Options{
 		AllowedOrigins: corsOrigins,
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

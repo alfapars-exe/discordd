@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+// memberLogger is shared by member_service.go and member_moderation.go —
+// both implement methods on the single memberService type.
+var memberLogger = logx.Component("service.member")
 
 // MemberService handles member management. All operations are server-scoped.
 type MemberService interface {
@@ -88,10 +92,10 @@ func (s *memberService) invalidateUserPerms(userID string) {
 // for Insert / broadcast outcomes. Same pattern as voiceService.audit.
 func (s *memberService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
-		log.Printf("[member/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		memberLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
-	log.Printf("[member/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	memberLogger.Info("audit event emitted", "event_type", entry.EventType, "server_id", entry.ServerID)
 	s.auditLogger.Write(entry)
 }
 
@@ -127,7 +131,7 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 	if err != nil {
 		// Non-fatal — fall back to "no nicknames" instead of failing the
 		// whole member list fetch.
-		log.Printf("[member] failed to load nicknames for server %s: %v", serverID, err)
+		memberLogger.Error("failed to load nicknames for server", "server_id", serverID, "err", pkg.ErrText(err))
 		nicknames = map[string]string{}
 	}
 
@@ -139,7 +143,7 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 	if s.timeoutRepo != nil {
 		active, terr := s.timeoutRepo.ListActive(ctx, serverID)
 		if terr != nil {
-			log.Printf("[member] failed to load active timeouts for server %s: %v", serverID, terr)
+			memberLogger.Error("failed to load active timeouts for server", "server_id", serverID, "err", pkg.ErrText(terr))
 		} else {
 			for _, t := range active {
 				timeoutsByUser[t.UserID] = t.ExpiresAt

@@ -3,12 +3,17 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 )
+
+var appLogger = logx.Component("service.applog")
 
 // AppLogService writes and queries structured app logs.
 type AppLogService interface {
@@ -29,6 +34,13 @@ type appLogService struct {
 	ch     chan models.AppLog
 	cancel context.CancelFunc
 	done   chan struct{}
+
+	// dropped counts entries discarded because ch was full (Log's
+	// non-blocking send hit its default case). Incremented on the caller's
+	// goroutine, drained and reported by the watchdog goroutine in Start —
+	// otherwise buffer overload during a traffic spike silently loses log
+	// entries with no operational signal.
+	dropped atomic.Uint64
 }
 
 // NewAppLogService creates the service. Call Start() to begin async writing.
@@ -57,11 +69,14 @@ func (s *appLogService) Log(level models.LogLevel, category models.LogCategory, 
 		Metadata: metaJSON,
 	}
 
-	// Non-blocking send — drop if buffer full (prevents backpressure on hot paths)
+	// Non-blocking send — drop if buffer full (prevents backpressure on hot
+	// paths). Just counts the drop instead of logging one line per entry:
+	// under sustained overload that would itself flood the log. The
+	// dropped-watchdog goroutine in Start reports the total periodically.
 	select {
 	case s.ch <- entry:
 	default:
-		log.Printf("[app_log] buffer full, dropping log: %s", message)
+		s.dropped.Add(1)
 	}
 }
 
@@ -73,13 +88,20 @@ func (s *appLogService) Clear(ctx context.Context) error {
 	return s.repo.DeleteAll(ctx)
 }
 
-// Start runs the async writer and daily auto-purge (30 days).
+// droppedReportInterval controls how often the dropped-watchdog goroutine
+// checks and reports Log() entries discarded due to a full buffer.
+const droppedReportInterval = time.Minute
+
+// Start runs the async writer, the dropped-entry watchdog, and the daily
+// auto-purge (30 days). Each background goroutine is wrapped with logx.Go:
+// an unrecovered panic in any one of them would otherwise crash the whole
+// process, not just app logging.
 func (s *appLogService) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
 	// Writer goroutine — drains channel and writes to DB
-	go func() {
+	logx.Go("app_log.writer", func() {
 		defer close(s.done)
 		for {
 			select {
@@ -88,14 +110,33 @@ func (s *appLogService) Start() {
 				return
 			case entry := <-s.ch:
 				if err := s.repo.Insert(ctx, &entry); err != nil {
-					log.Printf("[app_log] failed to write: %v", err)
+					appLogger.Error("failed to write log entry", "err", pkg.ErrText(err))
 				}
 			}
 		}
-	}()
+	})
+
+	// Dropped-entry watchdog — periodically surfaces how many Log() calls
+	// were discarded because the buffer was full since the last report, so
+	// overload becomes visible (a WARN in the log / Sentry breadcrumb)
+	// instead of silently losing diagnostic data.
+	logx.Go("app_log.dropped_watchdog", func() {
+		ticker := time.NewTicker(droppedReportInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n := s.dropped.Swap(0); n > 0 {
+					slog.Warn("app_log dropped entries", "count", n)
+				}
+			}
+		}
+	})
 
 	// Auto-purge: delete logs older than 30 days, check every 6 hours
-	go func() {
+	logx.Go("app_log.auto_purge", func() {
 		ticker := time.NewTicker(6 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -106,13 +147,13 @@ func (s *appLogService) Start() {
 				cutoff := time.Now().AddDate(0, 0, -30).UTC().Format("2006-01-02 15:04:05")
 				deleted, err := s.repo.DeleteBefore(ctx, cutoff)
 				if err != nil {
-					log.Printf("[app_log] auto-purge error: %v", err)
+					appLogger.Error("auto-purge failed", "err", pkg.ErrText(err))
 				} else if deleted > 0 {
-					log.Printf("[app_log] auto-purge: deleted %d logs older than 30 days", deleted)
+					appLogger.Info("auto-purge deleted old logs", "count", deleted, "max_age_days", 30)
 				}
 			}
 		}
-	}()
+	})
 }
 
 // Stop cancels background goroutines and drains any buffered log entries.
@@ -121,7 +162,7 @@ func (s *appLogService) Stop() {
 		s.cancel()
 	}
 	<-s.done
-	log.Println("[app_log] stopped")
+	appLogger.Info("app log service stopped")
 }
 
 // drain flushes remaining entries from the channel before exit.
@@ -130,7 +171,7 @@ func (s *appLogService) drain() {
 		select {
 		case entry := <-s.ch:
 			if err := s.repo.Insert(context.Background(), &entry); err != nil {
-				log.Printf("[app_log] drain: failed to write: %v", err)
+				appLogger.Error("drain: failed to write log entry", "err", pkg.ErrText(err))
 			}
 		default:
 			return

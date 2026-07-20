@@ -27,10 +27,15 @@
 package ws
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
+
+// hubLogger tags every Hub-lifecycle log line ("ws.hub"). Shared
+// package-level var — also used from hub_clients.go and hub_broadcast.go.
+var hubLogger = logx.Component("ws.hub")
 
 // cachedUserInfo holds user info cached at WS connect time.
 // Avoids DB lookups for typing/voice broadcasts.
@@ -193,5 +198,5 @@ func (h *Hub) Shutdown() {
 		close(client.send)
 		_ = client.conn.Close() // already-closed is acceptable
 	}
-	log.Printf("[ws] hub shut down, %d connections closed", len(clientList))
+	hubLogger.Info("hub shut down", "connections_closed", len(clientList))
 }

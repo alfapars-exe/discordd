@@ -36,3 +36,35 @@ func RequestIDFrom(ctx context.Context) string {
 	}
 	return ""
 }
+
+// requestInfoCtxKey is unexported for the same reason as requestIDCtxKey.
+type requestInfoCtxKey struct{}
+
+// requestInfo is the minimal breadcrumb ErrorCtx needs to correlate a 5xx
+// log line back to the endpoint that produced it, without pulling the full
+// *http.Request (and its body/header surface) into ctx.
+type requestInfo struct {
+	Method string
+	Path   string
+}
+
+// WithRequestInfo returns a derived context carrying the request's method
+// and path. Set by middleware.RequestLogger alongside the request id.
+func WithRequestInfo(ctx context.Context, method, path string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, requestInfoCtxKey{}, requestInfo{Method: method, Path: path})
+}
+
+// RequestInfoFrom returns the method and path previously stored via
+// WithRequestInfo. Returns ("", "") if none was set.
+func RequestInfoFrom(ctx context.Context) (method, path string) {
+	if ctx == nil {
+		return "", ""
+	}
+	if info, ok := ctx.Value(requestInfoCtxKey{}).(requestInfo); ok {
+		return info.Method, info.Path
+	}
+	return "", ""
+}

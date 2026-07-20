@@ -7,18 +7,22 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// authLogger is shared by auth_service.go and auth_password.go — both
+// implement methods on the single authService type.
+var authLogger = logx.Component(string(models.LogCategoryAuth))
 
 // AuthAppLogger writes structured logs. ISP to avoid circular dependency.
 type AuthAppLogger interface {
@@ -110,6 +114,11 @@ func (s *authService) logWarn(userID *string, message string, metadata map[strin
 // compromise indicators). These should trigger alerts in production —
 // audit_log queries filtering on LogLevelError + LogCategoryAuth surface them.
 // Added 2026-05-27 audit (P0-BC-03).
+//
+// Also used by Register to leave a durable trail when user/session creation
+// fails or partially fails, since those failures are invisible to Sentry via
+// a plain 500 alone (see pkg/response.go's Error()) and would otherwise only
+// surface as a support ticket about a missing account.
 func (s *authService) logError(userID *string, message string, metadata map[string]string) {
 	if s.appLogger != nil {
 		s.appLogger.Log(models.LogLevelError, models.LogCategoryAuth, userID, nil, message, metadata)
@@ -210,16 +219,56 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 		Status:       models.UserStatusOnline,
 	}
 
-	if err := s.userRepo.Create(ctx, user); err != nil {
+	// Refresh token bytes are pure randomness with no DB dependency, so they
+	// can be prepared before the transaction opens.
+	refreshBytes := make([]byte, 32)
+	if _, err := rand.Read(refreshBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+	refreshString := hex.EncodeToString(refreshBytes)
+
+	session := &models.Session{
+		RefreshToken: refreshString,
+		ExpiresAt:    time.Now().Add(s.refreshExp),
+	}
+
+	// A4: user row + session row commit atomically (see
+	// repository.sqliteUserRepo.CreateWithSession). Before this fix these
+	// were separate autocommit statements — a session-insert failure
+	// orphaned a committed user row (client saw 500; a retry then hit 409).
+	if err := s.userRepo.CreateWithSession(ctx, user, session); err != nil {
+		if !errors.Is(err, pkg.ErrAlreadyExists) {
+			// pkg.ErrText, not err.Error(): a libSQL connection failure echoes
+			// the DSN (incl. authToken) into the driver error, and app_logs is
+			// a durable sink rendered in the platform-admin log viewer.
+			s.logError(nil, "Register: user/session creation failed", map[string]string{
+				"username": req.Username,
+				"error":    pkg.ErrText(err),
+			})
+		}
 		return nil, err
 	}
 
-	tokens, err := s.generateTokens(ctx, user)
+	accessString, err := s.signAccessToken(user)
 	if err != nil {
+		// The user+session rows already committed at this point — this is
+		// the orphan case: the client sees an error, but the account (and a
+		// working refresh session) already exist. logError above/A1 exist
+		// to surface exactly this.
+		s.logError(&user.ID, "Register: user committed but access token signing failed", map[string]string{
+			"username": req.Username,
+			"error":    pkg.ErrText(err),
+		})
 		return nil, err
 	}
 
-	return tokens, nil
+	user.PasswordHash = ""
+
+	return &AuthTokens{
+		AccessToken:  accessString,
+		RefreshToken: refreshString,
+		User:         *user,
+	}, nil
 }
 
 // dummyLoginHash is a valid bcrypt hash (cost 12) compared against the
@@ -295,7 +344,7 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 				// Error and given structured metadata so monitoring can
 				// alert specifically on this event. This is a
 				// near-certain indicator of credential compromise.
-				log.Printf("[auth] SECURITY: refresh token reuse detected for user %s — invalidating all sessions", entry.userID)
+				authLogger.Error("SECURITY: refresh token reuse detected, invalidating all sessions", "user_id", entry.userID)
 				s.logError(&entry.userID, "Refresh token reuse detected — all sessions invalidated", map[string]string{
 					"event":           "token_compromise_detected",
 					"severity":        "critical",
@@ -491,7 +540,11 @@ func (s *authService) GenerateMediaToken(userID string) (string, error) {
 
 // ─── Private Helpers ───
 
-func (s *authService) generateTokens(ctx context.Context, user *models.User) (*AuthTokens, error) {
+// signAccessToken mints the JWT access token for user. Pure signing, no DB
+// I/O — shared by generateTokens (Login/RefreshToken) and Register, which
+// can't use generateTokens because its session row must be created
+// atomically with the user row, before the JWT is signed (see A4 in Register).
+func (s *authService) signAccessToken(user *models.User) (string, error) {
 	now := time.Now()
 	// Embed the current token_version so future "logout from all devices"
 	// can invalidate this token by bumping users.token_version above the
@@ -510,7 +563,15 @@ func (s *authService) generateTokens(ctx context.Context, user *models.User) (*A
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
 	accessString, err := accessToken.SignedString(s.jwtSecret)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign access token: %w", err)
+		return "", fmt.Errorf("failed to sign access token: %w", err)
+	}
+	return accessString, nil
+}
+
+func (s *authService) generateTokens(ctx context.Context, user *models.User) (*AuthTokens, error) {
+	accessString, err := s.signAccessToken(user)
+	if err != nil {
+		return nil, err
 	}
 
 	refreshBytes := make([]byte, 32)
@@ -522,7 +583,7 @@ func (s *authService) generateTokens(ctx context.Context, user *models.User) (*A
 	session := &models.Session{
 		UserID:       user.ID,
 		RefreshToken: refreshString,
-		ExpiresAt:    now.Add(s.refreshExp),
+		ExpiresAt:    time.Now().Add(s.refreshExp),
 	}
 
 	if err := s.sessionRepo.Create(ctx, session); err != nil {

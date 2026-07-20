@@ -15,13 +15,17 @@ package services
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/ws"
 )
+
+// voiceLogger is shared by every voice_*.go file in this package — they all
+// implement methods on the single voiceService struct (see doc comment above).
+var voiceLogger = logx.Component(string(models.LogCategoryVoice))
 
 // ─── ISP Interfaces ───
 
@@ -206,10 +210,10 @@ func (s *voiceService) SetAuditLogger(logger AuditWriter) {
 // outcomes.
 func (s *voiceService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
-		log.Printf("[voice/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		voiceLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
-	log.Printf("[voice/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	voiceLogger.Info("audit event emitted", "event_type", entry.EventType, "server_id", entry.ServerID)
 	s.auditLogger.Write(entry)
 }
 

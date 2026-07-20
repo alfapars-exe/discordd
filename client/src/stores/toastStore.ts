@@ -9,10 +9,24 @@ import { create } from "zustand";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
+/** Optional action button — e.g. { label: "Retry", onClick: () => ... }. */
+export type ToastAction = {
+  label: string;
+  onClick: () => void;
+};
+
+type ToastOptions = {
+  /** Optional bold title shown above the message (title+body layout). */
+  title?: string;
+  action?: ToastAction;
+};
+
 type Toast = {
   id: string;
   type: ToastType;
   message: string;
+  title?: string;
+  action?: ToastAction;
   duration: number;
   /** Exit animation active — fade-out before removal */
   isExiting: boolean;
@@ -20,7 +34,16 @@ type Toast = {
 
 type ToastState = {
   toasts: Toast[];
-  addToast: (type: ToastType, message: string, duration?: number) => void;
+  /**
+   * duration in ms; pass 0 or null for a persistent toast that only closes
+   * via manual dismissal (no auto-dismiss timer).
+   */
+  addToast: (
+    type: ToastType,
+    message: string,
+    duration?: number | null,
+    options?: ToastOptions
+  ) => void;
   /** Triggers exit animation, then removes from state after 300ms. */
   removeToast: (id: string) => void;
 };
@@ -36,14 +59,18 @@ const EXIT_ANIMATION_MS = 300;
 export const useToastStore = create<ToastState>((set, get) => ({
   toasts: [],
 
-  addToast: (type, message, duration = DEFAULT_DURATION) => {
+  addToast: (type, message, duration = DEFAULT_DURATION, options) => {
     const id = crypto.randomUUID();
+    // 0 or null means "persistent" — no auto-dismiss timer.
+    const resolvedDuration = duration ?? 0;
 
     const toast: Toast = {
       id,
       type,
       message,
-      duration,
+      title: options?.title,
+      action: options?.action,
+      duration: resolvedDuration,
       isExiting: false,
     };
 
@@ -62,11 +89,13 @@ export const useToastStore = create<ToastState>((set, get) => ({
       return { toasts: updatedToasts };
     });
 
-    const timerId = setTimeout(() => {
-      get().removeToast(id);
-    }, duration);
+    if (resolvedDuration > 0) {
+      const timerId = setTimeout(() => {
+        get().removeToast(id);
+      }, resolvedDuration);
 
-    timerMap.set(id, timerId);
+      timerMap.set(id, timerId);
+    }
   },
 
   removeToast: (id) => {

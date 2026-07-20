@@ -16,6 +16,7 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/middleware"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/i18n"
 	"github.com/argeinfina/hichat/pkg/logx"
@@ -36,14 +37,14 @@ func init() {
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	log.Println("[main] HiChat! server starting...")
+	bootLogger.Info("HiChat server starting")
 
 	// 1. Config
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("[main] failed to load config: %v", err)
 	}
-	log.Printf("[main] config loaded (port=%d)", cfg.Server.Port)
+	bootLogger.Info("config loaded", "port", cfg.Server.Port)
 
 	// 1b. Structured logging + optional Sentry. Initialised right after config
 	// so the chosen level/format and SENTRY_DSN take effect before any other
@@ -80,7 +81,7 @@ func main() {
 		boot := services.NewBackupService(cfg.Backup)
 		restoreCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		if err := boot.Restore(restoreCtx); err != nil {
-			log.Printf("[main] backup restore failed (continuing with whatever DB is on disk): %v", err)
+			bootLogger.Error("backup restore failed, continuing with whatever DB is on disk", "err", pkg.ErrText(err))
 		}
 		cancel()
 	}
@@ -104,11 +105,11 @@ func main() {
 	// roll back). Visibility only — deliberately never fatal, so a surprising
 	// answer surfaces in the logs instead of taking the deployment down.
 	if enforced, probeErr := database.ProbeForeignKeys(db.Conn); probeErr != nil {
-		log.Printf("[main] foreign key enforcement: UNKNOWN — probe inconclusive: %v", probeErr)
+		bootLogger.Warn("foreign key enforcement unknown — probe inconclusive", "err", pkg.ErrText(probeErr))
 	} else if enforced {
-		log.Printf("[main] foreign key enforcement: ENABLED")
+		bootLogger.Info("foreign key enforcement enabled")
 	} else {
-		log.Printf("[main] foreign key enforcement: DISABLED — the database accepted a row referencing a nonexistent parent; referential integrity is application-enforced only")
+		bootLogger.Warn("foreign key enforcement disabled — the database accepted a row referencing a nonexistent parent; referential integrity is application-enforced only")
 	}
 	// Closed explicitly at the end of the graceful-shutdown sequence — a
 	// defer here never ran anyway on the log.Fatalf boot-failure paths
@@ -189,7 +190,11 @@ func main() {
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
 
-	go hub.Run()
+	// hub.Run is the single goroutine processing every WS register/unregister
+	// for the whole server — a panic here would otherwise crash the entire
+	// process (an unrecovered goroutine panic kills all goroutines, not just
+	// this one), taking down every unrelated subsystem with it.
+	logx.Go("ws.hub_run", hub.Run)
 
 	// Voice orphan cleanup — periodic sweep for stale voice states (30s interval)
 	svcs.Voice.StartOrphanCleanup()
@@ -353,14 +358,14 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("[main] server listening on %s", cfg.Server.Addr())
+		bootLogger.Info("server listening", "addr", cfg.Server.Addr())
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[main] server error: %v", err)
 		}
 	}()
 
 	<-done
-	log.Println("[main] shutting down...")
+	bootLogger.Info("shutting down")
 
 	// Music bots first, and specifically BEFORE the (up to 3 minute) backup
 	// below: each Stop() disconnects the LiveKit room and kills that track's
@@ -400,8 +405,8 @@ func main() {
 	}
 
 	if err := db.Close(); err != nil {
-		log.Printf("[main] db close: %v", err)
+		bootLogger.Error("db close failed", "err", pkg.ErrText(err))
 	}
 
-	log.Println("[main] server stopped gracefully")
+	bootLogger.Info("server stopped gracefully")
 }

@@ -7,6 +7,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { isElectron, isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
+import { sanitizeReturnUrl } from "../../utils/returnUrl";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
 
 function LoginPage() {
@@ -66,9 +67,9 @@ function LoginPage() {
           window.electronAPI?.clearCredentials();
         }
       }
-      // Redirect to returnUrl (e.g. invite link) or /channels
-      const returnUrl = searchParams.get("returnUrl");
-      navigate(returnUrl ?? "/channels");
+      // Redirect to returnUrl (e.g. invite link) or /channels — sanitized,
+      // returnUrl is attacker-controlled query input (see utils/returnUrl.ts).
+      navigate(sanitizeReturnUrl(searchParams.get("returnUrl")));
     } else {
       // Retry başarısızsa (örn. wake-up sonrası server yine 503 döndü) wake-up
       // state'ini sıfırla — bir sonraki render watchError'u idle'dan tetikler
@@ -211,7 +212,7 @@ function LoginPage() {
         {/* Footer Link */}
         <p className="auth-link">
           {t("needAccount")}{" "}
-          <Link to={searchParams.get("returnUrl") ? `/register?returnUrl=${searchParams.get("returnUrl")}` : "/register"}>{t("registerLink")}</Link>
+          <Link to={searchParams.get("returnUrl") ? `/register?returnUrl=${encodeURIComponent(searchParams.get("returnUrl")!)}` : "/register"}>{t("registerLink")}</Link>
         </p>
 
         {/* Desktop download hint — only on web browsers with desktop OS */}

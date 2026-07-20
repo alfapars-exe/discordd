@@ -3,13 +3,15 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var channelLogger = logx.Component("service.channel")
 
 // ChannelVisibilityChecker resolves per-user channel visibility using role overrides.
 type ChannelVisibilityChecker interface {
@@ -71,10 +73,10 @@ func (s *channelService) SetAuditLogger(logger AuditWriter) {
 // report tells us exactly where the pipeline dropped.
 func (s *channelService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
-		log.Printf("[channel/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		channelLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
-	log.Printf("[channel/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	channelLogger.Info("audit event emitted", "event_type", entry.EventType, "server_id", entry.ServerID)
 	s.auditLogger.Write(entry)
 }
 

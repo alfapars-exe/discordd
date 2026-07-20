@@ -7,6 +7,13 @@ export type APIResponse<T = unknown> = {
   data?: T;
   error?: string;
   /**
+   * Machine-readable backend error code (e.g. "NOT_FOUND", "RATE_LIMITED"),
+   * derived from the server's domain sentinel. Optional — absent on success
+   * and on older/message-only error paths. classifyApiError prefers it over
+   * the free-text error string when present.
+   */
+  code?: string;
+  /**
    * True when the failure came from the network layer (fetch threw, DNS,
    * offline). Callers use this to decide "worth retrying" vs "give up" —
    * a 4xx is deterministic and shouldn't retry, a network flake often

@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -159,7 +160,7 @@ function AdminReportList() {
     if (res.success && res.data) {
       setReports(res.data.reports);
     } else {
-      addToast("error", res.error ?? t("platformReportLoadError"));
+      showApiError(res, { fallbackKey: "settings:platformReportLoadError" });
     }
     setIsLoading(false);
   }, [statusFilter, addToast, t]);
@@ -172,7 +173,7 @@ function AdminReportList() {
       if (res.success && res.data) {
         setReports(res.data.reports);
       } else {
-        addToast("error", res.error ?? t("platformReportLoadError"));
+        showApiError(res, { fallbackKey: "settings:platformReportLoadError" });
       }
       setIsLoading(false);
     })();
@@ -212,7 +213,7 @@ function AdminReportList() {
       });
       await fetchReports();
     } else {
-      addToast("error", res.error ?? t("platformReportStatusUpdateError"));
+      showApiError(res, { fallbackKey: "settings:platformReportStatusUpdateError" });
     }
 
     setSavingReports((prev) => {
@@ -280,7 +281,7 @@ function AdminReportList() {
       addToast("success", t("platformBanSuccess", { username: targetName }));
       await fetchReports();
     } else {
-      addToast("error", res.error ?? t("platformBanError"));
+      showApiError(res, { fallbackKey: "settings:platformBanError" });
     }
   }
 
@@ -295,7 +296,7 @@ function AdminReportList() {
       addToast("success", t("platformDeleteSuccess", { username: targetName }));
       await fetchReports();
     } else {
-      addToast("error", res.error ?? t("platformDeleteError"));
+      showApiError(res, { fallbackKey: "settings:platformDeleteError" });
     }
   }
 

@@ -3,7 +3,6 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
 )
 
 // ─── Voice Event Handlers ───
@@ -20,7 +19,7 @@ func (c *Client) handleVoiceJoin(event Event) {
 	}
 
 	if data.ChannelID == "" {
-		log.Printf("[ws] voice_join without channel_id from user %s", c.userID)
+		dispatchLogger.Warn("voice_join without channel_id", "user_id", c.userID)
 		return
 	}
 
@@ -77,7 +76,7 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	}
 
 	if data.TargetUserID == "" {
-		log.Printf("[ws] voice_admin_state_update missing target_user_id from user %s", c.userID)
+		dispatchLogger.Warn("voice_admin_state_update missing target_user_id", "user_id", c.userID)
 		return
 	}
 
@@ -86,8 +85,8 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// failing closed here means a forgotten check in the service can't
 	// degrade into a moderation bypass.
 	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
-		log.Printf("[ws] DENIED voice_admin_state_update: actor=%s target=%s (insufficient perms)",
-			c.userID, data.TargetUserID)
+		dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
+			"actor_id", c.userID, "target_id", data.TargetUserID)
 		return
 	}
 
@@ -108,13 +107,13 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 	}
 
 	if data.TargetUserID == "" || data.TargetChannelID == "" {
-		log.Printf("[ws] voice_move_user missing fields from user %s", c.userID)
+		dispatchLogger.Warn("voice_move_user missing fields", "user_id", c.userID)
 		return
 	}
 
 	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
-		log.Printf("[ws] DENIED voice_move_user: actor=%s target=%s (insufficient perms)",
-			c.userID, data.TargetUserID)
+		dispatchLogger.Warn("voice_move_user denied: insufficient perms",
+			"actor_id", c.userID, "target_id", data.TargetUserID)
 		return
 	}
 
@@ -135,13 +134,13 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 	}
 
 	if data.TargetUserID == "" {
-		log.Printf("[ws] voice_disconnect_user missing target_user_id from user %s", c.userID)
+		dispatchLogger.Warn("voice_disconnect_user missing target_user_id", "user_id", c.userID)
 		return
 	}
 
 	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
-		log.Printf("[ws] DENIED voice_disconnect_user: actor=%s target=%s (insufficient perms)",
-			c.userID, data.TargetUserID)
+		dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
+			"actor_id", c.userID, "target_id", data.TargetUserID)
 		return
 	}
 
@@ -162,7 +161,7 @@ func (c *Client) handleScreenShareWatch(event Event) {
 	}
 
 	if data.StreamerUserID == "" {
-		log.Printf("[ws] screen_share_watch missing streamer_user_id from user %s", c.userID)
+		dispatchLogger.Warn("screen_share_watch missing streamer_user_id", "user_id", c.userID)
 		return
 	}
 

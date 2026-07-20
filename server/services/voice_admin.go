@@ -6,7 +6,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -100,8 +99,8 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 		})
 	}
 
-	log.Printf("[voice] admin %s updated server state for user %s (muted=%v, deafened=%v)",
-		adminUserID, targetUserID, state.IsServerMuted, state.IsServerDeafened)
+	voiceLogger.Info("admin updated server voice state",
+		"admin_id", adminUserID, "target_id", targetUserID, "muted", state.IsServerMuted, "deafened", state.IsServerDeafened)
 	return nil
 }
 
@@ -266,8 +265,8 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		})
 	}
 
-	log.Printf("[voice] user %s moved user %s from channel %s to %s",
-		moverUserID, targetUserID, sourceChannelID, targetChannelID)
+	voiceLogger.Info("user moved another user between voice channels",
+		"mover_id", moverUserID, "target_id", targetUserID, "from_channel", sourceChannelID, "to_channel", targetChannelID)
 	return nil
 }
 
@@ -353,7 +352,7 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 		Metadata:     metadata,
 	})
 
-	log.Printf("[voice] admin %s disconnected user %s from channel %s",
-		disconnecterUserID, targetUserID, channelID)
+	voiceLogger.Info("admin disconnected user from voice channel",
+		"admin_id", disconnecterUserID, "target_id", targetUserID, "channel_id", channelID)
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 
 type MockUserRepo struct {
 	CreateFn                  func(ctx context.Context, user *models.User) error
+	CreateWithSessionFn       func(ctx context.Context, user *models.User, session *models.Session) error
 	GetByIDFn                 func(ctx context.Context, id string) (*models.User, error)
 	GetByUsernameFn           func(ctx context.Context, username string) (*models.User, error)
 	GetAllFn                  func(ctx context.Context) ([]models.User, error)
@@ -33,6 +34,12 @@ type MockUserRepo struct {
 func (m *MockUserRepo) Create(ctx context.Context, user *models.User) error {
 	if m.CreateFn != nil {
 		return m.CreateFn(ctx, user)
+	}
+	return nil
+}
+func (m *MockUserRepo) CreateWithSession(ctx context.Context, user *models.User, session *models.Session) error {
+	if m.CreateWithSessionFn != nil {
+		return m.CreateWithSessionFn(ctx, user, session)
 	}
 	return nil
 }

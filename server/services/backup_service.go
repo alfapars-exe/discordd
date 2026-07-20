@@ -53,7 +53,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,7 +65,11 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
+
+var backupLogger = logx.Component("service.backup")
 
 // cmdRunner is the indirection that makes BackupService testable. Production
 // uses defaultRunCmd (wraps exec.CommandContext); tests inject a fake to
@@ -181,10 +184,10 @@ func (b *BackupService) SetAppLogger(l BackupAppLogger) {
 //     next cycle.
 func (b *BackupService) Start() {
 	if !b.cfg.Enabled {
-		log.Printf("[backup] disabled (HF_TOKEN not set)")
+		backupLogger.Info("disabled (HF_TOKEN not set)")
 		return
 	}
-	log.Printf("[backup] enabled — bucket=%s interval=%s", b.cfg.HFBucket, b.cfg.Interval)
+	backupLogger.Info("enabled", "bucket", b.cfg.HFBucket, "interval", b.cfg.Interval)
 
 	go func() {
 		// Initial delay: let migrations + warm caches settle before the
@@ -245,15 +248,15 @@ func (b *BackupService) Stop() {
 func (b *BackupService) Shutdown(ctx context.Context) {
 	b.Stop() // halt the periodic ticker first so it can't race this cycle
 	if !b.cfg.Enabled {
-		log.Printf("[backup] shutdown backup skipped: disabled (HF_TOKEN not set)")
+		backupLogger.Info("shutdown backup skipped: disabled (HF_TOKEN not set)")
 		return
 	}
 	if database.IsRemoteLibSQL(b.cfg.DBPath) {
-		log.Printf("[backup] shutdown backup skipped: remote DSN, already persistent")
+		backupLogger.Info("shutdown backup skipped: remote DSN, already persistent")
 		return
 	}
 
-	log.Printf("[backup] shutdown backup: final DB snapshot before exit")
+	backupLogger.Info("shutdown backup: final DB snapshot before exit")
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -261,9 +264,9 @@ func (b *BackupService) Shutdown(ctx context.Context) {
 	}()
 	select {
 	case <-done:
-		log.Printf("[backup] shutdown backup complete")
+		backupLogger.Info("shutdown backup complete")
 	case <-ctx.Done():
-		log.Printf("[backup] shutdown backup did not finish before deadline: %v (process exiting)", ctx.Err())
+		backupLogger.Warn("shutdown backup did not finish before deadline, process exiting", "err", pkg.ErrText(ctx.Err()))
 	}
 }
 
@@ -291,19 +294,19 @@ func (b *BackupService) Shutdown(ctx context.Context) {
 // will 404 briefly while the goroutine catches up.
 func (b *BackupService) Restore(ctx context.Context) error {
 	if !b.cfg.Enabled {
-		log.Printf("[backup] restore skipped: disabled (HF_TOKEN not set)")
+		backupLogger.Info("restore skipped: disabled (HF_TOKEN not set)")
 		return nil
 	}
 	if database.IsRemoteLibSQL(b.cfg.DBPath) {
-		log.Printf("[backup] restore skipped: remote DSN (%s), upstream is already persistent", database.RedactDSN(b.cfg.DBPath))
+		backupLogger.Info("restore skipped: remote DSN, upstream is already persistent", "dsn", database.RedactDSN(b.cfg.DBPath))
 		return nil
 	}
 
 	force := os.Getenv("BACKUP_FORCE_RESTORE") == "1"
 	if !force {
 		if info, err := os.Stat(b.cfg.DBPath); err == nil && info.Size() >= 4096 {
-			log.Printf("[backup] restore skipped: existing DB at %s (%d bytes); set BACKUP_FORCE_RESTORE=1 to override",
-				b.cfg.DBPath, info.Size())
+			backupLogger.Info("restore skipped: existing DB found, set BACKUP_FORCE_RESTORE=1 to override",
+				"db_path", b.cfg.DBPath, "size_bytes", info.Size())
 			// Still try uploads — restart may have wiped uploads even if
 			// DB survived (mixed-mount edge case on some HF tiers).
 			b.startUploadsRestoreAsync()
@@ -311,7 +314,7 @@ func (b *BackupService) Restore(ctx context.Context) error {
 		}
 	}
 
-	log.Printf("[backup] restore start: bucket=%s force=%v", b.cfg.HFBucket, force)
+	backupLogger.Info("restore start", "bucket", b.cfg.HFBucket, "force", force)
 	b.logInfo("restore start", map[string]string{"bucket": b.cfg.HFBucket})
 
 	// 0o750 matches the DB-dir convention in database.go — no "other" access.
@@ -326,7 +329,7 @@ func (b *BackupService) Restore(ctx context.Context) error {
 	if err := b.hfDownloadFile(ctx, "db/hichat.db", tmpPath); err != nil {
 		// "404 / not found" → bucket is empty (fresh deploy). Not fatal.
 		if isHFNotFound(err) {
-			log.Printf("[backup] restore skipped: no snapshot in bucket yet (fresh deploy)")
+			backupLogger.Info("restore skipped: no snapshot in bucket yet (fresh deploy)")
 			b.logInfo("restore skipped: bucket empty", nil)
 			b.startUploadsRestoreAsync()
 			return nil
@@ -340,13 +343,13 @@ func (b *BackupService) Restore(ctx context.Context) error {
 
 	info, statErr := os.Stat(tmpPath)
 	if statErr != nil || info.Size() < 4096 {
-		log.Printf("[backup] restore skipped: downloaded file is empty or missing (stat err=%v size=%d)", statErr, sizeOf(info))
+		backupLogger.Warn("restore skipped: downloaded file is empty or missing", "stat_err", pkg.ErrText(statErr), "size_bytes", sizeOf(info))
 		_ = os.Remove(tmpPath)
 		return nil
 	}
 
 	if err := b.verifyDBIntegrity(ctx, tmpPath); err != nil {
-		log.Printf("[backup] restore skipped: integrity check failed: %v", err)
+		backupLogger.Error("restore skipped: integrity check failed", "err", pkg.ErrText(err))
 		b.logError("restore integrity check failed", map[string]string{"error": truncate(err.Error(), 256)})
 		_ = os.Remove(tmpPath)
 		return nil
@@ -364,7 +367,7 @@ func (b *BackupService) Restore(ctx context.Context) error {
 		_ = os.Remove(tmpPath)
 	}
 
-	log.Printf("[backup] restore ok: %s (%d bytes)", b.cfg.DBPath, info.Size())
+	backupLogger.Info("restore ok", "db_path", b.cfg.DBPath, "size_bytes", info.Size())
 	b.logInfo("restore ok", map[string]string{
 		"db_bytes": fmt.Sprintf("%d", info.Size()),
 		"source":   "hf-bucket",
@@ -397,7 +400,7 @@ func (b *BackupService) startUploadsRestoreAsync() {
 		ctx, cancel := context.WithTimeout(parent, 60*time.Minute)
 		defer cancel()
 		if err := b.restoreUploadsFromBucket(ctx); err != nil {
-			log.Printf("[backup] uploads restore failed: %v", err)
+			backupLogger.Error("uploads restore failed", "err", pkg.ErrText(err))
 			b.logError("uploads restore failed", map[string]string{"error": truncate(err.Error(), 256)})
 		}
 	}()
@@ -424,7 +427,7 @@ func (b *BackupService) restoreUploadsFromBucket(ctx context.Context) error {
 	// Skip if uploads dir is already populated. Catches the "DB was
 	// wiped but uploads survived" case as well as normal warm boots.
 	if entries, err := os.ReadDir(b.cfg.UploadDir); err == nil && len(entries) > 0 {
-		log.Printf("[backup] uploads restore skipped: %s already has %d entries", b.cfg.UploadDir, len(entries))
+		backupLogger.Info("uploads restore skipped: dir already populated", "upload_dir", b.cfg.UploadDir, "entries", len(entries))
 		return nil
 	}
 
@@ -432,7 +435,7 @@ func (b *BackupService) restoreUploadsFromBucket(ctx context.Context) error {
 		return fmt.Errorf("uploads dir mkdir: %w", err)
 	}
 
-	log.Printf("[backup] uploads restore start: bucket=%s → %s", b.cfg.HFBucket, b.cfg.UploadDir)
+	backupLogger.Info("uploads restore start", "bucket", b.cfg.HFBucket, "upload_dir", b.cfg.UploadDir)
 	src := fmt.Sprintf("hf://buckets/%s/latest/uploads", b.cfg.HFBucket)
 	out, err := b.runCmd(ctx, b.hfEnv(), "hf", "sync", src, b.cfg.UploadDir)
 	if err != nil {
@@ -440,12 +443,12 @@ func (b *BackupService) restoreUploadsFromBucket(ctx context.Context) error {
 		// the normal path through this branch.
 		joined := string(out) + " " + err.Error()
 		if isHFNotFoundMsg(joined) {
-			log.Printf("[backup] uploads restore skipped: no uploads in bucket yet")
+			backupLogger.Info("uploads restore skipped: no uploads in bucket yet")
 			return nil
 		}
 		return fmt.Errorf("hf sync (restore): %w (output: %s)", err, truncate(string(out), 1024))
 	}
-	log.Printf("[backup] uploads restore ok")
+	backupLogger.Info("uploads restore ok")
 	b.logInfo("uploads restore ok", nil)
 	return nil
 }
@@ -570,7 +573,7 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 	defer b.backupMu.Unlock()
 
 	start := time.Now()
-	log.Printf("[backup] cycle start (dbOnly=%v)", dbOnly)
+	backupLogger.Info("cycle start", "db_only", dbOnly)
 	b.logInfo("backup cycle started", map[string]string{"db_only": fmt.Sprintf("%v", dbOnly)})
 
 	if err := os.MkdirAll(b.cfg.WorkDir, 0o750); err != nil {
@@ -585,7 +588,7 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 	//    every cycle. So skip the DB snapshot entirely in remote mode; the
 	//    uploads mirror below still runs.
 	if database.IsRemoteLibSQL(b.cfg.DBPath) {
-		log.Printf("[backup] db snapshot skipped: remote DSN (%s), upstream is already persistent", database.RedactDSN(b.cfg.DBPath))
+		backupLogger.Info("db snapshot skipped: remote DSN, upstream is already persistent", "dsn", database.RedactDSN(b.cfg.DBPath))
 	} else {
 		// SQLite snapshot via VACUUM INTO — produces a consistent file
 		// even while the app continues writing. The output is a single
@@ -600,7 +603,7 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 			// Don't bail — still try to mirror uploads. DB snapshot might
 			// fail for a transient lock; uploads sync is independent.
 		} else {
-			log.Printf("[backup] sqlite snapshot ok (%s)", time.Since(dbStart))
+			backupLogger.Info("sqlite snapshot ok", "duration", time.Since(dbStart))
 		}
 
 		// Verify BEFORE promote. The upload below overwrites
@@ -623,7 +626,7 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 				if err := b.hfCopy(snapshotPath, "db/hichat.db"); err != nil {
 					b.fail("hf cp db", err)
 				} else {
-					log.Printf("[backup] db upload ok (%s)", time.Since(dbUploadStart))
+					backupLogger.Info("db upload ok", "duration", time.Since(dbUploadStart))
 					// Versioned history: a second, dated copy of the same
 					// verified bytes. Only after `latest/` succeeded — the
 					// live mirror is the priority, history is the bonus.
@@ -648,12 +651,12 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 		if err := b.hfSyncDir(b.cfg.UploadDir, "uploads"); err != nil {
 			b.fail("hf sync uploads", err)
 		} else {
-			log.Printf("[backup] uploads sync ok (%s)", time.Since(uploadsStart))
+			backupLogger.Info("uploads sync ok", "duration", time.Since(uploadsStart))
 		}
 	}
 
 	total := time.Since(start)
-	log.Printf("[backup] cycle complete (%s)", total)
+	backupLogger.Info("cycle complete", "duration", total)
 	b.logInfo("backup cycle complete", map[string]string{
 		"duration_seconds": fmt.Sprintf("%.0f", total.Seconds()),
 		"bucket":           b.cfg.HFBucket,
@@ -680,7 +683,7 @@ func (b *BackupService) snapshotSQLite(destPath string) error {
 		// The sqlite3 CLI echoes the DB path it was handed in its error
 		// output; for a libsql:// DSN that path carries an authToken=<jwt>
 		// credential. Redact it before it reaches the error — otherwise it
-		// leaks verbatim through fail()'s log.Printf and the app-logger.
+		// leaks verbatim through fail()'s log call and the app-logger.
 		return fmt.Errorf("sqlite3 vacuum: %w (output: %s)", err, database.RedactDSN(string(out)))
 	}
 	return nil
@@ -759,7 +762,7 @@ func (b *BackupService) rotateDailySnapshot(ctx context.Context, snapshotPath st
 		return
 	}
 	b.lastDailyDate = today
-	log.Printf("[backup] daily snapshot ok: %s", dest)
+	backupLogger.Info("daily snapshot ok", "dest", dest)
 
 	// Prune only after a successful rotation, so the listing costs one
 	// round-trip per day rather than one per hourly cycle.
@@ -791,14 +794,14 @@ func (b *BackupService) pruneDailySnapshots(ctx context.Context, today string) {
 	uri := strings.TrimSuffix(b.dailyPrefix(), "/")
 	out, err := b.runCmd(listCtx, b.hfEnv(), "hf", "buckets", "list", uri, "--recursive", "--format", "json")
 	if err != nil {
-		log.Printf("[backup] daily prune skipped: listing failed: %v (output: %s)", err, truncate(string(out), 512))
+		backupLogger.Error("daily prune skipped: listing failed", "err", pkg.ErrText(err), "output", truncate(string(out), 512))
 		return
 	}
 
 	dates, ok := parseDailyDates(out)
 	if !ok {
-		log.Printf("[backup] daily prune skipped: listing had no recognisable daily/<date> paths — refusing to delete on a guess (output: %s)",
-			truncate(string(out), 512))
+		backupLogger.Warn("daily prune skipped: listing had no recognisable daily/<date> paths, refusing to delete on a guess",
+			"output", truncate(string(out), 512))
 		return
 	}
 	if len(dates) <= keep {
@@ -935,7 +938,7 @@ func (b *BackupService) removeDailySnapshot(ctx context.Context, date string) er
 	if err != nil {
 		return fmt.Errorf("hf buckets remove %s: %w (output: %s)", target, err, truncate(string(out), 512))
 	}
-	log.Printf("[backup] daily prune: removed %s", target)
+	backupLogger.Info("daily prune: removed snapshot", "target", target)
 	return nil
 }
 
@@ -946,7 +949,7 @@ func (b *BackupService) hfSyncDir(srcDir, destSubpath string) error {
 	// Sanity: skip if the source doesn't exist — common on a fresh
 	// deploy where no uploads have happened yet.
 	if _, err := os.Stat(srcDir); err != nil {
-		log.Printf("[backup] source dir missing, skipping: %s", srcDir)
+		backupLogger.Info("source dir missing, skipping", "src_dir", srcDir)
 		return nil
 	}
 
@@ -990,7 +993,7 @@ func (b *BackupService) logError(msg string, meta map[string]string) {
 }
 
 func (b *BackupService) fail(step string, err error) {
-	log.Printf("[backup] %s failed: %v", step, err)
+	backupLogger.Error("backup step failed", "step", step, "err", pkg.ErrText(err))
 	b.logError("backup step failed", map[string]string{
 		"step":  step,
 		"error": truncate(err.Error(), 512),

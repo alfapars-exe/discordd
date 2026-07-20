@@ -2,7 +2,6 @@ package ws
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -10,7 +9,12 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
+
+// handlerLogger tags every connection-upgrade log line ("ws.handler").
+var handlerLogger = logx.Component("ws.handler")
 
 // TokenValidator validates JWT tokens for WS connections.
 // Defined here (not importing services.AuthService) to avoid circular dependency.
@@ -69,7 +73,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		log.Printf("[ws] CheckOrigin called — origin=%q host=%q", origin, r.Host)
+		handlerLogger.Debug("check origin called", "origin", origin, "host", r.Host)
 		// No Origin header = same-origin request (non-browser or same host)
 		if origin == "" {
 			return true
@@ -93,7 +97,7 @@ var upgrader = websocket.Upgrader{
 				return true
 			}
 		}
-		log.Printf("[ws] rejected connection from origin: %s", origin)
+		handlerLogger.Warn("rejected connection: origin not allowed", "origin", origin)
 		return false
 	},
 }
@@ -287,7 +291,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	if h.userInfoProvider != nil {
 		user, err := h.userInfoProvider.GetByID(r.Context(), claims.UserID)
 		if err != nil {
-			log.Printf("[ws] user info fetch failed for %s: %v", claims.UserID, err)
+			handlerLogger.Error("user info fetch failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
 			h.hub.logEvent(models.LogLevelError, models.LogCategoryWS, &claims.UserID, "WS connect: user lookup failed", map[string]string{
 				"error": err.Error(),
 			})
@@ -337,7 +341,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	if h.banChecker != nil {
 		banned, err := h.banChecker.IsBanned(r.Context(), claims.UserID)
 		if err != nil {
-			log.Printf("[ws] ban check failed for user %s: %v", claims.UserID, err)
+			handlerLogger.Error("ban check failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -349,7 +353,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[ws] upgrade failed for user %s: %v", claims.UserID, err)
+		handlerLogger.Error("websocket upgrade failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -399,7 +403,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		if ids, err := h.muteChecker.GetMutedServerIDs(r.Context(), claims.UserID); err == nil {
 			mutedServerIDs = ids
 		} else {
-			log.Printf("[ws] mute check failed for user %s: %v", claims.UserID, err)
+			handlerLogger.Error("mute check failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
 		}
 	}
 	if mutedServerIDs == nil {
@@ -412,7 +416,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		if ids, err := h.channelMuteChecker.GetMutedChannelIDs(r.Context(), claims.UserID); err == nil {
 			mutedChannelIDs = ids
 		} else {
-			log.Printf("[ws] channel mute check failed for user %s: %v", claims.UserID, err)
+			handlerLogger.Error("channel mute check failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
 		}
 	}
 	if mutedChannelIDs == nil {
@@ -478,7 +482,11 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Start pumps — WritePump in goroutine, ReadPump blocks until disconnect
-	go client.WritePump()
+	// Start pumps — WritePump in goroutine, ReadPump blocks until disconnect.
+	// WritePump fans out every hub broadcast to this one connection; wrapped
+	// in logx.Go so a panic on one client's write path can't take the whole
+	// process down with it (an unrecovered goroutine panic kills every
+	// connection, not just this one).
+	logx.Go("ws.write_pump", client.WritePump)
 	client.ReadPump()
 }

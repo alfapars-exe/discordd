@@ -9,6 +9,12 @@ import (
 // UserRepository defines data access for users.
 type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
+	// CreateWithSession creates a user and an associated session atomically
+	// — either both rows commit or neither does. Used by AuthService.Register
+	// to close the orphaned-user-row bug where a session-insert failure left
+	// a committed, tokenless user row behind (client saw 500; a retry then
+	// hit 409).
+	CreateWithSession(ctx context.Context, user *models.User, session *models.Session) error
 	GetByID(ctx context.Context, id string) (*models.User, error)
 	GetByUsername(ctx context.Context, username string) (*models.User, error)
 	GetAll(ctx context.Context) ([]models.User, error)

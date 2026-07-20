@@ -3,7 +3,6 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
 )
 
 // ─── P2P Call Event Handlers ───
@@ -20,7 +19,7 @@ func (c *Client) handleP2PCallInitiate(event Event) {
 	}
 
 	if data.ReceiverID == "" || data.CallType == "" {
-		log.Printf("[ws] p2p_call_initiate missing fields from user %s", c.userID)
+		dispatchLogger.Warn("p2p_call_initiate missing fields", "user_id", c.userID)
 		return
 	}
 
@@ -41,7 +40,7 @@ func (c *Client) handleP2PCallAccept(event Event) {
 	}
 
 	if data.CallID == "" {
-		log.Printf("[ws] p2p_call_accept missing call_id from user %s", c.userID)
+		dispatchLogger.Warn("p2p_call_accept missing call_id", "user_id", c.userID)
 		return
 	}
 
@@ -62,7 +61,7 @@ func (c *Client) handleP2PCallDecline(event Event) {
 	}
 
 	if data.CallID == "" {
-		log.Printf("[ws] p2p_call_decline missing call_id from user %s", c.userID)
+		dispatchLogger.Warn("p2p_call_decline missing call_id", "user_id", c.userID)
 		return
 	}
 
@@ -91,7 +90,7 @@ func (c *Client) handleP2PSignal(event Event) {
 	}
 
 	if data.CallID == "" || data.Type == "" {
-		log.Printf("[ws] p2p_signal missing fields from user %s", c.userID)
+		dispatchLogger.Warn("p2p_signal missing fields", "user_id", c.userID)
 		return
 	}
 

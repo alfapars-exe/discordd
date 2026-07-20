@@ -80,5 +80,6 @@
   "copyInviteLink": "Davet Linkini Kopyala",
   "copyInviteLinkHint": "WhatsApp, Telegram vb. ile paylaşın",
   "inviteLinkCopied": "Davet linki panoya kopyalandı",
-  "inviteCopyFailed": "Panoya kopyalanamadı"
+  "inviteCopyFailed": "Panoya kopyalanamadı",
+  "joinAfterRegisterFailed": "Hesabın oluşturuldu ama sunucuya katılım başarısız oldu. Lütfen davet bağlantısını tekrar dene."
 }

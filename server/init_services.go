@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"log"
 	"time"
 
 	"github.com/argeinfina/hichat/config"
@@ -101,9 +100,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	var emailSender email.EmailSender
 	if cfg.Email.ResendAPIKey != "" && cfg.Email.FromEmail != "" && cfg.Email.AppURL != "" {
 		emailSender = email.NewResendSender(cfg.Email.ResendAPIKey, cfg.Email.FromEmail, cfg.Email.AppURL)
-		log.Printf("[main] email service enabled (from=%s)", cfg.Email.FromEmail)
+		bootLogger.Info("email service enabled", "from", cfg.Email.FromEmail)
 	} else {
-		log.Println("[main] email service disabled (RESEND_API_KEY, RESEND_FROM or APP_URL not set)")
+		bootLogger.Info("email service disabled (RESEND_API_KEY, RESEND_FROM or APP_URL not set)")
 	}
 
 	// Remaining services (order-independent)

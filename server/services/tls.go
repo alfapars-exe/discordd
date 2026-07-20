@@ -17,11 +17,14 @@ package services
 
 import (
 	"crypto/tls"
-	"log"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
+
+var tlsLogger = logx.Component("service.tls")
 
 const insecureTLSEnv = "LIVEKIT_INSECURE_TLS"
 
@@ -36,9 +39,8 @@ func resolveInsecureTLS() {
 	switch v {
 	case "1", "true", "yes", "on":
 		insecureTLSFlag = true
-		log.Printf("[tls] WARNING: %s=%s — LiveKit TLS verification DISABLED. "+
-			"Use only for self-signed certs in a trusted self-hosted setup.",
-			insecureTLSEnv, v)
+		tlsLogger.Warn("LiveKit TLS verification DISABLED, use only for self-signed certs in a trusted self-hosted setup",
+			"env_var", insecureTLSEnv, "value", v)
 	default:
 		insecureTLSFlag = false
 	}

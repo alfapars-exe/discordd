@@ -3,14 +3,16 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"unicode/utf8"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var reactionLogger = logx.Component("service.reaction")
 
 // MaxEmojiLength caps emoji string length. Most emojis are 1-2 codepoints but
 // compound emojis (family, flag) can exceed 10. 32 provides a safe margin.
@@ -94,7 +96,7 @@ func (s *reactionService) ToggleReaction(ctx context.Context, messageID, userID,
 	onlineUsers := s.hub.GetOnlineUserIDsForServer(channel.ServerID)
 	perms, permErr := s.permResolver.ResolveChannelPermissionsBulk(ctx, message.ChannelID, onlineUsers)
 	if permErr != nil {
-		log.Printf("[reaction] bulk permission resolve failed channel=%s: %v", message.ChannelID, permErr)
+		reactionLogger.Error("bulk permission resolve failed", "channel_id", message.ChannelID, "err", pkg.ErrText(permErr))
 		return nil
 	}
 

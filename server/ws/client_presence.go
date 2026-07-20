@@ -3,7 +3,6 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
 )
 
 // handlePresenceUpdate processes a client presence change.
@@ -24,7 +23,9 @@ func (c *Client) handlePresenceUpdate(event Event) {
 	case "online", "idle", "dnd", "offline":
 		// valid
 	default:
-		log.Printf("[ws] invalid presence status from user %s: %s", c.userID, data.Status)
+		// data.Status is client-controlled — passed as a structured attr, not
+		// interpolated into the message (G706).
+		dispatchLogger.Warn("invalid presence status from client", "user_id", c.userID, "status", data.Status)
 		return
 	}
 

@@ -2,7 +2,8 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // Broadcast paths: shape (event, audience) -> JSON -> client send channels.
@@ -31,7 +32,7 @@ func (h *Hub) BroadcastToAll(event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal broadcast event: %v", err)
+		hubLogger.Error("failed to marshal broadcast event", "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -55,7 +56,7 @@ func (h *Hub) BroadcastToUsers(userIDs []string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal broadcast event: %v", err)
+		hubLogger.Error("failed to marshal broadcast event", "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -83,7 +84,7 @@ func (h *Hub) BroadcastToAllExcept(excludeUserID string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal broadcast event: %v", err)
+		hubLogger.Error("failed to marshal broadcast event", "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -106,7 +107,7 @@ func (h *Hub) BroadcastToUser(userID string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal user event: %v", err)
+		hubLogger.Error("failed to marshal user event", "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -131,7 +132,7 @@ func (h *Hub) BroadcastToServer(serverID string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal server broadcast event: %v", err)
+		hubLogger.Error("failed to marshal server broadcast event", "op", event.Op, "server_id", serverID, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -157,7 +158,7 @@ func (h *Hub) BroadcastToServerExcept(serverID, excludeUserID string, event Even
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal server broadcast event: %v", err)
+		hubLogger.Error("failed to marshal server broadcast event", "op", event.Op, "server_id", serverID, "err", pkg.ErrText(err))
 		return
 	}
 

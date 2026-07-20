@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver for local files (registers "sqlite")
 	// Remote libSQL/Turso driver is imported in database_libsql.go behind
@@ -20,6 +22,8 @@ import (
 	// then pointed at a libsql:// DSN fails at sql.Open with "unknown driver",
 	// which is the intended, legible outcome — see New below.
 )
+
+var logger = logx.Component("database")
 
 // recoverableErrors lists error patterns that can be safely skipped
 // when re-running a partially applied migration (e.g. "duplicate column name").
@@ -77,7 +81,7 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open libsql database: %w", err)
 		}
-		log.Printf("[database] using remote libSQL backend")
+		logger.Info("using remote libSQL backend")
 	} else {
 		// Local SQLite file — ensure parent directory exists. 0750 keeps
 		// the DB file's parent directory closed to "other" on the host so
@@ -112,7 +116,7 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 		}
-		log.Printf("[database] using local SQLite at %s", dbPath)
+		logger.Info("using local SQLite", "path", dbPath)
 	}
 
 	// Connection pool settings.
@@ -147,7 +151,7 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	log.Println("[database] connected and migrations applied")
+	logger.Info("connected and migrations applied")
 	return db, nil
 }
 
@@ -217,7 +221,7 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 				}
 				applied[file] = true
 			}
-			log.Printf("[database] bootstrapped %d existing migrations", len(sqlFiles))
+			logger.Info("bootstrapped existing migrations", "count", len(sqlFiles))
 			return nil
 		}
 	}
@@ -236,7 +240,7 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 			return err
 		}
 
-		log.Printf("[database] migration applied: %s", file)
+		logger.Info("migration applied", "file", file)
 	}
 
 	return nil
@@ -324,12 +328,12 @@ func execStatementsTx(tx *sql.Tx, filename, content string) error {
 			// fix the splitter without rewriting it, but we can detect the
 			// resulting empty-statement chunk here. go-libsql rejects empty
 			// statements with "API misuse: no SQL statement provided".
-			log.Printf("[database] %s: statement %d skipped (comment-only)", filename, i+1)
+			logger.Debug("statement skipped (comment-only)", "file", filename, "statement", i+1)
 			continue
 		}
 
 		if strings.HasPrefix(strings.ToUpper(core), "PRAGMA") {
-			log.Printf("[database] %s: statement %d skipped (PRAGMA — set via DSN / managed by libSQL server)", filename, i+1)
+			logger.Debug("statement skipped (PRAGMA — set via DSN / managed by libSQL server)", "file", filename, "statement", i+1)
 			continue
 		}
 
@@ -344,7 +348,7 @@ func execStatementsTx(tx *sql.Tx, filename, content string) error {
 			}
 
 			if recoverable {
-				log.Printf("[database] %s: statement %d skipped (recoverable: %s)", filename, i+1, errMsg)
+				logger.Warn("statement skipped (recoverable)", "file", filename, "statement", i+1, "err", pkg.ErrText(err))
 				continue
 			}
 

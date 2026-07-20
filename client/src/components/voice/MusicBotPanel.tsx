@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useServerStore } from "../../stores/serverStore";
-import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { skipMusic, pauseMusic, resumeMusic, stopMusic, getMusicState } from "../../api/music";
 
 type MusicBotPanelProps = {
@@ -37,7 +37,6 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
   const state = useVoiceStore((s) => s.musicBotStates[channelId]);
   const setMusicBotState = useVoiceStore((s) => s.setMusicBotState);
   const serverId = useServerStore((s) => s.activeServerId);
-  const addToast = useToastStore((s) => s.addToast);
 
   const [elapsed, setElapsed] = useState(0);
 
@@ -84,19 +83,19 @@ function MusicBotPanel({ channelId }: MusicBotPanelProps) {
     if (!serverId) return;
     const fn = is_paused ? resumeMusic : pauseMusic;
     const res = await fn(serverId, channelId);
-    if (!res.success) addToast("error", res.error ?? t("controlError"));
+    if (!res.success) showApiError(res, { fallbackKey: "music:controlError" });
   }
 
   async function handleSkip() {
     if (!serverId) return;
     const res = await skipMusic(serverId, channelId);
-    if (!res.success) addToast("error", res.error ?? t("controlError"));
+    if (!res.success) showApiError(res, { fallbackKey: "music:controlError" });
   }
 
   async function handleStop() {
     if (!serverId) return;
     const res = await stopMusic(serverId, channelId);
-    if (!res.success) addToast("error", res.error ?? t("controlError"));
+    if (!res.success) showApiError(res, { fallbackKey: "music:controlError" });
   }
 
   return (

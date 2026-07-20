@@ -6,11 +6,11 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/ws"
 
@@ -138,7 +138,8 @@ func (s *voiceService) sweepOrphanStates() {
 			livekitInstanceID: instanceID,
 			livekitIsCloud:    isCloud,
 		})
-		log.Printf("[voice] orphan cleanup: removed user %s from channel %s (offline for %s)", userID, channelID, now.Sub(offlineTime).Round(time.Second))
+		voiceLogger.Info("orphan cleanup: removed stale voice state",
+			"user_id", userID, "channel_id", channelID, "offline_for", now.Sub(offlineTime).Round(time.Second))
 		// INFO, not WARN: orphan sweep is the documented happy-path
 		// recovery (WS disconnect != voice leave, janitor catches the
 		// leftover). Flooding the WARN channel with every successful
@@ -178,7 +179,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
 	if err != nil {
-		log.Printf("[voice] removeParticipant: channel lookup failed for %s: %v", channelID, err)
+		voiceLogger.Error("removeParticipant: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: channel lookup failed", map[string]string{
 			"channel_id": channelID, "error": err.Error(),
 		})
@@ -187,7 +188,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
 	if err != nil {
-		log.Printf("[voice] removeParticipant: livekit instance lookup failed for server %s: %v", channel.ServerID, err)
+		voiceLogger.Error("removeParticipant: livekit instance lookup failed", "server_id", channel.ServerID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: LiveKit instance lookup failed", map[string]string{
 			"server_id": channel.ServerID, "channel_id": channelID, "error": err.Error(),
 		})
@@ -196,7 +197,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
 	if err != nil {
-		log.Printf("[voice] removeParticipant: api key decrypt failed: %v", err)
+		voiceLogger.Error("removeParticipant: api key decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: API key decrypt failed", map[string]string{
 			"channel_id": channelID, "error": err.Error(),
 		})
@@ -204,7 +205,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 	}
 	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
 	if err != nil {
-		log.Printf("[voice] removeParticipant: api secret decrypt failed: %v", err)
+		voiceLogger.Error("removeParticipant: api secret decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: API secret decrypt failed", map[string]string{
 			"channel_id": channelID, "error": err.Error(),
 		})
@@ -224,16 +225,16 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 			// Expected when participant already left LiveKit (e.g. network drop, orphan sweep after LiveKit timeout).
 			// Logged at INFO so the WARN channel stays meaningful — this branch always represents the success path
 			// after a benign race between WS disconnect, LiveKit timeout, and our 30s orphan sweep.
-			log.Printf("[voice] removeParticipant: user=%s room=%s already gone (not found)", userID, roomName)
+			voiceLogger.Info("removeParticipant: participant already gone (not found)", "user_id", userID, "room", roomName)
 			s.logInfo(models.LogCategoryVoice, &userID, "removeParticipant: participant already left LiveKit", meta)
 		} else {
-			log.Printf("[voice] removeParticipant: user=%s room=%s result: %v", userID, roomName, err)
+			voiceLogger.Error("removeParticipant: LiveKit API call failed", "user_id", userID, "room", roomName, "err", pkg.ErrText(err))
 			s.logError(models.LogCategoryVoice, &userID, "removeParticipant: LiveKit API call failed", meta)
 		}
 		return
 	}
 
-	log.Printf("[voice] removeParticipant: successfully removed user=%s from room=%s", userID, roomName)
+	voiceLogger.Info("removeParticipant: successfully removed participant", "user_id", userID, "room", roomName)
 }
 
 // StartAFKChecker periodically checks for inactive voice users and kicks them.
@@ -329,7 +330,7 @@ func (s *voiceService) sweepAFKUsers() {
 
 	// Phase 3: kick AFK users
 	for _, entry := range toKick {
-		log.Printf("[voice] AFK kick: user=%s channel=%s server=%s (idle too long)", entry.userID, entry.channelID, entry.serverID)
+		voiceLogger.Info("AFK kick: idle too long", "user_id", entry.userID, "channel_id", entry.channelID, "server_id", entry.serverID)
 
 		// Notify user before disconnect
 		s.hub.BroadcastToUser(entry.userID, ws.Event{

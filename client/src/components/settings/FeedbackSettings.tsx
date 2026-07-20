@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import {
   listMyFeedbackTickets,
   getFeedbackTicket,
@@ -79,7 +80,7 @@ function FeedbackSettings() {
       setActiveTicket(null);
       fetchTickets();
     } else {
-      addToast("error", res.error ?? t("feedbackDeleteError"));
+      showApiError(res, { fallbackKey: "settings:feedbackDeleteError" });
     }
   };
 
@@ -93,7 +94,7 @@ function FeedbackSettings() {
         setReplyContent("");
         setReplyFiles([]);
       } else {
-        addToast("error", res.error ?? t("feedbackReplyError"));
+        showApiError(res, { fallbackKey: "settings:feedbackReplyError" });
       }
     } catch {
       addToast("error", t("feedbackReplyError"));

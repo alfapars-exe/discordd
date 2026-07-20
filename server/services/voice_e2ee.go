@@ -7,8 +7,9 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"strings"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // getOrCreateRoomPassphrase returns or creates a per-room E2EE passphrase.
@@ -28,7 +29,7 @@ func (s *voiceService) getOrCreateRoomPassphrase(roomName string) (string, error
 	passphrase := base64.RawURLEncoding.EncodeToString(raw)
 
 	s.roomPassphrases[roomName] = passphrase
-	log.Printf("[voice] created E2EE passphrase for room %s", roomName)
+	voiceLogger.Info("created E2EE passphrase for room", "room_name", roomName)
 	return passphrase, nil
 }
 
@@ -46,7 +47,7 @@ func (s *voiceService) cleanupRoomPassphraseIfEmpty(channelID string) {
 	for roomName := range s.roomPassphrases {
 		if strings.HasSuffix(roomName, suffix) {
 			delete(s.roomPassphrases, roomName)
-			log.Printf("[voice] cleaned up E2EE passphrase for room %s", roomName)
+			voiceLogger.Info("cleaned up E2EE passphrase for room", "room_name", roomName)
 		}
 	}
 }
@@ -73,13 +74,13 @@ func (s *voiceService) rotateRoomPassphraseForChannel(channelID string) map[stri
 
 		raw := make([]byte, 32)
 		if _, err := cryptorand.Read(raw); err != nil {
-			log.Printf("[voice] WARN passphrase rotation crypto/rand failed for room %s: %v", roomName, err)
+			voiceLogger.Warn("passphrase rotation crypto/rand failed", "room_name", roomName, "err", pkg.ErrText(err))
 			continue
 		}
 		newPassphrase := base64.RawURLEncoding.EncodeToString(raw)
 		s.roomPassphrases[roomName] = newPassphrase
 		rotated[roomName] = newPassphrase
-		log.Printf("[voice] rotated E2EE passphrase for room %s (within-session forward secrecy)", roomName)
+		voiceLogger.Info("rotated E2EE passphrase for room (within-session forward secrecy)", "room_name", roomName)
 	}
 
 	return rotated

@@ -3,16 +3,18 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/ws"
 
 	"github.com/google/uuid"
 )
+
+var p2pLogger = logx.Component("service.p2p_call")
 
 // ISP interfaces — minimal deps instead of full repositories.
 
@@ -124,7 +126,7 @@ func (s *p2pCallService) InitiateCall(callerID, receiverID string, callType mode
 	s.userCalls[callerID] = call.ID // Register caller immediately to prevent double-call
 	s.mu.Unlock()
 
-	log.Printf("[p2p] call initiated: %s -> %s (type=%s, id=%s)", callerID, receiverID, callType, call.ID)
+	p2pLogger.Info("call initiated", "caller_id", callerID, "receiver_id", receiverID, "call_type", callType, "call_id", call.ID)
 
 	caller, err := s.userGetter.GetByID(ctx, callerID)
 	if err != nil {
@@ -180,7 +182,7 @@ func (s *p2pCallService) AcceptCall(userID, callID string) error {
 	s.userCalls[userID] = callID
 	s.mu.Unlock()
 
-	log.Printf("[p2p] call accepted: %s accepted call %s", userID, callID)
+	p2pLogger.Info("call accepted", "user_id", userID, "call_id", callID)
 
 	// Notify caller to start WebRTC negotiation
 	s.hub.BroadcastToUser(call.CallerID, ws.Event{
@@ -214,7 +216,7 @@ func (s *p2pCallService) DeclineCall(userID, callID string) error {
 	delete(s.userCalls, call.ReceiverID)
 	s.mu.Unlock()
 
-	log.Printf("[p2p] call declined: %s declined call %s", userID, callID)
+	p2pLogger.Info("call declined", "user_id", userID, "call_id", callID)
 
 	otherUserID := call.CallerID
 	if call.CallerID == userID {
@@ -250,7 +252,7 @@ func (s *p2pCallService) EndCall(userID string) error {
 	delete(s.userCalls, call.ReceiverID)
 	s.mu.Unlock()
 
-	log.Printf("[p2p] call ended: %s ended call %s", userID, callID)
+	p2pLogger.Info("call ended", "user_id", userID, "call_id", callID)
 
 	otherUserID := call.CallerID
 	if call.CallerID == userID {
@@ -315,7 +317,7 @@ func (s *p2pCallService) HandleDisconnect(userID string) {
 	delete(s.userCalls, call.ReceiverID)
 	s.mu.Unlock()
 
-	log.Printf("[p2p] call ended due to disconnect: user=%s, call=%s", userID, callID)
+	p2pLogger.Info("call ended due to disconnect", "user_id", userID, "call_id", callID)
 	s.logError(&userID, "P2P call ended due to WS disconnect", map[string]string{
 		"call_id": callID,
 	})

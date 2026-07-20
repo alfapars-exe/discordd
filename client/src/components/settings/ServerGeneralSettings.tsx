@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useActiveMembers } from "../../stores/memberStore";
@@ -116,7 +117,7 @@ function ServerGeneralSettings() {
         setEditInviteRequired(res.data.invite_required);
         addToast("success", t("serverSaved"));
       } else {
-        addToast("error", res.error ?? t("serverSaveError"));
+        showApiError(res, { fallbackKey: "settings:serverSaveError" });
       }
     } catch {
       addToast("error", t("serverSaveError"));
@@ -151,7 +152,7 @@ function ServerGeneralSettings() {
         setEditLkKey("");
         setEditLkSecret("");
       } else {
-        addToast("error", res.error ?? t("livekitSaveError"));
+        showApiError(res, { fallbackKey: "settings:livekitSaveError" });
       }
     } catch {
       addToast("error", t("livekitSaveError"));
@@ -168,7 +169,7 @@ function ServerGeneralSettings() {
         setServer(res.data);
         addToast("success", t("serverSaved"));
       } else {
-        addToast("error", res.error ?? t("serverSaveError"));
+        showApiError(res, { fallbackKey: "settings:serverSaveError" });
       }
     } catch {
       addToast("error", t("serverSaveError"));

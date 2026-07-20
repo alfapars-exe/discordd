@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -218,7 +218,15 @@ func Load() (*Config, error) {
 		if k, kErr := strconv.Atoi(kStr); kErr == nil && k > 0 {
 			dailyKeep = k
 		} else {
-			log.Printf("[config] ignoring invalid BACKUP_DAILY_KEEP=%q, using %d", kStr, dailyKeep)
+			// logx.Component is unavailable here: logx imports this package for
+			// config.LoggingConfig, so using it would create an import cycle.
+			// slog.Default() at this point (before logx.Init) is the stdlib
+			// default handler, which is fine for a boot-time warning.
+			slog.Warn("ignoring invalid BACKUP_DAILY_KEEP env value, using default",
+				"component", "config",
+				"value", kStr,
+				"default", dailyKeep,
+			)
 		}
 	}
 

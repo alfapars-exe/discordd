@@ -4,15 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var serverLogger = logx.Component("service.server")
 
 // LiveKitSettings exposes non-secret LiveKit info for the settings UI.
 type LiveKitSettings struct {
@@ -59,10 +61,10 @@ func (s *serverService) SetAuditLogger(logger AuditWriter) {
 // can be traced from runtime logs.
 func (s *serverService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
-		log.Printf("[server/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		serverLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
-	log.Printf("[server/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	serverLogger.Info("audit event emitted", "event_type", entry.EventType, "server_id", entry.ServerID)
 	s.auditLogger.Write(entry)
 }
 
@@ -150,7 +152,7 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 	case "mqvi_hosted":
 		instance, err := s.livekitRepo.GetLeastLoadedPlatformInstance(ctx)
 		if err != nil {
-			log.Printf("[server] no platform livekit instance available, creating server without voice: %v", err)
+			serverLogger.Warn("no platform livekit instance available, creating server without voice", "err", pkg.ErrText(err))
 		} else {
 			livekitInstanceID = &instance.ID
 			if err := s.livekitRepo.IncrementServerCount(ctx, instance.ID); err != nil {
@@ -299,8 +301,7 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 		},
 	})
 
-	log.Printf("[server] created server %s (name=%s, owner=%s, host=%s)",
-		server.ID, server.Name, ownerID, req.HostType)
+	serverLogger.Info("created server", "server_id", server.ID, "name", server.Name, "owner_id", ownerID, "host_type", req.HostType)
 
 	return server, nil
 }
@@ -371,7 +372,7 @@ func (s *serverService) UpdateServer(ctx context.Context, serverID string, req *
 			return nil, fmt.Errorf("failed to update livekit instance: %w", err)
 		}
 
-		log.Printf("[server] livekit credentials updated for server %s", serverID)
+		serverLogger.Info("livekit credentials updated", "server_id", serverID)
 	}
 
 	s.hub.BroadcastToServer(serverID, ws.Event{
@@ -418,11 +419,11 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		if err == nil {
 			if instance.IsPlatformManaged {
 				if decErr := s.livekitRepo.DecrementServerCount(ctx, instance.ID); decErr != nil {
-					log.Printf("[server] failed to decrement livekit server count instance=%s: %v", instance.ID, decErr)
+					serverLogger.Error("failed to decrement livekit server count", "instance_id", instance.ID, "err", pkg.ErrText(decErr))
 				}
 			} else {
 				if delErr := s.livekitRepo.Delete(ctx, instance.ID); delErr != nil {
-					log.Printf("[server] failed to delete self-hosted livekit instance=%s: %v", instance.ID, delErr)
+					serverLogger.Error("failed to delete self-hosted livekit instance", "instance_id", instance.ID, "err", pkg.ErrText(delErr))
 				}
 			}
 		}
@@ -445,13 +446,13 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
 
-	log.Printf("[server] deleted server %s by user %s", serverID, userID)
+	serverLogger.Info("deleted server", "server_id", serverID, "user_id", userID)
 	return nil
 }
 
 // JoinServer joins a server via invite code.
 func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode string) (*models.Server, error) {
-	invite, err := s.inviteService.ValidateAndUse(ctx, inviteCode)
+	invite, err := s.inviteService.Validate(ctx, inviteCode)
 	if err != nil {
 		return nil, err
 	}
@@ -470,13 +471,20 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		return nil, fmt.Errorf("failed to add member: %w", err)
 	}
 
+	// B3: burn the invite's use slot only once membership actually landed —
+	// incrementing earlier wasted a max_uses slot on joins that later failed
+	// (already-a-member, AddMember error).
+	if err := s.inviteService.MarkUsed(ctx, inviteCode); err != nil {
+		serverLogger.Error("failed to mark invite used", "invite_code", inviteCode, "err", pkg.ErrText(err))
+	}
+
 	// Assign default role
 	defaultRole, err := s.roleRepo.GetDefaultByServer(ctx, serverID)
 	if err != nil {
-		log.Printf("[server] failed to get default role for server %s: %v", serverID, err)
+		serverLogger.Error("failed to get default role for server", "server_id", serverID, "err", pkg.ErrText(err))
 	} else {
 		if err := s.roleRepo.AssignToUser(ctx, userID, defaultRole.ID, serverID); err != nil {
-			log.Printf("[server] failed to assign default role: %v", err)
+			serverLogger.Error("failed to assign default role", "err", pkg.ErrText(err))
 		}
 	}
 
@@ -501,7 +509,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	// Notify server members: new member joined (full MemberWithRoles for frontend)
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		log.Printf("[server] failed to get user %s for member_join broadcast: %v", userID, err)
+		serverLogger.Error("failed to get user for member_join broadcast", "user_id", userID, "err", pkg.ErrText(err))
 	} else {
 		roles, _ := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
 		member := models.ToMemberWithRoles(user, roles)
@@ -523,7 +531,7 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		EventType:    models.AuditEventMemberJoin,
 	})
 
-	log.Printf("[server] user %s joined server %s via invite", userID, serverID)
+	serverLogger.Info("user joined server via invite", "user_id", userID, "server_id", serverID)
 	return server, nil
 }
 
@@ -570,7 +578,7 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 		EventType:    models.AuditEventMemberLeave,
 	})
 
-	log.Printf("[server] user %s left server %s", userID, serverID)
+	serverLogger.Info("user left server", "user_id", userID, "server_id", serverID)
 	return nil
 }
 

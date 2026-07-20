@@ -3,13 +3,15 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var deviceLogger = logx.Component("service.device")
 
 // PrekeyLowThreshold — when prekey pool drops below this, a "prekey_low" WS event is sent.
 const PrekeyLowThreshold = 10
@@ -167,14 +169,14 @@ func (s *deviceService) GetPrekeyCount(ctx context.Context, userID, deviceID str
 func (s *deviceService) checkPrekeyLevels(ctx context.Context, userID string) {
 	devices, err := s.deviceRepo.ListByUser(ctx, userID)
 	if err != nil {
-		log.Printf("[device] failed to list devices for prekey check: %v", err)
+		deviceLogger.Error("failed to list devices for prekey check", "err", pkg.ErrText(err))
 		return
 	}
 
 	for _, d := range devices {
 		count, err := s.deviceRepo.CountPrekeys(ctx, userID, d.DeviceID)
 		if err != nil {
-			log.Printf("[device] failed to count prekeys for device %s: %v", d.DeviceID, err)
+			deviceLogger.Error("failed to count prekeys for device", "device_id", d.DeviceID, "err", pkg.ErrText(err))
 			continue
 		}
 

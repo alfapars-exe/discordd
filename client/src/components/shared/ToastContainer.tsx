@@ -19,6 +19,8 @@ function ToastContainer() {
           id={toast.id}
           type={toast.type}
           message={toast.message}
+          title={toast.title}
+          action={toast.action}
           isExiting={toast.isExiting}
           onDismiss={removeToast}
         />

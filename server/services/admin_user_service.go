@@ -8,13 +8,15 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var adminUserLogger = logx.Component("service.admin_user")
 
 // UserCacheInvalidator drops a cached authenticated-user row so a ban /
 // delete / admin-status change takes effect on the next HTTP request
@@ -110,7 +112,7 @@ func (s *adminUserService) PlatformBanUser(ctx context.Context, adminUserID, tar
 	// Best-effort email notification
 	if reason != "" && target.Email != nil && s.emailSender != nil {
 		if emailErr := s.emailSender.SendPlatformBanNotification(ctx, *target.Email, reason); emailErr != nil {
-			log.Printf("[admin] failed to send ban notification email to %s: %v", targetUserID, emailErr)
+			adminUserLogger.Error("failed to send ban notification email", "target_id", targetUserID, "err", pkg.ErrText(emailErr))
 		}
 	}
 
@@ -159,7 +161,7 @@ func (s *adminUserService) HardDeleteUser(ctx context.Context, adminUserID, targ
 	// Send email BEFORE deletion (address is lost after)
 	if reason != "" && target.Email != nil && s.emailSender != nil {
 		if emailErr := s.emailSender.SendAccountDeleteNotification(ctx, *target.Email, reason); emailErr != nil {
-			log.Printf("[admin] failed to send delete notification email to %s: %v", targetUserID, emailErr)
+			adminUserLogger.Error("failed to send delete notification email", "target_id", targetUserID, "err", pkg.ErrText(emailErr))
 		}
 	}
 

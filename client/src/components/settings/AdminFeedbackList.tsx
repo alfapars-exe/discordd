@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import {
   adminListFeedbackTickets,
   adminGetFeedbackTicket,
@@ -48,7 +49,7 @@ function AdminFeedbackList() {
       setTickets(res.data.tickets ?? []);
       setTotal(res.data.total);
     } else {
-      addToast("error", res.error ?? t("feedbackLoadError"));
+      showApiError(res, { fallbackKey: "settings:feedbackLoadError" });
     }
     setIsLoading(false);
   }, [statusFilter, typeFilter, addToast, t]);
@@ -76,7 +77,7 @@ function AdminFeedbackList() {
       setReplyContent("");
       setReplyFiles([]);
     } else {
-      addToast("error", res.error ?? t("feedbackReplyError"));
+      showApiError(res, { fallbackKey: "settings:feedbackReplyError" });
     }
     setIsSendingReply(false);
   };
@@ -89,7 +90,7 @@ function AdminFeedbackList() {
       addToast("success", t("adminFeedbackStatusUpdated"));
       fetchTickets();
     } else {
-      addToast("error", res.error ?? t("adminFeedbackStatusError"));
+      showApiError(res, { fallbackKey: "settings:adminFeedbackStatusError" });
     }
   };
 

@@ -123,6 +123,9 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			// pkg.RequestIDFrom, the private key can go away.
 			ctx := context.WithValue(r.Context(), requestIDKey, reqID)
 			ctx = pkg.WithRequestID(ctx, reqID)
+			// Method + path so pkg.ErrorCtx's 5xx log line can be correlated
+			// to an endpoint without pulling the whole *http.Request into ctx.
+			ctx = pkg.WithRequestInfo(ctx, r.Method, r.URL.Path)
 
 			rec := &statusRecorder{ResponseWriter: w}
 			start := time.Now()

@@ -12,17 +12,20 @@ package services
 import (
 	"context"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/pkg/promparse"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 )
+
+var metricsLogger = logx.Component("service.metrics")
 
 // MetricsCollector runs periodic background metric collection.
 type MetricsCollector interface {
@@ -94,7 +97,7 @@ func NewMetricsCollector(
 
 	if hetznerToken != "" {
 		mc.hetznerClient = hcloud.NewClient(hcloud.WithToken(hetznerToken))
-		log.Println("[metrics-collector] Hetzner Cloud API enabled")
+		metricsLogger.Info("Hetzner Cloud API enabled")
 	}
 
 	return mc
@@ -105,7 +108,7 @@ func (c *metricsCollector) Start() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	log.Printf("[metrics-collector] starting (interval=%s, retention=%dd)", c.interval, c.retentionDays)
+	metricsLogger.Info("starting", "interval", c.interval, "retention_days", c.retentionDays)
 
 	go func() {
 		c.collectAll()
@@ -118,7 +121,7 @@ func (c *metricsCollector) Start() {
 			case <-ticker.C:
 				c.collectAll()
 			case <-c.stopCh:
-				log.Println("[metrics-collector] stopped")
+				metricsLogger.Info("stopped")
 				return
 			}
 		}
@@ -138,7 +141,7 @@ func (c *metricsCollector) collectAll() {
 
 	instances, err := c.livekitRepo.ListPlatformInstances(ctx)
 	if err != nil {
-		log.Printf("[metrics-collector] failed to list instances: %v", err)
+		metricsLogger.Error("failed to list instances", "err", pkg.ErrText(err))
 		return
 	}
 
@@ -155,9 +158,9 @@ func (c *metricsCollector) collectAll() {
 	cutoff := now.Add(-time.Duration(c.retentionDays) * 24 * time.Hour)
 	purged, purgeErr := c.historyRepo.PurgeOlderThan(ctx, cutoff)
 	if purgeErr != nil {
-		log.Printf("[metrics-collector] purge error: %v", purgeErr)
+		metricsLogger.Error("purge failed", "err", pkg.ErrText(purgeErr))
 	} else if purged > 0 {
-		log.Printf("[metrics-collector] purged %d old snapshots", purged)
+		metricsLogger.Info("purged old snapshots", "count", purged)
 	}
 }
 
@@ -201,7 +204,7 @@ func (c *metricsCollector) collectOne(ctx context.Context, inst *models.LiveKitI
 	if inst.HetznerServerID != "" && c.hetznerClient != nil {
 		hCPU, hBwIn, hBwOut, hErr := c.fetchHetznerMetrics(ctx, inst.HetznerServerID, now)
 		if hErr != nil {
-			log.Printf("[metrics-collector] hetzner API error for %s (server %s): %v", inst.ID, inst.HetznerServerID, hErr)
+			metricsLogger.Error("hetzner API error", "instance_id", inst.ID, "hetzner_server_id", inst.HetznerServerID, "err", pkg.ErrText(hErr))
 		} else {
 			cpuPct = hCPU
 			bwInBps = hBwIn
@@ -267,7 +270,7 @@ func (c *metricsCollector) collectOne(ctx context.Context, inst *models.LiveKitI
 	}
 
 	if insertErr := c.historyRepo.Insert(ctx, snapshot); insertErr != nil {
-		log.Printf("[metrics-collector] insert error for %s: %v", inst.ID, insertErr)
+		metricsLogger.Error("insert failed", "instance_id", inst.ID, "err", pkg.ErrText(insertErr))
 	}
 }
 
@@ -345,7 +348,7 @@ func (c *metricsCollector) getVCPUCount(ctx context.Context, serverID int64) (in
 	}
 
 	c.vcpuCache[serverID] = cores
-	log.Printf("[metrics-collector] cached vCPU count for Hetzner server %d: %d cores", serverID, cores)
+	metricsLogger.Info("cached vCPU count for Hetzner server", "server_id", serverID, "cores", cores)
 
 	return cores, nil
 }
@@ -358,6 +361,6 @@ func (c *metricsCollector) insertUnavailable(ctx context.Context, instanceID str
 	}
 
 	if err := c.historyRepo.Insert(ctx, snapshot); err != nil {
-		log.Printf("[metrics-collector] insert unavailable error for %s: %v", instanceID, err)
+		metricsLogger.Error("insert unavailable snapshot failed", "instance_id", instanceID, "err", pkg.ErrText(err))
 	}
 }

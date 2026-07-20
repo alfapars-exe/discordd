@@ -5,7 +5,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -82,11 +81,12 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 				next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
 				if nextErr == nil && next != nil {
 					if migErr := s.livekitGetter.MigrateOneServer(ctx, channel.ServerID, next.ID); migErr == nil {
-						log.Printf("[voice] auto-switch server=%s from instance=%s to instance=%s (used=%ds quota=%ds threshold=%ds)",
-							channel.ServerID, lkInstance.ID, next.ID, used, quotaSec, thresholdSec)
+						voiceLogger.Info("auto-switch LiveKit instance",
+							"server_id", channel.ServerID, "from_instance", lkInstance.ID, "to_instance", next.ID,
+							"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
 						lkInstance = next
 					} else {
-						log.Printf("[voice] auto-switch migrate failed server=%s err=%v", channel.ServerID, migErr)
+						voiceLogger.Error("auto-switch migrate failed", "server_id", channel.ServerID, "err", pkg.ErrText(migErr))
 					}
 				}
 				// nextErr or next==nil: no eligible target — stay put.
@@ -122,7 +122,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		if hasGrant && grant.channelID == channelID && time.Now().Before(grant.expiresAt) {
 			delete(s.forceMoveGrants, userID) // consume — single use only
 			s.mu.Unlock()
-			log.Printf("[voice] force-move grant consumed for user %s in channel %s", userID, channelID)
+			voiceLogger.Info("force-move grant consumed", "user_id", userID, "channel_id", channelID)
 		} else {
 			if hasGrant {
 				delete(s.forceMoveGrants, userID) // expired or wrong channel — clean up

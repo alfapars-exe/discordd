@@ -80,5 +80,6 @@
   "copyInviteLink": "Copy Invite Link",
   "copyInviteLinkHint": "Share this link via WhatsApp, Telegram, etc.",
   "inviteLinkCopied": "Invite link copied to clipboard",
-  "inviteCopyFailed": "Could not copy to clipboard"
+  "inviteCopyFailed": "Could not copy to clipboard",
+  "joinAfterRegisterFailed": "Your account was created, but joining the server failed. Please try the invite link again."
 }

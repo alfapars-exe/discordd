@@ -10,18 +10,21 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/services"
 
 	"github.com/livekit/protocol/auth"
 	livekit "github.com/livekit/protocol/livekit"
 	"github.com/livekit/protocol/webhook"
 )
+
+var webhookLogger = logx.Component("handler.livekit_webhook")
 
 // WebhookKeyLoader loads encrypted LiveKit credentials from DB.
 // Returns ALL instances (not just platform-managed) so self-hosted instances
@@ -52,15 +55,18 @@ func (h *LiveKitWebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Req
 
 	provider, err := h.buildKeyProvider(r.Context())
 	if err != nil {
-		log.Printf("[livekit-webhook] failed to load keys: %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		webhookLogger.Error("failed to load keys", "err", pkg.ErrText(err))
+		// LiveKit's webhook sender only inspects the status code, not the
+		// body, so the JSON envelope is safe here too — kept consistent
+		// with the rest of the API instead of a bare http.Error.
+		pkg.ErrorWithMessage(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	event, err := webhook.ReceiveWebhookEvent(r, provider)
 	if err != nil {
-		log.Printf("[livekit-webhook] verification failed: %v", err)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		webhookLogger.Error("verification failed", "err", pkg.ErrText(err))
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -81,12 +87,12 @@ func (h *LiveKitWebhookHandler) buildKeyProvider(ctx context.Context) (auth.KeyP
 	for _, inst := range instances {
 		apiKey, err := crypto.Decrypt(inst.APIKey, h.encryptionKey)
 		if err != nil {
-			log.Printf("[livekit-webhook] failed to decrypt key for instance %s: %v", inst.ID, err)
+			webhookLogger.Error("failed to decrypt key for instance", "instance_id", inst.ID, "err", pkg.ErrText(err))
 			continue
 		}
 		apiSecret, err := crypto.Decrypt(inst.APISecret, h.encryptionKey)
 		if err != nil {
-			log.Printf("[livekit-webhook] failed to decrypt secret for instance %s: %v", inst.ID, err)
+			webhookLogger.Error("failed to decrypt secret for instance", "instance_id", inst.ID, "err", pkg.ErrText(err))
 			continue
 		}
 		keys[apiKey] = apiSecret

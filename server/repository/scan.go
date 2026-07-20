@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 )
 
@@ -27,4 +29,18 @@ func scanRows[T any](rows *sql.Rows, entity string, scan func(*sql.Rows) (T, err
 		return nil, fmt.Errorf("error iterating %s rows: %w", entity, err)
 	}
 	return out, nil
+}
+
+// generateID returns a random lowercase-hex identifier in the same shape
+// SQLite's `lower(hex(randomblob(8)))` produces (8 random bytes -> 16 hex
+// chars). Generating it in Go lets Create() use ExecContext instead of
+// QueryRowContext+Scan on a RETURNING clause, which is the fragile part
+// against Turso/libSQL's Hrana stream. Mirrors the pattern already used for
+// invite codes in services/invite_service.go.
+func generateID() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
