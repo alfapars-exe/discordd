@@ -197,7 +197,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	musicBotLogger.Info("enqueue: appended to queue", "channel_id", channelID, "queue_len", queueLen, "was_idle", wasIdle)
 
 	if wasIdle {
-		go s.playLoop(bot)
+		logx.Go("service.music_bot.play_loop", func() { s.playLoop(bot) })
 	}
 
 	s.broadcastState(bot)
@@ -237,7 +237,7 @@ func (s *musicBotService) Pause(channelID string) error {
 		return fmt.Errorf("pause failed: %w", err)
 	}
 	bot.isPaused = true
-	go s.broadcastState(bot)
+	logx.Go("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
 	return nil
 }
 
@@ -256,7 +256,7 @@ func (s *musicBotService) Resume(channelID string) error {
 		return fmt.Errorf("resume failed: %w", err)
 	}
 	bot.isPaused = false
-	go s.broadcastState(bot)
+	logx.Go("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
 	return nil
 }
 

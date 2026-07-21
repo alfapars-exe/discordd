@@ -3,6 +3,8 @@ package ws
 
 import (
 	"encoding/json"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── Voice Event Handlers ───
@@ -32,19 +34,21 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 	if c.hub.onVoiceJoin != nil {
 		info := c.hub.getUserInfo(c.userID)
-		go c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
+		logx.Go("ws.voice_join", func() {
+			c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
+		})
 	}
 }
 
 func (c *Client) handleVoiceLeave() {
 	if c.hub.onVoiceLeave != nil {
-		go c.hub.onVoiceLeave(c.userID)
+		logx.Go("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
 	}
 }
 
 func (c *Client) handleVoiceActivity() {
 	if c.hub.onVoiceActivity != nil {
-		go c.hub.onVoiceActivity(c.userID)
+		logx.Go("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
 	}
 }
 
@@ -60,7 +64,7 @@ func (c *Client) handleVoiceStateUpdate(event Event) {
 	}
 
 	if c.hub.onVoiceStateUpdate != nil {
-		go c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming)
+		logx.Go("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
 	}
 }
 
@@ -91,7 +95,9 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	}
 
 	if c.hub.onVoiceAdminStateUpdate != nil {
-		go c.hub.onVoiceAdminStateUpdate(c.userID, data.TargetUserID, data.IsServerMuted, data.IsServerDeafened)
+		logx.Go("ws.voice_admin_state_update", func() {
+			c.hub.onVoiceAdminStateUpdate(c.userID, data.TargetUserID, data.IsServerMuted, data.IsServerDeafened)
+		})
 	}
 }
 
@@ -118,7 +124,7 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 	}
 
 	if c.hub.onVoiceMoveUser != nil {
-		go c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID)
+		logx.Go("ws.voice_move_user", func() { c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID) })
 	}
 }
 
@@ -145,7 +151,7 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 	}
 
 	if c.hub.onVoiceDisconnectUser != nil {
-		go c.hub.onVoiceDisconnectUser(c.userID, data.TargetUserID)
+		logx.Go("ws.voice_disconnect_user", func() { c.hub.onVoiceDisconnectUser(c.userID, data.TargetUserID) })
 	}
 }
 
@@ -166,6 +172,6 @@ func (c *Client) handleScreenShareWatch(event Event) {
 	}
 
 	if c.hub.onScreenShareWatch != nil {
-		go c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching)
+		logx.Go("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
 	}
 }

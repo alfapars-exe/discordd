@@ -2,6 +2,7 @@ package ws
 
 import (
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // Client connection lifecycle + server-membership index maintenance.
@@ -70,9 +71,9 @@ func (h *Hub) addClient(client *Client) {
 	if isFirstConnection && h.onUserFirstConnect != nil {
 		userID := client.userID
 		prefStatus := client.prefStatus
-		go h.onUserFirstConnect(userID, prefStatus)
+		logx.Go("ws.user_first_connect", func() { h.onUserFirstConnect(userID, prefStatus) })
 	} else if !isFirstConnection && h.onPresenceManualUpdate != nil {
-		go h.onPresenceManualUpdate(client.userID, aggregateForExisting, true)
+		logx.Go("ws.presence_manual_update", func() { h.onPresenceManualUpdate(client.userID, aggregateForExisting, true) })
 	}
 }
 
@@ -125,9 +126,9 @@ func (h *Hub) removeClient(client *Client) {
 	}
 
 	if fullyDisconnected && h.onUserFullyDisconnected != nil {
-		go h.onUserFullyDisconnected(userID, "")
+		logx.Go("ws.user_fully_disconnected", func() { h.onUserFullyDisconnected(userID, "") })
 	} else if partialDisconnect && h.onPresenceManualUpdate != nil {
-		go h.onPresenceManualUpdate(userID, newAggregate, true)
+		logx.Go("ws.presence_manual_update", func() { h.onPresenceManualUpdate(userID, newAggregate, true) })
 	}
 }
 

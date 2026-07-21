@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // BotTokenValidator resolves a bot bearer token to a bot user id.
@@ -73,6 +74,6 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 		isBot:      true,
 	}
 	h.hub.register <- client
-	go client.WritePump()
+	logx.Go("ws.bot_write_pump", client.WritePump)
 	client.ReadPump()
 }

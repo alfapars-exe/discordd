@@ -3,6 +3,8 @@ package ws
 
 import (
 	"encoding/json"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── P2P Call Event Handlers ───
@@ -24,7 +26,7 @@ func (c *Client) handleP2PCallInitiate(event Event) {
 	}
 
 	if c.hub.onP2PCallInitiate != nil {
-		go c.hub.onP2PCallInitiate(c.userID, data)
+		logx.Go("ws.p2p_call_initiate", func() { c.hub.onP2PCallInitiate(c.userID, data) })
 	}
 }
 
@@ -45,7 +47,7 @@ func (c *Client) handleP2PCallAccept(event Event) {
 	}
 
 	if c.hub.onP2PCallAccept != nil {
-		go c.hub.onP2PCallAccept(c.userID, data)
+		logx.Go("ws.p2p_call_accept", func() { c.hub.onP2PCallAccept(c.userID, data) })
 	}
 }
 
@@ -66,14 +68,14 @@ func (c *Client) handleP2PCallDecline(event Event) {
 	}
 
 	if c.hub.onP2PCallDecline != nil {
-		go c.hub.onP2PCallDecline(c.userID, data)
+		logx.Go("ws.p2p_call_decline", func() { c.hub.onP2PCallDecline(c.userID, data) })
 	}
 }
 
 // handleP2PCallEnd — no payload needed, userID identifies the active call.
 func (c *Client) handleP2PCallEnd() {
 	if c.hub.onP2PCallEnd != nil {
-		go c.hub.onP2PCallEnd(c.userID)
+		logx.Go("ws.p2p_call_end", func() { c.hub.onP2PCallEnd(c.userID) })
 	}
 }
 
@@ -95,6 +97,6 @@ func (c *Client) handleP2PSignal(event Event) {
 	}
 
 	if c.hub.onP2PSignal != nil {
-		go c.hub.onP2PSignal(c.userID, data)
+		logx.Go("ws.p2p_signal", func() { c.hub.onP2PSignal(c.userID, data) })
 	}
 }
