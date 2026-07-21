@@ -34,6 +34,26 @@ const EMPTY_CHANNELS: DMChannelWithUser[] = [];
 const EMPTY_MESSAGES: DMMessage[] = [];
 const EMPTY_STRINGS: string[] = [];
 
+/**
+ * Per-channel AbortController for in-flight fetchMessages calls. When the
+ * user switches DMs (or this store's invalidateFetchCache is called), any
+ * pending request for the abandoned channel is aborted so its late setState
+ * can't trample the active channel's view.
+ *
+ * Keyed by channelId so two channels fetching concurrently don't cancel
+ * each other — only a SECOND fetch for the SAME channel aborts the first.
+ */
+const dmInflightFetches = new Map<string, AbortController>();
+
+/** Abort an in-flight fetch for the given DM channel, if any. */
+function abortDMChannelFetch(channelId: string): void {
+  const ctrl = dmInflightFetches.get(channelId);
+  if (ctrl) {
+    ctrl.abort();
+    dmInflightFetches.delete(channelId);
+  }
+}
+
 type DMCoreState = {
   channels: DMChannelWithUser[];
   selectedDMId: string | null;
@@ -127,11 +147,32 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     const e2eeStatus = useE2EEStore.getState().initStatus;
     if (e2eeStatus !== "ready") return;
 
+    // If a previous fetch for this channel is still in flight, cancel it.
+    // The two main triggers: user spam-clicking DMs, and E2EE store
+    // refreshing then re-triggering a fetch. Either way we don't want the
+    // late response to clobber whatever the user is now looking at.
+    abortDMChannelFetch(channelId);
+    const controller = new AbortController();
+    dmInflightFetches.set(channelId, controller);
+
     set({ isLoadingMessages: true });
 
     const res = await dmApi.getDMMessages(channelId, undefined, 50);
+
+    // Aborted while the request was in flight — drop the response. Cache
+    // invalidate also aborts, so this branch covers both user-switch and
+    // E2EE-rotation cases without polluting messagesByChannel.
+    if (controller.signal.aborted) {
+      return;
+    }
+    dmInflightFetches.delete(channelId);
+
     if (res.success && res.data) {
       const messages = await decryptDMMessages(res.data!.messages ?? []);
+
+      // Re-check abort after the async decrypt — a fast DM-switch during
+      // decryption would otherwise still write stale content.
+      if (controller.signal.aborted) return;
 
       set((state) => ({
         messagesByChannel: {
@@ -404,6 +445,9 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
   },
 
   invalidateMessages: (channelId) => {
+    // Abort any in-flight fetch for this channel so a late response can't
+    // re-populate the entry we're about to clear.
+    abortDMChannelFetch(channelId);
     set((state) => {
       const { [channelId]: _, ...rest } = state.messagesByChannel;
       const { [channelId]: __, ...restMore } = state.hasMoreByChannel;
@@ -412,6 +456,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
   },
 
   invalidateFetchCache: () => {
+    // Cancel any in-flight fetches; their late completion would re-populate
+    // messagesByChannel with stale ciphertext encrypted against the
+    // pre-restore E2EE state.
+    for (const ctrl of dmInflightFetches.values()) {
+      ctrl.abort();
+    }
+    dmInflightFetches.clear();
     set({ messagesByChannel: {}, hasMoreByChannel: {} });
   },
 }));
