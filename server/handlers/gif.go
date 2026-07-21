@@ -10,12 +10,18 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 )
 
 const klipyBaseURL = "https://api.klipy.com"
+
+// klipyHTTPClient bounds every outbound call to the Klipy API. http.Get's
+// DefaultClient has no timeout, so a stalled/slow-loris response from Klipy
+// would otherwise hang the request-handling goroutine indefinitely.
+var klipyHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // GifResult is the simplified GIF info returned to the client.
 type GifResult struct {
@@ -162,7 +168,7 @@ func fetchKlipyResults(url string) ([]GifResult, bool, error) {
 		return nil, false, errKlipyBadURL
 	}
 
-	resp, err := http.Get(url) // #nosec G107 — URL validated above
+	resp, err := klipyHTTPClient.Get(url) // #nosec G107 — URL validated above
 	if err != nil {
 		return nil, false, fmt.Errorf("klipy request failed: %w", err)
 	}
@@ -174,7 +180,7 @@ func fetchKlipyResults(url string) ([]GifResult, bool, error) {
 	}
 
 	var klipyResp klipyAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&klipyResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&klipyResp); err != nil {
 		return nil, false, fmt.Errorf("klipy response decode failed: %w", err)
 	}
 
