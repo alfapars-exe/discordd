@@ -120,9 +120,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService)
-	memberService.SetPermInvalidator(channelPermService)
 	roleService := services.NewRoleService(repos.Role, repos.User, hub)
-	roleService.SetPermInvalidator(channelPermService)
+	// SetPermInvalidator for both is wired in main.go (after initRoutes),
+	// not here: it needs to fan out to middleware.PermissionMiddleware too,
+	// which is only constructed inside initRoutes. See main.go's comment
+	// near initRoutes for the full rationale.
 	serverService := services.NewServerService(
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, inviteService, hub, encryptionKey,

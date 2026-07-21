@@ -14,9 +14,14 @@ import (
 // Literal paths must be registered before parametric ones
 // (e.g. "/api/servers/join" before "/api/servers/{serverId}").
 //
-// Returns the constructed AuthMiddleware so main.go can wire its user-cache
-// invalidator into the admin user service (ban / delete / admin-change →
-// immediate HTTP enforcement instead of waiting out the cache TTL).
+// Returns the constructed AuthMiddleware and PermissionMiddleware so
+// main.go can wire their cache invalidators into the services that mutate
+// the data those caches memoize: AuthMiddleware's user cache into the admin
+// user service (ban / delete / admin-change → immediate HTTP enforcement
+// instead of waiting out the cache TTL), and PermissionMiddleware's
+// per-server permission cache into role/member services (role-perm edit /
+// kick / ban / role-reassign → immediate invalidation instead of the 5s
+// TTL).
 func initRoutes(
 	mux *http.ServeMux,
 	h *Handlers,
@@ -26,7 +31,7 @@ func initRoutes(
 	serverRepo repository.ServerRepository,
 	deviceEnumLimiter middleware.IPRateLimiter,
 	botService *services.BotService,
-) *middleware.AuthMiddleware {
+) (*middleware.AuthMiddleware, *middleware.PermissionMiddleware) {
 	// Middleware. *services.BotService satisfies middleware.BotTokenValidator
 	// (ValidateBotToken), so the same instance powers token validation here and
 	// the owner-facing bot management handler below — one source of truth.
@@ -400,5 +405,5 @@ func initRoutes(
 	// the BotReadableOps subset scoped to the bot's servers.
 	mux.HandleFunc("GET /api/bot/gateway", h.WS.HandleBotConnection)
 
-	return authMw
+	return authMw, permMw
 }

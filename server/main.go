@@ -177,9 +177,12 @@ func main() {
 	svcs.Server.SetAuditLogger(svcs.AuditLog)
 	svcs.Message.SetAuditLogger(svcs.AuditLog)
 
-	// (SetPermInvalidator wiring moved into initServices — single
-	// source of truth for service-to-service dependency setup; main.go
-	// only owns app-level concerns now.)
+	// SetPermInvalidator wiring happens after initRoutes below (step 12),
+	// not here: it fans out to both channelPermService (available now) and
+	// permMw (middleware.PermissionMiddleware, only constructed inside
+	// initRoutes) via services.NewMultiInvalidator, so it needs permMw's
+	// late binding — same pattern as svcs.AdminUser.SetUserCacheInvalidator(authMw)
+	// below.
 
 	// 9d. Wire the member-timeout checker into voice. messageService
 	// gets the timeout repo via its constructor; voiceService uses a
@@ -248,13 +251,24 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	authMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botService)
+	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botService)
 
 	// Wire the auth user-cache invalidator into the admin user service so a
 	// platform ban / hard-delete / admin-status change drops the cached user
 	// row immediately, instead of letting a just-banned account keep making
 	// authenticated REST calls until the ~30s cache TTL expires (F-7).
 	svcs.AdminUser.SetUserCacheInvalidator(authMw)
+
+	// Wire the server-level permission cache (middleware/permission.go) into
+	// the same PermissionInvalidator fan-out as channelPermService's
+	// per-channel cache. permMw only exists after initRoutes runs, so this
+	// wiring can't happen inside initServices (services.NewMultiInvalidator
+	// is the composite; see permission.go's doc comment for what each call
+	// does). Wiring completes before the server accepts requests, so there
+	// is no window where a role/member write bypasses invalidation.
+	permInvalidator := services.NewMultiInvalidator(svcs.ChannelPermission, permMw)
+	svcs.Role.SetPermInvalidator(permInvalidator)
+	svcs.Member.SetPermInvalidator(permInvalidator)
 
 	// 13. Static file serving
 	registerStaticAndUploads(mux, cfg)
