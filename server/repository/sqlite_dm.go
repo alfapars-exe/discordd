@@ -245,10 +245,21 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
-			ORDER BY m.created_at DESC
+			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT ?`
 		args = []any{channelID, limit}
 	} else {
+		// Cursor pagination: fetch messages older than beforeID, using a
+		// compound (created_at, id) tiebreak. created_at has only second
+		// resolution while id is random hex, so a plain `created_at < X`
+		// cursor silently drops rows: whenever more than `limit` messages
+		// land in the same second, the ones on the far side of the page
+		// boundary never satisfy the strict `<` again and the client sees
+		// hasMore:false with messages permanently missing. Expressed as
+		// boolean expansion rather than a row-value comparison so it works
+		// identically on both the local modernc.org/sqlite driver and the
+		// CGO libsql/Turso driver (row-value comparison isn't guaranteed
+		// portable across both engines).
 		query = `
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
@@ -261,10 +272,12 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
-			  AND m.created_at < (SELECT created_at FROM dm_messages WHERE id = ?)
-			ORDER BY m.created_at DESC
+			  AND ( m.created_at < (SELECT created_at FROM dm_messages WHERE id = ?)
+			     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ?)
+			          AND m.id < ? ) )
+			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT ?`
-		args = []any{channelID, beforeID, limit}
+		args = []any{channelID, beforeID, beforeID, beforeID, limit}
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
