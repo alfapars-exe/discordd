@@ -13,19 +13,34 @@ import (
 
 type sqliteUserRepo struct {
 	db database.TxQuerier
+	// rawDB is set only when this repo was constructed directly on the
+	// top-level pool (init_repos.go). nil when constructed inside another
+	// transaction (db is already a *sql.Tx) — CreateWithSession requires
+	// rawDB because it opens its own transaction via database.WithTx.
+	rawDB *sql.DB
 }
 
 func NewSQLiteUserRepo(db database.TxQuerier) UserRepository {
-	return &sqliteUserRepo{db: db}
+	r := &sqliteUserRepo{db: db}
+	if raw, ok := db.(*sql.DB); ok {
+		r.rawDB = raw
+	}
+	return r
 }
 
 func (r *sqliteUserRepo) Create(ctx context.Context, user *models.User) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+	user.ID = id
+
 	query := `
 		INSERT INTO users (id, username, display_name, avatar_url, password_hash, status, email, language, is_platform_admin)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
+		user.ID,
 		user.Username,
 		user.DisplayName,
 		user.AvatarURL,
@@ -34,7 +49,7 @@ func (r *sqliteUserRepo) Create(ctx context.Context, user *models.User) error {
 		user.Email,
 		user.Language,
 		user.IsPlatformAdmin,
-	).Scan(&user.ID, &user.CreatedAt)
+	)
 
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -46,7 +61,38 @@ func (r *sqliteUserRepo) Create(ctx context.Context, user *models.User) error {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
+	// created_at is DB-side DEFAULT CURRENT_TIMESTAMP (001_init.sql), written
+	// as SQLite "YYYY-MM-DD HH:MM:SS" text. Deliberately NOT set from Go — a
+	// time.Time bind would write RFC3339 into the same column, silently
+	// mixing two date-string formats and breaking string-ordered queries.
+	// Best-effort read-back; must never turn a successful insert into a 500.
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM users WHERE id = ?", user.ID).Scan(&user.CreatedAt)
+
 	return nil
+}
+
+// CreateWithSession creates a user and an associated session atomically —
+// either both rows commit or neither does. Closes the orphaned-user-row bug:
+// previously user-insert and session-insert were separate autocommit
+// statements, so a dropped session insert left a committed, tokenless user
+// row (client saw 500; a retry then hit 409). Used by AuthService.Register.
+func (r *sqliteUserRepo) CreateWithSession(ctx context.Context, user *models.User, session *models.Session) error {
+	if r.rawDB == nil {
+		return fmt.Errorf("CreateWithSession requires a *sql.DB-backed repository")
+	}
+	return database.WithTx(ctx, r.rawDB, func(tx *sql.Tx) error {
+		txUserRepo := &sqliteUserRepo{db: tx}
+		if err := txUserRepo.Create(ctx, user); err != nil {
+			return err
+		}
+
+		session.UserID = user.ID
+		txSessionRepo := &sqliteSessionRepo{db: tx}
+		if err := txSessionRepo.Create(ctx, session); err != nil {
+			return fmt.Errorf("failed to create session: %w", err)
+		}
+		return nil
+	})
 }
 
 func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, error) {

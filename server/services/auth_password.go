@@ -15,7 +15,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -70,7 +69,7 @@ func (s *authService) ChangePassword(ctx context.Context, userID, currentPasswor
 	// the change) gets booted. Best-effort: if the bump fails, the
 	// password is still changed (caller's primary intent), we just log.
 	if err := s.userRepo.IncrementTokenVersion(ctx, userID); err != nil {
-		log.Printf("[auth] WARN failed to bump token_version after password change for %s: %v", userID, err)
+		authLogger.Warn("failed to bump token_version after password change", "user_id", userID, "err", pkg.ErrText(err))
 	}
 
 	return nil
@@ -135,12 +134,12 @@ func (s *authService) ForgotPassword(ctx context.Context, emailAddr string) (int
 
 	// Clean up old tokens for this user
 	if delErr := s.resetRepo.DeleteByUserID(ctx, user.ID); delErr != nil {
-		log.Printf("[auth] warning: failed to delete old reset tokens for user %s: %v", user.ID, delErr)
+		authLogger.Warn("failed to delete old reset tokens", "user_id", user.ID, "err", pkg.ErrText(delErr))
 	}
 
 	// Opportunistic cleanup of all expired tokens
 	if delErr := s.resetRepo.DeleteExpired(ctx); delErr != nil {
-		log.Printf("[auth] warning: failed to delete expired reset tokens: %v", delErr)
+		authLogger.Warn("failed to delete expired reset tokens", "err", pkg.ErrText(delErr))
 	}
 
 	// Generate token (32 bytes = 64 hex chars)
@@ -168,7 +167,7 @@ func (s *authService) ForgotPassword(ctx context.Context, emailAddr string) (int
 		return 0, fmt.Errorf("failed to send reset email: %w", err)
 	}
 
-	log.Printf("[auth] password reset email sent to user %s", user.ID)
+	authLogger.Info("password reset email sent", "user_id", user.ID)
 	return 0, nil
 }
 
@@ -195,7 +194,7 @@ func (s *authService) ResetPassword(ctx context.Context, token, newPassword stri
 
 	if time.Now().After(resetToken.ExpiresAt) {
 		if delErr := s.resetRepo.DeleteByID(ctx, resetToken.ID); delErr != nil {
-			log.Printf("[auth] warning: failed to delete expired token %s: %v", resetToken.ID, delErr)
+			authLogger.Warn("failed to delete expired reset token", "token_id", resetToken.ID, "err", pkg.ErrText(delErr))
 		}
 		return fmt.Errorf("%w: reset token has expired", pkg.ErrBadRequest)
 	}
@@ -211,9 +210,9 @@ func (s *authService) ResetPassword(ctx context.Context, token, newPassword stri
 
 	// Delete all tokens for this user (one-time use)
 	if err := s.resetRepo.DeleteByUserID(ctx, resetToken.UserID); err != nil {
-		log.Printf("[auth] warning: failed to delete reset tokens for user %s: %v", resetToken.UserID, err)
+		authLogger.Warn("failed to delete reset tokens after use", "user_id", resetToken.UserID, "err", pkg.ErrText(err))
 	}
 
-	log.Printf("[auth] password reset completed for user %s", resetToken.UserID)
+	authLogger.Info("password reset completed", "user_id", resetToken.UserID)
 	return nil
 }

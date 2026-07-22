@@ -1,0 +1,22 @@
+{
+  "network": "Couldn't reach the server. Check your internet connection and try again.",
+  "networkTitle": "Connection Problem",
+  "server": "Something went wrong on our end. Please try again in a moment.",
+  "serverTitle": "Server Error",
+  "unauthorized": "You need to sign in to do that.",
+  "unauthorizedTitle": "Sign-in Required",
+  "sessionExpired": "Your session has expired. Please sign in again.",
+  "sessionExpiredTitle": "Session Expired",
+  "rateLimited": "You're doing that too often. Please wait a moment and try again.",
+  "rateLimitedTitle": "Slow Down",
+  "validation": "Some of the information you entered isn't valid. Please check and try again.",
+  "validationTitle": "Invalid Input",
+  "notFound": "We couldn't find what you were looking for.",
+  "notFoundTitle": "Not Found",
+  "forbidden": "You don't have permission to do that.",
+  "forbiddenTitle": "Permission Denied",
+  "conflict": "This couldn't be completed because it conflicts with something else.",
+  "conflictTitle": "Conflict",
+  "unknown": "An unexpected error occurred. Please try again.",
+  "unknownTitle": "Something Went Wrong"
+}

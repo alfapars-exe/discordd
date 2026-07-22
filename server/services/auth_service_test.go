@@ -49,7 +49,7 @@ func TestRegister(t *testing.T) {
 				ur.IsEmailPlatformBannedFn = func(ctx context.Context, email string) (bool, error) {
 					return false, nil
 				}
-				ur.CreateFn = func(ctx context.Context, user *models.User) error {
+				ur.CreateWithSessionFn = func(ctx context.Context, user *models.User, session *models.Session) error {
 					// Verify bcrypt hash was generated
 					if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("password123")); err != nil {
 						t.Errorf("password hash does not match: %v", err)
@@ -127,8 +127,27 @@ func TestRegister(t *testing.T) {
 				Password: "password123",
 			},
 			setupRepo: func(ur *testutil.MockUserRepo, sr *testutil.MockSessionRepo) {
-				ur.CreateFn = func(ctx context.Context, user *models.User) error {
+				ur.CreateWithSessionFn = func(ctx context.Context, user *models.User, session *models.Session) error {
 					return errors.New("UNIQUE constraint failed: users.username")
+				}
+			},
+			wantErr: true,
+		},
+		{
+			name: "should fail when session creation fails after user row committed",
+			req: &models.CreateUserRequest{
+				Username: "testuser2",
+				Password: "password123",
+			},
+			setupRepo: func(ur *testutil.MockUserRepo, sr *testutil.MockSessionRepo) {
+				// Simulates the atomic CreateWithSession failing partway
+				// through (e.g. the session INSERT trips an error inside the
+				// transaction) — true row-level atomicity (user row rolled
+				// back when the session insert fails) is verified separately
+				// at the repository layer against a real DB, since a mock
+				// can't observe SQL rollback.
+				ur.CreateWithSessionFn = func(ctx context.Context, user *models.User, session *models.Session) error {
+					return errors.New("db error: session insert failed")
 				}
 			},
 			wantErr: true,
@@ -657,7 +676,7 @@ func TestGenerateMediaToken(t *testing.T) {
 func TestGenerateTokens_AccessTokenHasEmptyScope(t *testing.T) {
 	userRepo := &testutil.MockUserRepo{
 		IsEmailPlatformBannedFn: func(_ context.Context, _ string) (bool, error) { return false, nil },
-		CreateFn: func(_ context.Context, user *models.User) error {
+		CreateWithSessionFn: func(_ context.Context, user *models.User, session *models.Session) error {
 			user.ID = "user-1"
 			return nil
 		},

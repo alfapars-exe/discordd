@@ -1,13 +1,18 @@
 package main
 
 import (
-	"log"
-
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
+
+// hubLogger tags every Hub-callback log line (presence/voice/p2p/typing
+// event handling wired below) so they can be filtered separately from the
+// boot-sequence logs in main.go/bootstrap.go/init_services.go.
+var hubLogger = logx.Component("server")
 
 // registerHubCallbacks wires Hub events to service layer logic.
 //
@@ -51,7 +56,7 @@ func registerHubCallbacks(
 		defer cancel()
 
 		if updateErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOffline); updateErr != nil {
-			log.Printf("[presence] failed to set offline for user %s: %v", userID, updateErr)
+			hubLogger.Error("failed to set offline status", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
 		}
 
 		hub.SetInvisible(userID, false)
@@ -63,7 +68,7 @@ func registerHubCallbacks(
 				Status: string(models.UserStatusOffline),
 			},
 		})
-		log.Printf("[presence] user %s disconnected (DB set to offline)", userID)
+		hubLogger.Info("user disconnected, DB set to offline", "area", "presence", "user_id", userID)
 
 		// Voice state is NOT cleaned here — WS disconnect != voice leave.
 		// LiveKit connection is separate; WS may reconnect shortly.
@@ -81,7 +86,7 @@ func registerHubCallbacks(
 		if vState := voiceService.GetUserVoiceState(userID); vState != nil && vState.IsStreaming {
 			falseVal := false
 			if updErr := voiceService.UpdateState(userID, nil, nil, &falseVal); updErr != nil {
-				log.Printf("[voice] failed to clear streaming on disconnect user=%s: %v", userID, updErr)
+				hubLogger.Error("failed to clear streaming on disconnect", "area", "voice", "user_id", userID, "err", pkg.ErrText(updErr))
 			}
 		}
 
@@ -94,7 +99,7 @@ func registerHubCallbacks(
 
 	hub.OnVoiceJoin(func(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) {
 		if err := voiceService.JoinChannel(userID, username, displayName, avatarURL, channelID, isMuted, isDeafened); err != nil {
-			log.Printf("[voice] join error user=%s channel=%s: %v", userID, channelID, err)
+			hubLogger.Error("voice join failed", "area", "voice", "user_id", userID, "channel_id", channelID, "err", pkg.ErrText(err))
 			return
 		}
 
@@ -106,27 +111,27 @@ func registerHubCallbacks(
 
 		// Track last voice activity for admin panel
 		if actErr := userRepo.UpdateLastVoiceActivity(ctx, userID); actErr != nil {
-			log.Printf("[voice] failed to update user voice activity user=%s: %v", userID, actErr)
+			hubLogger.Error("failed to update user voice activity", "area", "voice", "user_id", userID, "err", pkg.ErrText(actErr))
 		}
 
 		// Track server-level voice activity
 		ch, chErr := channelRepo.GetByID(ctx, channelID)
 		if chErr != nil {
-			log.Printf("[voice] channel lookup for activity tracking failed channel=%s: %v", channelID, chErr)
+			hubLogger.Error("channel lookup for activity tracking failed", "area", "voice", "channel_id", channelID, "err", pkg.ErrText(chErr))
 			return
 		}
 		if actErr := serverRepo.UpdateLastVoiceActivity(ctx, ch.ServerID); actErr != nil {
-			log.Printf("[voice] failed to update server voice activity server=%s: %v", ch.ServerID, actErr)
+			hubLogger.Error("failed to update server voice activity", "area", "voice", "server_id", ch.ServerID, "err", pkg.ErrText(actErr))
 		}
 	})
 	hub.OnVoiceLeave(func(userID string) {
 		if err := voiceService.LeaveChannel(userID); err != nil {
-			log.Printf("[voice] leave error user=%s: %v", userID, err)
+			hubLogger.Error("voice leave failed", "area", "voice", "user_id", userID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnVoiceStateUpdate(func(userID string, isMuted, isDeafened, isStreaming *bool) {
 		if err := voiceService.UpdateState(userID, isMuted, isDeafened, isStreaming); err != nil {
-			log.Printf("[voice] state update error user=%s: %v", userID, err)
+			hubLogger.Error("voice state update failed", "area", "voice", "user_id", userID, "err", pkg.ErrText(err))
 		}
 	})
 	// The three moderation callbacks below only spend their context on
@@ -137,7 +142,7 @@ func registerHubCallbacks(
 		defer cancel()
 
 		if err := voiceService.AdminUpdateState(ctx, adminUserID, targetUserID, isServerMuted, isServerDeafened); err != nil {
-			log.Printf("[voice] admin state update error admin=%s target=%s: %v", adminUserID, targetUserID, err)
+			hubLogger.Error("voice admin state update failed", "area", "voice", "admin_user_id", adminUserID, "target_user_id", targetUserID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnVoiceMoveUser(func(moverUserID, targetUserID, targetChannelID string) {
@@ -145,7 +150,7 @@ func registerHubCallbacks(
 		defer cancel()
 
 		if err := voiceService.MoveUser(ctx, moverUserID, targetUserID, targetChannelID); err != nil {
-			log.Printf("[voice] move user error mover=%s target=%s channel=%s: %v", moverUserID, targetUserID, targetChannelID, err)
+			hubLogger.Error("voice move user failed", "area", "voice", "mover_user_id", moverUserID, "target_user_id", targetUserID, "channel_id", targetChannelID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnVoiceDisconnectUser(func(disconnecterUserID, targetUserID string) {
@@ -153,7 +158,7 @@ func registerHubCallbacks(
 		defer cancel()
 
 		if err := voiceService.AdminDisconnectUser(ctx, disconnecterUserID, targetUserID); err != nil {
-			log.Printf("[voice] disconnect user error disconnecter=%s target=%s: %v", disconnecterUserID, targetUserID, err)
+			hubLogger.Error("voice admin disconnect user failed", "area", "voice", "disconnecter_user_id", disconnecterUserID, "target_user_id", targetUserID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnScreenShareWatch(func(viewerUserID, streamerUserID string, watching bool) {
@@ -168,27 +173,27 @@ func registerHubCallbacks(
 	hub.OnP2PCallInitiate(func(callerID string, data ws.P2PCallInitiateData) {
 		callType := models.P2PCallType(data.CallType)
 		if err := p2pCallService.InitiateCall(callerID, data.ReceiverID, callType); err != nil {
-			log.Printf("[p2p] initiate error caller=%s receiver=%s: %v", callerID, data.ReceiverID, err)
+			hubLogger.Error("p2p call initiate failed", "area", "p2p", "caller_id", callerID, "receiver_id", data.ReceiverID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnP2PCallAccept(func(userID string, data ws.P2PCallAcceptData) {
 		if err := p2pCallService.AcceptCall(userID, data.CallID); err != nil {
-			log.Printf("[p2p] accept error user=%s call=%s: %v", userID, data.CallID, err)
+			hubLogger.Error("p2p call accept failed", "area", "p2p", "user_id", userID, "call_id", data.CallID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnP2PCallDecline(func(userID string, data ws.P2PCallDeclineData) {
 		if err := p2pCallService.DeclineCall(userID, data.CallID); err != nil {
-			log.Printf("[p2p] decline error user=%s call=%s: %v", userID, data.CallID, err)
+			hubLogger.Error("p2p call decline failed", "area", "p2p", "user_id", userID, "call_id", data.CallID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnP2PCallEnd(func(userID string) {
 		if err := p2pCallService.EndCall(userID); err != nil {
-			log.Printf("[p2p] end error user=%s: %v", userID, err)
+			hubLogger.Error("p2p call end failed", "area", "p2p", "user_id", userID, "err", pkg.ErrText(err))
 		}
 	})
 	hub.OnP2PSignal(func(senderID string, data ws.P2PSignalData) {
 		if err := p2pCallService.RelaySignal(senderID, data.CallID, data); err != nil {
-			log.Printf("[p2p] signal relay error sender=%s call=%s: %v", senderID, data.CallID, err)
+			hubLogger.Error("p2p signal relay failed", "area", "p2p", "sender_id", senderID, "call_id", data.CallID, "err", pkg.ErrText(err))
 		}
 	})
 
@@ -213,7 +218,7 @@ func registerHubCallbacks(
 		onlineUsers := hub.GetOnlineUserIDsForServer(ch.ServerID)
 		perms, permErr := channelPermResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
 		if permErr != nil {
-			log.Printf("[typing] bulk permission resolve failed channel=%s: %v", channelID, permErr)
+			hubLogger.Error("typing bulk permission resolve failed", "area", "typing", "channel_id", channelID, "err", pkg.ErrText(permErr))
 			return
 		}
 
@@ -256,7 +261,7 @@ func userFirstConnectCallback(hub *ws.Hub, userRepo repository.UserRepository) w
 		// Read persistent pref_status from DB (not client-provided — client may differ per device).
 		user, err := userRepo.GetByID(ctx, userID)
 		if err != nil {
-			log.Printf("[presence] failed to get user %s: %v", userID, err)
+			hubLogger.Error("failed to get user for first-connect presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(err))
 			return
 		}
 
@@ -274,12 +279,12 @@ func userFirstConnectCallback(hub *ws.Hub, userRepo repository.UserRepository) w
 					Status: string(models.UserStatusOffline),
 				},
 			})
-			log.Printf("[presence] user %s connected as invisible (pref_status=offline)", userID)
+			hubLogger.Info("user connected as invisible (pref_status=offline)", "area", "presence", "user_id", userID)
 			return
 		}
 
 		if updateErr := userRepo.UpdateStatus(ctx, userID, targetStatus); updateErr != nil {
-			log.Printf("[presence] failed to update status for user %s: %v", userID, updateErr)
+			hubLogger.Error("failed to update status on first connect", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
 		}
 
 		hub.BroadcastToAll(ws.Event{
@@ -289,7 +294,7 @@ func userFirstConnectCallback(hub *ws.Hub, userRepo repository.UserRepository) w
 				Status: string(targetStatus),
 			},
 		})
-		log.Printf("[presence] user %s connected with status %s (from pref_status)", userID, targetStatus)
+		hubLogger.Info("user connected with status from pref_status", "area", "presence", "user_id", userID, "status", targetStatus)
 	}
 }
 
@@ -303,7 +308,7 @@ func presenceUpdateCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.
 		st := models.UserStatus(status)
 
 		if err := userRepo.UpdateStatus(ctx, userID, st); err != nil {
-			log.Printf("[presence] failed to set %s for user %s: %v", status, userID, err)
+			hubLogger.Error("failed to set status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
 			return
 		}
 
@@ -312,7 +317,7 @@ func presenceUpdateCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.
 		// correctly after WS reconnect.
 		if !isAuto {
 			if err := userRepo.UpdatePrefStatus(ctx, userID, st); err != nil {
-				log.Printf("[presence] failed to set pref_status %s for user %s: %v", status, userID, err)
+				hubLogger.Error("failed to set pref_status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
 			}
 		}
 
@@ -330,7 +335,7 @@ func presenceUpdateCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.
 		if isAuto {
 			source = "auto"
 		}
-		log.Printf("[presence] user %s is now %s (%s)", userID, status, source)
+		hubLogger.Info("presence updated", "area", "presence", "user_id", userID, "status", status, "source", source)
 	}
 }
 

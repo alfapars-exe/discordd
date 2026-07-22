@@ -6,6 +6,7 @@ import { useMemberStore, useActiveMembers } from "../../stores/memberStore";
 import { useRoleStore, useActiveRoles } from "../../stores/roleStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useConfirm } from "../../hooks/useConfirm";
 import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
@@ -154,7 +155,7 @@ function MembersSettings() {
       setHasChanges(false);
       addToast("success", t("memberRolesSaved"));
     } else {
-      addToast("error", res.error ?? t("memberRolesSaveError"));
+      showApiError(res, { fallbackKey: "settings:memberRolesSaveError" });
     }
   }
 
@@ -175,7 +176,7 @@ function MembersSettings() {
       addToast("success", t("memberKicked"));
       setSelectedMemberId(null);
     } else {
-      addToast("error", res.error ?? t("memberKickError"));
+      showApiError(res, { fallbackKey: "settings:memberKickError" });
     }
   }
 
@@ -196,7 +197,7 @@ function MembersSettings() {
       addToast("success", t("memberBanned"));
       setSelectedMemberId(null);
     } else {
-      addToast("error", res.error ?? t("memberBanError"));
+      showApiError(res, { fallbackKey: "settings:memberBanError" });
     }
   }
 
@@ -217,7 +218,7 @@ function MembersSettings() {
       setBans((prev) => prev.filter((b) => b.user_id !== selectedBan.user_id));
       setSelectedBanUserId(null);
     } else {
-      addToast("error", res.error ?? t("memberUnbanError"));
+      showApiError(res, { fallbackKey: "settings:memberUnbanError" });
     }
   }
 

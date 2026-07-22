@@ -1,0 +1,22 @@
+{
+  "network": "Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dene.",
+  "networkTitle": "Bağlantı Sorunu",
+  "server": "Bizim tarafımızda bir sorun oluştu. Lütfen biraz sonra tekrar dene.",
+  "serverTitle": "Sunucu Hatası",
+  "unauthorized": "Bunu yapmak için giriş yapman gerekiyor.",
+  "unauthorizedTitle": "Giriş Gerekli",
+  "sessionExpired": "Oturumunun süresi doldu. Lütfen tekrar giriş yap.",
+  "sessionExpiredTitle": "Oturum Süresi Doldu",
+  "rateLimited": "Bunu çok sık yapıyorsun. Lütfen biraz bekleyip tekrar dene.",
+  "rateLimitedTitle": "Yavaşla",
+  "validation": "Girdiğin bilgilerden bazıları geçerli değil. Lütfen kontrol edip tekrar dene.",
+  "validationTitle": "Geçersiz Bilgi",
+  "notFound": "Aradığın şeyi bulamadık.",
+  "notFoundTitle": "Bulunamadı",
+  "forbidden": "Bunu yapmaya yetkin yok.",
+  "forbiddenTitle": "İzin Reddedildi",
+  "conflict": "Bu işlem başka bir şeyle çakıştığı için tamamlanamadı.",
+  "conflictTitle": "Çakışma",
+  "unknown": "Beklenmeyen bir hata oluştu. Lütfen tekrar dene.",
+  "unknownTitle": "Bir Şeyler Ters Gitti"
+}

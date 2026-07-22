@@ -14,17 +14,21 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/ws"
 
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
+
+// musicBotLogger is shared by every music_bot_*.go file in this package —
+// they all implement methods on the single musicBotService/botInstance types.
+var musicBotLogger = logx.Component("service.musicbot")
 
 // idleLeaveAfter — how long an empty queue + no current track keeps the bot
 // idle before it disconnects on its own. Matches Discord's ~2-5 min behaviour.
@@ -142,15 +146,15 @@ func (s *musicBotService) SetAppLogger(logger VoiceAppLogger) {
 // (1 for a single video URL, N for a playlist). Lazy-starts the bot on first
 // call per channel. PermSpeak is enforced by the HTTP handler.
 func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url string) ([]models.MusicTrack, error) {
-	log.Printf("[music] enqueue request: channel=%s user=%s url=%q", channelID, userID, url)
+	musicBotLogger.Info("enqueue request", "channel_id", channelID, "user_id", userID, "url", url)
 
 	channel, err := s.channels.GetByID(ctx, channelID)
 	if err != nil {
-		log.Printf("[music] enqueue: channel lookup failed channel=%s err=%v", channelID, err)
+		musicBotLogger.Error("enqueue: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		return nil, fmt.Errorf("channel lookup failed: %w", err)
 	}
 	if channel.Type != models.ChannelTypeVoice {
-		log.Printf("[music] enqueue: not a voice channel channel=%s type=%s", channelID, channel.Type)
+		musicBotLogger.Warn("enqueue: not a voice channel", "channel_id", channelID, "channel_type", channel.Type)
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
 	}
 
@@ -167,18 +171,18 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	tracks, err := extractTracks(ctx, url, userID, requesterName)
 	extractMs := time.Since(extractStart).Milliseconds()
 	if err != nil {
-		log.Printf("[music] enqueue: yt-dlp extract failed channel=%s url=%q err=%v duration=%dms",
-			channelID, url, err, extractMs)
+		musicBotLogger.Error("enqueue: yt-dlp extract failed",
+			"channel_id", channelID, "url", url, "err", pkg.ErrText(err), "duration_ms", extractMs)
 		return nil, fmt.Errorf("yt-dlp extraction failed: %w", err)
 	}
-	log.Printf("[music] enqueue: extracted %d track(s) channel=%s duration=%dms", len(tracks), channelID, extractMs)
+	musicBotLogger.Info("enqueue: extracted tracks", "track_count", len(tracks), "channel_id", channelID, "duration_ms", extractMs)
 	if len(tracks) == 0 {
 		return nil, fmt.Errorf("%w: no playable tracks found at URL", pkg.ErrBadRequest)
 	}
 
 	bot, err := s.getOrCreateBot(ctx, channel.ServerID, channelID)
 	if err != nil {
-		log.Printf("[music] enqueue: getOrCreateBot failed channel=%s err=%v", channelID, err)
+		musicBotLogger.Error("enqueue: getOrCreateBot failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		return nil, err
 	}
 
@@ -190,10 +194,10 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	queueLen := len(bot.queue)
 	bot.mu.Unlock()
 
-	log.Printf("[music] enqueue: appended channel=%s queue_len=%d wasIdle=%v", channelID, queueLen, wasIdle)
+	musicBotLogger.Info("enqueue: appended to queue", "channel_id", channelID, "queue_len", queueLen, "was_idle", wasIdle)
 
 	if wasIdle {
-		go s.playLoop(bot)
+		logx.Go("service.music_bot.play_loop", func() { s.playLoop(bot) })
 	}
 
 	s.broadcastState(bot)
@@ -233,7 +237,7 @@ func (s *musicBotService) Pause(channelID string) error {
 		return fmt.Errorf("pause failed: %w", err)
 	}
 	bot.isPaused = true
-	go s.broadcastState(bot)
+	logx.Go("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
 	return nil
 }
 
@@ -252,7 +256,7 @@ func (s *musicBotService) Resume(channelID string) error {
 		return fmt.Errorf("resume failed: %w", err)
 	}
 	bot.isPaused = false
-	go s.broadcastState(bot)
+	logx.Go("service.music_bot.broadcast_state", func() { s.broadcastState(bot) })
 	return nil
 }
 
@@ -301,7 +305,7 @@ func (s *musicBotService) Stop(channelID string) error {
 			},
 		},
 	})
-	log.Printf("[music] bot stopped channel=%s", channelID)
+	musicBotLogger.Info("bot stopped", "channel_id", channelID)
 	return nil
 }
 
@@ -328,7 +332,7 @@ func (s *musicBotService) StopAll() {
 	if len(channelIDs) == 0 {
 		return
 	}
-	log.Printf("[music] stopping %d active bot(s) for shutdown", len(channelIDs))
+	musicBotLogger.Info("stopping active bots for shutdown", "count", len(channelIDs))
 	for _, channelID := range channelIDs {
 		_ = s.Stop(channelID)
 	}
@@ -441,7 +445,7 @@ func (s *musicBotService) broadcastPlaybackError(bot *botInstance, cause error, 
 
 func (s *musicBotService) logErr(category models.LogCategory, channelID, msg string, meta map[string]string) {
 	if s.appLogger == nil {
-		log.Printf("[music] %s channel=%s %v", msg, channelID, meta)
+		musicBotLogger.Error(msg, "channel_id", channelID, "metadata", meta)
 		return
 	}
 	if meta == nil {

@@ -10,8 +10,15 @@ import (
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
+
+// startupLogger tags every boot-time repair/seed log line originating from
+// this file (corrupt-ID cleanup, stale presence reset, platform LiveKit
+// seeding, platform admin bootstrap).
+var startupLogger = logx.Component("startup")
 
 // bootstrapPlatformAdmin idempotently grants platform-admin to a known
 // username at every server start. Required because the in-app admin endpoint
@@ -30,11 +37,11 @@ func bootstrapPlatformAdmin(db *database.DB, username string) {
 		username,
 	)
 	if err != nil {
-		log.Printf("[main] bootstrap platform admin (%s) failed: %v", username, err)
+		startupLogger.Error("bootstrap platform admin failed", "username", username, "err", pkg.ErrText(err))
 		return
 	}
 	if affected, _ := res.RowsAffected(); affected > 0 {
-		log.Printf("[main] bootstrapped platform admin: %s", username)
+		startupLogger.Info("bootstrapped platform admin", "username", username)
 	}
 }
 
@@ -50,24 +57,24 @@ func repairCorruptIDs(db *database.DB) {
 	var emptyLK int
 	if err := db.Conn.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM livekit_instances WHERE id = ''`).Scan(&emptyLK); err != nil {
-		log.Printf("[main] warning: failed to check empty-ID livekit instances: %v", err)
+		startupLogger.Error("failed to check empty-ID livekit instances", "err", pkg.ErrText(err))
 	}
 	if emptyLK > 0 {
 		var newLKID string
 		if err := db.Conn.QueryRowContext(ctx,
 			`SELECT lower(hex(randomblob(8)))`).Scan(&newLKID); err != nil {
-			log.Printf("[main] warning: failed to generate new livekit ID: %v", err)
+			startupLogger.Error("failed to generate new livekit ID", "err", pkg.ErrText(err))
 		} else {
 			if _, err := db.Conn.ExecContext(ctx,
 				`UPDATE livekit_instances SET id = ? WHERE id = ''`, newLKID); err != nil {
-				log.Printf("[main] warning: failed to update empty-ID livekit instance: %v", err)
+				startupLogger.Error("failed to update empty-ID livekit instance", "err", pkg.ErrText(err))
 			}
 			res, fixErr := db.Conn.ExecContext(ctx,
 				`UPDATE servers SET livekit_instance_id = ? WHERE livekit_instance_id = ''`, newLKID)
 			if fixErr != nil {
-				log.Printf("[main] warning: failed to update server livekit refs: %v", fixErr)
+				startupLogger.Error("failed to update server livekit refs", "err", pkg.ErrText(fixErr))
 			} else if aff, _ := res.RowsAffected(); aff > 0 {
-				log.Printf("[main] fixed empty-ID livekit instance → %s (%d server refs updated)", newLKID, aff)
+				startupLogger.Info("fixed empty-ID livekit instance", "new_livekit_id", newLKID, "server_refs_updated", aff)
 			}
 		}
 	}
@@ -77,20 +84,20 @@ func repairCorruptIDs(db *database.DB) {
 	var emptySrv int
 	if err := db.Conn.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM servers WHERE id = ''`).Scan(&emptySrv); err != nil {
-		log.Printf("[main] warning: failed to check empty-ID servers: %v", err)
+		startupLogger.Error("failed to check empty-ID servers", "err", pkg.ErrText(err))
 	}
 	if emptySrv > 0 {
 		cleanupTables := []string{"channels", "categories", "roles", "user_roles", "invites", "bans", "server_members"}
 		for _, table := range cleanupTables {
 			if _, err := db.Conn.ExecContext(ctx,
 				fmt.Sprintf(`DELETE FROM %s WHERE server_id = ''`, table)); err != nil {
-				log.Printf("[main] warning: failed to clean empty-ID from %s: %v", table, err)
+				startupLogger.Error("failed to clean empty-ID rows", "table", table, "err", pkg.ErrText(err))
 			}
 		}
 		if _, err := db.Conn.ExecContext(ctx, `DELETE FROM servers WHERE id = ''`); err != nil {
-			log.Printf("[main] warning: failed to delete empty-ID servers: %v", err)
+			startupLogger.Error("failed to delete empty-ID servers", "err", pkg.ErrText(err))
 		}
-		log.Printf("[main] cleaned up %d empty-ID server(s) and related data", emptySrv)
+		startupLogger.Info("cleaned up empty-ID server(s) and related data", "count", emptySrv)
 	}
 }
 
@@ -201,11 +208,11 @@ func resetStalePresence(db *database.DB) {
 	result, err := db.Conn.ExecContext(context.Background(),
 		`UPDATE users SET status = 'offline', last_seen_at = CURRENT_TIMESTAMP WHERE status IN ('online', 'idle')`)
 	if err != nil {
-		log.Printf("[main] warning: failed to reset stale presence: %v", err)
+		startupLogger.Error("failed to reset stale presence", "err", pkg.ErrText(err))
 		return
 	}
 	if affected, _ := result.RowsAffected(); affected > 0 {
-		log.Printf("[main] reset %d stale user status(es) to offline", affected)
+		startupLogger.Info("reset stale user status(es) to offline", "count", affected)
 	}
 }
 
@@ -242,7 +249,7 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 		if createErr := repos.LiveKit.Create(ctx, platformInstance); createErr != nil {
 			log.Fatalf("[main] failed to seed platform livekit instance: %v", createErr)
 		}
-		log.Printf("[main] seeded platform LiveKit instance (url=%s, id=%s)", cfg.LiveKit.URL, platformInstance.ID)
+		startupLogger.Info("seeded platform LiveKit instance", "url", cfg.LiveKit.URL, "livekit_instance_id", platformInstance.ID)
 	} else {
 		// Instance already exists. Keep its stored (encrypted) credentials in
 		// sync with the env triplet so rotating LIVEKIT_URL/KEY/SECRET and
@@ -256,7 +263,7 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 		}
 		if cur, err := crypto.Decrypt(platformInstance.APIKey, encryptionKey); err != nil || cur != cfg.LiveKit.APIKey {
 			if enc, encErr := crypto.Encrypt(cfg.LiveKit.APIKey, encryptionKey); encErr != nil {
-				log.Printf("[main] warning: failed to encrypt rotated platform livekit key: %v", encErr)
+				startupLogger.Error("failed to encrypt rotated platform livekit key", "err", pkg.ErrText(encErr))
 			} else {
 				platformInstance.APIKey = enc
 				changed = true
@@ -264,7 +271,7 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 		}
 		if cur, err := crypto.Decrypt(platformInstance.APISecret, encryptionKey); err != nil || cur != cfg.LiveKit.APISecret {
 			if enc, encErr := crypto.Encrypt(cfg.LiveKit.APISecret, encryptionKey); encErr != nil {
-				log.Printf("[main] warning: failed to encrypt rotated platform livekit secret: %v", encErr)
+				startupLogger.Error("failed to encrypt rotated platform livekit secret", "err", pkg.ErrText(encErr))
 			} else {
 				platformInstance.APISecret = enc
 				changed = true
@@ -272,9 +279,9 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 		}
 		if changed {
 			if updErr := repos.LiveKit.Update(ctx, platformInstance); updErr != nil {
-				log.Printf("[main] warning: failed to sync platform livekit credentials from env: %v", updErr)
+				startupLogger.Error("failed to sync platform livekit credentials from env", "err", pkg.ErrText(updErr))
 			} else {
-				log.Printf("[main] synced platform LiveKit credentials from env (id=%s)", platformInstance.ID)
+				startupLogger.Info("synced platform LiveKit credentials from env", "livekit_instance_id", platformInstance.ID)
 			}
 		}
 	}
@@ -284,8 +291,8 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 		platformInstance.ID,
 	)
 	if linkErr != nil {
-		log.Printf("[main] warning: failed to link orphan servers to platform livekit: %v", linkErr)
+		startupLogger.Error("failed to link orphan servers to platform livekit", "err", pkg.ErrText(linkErr))
 	} else if affected, _ := result.RowsAffected(); affected > 0 {
-		log.Printf("[main] linked %d orphan server(s) to platform LiveKit instance", affected)
+		startupLogger.Info("linked orphan server(s) to platform LiveKit instance", "count", affected)
 	}
 }

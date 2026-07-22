@@ -442,8 +442,12 @@ func TestDMRepo_GetMessagesPagination(t *testing.T) {
 	ch := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusAccepted)
 	other := newDMChannel(t, ctx, repo, dmAlice, dmCarol, models.DMStatusAccepted)
 
-	// created_at has 1-second resolution in this schema, so distinct
-	// timestamps are set explicitly rather than relying on insert order.
+	// created_at has 1-second resolution in this schema, so each message
+	// gets an explicit, distinct-per-second stamp rather than relying on
+	// insert order — this keeps the ordering assertions below unambiguous.
+	// The case where multiple messages DO share a second, and pagination
+	// must not lose any of them, is exercised separately at the bottom of
+	// this test.
 	ids := make([]string, 4)
 	for i := range ids {
 		m := newDMMessage(t, ctx, repo, ch.ID, dmAlice, string(rune('a'+i)))
@@ -508,6 +512,60 @@ func TestDMRepo_GetMessagesPagination(t *testing.T) {
 		}
 		if got == nil {
 			t.Fatal("empty result is nil, want an empty slice")
+		}
+	})
+
+	// REGRESSION GUARD — this is the case the (created_at, id) compound
+	// cursor exists for. created_at only has second resolution; id is
+	// random hex. Four messages below share the exact same created_at,
+	// newer than every message seeded above, so a page boundary is forced
+	// to fall inside the tied group. Before the fix, the cursor branch
+	// filtered on `created_at < (SELECT created_at ... WHERE id = ?)`
+	// alone: once the cursor lands on a tied row, every other row with the
+	// SAME created_at fails that strict `<` forever, so the second page
+	// silently skipped straight past the rest of the tie and those
+	// messages were gone for good — not just delayed, permanently
+	// unreachable via pagination.
+	t.Run("messages sharing a created_at second all survive a page boundary", func(t *testing.T) {
+		tieIDs := make([]string, 4)
+		for i := range tieIDs {
+			m := newDMMessage(t, ctx, repo, ch.ID, dmAlice, "es-"+string(rune('a'+i)))
+			tieIDs[i] = m.ID
+			if _, err := db.Conn.Exec(
+				`UPDATE dm_messages SET created_at = '2026-01-01 00:01:00' WHERE id = ?`, m.ID,
+			); err != nil {
+				t.Fatalf("stamp created_at: %v", err)
+			}
+		}
+
+		page1, err := repo.GetMessages(ctx, ch.ID, "", 2)
+		if err != nil {
+			t.Fatalf("GetMessages page 1: %v", err)
+		}
+		if len(page1) != 2 {
+			t.Fatalf("page 1 = %d messages, want 2", len(page1))
+		}
+
+		cursor := page1[len(page1)-1].ID
+		page2, err := repo.GetMessages(ctx, ch.ID, cursor, 2)
+		if err != nil {
+			t.Fatalf("GetMessages page 2: %v", err)
+		}
+		if len(page2) != 2 {
+			t.Fatalf("page 2 = %d messages, want 2 — the rest of the tied group went missing at the page boundary", len(page2))
+		}
+
+		seen := make(map[string]int, len(tieIDs))
+		for _, m := range page1 {
+			seen[m.ID]++
+		}
+		for _, m := range page2 {
+			seen[m.ID]++
+		}
+		for _, id := range tieIDs {
+			if seen[id] != 1 {
+				t.Errorf("tie message %s appeared %d time(s) across the two pages, want exactly 1", id, seen[id])
+			}
 		}
 	})
 }

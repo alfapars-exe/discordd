@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import * as profileApi from "../../api/profile";
 import AvatarUpload from "./AvatarUpload";
 import LanguageSelector from "./LanguageSelector";
@@ -94,7 +95,7 @@ function ProfileSettings() {
           const cacheBustedUrl = `${avatarRes.data.avatar_url}?t=${Date.now()}`;
           updateUser({ avatar_url: cacheBustedUrl });
         } else {
-          addToast("error", avatarRes.error ?? t("avatarUploadError"));
+          showApiError(avatarRes, { fallbackKey: "settings:avatarUploadError" });
           setIsSaving(false);
           return;
         }
@@ -128,7 +129,7 @@ function ProfileSettings() {
             dm_privacy: pendingDMPrivacy,
           });
         } else {
-          addToast("error", res.error ?? t("profileSaveError"));
+          showApiError(res, { fallbackKey: "settings:profileSaveError" });
           setIsSaving(false);
           return;
         }

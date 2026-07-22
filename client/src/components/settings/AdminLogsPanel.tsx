@@ -7,6 +7,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useConfirm } from "../../hooks/useConfirm";
 import { listAppLogs, clearAppLogs } from "../../api/admin";
 import type { AppLog, AppLogLevel } from "../../types";
@@ -97,7 +98,7 @@ function AdminLogsPanel() {
           setLogs(res.data.logs ?? []);
           setTotal(res.data.total);
         } else {
-          addToast("error", res.error ?? t("platformLogsLoadError"));
+          showApiError(res, { fallbackKey: "settings:platformLogsLoadError" });
         }
       } catch {
         addToast("error", t("platformLogsLoadError"));
@@ -126,7 +127,7 @@ function AdminLogsPanel() {
           setLogs(res.data.logs ?? []);
           setTotal(res.data.total);
         } else {
-          addToast("error", res.error ?? t("platformLogsLoadError"));
+          showApiError(res, { fallbackKey: "settings:platformLogsLoadError" });
         }
       } catch {
         if (!cancelled) addToast("error", t("platformLogsLoadError"));
@@ -176,7 +177,7 @@ function AdminLogsPanel() {
         setPage(0);
         addToast("success", t("platformLogsCleared"));
       } else {
-        addToast("error", res.error ?? t("platformLogsClearError"));
+        showApiError(res, { fallbackKey: "settings:platformLogsClearError" });
       }
     } catch {
       addToast("error", t("platformLogsClearError"));

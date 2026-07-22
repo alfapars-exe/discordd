@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -14,10 +13,13 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 	"github.com/google/uuid"
 )
+
+var soundboardLogger = logx.Component("service.soundboard")
 
 const (
 	maxSoundDurationMs = 7000 // 7 seconds
@@ -74,7 +76,7 @@ func NewSoundboardService(
 	// closed off from "other" so a shared host doesn't leak audio clips.
 	dir := filepath.Join(uploadDir, soundboardSubdir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		log.Printf("[soundboard] WARN failed to create soundboard dir %s: %v", dir, err)
+		soundboardLogger.Warn("failed to create soundboard dir", "dir", dir, "err", pkg.ErrText(err))
 	}
 
 	return &soundboardService{

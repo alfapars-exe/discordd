@@ -97,3 +97,92 @@ func TestError_ErrInternalAlsoHidden(t *testing.T) {
 		t.Errorf("internal host leaked to client: %q", resp.Error)
 	}
 }
+
+// TestMapErrorToStatus_E2EESentinels verifies the E2EE sentinels added
+// alongside the original 5 are mapped to a status instead of silently
+// falling into the 500 default.
+func TestMapErrorToStatus_E2EESentinels(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"device not found", ErrDeviceNotFound, http.StatusNotFound},
+		{"prekey pool exhausted", ErrPrekeyExhausted, http.StatusConflict},
+		{"invalid key", ErrInvalidKey, http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := mapErrorToStatus(tc.err); got != tc.want {
+				t.Errorf("mapErrorToStatus(%v) = %d, want %d", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestError_ResponseCode_MatchesSentinel verifies every sentinel produces
+// the expected machine-readable Code in the JSON envelope, and that an
+// unmapped/internal error falls back to "INTERNAL".
+func TestError_ResponseCode_MatchesSentinel(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"not found", ErrNotFound, "NOT_FOUND"},
+		{"unauthorized", ErrUnauthorized, "UNAUTHORIZED"},
+		{"forbidden", ErrForbidden, "FORBIDDEN"},
+		{"already exists", ErrAlreadyExists, "ALREADY_EXISTS"},
+		{"bad request", ErrBadRequest, "BAD_REQUEST"},
+		{"device not found", ErrDeviceNotFound, "NOT_FOUND"},
+		{"prekey exhausted", ErrPrekeyExhausted, "CONFLICT"},
+		{"invalid key", ErrInvalidKey, "INVALID_KEY"},
+		{"internal", ErrInternal, "INTERNAL"},
+		{"unmapped error", errors.New("some driver error"), "INTERNAL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			Error(rr, tc.err)
+
+			var resp APIResponse
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if resp.Code != tc.want {
+				t.Errorf("Code = %q, want %q", resp.Code, tc.want)
+			}
+		})
+	}
+}
+
+// TestError_ResponseCode_WrappedSentinel verifies errorCode still resolves
+// through fmt.Errorf %w wrapping, matching mapErrorToStatus's errors.Is use.
+func TestError_ResponseCode_WrappedSentinel(t *testing.T) {
+	rr := httptest.NewRecorder()
+	Error(rr, fmt.Errorf("%w: pool empty for device xyz", ErrPrekeyExhausted))
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rr.Code)
+	}
+	var resp APIResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if resp.Code != "CONFLICT" {
+		t.Errorf("Code = %q, want CONFLICT", resp.Code)
+	}
+}
+
+// TestErrorWithMessage_NoCode verifies the message-only path never sets a
+// Code — the JSON field should be entirely absent (omitempty), not merely
+// empty-string-but-present in the marshaled body.
+func TestErrorWithMessage_NoCode(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ErrorWithMessage(rr, http.StatusBadRequest, "serverId is required")
+
+	body := rr.Body.String()
+	if strings.Contains(body, `"code"`) {
+		t.Errorf("expected no code field in message-only response, got: %s", body)
+	}
+}

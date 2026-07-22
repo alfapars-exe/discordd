@@ -3,14 +3,16 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var e2eeLogger = logx.Component("service.e2ee")
 
 // E2EEService handles key backup and group session management.
 //
@@ -89,7 +91,7 @@ func (s *e2eeService) GetKeyBackup(ctx context.Context, userID string) (*models.
 		backup.UserID, backup.Version, backup.Algorithm,
 		backup.EncryptedData, backup.Nonce, backup.Salt,
 	) {
-		log.Printf("[e2ee] SECURITY: key backup HMAC mismatch for user %s — refusing tampered blob", userID)
+		e2eeLogger.Error("SECURITY: key backup HMAC mismatch, refusing tampered blob", "user_id", userID)
 		return nil, fmt.Errorf("%w: key backup failed integrity check", pkg.ErrInternal)
 	}
 	return backup, nil

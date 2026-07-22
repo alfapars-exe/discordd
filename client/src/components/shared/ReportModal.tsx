@@ -7,6 +7,7 @@ import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { reportUser, type ReportReason } from "../../api/report";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useFileDrop } from "../../hooks/useFileDrop";
 import FilePreview from "../chat/FilePreview";
 
@@ -123,10 +124,13 @@ function ReportModal({ userId, username, onClose }: ReportModalProps) {
         addToast("warning", t("alreadyReported"));
         onClose();
       } else {
-        addToast("error", res.error ?? "Failed to submit report");
+        // No site-specific fallback key existed here before (the previous
+        // fallback was an untranslated English literal) — the classifier's
+        // generic localized message is a strict improvement.
+        showApiError(res);
       }
     } catch {
-      addToast("error", "Failed to submit report");
+      addToast("error", t("errors:unknown"));
     } finally {
       setIsSubmitting(false);
     }

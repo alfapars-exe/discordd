@@ -18,15 +18,20 @@
  * add a pattern + key for it.
  */
 
-import type { TFunction } from "i18next";
+import type { Namespace, TFunction } from "i18next";
 
 /**
  * Ordered list of (regex, i18n key) pairs. Order matters when a backend
  * message could match multiple patterns (most-specific first). Add new
  * entries here when the backend grows a new error string — no need to
  * touch the callers.
+ *
+ * Exported so src/utils/apiError.ts (classifyApiError) can reuse the exact
+ * same detection logic instead of duplicating it — auth-specific backend
+ * messages should resolve to these fine-grained `auth` namespace keys
+ * everywhere, not just on the auth pages that call localizeAuthError below.
  */
-const PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+export const AUTH_ERROR_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   // Login
   [/invalid username or password/i, "invalidCredentials"],
   [/invalid refresh token|refresh token expired/i, "sessionExpired"],
@@ -57,12 +62,12 @@ const PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
  * Returns null for null input (so callers can chain `localizeAuthError(error, t)`
  * directly into `{... && <div>...</div>}`).
  */
-export function localizeAuthError(
+export function localizeAuthError<Ns extends Namespace>(
   error: string | null | undefined,
-  t: TFunction,
+  t: TFunction<Ns>,
 ): string | null {
   if (!error) return null;
-  for (const [pattern, key] of PATTERNS) {
+  for (const [pattern, key] of AUTH_ERROR_PATTERNS) {
     if (pattern.test(error)) {
       return t(key, { ns: "auth" });
     }

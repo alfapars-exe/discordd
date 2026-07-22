@@ -3,34 +3,50 @@
  */
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import type { ToastAction } from "../../stores/toastStore";
 
 type ToastProps = {
   id: string;
   type: "success" | "error" | "warning" | "info";
   message: string;
+  /** Optional bold title above the message — falls back to plain message-only layout. */
+  title?: string;
+  action?: ToastAction;
   isExiting: boolean;
   onDismiss: (id: string) => void;
 };
 
-function Toast({ id, type, message, isExiting, onDismiss }: ToastProps) {
+function Toast({ id, type, message, title, action, isExiting, onDismiss }: ToastProps) {
+  const { t } = useTranslation("common");
   const handleDismiss = useCallback(() => {
     onDismiss(id);
   }, [id, onDismiss]);
 
   const toastClass = `toast toast-${type} toast-border-${type}${isExiting ? " toast-exiting" : ""}`;
+  // error/warning are urgent (assertive) — success/info shouldn't interrupt screen reader users.
+  const role = type === "error" || type === "warning" ? "alert" : "status";
 
   return (
-    <div className={toastClass} role="alert">
+    <div className={toastClass} role={role}>
       {/* Icon */}
       <div className="toast-icon">
         <ToastIcon type={type} />
       </div>
 
-      {/* Message */}
-      <span className="toast-message">{message}</span>
+      {/* Message (+ optional title / action button) */}
+      <div className="toast-body">
+        {title && <div className="toast-title">{title}</div>}
+        <span className="toast-message">{message}</span>
+        {action && (
+          <button onClick={action.onClick} className="toast-action">
+            {action.label}
+          </button>
+        )}
+      </div>
 
       {/* Dismiss */}
-      <button onClick={handleDismiss} className="toast-close" aria-label="Close">
+      <button onClick={handleDismiss} className="toast-close" aria-label={t("close")}>
         ✕
       </button>
     </div>

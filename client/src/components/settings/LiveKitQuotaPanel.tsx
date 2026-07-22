@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { getLiveKitQuota, updateLiveKitQuotaSettings } from "../../api/admin";
 import type { LiveKitInstanceQuotaView } from "../../types";
 // Aliased — this module already has a local formatDate wrapper (keeps the
@@ -55,7 +55,6 @@ function progressColor(view: LiveKitInstanceQuotaView): string {
 
 function LiveKitQuotaPanel() {
   const { t } = useTranslation("settings");
-  const addToast = useToastStore((s) => s.addToast);
 
   const [rows, setRows] = useState<LiveKitInstanceQuotaView[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -68,12 +67,16 @@ function LiveKitQuotaPanel() {
       if (res.success && res.data) {
         setRows(res.data);
       } else {
-        addToast("error", res.error ?? t("quotaLoadError", { defaultValue: "Yüklenemedi" }));
+        // No dedicated i18n key existed here before (the fallback was a
+        // hardcoded Turkish-only defaultValue) — the classifier's generic
+        // localized message replaces it without losing coverage in either
+        // language.
+        showApiError(res);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [addToast, t]);
+  }, []);
 
   useEffect(() => {
     queueMicrotask(() => refresh());
@@ -87,13 +90,13 @@ function LiveKitQuotaPanel() {
         if (res.success && res.data) {
           setRows((prev) => prev.map((r) => (r.id === id ? res.data! : r)));
         } else {
-          addToast("error", res.error ?? t("quotaSaveError", { defaultValue: "Kaydedilemedi" }));
+          showApiError(res);
         }
       } finally {
         setSavingId(null);
       }
     },
-    [addToast, t],
+    [],
   );
 
   return (

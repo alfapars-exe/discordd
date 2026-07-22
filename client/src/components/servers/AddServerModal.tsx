@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useServerStore } from "../../stores/serverStore";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import type { CreateServerRequest } from "../../types";
 
 type AddServerModalProps = {
@@ -114,9 +115,10 @@ function AddServerModal({ onClose }: AddServerModalProps) {
       // createServer sets activeServerId + activeServer atomically; AppLayout handles cascade refetch.
       onClose();
     } else {
-      // Surface the actual API error (e.g. "bad request: server name must be...")
-      // instead of a generic toast, so the user sees what to fix.
-      addToast("error", res.error || tCommon("somethingWentWrong"));
+      // Classified/localized toast instead of the raw backend string — see
+      // src/utils/apiError.ts. "somethingWentWrong" stays as the fallback
+      // for backends that don't classify as a specific bucket.
+      showApiError(res, { fallbackKey: "common:somethingWentWrong" });
     }
   }
 

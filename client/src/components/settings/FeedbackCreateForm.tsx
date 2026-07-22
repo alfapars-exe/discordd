@@ -11,6 +11,7 @@ import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { createFeedbackTicket } from "../../api/feedback";
 import type { FeedbackType } from "../../types";
 import { useFileDrop } from "../../hooks/useFileDrop";
@@ -81,7 +82,7 @@ function FeedbackCreateForm({ onSubmitted, onClose }: Props) {
         addToast("success", t("feedbackSubmitSuccess"));
         onSubmitted();
       } else {
-        addToast("error", res.error ?? t("feedbackSubmitError"));
+        showApiError(res, { fallbackKey: "settings:feedbackSubmitError" });
       }
     } catch {
       addToast("error", t("feedbackSubmitError"));

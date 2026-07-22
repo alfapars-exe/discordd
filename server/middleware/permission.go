@@ -23,9 +23,13 @@ import (
 // Trade-off: cache miss rate is ~6x higher (every 5s vs every 30s), so
 // burst-heavy clients (rapid channel switching, role inspector tools) hit
 // the role repository more often. Mitigations:
-//  1. Event-driven invalidation (InvalidateUserPermissions /
-//     InvalidateServerPermissions) is called from role-edit paths, so
-//     the cache is correct between TTL boundaries already.
+//  1. Event-driven invalidation: this cache is wired as one of the fan-out
+//     targets of a services.PermissionInvalidator composite (see
+//     services.NewMultiInvalidator, wired in main.go after initRoutes).
+//     Member-write paths (kick/ban/role-reassign) call InvalidateUser;
+//     role-permission-mask edits call InvalidateAll — so the cache is
+//     correct between TTL boundaries already instead of relying on TTL
+//     expiry alone.
 //  2. roleRepo.GetByUserIDAndServer is itself indexed (PK lookup +
 //     role_members JOIN) — sub-millisecond at typical scale.
 //
@@ -55,9 +59,11 @@ func permCacheKey(userID, serverID string) string {
 }
 
 // InvalidateUserPermissions drops every cached entry for this user across
-// all servers. Call this from the role-assignment / role-permission-edit /
-// member-removal paths so the next request sees fresh permissions instead
-// of waiting up to permCacheTTL for the entry to expire.
+// all servers. Wired via InvalidateUser (below) into the
+// services.PermissionInvalidator composite that member-write paths
+// (kick/ban/role-reassign) call, so the next request sees fresh
+// permissions instead of waiting up to permCacheTTL for the entry to
+// expire.
 func (m *PermissionMiddleware) InvalidateUserPermissions(userID string) {
 	prefix := userID + ":"
 	m.permCache.DeleteFunc(func(key string) bool {
@@ -66,13 +72,31 @@ func (m *PermissionMiddleware) InvalidateUserPermissions(userID string) {
 }
 
 // InvalidateServerPermissions drops every cached entry for every member of
-// a server. Used when a role's permission mask is edited (which affects
-// every member who has that role).
+// a server. Currently unused by any wired call site (role-permission-mask
+// edits use InvalidateAll instead, since a role's server isn't known from
+// the composite's ISP-narrowed interface) — kept for symmetry with
+// channelPermService and as the natural target if a server-scoped
+// invalidation path is added later.
 func (m *PermissionMiddleware) InvalidateServerPermissions(serverID string) {
 	suffix := ":" + serverID
 	m.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasSuffix(key, suffix)
 	})
+}
+
+// InvalidateUser satisfies services.PermissionInvalidator so this
+// middleware can be wired as a fan-out target alongside
+// channelPermService. Delegates to InvalidateUserPermissions.
+func (m *PermissionMiddleware) InvalidateUser(userID string) {
+	m.InvalidateUserPermissions(userID)
+}
+
+// InvalidateAll drops the entire cache. Used when a role's permission mask
+// changes — that affects every member holding the role, and this cache
+// only keys on (userID, serverID), not role, so a full wipe is the correct
+// (and only practical) response. Mirrors channelPermService.InvalidateAll.
+func (m *PermissionMiddleware) InvalidateAll() {
+	m.permCache.Clear()
 }
 
 // resolveEffectivePerms returns the cached permission mask, falling back to

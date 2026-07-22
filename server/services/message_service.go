@@ -3,13 +3,15 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var messageLogger = logx.Component("service.message")
 
 type MessageService interface {
 	GetByChannelID(ctx context.Context, serverID, channelID, userID string, beforeID string, limit int) (*models.MessagePage, error)
@@ -47,10 +49,10 @@ func (s *messageService) SetAuditLogger(logger AuditWriter) {
 // action).
 func (s *messageService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
-		log.Printf("[message/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		messageLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
-	log.Printf("[message/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	messageLogger.Info("audit event emitted", "event_type", entry.EventType, "server_id", entry.ServerID)
 	s.auditLogger.Write(entry)
 }
 
@@ -340,7 +342,7 @@ func (s *messageService) allowedViewers(channelID string) []string {
 	if err != nil {
 		// Fail closed — better a missed broadcast (clients refetch) than
 		// leaking a message into a channel someone may not read.
-		log.Printf("[message] bulk permission resolve failed channel=%s: %v", channelID, err)
+		messageLogger.Error("bulk permission resolve failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		return nil
 	}
 
@@ -429,23 +431,23 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 		}
 
 		if err := s.mentionRepo.DeleteByMessageID(ctx, id); err != nil {
-			log.Printf("[mention] failed to delete old mentions for message %s: %v\n", id, err)
+			messageLogger.Error("failed to delete old mentions", "message_id", id, "err", pkg.ErrText(err))
 		}
 		mentionedIDs := s.extractMentions(ctx, req.Content)
 		if len(mentionedIDs) > 0 {
 			if err := s.mentionRepo.SaveMentions(ctx, id, mentionedIDs); err != nil {
-				log.Printf("[mention] failed to save mentions for message %s: %v\n", id, err)
+				messageLogger.Error("failed to save mentions", "message_id", id, "err", pkg.ErrText(err))
 			}
 		}
 		message.Mentions = mentionedIDs
 
 		if err := s.roleMentionRepo.DeleteByMessageID(ctx, id); err != nil {
-			log.Printf("[mention] failed to delete old role mentions for message %s: %v\n", id, err)
+			messageLogger.Error("failed to delete old role mentions", "message_id", id, "err", pkg.ErrText(err))
 		}
 		roleMentionIDs := s.extractRoleMentions(ctx, req.Content, serverID)
 		if len(roleMentionIDs) > 0 {
 			if err := s.roleMentionRepo.SaveRoleMentions(ctx, id, roleMentionIDs); err != nil {
-				log.Printf("[mention] failed to save role mentions for message %s: %v\n", id, err)
+				messageLogger.Error("failed to save role mentions", "message_id", id, "err", pkg.ErrText(err))
 			}
 		}
 		message.RoleMentions = roleMentionIDs
@@ -492,7 +494,7 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 	// Decrement unread_count for every user who had this message as unread.
 	// Uses the message's CreatedAt (captured before delete) as the watermark.
 	if err := s.readStateRepo.DecrementUnreadForDeleted(ctx, message.ChannelID, message.UserID, message.CreatedAt); err != nil {
-		log.Printf("[message] failed to decrement unread counts on delete for channel %s: %v", message.ChannelID, err)
+		messageLogger.Error("failed to decrement unread counts on delete", "channel_id", message.ChannelID, "err", pkg.ErrText(err))
 	}
 
 	s.hub.BroadcastToUsers(s.allowedViewers(message.ChannelID), ws.Event{

@@ -6,7 +6,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -42,7 +41,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		lkInstanceID = lkInst.ID
 		lkIsCloud = lkInst.IsPlatformManaged
 	} else if lkErr != nil {
-		log.Printf("[voice] join: livekit instance lookup failed for server=%s: %v", serverID, lkErr)
+		voiceLogger.Error("join: livekit instance lookup failed", "server_id", serverID, "err", pkg.ErrText(lkErr))
 	}
 
 	var oldChannelID string
@@ -72,7 +71,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 			existing.AvatarURL = avatarURL
 			existing.LastActivity = time.Now()
 			s.mu.Unlock()
-			log.Printf("[voice] same-channel rejoin user=%s channel=%s (no broadcast)", userID, channelID)
+			voiceLogger.Info("same-channel rejoin (no broadcast)", "user_id", userID, "channel_id", channelID)
 			return nil
 		}
 
@@ -135,7 +134,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		go s.creditUsage(oldInstanceID, oldIsCloud, oldJoinedAt)
 	}
 
-	log.Printf("[voice] user %s joined channel %s", userID, channelID)
+	voiceLogger.Info("user joined voice channel", "user_id", userID, "channel_id", channelID)
 	return nil
 }
 
@@ -156,8 +155,7 @@ func (s *voiceService) creditUsage(instanceID string, isCloud bool, joinedAt tim
 	if err := s.livekitGetter.IncrementMonthlyUsage(
 		context.Background(), instanceID, year, int(month), seconds,
 	); err != nil {
-		log.Printf("[voice] credit usage failed instance=%s seconds=%d err=%v",
-			instanceID, seconds, err)
+		voiceLogger.Error("credit usage failed", "instance_id", instanceID, "seconds", seconds, "err", pkg.ErrText(err))
 	}
 }
 
@@ -262,7 +260,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 		go s.musicBotHook.StopAllForChannel(channelID)
 	}
 
-	log.Printf("[voice] user %s left channel %s", userID, channelID)
+	voiceLogger.Info("user left voice channel", "user_id", userID, "channel_id", channelID)
 	return nil
 }
 
@@ -373,7 +371,7 @@ func (s *voiceService) GetAllVoiceStates() []models.VoiceState {
 
 func (s *voiceService) DisconnectUser(userID string) {
 	if err := s.LeaveChannel(userID); err != nil {
-		log.Printf("[voice] disconnect cleanup failed for user=%s: %v", userID, err)
+		voiceLogger.Error("disconnect cleanup failed", "user_id", userID, "err", pkg.ErrText(err))
 	}
 }
 

@@ -2,11 +2,12 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,6 +17,11 @@ const (
 	maxMessageSize = 32768            // 32KB — WebRTC SDP + E2EE base64 overhead
 	sendBufferSize = 256
 )
+
+// dispatchLogger tags every per-connection event-handling log line
+// ("ws.dispatch"). Shared package-level var — also used from
+// client_dispatch.go, client_p2p.go, client_presence.go, client_voice.go.
+var dispatchLogger = logx.Component("ws.dispatch")
 
 // Client represents a single WebSocket connection.
 // Each connection runs two goroutines: ReadPump (read) and WritePump (write).
@@ -62,7 +68,7 @@ func (c *Client) ReadPump() {
 	c.conn.SetReadLimit(maxMessageSize)
 
 	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		log.Printf("[ws] failed to set read deadline for user %s: %v", c.userID, err)
+		dispatchLogger.Error("failed to set read deadline", "user_id", c.userID, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -78,13 +84,17 @@ func (c *Client) ReadPump() {
 				// router NAT timeout) is logged at INFO so the WARN feed
 				// reflects things worth investigating instead of normal
 				// session churn.
-				log.Printf("[ws] unexpected close for user %s: %v", c.userID, err)
 				level := models.LogLevelInfo
 				if websocket.IsCloseError(err,
 					websocket.CloseAbnormalClosure,
 					websocket.CloseInternalServerErr,
 					websocket.CloseServiceRestart) {
 					level = models.LogLevelWarn
+				}
+				if level == models.LogLevelWarn {
+					dispatchLogger.Warn("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
+				} else {
+					dispatchLogger.Info("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
 				}
 				c.hub.logEvent(level, models.LogCategoryWS, &c.userID,
 					"WebSocket unexpected close", map[string]string{"error": err.Error()})
@@ -94,7 +104,7 @@ func (c *Client) ReadPump() {
 
 		var event Event
 		if err := json.Unmarshal(rawMessage, &event); err != nil {
-			log.Printf("[ws] invalid message from user %s: %v", c.userID, err)
+			dispatchLogger.Warn("invalid message from client", "user_id", c.userID, "err", pkg.ErrText(err))
 			continue
 		}
 
@@ -105,14 +115,14 @@ func (c *Client) ReadPump() {
 func (c *Client) sendEvent(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] failed to marshal event for user %s: %v", c.userID, err)
+		dispatchLogger.Error("failed to marshal event", "user_id", c.userID, "err", pkg.ErrText(err))
 		return
 	}
 
 	select {
 	case c.send <- data:
 	default:
-		log.Printf("[ws] send buffer full for user %s, dropping connection", c.userID)
+		dispatchLogger.Warn("send buffer full, dropping connection", "user_id", c.userID)
 		// Non-blocking enqueue — see Hub.queueUnregister rationale. We're
 		// already on the client goroutine here so we don't strictly need
 		// to avoid blocking, but keeping the discipline uniform across

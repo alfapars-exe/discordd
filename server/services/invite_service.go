@@ -16,9 +16,16 @@ type InviteService interface {
 	Create(ctx context.Context, serverID, createdBy string, req *models.CreateInviteRequest) (*models.Invite, error)
 	ListByServer(ctx context.Context, serverID string) ([]models.InviteWithCreator, error)
 	Delete(ctx context.Context, code string) error
-	// ValidateAndUse validates the code, increments usage, and returns the invite.
-	// Called by ServerService.JoinServer to resolve server_id from the invite.
-	ValidateAndUse(ctx context.Context, code string) (*models.Invite, error)
+	// Validate checks the code's validity (existence, expiry, max-uses)
+	// without mutating state. Callers that go on to successfully complete
+	// the action the invite gates should call MarkUsed afterwards — see
+	// ServerService.JoinServer.
+	Validate(ctx context.Context, code string) (*models.Invite, error)
+	// MarkUsed increments the invite's use counter. Call only once the
+	// gated action has actually succeeded — incrementing on a failed join
+	// would waste a max_uses slot on an invite that never resulted in a
+	// new member.
+	MarkUsed(ctx context.Context, code string) error
 	IsInviteRequired(ctx context.Context, serverID string) (bool, error)
 	// GetPreview returns server info for an invite code without requiring auth.
 	// Returns preview even for expired/maxed-out invites so the user can see
@@ -98,7 +105,7 @@ func (s *inviteService) Delete(ctx context.Context, code string) error {
 	return nil
 }
 
-func (s *inviteService) ValidateAndUse(ctx context.Context, code string) (*models.Invite, error) {
+func (s *inviteService) Validate(ctx context.Context, code string) (*models.Invite, error) {
 	invite, err := s.inviteRepo.GetByCode(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid invite code", pkg.ErrBadRequest)
@@ -112,11 +119,14 @@ func (s *inviteService) ValidateAndUse(ctx context.Context, code string) (*model
 		return nil, fmt.Errorf("%w: invite code has reached max uses", pkg.ErrBadRequest)
 	}
 
-	if err := s.inviteRepo.IncrementUses(ctx, code); err != nil {
-		return nil, fmt.Errorf("failed to increment invite uses: %w", err)
-	}
-
 	return invite, nil
+}
+
+func (s *inviteService) MarkUsed(ctx context.Context, code string) error {
+	if err := s.inviteRepo.IncrementUses(ctx, code); err != nil {
+		return fmt.Errorf("failed to increment invite uses: %w", err)
+	}
+	return nil
 }
 
 func (s *inviteService) IsInviteRequired(ctx context.Context, serverID string) (bool, error) {

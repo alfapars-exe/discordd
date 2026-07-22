@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useServerStore } from "../stores/serverStore";
 import { useToastStore } from "../stores/toastStore";
+import { showApiError } from "../utils/apiError";
 import { playMusic, skipMusic, pauseMusic, resumeMusic, stopMusic } from "../api/music";
 
 const MUSIC_COMMANDS = new Set(["play", "skip", "pause", "resume", "stop"]);
@@ -69,7 +70,7 @@ export function useMusicSlashCommand() {
             const count = res.data.added_tracks.length;
             addToast("success", t("addedToQueue", { count }));
           } else {
-            addToast("error", res.error ?? t("playError"));
+            showApiError(res, { fallbackKey: "music:playError" });
           }
           return true;
         }
@@ -81,7 +82,7 @@ export function useMusicSlashCommand() {
           stopMusic;
         const res = await fn(serverId, voiceChannelId);
         if (!res.success) {
-          addToast("error", res.error ?? t("controlError"));
+          showApiError(res, { fallbackKey: "music:controlError" });
         }
         return true;
       } catch (err) {

@@ -184,8 +184,11 @@ func TestMessageRepo_Pagination(t *testing.T) {
 	repo := NewSQLiteMessageRepo(db.Conn)
 	ctx := context.Background()
 
-	// created_at is second-resolution, so stamps are set explicitly instead
-	// of relying on insertion speed.
+	// created_at is second-resolution, so each message gets an explicit,
+	// distinct-per-second stamp instead of relying on insertion speed — this
+	// keeps the ordering assertions below unambiguous. The case where
+	// multiple messages DO share a second, and pagination must not lose any
+	// of them, is exercised separately at the bottom of this test.
 	ids := make([]string, 5)
 	for i := range ids {
 		m := newMessage(t, ctx, repo, msgChannel, msgAuthor, string(rune('a'+i)))
@@ -267,6 +270,60 @@ func TestMessageRepo_Pagination(t *testing.T) {
 		}
 		if len(got) != 0 {
 			t.Errorf("messages = %d, want 0", len(got))
+		}
+	})
+
+	// REGRESSION GUARD — this is the case the (created_at, id) compound
+	// cursor exists for. created_at only has second resolution; id is
+	// random hex. Four messages below share the exact same created_at,
+	// newer than every message seeded above, so a page boundary is forced
+	// to fall inside the tied group. Before the fix, the cursor branch
+	// filtered on `created_at < (SELECT created_at ... WHERE id = ?)`
+	// alone: once the cursor lands on a tied row, every other row with the
+	// SAME created_at fails that strict `<` forever, so the second page
+	// silently skipped straight past the rest of the tie and those
+	// messages were gone for good — not just delayed, permanently
+	// unreachable via pagination.
+	t.Run("messages sharing a created_at second all survive a page boundary", func(t *testing.T) {
+		tieIDs := make([]string, 4)
+		for i := range tieIDs {
+			m := newMessage(t, ctx, repo, msgChannel, msgAuthor, "es-"+string(rune('a'+i)))
+			tieIDs[i] = m.ID
+			if _, err := db.Conn.Exec(
+				`UPDATE messages SET created_at = '2026-01-01 00:01:00' WHERE id = ?`, m.ID,
+			); err != nil {
+				t.Fatalf("stamp created_at: %v", err)
+			}
+		}
+
+		page1, err := repo.GetByChannelID(ctx, msgChannel, "", 2)
+		if err != nil {
+			t.Fatalf("GetByChannelID page 1: %v", err)
+		}
+		if len(page1) != 2 {
+			t.Fatalf("page 1 = %d messages, want 2", len(page1))
+		}
+
+		cursor := page1[len(page1)-1].ID
+		page2, err := repo.GetByChannelID(ctx, msgChannel, cursor, 2)
+		if err != nil {
+			t.Fatalf("GetByChannelID page 2: %v", err)
+		}
+		if len(page2) != 2 {
+			t.Fatalf("page 2 = %d messages, want 2 — the rest of the tied group went missing at the page boundary", len(page2))
+		}
+
+		seen := make(map[string]int, len(tieIDs))
+		for _, m := range page1 {
+			seen[m.ID]++
+		}
+		for _, m := range page2 {
+			seen[m.ID]++
+		}
+		for _, id := range tieIDs {
+			if seen[id] != 1 {
+				t.Errorf("tie message %s appeared %d time(s) across the two pages, want exactly 1", id, seen[id])
+			}
 		}
 	})
 }

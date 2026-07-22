@@ -16,11 +16,36 @@
  * We re-derive the connection fields inline at event time and pass them
  * as event metadata — clientLog's spread order ensures event metadata
  * overrides the cached common fields.
+ *
+ * User-facing notification: uncaught exceptions and unhandled rejections
+ * are real, unexpected bugs (as opposed to API failures, which apiClient
+ * returns as a Result and never throws — those are surfaced per-call-site
+ * via src/utils/apiError.ts's showApiError). We show one deduped "something
+ * went wrong" toast per short window rather than a toast per event, since a
+ * single failure often cascades into several error/rejection events.
+ * online/offline stay log-only here — ConnectionBanner already owns the
+ * user-facing surface for connectivity state.
  */
 
 import { logToServer } from "./clientLog";
+import { useToastStore } from "../stores/toastStore";
+import i18n from "../i18n";
 
 let installed = false;
+
+/** Minimum gap between consecutive "unexpected error" toasts. */
+const NOTIFY_DEDUP_WINDOW_MS = 10_000;
+let lastNotifiedAt = 0;
+
+/** Shows the generic unexpected-error toast, deduped within the window above. */
+function notifyUnexpectedError(): void {
+  const now = Date.now();
+  if (now - lastNotifiedAt < NOTIFY_DEDUP_WINDOW_MS) return;
+  lastNotifiedAt = now;
+  useToastStore.getState().addToast("error", i18n.t("errors:unknown"), undefined, {
+    title: i18n.t("errors:unknownTitle"),
+  });
+}
 
 const MAX_MESSAGE_LEN = 200;
 const MAX_STACK_LEN = 1024;
@@ -69,6 +94,7 @@ export function installGlobalErrorLogger(): void {
       stack: err instanceof Error && err.stack ? truncate(err.stack, MAX_STACK_LEN) : "",
       errorName: err instanceof Error ? err.name : typeof err,
     });
+    notifyUnexpectedError();
   });
 
   window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
@@ -79,6 +105,7 @@ export function installGlobalErrorLogger(): void {
       stack: isError && reason.stack ? truncate(reason.stack, MAX_STACK_LEN) : "",
       errorName: isError ? reason.name : typeof reason,
     });
+    notifyUnexpectedError();
   });
 
   window.addEventListener("online", () => {

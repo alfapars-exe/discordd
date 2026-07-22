@@ -1,9 +1,8 @@
 package ws
 
 import (
-	"log"
-
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // Client connection lifecycle + server-membership index maintenance.
@@ -62,8 +61,9 @@ func (h *Hub) addClient(client *Client) {
 		aggregateForExisting = h.computeAggregateStatusLocked(client.userID)
 	}
 
-	log.Printf("[ws] client connected: user=%s status=%s (total connections for user: %d)",
-		client.userID, client.status, len(h.clients[client.userID]))
+	hubLogger.Info("client connected",
+		"user_id", client.userID, "status", client.status,
+		"total_connections", len(h.clients[client.userID]))
 
 	h.mu.Unlock()
 
@@ -71,9 +71,9 @@ func (h *Hub) addClient(client *Client) {
 	if isFirstConnection && h.onUserFirstConnect != nil {
 		userID := client.userID
 		prefStatus := client.prefStatus
-		go h.onUserFirstConnect(userID, prefStatus)
+		logx.Go("ws.user_first_connect", func() { h.onUserFirstConnect(userID, prefStatus) })
 	} else if !isFirstConnection && h.onPresenceManualUpdate != nil {
-		go h.onPresenceManualUpdate(client.userID, aggregateForExisting, true)
+		logx.Go("ws.presence_manual_update", func() { h.onPresenceManualUpdate(client.userID, aggregateForExisting, true) })
 	}
 }
 
@@ -102,15 +102,16 @@ func (h *Hub) removeClient(client *Client) {
 				delete(h.clients, client.userID)
 				fullyDisconnected = true
 				userID = client.userID
-				log.Printf("[ws] user fully disconnected: %s", client.userID)
+				hubLogger.Info("user fully disconnected", "user_id", client.userID)
 				h.logEvent(models.LogLevelInfo, models.LogCategoryWS, &client.userID,
 					"user fully disconnected (all tabs closed)", nil)
 			} else {
 				partialDisconnect = true
 				userID = client.userID
 				newAggregate = h.computeAggregateStatusLocked(client.userID)
-				log.Printf("[ws] client disconnected: user=%s (remaining: %d, aggregate=%s)",
-					client.userID, len(clients), newAggregate)
+				hubLogger.Info("client disconnected",
+					"user_id", client.userID, "remaining_connections", len(clients),
+					"aggregate_status", newAggregate)
 			}
 		}
 	}
@@ -125,9 +126,9 @@ func (h *Hub) removeClient(client *Client) {
 	}
 
 	if fullyDisconnected && h.onUserFullyDisconnected != nil {
-		go h.onUserFullyDisconnected(userID, "")
+		logx.Go("ws.user_fully_disconnected", func() { h.onUserFullyDisconnected(userID, "") })
 	} else if partialDisconnect && h.onPresenceManualUpdate != nil {
-		go h.onPresenceManualUpdate(userID, newAggregate, true)
+		logx.Go("ws.presence_manual_update", func() { h.onPresenceManualUpdate(userID, newAggregate, true) })
 	}
 }
 

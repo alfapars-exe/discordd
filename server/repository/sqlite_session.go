@@ -33,6 +33,12 @@ func hashRefreshToken(token string) string {
 }
 
 func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+	session.ID = id
+
 	// We persist only the hash. The legacy `refresh_token` column is
 	// declared NOT NULL **and** UNIQUE in migration 001, so we can't
 	// write SQL NULL here, and we can't write a shared sentinel ('' or
@@ -47,19 +53,23 @@ func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session)
 	hash := hashRefreshToken(session.RefreshToken)
 	query := `
 		INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
+		session.ID,
 		session.UserID,
 		hash,
 		hash, // legacy NOT NULL + UNIQUE column — reuse hash for uniqueness
 		session.ExpiresAt,
-	).Scan(&session.ID, &session.CreatedAt)
+	)
 
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at — see
+	// sqlite_user.go Create for why this isn't set from Go.
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM sessions WHERE id = ?", session.ID).Scan(&session.CreatedAt)
 
 	return nil
 }

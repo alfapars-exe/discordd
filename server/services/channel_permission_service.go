@@ -15,16 +15,18 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/cache"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var channelPermLogger = logx.Component("service.channel_permission")
 
 const (
 	permCacheTTL     = 30 * time.Second
@@ -145,7 +147,7 @@ func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelI
 	// allow=0, deny=0 -> no effect (same as inherit), delete
 	if req.Allow == 0 && req.Deny == 0 {
 		if err := s.permRepo.Delete(ctx, channelID, roleID); err != nil {
-			log.Printf("[channel-perm] failed to delete override (idempotent, non-fatal) channel=%s role=%s: %v", channelID, roleID, err)
+			channelPermLogger.Error("failed to delete override (idempotent, non-fatal)", "channel_id", channelID, "role_id", roleID, "err", pkg.ErrText(err))
 		}
 
 		s.invalidateChannelCache(channelID)

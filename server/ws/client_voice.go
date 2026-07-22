@@ -3,7 +3,8 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── Voice Event Handlers ───
@@ -20,7 +21,7 @@ func (c *Client) handleVoiceJoin(event Event) {
 	}
 
 	if data.ChannelID == "" {
-		log.Printf("[ws] voice_join without channel_id from user %s", c.userID)
+		dispatchLogger.Warn("voice_join without channel_id", "user_id", c.userID)
 		return
 	}
 
@@ -33,19 +34,21 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 	if c.hub.onVoiceJoin != nil {
 		info := c.hub.getUserInfo(c.userID)
-		go c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
+		logx.Go("ws.voice_join", func() {
+			c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
+		})
 	}
 }
 
 func (c *Client) handleVoiceLeave() {
 	if c.hub.onVoiceLeave != nil {
-		go c.hub.onVoiceLeave(c.userID)
+		logx.Go("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
 	}
 }
 
 func (c *Client) handleVoiceActivity() {
 	if c.hub.onVoiceActivity != nil {
-		go c.hub.onVoiceActivity(c.userID)
+		logx.Go("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
 	}
 }
 
@@ -61,7 +64,7 @@ func (c *Client) handleVoiceStateUpdate(event Event) {
 	}
 
 	if c.hub.onVoiceStateUpdate != nil {
-		go c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming)
+		logx.Go("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
 	}
 }
 
@@ -77,7 +80,7 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	}
 
 	if data.TargetUserID == "" {
-		log.Printf("[ws] voice_admin_state_update missing target_user_id from user %s", c.userID)
+		dispatchLogger.Warn("voice_admin_state_update missing target_user_id", "user_id", c.userID)
 		return
 	}
 
@@ -86,13 +89,15 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// failing closed here means a forgotten check in the service can't
 	// degrade into a moderation bypass.
 	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
-		log.Printf("[ws] DENIED voice_admin_state_update: actor=%s target=%s (insufficient perms)",
-			c.userID, data.TargetUserID)
+		dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
+			"actor_id", c.userID, "target_id", data.TargetUserID)
 		return
 	}
 
 	if c.hub.onVoiceAdminStateUpdate != nil {
-		go c.hub.onVoiceAdminStateUpdate(c.userID, data.TargetUserID, data.IsServerMuted, data.IsServerDeafened)
+		logx.Go("ws.voice_admin_state_update", func() {
+			c.hub.onVoiceAdminStateUpdate(c.userID, data.TargetUserID, data.IsServerMuted, data.IsServerDeafened)
+		})
 	}
 }
 
@@ -108,18 +113,18 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 	}
 
 	if data.TargetUserID == "" || data.TargetChannelID == "" {
-		log.Printf("[ws] voice_move_user missing fields from user %s", c.userID)
+		dispatchLogger.Warn("voice_move_user missing fields", "user_id", c.userID)
 		return
 	}
 
 	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
-		log.Printf("[ws] DENIED voice_move_user: actor=%s target=%s (insufficient perms)",
-			c.userID, data.TargetUserID)
+		dispatchLogger.Warn("voice_move_user denied: insufficient perms",
+			"actor_id", c.userID, "target_id", data.TargetUserID)
 		return
 	}
 
 	if c.hub.onVoiceMoveUser != nil {
-		go c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID)
+		logx.Go("ws.voice_move_user", func() { c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID) })
 	}
 }
 
@@ -135,18 +140,18 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 	}
 
 	if data.TargetUserID == "" {
-		log.Printf("[ws] voice_disconnect_user missing target_user_id from user %s", c.userID)
+		dispatchLogger.Warn("voice_disconnect_user missing target_user_id", "user_id", c.userID)
 		return
 	}
 
 	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
-		log.Printf("[ws] DENIED voice_disconnect_user: actor=%s target=%s (insufficient perms)",
-			c.userID, data.TargetUserID)
+		dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
+			"actor_id", c.userID, "target_id", data.TargetUserID)
 		return
 	}
 
 	if c.hub.onVoiceDisconnectUser != nil {
-		go c.hub.onVoiceDisconnectUser(c.userID, data.TargetUserID)
+		logx.Go("ws.voice_disconnect_user", func() { c.hub.onVoiceDisconnectUser(c.userID, data.TargetUserID) })
 	}
 }
 
@@ -162,11 +167,11 @@ func (c *Client) handleScreenShareWatch(event Event) {
 	}
 
 	if data.StreamerUserID == "" {
-		log.Printf("[ws] screen_share_watch missing streamer_user_id from user %s", c.userID)
+		dispatchLogger.Warn("screen_share_watch missing streamer_user_id", "user_id", c.userID)
 		return
 	}
 
 	if c.hub.onScreenShareWatch != nil {
-		go c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching)
+		logx.Go("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
 	}
 }

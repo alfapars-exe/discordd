@@ -10,7 +10,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -89,7 +88,7 @@ func (s *memberService) Ban(ctx context.Context, serverID, actorID, targetID, re
 
 	// Remove membership (best-effort — ban already created)
 	if rmErr := s.serverRepo.RemoveMember(ctx, serverID, targetID); rmErr != nil {
-		log.Printf("[member] failed to remove member after ban server=%s user=%s: %v", serverID, targetID, rmErr)
+		memberLogger.Error("failed to remove member after ban", "server_id", serverID, "target_id", targetID, "err", pkg.ErrText(rmErr))
 	}
 
 	// Same rationale as Kick — drop cached permissions defensively.

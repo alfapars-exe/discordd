@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -38,6 +39,38 @@ func TestWithRequestID_nilCtxUpgradesToBackground(t *testing.T) {
 	ctx := WithRequestID(nil, "req-nil-safe")
 	if got := RequestIDFrom(ctx); got != "req-nil-safe" {
 		t.Errorf("nil ctx path lost the id: %q", got)
+	}
+}
+
+func TestRequestInfoFrom_returnsEmptyOnBareContext(t *testing.T) {
+	method, path := RequestInfoFrom(context.Background())
+	if method != "" || path != "" {
+		t.Errorf("bare context should carry no request info, got (%q, %q)", method, path)
+	}
+}
+
+func TestRequestInfoFrom_returnsEmptyOnNilContext(t *testing.T) {
+	//nolint:staticcheck // deliberate nil-context probe
+	method, path := RequestInfoFrom(nil)
+	if method != "" || path != "" {
+		t.Errorf("nil context should return empty, got (%q, %q)", method, path)
+	}
+}
+
+func TestWithRequestInfo_thenRequestInfoFrom_roundTripsValue(t *testing.T) {
+	ctx := WithRequestInfo(context.Background(), "POST", "/api/messages")
+	method, path := RequestInfoFrom(ctx)
+	if method != "POST" || path != "/api/messages" {
+		t.Errorf("round trip failed: got (%q, %q)", method, path)
+	}
+}
+
+func TestWithRequestInfo_nilCtxUpgradesToBackground(t *testing.T) {
+	//nolint:staticcheck // deliberate nil-context probe
+	ctx := WithRequestInfo(nil, "GET", "/health")
+	method, path := RequestInfoFrom(ctx)
+	if method != "GET" || path != "/health" {
+		t.Errorf("nil ctx path lost the info: got (%q, %q)", method, path)
 	}
 }
 
@@ -102,6 +135,44 @@ func TestErrorCtx_500_emptyUserMsg_fallsBackToInternalServerError(t *testing.T) 
 	}
 }
 
+func TestErrorCtx_setsCodeFromSentinel(t *testing.T) {
+	_, restore := captureSlog(t)
+	defer restore()
+
+	rec := httptest.NewRecorder()
+	ErrorCtx(context.Background(), rec, http.StatusNotFound, "device not found", ErrDeviceNotFound)
+
+	var env APIResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("bad JSON body: %v", err)
+	}
+	if env.Code != "NOT_FOUND" {
+		t.Errorf("Code = %q, want NOT_FOUND", env.Code)
+	}
+}
+
+func TestErrorCtx_500_forcesInternalCode_evenWith4xxSentinel(t *testing.T) {
+	_, restore := captureSlog(t)
+	defer restore()
+
+	rec := httptest.NewRecorder()
+	// A 5xx status paired with an err wrapping a 4xx sentinel must not leak the
+	// sentinel's code — status and code have to agree.
+	ErrorCtx(context.Background(), rec, http.StatusInternalServerError,
+		"failed to load device", fmt.Errorf("lookup: %w", ErrDeviceNotFound))
+
+	var env APIResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("bad JSON body: %v", err)
+	}
+	if env.Code != "INTERNAL" {
+		t.Errorf("Code = %q, want INTERNAL (5xx must not carry a 4xx sentinel code)", env.Code)
+	}
+	if env.Error != "failed to load device" {
+		t.Errorf("Error = %q, want the user message", env.Error)
+	}
+}
+
 func TestErrorCtx_4xx_passesUserMsgThrough_andDoesNotLog(t *testing.T) {
 	buf, restore := captureSlog(t)
 	defer restore()
@@ -119,6 +190,25 @@ func TestErrorCtx_4xx_passesUserMsgThrough_andDoesNotLog(t *testing.T) {
 	}
 	if buf.Len() > 0 {
 		t.Errorf("4xx should not log — log buffer got: %s", buf.String())
+	}
+}
+
+func TestErrorCtx_500_logsMethodAndPath_whenSetOnCtx(t *testing.T) {
+	buf, restore := captureSlog(t)
+	defer restore()
+
+	rec := httptest.NewRecorder()
+	ctx := WithRequestID(context.Background(), "req-mp")
+	ctx = WithRequestInfo(ctx, "POST", "/api/devices/register")
+
+	ErrorCtx(ctx, rec, http.StatusInternalServerError, "failed to register device", errors.New("db error"))
+
+	logLine := buf.String()
+	if !strings.Contains(logLine, `"method":"POST"`) {
+		t.Errorf("log missing method: %s", logLine)
+	}
+	if !strings.Contains(logLine, `"path":"/api/devices/register"`) {
+		t.Errorf("log missing path: %s", logLine)
 	}
 }
 

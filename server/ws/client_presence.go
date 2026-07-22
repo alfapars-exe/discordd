@@ -3,7 +3,8 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // handlePresenceUpdate processes a client presence change.
@@ -24,7 +25,9 @@ func (c *Client) handlePresenceUpdate(event Event) {
 	case "online", "idle", "dnd", "offline":
 		// valid
 	default:
-		log.Printf("[ws] invalid presence status from user %s: %s", c.userID, data.Status)
+		// data.Status is client-controlled — passed as a structured attr, not
+		// interpolated into the message (G706).
+		dispatchLogger.Warn("invalid presence status from client", "user_id", c.userID, "status", data.Status)
 		return
 	}
 
@@ -34,7 +37,7 @@ func (c *Client) handlePresenceUpdate(event Event) {
 	c.hub.mu.Unlock()
 
 	if c.hub.onPresenceManualUpdate != nil {
-		go c.hub.onPresenceManualUpdate(c.userID, aggregate, data.IsAuto)
+		logx.Go("ws.presence_manual_update", func() { c.hub.onPresenceManualUpdate(c.userID, aggregate, data.IsAuto) })
 	}
 }
 
@@ -58,7 +61,7 @@ func (c *Client) handleTyping(event Event) {
 
 	if c.hub.onChannelTyping != nil {
 		username := c.hub.getUserUsername(c.userID)
-		go c.hub.onChannelTyping(c.userID, username, typing.ChannelID)
+		logx.Go("ws.channel_typing", func() { c.hub.onChannelTyping(c.userID, username, typing.ChannelID) })
 	}
 }
 
@@ -83,6 +86,6 @@ func (c *Client) handleDMTyping(event Event) {
 
 	if c.hub.onDMTyping != nil {
 		username := c.hub.getUserUsername(c.userID)
-		go c.hub.onDMTyping(c.userID, username, data.DMChannelID)
+		logx.Go("ws.dm_typing", func() { c.hub.onDMTyping(c.userID, username, data.DMChannelID) })
 	}
 }

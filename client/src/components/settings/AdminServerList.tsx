@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -153,7 +154,7 @@ function AdminServerList() {
         listLiveKitInstances(),
       ]);
       if (srvRes.success && srvRes.data) setServers(srvRes.data);
-      else addToast("error", srvRes.error ?? t("platformServerLoadError"));
+      else showApiError(srvRes, { fallbackKey: "settings:platformServerLoadError" });
 
       if (instRes.success && instRes.data) setInstances(instRes.data);
       setIsLoading(false);
@@ -216,7 +217,7 @@ function AdminServerList() {
       });
       addToast("success", t("platformServerInstanceUpdated"));
     } else {
-      addToast("error", res.error ?? t("platformServerInstanceUpdateError"));
+      showApiError(res, { fallbackKey: "settings:platformServerInstanceUpdateError" });
     }
   }
 
@@ -289,7 +290,7 @@ function AdminServerList() {
       addToast("success", t("platformServerDeleteSuccess", { serverName: targetName }));
       await refetchServers();
     } else {
-      addToast("error", res.error ?? t("platformServerDeleteError"));
+      showApiError(res, { fallbackKey: "settings:platformServerDeleteError" });
     }
   }
 

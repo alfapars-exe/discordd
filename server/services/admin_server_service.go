@@ -16,13 +16,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var adminServerLogger = logx.Component("service.admin_server")
 
 // AdminServerService handles platform admin server deletion.
 type AdminServerService interface {
@@ -68,11 +71,11 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 		if lkErr == nil {
 			if instance.IsPlatformManaged {
 				if decErr := s.livekitRepo.DecrementServerCount(ctx, instance.ID); decErr != nil {
-					log.Printf("[admin-server] failed to decrement livekit server count instance=%s: %v", instance.ID, decErr)
+					adminServerLogger.Error("failed to decrement livekit server count", "instance_id", instance.ID, "err", pkg.ErrText(decErr))
 				}
 			} else {
 				if delErr := s.livekitRepo.Delete(ctx, instance.ID); delErr != nil {
-					log.Printf("[admin-server] failed to delete self-hosted livekit instance=%s: %v", instance.ID, delErr)
+					adminServerLogger.Error("failed to delete self-hosted livekit instance", "instance_id", instance.ID, "err", pkg.ErrText(delErr))
 				}
 			}
 		}
@@ -97,11 +100,11 @@ func (s *adminServerService) DeleteServer(ctx context.Context, adminUserID, serv
 		owner, ownerErr := s.userRepo.GetByID(ctx, server.OwnerID)
 		if ownerErr == nil && owner.Email != nil {
 			if emailErr := s.emailSender.SendServerDeleteNotification(ctx, *owner.Email, server.Name, reason); emailErr != nil {
-				log.Printf("[admin-server] failed to send server delete notification to owner %s: %v", server.OwnerID, emailErr)
+				adminServerLogger.Error("failed to send server delete notification", "owner_id", server.OwnerID, "err", pkg.ErrText(emailErr))
 			}
 		}
 	}
 
-	log.Printf("[admin-server] admin %s deleted server %s (%s)", adminUserID, serverID, server.Name)
+	adminServerLogger.Info("admin deleted server", "admin_id", adminUserID, "server_id", serverID, "server_name", server.Name)
 	return nil
 }

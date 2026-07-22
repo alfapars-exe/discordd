@@ -15,14 +15,16 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var auditLogger = logx.Component("service.auditlog")
 
 // AuditLogService is the public API for writing and reading audit events.
 type AuditLogService interface {
@@ -109,7 +111,7 @@ func (s *auditLogService) Write(entry models.AuditLog) {
 	select {
 	case s.ch <- entry:
 	default:
-		log.Printf("[audit_log] buffer full, dropping event: %s", entry.EventType)
+		auditLogger.Warn("buffer full, dropping event", "event_type", entry.EventType)
 	}
 }
 
@@ -172,7 +174,7 @@ func (s *auditLogService) allowedViewers(ctx context.Context, serverID string) [
 
 	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, serverID, online)
 	if err != nil {
-		log.Printf("[audit_log] bulk role resolve failed server=%s: %v", serverID, err)
+		auditLogger.Error("bulk role resolve failed", "server_id", serverID, "err", pkg.ErrText(err))
 		return nil
 	}
 
@@ -193,7 +195,9 @@ func (s *auditLogService) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
-	go func() {
+	// Same async-writer shape as appLogService — wrapped so a panic here
+	// can't crash the whole process (see pkg/logx.Go doc comment).
+	logx.Go("audit_log.writer", func() {
 		defer close(s.done)
 		for {
 			select {
@@ -204,7 +208,7 @@ func (s *auditLogService) Start() {
 				s.persistAndBroadcast(ctx, entry)
 			}
 		}
-	}()
+	})
 }
 
 func (s *auditLogService) Stop() {
@@ -212,7 +216,7 @@ func (s *auditLogService) Stop() {
 		s.cancel()
 	}
 	<-s.done
-	log.Println("[audit_log] stopped")
+	auditLogger.Info("audit log service stopped")
 }
 
 // drain flushes remaining entries from the channel before exit. Mirrors
@@ -231,7 +235,8 @@ func (s *auditLogService) drain() {
 func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.AuditLog) {
 
 	if err := s.repo.Insert(ctx, &entry); err != nil {
-		log.Printf("[audit_log] failed to insert: %v event=%s server=%s", err, entry.EventType, entry.ServerID)
+		auditLogger.Error("failed to insert audit entry",
+			"err", pkg.ErrText(err), "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
 	// After Track R the repo populates entry.ID + entry.CreatedAt via
@@ -251,8 +256,9 @@ func (s *auditLogService) persistAndBroadcast(ctx context.Context, entry models.
 	// the audit channel didn't update" reports — no log means s.audit()
 	// never reached the buffer (auditLogger nil or Write dropped); 0 viewers
 	// means broadcast skipped (clients see it on next fetchInitial DB read).
-	log.Printf("[audit_log] persisted id=%s event=%s server=%s actor=%v target=%v viewers=%d",
-		entry.ID, entry.EventType, entry.ServerID, entry.ActorUserID, entry.TargetUserID, len(viewers))
+	auditLogger.Info("audit entry persisted",
+		"id", entry.ID, "event_type", entry.EventType, "server_id", entry.ServerID,
+		"actor_id", entry.ActorUserID, "target_id", entry.TargetUserID, "viewers", len(viewers))
 	if len(viewers) > 0 {
 		s.hub.BroadcastToUsers(viewers, ws.Event{
 			Op:   ws.OpAuditEvent,

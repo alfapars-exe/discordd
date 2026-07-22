@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useAuthStore } from "../../stores/authStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useDMStore } from "../../stores/dmStore";
@@ -174,7 +175,7 @@ function AdminUserList() {
       if (res.success && res.data) {
         setUsers(res.data);
       } else {
-        addToast("error", res.error ?? t("platformUserLoadError"));
+        showApiError(res, { fallbackKey: "settings:platformUserLoadError" });
       }
       setIsLoading(false);
     }
@@ -269,7 +270,7 @@ function AdminUserList() {
       addToast("success", t("platformBanSuccess", { username: targetName }));
       await refetchUsers();
     } else {
-      addToast("error", res.error ?? t("platformBanError"));
+      showApiError(res, { fallbackKey: "settings:platformBanError" });
     }
   }
 
@@ -284,7 +285,7 @@ function AdminUserList() {
       addToast("success", t("platformUnbanSuccess", { username: user.username }));
       await refetchUsers();
     } else {
-      addToast("error", res.error ?? t("platformUnbanError"));
+      showApiError(res, { fallbackKey: "settings:platformUnbanError" });
     }
   }
 
@@ -302,7 +303,7 @@ function AdminUserList() {
       addToast("success", t("platformAdminSuccess"));
       await refetchUsers();
     } else {
-      addToast("error", res.error ?? t("platformAdminError"));
+      showApiError(res, { fallbackKey: "settings:platformAdminError" });
     }
   }
 
@@ -317,7 +318,7 @@ function AdminUserList() {
       addToast("success", t("platformDeleteSuccess", { username: targetName }));
       await refetchUsers();
     } else {
-      addToast("error", res.error ?? t("platformDeleteError"));
+      showApiError(res, { fallbackKey: "settings:platformDeleteError" });
     }
   }
 

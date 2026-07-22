@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
+import { showApiError } from "../../utils/apiError";
 import { useConfirm } from "../../hooks/useConfirm";
 import {
   listLiveKitInstances,
@@ -75,7 +76,7 @@ function LiveKitTab() {
         if (res.success && res.data) {
           setInstances(res.data);
         } else {
-          addToast("error", res.error ?? tRef.current("platformInstanceLoadError"));
+          showApiError(res, { fallbackKey: "settings:platformInstanceLoadError" });
         }
       } catch {
         if (!cancelled) addToast("error", tRef.current("platformInstanceLoadError"));
@@ -136,7 +137,7 @@ function LiveKitTab() {
         setSelectedId(res.data.id);
         addToast("success", t("platformInstanceCreated"));
       } else {
-        addToast("error", res.error ?? t("platformInstanceCreateError"));
+        showApiError(res, { fallbackKey: "settings:platformInstanceCreateError" });
       }
     } catch {
       addToast("error", t("platformInstanceCreateError"));
@@ -184,7 +185,7 @@ function LiveKitTab() {
         );
         addToast("success", t("platformInstanceUpdated"));
       } else {
-        addToast("error", res.error ?? t("platformInstanceUpdateError"));
+        showApiError(res, { fallbackKey: "settings:platformInstanceUpdateError" });
       }
     } catch {
       addToast("error", t("platformInstanceUpdateError"));

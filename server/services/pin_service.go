@@ -3,13 +3,15 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var pinLogger = logx.Component("service.pin")
 
 // MaxPinsPerChannel is the max number of pins per channel (same as Discord: 50).
 const MaxPinsPerChannel = 50
@@ -62,7 +64,7 @@ func (s *pinService) allowedViewers(channelID string) []string {
 	onlineUsers := s.hub.GetOnlineUserIDsForServer(channel.ServerID)
 	perms, err := s.permResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
 	if err != nil {
-		log.Printf("[pin] bulk permission resolve failed channel=%s: %v", channelID, err)
+		pinLogger.Error("bulk permission resolve failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		return nil
 	}
 
@@ -110,7 +112,7 @@ func (s *pinService) Pin(ctx context.Context, messageID string, channelID string
 		Op:   ws.OpMessagePin,
 		Data: result,
 	})
-	log.Printf("[pin] message %s pinned in channel %s by user %s", messageID, channelID, pinnedBy)
+	pinLogger.Info("message pinned", "message_id", messageID, "channel_id", channelID, "pinned_by", pinnedBy)
 
 	return result, nil
 }
@@ -135,7 +137,7 @@ func (s *pinService) Unpin(ctx context.Context, messageID string, channelID stri
 			"channel_id": channelID,
 		},
 	})
-	log.Printf("[pin] message %s unpinned in channel %s", messageID, channelID)
+	pinLogger.Info("message unpinned", "message_id", messageID, "channel_id", channelID)
 
 	return nil
 }

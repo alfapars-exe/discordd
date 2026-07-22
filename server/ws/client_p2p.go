@@ -3,7 +3,8 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── P2P Call Event Handlers ───
@@ -20,12 +21,12 @@ func (c *Client) handleP2PCallInitiate(event Event) {
 	}
 
 	if data.ReceiverID == "" || data.CallType == "" {
-		log.Printf("[ws] p2p_call_initiate missing fields from user %s", c.userID)
+		dispatchLogger.Warn("p2p_call_initiate missing fields", "user_id", c.userID)
 		return
 	}
 
 	if c.hub.onP2PCallInitiate != nil {
-		go c.hub.onP2PCallInitiate(c.userID, data)
+		logx.Go("ws.p2p_call_initiate", func() { c.hub.onP2PCallInitiate(c.userID, data) })
 	}
 }
 
@@ -41,12 +42,12 @@ func (c *Client) handleP2PCallAccept(event Event) {
 	}
 
 	if data.CallID == "" {
-		log.Printf("[ws] p2p_call_accept missing call_id from user %s", c.userID)
+		dispatchLogger.Warn("p2p_call_accept missing call_id", "user_id", c.userID)
 		return
 	}
 
 	if c.hub.onP2PCallAccept != nil {
-		go c.hub.onP2PCallAccept(c.userID, data)
+		logx.Go("ws.p2p_call_accept", func() { c.hub.onP2PCallAccept(c.userID, data) })
 	}
 }
 
@@ -62,19 +63,19 @@ func (c *Client) handleP2PCallDecline(event Event) {
 	}
 
 	if data.CallID == "" {
-		log.Printf("[ws] p2p_call_decline missing call_id from user %s", c.userID)
+		dispatchLogger.Warn("p2p_call_decline missing call_id", "user_id", c.userID)
 		return
 	}
 
 	if c.hub.onP2PCallDecline != nil {
-		go c.hub.onP2PCallDecline(c.userID, data)
+		logx.Go("ws.p2p_call_decline", func() { c.hub.onP2PCallDecline(c.userID, data) })
 	}
 }
 
 // handleP2PCallEnd — no payload needed, userID identifies the active call.
 func (c *Client) handleP2PCallEnd() {
 	if c.hub.onP2PCallEnd != nil {
-		go c.hub.onP2PCallEnd(c.userID)
+		logx.Go("ws.p2p_call_end", func() { c.hub.onP2PCallEnd(c.userID) })
 	}
 }
 
@@ -91,11 +92,11 @@ func (c *Client) handleP2PSignal(event Event) {
 	}
 
 	if data.CallID == "" || data.Type == "" {
-		log.Printf("[ws] p2p_signal missing fields from user %s", c.userID)
+		dispatchLogger.Warn("p2p_signal missing fields", "user_id", c.userID)
 		return
 	}
 
 	if c.hub.onP2PSignal != nil {
-		go c.hub.onP2PSignal(c.userID, data)
+		logx.Go("ws.p2p_signal", func() { c.hub.onP2PSignal(c.userID, data) })
 	}
 }

@@ -3,13 +3,15 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var roleLogger = logx.Component("service.role")
 
 // RoleService handles role CRUD. All operations are server-scoped.
 type RoleService interface {
@@ -58,10 +60,10 @@ func (s *roleService) invalidatePerms() {
 // channel stayed empty" reports can be diagnosed from runtime logs.
 func (s *roleService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
-		log.Printf("[role/audit] DROPPED event=%s server=%s (auditLogger not wired)", entry.EventType, entry.ServerID)
+		roleLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
 		return
 	}
-	log.Printf("[role/audit] emit event=%s server=%s", entry.EventType, entry.ServerID)
+	roleLogger.Info("audit event emitted", "event_type", entry.EventType, "server_id", entry.ServerID)
 	s.auditLogger.Write(entry)
 }
 

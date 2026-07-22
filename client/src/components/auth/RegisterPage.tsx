@@ -4,10 +4,14 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useToastStore } from "../../stores/toastStore";
 import { isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
+import { sanitizeReturnUrl, matchInviteReturnUrl } from "../../utils/returnUrl";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
+import * as serversApi from "../../api/servers";
 
 /** Inline modal for Terms of Service / Privacy Policy */
 function LegalModal({ type, onClose }: { type: "terms" | "privacy"; onClose: () => void }) {
@@ -92,6 +96,7 @@ function RegisterPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const clearError = useAuthStore((s) => s.clearError);
+  const addToast = useToastStore((s) => s.addToast);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -130,6 +135,42 @@ function RegisterPage() {
   });
 
   // ─── Handlers ───
+
+  // Kayıt sonrası davet linkinden gelindiyse otomatik katıl — kullanıcı
+  // davet sayfasına dönüp "Katıl" butonuna basmak zorunda kalmasın. Bu,
+  // InviteJoinPage.handleJoin ile birebir aynı başarı/hata deseni (toast
+  // anahtarları, serverStore güncellemesi, aktif sunucu seçimi).
+  async function joinInviteAfterRegister(code: string) {
+    const res = await serversApi.joinServer(code);
+    if (res.success && res.data) {
+      const server = res.data;
+      const store = useServerStore.getState();
+      const exists = store.servers.some((s) => s.id === server.id);
+      if (!exists) {
+        useServerStore.setState((state) => ({
+          servers: [...state.servers, { id: server.id, name: server.name, icon_url: server.icon_url }],
+        }));
+      }
+      useServerStore.setState({ activeServerId: server.id, activeServer: server });
+      addToast("success", t("serverJoined", { ns: "servers" }));
+      navigate("/channels", { replace: true });
+      return;
+    }
+
+    const err = res.error ?? "";
+    if (err.includes("already a member")) {
+      addToast("info", t("alreadyMember", { ns: "servers" }));
+      navigate("/channels", { replace: true });
+      return;
+    }
+
+    // Kısmi başarı: hesap oluşturuldu ama katılım başarısız — register'ı
+    // ASLA yeniden POST etme (rate limit sıfırlanmıyor), kullanıcıyı davet
+    // sayfasına gönder ki manuel "Katıl" butonuyla tekrar deneyebilsin.
+    addToast("error", t("joinAfterRegisterFailed", { ns: "servers" }));
+    navigate(`/invite/${code}`, { replace: true });
+  }
+
   async function attemptRegister(payload: SubmitPayload) {
     const success = await register(
       payload.username,
@@ -139,8 +180,13 @@ function RegisterPage() {
     );
     if (success) {
       wakeUp.reset();
-      const returnUrl = searchParams.get("returnUrl");
-      navigate(returnUrl ?? "/channels");
+      const rawReturnUrl = searchParams.get("returnUrl");
+      const inviteCode = matchInviteReturnUrl(rawReturnUrl);
+      if (inviteCode) {
+        await joinInviteAfterRegister(inviteCode);
+        return;
+      }
+      navigate(sanitizeReturnUrl(rawReturnUrl));
     } else if (wakeUp.state.phase === "ready") {
       // Retry başarısızsa loop'u sıfırla — bir sonraki render watchError'u
       // idle'dan tetikler ve döngü yeniden başlar.
@@ -378,7 +424,7 @@ function RegisterPage() {
         {/* Footer Link */}
         <p className="auth-link">
           {t("alreadyHaveAccount")}{" "}
-          <Link to={searchParams.get("returnUrl") ? `/login?returnUrl=${searchParams.get("returnUrl")}` : "/login"}>{t("loginLink")}</Link>
+          <Link to={searchParams.get("returnUrl") ? `/login?returnUrl=${encodeURIComponent(searchParams.get("returnUrl")!)}` : "/login"}>{t("loginLink")}</Link>
         </p>
 
         {shouldShowDownloadPrompt() && (() => {
