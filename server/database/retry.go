@@ -85,6 +85,12 @@ func NewRetryingQuerier(db TxQuerier) TxQuerier {
 	return &retryingQuerier{db: db}
 }
 
+// Unwrap exposes the wrapped TxQuerier so RawDB can walk past this wrapper to
+// find the underlying *sql.DB (or the next wrapper in the chain).
+func (r *retryingQuerier) Unwrap() TxQuerier {
+	return r.db
+}
+
 // retry runs attempt until it stops failing with a stale-stream prepare
 // error, up to maxPrepareRetries extra tries.
 func retry(ctx context.Context, label string, attempt func() error) error {

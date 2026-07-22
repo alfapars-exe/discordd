@@ -3,16 +3,18 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
+
+var authHandlerLogger = logx.Component("handler.auth")
 
 // refreshCookieName is the HttpOnly cookie that carries the refresh token
 // when the client is browser/Electron-based. Cookie storage moves the
@@ -96,7 +98,7 @@ const refreshCookieTTL = 30 * 24 * time.Hour
 // already exempt secure-only cookies for development. It is also a hard
 // prerequisite for SameSite=None, which browsers reject without it.
 func setRefreshCookie(w http.ResponseWriter, r *http.Request, refreshToken string) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are always true below; SameSite is refreshCookieSameSite(r), which only ever returns SameSiteNoneMode or SameSiteStrictMode (see its doc comment above), never an insecure/default value
 		Name:     refreshCookieName,
 		Value:    refreshToken,
 		Path:     "/api/auth",
@@ -122,7 +124,7 @@ func setRefreshCookie(w http.ResponseWriter, r *http.Request, refreshToken strin
 // served today (e.g. a shell upgraded across this change).
 func clearRefreshCookie(w http.ResponseWriter) {
 	for _, sameSite := range []http.SameSite{http.SameSiteNoneMode, http.SameSiteStrictMode} {
-		http.SetCookie(w, &http.Cookie{
+		http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are always true below; sameSite only ever takes the two safe values in the range literal above
 			Name:     refreshCookieName,
 			Value:    "",
 			Path:     "/api/auth",
@@ -179,7 +181,7 @@ const mediaCookieTTL = services.MediaTokenTTL
 //   - Cross-origin JS can't read the response body (no ACAO for this handler),
 //     so an attacker page can at most cause a bandwidth burn on a known URL.
 func setMediaCookie(w http.ResponseWriter, mediaToken string) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are true below; SameSite=None is deliberate (required for cross-scheme <img> loads from Electron/Capacitor, see doc comment above) and its CSRF exposure is negligible for this specific cookie (Path-scoped to one idempotent GET handler with unenumerable URLs and its own permission recheck — see the doc comment above)
 		Name:     mediaCookieName,
 		Value:    mediaToken,
 		Path:     "/api/uploads",
@@ -202,7 +204,7 @@ func setMediaCookie(w http.ResponseWriter, mediaToken string) {
 func (h *AuthHandler) issueMediaCookie(w http.ResponseWriter, userID string) {
 	mediaToken, err := h.authService.GenerateMediaToken(userID)
 	if err != nil {
-		log.Printf("[auth] media token generation failed for user %s: %v", userID, err)
+		authHandlerLogger.Error("media token generation failed", "user_id", userID, "err", pkg.ErrText(err))
 		return
 	}
 	setMediaCookie(w, mediaToken)
@@ -210,7 +212,7 @@ func (h *AuthHandler) issueMediaCookie(w http.ResponseWriter, userID string) {
 
 // clearMediaCookie expires the media cookie on logout.
 func clearMediaCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are true below; SameSite=None mirrors setMediaCookie above (same reasoning: cross-scheme <img> loads, negligible CSRF exposure)
 		Name:     mediaCookieName,
 		Value:    "",
 		Path:     "/api/uploads",

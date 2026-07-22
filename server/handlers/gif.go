@@ -168,7 +168,7 @@ func fetchKlipyResults(url string) ([]GifResult, bool, error) {
 		return nil, false, errKlipyBadURL
 	}
 
-	resp, err := klipyHTTPClient.Get(url) // #nosec G107 — URL validated above
+	resp, err := klipyHTTPClient.Get(url) // #nosec G107,G704 -- host is hard-guarded above (strings.HasPrefix against the klipyBaseURL constant); no request-derived data can reach the scheme or host
 	if err != nil {
 		return nil, false, fmt.Errorf("klipy request failed: %w", err)
 	}

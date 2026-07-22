@@ -11,6 +11,11 @@ import (
 // (full send buffer) get unregistered in a goroutine to avoid blocking the
 // loop. Each broadcast bumps event.Seq atomically before marshaling.
 
+// errMarshalBroadcastEvent is the shared log message for the three broadcast
+// methods below — one constant instead of the literal repeated at each call
+// site, so a wording change can't drift between them.
+const errMarshalBroadcastEvent = "failed to marshal broadcast event"
+
 // deliver enqueues pre-marshaled bytes to one client, applying the bot
 // read-only filter. This is the SINGLE place per-client delivery happens —
 // every broadcast method funnels through it so the bot allow-list cannot be
@@ -32,7 +37,7 @@ func (h *Hub) BroadcastToAll(event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		hubLogger.Error("failed to marshal broadcast event", "op", event.Op, "err", pkg.ErrText(err))
+		hubLogger.Error(errMarshalBroadcastEvent, "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -56,7 +61,7 @@ func (h *Hub) BroadcastToUsers(userIDs []string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		hubLogger.Error("failed to marshal broadcast event", "op", event.Op, "err", pkg.ErrText(err))
+		hubLogger.Error(errMarshalBroadcastEvent, "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 
@@ -84,7 +89,7 @@ func (h *Hub) BroadcastToAllExcept(excludeUserID string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		hubLogger.Error("failed to marshal broadcast event", "op", event.Op, "err", pkg.ErrText(err))
+		hubLogger.Error(errMarshalBroadcastEvent, "op", event.Op, "err", pkg.ErrText(err))
 		return
 	}
 

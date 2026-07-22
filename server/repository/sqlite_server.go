@@ -262,8 +262,8 @@ func (r *sqliteServerRepo) GetNicknamesForServer(ctx context.Context, serverID s
 }
 
 func (r *sqliteServerRepo) UpdateMemberPositions(ctx context.Context, userID string, items []models.PositionUpdate) error {
-	sqlDB, ok := r.db.(*sql.DB)
-	if !ok {
+	sqlDB := database.RawDB(r.db)
+	if sqlDB == nil {
 		return fmt.Errorf("UpdateMemberPositions requires *sql.DB to start transaction")
 	}
 	tx, err := sqlDB.BeginTx(ctx, nil)

@@ -59,10 +59,15 @@ const EXIT_ANIMATION_MS = 300;
 export const useToastStore = create<ToastState>((set, get) => ({
   toasts: [],
 
-  addToast: (type, message, duration = DEFAULT_DURATION, options) => {
+  addToast: (type, message, duration, options) => {
     const id = crypto.randomUUID();
-    // 0 or null means "persistent" — no auto-dismiss timer.
-    const resolvedDuration = duration ?? 0;
+    // Not passed at all -> the default duration. Explicitly 0 or null ->
+    // persistent (no auto-dismiss timer). The default lives here, not as a
+    // `duration = DEFAULT_DURATION` parameter default, because `options`
+    // (after it) has no default of its own — a default before a
+    // defaultless parameter forces every caller who wants `options` to
+    // also pass `duration` explicitly.
+    const resolvedDuration = duration === undefined ? DEFAULT_DURATION : (duration ?? 0);
 
     const toast: Toast = {
       id,

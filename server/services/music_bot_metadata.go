@@ -40,7 +40,7 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	// (argument injection → RCE under the server process). Handlers also
 	// allow-list the URL scheme, but this is the defense-in-depth layer
 	// closest to the actual subprocess.
-	cmd := exec.CommandContext(ctx,
+	cmd := exec.CommandContext(ctx, // #nosec G204 -- urlStr is user-supplied, but the binary name is a fixed literal, exec.CommandContext never invokes a shell (no metacharacter-injection vector), the scheme allow-list above rejects anything but http(s), and "--" below stops urlStr from being parsed as a yt-dlp flag (see the comment above)
 		"yt-dlp",
 		"--flat-playlist",
 		"--dump-json",
