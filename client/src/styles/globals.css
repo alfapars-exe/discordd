@@ -2618,6 +2618,15 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .spinner { width:24px;height:24px;border:2px solid var(--b1);border-top-color:var(--primary);border-radius:999px;animation:spin .6s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
 
+/* App init + lazy-route Suspense loading screen (App.tsx). Full-height centered
+   spinner. Previously authored with Tailwind utility classes (flex/h-full/
+   bg-background/border-t-brand/text-text-muted …) that were never in the
+   bundle — Tailwind isn't installed — so the spinner rendered invisible. */
+.app-loading { flex:1;min-height:0;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-0); }
+.app-loading-inner { text-align:center; }
+.app-loading-spinner { width:56px;height:56px;margin:0 auto 24px;border:4px solid var(--b1);border-top-color:var(--primary);border-radius:999px;animation:spin .8s linear infinite; }
+.app-loading-text { font-size:16px;color:var(--t2); }
+
 /* ═══════════════════════════════════════
    PINNED MESSAGES PANEL
    ═══════════════════════════════════════ */

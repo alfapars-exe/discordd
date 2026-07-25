@@ -188,7 +188,7 @@ function EncryptionSettings() {
             />
           </div>
 
-          <div className="mt-3">
+          <div style={{ marginTop: 12 }}>
             <button
               onClick={handleSaveRecoveryPassword}
               disabled={!password.trim() || isSavingPassword}
