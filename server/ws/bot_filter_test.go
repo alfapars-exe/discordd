@@ -9,8 +9,8 @@ import "testing"
 func TestDeliver_BotFilter(t *testing.T) {
 	h := NewHub()
 
-	bot := &Client{userID: "bot_x", send: make(chan []byte, 4), isBot: true}
-	human := &Client{userID: "u1", send: make(chan []byte, 4)}
+	bot := &Client{userID: "bot_x", send: make(chan []byte, 4), done: make(chan struct{}), isBot: true}
+	human := &Client{userID: "u1", send: make(chan []byte, 4), done: make(chan struct{})}
 
 	// Allowed op → bot receives it.
 	h.deliver(bot, OpMessageCreate, []byte(`{"op":"message_create"}`))

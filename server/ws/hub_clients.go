@@ -77,8 +77,9 @@ func (h *Hub) addClient(client *Client) {
 	}
 }
 
-// removeClient unregisters a client and closes its send channel.
-// Fires OnUserFullyDisconnected when the last connection closes.
+// removeClient unregisters a client and signals its done channel (which stops
+// WritePump and any in-flight sendEvent). Fires OnUserFullyDisconnected when
+// the last connection closes.
 // Otherwise recomputes and broadcasts aggregate status.
 func (h *Hub) removeClient(client *Client) {
 	h.mu.Lock()
@@ -91,7 +92,7 @@ func (h *Hub) removeClient(client *Client) {
 	if clients, ok := h.clients[client.userID]; ok {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
-			close(client.send)
+			client.closeDone()
 
 			// Remove this client from all server indexes it belonged to.
 			for _, sid := range client.serverIDs {

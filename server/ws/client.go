@@ -32,6 +32,17 @@ type Client struct {
 	send   chan []byte
 	mu     sync.Mutex // protects conn.WriteMessage
 
+	// done is closed exactly once (via closeDone) when the Hub removes this
+	// client — from removeClient (ban / disconnect) or Shutdown. The send
+	// channel is deliberately NEVER closed: sendEvent (below) and deliver
+	// (hub_broadcast.go) write to send from goroutines that don't hold h.mu,
+	// so closing send would race those writes into a "send on closed channel"
+	// panic that kills the whole process. Closing a separate done channel
+	// instead lets every sender select on <-c.done and lets WritePump exit,
+	// making send-on-closed structurally impossible.
+	done      chan struct{}
+	closeOnce sync.Once
+
 	// serverIDs: servers this user belongs to. Populated from DB at connect,
 	// updated on join/leave. Used by BroadcastToServer for filtering.
 	serverIDs []string
@@ -117,6 +128,14 @@ func (c *Client) logUnexpectedClose(err error) {
 		"WebSocket unexpected close", map[string]string{"error": err.Error()})
 }
 
+// closeDone signals sender goroutines and WritePump that the Hub has removed
+// this client. Idempotent — safe to call from both removeClient and Shutdown
+// (h.mu already serializes them, but the Once makes single-close local and
+// self-evident rather than an invariant a future edit could break).
+func (c *Client) closeDone() {
+	c.closeOnce.Do(func() { close(c.done) })
+}
+
 func (c *Client) sendEvent(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -126,6 +145,9 @@ func (c *Client) sendEvent(event Event) {
 
 	select {
 	case c.send <- data:
+	case <-c.done:
+		// Client already removed (ban / disconnect / shutdown). Drop silently —
+		// WritePump has exited and nothing will drain send.
 	default:
 		dispatchLogger.Warn("send buffer full, dropping connection", "user_id", c.userID)
 		// Non-blocking enqueue — see Hub.queueUnregister rationale. We're
@@ -137,21 +159,33 @@ func (c *Client) sendEvent(event Event) {
 }
 
 // WritePump writes messages from Hub to the WebSocket connection.
-// Runs as a goroutine until the send channel is closed.
+// Runs as a goroutine until the Hub closes this client's done channel.
 func (c *Client) WritePump() {
 	defer c.conn.Close()
 
 	for {
-		message, ok := <-c.send
-		if !ok {
-			// Channel closed — Hub removed this client. The close frame is a
-			// courtesy; the peer may already be gone, so the error is moot.
-			_ = c.writeMessage(websocket.CloseMessage, nil)
-			return
-		}
-
-		if err := c.writeMessage(websocket.TextMessage, message); err != nil {
-			return
+		select {
+		case message := <-c.send:
+			if err := c.writeMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-c.done:
+			// Hub removed this client (removeClient / Shutdown closed done).
+			// Flush anything still buffered in send — mirrors the old
+			// close(send) behavior where <-c.send drained the buffer before
+			// reporting the channel closed — then send the courtesy close
+			// frame. The peer may already be gone, so a write error is moot.
+			for {
+				select {
+				case message := <-c.send:
+					if err := c.writeMessage(websocket.TextMessage, message); err != nil {
+						return
+					}
+				default:
+					_ = c.writeMessage(websocket.CloseMessage, nil)
+					return
+				}
+			}
 		}
 	}
 }
