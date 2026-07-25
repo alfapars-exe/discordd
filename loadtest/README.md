@@ -86,7 +86,7 @@ Every setting can also be exported as a shell env var instead of passed via
 | `BASE_URL`         | `http://localhost:9090`   | HTTP(S) base URL of the server under test; the WS URL is derived from it (`http`->`ws`, `https`->`wss`). |
 | `USERNAME`         | `loadtest`                | Login username, used when `USER_COUNT <= 1`. |
 | `USERNAME_PREFIX`  | `loadtest`                | Prefix for per-VU usernames when `USER_COUNT > 1` (VU *i* logs in as `${USERNAME_PREFIX}${i}`). |
-| `PASSWORD`         | `loadtest-password`       | Password shared by all accounts used in the run. |
+| `PASSWORD`         | *(required)*              | Password shared by all accounts used in the run. The script aborts if it is unset — there is deliberately no default. |
 | `USER_COUNT`       | `1`                       | Number of pre-seeded distinct accounts to spread VUs across. |
 | `USE_LEGACY_TOKEN` | `false`                   | `true` to bypass the ws-ticket exchange and connect with `?token=<access_token>` — see the rate-limit section above. |
 | `WS_VUS`           | `200`                     | Target concurrent connections during the hold stage. |

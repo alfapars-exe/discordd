@@ -28,8 +28,17 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:9090';
 // than one seeded account.
 const USERNAME = __ENV.USERNAME || 'loadtest';
 const USERNAME_PREFIX = __ENV.USERNAME_PREFIX || 'loadtest';
-const PASSWORD = __ENV.PASSWORD || 'loadtest-password';
+// No default: a load test that authenticates with a password baked into the
+// repo is one copy-paste away from being pointed at something real with a
+// credential everyone can read. Fail fast instead.
+const PASSWORD = __ENV.PASSWORD;
 const USER_COUNT = parseInt(__ENV.USER_COUNT || '1', 10);
+
+if (!PASSWORD) {
+  throw new Error(
+    'PASSWORD is required — pass it with `-e PASSWORD=<password>` or export it. See loadtest/README.md.'
+  );
+}
 
 // When "true", skip the /api/auth/ws-ticket exchange entirely and open the
 // WebSocket with the legacy `?token=<access_token>` query param instead.
@@ -86,6 +95,8 @@ function wsURLFromBase(baseURL) {
     return 'wss://' + baseURL.slice('https://'.length);
   }
   if (baseURL.startsWith('http://')) {
+    // NOSONAR - ws:// mirrors an operator-supplied http:// base, which this
+    // script only targets for local dev; an https:// base yields wss:// above.
     return 'ws://' + baseURL.slice('http://'.length);
   }
   return baseURL;
