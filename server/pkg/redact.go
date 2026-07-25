@@ -29,8 +29,10 @@ func ErrText(err error) string {
 
 // secretParams are query-string keys whose values must never be logged.
 // Matched case-insensitively — drivers and upstream services are not
-// consistent about casing (authToken / authtoken / AuthToken).
-var secretParams = []string{"authtoken=", "password=", "apikey=", "api_key=", "secret=", "token="}
+// consistent about casing (authToken / authtoken / AuthToken). "ticket=" is
+// the WebSocket connection's one-time credential (client passes it as
+// `?ticket=<value>`); short-lived and single-use, but still a credential.
+var secretParams = []string{"authtoken=", "password=", "apikey=", "api_key=", "secret=", "token=", "ticket="}
 
 // valueTerminators end a query-parameter value. \r matters: a CRLF-terminated
 // value would otherwise swallow the \r along with the rest of the line.
@@ -38,6 +40,13 @@ const valueTerminators = "&\"' \t\r\n"
 
 func redactSecrets(s string) string {
 	for _, key := range secretParams {
+		if key == "" {
+			// indexFold("", ...) returns 0 for an empty substr, so an empty
+			// key would make redactParam treat every position as a match and
+			// mask the rest of the string forever. Not reachable with the
+			// list above, but cheap to guard against a future entry.
+			continue
+		}
 		s = redactParam(s, key)
 	}
 	return s

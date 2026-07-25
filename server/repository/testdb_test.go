@@ -34,7 +34,7 @@ import (
 // for local SQLite, so FK-violating rows cannot be inserted through this
 // handle. See database/maintenance_census_test.go for the second-connection
 // trick if a test needs to plant an orphan row deliberately.
-func newTestDB(t *testing.T) *database.DB {
+func newTestDB(t testing.TB) *database.DB {
 	t.Helper()
 	db, _ := newTestDBWithPath(t)
 	return db
@@ -42,7 +42,11 @@ func newTestDB(t *testing.T) *database.DB {
 
 // newTestDBWithPath also returns the file path, for tests that need a second
 // connection with different pragmas (see execWithoutFKs).
-func newTestDBWithPath(t *testing.T) (*database.DB, string) {
+//
+// Takes testing.TB (not *testing.T) so benchmarks can share this harness —
+// every existing *testing.T caller already satisfies TB, so this is a pure
+// signature widening with no behavior change.
+func newTestDBWithPath(t testing.TB) (*database.DB, string) {
 	t.Helper()
 	// runMigrations expects the FS rooted at the migrations dir (main.go does
 	// the same fs.Sub before calling database.New).
@@ -64,7 +68,7 @@ func newTestDBWithPath(t *testing.T) (*database.DB, string) {
 // otherwise refuse (an orphan, a dangling reference). Same trick as
 // maintenance_census_test.go, and it mirrors how such rows plausibly reach
 // production: through a path where enforcement was not in effect.
-func execWithoutFKs(t *testing.T, path string, stmts ...string) {
+func execWithoutFKs(t testing.TB, path string, stmts ...string) {
 	t.Helper()
 	conn, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
 	if err != nil {
@@ -81,7 +85,7 @@ func execWithoutFKs(t *testing.T, path string, stmts ...string) {
 // countRows runs a single-integer query (COUNT(*), a bare column, …) and
 // fails the test if it errors. Used for post-condition assertions that read
 // the table directly rather than through the repo under test.
-func countRows(t *testing.T, db *database.DB, query string, args ...any) int {
+func countRows(t testing.TB, db *database.DB, query string, args ...any) int {
 	t.Helper()
 	var n int
 	if err := db.Conn.QueryRow(query, args...).Scan(&n); err != nil {
@@ -93,7 +97,7 @@ func countRows(t *testing.T, db *database.DB, query string, args ...any) int {
 // execSeed runs a list of INSERT statements, failing loudly on the first
 // error so a broken fixture is reported as a fixture problem rather than
 // surfacing later as a mysterious empty result set.
-func execSeed(t *testing.T, db *database.DB, stmts []seedStmt) {
+func execSeed(t testing.TB, db *database.DB, stmts []seedStmt) {
 	t.Helper()
 	for _, s := range stmts {
 		if _, err := db.Conn.Exec(s.q, s.args...); err != nil {

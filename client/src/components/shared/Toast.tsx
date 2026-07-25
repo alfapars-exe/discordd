@@ -17,7 +17,7 @@ type ToastProps = {
   onDismiss: (id: string) => void;
 };
 
-function Toast({ id, type, message, title, action, isExiting, onDismiss }: ToastProps) {
+function Toast({ id, type, message, title, action, isExiting, onDismiss }: Readonly<ToastProps>) {
   const { t } = useTranslation("common");
   const handleDismiss = useCallback(() => {
     onDismiss(id);
@@ -39,14 +39,14 @@ function Toast({ id, type, message, title, action, isExiting, onDismiss }: Toast
         {title && <div className="toast-title">{title}</div>}
         <span className="toast-message">{message}</span>
         {action && (
-          <button onClick={action.onClick} className="toast-action">
+          <button type="button" onClick={action.onClick} className="toast-action">
             {action.label}
           </button>
         )}
       </div>
 
       {/* Dismiss */}
-      <button onClick={handleDismiss} className="toast-close" aria-label={t("close")}>
+      <button type="button" onClick={handleDismiss} className="toast-close" aria-label={t("close")}>
         ✕
       </button>
     </div>

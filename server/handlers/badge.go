@@ -234,7 +234,7 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid filename")
 		return
 	}
-	dest, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
+	dest, err := os.Create(destPath) // #nosec G304,G703 -- verified by SafeJoin (pkg/safepath.go: rejects .., absolute paths, and any resolved path outside baseDir)
 	if err != nil {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to save icon", err)
 		return

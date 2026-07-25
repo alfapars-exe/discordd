@@ -248,7 +248,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	}
 
 	// Remove phantom from old LiveKit room (best-effort)
-	go s.removeParticipantFromLiveKit(sourceChannelID, targetUserID)
+	go s.removeParticipantFromLiveKit(sourceChannelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
 
 	// Audit: voice move (only when an admin moved someone else; self-moves
 	// are not moderation events and we don't log them).
@@ -338,7 +338,7 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 		})
 	}
 
-	go s.removeParticipantFromLiveKit(channelID, targetUserID)
+	go s.removeParticipantFromLiveKit(channelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
 
 	// Audit: voice kick
 	disconnecter := disconnecterUserID

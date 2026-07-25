@@ -78,7 +78,7 @@ var backupLogger = logx.Component("service.backup")
 type cmdRunner func(ctx context.Context, env []string, name string, args ...string) ([]byte, error)
 
 func defaultRunCmd(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- name is a runtime parameter only because this is the shared, testable indirection (see cmdRunner doc); at all 8 call sites in this file it is a fixed literal ("hf" or "sqlite3"), never a variable, and args come from internal config/generated paths, never raw request input. exec.CommandContext also never invokes a shell, so no metacharacter-injection vector exists regardless.
 	if env != nil {
 		cmd.Env = env
 	}

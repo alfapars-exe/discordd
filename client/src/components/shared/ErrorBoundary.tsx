@@ -19,6 +19,7 @@ import { logToServer } from "../../api/clientLog";
 // i18n.t() here is safe even though this boundary mounts above the Router
 // (no provider/hook available in a class component this high in the tree).
 import i18n from "../../i18n";
+import { captureBoundaryError } from "../../monitoring/sentry";
 
 type Props = {
   children: ReactNode;
@@ -70,6 +71,9 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught render error:", error, errorInfo);
+
+    // DSN-gated — no-op when Sentry isn't configured.
+    captureBoundaryError(error, errorInfo);
 
     // Server-side telemetry — we can't see mobile DevTools, so without this
     // the crash is invisible to admins. logToServer swallows its own errors.

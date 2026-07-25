@@ -98,7 +98,7 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 		reporter := user.Username
 		select {
 		case h.emailSem <- struct{}{}:
-			go func() {
+			go func() { // #nosec G118 -- deliberately detached from r.Context(): the handler responds 204 immediately (see comment above) without waiting on this goroutine, so r.Context() would already be canceled by the time SendDiagnosticsReport runs; context.Background()+its own timeout is correct for a fire-and-forget send
 				defer func() { <-h.emailSem }()
 				ctx, cancel := context.WithTimeout(context.Background(), diagnosticsEmailTimeout)
 				defer cancel()

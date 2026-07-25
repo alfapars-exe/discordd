@@ -16,6 +16,7 @@ import { logToServer } from "../../api/clientLog";
 // i18n is a module singleton with bundled en/tr resources — usable from a
 // class component without the react-i18next hook/provider.
 import i18n from "../../i18n";
+import { captureBoundaryError } from "../../monitoring/sentry";
 
 type Props = {
   section: string;
@@ -45,6 +46,9 @@ class SectionErrorBoundary extends Component<Props, State> {
       error,
       errorInfo
     );
+
+    // DSN-gated — no-op when Sentry isn't configured.
+    captureBoundaryError(error, errorInfo);
 
     // Same server-side telemetry as the app-level boundary — without it a
     // section crash on mobile/desktop builds is invisible to admins.

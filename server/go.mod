@@ -15,9 +15,9 @@ require (
 	github.com/resend/resend-go/v3 v3.10.1
 	github.com/rs/cors v1.11.1
 	github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04
-	golang.org/x/crypto v0.52.0
+	golang.org/x/crypto v0.53.0
 	golang.org/x/image v0.44.0
-	golang.org/x/net v0.55.0
+	golang.org/x/net v0.56.0
 	modernc.org/sqlite v1.54.0
 )
 

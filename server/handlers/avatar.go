@@ -218,7 +218,7 @@ func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request) (s
 	if err != nil {
 		return "", fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	if err := os.WriteFile(destPath, resized, 0o600); err != nil { // #nosec G304 — verified by SafeJoin
+	if err := os.WriteFile(destPath, resized, 0o600); err != nil { // #nosec G304,G703 -- verified by SafeJoin (pkg/safepath.go: rejects .., absolute paths, and any resolved path outside baseDir)
 		return "", fmt.Errorf("failed to save file: %w", err)
 	}
 

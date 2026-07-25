@@ -39,7 +39,7 @@ const multipartHeaderOverhead = 1 * 1024 * 1024 // 1 MiB
 // initial rollout.
 func LimitedParseMultipartForm(w http.ResponseWriter, r *http.Request, maxBytes int64) error {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+multipartHeaderOverhead)
-	return r.ParseMultipartForm(maxBytes)
+	return r.ParseMultipartForm(maxBytes) // #nosec G120 -- r.Body was just wrapped in http.MaxBytesReader on the line above; gosec's pattern match doesn't trace that mutation, but the parse is bounded (this whole file exists to provide that bound)
 }
 
 // LimitedParseMultipartFormN is the multi-file variant: maxBytesPerFile
@@ -55,7 +55,7 @@ func LimitedParseMultipartFormN(w http.ResponseWriter, r *http.Request, maxBytes
 	}
 	totalCap := maxBytesPerFile*int64(n) + multipartHeaderOverhead
 	r.Body = http.MaxBytesReader(w, r.Body, totalCap)
-	return r.ParseMultipartForm(maxBytesPerFile)
+	return r.ParseMultipartForm(maxBytesPerFile) // #nosec G120 -- r.Body was just wrapped in http.MaxBytesReader on the line above; gosec's pattern match doesn't trace that mutation, but the parse is bounded (this whole file exists to provide that bound)
 }
 
 // Compile-time guard that the package still imports multipart — the

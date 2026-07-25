@@ -26,7 +26,10 @@ const (
 	msgSecondUser   = "u-second"
 )
 
-func seedMessageWorld(t *testing.T, db *database.DB) {
+// seedMessageWorld takes testing.TB (not *testing.T) so sqlite_message_bench_test.go
+// can reuse this fixture from a *testing.B — every existing *testing.T caller
+// already satisfies TB, so this is a pure signature widening.
+func seedMessageWorld(t testing.TB, db *database.DB) {
 	t.Helper()
 	execSeed(t, db, []seedStmt{
 		{`INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, 'x')`,
@@ -40,8 +43,10 @@ func seedMessageWorld(t *testing.T, db *database.DB) {
 	})
 }
 
-// newMessage creates a plaintext message through the repo.
-func newMessage(t *testing.T, ctx context.Context, repo MessageRepository, channelID, userID, content string) *models.Message {
+// newMessage creates a plaintext message through the repo. testing.TB (see
+// seedMessageWorld above) so BenchmarkMessageRepo_* can build its ~1000-row
+// fixture with the same helper the correctness tests use.
+func newMessage(t testing.TB, ctx context.Context, repo MessageRepository, channelID, userID, content string) *models.Message {
 	t.Helper()
 	msg := &models.Message{ChannelID: channelID, UserID: userID, Content: &content}
 	if err := repo.Create(ctx, msg); err != nil {

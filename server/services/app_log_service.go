@@ -100,60 +100,66 @@ func (s *appLogService) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
-	// Writer goroutine — drains channel and writes to DB
-	logx.Go("app_log.writer", func() {
-		defer close(s.done)
-		for {
-			select {
-			case <-ctx.Done():
-				s.drain()
-				return
-			case entry := <-s.ch:
-				if err := s.repo.Insert(ctx, &entry); err != nil {
-					appLogger.Error("failed to write log entry", "err", pkg.ErrText(err))
-				}
-			}
-		}
-	})
+	logx.Go("app_log.writer", func() { s.writerLoop(ctx) })
+	logx.Go("app_log.dropped_watchdog", func() { s.droppedWatchdogLoop(ctx) })
+	logx.Go("app_log.auto_purge", func() { s.autoPurgeLoop(ctx) })
+}
 
-	// Dropped-entry watchdog — periodically surfaces how many Log() calls
-	// were discarded because the buffer was full since the last report, so
-	// overload becomes visible (a WARN in the log / Sentry breadcrumb)
-	// instead of silently losing diagnostic data.
-	logx.Go("app_log.dropped_watchdog", func() {
-		ticker := time.NewTicker(droppedReportInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if n := s.dropped.Swap(0); n > 0 {
-					slog.Warn("app_log dropped entries", "count", n)
-				}
+// writerLoop drains s.ch and writes each entry to the DB until ctx is
+// canceled, then drains whatever is left buffered. Split out of Start purely
+// to keep each goroutine's branching separately readable; behavior unchanged.
+func (s *appLogService) writerLoop(ctx context.Context) {
+	defer close(s.done)
+	for {
+		select {
+		case <-ctx.Done():
+			s.drain()
+			return
+		case entry := <-s.ch:
+			if err := s.repo.Insert(ctx, &entry); err != nil {
+				appLogger.Error("failed to write log entry", "err", pkg.ErrText(err))
 			}
 		}
-	})
+	}
+}
 
-	// Auto-purge: delete logs older than 30 days, check every 6 hours
-	logx.Go("app_log.auto_purge", func() {
-		ticker := time.NewTicker(6 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				cutoff := time.Now().AddDate(0, 0, -30).UTC().Format("2006-01-02 15:04:05")
-				deleted, err := s.repo.DeleteBefore(ctx, cutoff)
-				if err != nil {
-					appLogger.Error("auto-purge failed", "err", pkg.ErrText(err))
-				} else if deleted > 0 {
-					appLogger.Info("auto-purge deleted old logs", "count", deleted, "max_age_days", 30)
-				}
+// droppedWatchdogLoop periodically surfaces how many Log() calls were
+// discarded because the buffer was full since the last report, so overload
+// becomes visible (a WARN in the log / Sentry breadcrumb) instead of
+// silently losing diagnostic data.
+func (s *appLogService) droppedWatchdogLoop(ctx context.Context) {
+	ticker := time.NewTicker(droppedReportInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if n := s.dropped.Swap(0); n > 0 {
+				slog.Warn("app_log dropped entries", "count", n)
 			}
 		}
-	})
+	}
+}
+
+// autoPurgeLoop deletes logs older than 30 days, checking every 6 hours.
+func (s *appLogService) autoPurgeLoop(ctx context.Context) {
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().AddDate(0, 0, -30).UTC().Format("2006-01-02 15:04:05")
+			deleted, err := s.repo.DeleteBefore(ctx, cutoff)
+			if err != nil {
+				appLogger.Error("auto-purge failed", "err", pkg.ErrText(err))
+			} else if deleted > 0 {
+				appLogger.Info("auto-purge deleted old logs", "count", deleted, "max_age_days", 30)
+			}
+		}
+	}
 }
 
 // Stop cancels background goroutines and drains any buffered log entries.

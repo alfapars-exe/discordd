@@ -287,8 +287,8 @@ func (r *sqliteLiveKitRepo) ListAllInstances(ctx context.Context) ([]models.Live
 
 // MigrateServers moves all servers from one instance to another within a transaction.
 func (r *sqliteLiveKitRepo) MigrateServers(ctx context.Context, fromInstanceID, toInstanceID string) (int64, error) {
-	sqlDB, ok := r.db.(*sql.DB)
-	if !ok {
+	sqlDB := database.RawDB(r.db)
+	if sqlDB == nil {
 		return 0, fmt.Errorf("MigrateServers requires *sql.DB to start transaction")
 	}
 	tx, err := sqlDB.BeginTx(ctx, nil)
@@ -341,8 +341,8 @@ func (r *sqliteLiveKitRepo) MigrateServers(ctx context.Context, fromInstanceID, 
 
 // MigrateOneServer moves a single server to a different LiveKit instance within a transaction.
 func (r *sqliteLiveKitRepo) MigrateOneServer(ctx context.Context, serverID, newInstanceID string) error {
-	sqlDB, ok := r.db.(*sql.DB)
-	if !ok {
+	sqlDB := database.RawDB(r.db)
+	if sqlDB == nil {
 		return fmt.Errorf("MigrateOneServer requires *sql.DB to start transaction")
 	}
 	tx, err := sqlDB.BeginTx(ctx, nil)

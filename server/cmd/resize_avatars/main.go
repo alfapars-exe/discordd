@@ -39,6 +39,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 
@@ -71,102 +72,126 @@ func main() {
 		savedBytes                           int64
 	}
 
-	err := filepath.WalkDir(*dir, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			return nil
-		}
-		stats.seen++
-		name := d.Name()
-		if !avatarSuffixRe.MatchString(name) {
-			stats.skipped++
-			return nil
-		}
-
-		origInfo, err := os.Stat(path)
+	// os.Root scopes every filesystem call below to *dir: a symlink inside
+	// the tree cannot be followed to a target outside it, closing the
+	// TOCTOU window a plain path string leaves open between the WalkDir
+	// callback observing a name and this function later operating on it
+	// (gosec G122). Paths from here on are root-relative and always
+	// "/"-separated (io/fs's contract), so path.Dir/path.Join are used
+	// instead of their filepath counterparts.
+	//
+	// The open+walk is wrapped in its own function so `defer root.Close()`
+	// resolves on a normal return, before the log.Fatalf below — Fatalf
+	// calls os.Exit, which would otherwise skip a defer sitting in the same
+	// function scope and leak the root's open file descriptor.
+	walkErr := func() error {
+		root, err := os.OpenRoot(*dir)
 		if err != nil {
-			log.Printf("[resize] stat %s: %v", name, err)
-			stats.errors++
-			return nil
+			return fmt.Errorf("open dir %s: %w", *dir, err)
 		}
-		origSize := origInfo.Size()
+		defer func() {
+			if cerr := root.Close(); cerr != nil {
+				log.Printf("[resize] close %s: %v", *dir, cerr)
+			}
+		}()
 
-		// We don't want to load gigantic attachments through the image
-		// decoder. Avatars are capped at 8 MB by the upload handler;
-		// anything materially larger is almost certainly a different
-		// kind of file and worth skipping.
-		if origSize > 16<<20 {
-			stats.skipped++
-			return nil
-		}
+		return fs.WalkDir(root.FS(), ".", func(relPath string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
+			}
+			stats.seen++
+			name := d.Name()
+			if !avatarSuffixRe.MatchString(name) {
+				stats.skipped++
+				return nil
+			}
 
-		in, err := os.Open(path) // #nosec G304 — path from a controlled WalkDir under flag-provided dir
-		if err != nil {
-			log.Printf("[resize] open %s: %v", name, err)
-			stats.errors++
-			return nil
-		}
-		resized, ext, err := handlers.ResizeAvatarBytes(in)
-		in.Close()
-		if err != nil {
-			log.Printf("[resize] resize %s: %v", name, err)
-			stats.errors++
-			return nil
-		}
-
-		// Skip writes that would not save anything (and would risk a
-		// pointless format flip on tiny files).
-		newSize := int64(len(resized))
-		if newSize >= origSize {
-			stats.kept++
-			return nil
-		}
-
-		newName := handlers.SwapExtension(name, ext)
-		newPath := filepath.Join(filepath.Dir(path), newName)
-
-		if *dryRun {
-			log.Printf("[resize] DRY %s: %d → %d bytes (-%d)", name, origSize, newSize, origSize-newSize)
-			stats.resized++
-			stats.savedBytes += origSize - newSize
-			return nil
-		}
-
-		if !*inPlace {
-			if err := os.Rename(path, path+".bak"); err != nil {
-				log.Printf("[resize] backup %s: %v", name, err)
+			origInfo, err := root.Stat(relPath)
+			if err != nil {
+				log.Printf("[resize] stat %s: %v", name, err)
 				stats.errors++
 				return nil
 			}
-		}
+			origSize := origInfo.Size()
 
-		if err := os.WriteFile(newPath, resized, 0o600); err != nil {
-			log.Printf("[resize] write %s: %v", newName, err)
-			stats.errors++
-			return nil
-		}
-
-		// If the extension changed, keep the original URL resolvable by
-		// also writing a copy under the original filename. We can't rely
-		// on symlinks (HF Spaces' /data mount is on a filesystem that
-		// may or may not allow them depending on the backing store), so
-		// duplicate the bytes; the cost is a single small avatar's worth.
-		if newPath != path {
-			if err := os.WriteFile(path, resized, 0o600); err != nil {
-				log.Printf("[resize] alias %s -> %s: %v", name, newName, err)
-				// The new file was written; the alias is best-effort.
+			// We don't want to load gigantic attachments through the image
+			// decoder. Avatars are capped at 8 MB by the upload handler;
+			// anything materially larger is almost certainly a different
+			// kind of file and worth skipping.
+			if origSize > 16<<20 {
+				stats.skipped++
+				return nil
 			}
-		}
 
-		log.Printf("[resize] %s: %d → %d bytes (-%d) %s", name, origSize, newSize, origSize-newSize, deltaNote(name, newName))
-		stats.resized++
-		stats.savedBytes += origSize - newSize
-		return nil
-	})
-	if err != nil {
-		log.Fatalf("[resize] walk error: %v", err)
+			in, err := root.Open(relPath)
+			if err != nil {
+				log.Printf("[resize] open %s: %v", name, err)
+				stats.errors++
+				return nil
+			}
+			resized, ext, err := handlers.ResizeAvatarBytes(in)
+			in.Close()
+			if err != nil {
+				log.Printf("[resize] resize %s: %v", name, err)
+				stats.errors++
+				return nil
+			}
+
+			// Skip writes that would not save anything (and would risk a
+			// pointless format flip on tiny files).
+			newSize := int64(len(resized))
+			if newSize >= origSize {
+				stats.kept++
+				return nil
+			}
+
+			newName := handlers.SwapExtension(name, ext)
+			newRelPath := path.Join(path.Dir(relPath), newName)
+
+			if *dryRun {
+				log.Printf("[resize] DRY %s: %d → %d bytes (-%d)", name, origSize, newSize, origSize-newSize)
+				stats.resized++
+				stats.savedBytes += origSize - newSize
+				return nil
+			}
+
+			if !*inPlace {
+				if err := root.Rename(relPath, relPath+".bak"); err != nil {
+					log.Printf("[resize] backup %s: %v", name, err)
+					stats.errors++
+					return nil
+				}
+			}
+
+			if err := root.WriteFile(newRelPath, resized, 0o600); err != nil {
+				log.Printf("[resize] write %s: %v", newName, err)
+				stats.errors++
+				return nil
+			}
+
+			// If the extension changed, keep the original URL resolvable by
+			// also writing a copy under the original filename. We can't rely
+			// on symlinks (HF Spaces' /data mount is on a filesystem that
+			// may or may not allow them depending on the backing store), so
+			// duplicate the bytes; the cost is a single small avatar's worth.
+			if newRelPath != relPath {
+				if err := root.WriteFile(relPath, resized, 0o600); err != nil {
+					log.Printf("[resize] alias %s -> %s: %v", name, newName, err)
+					// The new file was written; the alias is best-effort.
+				}
+			}
+
+			log.Printf("[resize] %s: %d → %d bytes (-%d) %s", name, origSize, newSize, origSize-newSize, deltaNote(name, newName))
+			stats.resized++
+			stats.savedBytes += origSize - newSize
+			return nil
+		})
+	}()
+	if walkErr != nil {
+		log.Fatalf("[resize] walk error: %v", walkErr)
 	}
 
 	log.Printf("[resize] done — seen=%d resized=%d kept=%d skipped=%d errors=%d saved=%s",

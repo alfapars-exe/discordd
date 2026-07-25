@@ -115,8 +115,8 @@ func (r *sqliteCategoryRepo) Delete(ctx context.Context, id string) error {
 
 // UpdatePositions atomically updates positions for multiple categories.
 func (r *sqliteCategoryRepo) UpdatePositions(ctx context.Context, items []models.PositionUpdate) error {
-	sqlDB, ok := r.db.(*sql.DB)
-	if !ok {
+	sqlDB := database.RawDB(r.db)
+	if sqlDB == nil {
 		return fmt.Errorf("UpdatePositions requires *sql.DB to start transaction")
 	}
 	tx, err := sqlDB.BeginTx(ctx, nil)

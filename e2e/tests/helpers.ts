@@ -218,7 +218,9 @@ export async function createServer(page: Page, name: string): Promise<void> {
   await page.getByRole("button", { name: /^Create$/ }).click();
 
   // Toast confirms the create round-trip landed before we look for channels.
-  await expect(page.getByRole("alert").filter({ hasText: /Server created successfully/i })).toBeVisible({
+  // role is "status", not "alert": Toast.tsx reserves the assertive "alert"
+  // role for error/warning toasts and announces success politely via "status".
+  await expect(page.getByRole("status").filter({ hasText: /Server created successfully/i })).toBeVisible({
     timeout: 15_000,
   });
 }

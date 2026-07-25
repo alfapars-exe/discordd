@@ -51,7 +51,11 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 		return true
 	}
 
-	title := html.EscapeString(preview.ServerName)
+	// Escaped inline at each Fprintf sink below, not once here and reused —
+	// gosec's G705 (XSS) taint tracker only recognises html.EscapeString as a
+	// sanitizer when it wraps the argument at the point of use, not when a
+	// pre-escaped variable is read back several lines later.
+	rawTitle := preview.ServerName
 	description := fmt.Sprintf("%d members", preview.MemberCount)
 
 	var imageURL string
@@ -71,6 +75,11 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// #nosec G705 -- every interpolated value below is wrapped in html.EscapeString
+	// (escapes <, >, &, ', ") at its point of use; description is a pure "%d
+	// members" integer format with no injectable content. gosec's G705 taint
+	// tracker does not appear to recognise html.EscapeString as a sanitizer,
+	// but it escapes the exact character set html/template would here.
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
@@ -80,18 +89,20 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 <meta property="og:title" content="%s">
 <meta property="og:description" content="%s">
 <meta property="og:url" content="%s">`,
-		title, description, html.EscapeString(inviteURL))
+		html.EscapeString(rawTitle), description, html.EscapeString(inviteURL))
 
 	if imageURL != "" {
 		fmt.Fprintf(w, `
 <meta property="og:image" content="%s">`, html.EscapeString(imageURL))
 	}
 
+	// #nosec G705 -- same reasoning as the DOCTYPE Fprintf above: rawTitle is
+	// escaped inline, description is a pure integer format.
 	fmt.Fprintf(w, `
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="%s">
 <meta name="twitter:description" content="%s">`,
-		title, description)
+		html.EscapeString(rawTitle), description)
 
 	if imageURL != "" {
 		fmt.Fprintf(w, `

@@ -13,19 +13,16 @@ import (
 
 type sqliteUserRepo struct {
 	db database.TxQuerier
-	// rawDB is set only when this repo was constructed directly on the
-	// top-level pool (init_repos.go). nil when constructed inside another
-	// transaction (db is already a *sql.Tx) — CreateWithSession requires
-	// rawDB because it opens its own transaction via database.WithTx.
+	// rawDB is the underlying *sql.DB reached by unwrapping db (see
+	// database.RawDB) — nil when constructed inside another transaction (db
+	// is already a *sql.Tx, which has nothing further to unwrap).
+	// CreateWithSession requires it because it opens its own transaction via
+	// database.WithTx.
 	rawDB *sql.DB
 }
 
 func NewSQLiteUserRepo(db database.TxQuerier) UserRepository {
-	r := &sqliteUserRepo{db: db}
-	if raw, ok := db.(*sql.DB); ok {
-		r.rawDB = raw
-	}
-	return r
+	return &sqliteUserRepo{db: db, rawDB: database.RawDB(db)}
 }
 
 func (r *sqliteUserRepo) Create(ctx context.Context, user *models.User) error {

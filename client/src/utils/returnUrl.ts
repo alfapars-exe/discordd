@@ -31,7 +31,7 @@ const INVITE_RETURN_URL_PATTERN = /^\/invite\/([a-f0-9]{16})$/;
  * such encoding to one question: does this land on us or somewhere else?
  */
 export function sanitizeReturnUrl(raw: string | null | undefined): string {
-  if (!raw || !raw.startsWith("/")) {
+  if (!raw?.startsWith("/")) {
     return DEFAULT_RETURN_PATH;
   }
 

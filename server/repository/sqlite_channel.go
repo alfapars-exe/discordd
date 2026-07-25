@@ -140,8 +140,8 @@ func (r *sqliteChannelRepo) Delete(ctx context.Context, id string) error {
 // UpdatePositions atomically updates positions for multiple channels.
 // If CategoryID is set, the channel's category is also updated (cross-category drag-and-drop).
 func (r *sqliteChannelRepo) UpdatePositions(ctx context.Context, items []models.PositionUpdate) error {
-	sqlDB, ok := r.db.(*sql.DB)
-	if !ok {
+	sqlDB := database.RawDB(r.db)
+	if sqlDB == nil {
 		return fmt.Errorf("UpdatePositions requires *sql.DB to start transaction")
 	}
 	tx, err := sqlDB.BeginTx(ctx, nil)

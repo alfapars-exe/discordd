@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -96,10 +97,13 @@ func (h *GifHandler) Search(w http.ResponseWriter, r *http.Request) {
 	perPage := clampInt(r.URL.Query().Get("per_page"), 24, 8, 50)
 	page := clampInt(r.URL.Query().Get("page"), 1, 1, 100)
 
-	url := fmt.Sprintf("%s/api/v1/%s/gifs/search?q=%s&per_page=%d&page=%d&customer_id=%s",
-		klipyBaseURL, h.klipyAPIKey, query, perPage, page, user.ID)
+	// query is free-text user input; it must be percent-encoded before
+	// joining the query string, or a value containing "&"/"#"/"=" could
+	// inject extra Klipy API parameters (query-param injection).
+	reqURL := fmt.Sprintf("%s/api/v1/%s/gifs/search?q=%s&per_page=%d&page=%d&customer_id=%s",
+		klipyBaseURL, h.klipyAPIKey, url.QueryEscape(query), perPage, page, user.ID)
 
-	results, hasNext, err := fetchKlipyResults(url)
+	results, hasNext, err := fetchKlipyResults(reqURL)
 	if err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadGateway, "failed to search GIFs")
 		return
@@ -168,7 +172,7 @@ func fetchKlipyResults(url string) ([]GifResult, bool, error) {
 		return nil, false, errKlipyBadURL
 	}
 
-	resp, err := klipyHTTPClient.Get(url) // #nosec G107 — URL validated above
+	resp, err := klipyHTTPClient.Get(url) // #nosec G107,G704 -- host is hard-guarded above (strings.HasPrefix against the klipyBaseURL constant); no request-derived data can reach the scheme or host
 	if err != nil {
 		return nil, false, fmt.Errorf("klipy request failed: %w", err)
 	}

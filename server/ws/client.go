@@ -76,28 +76,7 @@ func (c *Client) ReadPump() {
 		_, rawMessage, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				// Branch on close code: 1006 (abnormal — no graceful close
-				// frame, usually a crashed renderer or a yanked cable),
-				// 1011 (server internal error reflected back), and 1012
-				// (service restart) are genuine anomalies and stay at WARN.
-				// Everything else (mobile background, OS sleep wake-up,
-				// router NAT timeout) is logged at INFO so the WARN feed
-				// reflects things worth investigating instead of normal
-				// session churn.
-				level := models.LogLevelInfo
-				if websocket.IsCloseError(err,
-					websocket.CloseAbnormalClosure,
-					websocket.CloseInternalServerErr,
-					websocket.CloseServiceRestart) {
-					level = models.LogLevelWarn
-				}
-				if level == models.LogLevelWarn {
-					dispatchLogger.Warn("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
-				} else {
-					dispatchLogger.Info("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
-				}
-				c.hub.logEvent(level, models.LogCategoryWS, &c.userID,
-					"WebSocket unexpected close", map[string]string{"error": err.Error()})
+				c.logUnexpectedClose(err)
 			}
 			return
 		}
@@ -110,6 +89,32 @@ func (c *Client) ReadPump() {
 
 		c.handleEvent(event)
 	}
+}
+
+// logUnexpectedClose classifies and logs a WebSocket close that ReadPump
+// determined wasn't a graceful going-away/normal-closure. Split out of
+// ReadPump to keep its branching shallow — behavior is unchanged.
+func (c *Client) logUnexpectedClose(err error) {
+	// Branch on close code: 1006 (abnormal — no graceful close frame,
+	// usually a crashed renderer or a yanked cable), 1011 (server internal
+	// error reflected back), and 1012 (service restart) are genuine
+	// anomalies and stay at WARN. Everything else (mobile background, OS
+	// sleep wake-up, router NAT timeout) is logged at INFO so the WARN feed
+	// reflects things worth investigating instead of normal session churn.
+	level := models.LogLevelInfo
+	if websocket.IsCloseError(err,
+		websocket.CloseAbnormalClosure,
+		websocket.CloseInternalServerErr,
+		websocket.CloseServiceRestart) {
+		level = models.LogLevelWarn
+	}
+	if level == models.LogLevelWarn {
+		dispatchLogger.Warn("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
+	} else {
+		dispatchLogger.Info("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
+	}
+	c.hub.logEvent(level, models.LogCategoryWS, &c.userID,
+		"WebSocket unexpected close", map[string]string{"error": err.Error()})
 }
 
 func (c *Client) sendEvent(event Event) {
