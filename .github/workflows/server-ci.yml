@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
@@ -94,7 +94,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
@@ -175,7 +175,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
