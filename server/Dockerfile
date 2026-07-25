@@ -4,9 +4,9 @@
 # build, multi-arch, CGO + libsql). This file is the lighter local-dev /
 # self-host path: pure-Go SQLite only, no libsql, no music-bot deps.
 #
-# Why 1.25-bookworm not 1.25-alpine?
-# go.mod requires `go 1.25.0`. Alpine's Go toolchain is fine, but matching
-# the root Dockerfile (debian:bookworm-slim runtime + golang:1.25-bookworm
+# Why 1.26-bookworm not 1.26-alpine?
+# go.mod requires `go 1.26`. Alpine's Go toolchain is fine, but matching
+# the root Dockerfile (debian:bookworm-slim runtime + golang:1.26.5-bookworm
 # builder) keeps the two images on the same glibc baseline so behaviour
 # debugging in one transfers to the other.
 #
@@ -24,7 +24,7 @@
 # could not be built at all until that tag was corrected.
 
 # ─── Builder Stage ───
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.26.5-bookworm AS builder
 
 WORKDIR /build
 COPY go.mod go.sum ./
