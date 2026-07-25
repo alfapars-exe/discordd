@@ -71,7 +71,7 @@ export default defineConfig(({ command }) => ({
   build: {
     // Electron (Chromium) and Capacitor (WKWebView/Android WebView) both support modern JS
     target: "chrome120",
-    minify: "esbuild",
+    minify: true,
     sourcemap: false,
     rollupOptions: {
       output: {
