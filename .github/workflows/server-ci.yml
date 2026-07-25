@@ -81,7 +81,7 @@ jobs:
         # v7 is required for golangci-lint v2.x version strings; v6 only
         # accepts v1 pins (its `latest` silently installed v2 anyway, which
         # is how the config-schema breakage slipped in).
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           working-directory: server
