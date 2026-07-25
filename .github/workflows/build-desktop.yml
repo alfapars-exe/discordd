@@ -43,7 +43,7 @@ jobs:
           node-version: 22
 
       # node-gyp requires distutils (removed in Python 3.12+)
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
