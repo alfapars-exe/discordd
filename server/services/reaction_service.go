@@ -102,7 +102,7 @@ func (s *reactionService) ToggleReaction(ctx context.Context, messageID, userID,
 
 	allowed := make([]string, 0, len(onlineUsers))
 	for _, uid := range onlineUsers {
-		if perms[uid].Has(models.PermViewChannel) && perms[uid].Has(models.PermReadMessages) {
+		if models.PermCanReadChannel(perms[uid]) {
 			allowed = append(allowed, uid)
 		}
 	}

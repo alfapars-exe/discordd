@@ -57,7 +57,7 @@ func (s *readStateService) GetUnreadCounts(ctx context.Context, userID, serverID
 		if err != nil {
 			continue
 		}
-		if perms.Has(models.PermViewChannel) && perms.Has(models.PermReadMessages) {
+		if models.PermCanReadChannel(perms) {
 			filtered = append(filtered, info)
 		}
 	}

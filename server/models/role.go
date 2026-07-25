@@ -42,6 +42,16 @@ func (p Permission) Has(perm Permission) bool {
 	return p&perm != 0
 }
 
+// PermCanReadChannel reports whether p grants both viewing a channel and
+// reading its messages — the two-bit gate every channel read path checks.
+// Returns a bool, not an error, on purpose: the negative guards and the bulk
+// filters that call this phrase their failure differently and the client's
+// i18n classification keys off the exact server text, so each call site keeps
+// its own message. Inherits Has's admin bypass.
+func PermCanReadChannel(p Permission) bool {
+	return p.Has(PermViewChannel) && p.Has(PermReadMessages)
+}
+
 // OwnerRoleID is kept for backward compatibility with seeded data.
 // New servers identify the owner role via the IsOwner field.
 const OwnerRoleID = "owner"

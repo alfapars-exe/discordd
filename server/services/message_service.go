@@ -99,7 +99,7 @@ func (s *messageService) GetByChannelID(ctx context.Context, serverID, channelID
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermReadMessages) {
+	if !models.PermCanReadChannel(channelPerms) {
 		return nil, fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
@@ -348,7 +348,7 @@ func (s *messageService) allowedViewers(channelID string) []string {
 
 	allowed := make([]string, 0, len(onlineUsers))
 	for _, userID := range onlineUsers {
-		if perms[userID].Has(models.PermViewChannel) && perms[userID].Has(models.PermReadMessages) {
+		if models.PermCanReadChannel(perms[userID]) {
 			allowed = append(allowed, userID)
 		}
 	}
@@ -386,7 +386,7 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermReadMessages) {
+	if !models.PermCanReadChannel(channelPerms) {
 		return nil, fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
@@ -529,12 +529,5 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 }
 
 func (s *messageService) validateChannelScope(ctx context.Context, serverID, channelID string) (*models.Channel, error) {
-	channel, err := s.channelRepo.GetByID(ctx, channelID)
-	if err != nil {
-		return nil, err
-	}
-	if channel.ServerID != serverID {
-		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
-	}
-	return channel, nil
+	return resolveChannelInServer(ctx, s.channelRepo, serverID, channelID)
 }

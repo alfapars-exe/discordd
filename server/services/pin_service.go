@@ -70,7 +70,7 @@ func (s *pinService) allowedViewers(channelID string) []string {
 
 	allowed := make([]string, 0, len(onlineUsers))
 	for _, uid := range onlineUsers {
-		if perms[uid].Has(models.PermViewChannel) && perms[uid].Has(models.PermReadMessages) {
+		if models.PermCanReadChannel(perms[uid]) {
 			allowed = append(allowed, uid)
 		}
 	}
@@ -159,24 +159,13 @@ func (s *pinService) GetPinnedMessages(ctx context.Context, serverID, channelID,
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermReadMessages) {
+	if !models.PermCanReadChannel(channelPerms) {
 		return nil, fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
 	return s.pinRepo.GetByChannelID(ctx, channelID)
 }
 
-// validateChannelScope mirrors messageService.validateChannelScope: confirms the
-// channel referenced by the request actually belongs to the server in the URL,
-// so a caller cannot act on a channel in a server they don't have access to by
-// mismatching serverID/channelID.
 func (s *pinService) validateChannelScope(ctx context.Context, serverID, channelID string) (*models.Channel, error) {
-	channel, err := s.channelRepo.GetByID(ctx, channelID)
-	if err != nil {
-		return nil, err
-	}
-	if channel.ServerID != serverID {
-		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
-	}
-	return channel, nil
+	return resolveChannelInServer(ctx, s.channelRepo, serverID, channelID)
 }
