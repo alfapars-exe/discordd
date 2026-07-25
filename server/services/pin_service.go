@@ -17,9 +17,9 @@ var pinLogger = logx.Component("service.pin")
 const MaxPinsPerChannel = 50
 
 type PinService interface {
-	Pin(ctx context.Context, messageID string, channelID string, pinnedBy string) (*models.PinnedMessageWithDetails, error)
-	Unpin(ctx context.Context, messageID string, channelID string) error
-	GetPinnedMessages(ctx context.Context, channelID string) ([]models.PinnedMessageWithDetails, error)
+	Pin(ctx context.Context, serverID, messageID, channelID, pinnedBy string) (*models.PinnedMessageWithDetails, error)
+	Unpin(ctx context.Context, serverID, messageID, channelID string) error
+	GetPinnedMessages(ctx context.Context, serverID, channelID, userID string) ([]models.PinnedMessageWithDetails, error)
 }
 
 type pinService struct {
@@ -77,7 +77,11 @@ func (s *pinService) allowedViewers(channelID string) []string {
 	return allowed
 }
 
-func (s *pinService) Pin(ctx context.Context, messageID string, channelID string, pinnedBy string) (*models.PinnedMessageWithDetails, error) {
+func (s *pinService) Pin(ctx context.Context, serverID, messageID, channelID, pinnedBy string) (*models.PinnedMessageWithDetails, error) {
+	if _, err := s.validateChannelScope(ctx, serverID, channelID); err != nil {
+		return nil, err
+	}
+
 	message, err := s.messageRepo.GetByID(ctx, messageID)
 	if err != nil {
 		return nil, err
@@ -117,7 +121,11 @@ func (s *pinService) Pin(ctx context.Context, messageID string, channelID string
 	return result, nil
 }
 
-func (s *pinService) Unpin(ctx context.Context, messageID string, channelID string) error {
+func (s *pinService) Unpin(ctx context.Context, serverID, messageID, channelID string) error {
+	if _, err := s.validateChannelScope(ctx, serverID, channelID); err != nil {
+		return err
+	}
+
 	message, err := s.messageRepo.GetByID(ctx, messageID)
 	if err != nil {
 		return err
@@ -142,6 +150,33 @@ func (s *pinService) Unpin(ctx context.Context, messageID string, channelID stri
 	return nil
 }
 
-func (s *pinService) GetPinnedMessages(ctx context.Context, channelID string) ([]models.PinnedMessageWithDetails, error) {
+func (s *pinService) GetPinnedMessages(ctx context.Context, serverID, channelID, userID string) ([]models.PinnedMessageWithDetails, error) {
+	if _, err := s.validateChannelScope(ctx, serverID, channelID); err != nil {
+		return nil, err
+	}
+
+	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
+	}
+	if !channelPerms.Has(models.PermViewChannel) || !channelPerms.Has(models.PermReadMessages) {
+		return nil, fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
+	}
+
 	return s.pinRepo.GetByChannelID(ctx, channelID)
+}
+
+// validateChannelScope mirrors messageService.validateChannelScope: confirms the
+// channel referenced by the request actually belongs to the server in the URL,
+// so a caller cannot act on a channel in a server they don't have access to by
+// mismatching serverID/channelID.
+func (s *pinService) validateChannelScope(ctx context.Context, serverID, channelID string) (*models.Channel, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel.ServerID != serverID {
+		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+	}
+	return channel, nil
 }
