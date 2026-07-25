@@ -1,0 +1,4364 @@
+openapi: 3.1.0
+info:
+  title: HiChat API
+  version: "0.1.0"
+  description: |-
+    REST + WebSocket API for HiChat, a Discord-style chat platform (servers, channels,
+    DMs, voice/video via LiveKit, end-to-end-encrypted messaging, a music/soundboard
+    bot, and a read-only Bot Gateway).
+
+    ## Response envelope
+    Every JSON response — success or error — is wrapped in the same envelope
+    (`ApiEnvelope`, mirroring `pkg.APIResponse`):
+    `{"success": bool, "data": <payload, omitted on error>, "error": <message, omitted
+    on success>, "code": <machine-readable error code, omitted on success and on some
+    legacy message-only error paths>}`. Success responses set `success: true` and
+    populate `data` with an operation-specific payload; error responses set
+    `success: false`, `error` (safe to display for 4xx, generic "internal server error"
+    text for 5xx — see `pkg.Error`), and `code` (one of the `ErrorCode` enum values).
+
+    ## Permission model
+    Server-scoped authorization (`models.Permission` in `server/models/role.go`) is a
+    20-bit bitfield stored per `Role`; a member's effective permission mask is the
+    bitwise OR of every role they hold. Endpoints gated on one specific bit at the
+    routing-middleware layer (`authServerPerm` in `init_routes.go`) carry the
+    `x-required-permission` extension (bit name + decimal value). `PermAdmin` (512)
+    short-circuits every check in `Permission.Has` — a role holding `PermAdmin` passes
+    every `x-required-permission` gate regardless of its other bits.
+
+    A few endpoints perform the real permission decision INSIDE the handler or service
+    layer instead of (or in addition to) the routing middleware — e.g. the music bot
+    (`PermSpeak`/`PermManageChannels`), the audit log (`PermAdmin` OR any moderation
+    bit), and per-server nicknames (`PermManageNicknames`, waived for renaming
+    yourself). Those operations carry `x-permission-note` describing the real,
+    handler-internal check; `x-required-permission` is deliberately omitted or reflects
+    only what the outer middleware chain enforces (typically just server membership) —
+    never conflate the two.
+
+    Platform-wide administration (`authAdmin` in `init_routes.go`) is a SEPARATE
+    concept from the per-server `Permission` bitfield: it gates on the boolean
+    `models.User.IsPlatformAdmin`, not on any bit above. Those operations are marked
+    with `x-platform-admin: true` instead of `x-required-permission`.
+
+    ## Auth
+    Two bearer credential families share the same `Authorization: Bearer <token>`
+    header and the same `AuthMiddleware.Require` gate: human session JWTs
+    (`bearerAuth`) and bot automation tokens prefixed `hb_` (`botAuth`,
+    `models.BotTokenPrefix`) — the middleware branches on that prefix before falling
+    back to JWT validation, so both credential types are accepted on every route that
+    lists the default `bearerAuth` + `botAuth` security requirement. `GET
+    /api/uploads/*` additionally accepts a dedicated HttpOnly `hichat_media` cookie for
+    `<img>`/`<video>` browser contexts that cannot set a header. The WebSocket
+    endpoints use two more mechanisms entirely (see their operation descriptions).
+
+    ## Stub phase
+    This document enumerates every route (path, method, tags, auth/permission
+    metadata, path/query parameters) against a generic success/error envelope;
+    request/response `data` payloads are intentionally left as
+    `TODO: detailed schema` placeholders (see `StubData`) — full per-endpoint body
+    schemas are the next authoring phase, not this one.
+servers:
+  - url: https://infinayazilim-discord.hf.space
+    description: Production (HuggingFace Space, single-container deploy)
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: Auth
+    description: Registration, login, session refresh/logout, password reset, WS ticket issuance.
+  - name: Users
+    description: The caller's own profile, avatar, wallpaper, preferences, and onboarding-prompt state.
+  - name: Servers
+    description: Server (guild) lifecycle, membership, server-level mute, icon, and LiveKit settings.
+  - name: DMs
+    description: Direct-message channel discovery, creation, and request accept/decline.
+  - name: DMSettings
+    description: Per-DM-channel preferences — hide, pin-to-top, mute, E2EE toggle.
+  - name: Messages
+    description: Message CRUD and search, both server-channel and DM scoped.
+  - name: Reactions
+    description: Emoji reaction toggle on a message, server-channel or DM scoped.
+  - name: Pins
+    description: Pin/unpin a message and list a channel's or DM's pinned messages.
+  - name: ReadState
+    description: Per-channel read-cursor tracking (mark read, mark all read, unread summary).
+  - name: Channels
+    description: Server channel CRUD, reordering, and channel-level mute.
+  - name: Categories
+    description: Server channel-category CRUD and reordering.
+  - name: Members
+    description: Server membership roster, role assignment, kick, ban, and per-member timeout.
+  - name: Roles
+    description: Server role CRUD, reordering, and the permission bitfield carried per role.
+  - name: Bans
+    description: Server ban roster (list, lift).
+  - name: Timeouts
+    description: Discord-style temporary mute/timeout, applied and lifted per member.
+  - name: Nicknames
+    description: Per-server member nickname, self-service or moderator-applied.
+  - name: ChannelPermissions
+    description: Per-channel, per-role permission overrides layered on top of the server-wide role bitfield.
+  - name: Invites
+    description: Server invite-code lifecycle and the public invite preview.
+  - name: E2EE-Devices
+    description: End-to-end-encryption device registration, one-time prekey upload, and public key-material lookup.
+  - name: E2EE-KeyBackup
+    description: Server-held, client-encrypted backup of a user's E2EE identity/session keys.
+  - name: E2EE-GroupSessions
+    description: Sender-key group-session distribution for E2EE server channels.
+  - name: Bots
+    description: Owner-facing bot-account management — create, list, revoke automation credentials.
+  - name: Voice
+    description: LiveKit voice/screen-share token issuance, voice-state snapshot, and the LiveKit webhook receiver.
+  - name: Music
+    description: Per-channel YouTube-to-LiveKit music bot (play/skip/pause/resume/stop/state).
+  - name: Soundboard
+    description: Per-server soundboard clip CRUD and playback.
+  - name: Friends
+    description: Friend requests and the friends roster.
+  - name: Blocks
+    description: User-level blocking (list, block, unblock).
+  - name: Badges
+    description: Platform badge catalog CRUD and per-user badge assignment.
+  - name: GIFs
+    description: Klipy GIF-search proxy (trending + query search).
+  - name: Feedback
+    description: User support tickets, including the caller's own thread and replies.
+  - name: Reports
+    description: User-submitted abuse reports on other users.
+  - name: Admin
+    description: Platform-admin-only endpoints — LiveKit fleet, servers, reports, feedback, users, app logs.
+  - name: Stats
+    description: Public, unauthenticated platform statistics.
+  - name: Uploads
+    description: Attachment/avatar/icon byte serving, with mixed public/access-controlled categories.
+  - name: WebSocket
+    description: Realtime gateway upgrades — the human hub (`/ws`) and the read-only bot gateway.
+  - name: Diagnostics
+    description: Client-side diagnostic log ingestion (crash dumps, screen-share lifecycle) and admin-emailed diagnostic bundles.
+  - name: System
+    description: Health/readiness probes, deploy-version polling, and static landing assets.
+  - name: Audit
+    description: >-
+      Server moderation history (audit log). NOT part of the tag catalog requested for
+      this pass — added because `GET /api/servers/{serverId}/audit` has no closer fit
+      among the given tags; flagged here for visibility rather than silently folded
+      into `Admin` or `Members`.
+x-permissions:
+  description: >-
+    models.Permission (server/models/role.go) is a bitwise-OR'd int64 stored per Role;
+    a member's effective mask is the OR of every role they hold. PermAdmin
+    short-circuits Permission.Has — a role carrying it passes every check below
+    regardless of its other bits. Per-channel overrides (channel_permissions table,
+    see the ChannelPermissions tag) can further adjust the effective mask for one
+    specific channel; that layering is not represented in this flat bit catalog.
+  bits:
+    PermManageChannels: 1
+    PermManageRoles: 2
+    PermKickMembers: 4
+    PermBanMembers: 8
+    PermManageMessages: 16
+    PermSendMessages: 32
+    PermConnectVoice: 64
+    PermSpeak: 128
+    PermStream: 256
+    PermAdmin: 512
+    PermManageInvites: 1024
+    PermReadMessages: 2048
+    PermViewChannel: 4096
+    PermMoveMembers: 8192
+    PermMuteMembers: 16384
+    PermDeafenMembers: 32768
+    PermUseSoundboard: 65536
+    PermManageSoundboard: 131072
+    PermTimeoutMembers: 262144
+    PermManageNicknames: 524288
+  PermAll: 1048575
+  PermAllNote: >-
+    Sum of every bit above — (1 << 20) - 1. Distinct from the boolean
+    models.User.IsPlatformAdmin used by authAdmin routes (see x-platform-admin),
+    which is a platform-wide flag, not a bit in this server-scoped field.
+security:
+  - bearerAuth: []
+  - botAuth: []
+paths:
+  # ── Auth ──
+  /api/auth/register:
+    post:
+      operationId: authRegister
+      summary: Create a new user account.
+      description: >-
+        IP rate limited. Sets the hichat_refresh (HttpOnly) and hichat_media
+        cookies on success in addition to returning access_token in the
+        body — see AuthTokens.
+      tags: [Auth]
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/RegisterRequestBody' }
+      responses:
+        '201': { $ref: '#/components/responses/AuthTokensResponse' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/auth/login:
+    post:
+      operationId: authLogin
+      summary: Exchange credentials for a session (access + refresh tokens).
+      description: >-
+        IP rate limited (resets on success). Sets the hichat_refresh
+        (HttpOnly) and hichat_media cookies in addition to returning
+        access_token in the body — see AuthTokens.
+      tags: [Auth]
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/LoginRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/AuthTokensResponse' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/auth/refresh:
+    post:
+      operationId: authRefresh
+      summary: Exchange a refresh token for a new access token.
+      description: >-
+        Reads the refresh token from the hichat_refresh HttpOnly cookie
+        first, falling back to refresh_token in the body — an empty body is
+        valid when the cookie is present. Rotates the refresh token
+        server-side (old one invalidated) and re-sets both cookies. Reusing
+        an already-rotated token invalidates every session for that user
+        (leak-detection heuristic).
+      tags: [Auth]
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/RefreshTokenRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/AuthTokensResponse' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/auth/logout:
+    post:
+      operationId: authLogout
+      summary: Invalidate the caller's current session.
+      description: >-
+        Idempotent — reads the refresh token from the cookie or body (both
+        optional; a missing token still returns 200), invalidates it
+        server-side if present, and always clears both the hichat_refresh
+        and hichat_media cookies. Response message is literally
+        "logged out".
+      tags: [Auth]
+      requestBody: { $ref: '#/components/requestBodies/RefreshTokenRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/auth/forgot-password:
+    post:
+      operationId: authForgotPassword
+      summary: Request a password-reset email.
+      description: >-
+        IP rate limited, plus a 90s per-email server-side cooldown. Always
+        returns the same generic message regardless of whether the email
+        exists or is cooling down (enumeration protection) — response
+        message is literally "if the email exists, a reset link has been
+        sent".
+      tags: [Auth]
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/ForgotPasswordRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/auth/reset-password:
+    post:
+      operationId: authResetPassword
+      summary: Complete a password reset using the emailed token.
+      description: >-
+        IP rate limited. Validates the token (SHA-256 hash lookup), updates
+        the password, and deletes the token (one-time use). Response
+        message is literally "password has been reset successfully".
+      tags: [Auth]
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/ResetPasswordRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/auth/ws-ticket:
+    post:
+      operationId: authWsTicket
+      summary: Mint a one-shot, ~30s-TTL ticket for the human WebSocket handshake.
+      description: >-
+        The resulting ticket is passed as `?ticket=<value>` on `GET /ws` — see the
+        WebSocket tag for the full handshake flow.
+      tags: [Auth, WebSocket]
+      responses:
+        '200': { $ref: '#/components/responses/WsTicketOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404':
+          description: WS ticket service not enabled on this server (falls back to the legacy ?token= WS path).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+
+  # ── Users ──
+  /api/users/me:
+    get:
+      operationId: usersMe
+      summary: Get the caller's own user record.
+      tags: [Users]
+      responses:
+        '200': { $ref: '#/components/responses/UserOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/profile:
+    patch:
+      operationId: usersUpdateProfile
+      summary: Update the caller's profile fields.
+      description: >-
+        Global endpoint (not server-scoped) — routed through MemberHandler
+        but has nothing to do with any one server's membership. Response is
+        a MemberWithRoles view with roles always empty (see the schema
+        description).
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/UpdateProfileRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MemberWithRolesOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/users/me/password:
+    post:
+      operationId: usersChangePassword
+      summary: Change the caller's password.
+      description: >-
+        Requires current_password even though the caller is already
+        authenticated — defense-in-depth against a stolen/XSS'd JWT.
+        Bumps token_version on success, invalidating every other
+        outstanding access token for this user. Response message is
+        literally "password changed".
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/ChangePasswordRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/email:
+    put:
+      operationId: usersChangeEmail
+      summary: Change the caller's email address.
+      description: >-
+        Requires the current password. An empty new_email removes the
+        caller's email (sets it to NULL) instead of being rejected.
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/ChangeEmailRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/ChangeEmailOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/users/me/avatar:
+    post:
+      operationId: usersUploadAvatar
+      summary: Upload the caller's avatar image.
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/wallpaper:
+    post:
+      operationId: usersUploadWallpaper
+      summary: Upload the caller's chat wallpaper image.
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    delete:
+      operationId: usersDeleteWallpaper
+      summary: Remove the caller's chat wallpaper.
+      tags: [Users]
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/preferences:
+    get:
+      operationId: usersGetPreferences
+      summary: Get the caller's client preferences.
+      description: >-
+        Never 404s — a user with no saved row gets back an empty
+        `data: {}` object rather than an error.
+      tags: [Users]
+      responses:
+        '200': { $ref: '#/components/responses/UserPreferencesOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    patch:
+      operationId: usersUpdatePreferences
+      summary: Update the caller's client preferences.
+      description: Top-level-key merge only (not a deep/recursive merge) of the partial object into the existing preferences blob.
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/UpdatePreferencesRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/UserPreferencesOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/dismiss-download-prompt:
+    post:
+      operationId: usersDismissDownloadPrompt
+      summary: Mark the desktop-app download prompt as dismissed.
+      tags: [Users]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/dismiss-welcome:
+    post:
+      operationId: usersDismissWelcome
+      summary: Mark the first-run welcome flow as dismissed.
+      tags: [Users]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Servers (global) ──
+  /api/servers:
+    get:
+      operationId: serversList
+      summary: List servers the caller belongs to.
+      tags: [Servers]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: serversCreate
+      summary: Create a new server.
+      tags: [Servers]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/servers/join:
+    post:
+      operationId: serversJoin
+      summary: Join a server via invite code.
+      tags: [Servers]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/servers/reorder:
+    patch:
+      operationId: serversReorder
+      summary: Reorder the caller's server sidebar list.
+      tags: [Servers]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/servers/mutes:
+    get:
+      operationId: serversListMutes
+      summary: List servers the caller has muted.
+      tags: [Servers]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Uploads ──
+  /api/uploads/{path}:
+    get:
+      operationId: uploadsServe
+      summary: Serve an uploaded/generated file (attachment, avatar, icon, badge, soundboard clip, ...).
+      description: >-
+        Registered as the catch-all prefix `GET /api/uploads/` (Go 1.22 ServeMux
+        prefix match), not a literal single-segment route. Access control is
+        per-category and enforced inside the handler, not by routing middleware:
+        channel/DM attachments require either a Bearer session token or the
+        `hichat_media` cookie and are checked against the caller's channel/DM
+        access; avatars, server icons, badges, and soundboard clips are served
+        with no auth check at all so they keep rendering in unauthenticated
+        `<img>` contexts. Path traversal is rejected (path.Clean + SafeJoin).
+      tags: [Uploads]
+      security:
+        - {}
+        - bearerAuth: []
+        - mediaCookie: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+          description: Category-prefixed relative file path, e.g. `attachments/<id>/<file>`, `avatars/<file>`.
+      responses:
+        '200':
+          description: File bytes, Content-Type inferred from extension.
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── DMs ──
+  /api/dms/settings:
+    get:
+      operationId: dmsGetSettings
+      summary: Get the caller's global DM preferences.
+      tags: [DMSettings]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/dms:
+    get:
+      operationId: dmsList
+      summary: List the caller's DM channels.
+      tags: [DMs]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: dmsCreate
+      summary: Create or get the existing 1:1 DM channel with another user.
+      tags: [DMs]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/channels/{channelId}/hide:
+    post:
+      operationId: dmsHide
+      summary: Hide a DM channel from the caller's DM list.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: dmsUnhide
+      summary: Unhide a previously hidden DM channel.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/channels/{channelId}/pin-conversation:
+    post:
+      operationId: dmsPinConversation
+      summary: Pin a DM conversation to the top of the caller's DM list.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: dmsUnpinConversation
+      summary: Unpin a DM conversation.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/channels/{channelId}/mute:
+    post:
+      operationId: dmsMute
+      summary: Mute notifications for a DM channel.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: dmsUnmute
+      summary: Unmute a DM channel.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/channels/{channelId}/accept:
+    post:
+      operationId: dmsAcceptRequest
+      summary: Accept a pending DM request (first message from a non-friend).
+      tags: [DMs]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/channels/{channelId}/decline:
+    post:
+      operationId: dmsDeclineRequest
+      summary: Decline a pending DM request.
+      tags: [DMs]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/channels/{channelId}/e2ee:
+    patch:
+      operationId: dmsToggleE2ee
+      summary: Toggle end-to-end encryption for a DM channel.
+      tags: [DMSettings]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/{channelId}/messages:
+    get:
+      operationId: dmMessagesList
+      summary: List messages in a DM channel.
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+        - $ref: '#/components/parameters/BeforeParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: dmMessagesSend
+      summary: Send a message in a DM channel (JSON or multipart with attachment).
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/messages/{id}:
+    patch:
+      operationId: dmMessagesEdit
+      summary: Edit a DM message.
+      tags: [Messages]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: DM message ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: dmMessagesDelete
+      summary: Delete a DM message.
+      tags: [Messages]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: DM message ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/messages/{id}/reactions:
+    post:
+      operationId: dmMessagesToggleReaction
+      summary: Toggle an emoji reaction on a DM message.
+      tags: [Reactions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: DM message ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/messages/{id}/pin:
+    post:
+      operationId: dmMessagesPin
+      summary: Pin a DM message.
+      tags: [Pins]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: DM message ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: dmMessagesUnpin
+      summary: Unpin a DM message.
+      tags: [Pins]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: DM message ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/{channelId}/pinned:
+    get:
+      operationId: dmMessagesListPinned
+      summary: List a DM channel's pinned messages.
+      tags: [Pins]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/{channelId}/search:
+    get:
+      operationId: dmMessagesSearch
+      summary: Search messages within a DM channel.
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+        - $ref: '#/components/parameters/QParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Blocks / Reports / Diagnostics ──
+  /api/users/blocked:
+    get:
+      operationId: blocksList
+      summary: List users the caller has blocked.
+      tags: [Blocks]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/{userId}/block:
+    post:
+      operationId: blocksBlockUser
+      summary: Block a user.
+      tags: [Blocks]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: blocksUnblockUser
+      summary: Unblock a user.
+      tags: [Blocks]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/{userId}/report:
+    post:
+      operationId: reportsCreateUserReport
+      summary: Report a user for abuse/policy violation.
+      tags: [Reports]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/client-log:
+    post:
+      operationId: diagnosticsClientLog
+      summary: Ingest a client-side diagnostic log line (crash dump, screen-share lifecycle, ...).
+      tags: [Diagnostics]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/diagnostics-report:
+    post:
+      operationId: diagnosticsReport
+      summary: Email a gzipped client diagnostic bundle to the platform admin.
+      tags: [Diagnostics]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Feedback ──
+  /api/feedback:
+    get:
+      operationId: feedbackListMine
+      summary: List the caller's own support tickets.
+      tags: [Feedback]
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: feedbackCreateTicket
+      summary: Create a support ticket.
+      tags: [Feedback]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/feedback/{id}:
+    get:
+      operationId: feedbackGetTicket
+      summary: Get one of the caller's support tickets.
+      tags: [Feedback]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Feedback ticket ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: feedbackDeleteTicket
+      summary: Delete one of the caller's support tickets.
+      tags: [Feedback]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Feedback ticket ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/feedback/{id}/reply:
+    post:
+      operationId: feedbackAddReply
+      summary: Reply to the caller's own support ticket.
+      tags: [Feedback]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Feedback ticket ID.
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── E2EE Devices ──
+  /api/devices:
+    get:
+      operationId: devicesList
+      summary: List the caller's own registered E2EE devices.
+      tags: [E2EE-Devices]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: devicesRegister
+      summary: Register a new E2EE device (identity key + initial prekeys).
+      tags: [E2EE-Devices]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/devices/{deviceId}:
+    delete:
+      operationId: devicesDelete
+      summary: Deregister an E2EE device.
+      tags: [E2EE-Devices]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/devices/{deviceId}/prekeys:
+    post:
+      operationId: devicesUploadPrekeys
+      summary: Top up a device's one-time-prekey pool.
+      tags: [E2EE-Devices]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/devices/{deviceId}/signed-prekey:
+    put:
+      operationId: devicesUpdateSignedPrekey
+      summary: Rotate a device's signed prekey.
+      tags: [E2EE-Devices]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/devices/{deviceId}/prekey-count:
+    get:
+      operationId: devicesGetPrekeyCount
+      summary: Get a device's remaining one-time-prekey count.
+      tags: [E2EE-Devices]
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── E2EE Key Backup ──
+  /api/e2ee/key-backup:
+    put:
+      operationId: e2eeUpsertKeyBackup
+      summary: Upsert the caller's server-held, client-encrypted key backup blob.
+      tags: [E2EE-KeyBackup]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    get:
+      operationId: e2eeGetKeyBackup
+      summary: Fetch the caller's key backup blob.
+      tags: [E2EE-KeyBackup]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: e2eeDeleteKeyBackup
+      summary: Delete the caller's key backup blob.
+      tags: [E2EE-KeyBackup]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── E2EE public device/prekey enumeration (rate-limited) ──
+  /api/users/{userId}/devices:
+    get:
+      operationId: devicesListPublic
+      summary: List another user's public E2EE device identities.
+      description: >-
+        Per-IP rate limited (P0-BD-02) — public key-material enumeration is a
+        historically abused vector for user/device fingerprinting.
+      tags: [E2EE-Devices]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/users/{userId}/prekey-bundles:
+    get:
+      operationId: devicesGetPrekeyBundles
+      summary: Fetch X3DH prekey bundles for another user's devices.
+      description: >-
+        Per-IP rate limited (P0-BD-02) — see devicesListPublic. Consuming a
+        one-time prekey here depletes that device's pool; ErrPrekeyExhausted
+        maps to 409 when the pool is empty.
+      tags: [E2EE-Devices]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+
+  # ── Channel mutes (global list) ──
+  /api/channels/mutes:
+    get:
+      operationId: channelsListMutes
+      summary: List channels the caller has muted, across all servers.
+      tags: [Channels]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Link Preview ──
+  /api/link-preview:
+    get:
+      operationId: linkPreviewGet
+      summary: Fetch (or serve cached) OpenGraph metadata for a URL, for link-preview rendering.
+      tags: [Messages]
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+          description: The URL to preview.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Badges ──
+  /api/badges:
+    get:
+      operationId: badgesList
+      summary: List the platform badge catalog.
+      tags: [Badges]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: badgesCreate
+      summary: Create a new badge.
+      tags: [Badges]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/badges/icon:
+    post:
+      operationId: badgesUploadIcon
+      summary: Upload a badge icon image, returning its URL for use in badgesCreate/badgesUpdate.
+      tags: [Badges]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/badges/{id}:
+    patch:
+      operationId: badgesUpdate
+      summary: Update a badge's fields.
+      tags: [Badges]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Badge ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: badgesDelete
+      summary: Delete a badge.
+      tags: [Badges]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Badge ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/badges/{id}/assign:
+    post:
+      operationId: badgesAssign
+      summary: Assign a badge to a user.
+      tags: [Badges]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Badge ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/badges/{id}/assign/{userId}:
+    delete:
+      operationId: badgesUnassign
+      summary: Remove a badge from a user.
+      tags: [Badges]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Badge ID.
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/{userId}/badges:
+    get:
+      operationId: badgesGetUserBadges
+      summary: List badges assigned to a user.
+      tags: [Badges]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── GIFs (Klipy proxy) ──
+  /api/gifs/trending:
+    get:
+      operationId: gifsTrending
+      summary: Get trending GIFs.
+      tags: [GIFs]
+      parameters:
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/gifs/search:
+    get:
+      operationId: gifsSearch
+      summary: Search GIFs by query text.
+      tags: [GIFs]
+      parameters:
+        - $ref: '#/components/parameters/QParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Friends ──
+  /api/friends/requests:
+    get:
+      operationId: friendsListRequests
+      summary: List incoming/outgoing friend requests.
+      tags: [Friends]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: friendsSendRequest
+      summary: Send a friend request.
+      tags: [Friends]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/friends/requests/{id}/accept:
+    post:
+      operationId: friendsAcceptRequest
+      summary: Accept a friend request.
+      tags: [Friends]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Friend request ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/friends/requests/{id}:
+    delete:
+      operationId: friendsDeclineRequest
+      summary: Decline (or cancel) a friend request.
+      tags: [Friends]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Friend request ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/friends:
+    get:
+      operationId: friendsList
+      summary: List the caller's friends.
+      tags: [Friends]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/friends/{userId}:
+    delete:
+      operationId: friendsRemove
+      summary: Remove a friend.
+      tags: [Friends]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Bots (owner-facing management) ──
+  /api/bots:
+    get:
+      operationId: botsList
+      summary: List the caller's own bot accounts.
+      tags: [Bots]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: botsCreate
+      summary: Create a new bot account and mint its initial token.
+      description: A bot caller cannot create another bot (self-service is human-only).
+      tags: [Bots]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/bots/{botID}/revoke:
+    post:
+      operationId: botsRevoke
+      summary: Revoke every token of one of the caller's bots.
+      tags: [Bots]
+      parameters:
+        - $ref: '#/components/parameters/BotId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Platform Admin — LiveKit ──
+  /api/admin/livekit/quota:
+    get:
+      operationId: adminLiveKitQuotaReport
+      summary: Get the platform-wide LiveKit quota usage report.
+      tags: [Admin]
+      x-platform-admin: true
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/livekit-instances:
+    get:
+      operationId: adminListLiveKitInstances
+      summary: List all registered LiveKit instances.
+      tags: [Admin]
+      x-platform-admin: true
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    post:
+      operationId: adminCreateLiveKitInstance
+      summary: Register a new LiveKit instance.
+      tags: [Admin]
+      x-platform-admin: true
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/livekit-instances/{id}:
+    get:
+      operationId: adminGetLiveKitInstance
+      summary: Get one LiveKit instance's configuration.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    patch:
+      operationId: adminUpdateLiveKitInstance
+      summary: Update a LiveKit instance's configuration.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: adminDeleteLiveKitInstance
+      summary: Remove a LiveKit instance.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/livekit-instances/{id}/metrics:
+    get:
+      operationId: adminLiveKitInstanceMetrics
+      summary: Get a LiveKit instance's current metrics snapshot.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/livekit-instances/{id}/metrics/timeseries:
+    get:
+      operationId: adminLiveKitInstanceMetricsTimeseries
+      summary: Get a LiveKit instance's raw metrics time series (for charting).
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+        - $ref: '#/components/parameters/PeriodParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/livekit-instances/{id}/metrics/history:
+    get:
+      operationId: adminLiveKitInstanceMetricsHistory
+      summary: Get a LiveKit instance's aggregated metrics history summary.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+        - $ref: '#/components/parameters/PeriodParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/livekit-instances/{id}/quota:
+    patch:
+      operationId: adminUpdateLiveKitQuotaSettings
+      summary: Update a LiveKit instance's quota settings.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LiveKitInstanceId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Platform Admin — Servers ──
+  /api/admin/servers:
+    get:
+      operationId: adminListServers
+      summary: List all servers on the platform.
+      tags: [Admin]
+      x-platform-admin: true
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/servers/{serverId}/instance:
+    patch:
+      operationId: adminMigrateServerInstance
+      summary: Migrate a server to a different LiveKit instance.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: migrate_to
+          in: query
+          required: true
+          schema: { type: string }
+          description: Target LiveKit instance ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/servers/{serverId}:
+    delete:
+      operationId: adminDeleteServer
+      summary: Hard-delete a server (platform-admin override).
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Platform Admin — Reports ──
+  /api/admin/reports:
+    get:
+      operationId: adminListReports
+      summary: List user-submitted abuse reports.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by report status (e.g. pending).
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/reports/{id}/status:
+    patch:
+      operationId: adminUpdateReportStatus
+      summary: Update a report's triage status.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Report ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Platform Admin — Feedback ──
+  /api/admin/feedback:
+    get:
+      operationId: adminListFeedback
+      summary: List all support tickets.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by ticket status.
+        - name: type
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by ticket type.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/feedback/{id}:
+    get:
+      operationId: adminGetFeedback
+      summary: Get any user's support ticket.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Feedback ticket ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/feedback/{id}/reply:
+    post:
+      operationId: adminReplyFeedback
+      summary: Reply to any user's support ticket as an admin.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Feedback ticket ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/feedback/{id}/status:
+    patch:
+      operationId: adminUpdateFeedbackStatus
+      summary: Update a support ticket's status.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Feedback ticket ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Platform Admin — Users ──
+  /api/admin/users:
+    get:
+      operationId: adminListUsers
+      summary: List all platform users.
+      tags: [Admin]
+      x-platform-admin: true
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/users/{id}/ban:
+    post:
+      operationId: adminBanUser
+      summary: Platform-ban a user (blocks login/API access).
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Target user ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: adminUnbanUser
+      summary: Lift a platform ban.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Target user ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/users/{id}:
+    delete:
+      operationId: adminHardDeleteUser
+      summary: Permanently delete a user account and its data.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Target user ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/users/{id}/platform-admin:
+    patch:
+      operationId: adminSetUserPlatformAdmin
+      summary: Grant or revoke another user's platform-admin flag.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Target user ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Platform Admin — App Logs ──
+  /api/admin/logs:
+    get:
+      operationId: adminListAppLogs
+      summary: Query structured application logs.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: level
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by log level.
+        - name: category
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by log category.
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+          description: Free-text search over log messages.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    delete:
+      operationId: adminClearAppLogs
+      summary: Purge all stored application logs.
+      tags: [Admin]
+      x-platform-admin: true
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+
+  # ── LiveKit webhook ──
+  /api/livekit/webhook:
+    post:
+      operationId: livekitWebhookHandle
+      summary: Receive a LiveKit server webhook event (participant join/leave, etc.).
+      description: >-
+        Not called by API clients — invoked by the LiveKit server(s) themselves.
+        No session/bot auth; verified via HMAC signature against every
+        configured LiveKit instance's key pair (see the livekitWebhook security
+        scheme).
+      tags: [Voice]
+      security:
+        - livekitWebhook: []
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Public misc ──
+  /api/stats:
+    get:
+      operationId: statsGetPublic
+      summary: Get public, unauthenticated platform statistics.
+      tags: [Stats]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+  /api/invites/{code}/preview:
+    get:
+      operationId: invitesPreview
+      summary: Preview an invite (server name/icon/member count) without joining.
+      tags: [Invites]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/InviteCode'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ═══ SERVER-SCOPED ROUTES ═══
+
+  # ── Server ──
+  /api/servers/{serverId}:
+    get:
+      operationId: serversGet
+      summary: Get a server's details.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    patch:
+      operationId: serversUpdate
+      summary: Update a server's settings.
+      tags: [Servers]
+      x-required-permission: { name: PermAdmin, value: 512 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: serversDelete
+      summary: Delete a server (owner action).
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/leave:
+    post:
+      operationId: serversLeave
+      summary: Leave a server.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/icon:
+    post:
+      operationId: serversUploadIcon
+      summary: Upload a server's icon image.
+      tags: [Servers]
+      x-required-permission: { name: PermAdmin, value: 512 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Server Mute ──
+  /api/servers/{serverId}/mute:
+    post:
+      operationId: serversMute
+      summary: Mute a server's notifications for the caller.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: serversUnmute
+      summary: Unmute a server for the caller.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Channel Mute ──
+  /api/servers/{serverId}/channels/{id}/mute:
+    post:
+      operationId: channelsMute
+      summary: Mute a channel's notifications for the caller.
+      tags: [Channels]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: channelsUnmute
+      summary: Unmute a channel for the caller.
+      tags: [Channels]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── LiveKit settings ──
+  /api/servers/{serverId}/livekit:
+    get:
+      operationId: serversGetLiveKitSettings
+      summary: Get a server's LiveKit voice/video settings.
+      tags: [Servers]
+      x-required-permission: { name: PermAdmin, value: 512 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Audit log ──
+  /api/servers/{serverId}/audit:
+    get:
+      operationId: auditListServerAudit
+      summary: List a server's moderation audit log.
+      tags: [Audit]
+      x-permission-note: >-
+        authServer only grants membership; auditLogService itself enforces view
+        access — PermAdmin OR any of PermKickMembers/PermBanMembers/PermMuteMembers/
+        PermDeafenMembers — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/BeforeParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Channels ──
+  /api/servers/{serverId}/channels:
+    get:
+      operationId: channelsList
+      summary: List a server's channels.
+      description: Grouped by category (an "Uncategorized" pseudo-group first, when non-empty), filtered to channels the caller has PermViewChannel on — see CategoryWithChannels.
+      tags: [Channels]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/CategoryWithChannelsListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: channelsCreate
+      summary: Create a channel.
+      tags: [Channels]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/CreateChannelRequestBody' }
+      responses:
+        '201': { $ref: '#/components/responses/ChannelCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/reorder:
+    patch:
+      operationId: channelsReorder
+      summary: Reorder a server's channels.
+      description: Body shape shared with categoriesReorder — see ReorderItemsRequest. Response is the same grouped shape as channelsList.
+      tags: [Channels]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/ReorderItemsRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/CategoryWithChannelsListOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{id}:
+    patch:
+      operationId: channelsUpdate
+      summary: Update a channel.
+      tags: [Channels]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      requestBody: { $ref: '#/components/requestBodies/UpdateChannelRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/ChannelOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: channelsDelete
+      summary: Delete a channel.
+      description: The server's audit channel cannot be deleted (403).
+      tags: [Channels]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Categories ──
+  /api/servers/{serverId}/categories:
+    get:
+      operationId: categoriesList
+      summary: List a server's channel categories.
+      tags: [Categories]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/CategoryListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: categoriesCreate
+      summary: Create a channel category.
+      tags: [Categories]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/CreateCategoryRequestBody' }
+      responses:
+        '201': { $ref: '#/components/responses/CategoryCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/categories/{id}:
+    patch:
+      operationId: categoriesUpdate
+      summary: Update a channel category.
+      tags: [Categories]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Category ID.
+      requestBody: { $ref: '#/components/requestBodies/UpdateCategoryRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/CategoryOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: categoriesDelete
+      summary: Delete a channel category.
+      tags: [Categories]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Category ID.
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/categories/reorder:
+    patch:
+      operationId: categoriesReorder
+      summary: Reorder a server's channel categories.
+      description: Body shape shared with channelsReorder — see ReorderItemsRequest (category_id in each item is unused here).
+      tags: [Categories]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/ReorderItemsRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/CategoryListOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Messages (server-scoped) ──
+  /api/servers/{serverId}/channels/{id}/messages:
+    get:
+      operationId: messagesList
+      summary: List messages in a channel.
+      description: Cursor-based pagination — `before` is a message ID (older messages), `limit` is capped server-side at 100 (default 50).
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+        - $ref: '#/components/parameters/BeforeParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200': { $ref: '#/components/responses/MessagePageOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: messagesCreate
+      summary: Send a message in a channel (JSON or multipart with attachment).
+      description: >-
+        Per-user rate limited (5/5s for all sends; a separate 20/min budget
+        applies only to multipart/attachment sends). If the message is
+        created but one or more attached files fail to upload, the response
+        is 207 Multi-Status (the message still exists) instead of 201 — see
+        MessageCreatePartialResponse.
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      requestBody: { $ref: '#/components/requestBodies/CreateMessageRequestBody' }
+      responses:
+        '201': { $ref: '#/components/responses/MessageCreated' }
+        '207': { $ref: '#/components/responses/MessageCreatePartial' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/servers/{serverId}/messages/{id}:
+    patch:
+      operationId: messagesUpdate
+      summary: Edit a message.
+      description: Owner only. Cannot change encryption_version on edit (400 if it doesn't match the message's currently stored value).
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Message ID.
+      requestBody: { $ref: '#/components/requestBodies/UpdateMessageRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: messagesDelete
+      summary: Delete a message.
+      tags: [Messages]
+      x-permission-note: >-
+        authServerPermLoad only loads the caller's effective permissions into
+        context — no gate at the middleware layer. messageService.Delete allows
+        deleting one's own message unconditionally, and requires
+        PermManageMessages to delete another member's message. Not reflected in
+        x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Message ID.
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Reactions ──
+  /api/servers/{serverId}/messages/{messageId}/reactions:
+    post:
+      operationId: reactionsToggle
+      summary: Toggle an emoji reaction on a message.
+      description: Adds the reaction if the caller hasn't used this emoji on the message yet, removes it otherwise. Response message is literally "reaction toggled".
+      tags: [Reactions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/MessageId'
+      requestBody: { $ref: '#/components/requestBodies/ToggleReactionRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Pins ──
+  /api/servers/{serverId}/channels/{id}/pins:
+    get:
+      operationId: pinsList
+      summary: List a channel's pinned messages.
+      tags: [Pins]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      responses:
+        '200': { $ref: '#/components/responses/PinnedMessageListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/pin:
+    post:
+      operationId: pinsPin
+      summary: Pin a message.
+      description: 'Capped at 50 pins per channel (MaxPinsPerChannel, matching Discord); a full channel returns 400. Rejects (400) if the message does not belong to this channel.'
+      tags: [Pins]
+      x-required-permission: { name: PermManageMessages, value: 16 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '201': { $ref: '#/components/responses/PinnedMessageCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: pinsUnpin
+      summary: Unpin a message.
+      description: Response message is literally "message unpinned".
+      tags: [Pins]
+      x-required-permission: { name: PermManageMessages, value: 16 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Read State ──
+  /api/servers/{serverId}/channels/read-all:
+    post:
+      operationId: readStateMarkAllRead
+      summary: Mark every channel in a server as read.
+      tags: [ReadState]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/unread:
+    get:
+      operationId: readStateGetUnreads
+      summary: Get the unread-message summary for a server's channels.
+      tags: [ReadState]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{id}/read:
+    post:
+      operationId: readStateMarkRead
+      summary: Mark one channel as read.
+      tags: [ReadState]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Members ──
+  /api/servers/{serverId}/members:
+    get:
+      operationId: membersList
+      summary: List a server's members.
+      tags: [Members]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/members/{id}:
+    get:
+      operationId: membersGet
+      summary: Get one member's details.
+      tags: [Members]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: membersKick
+      summary: Kick a member from the server.
+      tags: [Members]
+      x-required-permission: { name: PermKickMembers, value: 4 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/members/{id}/roles:
+    patch:
+      operationId: membersModifyRoles
+      summary: Change a member's assigned roles.
+      tags: [Members]
+      x-required-permission: { name: PermManageRoles, value: 2 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/members/{id}/ban:
+    post:
+      operationId: membersBan
+      summary: Ban a member from the server.
+      tags: [Members]
+      x-required-permission: { name: PermBanMembers, value: 8 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Timeouts ──
+  /api/servers/{serverId}/members/{id}/timeout:
+    put:
+      operationId: membersTimeout
+      summary: Apply a Discord-style temporary timeout to a member.
+      tags: [Timeouts]
+      x-required-permission: { name: PermTimeoutMembers, value: 262144 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: membersRemoveTimeout
+      summary: Lift a member's timeout early.
+      tags: [Timeouts]
+      x-required-permission: { name: PermTimeoutMembers, value: 262144 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Nicknames ──
+  /api/servers/{serverId}/members/{id}/nickname:
+    patch:
+      operationId: membersSetNickname
+      summary: Set a member's per-server nickname.
+      tags: [Nicknames]
+      x-permission-note: >-
+        authServer only grants membership; memberService.SetNickname allows
+        self-rename unconditionally and requires PermManageNicknames only when
+        the caller targets another member. Not reflected in
+        x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Member (user) ID. May be the caller's own ID (self-rename, always allowed).
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Bans ──
+  /api/servers/{serverId}/bans:
+    get:
+      operationId: bansList
+      summary: List a server's banned users.
+      tags: [Bans]
+      x-required-permission: { name: PermBanMembers, value: 8 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/bans/{id}:
+    delete:
+      operationId: bansUnban
+      summary: Lift a server ban.
+      tags: [Bans]
+      x-required-permission: { name: PermBanMembers, value: 8 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Banned user ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Roles ──
+  /api/servers/{serverId}/roles:
+    get:
+      operationId: rolesList
+      summary: List a server's roles.
+      tags: [Roles]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: rolesCreate
+      summary: Create a role.
+      tags: [Roles]
+      x-required-permission: { name: PermManageRoles, value: 2 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/roles/reorder:
+    patch:
+      operationId: rolesReorder
+      summary: Reorder a server's roles.
+      tags: [Roles]
+      x-required-permission: { name: PermManageRoles, value: 2 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/roles/{id}:
+    patch:
+      operationId: rolesUpdate
+      summary: Update a role, including its permission bitfield.
+      tags: [Roles]
+      x-required-permission: { name: PermManageRoles, value: 2 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Role ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: rolesDelete
+      summary: Delete a role.
+      tags: [Roles]
+      x-required-permission: { name: PermManageRoles, value: 2 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Role ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Channel Permissions ──
+  /api/servers/{serverId}/channels/{id}/permissions:
+    get:
+      operationId: channelPermissionsListOverrides
+      summary: List a channel's per-role permission overrides.
+      tags: [ChannelPermissions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/permissions/{roleId}:
+    put:
+      operationId: channelPermissionsSetOverride
+      summary: Set a channel's permission override for a role.
+      tags: [ChannelPermissions]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - $ref: '#/components/parameters/RoleId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: channelPermissionsDeleteOverride
+      summary: Remove a channel's permission override for a role.
+      tags: [ChannelPermissions]
+      x-required-permission: { name: PermManageChannels, value: 1 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - $ref: '#/components/parameters/RoleId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Invites ──
+  /api/servers/{serverId}/invites:
+    get:
+      operationId: invitesList
+      summary: List a server's active invites.
+      tags: [Invites]
+      x-required-permission: { name: PermManageInvites, value: 1024 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: invitesCreate
+      summary: Create a server invite.
+      tags: [Invites]
+      x-required-permission: { name: PermManageInvites, value: 1024 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/servers/{serverId}/invites/{code}:
+    delete:
+      operationId: invitesDelete
+      summary: Revoke a server invite.
+      tags: [Invites]
+      x-required-permission: { name: PermManageInvites, value: 1024 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/InviteCode'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── E2EE Group Sessions ──
+  /api/servers/{serverId}/channels/{channelId}/group-sessions:
+    post:
+      operationId: e2eeCreateGroupSession
+      summary: Distribute/rotate a sender-key group session for an E2EE channel.
+      tags: [E2EE-GroupSessions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - name: device_id
+          in: query
+          required: true
+          schema: { type: string }
+          description: Sending device's own ID.
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    get:
+      operationId: e2eeGetGroupSessions
+      summary: Fetch group sessions for an E2EE channel.
+      tags: [E2EE-GroupSessions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Search ──
+  /api/servers/{serverId}/search:
+    get:
+      operationId: messagesSearchServer
+      summary: Search messages across a server (optionally scoped to one channel).
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/QParam'
+        - name: channel_id
+          in: query
+          required: false
+          schema: { type: string }
+          description: Restrict the search to one channel.
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Voice ──
+  /api/servers/{serverId}/voice/token:
+    post:
+      operationId: voiceToken
+      summary: Issue a LiveKit access token to join a voice channel.
+      tags: [Voice]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/voice/screen-token:
+    post:
+      operationId: voiceScreenToken
+      summary: Issue a LiveKit access token for a screen-share track.
+      tags: [Voice]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/voice/states:
+    get:
+      operationId: voiceStates
+      summary: Get the current voice-channel presence snapshot for a server.
+      tags: [Voice]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Music bot ──
+  /api/servers/{serverId}/channels/{channelId}/music/play:
+    post:
+      operationId: musicPlay
+      summary: Enqueue (and lazy-start) a YouTube track in a voice channel.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler.Play requires PermSpeak
+        in the target voice channel (resolved via ChannelPermResolver, same gate
+        as actually talking) — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/skip:
+    post:
+      operationId: musicSkip
+      summary: Skip the currently playing track.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler enforces PermSpeak in
+        the target voice channel — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/pause:
+    post:
+      operationId: musicPause
+      summary: Pause playback.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler enforces PermSpeak in
+        the target voice channel — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/resume:
+    post:
+      operationId: musicResume
+      summary: Resume paused playback.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler enforces PermSpeak in
+        the target voice channel — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/stop:
+    post:
+      operationId: musicStop
+      summary: Stop playback and clear the queue.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler.Stop requires
+        PermManageChannels (not PermSpeak) — not reflected in
+        x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/state:
+    get:
+      operationId: musicState
+      summary: Get the current music-bot state for a channel.
+      tags: [Music]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Soundboard ──
+  /api/servers/{serverId}/soundboard/sounds:
+    get:
+      operationId: soundboardList
+      summary: List a server's soundboard clips.
+      tags: [Soundboard]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: soundboardCreate
+      summary: Upload a new soundboard clip.
+      tags: [Soundboard]
+      x-required-permission: { name: PermManageSoundboard, value: 131072 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/soundboard/sounds/{soundId}:
+    patch:
+      operationId: soundboardUpdate
+      summary: Update a soundboard clip's metadata.
+      tags: [Soundboard]
+      x-required-permission: { name: PermManageSoundboard, value: 131072 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/SoundId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: soundboardDelete
+      summary: Delete a soundboard clip.
+      tags: [Soundboard]
+      x-required-permission: { name: PermManageSoundboard, value: 131072 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/SoundId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/soundboard/sounds/{soundId}/play:
+    post:
+      operationId: soundboardPlay
+      summary: Broadcast a soundboard clip into the caller's current voice channel.
+      tags: [Soundboard]
+      x-required-permission: { name: PermUseSoundboard, value: 65536 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/SoundId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── WebSocket ──
+  /ws:
+    get:
+      operationId: wsConnect
+      summary: Upgrade to the human realtime gateway WebSocket connection.
+      description: >-
+        This is a WebSocket handshake (HTTP Upgrade), not a plain HTTP request —
+        modeled here only so the route is enumerated. Preferred auth: obtain a
+        one-shot, ~30s-TTL ticket from POST /api/auth/ws-ticket, then connect
+        with `?ticket=<value>`. A legacy `?token=<access_token>` query-string
+        path exists but is disabled server-side pending removal. No
+        Authorization header is used on this route — the ticket/token is a
+        query parameter because browsers cannot set custom headers on a
+        WebSocket handshake.
+      tags: [WebSocket]
+      security: []
+      parameters:
+        - name: ticket
+          in: query
+          required: false
+          schema: { type: string }
+          description: One-shot ticket minted by POST /api/auth/ws-ticket.
+      responses:
+        '101':
+          description: Switching Protocols — WebSocket handshake accepted.
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/bot/gateway:
+    get:
+      operationId: wsBotGateway
+      summary: Upgrade to the read-only bot gateway WebSocket connection.
+      description: >-
+        WebSocket handshake authenticated via `Authorization: Bearer hb_...`
+        (bot token only — a human JWT is rejected even though it is also a
+        Bearer token). Streams a read-only subset of events
+        (BotReadableOps) scoped to the servers the bot belongs to.
+      tags: [WebSocket]
+      security:
+        - botAuth: []
+      responses:
+        '101':
+          description: Switching Protocols — WebSocket handshake accepted.
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404':
+          description: Bot gateway disabled (no bot token validator configured).
+
+  # ── System ──
+  /api/health:
+    get:
+      operationId: systemHealth
+      summary: Liveness probe. Always returns 200; body reports the cached deep-dependency verdict.
+      tags: [System]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+  /api/ready:
+    get:
+      operationId: systemReady
+      summary: Readiness probe. Performs a request-time DB check; may return 503.
+      tags: [System]
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '503':
+          description: Not ready — a dependency (typically the database) failed its live check.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /static/landing/{file}:
+    get:
+      operationId: systemStaticLanding
+      summary: Serve a public landing-page asset (video, screenshots).
+      tags: [System]
+      security: []
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema: { type: string }
+          description: Single path segment — nested paths are rejected (404).
+      responses:
+        '200':
+          description: Asset bytes.
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/version:
+    get:
+      operationId: systemVersion
+      summary: Get the current process's startup ID, used by clients to detect a new deploy.
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: '`{"version": "<uuid, regenerated per process start>"}`'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Human session access token, minted by POST /api/auth/login or
+        POST /api/auth/refresh. Sent as `Authorization: Bearer <jwt>`.
+    botAuth:
+      type: http
+      scheme: bearer
+      description: >-
+        Bot automation credential minted by POST /api/bots. Uses the identical
+        `Authorization: Bearer <token>` header as bearerAuth; AuthMiddleware.Require
+        distinguishes the two by the models.BotTokenPrefix `hb_` prefix on the
+        token value itself, before falling back to JWT validation. Accepted on
+        every route documented with the default bearerAuth + botAuth security
+        requirement (both are alternatives — either satisfies it).
+    mediaCookie:
+      type: apiKey
+      in: cookie
+      name: hichat_media
+      description: >-
+        Scope-limited media JWT set as an HttpOnly cookie on login/refresh.
+        Authenticates ONLY GET /api/uploads/* (channel/DM attachment bytes),
+        for contexts that cannot set a header — a bare `<img>`/`<video>` src.
+        AuthMiddleware rejects any non-empty token scope on every other route,
+        so a leaked media token cannot be replayed against the rest of the API.
+    livekitWebhook:
+      type: apiKey
+      in: header
+      name: Authorize
+      description: >-
+        Not a per-caller secret in the usual apiKey sense: LiveKit signs each
+        webhook delivery with an HMAC-derived, JWT-shaped token in the
+        `Authorize` header. The server verifies it against every configured
+        LiveKit instance's decrypted API key/secret pair (a multi-key
+        webhook.ReceiveWebhookEvent provider), so any known instance's
+        credentials validate the signature — there is no client-supplied
+        credential to document beyond "this header must verify."
+  parameters:
+    ServerId:
+      name: serverId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Server (guild) ID.
+    ChannelId:
+      name: channelId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Channel ID.
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Message ID.
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Role ID (channel-permission override target).
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Target user ID.
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string }
+      description: E2EE device ID.
+    SoundId:
+      name: soundId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Soundboard sound ID.
+    BotId:
+      name: botID
+      in: path
+      required: true
+      schema: { type: string }
+      description: Bot account ID.
+    InviteCode:
+      name: code
+      in: path
+      required: true
+      schema: { type: string }
+      description: Invite code.
+    LiveKitInstanceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: LiveKit instance ID.
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer }
+      description: Page size limit.
+    OffsetParam:
+      name: offset
+      in: query
+      required: false
+      schema: { type: integer }
+      description: Pagination offset.
+    BeforeParam:
+      name: before
+      in: query
+      required: false
+      schema: { type: string }
+      description: Cursor — return items before this ID (or, for the audit log, timestamp).
+    QParam:
+      name: q
+      in: query
+      required: false
+      schema: { type: string }
+      description: Search query text.
+    PerPageParam:
+      name: per_page
+      in: query
+      required: false
+      schema: { type: integer }
+      description: Results per page.
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer }
+      description: Page number (1-based).
+    PeriodParam:
+      name: period
+      in: query
+      required: false
+      schema: { type: string, enum: ['24h', '7d', '30d'], default: '24h' }
+      description: Metrics aggregation window.
+  schemas:
+    ErrorCode:
+      type: string
+      description: >-
+        Machine-readable error identifier derived from the domain sentinel
+        error (server/pkg/errors.go) via pkg.errorCode. Empty/omitted on
+        success responses and on some legacy message-only error paths
+        (pkg.ErrorWithMessage).
+      enum:
+        - NOT_FOUND
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - ALREADY_EXISTS
+        - BAD_REQUEST
+        - CONFLICT
+        - INVALID_KEY
+        - INTERNAL
+    ApiEnvelope:
+      type: object
+      description: Standard response envelope wrapping every API response (pkg.APIResponse).
+      properties:
+        success:
+          type: boolean
+          description: true on 2xx responses, false on error responses.
+        data:
+          description: >-
+            Present on success responses; omitted on error responses. Payload
+            shape is operation-specific — see the allOf composition on each
+            2xx response.
+        error:
+          type: string
+          description: Human-readable message. Present only on error responses (safe to display for 4xx; generic text for 5xx).
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+      required: [success]
+    ErrorResponse:
+      description: Envelope shape on error responses — success is always false; data is omitted.
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            success:
+              type: boolean
+              enum: [false]
+          required: [success, error]
+    StubData:
+      description: 'TODO: detailed schema — to be specified in the next authoring phase.'
+      type: object
+      additionalProperties: true
+
+    # ── Shared primitives (Auth / Users / Messages / Reactions / Pins / Channels / Categories) ──
+    MessageOnlyResponse:
+      description: >-
+        Generic `{"message": "..."}` payload shared by several endpoints that
+        have no richer data to return (pkg.JSON with a map[string]string).
+        The exact text is operation-specific — see each operation's
+        description for the literal string it sends.
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+      example: { message: "logged out" }
+    User:
+      description: >-
+        models.User as exposed to the caller. Fields tagged `json:"-"` in Go
+        (PasswordHash, TokenVersion, PlatformBanReason, PlatformBannedBy,
+        PlatformBannedAt) are never serialized and are omitted here.
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        display_name: { type: [string, "null"] }
+        avatar_url: { type: [string, "null"] }
+        wallpaper_url: { type: [string, "null"] }
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        pref_status:
+          allOf: [{ $ref: '#/components/schemas/UserStatus' }]
+          description: >-
+            The user's saved/preferred status (what they picked in the
+            client), as opposed to `status` which is the live computed
+            presence. `pref_status=offline` is HiChat's "invisible mode".
+        custom_status: { type: [string, "null"] }
+        email: { type: [string, "null"], format: email }
+        language: { type: string, example: en }
+        dm_privacy:
+          type: string
+          enum: [everyone, message_request, friends_only]
+        is_platform_admin: { type: boolean }
+        is_platform_banned: { type: boolean }
+        has_seen_download_prompt: { type: boolean }
+        has_seen_welcome: { type: boolean }
+        last_seen_at:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            Offline-transition timestamp. Always null while pref_status is
+            NOT "offline" and the user is online; ALSO forced null (even
+            though the DB column is populated) when pref_status="offline" —
+            invisible mode never leaks a "last seen" timestamp (see
+            models.ToMemberWithRoles and the client-facing suppression rule
+            it implements).
+        is_bot: { type: boolean }
+        owner_user_id:
+          type: string
+          description: Set only on bot accounts (migration 072) — the human owner's user ID. Omitted for human users.
+        created_at: { type: string, format: date-time }
+      required: [id, username, status, pref_status, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome, is_bot, created_at]
+      example:
+        id: "a1b2c3d4e5f6a7b8"
+        username: hb_wanderer
+        display_name: Wanderer
+        avatar_url: null
+        wallpaper_url: null
+        status: online
+        pref_status: online
+        custom_status: null
+        email: user@example.com
+        language: en
+        dm_privacy: everyone
+        is_platform_admin: false
+        is_platform_banned: false
+        has_seen_download_prompt: true
+        has_seen_welcome: true
+        last_seen_at: null
+        is_bot: false
+        created_at: "2026-01-15T10:20:30Z"
+    UserStatus:
+      type: string
+      enum: [online, idle, dnd, offline]
+
+    # ── Auth ──
+    RegisterRequest:
+      description: models.CreateUserRequest — body of POST /api/auth/register.
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[A-Za-z0-9_]+$'
+          description: Trimmed server-side; letters, digits, and underscore only.
+        password:
+          type: string
+          minLength: 8
+          format: password
+        display_name:
+          type: string
+          maxLength: 32
+          description: Trimmed server-side. Optional — omitted/empty stores null.
+        email:
+          type: string
+          format: email
+          description: Optional. Validated against a simple `local@domain.tld` regex when non-empty.
+        invite_code:
+          type: string
+          description: >-
+            Accepted by the request shape but currently a DEAD FIELD:
+            AuthService.Register never reads CreateUserRequest.InviteCode —
+            there is no invite-gated registration flow in the code today.
+            Do not rely on this for access control.
+      required: [username, password]
+      example:
+        username: hb_wanderer
+        password: "correct-horse-battery-staple"
+        display_name: Wanderer
+        email: user@example.com
+        invite_code: ""
+    LoginRequest:
+      description: models.LoginRequest — body of POST /api/auth/login.
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+      required: [username, password]
+      example:
+        username: hb_wanderer
+        password: "correct-horse-battery-staple"
+    RefreshTokenBody:
+      description: >-
+        Optional JSON body for POST /api/auth/refresh and POST
+        /api/auth/logout. Both endpoints prefer the HttpOnly `hichat_refresh`
+        cookie (set on register/login/refresh) via extractRefreshToken; this
+        field is the fallback for native clients that don't manage cookies.
+        An empty body is valid when the cookie is present.
+      type: object
+      properties:
+        refresh_token: { type: string }
+      example:
+        refresh_token: ""
+    AuthTokens:
+      description: >-
+        services.AuthTokens — returned by register/login/refresh. The refresh
+        token itself is deliberately `json:"-"` and never appears in this
+        body; it is delivered exclusively via the HttpOnly+Secure
+        `hichat_refresh` cookie set on the same response (see
+        handlers/auth.go setRefreshCookie). A `hichat_media` cookie (scope
+        media JWT) is also set as a side effect for inline attachment
+        rendering.
+      type: object
+      properties:
+        access_token: { type: string }
+        user:
+          $ref: '#/components/schemas/User'
+      required: [access_token, user]
+      example:
+        access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          id: "a1b2c3d4e5f6a7b8"
+          username: hb_wanderer
+          display_name: Wanderer
+          avatar_url: null
+          wallpaper_url: null
+          status: online
+          pref_status: online
+          custom_status: null
+          email: user@example.com
+          language: en
+          dm_privacy: everyone
+          is_platform_admin: false
+          is_platform_banned: false
+          has_seen_download_prompt: false
+          has_seen_welcome: false
+          last_seen_at: null
+          is_bot: false
+          created_at: "2026-01-15T10:20:30Z"
+    ForgotPasswordRequest:
+      description: models.ForgotPasswordRequest — body of POST /api/auth/forgot-password.
+      type: object
+      properties:
+        email: { type: string, format: email }
+      required: [email]
+      example:
+        email: user@example.com
+    ResetPasswordRequest:
+      description: models.ResetPasswordRequest — body of POST /api/auth/reset-password.
+      type: object
+      properties:
+        token:
+          type: string
+          description: Plaintext one-time token from the emailed reset link (only its SHA-256 hash is stored server-side).
+        new_password:
+          type: string
+          minLength: 8
+          format: password
+      required: [token, new_password]
+      example:
+        token: "9f8e7d6c5b4a3210"
+        new_password: "new-correct-horse-battery"
+    WsTicketResponse:
+      description: >-
+        One-shot, ~30-second-TTL ticket minted by POST /api/auth/ws-ticket
+        for the `GET /ws?ticket=<value>` handshake.
+      type: object
+      properties:
+        ticket: { type: string }
+      required: [ticket]
+      example:
+        ticket: "wst_5f3e2c1a9b8d7e6f"
+
+    # ── Users (me) ──
+    ChangePasswordRequest:
+      description: >-
+        Anonymous struct in handlers/auth.go ChangePassword — not a named
+        Go type. Requires current_password (defense-in-depth against a
+        stolen/XSS'd JWT) in addition to session auth.
+      type: object
+      properties:
+        current_password: { type: string, format: password }
+        new_password:
+          type: string
+          minLength: 6
+          format: password
+          description: >-
+            AuthService.ChangePassword enforces a 6-character minimum here —
+            note this is LOWER than registration's 8-character minimum
+            (models.CreateUserRequest.Validate); documented as coded, not a
+            recommendation.
+      required: [current_password, new_password]
+      example:
+        current_password: "correct-horse-battery-staple"
+        new_password: "newer-horse-battery-staple"
+    ChangeEmailRequest:
+      description: models.ChangeEmailRequest — body of PUT /api/users/me/email.
+      type: object
+      properties:
+        password:
+          type: string
+          format: password
+          description: Current password, re-verified via bcrypt before the change is applied.
+        new_email:
+          type: string
+          format: email
+          description: Empty string (or field omitted) REMOVES the caller's email (sets it to NULL) rather than being rejected.
+      required: [password]
+      example:
+        password: "correct-horse-battery-staple"
+        new_email: newmail@example.com
+    ChangeEmailResponse:
+      type: object
+      properties:
+        message: { type: string, example: "email updated" }
+        email:
+          type: [string, "null"]
+          description: The new email value, or null when new_email was empty (email removed).
+      required: [message, email]
+    UpdateProfileRequest:
+      description: >-
+        models.UpdateProfileRequest — body of PATCH /api/users/me/profile.
+        Every field is a pointer: omitted/null means "leave unchanged".
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[A-Za-z0-9_]+$'
+          description: Checked for availability against every other user; 409 if taken.
+        display_name:
+          type: string
+          maxLength: 32
+          description: Explicit empty string clears it (stores null).
+        avatar_url:
+          type: string
+          description: >-
+            Freeform string, not validated against the upload service — the
+            dedicated POST /api/users/me/avatar endpoint is the normal way
+            to set this from an uploaded file.
+        custom_status:
+          type: string
+          maxLength: 128
+          description: Explicit empty string clears it (stores null).
+        language:
+          type: string
+          enum: [en, tr]
+        dm_privacy:
+          type: string
+          enum: [everyone, message_request, friends_only]
+      example:
+        display_name: Wanderer
+        custom_status: "on a quest"
+        language: en
+        dm_privacy: everyone
+    MemberWithRoles:
+      description: >-
+        models.MemberWithRoles — the response payload of
+        PATCH /api/users/me/profile. This is a GLOBAL (non-server-scoped)
+        update, so ToMemberWithRoles is called with a nil roles slice here:
+        `roles` is always `[]` and `effective_permissions` is always `0` for
+        THIS operation. The server-scoped fields (nickname, non-empty roles,
+        a real effective_permissions mask, timeout_expires_at) only carry
+        meaningful values from the per-server Members endpoints (out of
+        scope in this authoring pass).
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        display_name: { type: [string, "null"] }
+        avatar_url: { type: [string, "null"] }
+        nickname: { type: [string, "null"] }
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        custom_status: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        roles:
+          type: array
+          items: {}
+          description: Always empty for this endpoint (see the schema description above).
+        effective_permissions:
+          type: integer
+          description: Bitwise-OR of role permissions (see the top-level x-permissions bit catalog). Always 0 for this endpoint.
+        timeout_expires_at:
+          type: [string, "null"]
+          format: date-time
+        last_seen_at:
+          type: [string, "null"]
+          format: date-time
+      required: [id, username, status, created_at, roles, effective_permissions]
+      example:
+        id: "a1b2c3d4e5f6a7b8"
+        username: hb_wanderer
+        display_name: Wanderer
+        avatar_url: null
+        nickname: null
+        status: online
+        custom_status: "on a quest"
+        created_at: "2026-01-15T10:20:30Z"
+        roles: []
+        effective_permissions: 0
+    UserPreferences:
+      description: models.UserPreferences — GET/PATCH /api/users/me/preferences payload.
+      type: object
+      properties:
+        user_id: { type: string }
+        data:
+          type: object
+          additionalProperties: true
+          description: >-
+            Opaque, free-form client-synced settings blob. The backend does
+            no field-level validation and just top-level-key-merges PATCH
+            bodies into this object.
+        updated_at:
+          type: string
+          description: >-
+            SQLite's default CURRENT_TIMESTAMP text form
+            ("YYYY-MM-DD HH:MM:SS", not RFC3339) — treat as an opaque
+            display string rather than a strict date-time.
+      required: [user_id, data, updated_at]
+      example:
+        user_id: "a1b2c3d4e5f6a7b8"
+        data: { theme: dark, notifications_muted: false }
+        updated_at: "2026-01-15 10:20:30"
+    UpdatePreferencesRequest:
+      description: models.UpdatePreferencesRequest — body of PATCH /api/users/me/preferences.
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+          description: Partial JSON object; present keys are merged into existing data, other keys are left untouched.
+      required: [data]
+      example:
+        data: { theme: dark }
+
+    # ── Messages (server-channel scoped) ──
+    Attachment:
+      description: models.Attachment.
+      type: object
+      properties:
+        id: { type: string }
+        message_id: { type: string }
+        filename: { type: string }
+        file_url: { type: string }
+        file_size: { type: [integer, "null"], format: int64 }
+        mime_type: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+      required: [id, message_id, filename, file_url, created_at]
+    ReactionGroup:
+      description: models.ReactionGroup — reactions on a message, aggregated by emoji.
+      type: object
+      properties:
+        emoji: { type: string }
+        count: { type: integer }
+        users:
+          type: array
+          items: { type: string }
+          description: User IDs who used this emoji — lets the client render "you reacted" highlighting.
+      required: [emoji, count, users]
+    MessageReference:
+      description: >-
+        models.MessageReference — a preview of the replied-to message. If the
+        original message was deleted, author and content are both null.
+      type: object
+      properties:
+        id: { type: string }
+        author:
+          anyOf:
+            - $ref: '#/components/schemas/User'
+            - type: "null"
+          description: Omitted/null if the original message (or its author) was deleted.
+        content: { type: [string, "null"] }
+      required: [id, content]
+    Message:
+      description: >-
+        models.Message. E2EE: when encryption_version > 0, content is null
+        and the payload lives in ciphertext (an opaque blob); sender_device_id
+        identifies the E2EE device that encrypted it, and e2ee_metadata is an
+        opaque sidecar for ratchet/sender-key bookkeeping.
+      type: object
+      properties:
+        id: { type: string }
+        channel_id: { type: string }
+        user_id: { type: string }
+        server_id:
+          type: string
+          description: >-
+            Transient field, not stored in the DB — populated on the create
+            path just before the WS broadcast so recipients can route the
+            event without a channel lookup. May be empty on responses that
+            didn't go through that path (e.g. list/edit).
+        content: { type: [string, "null"] }
+        edited_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        reply_to_id: { type: [string, "null"] }
+        author:
+          allOf: [{ $ref: '#/components/schemas/User' }]
+          description: Populated via JOIN on reads; omitted on some write-path responses.
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        mentions:
+          type: array
+          items: { type: string }
+          description: User IDs mentioned in plaintext content. Always empty for E2EE messages (server cannot read ciphertext).
+        role_mentions:
+          type: array
+          items: { type: string }
+          description: Role IDs mentioned in plaintext content. Always empty for E2EE messages.
+        reactions:
+          type: array
+          items: { $ref: '#/components/schemas/ReactionGroup' }
+        referenced_message:
+          $ref: '#/components/schemas/MessageReference'
+        encryption_version:
+          type: integer
+          enum: [0, 1]
+          description: 0 = plaintext, 1 = E2EE.
+        ciphertext: { type: [string, "null"] }
+        sender_device_id: { type: [string, "null"] }
+        e2ee_metadata: { type: [string, "null"] }
+      required: [id, channel_id, user_id, content, created_at, reply_to_id, mentions, role_mentions, reactions, encryption_version]
+      example:
+        id: "m1a2b3c4"
+        channel_id: "c1a2b3c4"
+        user_id: "a1b2c3d4e5f6a7b8"
+        server_id: "s1a2b3c4"
+        content: "hello there"
+        edited_at: null
+        created_at: "2026-01-15T10:20:30Z"
+        reply_to_id: null
+        mentions: []
+        role_mentions: []
+        reactions: []
+        encryption_version: 0
+    MessagePage:
+      description: models.MessagePage — cursor-based pagination response for GET .../messages.
+      type: object
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        has_more: { type: boolean }
+      required: [messages, has_more]
+    CreateMessageRequest:
+      description: >-
+        models.CreateMessageRequest — JSON body of POST .../messages when no
+        file attachment is sent (see CreateMessageMultipartRequest for the
+        multipart/form-data shape). Content must be non-empty (1-999 runes,
+        MaxMessageLength) UNLESS encryption_version=1, in which case
+        ciphertext + sender_device_id are required instead and content is
+        ignored.
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 999
+        reply_to_id: { type: [string, "null"] }
+        encryption_version:
+          type: integer
+          enum: [0, 1]
+          default: 0
+        ciphertext: { type: string, description: Required when encryption_version=1. }
+        sender_device_id: { type: string, description: Required when encryption_version=1. }
+        e2ee_metadata: { type: string }
+      example:
+        content: "hello there"
+    CreateMessageMultipartRequest:
+      description: >-
+        multipart/form-data body of POST .../messages when attaching files
+        (or sending an E2EE message, since form fields are also accepted
+        there). Detected server-side by a literal "multipart/form-data"
+        Content-Type prefix check (isMultipart), not full MIME parsing.
+        E2EE fields must be supplied as a consistent set: encryption_version
+        "1" requires both ciphertext and sender_device_id, and conversely
+        ciphertext/sender_device_id without encryption_version="1" is
+        rejected (400) rather than silently treated as plaintext.
+      type: object
+      properties:
+        content: { type: string, description: Plaintext content form field. May be empty if files are attached. }
+        reply_to_id: { type: string }
+        encryption_version:
+          type: string
+          enum: ["0", "1"]
+          description: Form values are strings, not JSON integers — only the literal "1" enables the E2EE branch.
+        ciphertext: { type: string }
+        sender_device_id: { type: string }
+        e2ee_metadata: { type: string }
+        files:
+          type: array
+          items: { type: string, format: binary }
+          description: Zero or more file attachments (form field name "files", repeatable).
+    MessageCreatePartialResponse:
+      description: >-
+        HTTP 207 Multi-Status — returned instead of 201 when the message was
+        created but one or more attached files failed to upload (per-file
+        failures no longer silently swallowed).
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/Message'
+        upload_failures:
+          type: array
+          items:
+            type: object
+            properties:
+              filename: { type: string }
+              error: { type: string }
+            required: [filename, error]
+      required: [message, upload_failures]
+    UpdateMessageRequest:
+      description: >-
+        models.UpdateMessageRequest — body of PATCH .../messages/{id}. The
+        request's encryption_version MUST match the message's currently
+        stored encryption_version (a 400 rejects any attempt to change
+        format on edit) — this is not a format-migration endpoint.
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 999
+        encryption_version:
+          type: integer
+          enum: [0, 1]
+        ciphertext: { type: string, description: Required when encryption_version=1. }
+        sender_device_id: { type: string }
+        e2ee_metadata: { type: string }
+      example:
+        content: "hello there (edited)"
+        encryption_version: 0
+
+    # ── Reactions ──
+    ToggleReactionRequest:
+      description: >-
+        Anonymous toggleRequest struct in handlers/reaction.go — emoji is
+        sent in the body (not the URL path) to avoid emoji URL-encoding
+        edge cases. Adds the reaction if the caller hasn't reacted with this
+        emoji yet, removes it otherwise (toggle).
+      type: object
+      properties:
+        emoji: { type: string, example: "👍" }
+      required: [emoji]
+
+    # ── Pins ──
+    PinnedMessageWithDetails:
+      description: >-
+        models.PinnedMessageWithDetails — a pinned-message row joined with
+        the full message and the user who pinned it.
+      type: object
+      properties:
+        id: { type: string }
+        message_id: { type: string }
+        channel_id: { type: string }
+        pinned_by: { type: string, description: User ID of whoever pinned the message. }
+        created_at: { type: string, format: date-time }
+        message:
+          $ref: '#/components/schemas/Message'
+        pinned_by_user:
+          $ref: '#/components/schemas/User'
+      required: [id, message_id, channel_id, pinned_by, created_at, message]
+
+    # ── Channels ──
+    Channel:
+      description: models.Channel.
+      type: object
+      properties:
+        id: { type: string }
+        server_id: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [text, voice, audit]
+          description: >-
+            "audit" is a server-wide moderation feed — exactly one per
+            server, auto-created, not user-composable.
+        category_id: { type: [string, "null"] }
+        topic: { type: [string, "null"] }
+        position: { type: integer }
+        user_limit: { type: integer, description: "Voice channels only. 0 = unlimited." }
+        bitrate: { type: integer, description: "Voice channels only, in bps." }
+        created_at: { type: string, format: date-time }
+      required: [id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at]
+      example:
+        id: "c1a2b3c4"
+        server_id: "s1a2b3c4"
+        name: general
+        type: text
+        category_id: null
+        topic: null
+        position: 0
+        user_limit: 0
+        bitrate: 0
+        created_at: "2026-01-15T10:20:30Z"
+    CreateChannelRequest:
+      description: models.CreateChannelRequest — body of POST /api/servers/{serverId}/channels.
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+        type:
+          type: string
+          enum: [text, voice, audit]
+          description: >-
+            "audit" is accepted here but capped at one per server — Create
+            returns 400 if the server already has an audit channel (a plain
+            ErrBadRequest, not a distinct sentinel/code).
+        category_id:
+          type: string
+          description: >-
+            Optional. Must reference a category in the SAME server: a
+            nonexistent category_id returns 400; a category_id that exists
+            but belongs to a DIFFERENT server returns 404 (both paths share
+            the message "category not found" but differ in status code —
+            documented as coded).
+        topic: { type: string, maxLength: 1024 }
+      required: [name, type]
+      example:
+        name: general
+        type: text
+        category_id: ""
+        topic: ""
+    UpdateChannelRequest:
+      description: >-
+        models.UpdateChannelRequest — body of PATCH
+        /api/servers/{serverId}/channels/{id}. Every field is a pointer:
+        omitted/null means "don't change".
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50, description: Audit channels reject a name change (403). }
+        topic: { type: string, maxLength: 1024 }
+        category_id:
+          type: string
+          description: Empty string removes from category; non-empty moves (same existence/ownership rules as create).
+        bitrate:
+          type: integer
+          minimum: 8000
+          maximum: 384000
+          description: Voice channels only — silently ignored on text/audit channels.
+        user_limit:
+          type: integer
+          minimum: 0
+          maximum: 99
+          description: Voice channels only (0 = unlimited) — silently ignored on text/audit channels.
+      example:
+        topic: "Welcome to #general"
+    CategoryWithChannels:
+      description: >-
+        models.CategoryWithChannels — one grouped entry of GET/PATCH-reorder
+        .../channels responses. An "Uncategorized" pseudo-group (channels
+        with category_id=null) is synthesized with category.id="" and
+        category.position=-1, sorted first when non-empty.
+      type: object
+      properties:
+        category:
+          $ref: '#/components/schemas/Category'
+        channels:
+          type: array
+          items: { $ref: '#/components/schemas/Channel' }
+      required: [category, channels]
+    PositionUpdate:
+      description: models.PositionUpdate — one entry of a reorder request.
+      type: object
+      properties:
+        id: { type: string }
+        position: { type: integer, minimum: 0 }
+        category_id:
+          type: string
+          description: >-
+            Only meaningful for the channel-reorder endpoint (cross-category
+            moves); unused by the category-reorder endpoint.
+      required: [id, position]
+    ReorderItemsRequest:
+      description: >-
+        Shared JSON shape for PATCH .../channels/reorder (models.ReorderChannelsRequest)
+        AND PATCH .../categories/reorder (an equivalent anonymous
+        `{items: []models.PositionUpdate}` struct in handlers/category.go) —
+        both decode the identical `{"items": [...]}` body.
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/PositionUpdate' }
+          description: No duplicate ids; each position must be >= 0.
+      required: [items]
+      example:
+        items:
+          - { id: "c1a2b3c4", position: 0 }
+          - { id: "c5d6e7f8", position: 1, category_id: "cat1" }
+
+    # ── Categories ──
+    Category:
+      description: models.Category.
+      type: object
+      properties:
+        id: { type: string }
+        server_id: { type: string }
+        name: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+      required: [id, server_id, name, position, created_at]
+      example:
+        id: "cat1"
+        server_id: "s1a2b3c4"
+        name: "Text Channels"
+        position: 0
+        created_at: "2026-01-15T10:20:30Z"
+    CreateCategoryRequest:
+      description: models.CreateCategoryRequest — body of POST /api/servers/{serverId}/categories.
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+      required: [name]
+      example:
+        name: "Text Channels"
+    UpdateCategoryRequest:
+      description: models.UpdateCategoryRequest — body of PATCH .../categories/{id}.
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+      example:
+        name: "Voice Channels"
+  responses:
+    StubOK:
+      description: Success (200). Payload is a stub in this phase — see StubData.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/StubData'
+    StubCreated:
+      description: Resource created (201). Payload is a stub in this phase — see StubData.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/StubData'
+    StubNoContent:
+      description: Success, no response body (204).
+    BadRequestError:
+      description: Malformed request — validation failure, missing required field, or invalid query/path parameter.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    UnauthorizedError:
+      description: Missing, malformed, expired, or revoked credential (session JWT or bot token).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ForbiddenError:
+      description: >-
+        Authenticated but not authorized — not a server member, missing the
+        required permission bit, or (on platform routes) not a platform admin.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFoundError:
+      description: Target resource does not exist, or is not visible to the caller.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ConflictError:
+      description: >-
+        State conflict — a duplicate resource (code ALREADY_EXISTS) or a
+        conflicting current state (code CONFLICT, e.g. an exhausted E2EE
+        one-time-prekey pool).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequestsError:
+      description: Per-IP rate limit exceeded.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+    # ── Auth ──
+    AuthTokensResponse:
+      description: Success — session tokens + the caller's user record (register/login/refresh).
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AuthTokens'
+    MessageOnlyOK:
+      description: 'Success (200) — generic `{"message": "..."}` payload.'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MessageOnlyResponse'
+    WsTicketOK:
+      description: Success (200) — one-shot WS ticket.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WsTicketResponse'
+
+    # ── Users (me) ──
+    UserOK:
+      description: Success (200) — the caller's own user record.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+    MemberWithRolesOK:
+      description: Success (200) — the updated profile, as a MemberWithRoles view.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MemberWithRoles'
+    ChangeEmailOK:
+      description: Success (200) — email change confirmation.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChangeEmailResponse'
+    UserPreferencesOK:
+      description: Success (200) — the caller's preferences blob.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserPreferences'
+
+    # ── Messages ──
+    MessagePageOK:
+      description: Success (200) — a page of channel messages.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MessagePage'
+    MessageCreated:
+      description: Success (201) — the created message.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Message'
+    MessageCreatePartial:
+      description: >-
+        Multi-Status (207) — the message was created but one or more
+        attached files failed to upload; see MessageCreatePartialResponse.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MessageCreatePartialResponse'
+    MessageOK:
+      description: Success (200) — the updated message.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Message'
+
+    # ── Pins ──
+    PinnedMessageListOK:
+      description: Success (200) — a channel's pinned messages.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PinnedMessageWithDetails' }
+    PinnedMessageCreated:
+      description: Success (201) — the pinned-message record.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PinnedMessageWithDetails'
+
+    # ── Channels ──
+    CategoryWithChannelsListOK:
+      description: Success (200) — a server's channels, grouped by category.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CategoryWithChannels' }
+    ChannelCreated:
+      description: Success (201) — the created channel.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Channel'
+    ChannelOK:
+      description: Success (200) — the updated channel.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Channel'
+
+    # ── Categories ──
+    CategoryListOK:
+      description: Success (200) — a server's channel categories.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+    CategoryCreated:
+      description: Success (201) — the created category.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Category'
+    CategoryOK:
+      description: Success (200) — the updated category.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Category'
+  requestBodies:
+    StubJSON:
+      description: 'JSON request payload (stub — fields to be specified in the next authoring phase).'
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/StubData' }
+    StubMultipart:
+      description: 'Multipart form payload (stub — fields/attachment to be specified in the next authoring phase).'
+      required: true
+      content:
+        multipart/form-data:
+          schema: { $ref: '#/components/schemas/StubData' }
+
+    # ── Auth ──
+    RegisterRequestBody:
+      description: Body of POST /api/auth/register.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RegisterRequest' }
+    LoginRequestBody:
+      description: Body of POST /api/auth/login.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/LoginRequest' }
+    RefreshTokenRequestBody:
+      description: Optional body of POST /api/auth/refresh or POST /api/auth/logout — see RefreshTokenBody.
+      required: false
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RefreshTokenBody' }
+    ForgotPasswordRequestBody:
+      description: Body of POST /api/auth/forgot-password.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ForgotPasswordRequest' }
+    ResetPasswordRequestBody:
+      description: Body of POST /api/auth/reset-password.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+
+    # ── Users (me) ──
+    UpdateProfileRequestBody:
+      description: Body of PATCH /api/users/me/profile.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+    ChangePasswordRequestBody:
+      description: Body of POST /api/users/me/password.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+    ChangeEmailRequestBody:
+      description: Body of PUT /api/users/me/email.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ChangeEmailRequest' }
+    UpdatePreferencesRequestBody:
+      description: Body of PATCH /api/users/me/preferences.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdatePreferencesRequest' }
+
+    # ── Messages ──
+    CreateMessageRequestBody:
+      description: >-
+        Body of POST /api/servers/{serverId}/channels/{id}/messages. Either
+        a plain JSON payload (no attachments) or multipart/form-data (file
+        attachments and/or E2EE form fields) — see isMultipart in
+        handlers/message.go for the Content-Type dispatch.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CreateMessageRequest' }
+        multipart/form-data:
+          schema: { $ref: '#/components/schemas/CreateMessageMultipartRequest' }
+    UpdateMessageRequestBody:
+      description: Body of PATCH /api/servers/{serverId}/messages/{id}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateMessageRequest' }
+
+    # ── Reactions ──
+    ToggleReactionRequestBody:
+      description: Body of POST /api/servers/{serverId}/messages/{messageId}/reactions.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ToggleReactionRequest' }
+
+    # ── Channels ──
+    CreateChannelRequestBody:
+      description: Body of POST /api/servers/{serverId}/channels.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CreateChannelRequest' }
+    UpdateChannelRequestBody:
+      description: Body of PATCH /api/servers/{serverId}/channels/{id}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateChannelRequest' }
+    ReorderItemsRequestBody:
+      description: >-
+        Shared body of PATCH .../channels/reorder AND PATCH
+        .../categories/reorder — see ReorderItemsRequest.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReorderItemsRequest' }
+
+    # ── Categories ──
+    CreateCategoryRequestBody:
+      description: Body of POST /api/servers/{serverId}/categories.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CreateCategoryRequest' }
+    UpdateCategoryRequestBody:
+      description: Body of PATCH /api/servers/{serverId}/categories/{id}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateCategoryRequest' }
