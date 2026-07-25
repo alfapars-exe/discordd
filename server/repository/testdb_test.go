@@ -63,6 +63,18 @@ func newTestDBWithPath(t testing.TB) (*database.DB, string) {
 	return db, path
 }
 
+// wrapForRepo wraps the test DB in the SAME production retry wrapper
+// (database.NewRetryingQuerier) that initRepositories puts in front of every
+// repository. Tests that build a repo straight from db.Conn bypass that
+// wrapper, so the RawDB/WithTx unwrap path — the exact thing that silently
+// stranded CreateWithSession plus six UpdatePositions/Migrate methods when the
+// wrapper first landed (see database/tx.go) — went untested. Construct
+// at-risk repos through this so a repo that reverts from database.RawDB(r.db)
+// to a bare db.(*sql.DB) assertion fails in the suite instead of only in prod.
+func wrapForRepo(db *database.DB) database.TxQuerier {
+	return database.NewRetryingQuerier(db.Conn)
+}
+
 // execWithoutFKs runs statements through a second connection with
 // foreign_keys OFF, so a test can plant a row that FK enforcement would
 // otherwise refuse (an orphan, a dangling reference). Same trick as
