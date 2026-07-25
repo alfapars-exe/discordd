@@ -21,6 +21,10 @@ COPY client ./
 # and the whole Space goes red. (vite.config.ts also falls back gracefully
 # to "0.0.0" if this file is somehow missing — defense in depth.)
 COPY package.json /app/package.json
+# DSN-gated Sentry (see client/src/monitoring/sentry.ts): unset by default,
+# so a build without --build-arg VITE_SENTRY_DSN=... stays Sentry-free.
+ARG VITE_SENTRY_DSN
+ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
 RUN npm run build
 # Output: /app/client/dist/
 

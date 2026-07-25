@@ -11,6 +11,7 @@ import { isNativeApp } from "./utils/constants";
 import { configureMobileUI, initAppLifecycle } from "./utils/nativePlugins";
 import { installGlobalErrorLogger } from "./api/globalErrorLogger";
 import { installScreenPickerDiagnosticForwarder } from "./api/screenPickerDiagnostic";
+import { initSentry } from "./monitoring/sentry";
 
 // Native shells (Electron file://, Capacitor capacitor://) don't support HTML5 History API.
 // Web uses BrowserRouter for clean URLs. Capitalized (JSX requires it for <Router>) but
@@ -32,6 +33,10 @@ installGlobalErrorLogger();
 // active in Electron; no-op otherwise. Idempotent. See plan
 // info-ws-ramses-user-spicy-cascade.md for the diagnosis flow.
 installScreenPickerDiagnosticForwarder();
+
+// DSN-gated — no-op when VITE_SENTRY_DSN isn't set (local dev / self-host).
+// Called before the render so early render-time errors are also captured.
+initSentry();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
