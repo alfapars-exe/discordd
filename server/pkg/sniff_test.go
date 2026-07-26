@@ -2,9 +2,7 @@ package pkg
 
 import (
 	"bytes"
-	"errors"
 	"io"
-	"strings"
 	"testing"
 )
 
@@ -15,8 +13,8 @@ var (
 	gifMagic  = []byte("GIF89a")
 	pdfMagic  = []byte("%PDF-1.4\n")
 	// http.DetectContentType returns "application/ogg" for OGG containers,
-	// but the audio allowlist entry is "audio/ogg". The extension fallback
-	// is what actually makes ogg uploads work.
+	// not "audio/ogg" — RefineMIME's extension fallback is what records the
+	// audio type for ogg uploads.
 	oggMagic = []byte("OggS\x00\x02")
 )
 
@@ -67,98 +65,45 @@ func TestSniffContentType_shortFileStillSniffs(t *testing.T) {
 	}
 }
 
-func TestSniffAndValidate_acceptsAllowed(t *testing.T) {
-	allow := map[string]bool{"image/png": true}
-	mime, _, err := SniffAndValidate(bytes.NewReader(pngMagic), "image/png", allow)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
+func TestRefineMIME(t *testing.T) {
+	tests := []struct {
+		name     string
+		sniffed  string
+		filename string
+		want     string
+	}{
+		// The two generic results ARE refined by extension.
+		{"ogg container to audio", "application/ogg", "song.ogg", "audio/ogg"},
+		{"octet-stream txt", "application/octet-stream", "notes.txt", "text/plain"},
+		{"octet-stream mp3", "application/octet-stream", "track.mp3", "audio/mpeg"},
+		{"octet-stream avif", "application/octet-stream", "pic.avif", "image/avif"},
+		{"extension is case-insensitive", "application/octet-stream", "SONG.OGG", "audio/ogg"},
+		// No extension match → generic result stays.
+		{"unknown extension stays generic", "application/octet-stream", "shell.exe", "application/octet-stream"},
+		{"no extension stays generic", "application/octet-stream", "blob", "application/octet-stream"},
+		// A SPECIFIC sniff is never overridden by the name — bytes win.
+		// This is the security property: HTML disguised as .png must keep
+		// its text/html classification for the serve-time decision.
+		{"specific sniff beats png name", "text/html", "fake.png", "text/html"},
+		{"specific sniff beats txt name", "image/png", "confusing.txt", "image/png"},
+		// svg is deliberately NOT in the map — an octet-stream sniff with an
+		// .svg name must stay generic (never classified inline-displayable).
+		{"svg never refined", "application/octet-stream", "pic.svg", "application/octet-stream"},
 	}
-	if mime != "image/png" {
-		t.Errorf("mime = %q", mime)
-	}
-}
-
-func TestSniffAndValidate_rejectsDisallowedWithTypedError(t *testing.T) {
-	allow := map[string]bool{"image/png": true}
-	// Claim png but ship pdf bytes — classic mismatch.
-	_, _, err := SniffAndValidate(bytes.NewReader(pdfMagic), "image/png", allow)
-	var mimeErr *MIMETypeError
-	if !errors.As(err, &mimeErr) {
-		t.Fatalf("want *MIMETypeError, got %T: %v", err, err)
-	}
-	if mimeErr.Detected != "application/pdf" {
-		t.Errorf("Detected = %q", mimeErr.Detected)
-	}
-	if mimeErr.Claimed != "image/png" {
-		t.Errorf("Claimed = %q", mimeErr.Claimed)
-	}
-	if !strings.Contains(mimeErr.Error(), "declared image/png but bytes are application/pdf") {
-		t.Errorf("error text lacks mismatch clue: %q", mimeErr.Error())
-	}
-}
-
-func TestSniffOrExtension_recoversOggByExtension(t *testing.T) {
-	// Sniff yields "application/ogg" (per http.DetectContentType), which
-	// isn't in our allowlist even though "audio/ogg" is. Extension "ogg"
-	// resolves the mismatch — this is the real-world fix.
-	allow := map[string]bool{"audio/ogg": true}
-	mime, _, err := SniffOrExtension(bytes.NewReader(oggMagic), "song.ogg", "audio/ogg", allow)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if mime != "audio/ogg" {
-		t.Errorf("mime = %q, want audio/ogg", mime)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RefineMIME(tc.sniffed, tc.filename); got != tc.want {
+				t.Errorf("RefineMIME(%q, %q) = %q, want %q", tc.sniffed, tc.filename, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestSniffOrExtension_recoversOctetStreamByExtension(t *testing.T) {
-	// Bytes that DetectContentType can't classify → application/octet-stream.
-	// Extension .txt → text/plain is in allowlist → accepted.
-	blob := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
-	allow := map[string]bool{"text/plain": true}
-	mime, _, err := SniffOrExtension(bytes.NewReader(blob), "notes.txt", "text/plain", allow)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
+func TestNormalizeMIME(t *testing.T) {
+	if got := NormalizeMIME("Text/Plain; charset=utf-8"); got != "text/plain" {
+		t.Errorf("NormalizeMIME = %q, want text/plain", got)
 	}
-	if mime != "text/plain" {
-		t.Errorf("mime = %q, want text/plain", mime)
-	}
-}
-
-func TestSniffOrExtension_rejectsWhenBothMiss(t *testing.T) {
-	// Neither the bytes NOR the extension resolve to an allowed type.
-	allow := map[string]bool{"image/png": true}
-	_, _, err := SniffOrExtension(bytes.NewReader(pdfMagic), "shell.exe", "image/png", allow)
-	var mimeErr *MIMETypeError
-	if !errors.As(err, &mimeErr) {
-		t.Fatalf("want *MIMETypeError, got %v", err)
-	}
-	// Detected is what the bytes actually looked like, not the extension guess.
-	if mimeErr.Detected != "application/pdf" {
-		t.Errorf("Detected = %q", mimeErr.Detected)
-	}
-}
-
-func TestSniffOrExtension_prefersSniffOverExtensionWhenBothInAllowlist(t *testing.T) {
-	// Bytes ARE png, filename says .txt. Both mime types are in the
-	// allowlist. Sniff wins — the bytes are the source of truth.
-	allow := map[string]bool{"image/png": true, "text/plain": true}
-	mime, _, err := SniffOrExtension(bytes.NewReader(pngMagic), "confusing.txt", "image/png", allow)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if mime != "image/png" {
-		t.Errorf("mime = %q, want image/png (bytes take priority)", mime)
-	}
-}
-
-func TestSniffOrExtension_extensionIsCaseInsensitive(t *testing.T) {
-	allow := map[string]bool{"audio/ogg": true}
-	mime, _, err := SniffOrExtension(bytes.NewReader(oggMagic), "SONG.OGG", "audio/ogg", allow)
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if mime != "audio/ogg" {
-		t.Errorf("mime = %q, want audio/ogg", mime)
+	if got := NormalizeMIME("image/png"); got != "image/png" {
+		t.Errorf("NormalizeMIME = %q, want image/png", got)
 	}
 }

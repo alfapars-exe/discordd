@@ -49,15 +49,18 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	}
 	claimedType = strings.TrimSpace(strings.Split(claimedType, ";")[0])
 
-	// E2EE files arrive as application/octet-stream — skip MIME whitelist
+	// E2EE files arrive as application/octet-stream — sniffing is pointless.
+	// Plaintext files: record the sniffed best-effort type; nothing is
+	// rejected by type anymore (serve-time headers neutralize hostile
+	// uploads — see the download handler).
 	mimeForRecord := claimedType
 	body := io.Reader(file)
 	if !isEncrypted {
-		realMIME, replay, err := pkg.SniffOrExtension(file, header.Filename, claimedType, allowedMimeTypes)
+		sniffed, replay, err := pkg.SniffContentType(file)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+			return nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
 		}
-		mimeForRecord = realMIME
+		mimeForRecord = pkg.RefineMIME(sniffed, header.Filename)
 		body = replay
 	}
 

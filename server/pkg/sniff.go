@@ -1,11 +1,17 @@
-// Package pkg — content-type sniffing for upload validation.
+// Package pkg — content-type sniffing for uploads.
 //
 // http.DetectContentType inspects the first 512 bytes of a file and
 // returns the MIME the bytes actually look like, regardless of what the
 // client claimed in the multipart Content-Type header. The client header
-// is fully attacker-controlled, so any MIME allowlist check that trusts
-// it is trivially bypassed by labelling a JS shell or HTML XSS payload
-// as image/png.
+// is fully attacker-controlled, so nothing security-relevant may ever
+// trust it.
+//
+// Since all file types became uploadable, the sniffed MIME is RECORDED
+// (display metadata) rather than enforced — there is no upload allowlist
+// anymore. The security boundary moved to serve time: the download handler
+// re-sniffs the bytes and forces non-displayable types to
+// application/octet-stream + Content-Disposition: attachment, so a
+// hostile HTML/JS/SVG upload can never execute on the app origin.
 //
 // SniffContentType reads up to 512 bytes from src, runs DetectContentType
 // against the buffer, and returns:
@@ -47,81 +53,42 @@ func SniffContentType(src io.Reader) (mime string, body io.Reader, err error) {
 	}
 
 	sniffed := http.DetectContentType(buf[:n])
-
-	// Strip any "; charset=..." trailer so callers can compare against a
-	// plain "image/png" allowlist without prefix matching.
-	if semi := strings.IndexByte(sniffed, ';'); semi >= 0 {
-		sniffed = strings.TrimSpace(sniffed[:semi])
-	}
-
 	replayed := io.MultiReader(bytes.NewReader(buf[:n]), src)
-	return strings.ToLower(sniffed), replayed, nil
+	return NormalizeMIME(sniffed), replayed, nil
 }
 
-// SniffAndValidate is a one-shot helper for upload services. It sniffs
-// the real MIME, checks it against the allowlist, and returns the
-// replayed reader for the caller to save. Returns the sniffed MIME on
-// success so callers can persist the *real* type instead of the
-// client-supplied one.
-//
-// `claimedMIME` is the multipart Content-Type header, included for the
-// "claimed vs actual" mismatch check — if the client said image/png and
-// the bytes say application/x-msdownload, we surface that as an error.
-// `allowlist` lookups happen against the SNIFFED MIME.
-func SniffAndValidate(
-	src io.Reader,
-	claimedMIME string,
-	allowlist map[string]bool,
-) (realMIME string, body io.Reader, err error) {
-	realMIME, body, err = SniffContentType(src)
-	if err != nil {
-		return "", nil, err
+// NormalizeMIME strips any "; charset=..." trailer and lowercases, so
+// callers can compare against plain "image/png"-style values.
+func NormalizeMIME(mime string) string {
+	if semi := strings.IndexByte(mime, ';'); semi >= 0 {
+		mime = strings.TrimSpace(mime[:semi])
 	}
-
-	if !allowlist[realMIME] {
-		return realMIME, body, &MIMETypeError{
-			Detected: realMIME,
-			Claimed:  claimedMIME,
-		}
-	}
-
-	return realMIME, body, nil
-}
-
-// MIMETypeError is returned by SniffAndValidate when the sniffed MIME is
-// not in the allowlist. Both the sniffed and claimed types are reported
-// so logs can show "client said X, bytes were Y" — useful for tuning the
-// allowlist and spotting active probing.
-type MIMETypeError struct {
-	Detected string
-	Claimed  string
-}
-
-func (e *MIMETypeError) Error() string {
-	if e.Claimed == "" || e.Claimed == e.Detected {
-		return "file type not allowed: " + e.Detected
-	}
-	return "file type not allowed: declared " + e.Claimed + " but bytes are " + e.Detected
+	return strings.ToLower(mime)
 }
 
 // extensionMIME is the controlled fallback map for filename-based
-// classification. Kept small and explicit so we can't accidentally accept
-// something http.DetectContentType and the allowlist both would reject.
+// classification. Kept small and explicit, and consulted ONLY when the
+// sniff came back generic (see RefineMIME) — so a name can never override
+// what the bytes actually are, and active content (svg/html/js/xml) is
+// deliberately absent: nothing may label those inline-displayable.
 //
 // The real-world need: DetectContentType returns "application/ogg" for
-// OGG containers (not "audio/ogg" per our allowlist) and
-// "application/octet-stream" for raw MP3s without an ID3 tag. Without
-// this fallback, valid uploads get 400ed.
+// OGG containers (not "audio/ogg") and "application/octet-stream" for raw
+// MP3s without an ID3 tag; without the fallback those recorded as opaque
+// blobs and lost their inline players.
 var extensionMIME = map[string]string{
 	"jpg":  "image/jpeg",
 	"jpeg": "image/jpeg",
 	"png":  "image/png",
 	"gif":  "image/gif",
 	"webp": "image/webp",
+	"bmp":  "image/bmp",
+	"avif": "image/avif",
 	"mp4":  "video/mp4",
 	"webm": "video/webm",
 	"mp3":  "audio/mpeg",
 	"ogg":  "audio/ogg",
+	"wav":  "audio/wave",
 	"pdf":  "application/pdf",
 	"txt":  "text/plain",
 }
@@ -134,32 +101,18 @@ func extFromName(filename string) string {
 	return strings.ToLower(filename[dot+1:])
 }
 
-// SniffOrExtension is SniffAndValidate with a controlled filename-extension
-// fallback for cases where http.DetectContentType is technically correct
-// but the resulting MIME isn't in the allowlist (OGG, raw MP3). Sniffing
-// still wins whenever the bytes resolve to an allowed type — extension is
-// only consulted when the sniffed type would otherwise be rejected.
-func SniffOrExtension(
-	src io.Reader,
-	filename string,
-	claimedMIME string,
-	allowlist map[string]bool,
-) (realMIME string, body io.Reader, err error) {
-	sniffed, body, err := SniffContentType(src)
-	if err != nil {
-		return "", nil, err
+// RefineMIME upgrades a GENERIC sniff result using the controlled extension
+// map. Only "application/octet-stream" and "application/ogg" are refined;
+// any specific sniffed type always wins — the bytes are the source of
+// truth, so a .png full of HTML stays text/html no matter what the name
+// claims. Never errors: with no upload allowlist there is nothing to
+// reject, only a best-effort type to record.
+func RefineMIME(sniffed, filename string) string {
+	if sniffed != "application/octet-stream" && sniffed != "application/ogg" {
+		return sniffed
 	}
-
-	if allowlist[sniffed] {
-		return sniffed, body, nil
+	if candidate, ok := extensionMIME[extFromName(filename)]; ok {
+		return candidate
 	}
-
-	if candidate, ok := extensionMIME[extFromName(filename)]; ok && allowlist[candidate] {
-		return candidate, body, nil
-	}
-
-	return sniffed, body, &MIMETypeError{
-		Detected: sniffed,
-		Claimed:  claimedMIME,
-	}
+	return sniffed
 }

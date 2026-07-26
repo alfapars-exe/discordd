@@ -19,7 +19,7 @@ import (
 
 // oggMagic mirrors the first six bytes of a real OGG stream; enough for
 // http.DetectContentType to return "application/ogg" — the exact mismatch
-// SniffOrExtension exists to work around.
+// RefineMIME's extension fallback exists to work around.
 var (
 	pngMagic = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	oggMagic = []byte("OggS\x00\x02")
@@ -114,27 +114,47 @@ func TestUploadService_recoversOggByExtension(t *testing.T) {
 	}
 }
 
-func TestUploadService_rejectsDisallowedMime(t *testing.T) {
-	// PDF isn't in this hypothetical allowlist? PDF IS in the real one
-	// (application/pdf). Use an executable claim instead — script.exe
-	// with random bytes → application/octet-stream sniff, .exe extension
-	// not in map → MIMETypeError.
+func TestUploadService_acceptsUnknownTypeAsOctetStream(t *testing.T) {
+	// All file types upload now. An executable with unclassifiable bytes
+	// sniffs as application/octet-stream, .exe has no extension mapping,
+	// and the upload SUCCEEDS with that generic recorded type. (Serving is
+	// where such files are forced to download — see upload_download.go.)
 	repo := &testutil.MockAttachmentRepo{}
 	svc, dir := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "shell.exe", "application/octet-stream",
 		[]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05})
 	defer file.Close()
 
-	_, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
-	if err == nil {
-		t.Fatal("expected error rejecting disallowed type")
+	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
+	if err != nil {
+		t.Fatalf("Upload of unknown type must succeed now: %v", err)
 	}
-	if !errors.Is(err, pkg.ErrBadRequest) {
-		t.Errorf("err chain missing ErrBadRequest: %v", err)
+	if att.MimeType == nil || *att.MimeType != "application/octet-stream" {
+		t.Errorf("MimeType = %v, want application/octet-stream", att.MimeType)
 	}
-	// No file must have been written to disk on rejection.
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Errorf("rejected upload wrote %d files to disk", len(entries))
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Errorf("uploadDir entries = %d, want 1", len(entries))
+	}
+}
+
+func TestUploadService_recordsSniffedTypeOverClaim(t *testing.T) {
+	// HTML bytes disguised with a .png name and an image/png claim: the
+	// recorded MIME must follow the BYTES (text/html), never the claim or
+	// the extension — the serve-time inline/attachment decision depends on
+	// downstream consumers not being lied to.
+	repo := &testutil.MockAttachmentRepo{}
+	svc, _ := newTestUploadService(t, repo)
+	file, fh := buildUpload(t, "innocent.png", "image/png",
+		[]byte("<!DOCTYPE html><html><body>boo</body></html>"))
+	defer file.Close()
+
+	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if att.MimeType == nil || *att.MimeType != "text/html" {
+		t.Errorf("MimeType = %v, want text/html (sniffed from bytes)", att.MimeType)
 	}
 }
 
