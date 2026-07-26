@@ -31,12 +31,18 @@ func scanChannel(rows *sql.Rows) (models.Channel, error) {
 }
 
 func (r *sqliteChannelRepo) Create(ctx context.Context, channel *models.Channel) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to create channel: %w", err)
+	}
+	channel.ID = id
+
 	query := `
 		INSERT INTO channels (id, server_id, name, type, category_id, topic, position, user_limit, bitrate)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
+		channel.ID,
 		channel.ServerID,
 		channel.Name,
 		channel.Type,
@@ -45,11 +51,13 @@ func (r *sqliteChannelRepo) Create(ctx context.Context, channel *models.Channel)
 		channel.Position,
 		channel.UserLimit,
 		channel.Bitrate,
-	).Scan(&channel.ID, &channel.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create channel: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM channels WHERE id = ?", channel.ID).Scan(&channel.CreatedAt)
 
 	return nil
 }
