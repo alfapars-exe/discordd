@@ -1,5 +1,9 @@
 /**
- * Generic API + WebSocket envelope shapes.
+ * Generic API response envelope.
+ *
+ * The WebSocket frame type (`WSMessage`) and its per-op payload map now live
+ * in `./ws` (discriminated union keyed by `op`); both are re-exported from the
+ * types barrel, so existing `import { WSMessage } from "../types"` keeps working.
  */
 
 export type APIResponse<T = unknown> = {
@@ -26,12 +30,11 @@ export type APIResponse<T = unknown> = {
    * a generic 5xx.
    */
   status?: number;
-};
-
-export type WSMessage = {
-  op: string;
-  d: unknown;
-  seq?: number;
-  /** Server ID — injected by BroadcastToServer for server-scoped events */
-  server_id?: string;
+  /**
+   * True when the request was aborted by the caller-requested timeout
+   * (RequestOptions.timeoutMs). Deliberately distinct from isNetworkError:
+   * a timed-out POST may have been persisted server-side, so retry helpers
+   * must NOT auto-retry it (duplicate risk without an idempotency key).
+   */
+  isTimeout?: boolean;
 };

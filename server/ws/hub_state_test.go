@@ -29,8 +29,8 @@ func TestUpdateUserInfo_UnknownUserIsNoOp(t *testing.T) {
 
 func TestRemoveClient_EvictsUserInfoOnlyOnFullDisconnect(t *testing.T) {
 	h := NewHub()
-	c1 := &Client{hub: h, userID: "u1", send: make(chan []byte, 1)}
-	c2 := &Client{hub: h, userID: "u1", send: make(chan []byte, 1)}
+	c1 := &Client{hub: h, userID: "u1", send: make(chan []byte, 1), done: make(chan struct{})}
+	c2 := &Client{hub: h, userID: "u1", send: make(chan []byte, 1), done: make(chan struct{})}
 	h.SetUserInfo("u1", "alice", "Alice", "")
 	h.addClient(c1)
 	h.addClient(c2)

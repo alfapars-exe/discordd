@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getLinkPreview } from "../../api/linkPreview";
+import { useLightboxStore, isPlainLeftClick } from "../../stores/lightboxStore";
 import type { LinkPreview } from "../../types";
 
 /** Session-level cache — cleared on page reload */
@@ -101,7 +102,9 @@ function LinkPreviewCard({ url }: LinkPreviewCardProps) {
           <span className="link-preview-desc">{preview.description}</span>
         )}
 
-        {/* OG Image */}
+        {/* OG Image — plain left-click previews in the lightbox (covers
+            GIF-picker GIFs, which travel as message-content URLs, not
+            attachments); other clicks fall through to the card anchor. */}
         {preview.image_url && (
           <img
             src={preview.image_url}
@@ -110,6 +113,18 @@ function LinkPreviewCard({ url }: LinkPreviewCardProps) {
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
+            onClick={(e) => {
+              if (!isPlainLeftClick(e)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              useLightboxStore.getState().open({
+                kind: "remote",
+                src: preview.image_url!,
+                href: url,
+                filename: preview.title ?? url,
+                noReferrer: true,
+              });
+            }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
         )}

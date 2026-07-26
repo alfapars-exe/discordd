@@ -15,6 +15,8 @@ describe("mimeTypeFromExtension", () => {
     ["a.jpeg", "image/jpeg"],
     ["a.gif", "image/gif"],
     ["a.webp", "image/webp"],
+    ["a.bmp", "image/bmp"],
+    ["a.avif", "image/avif"],
     ["clip.mp4", "video/mp4"],
     ["notes.txt", "text/plain"],
   ])("infers %s → %s", (name, expected) => {
@@ -28,20 +30,19 @@ describe("mimeTypeFromExtension", () => {
   it("returns null for unknown extension", () => {
     expect(mimeTypeFromExtension("script.exe")).toBeNull();
   });
+
+  it("never classifies svg as an inline image (script-capable format)", () => {
+    expect(mimeTypeFromExtension("pic.svg")).toBeNull();
+  });
 });
 
 describe("validateFiles", () => {
-  it("accepts allowed types with valid mime", () => {
-    const f = makeFile("a.png", "image/png", 1024);
-    const { valid, rejected } = validateFiles([f]);
-    expect(valid).toEqual([f]);
-    expect(rejected).toEqual([]);
-  });
-
-  it("infers mime from extension when file.type is empty", () => {
-    const f = makeFile("a.png", "", 1024);
-    const { valid, rejected } = validateFiles([f]);
-    expect(valid).toEqual([f]);
+  it("accepts every file type — size is the only gate", () => {
+    const png = makeFile("a.png", "image/png", 1024);
+    const exe = makeFile("script.exe", "application/x-msdownload", 100);
+    const unknown = makeFile("blob", "", 100);
+    const { valid, rejected } = validateFiles([png, exe, unknown]);
+    expect(valid).toEqual([png, exe, unknown]);
     expect(rejected).toEqual([]);
   });
 
@@ -52,29 +53,13 @@ describe("validateFiles", () => {
     expect(rejected).toEqual([{ file: oversized, reason: "too_large" }]);
   });
 
-  it("rejects disallowed types with reason=type_not_allowed", () => {
-    const evil = makeFile("script.exe", "application/x-msdownload", 100);
-    const { valid, rejected } = validateFiles([evil]);
-    expect(valid).toEqual([]);
-    expect(rejected).toEqual([{ file: evil, reason: "type_not_allowed" }]);
-  });
-
-  it("rejects when file.type is empty AND extension is unknown", () => {
-    const f = makeFile("blob", "", 100);
-    const { valid, rejected } = validateFiles([f]);
-    expect(valid).toEqual([]);
-    expect(rejected).toHaveLength(1);
-    expect(rejected[0]?.reason).toBe("type_not_allowed");
-  });
-
-  it("partitions a mixed batch correctly", () => {
+  it("partitions a mixed batch: only the oversized file is rejected", () => {
     const good = makeFile("a.png", "image/png", 1024);
     const oversized = makeFile("big.png", "image/png", MAX_FILE_SIZE + 1);
-    const forbidden = makeFile("script.exe", "application/x-msdownload", 100);
-    const { valid, rejected } = validateFiles([good, oversized, forbidden]);
-    expect(valid).toEqual([good]);
-    expect(rejected).toHaveLength(2);
-    expect(rejected.map((r) => r.reason)).toEqual(["too_large", "type_not_allowed"]);
+    const exe = makeFile("script.exe", "application/x-msdownload", 100);
+    const { valid, rejected } = validateFiles([good, oversized, exe]);
+    expect(valid).toEqual([good, exe]);
+    expect(rejected).toEqual([{ file: oversized, reason: "too_large" }]);
   });
 
   it("accepts FileList and array uniformly", () => {

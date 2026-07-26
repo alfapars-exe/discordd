@@ -42,7 +42,9 @@ func newUploadTestAuthService() services.AuthService {
 }
 
 func newTestUploadHandler(uploadDir string) *UploadDownloadHandler {
-	return NewUploadDownloadHandler(uploadDir, nil, nil, nil, nil, newUploadTestAuthService())
+	// These tests exercise authUserID / serveFile directly, not Serve, so the
+	// media access service is unused — nil is fine.
+	return NewUploadDownloadHandler(uploadDir, nil, newUploadTestAuthService())
 }
 
 // signUploadTestToken mints a JWT with an explicit scope and TTL. Signing by
@@ -204,6 +206,142 @@ func TestServeFile_CacheControlIsPrivate(t *testing.T) {
 	}
 }
 
+// TestServeFile_TypeHardening pins the all-file-types serving contract:
+// Content-Type comes from re-sniffing the BYTES (never the name), only
+// display-safe types render inline, and everything else is a forced
+// octet-stream download with a sandbox CSP — the trio that breaks the
+// uploaded-HTML + uploaded-JS same-origin stored-XSS chain.
+func TestServeFile_TypeHardening(t *testing.T) {
+	pngBytes := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+
+	tests := []struct {
+		name         string
+		diskName     string
+		body         []byte
+		wantType     string
+		wantDisp     string // Content-Disposition prefix
+		wantSandbox  bool
+		wantDispName string // expected filename in the Content-Disposition
+	}{
+		{
+			name: "real png renders inline", diskName: "aabbccddeeff0011_photo.png",
+			body: pngBytes, wantType: "image/png", wantDisp: "inline", wantDispName: "photo.png",
+		},
+		{
+			name: "html is a forced download", diskName: "aabbccddeeff0011_page.html",
+			body:     []byte("<!DOCTYPE html><html><script>alert(1)</script></html>"),
+			wantType: "application/octet-stream", wantDisp: "attachment", wantSandbox: true,
+			wantDispName: "page.html",
+		},
+		{
+			name: "html disguised as png still downloads (bytes win)", diskName: "aabbccddeeff0011_fake.png",
+			body:     []byte("<!DOCTYPE html><html><body>boo</body></html>"),
+			wantType: "application/octet-stream", wantDisp: "attachment", wantSandbox: true,
+			wantDispName: "fake.png",
+		},
+		{
+			name: "svg never renders inline", diskName: "aabbccddeeff0011_pic.svg",
+			body:     []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`),
+			wantType: "application/octet-stream", wantDisp: "attachment", wantSandbox: true,
+			wantDispName: "pic.svg",
+		},
+		{
+			name: "js is a forced download (script-chain guard)", diskName: "aabbccddeeff0011_app.js",
+			body:     []byte("console.log('pwn')"),
+			wantType: "application/octet-stream", wantDisp: "attachment", wantSandbox: true,
+			wantDispName: "app.js",
+		},
+		{
+			name: "pdf stays inline", diskName: "aabbccddeeff0011_doc.pdf",
+			body: []byte("%PDF-1.4\n"), wantType: "application/pdf", wantDisp: "inline",
+			wantDispName: "doc.pdf",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tc.diskName), tc.body, 0o600); err != nil {
+				t.Fatalf("write fixture: %v", err)
+			}
+			h := newTestUploadHandler(dir)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/uploads/"+tc.diskName, nil)
+			rec := httptest.NewRecorder()
+			h.serveFile(rec, req, tc.diskName)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Type"); got != tc.wantType {
+				t.Errorf("Content-Type = %q, want %q", got, tc.wantType)
+			}
+			disp := rec.Header().Get("Content-Disposition")
+			if !strings.HasPrefix(disp, tc.wantDisp) {
+				t.Errorf("Content-Disposition = %q, want prefix %q", disp, tc.wantDisp)
+			}
+			if !strings.Contains(disp, `filename="`+tc.wantDispName+`"`) {
+				t.Errorf("Content-Disposition %q lacks filename %q (random prefix must be stripped)", disp, tc.wantDispName)
+			}
+			if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+			}
+			csp := rec.Header().Get("Content-Security-Policy")
+			if tc.wantSandbox && csp != "sandbox" {
+				t.Errorf("Content-Security-Policy = %q, want sandbox", csp)
+			}
+			if !tc.wantSandbox && csp == "sandbox" {
+				t.Errorf("inline response must not carry the sandbox CSP")
+			}
+			if got := rec.Header().Get("Cache-Control"); got != "private, max-age=3600" {
+				t.Errorf("Cache-Control = %q", got)
+			}
+		})
+	}
+}
+
+// TestContentDisposition_EscapingAndInjection covers the user-supplied
+// filename surface: CRLF header injection, quote/backslash escaping in the
+// ASCII fallback, and the RFC 5987 extended form for non-ASCII names.
+func TestContentDisposition_EscapingAndInjection(t *testing.T) {
+	got := contentDisposition("attachment", "rapor \"2026\" ğüş\r\nSet-Cookie: pwn=1.pdf")
+
+	if strings.ContainsAny(got, "\r\n") {
+		t.Fatalf("CR/LF survived into the header value: %q", got)
+	}
+	if !strings.Contains(got, `\"2026\"`) {
+		t.Errorf("quotes not backslash-escaped in ASCII fallback: %q", got)
+	}
+	if !strings.Contains(got, "filename*=UTF-8''") {
+		t.Errorf("missing RFC 5987 extended form: %q", got)
+	}
+	// The ASCII fallback segment (before filename*) must be pure ASCII.
+	fallback := got[:strings.Index(got, "filename*=")]
+	for i := 0; i < len(fallback); i++ {
+		if fallback[i] > 0x7e {
+			t.Errorf("non-ASCII byte %#x leaked into the fallback segment: %q", fallback[i], fallback)
+			break
+		}
+	}
+
+	if got := contentDisposition("inline", ""); !strings.Contains(got, `filename="download"`) {
+		t.Errorf("empty filename must fall back to a generic name: %q", got)
+	}
+}
+
+func TestDownloadName_StripsDiskPrefix(t *testing.T) {
+	if got := downloadName("aabbccddeeff0011_photo.png"); got != "photo.png" {
+		t.Errorf("downloadName = %q, want photo.png", got)
+	}
+	// Names without the random prefix (public assets) pass through.
+	if got := downloadName("avatar.png"); got != "avatar.png" {
+		t.Errorf("downloadName = %q, want avatar.png", got)
+	}
+	if got := downloadName("aabbccddeeff0011_"); got != "download" {
+		t.Errorf("downloadName on empty remainder = %q, want download", got)
+	}
+}
+
 // compile-time guard: the handler's validator interface is satisfied by the
 // real AuthService, so these tests exercise production validation logic.
 var _ AccessTokenValidator = (services.AuthService)(nil)
@@ -283,7 +421,7 @@ var (
 // chan-1), one DM attachment (dm-msg-1 in dm-chan-1 between serveDMUser1ID and
 // serveDMUser2ID) and nothing claiming the avatar. Returns the upload dir so
 // traversal tests can plant a secret next to it.
-func newServeWorld(t *testing.T) (*UploadDownloadHandler, string) {
+func newServeWorld(t *testing.T) (*UploadDownloadHandler, string, *serveAttachmentRepo) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -351,8 +489,9 @@ func newServeWorld(t *testing.T) (*UploadDownloadHandler, string) {
 		},
 	}
 
-	h := NewUploadDownloadHandler(dir, attachments, dmRepo, messages, perms, newUploadTestAuthService())
-	return h, dir
+	mediaAuth := services.NewMediaAccessService(attachments, messages, dmRepo, perms)
+	h := NewUploadDownloadHandler(dir, mediaAuth, newUploadTestAuthService())
+	return h, dir, attachments
 }
 
 // serveAs issues GET <path> as userID ("" = no credential at all) through the
@@ -372,7 +511,7 @@ func serveAs(t *testing.T, h *UploadDownloadHandler, path, userID string) *httpt
 }
 
 func TestServe_AuthGating(t *testing.T) {
-	h, _ := newServeWorld(t)
+	h, _, _ := newServeWorld(t)
 
 	tests := []struct {
 		name       string
@@ -482,7 +621,7 @@ func TestServe_AuthGating(t *testing.T) {
 // raw name (prefix check) and serveFile rejects again after path.Clean +
 // SafeJoin; both layers are exercised.
 func TestServe_RefusesPathTraversal(t *testing.T) {
-	h, uploadDir := newServeWorld(t)
+	h, uploadDir, _ := newServeWorld(t)
 
 	const secret = "TOP-SECRET-OUTSIDE-UPLOAD-DIR"
 	secretPath := filepath.Join(filepath.Dir(uploadDir), "secret.txt")
@@ -539,9 +678,10 @@ func TestServe_RefusesPathTraversal(t *testing.T) {
 // branch — that fall-through would be an auth bypass.
 func TestServe_OrphanAndLookupFailures(t *testing.T) {
 	t.Run("attachment pointing at a deleted message is 404", func(t *testing.T) {
-		h, _ := newServeWorld(t)
-		// msg-2 is unknown to the message repo → GetByID returns ErrNotFound.
-		att := h.attachmentRepo.(*serveAttachmentRepo)
+		h, _, att := newServeWorld(t)
+		// msg-gone is unknown to the message repo → GetByID returns ErrNotFound.
+		// The service holds this same *serveAttachmentRepo, so injecting into
+		// its map here is visible to the Serve path below.
 		att.byURL["/api/uploads/"+servePublicFile] = &models.Attachment{
 			ID: "att-orphan", MessageID: "msg-gone", FileURL: "/api/uploads/" + servePublicFile,
 		}
@@ -557,8 +697,9 @@ func TestServe_OrphanAndLookupFailures(t *testing.T) {
 			t.Fatalf("write fixture: %v", err)
 		}
 		boom := &boomAttachmentRepo{MockAttachmentRepo: &testutil.MockAttachmentRepo{}}
-		h := NewUploadDownloadHandler(dir, boom, &serveDMRepo{MockDMRepo: &testutil.MockDMRepo{}},
-			&testutil.MockMessageRepo{}, &testutil.MockChannelPermResolver{}, newUploadTestAuthService())
+		mediaAuth := services.NewMediaAccessService(boom, &testutil.MockMessageRepo{},
+			&serveDMRepo{MockDMRepo: &testutil.MockDMRepo{}}, &testutil.MockChannelPermResolver{})
+		h := NewUploadDownloadHandler(dir, mediaAuth, newUploadTestAuthService())
 
 		rec := serveAs(t, h, "/api/uploads/"+servePublicFile, serveChannelMemberID)
 		if rec.Code != http.StatusInternalServerError {

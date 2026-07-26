@@ -20,10 +20,15 @@ func NewSQLiteDeviceRepo(db database.TxQuerier) DeviceRepository {
 
 // Register creates or re-registers a device (upsert on user_id + device_id).
 func (r *sqliteDeviceRepo) Register(ctx context.Context, device *models.Device) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to register device: %w", err)
+	}
+
 	query := `
-		INSERT INTO user_devices (user_id, device_id, display_name, identity_key, signing_key,
+		INSERT INTO user_devices (id, user_id, device_id, display_name, identity_key, signing_key,
 			signed_prekey, signed_prekey_id, signed_prekey_signature, registration_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, device_id)
 		DO UPDATE SET
 			display_name = excluded.display_name,
@@ -33,17 +38,23 @@ func (r *sqliteDeviceRepo) Register(ctx context.Context, device *models.Device) 
 			signed_prekey_id = excluded.signed_prekey_id,
 			signed_prekey_signature = excluded.signed_prekey_signature,
 			registration_id = excluded.registration_id,
-			last_seen_at = CURRENT_TIMESTAMP
-		RETURNING id, last_seen_at, created_at`
+			last_seen_at = CURRENT_TIMESTAMP`
 
-	err := r.db.QueryRowContext(ctx, query,
-		device.UserID, device.DeviceID, device.DisplayName, device.IdentityKey, device.SigningKey,
+	if _, err := r.db.ExecContext(ctx, query,
+		id, device.UserID, device.DeviceID, device.DisplayName, device.IdentityKey, device.SigningKey,
 		device.SignedPrekey, device.SignedPrekeyID, device.SignedPrekeySig,
 		device.RegistrationID,
-	).Scan(&device.ID, &device.LastSeenAt, &device.CreatedAt)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to register device: %w", err)
 	}
+
+	// Read back the canonical row: on an upsert CONFLICT the id is the
+	// pre-existing one (id is not in the DO UPDATE set), not the candidate
+	// generated above. RETURNING avoided for Turso/Hrana safety (see retry.go).
+	_ = r.db.QueryRowContext(ctx,
+		"SELECT id, last_seen_at, created_at FROM user_devices WHERE user_id = ? AND device_id = ?",
+		device.UserID, device.DeviceID,
+	).Scan(&device.ID, &device.LastSeenAt, &device.CreatedAt)
 	return nil
 }
 

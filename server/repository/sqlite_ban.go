@@ -34,16 +34,17 @@ func scanBan(rows *sql.Rows) (models.Ban, error) {
 func (r *sqliteBanRepo) Create(ctx context.Context, ban *models.Ban) error {
 	query := `
 		INSERT OR REPLACE INTO bans (server_id, user_id, username, reason, banned_by, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-		RETURNING created_at`
+		VALUES (?, ?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
 		ban.ServerID, ban.UserID, ban.Username, ban.Reason, ban.BannedBy, ban.ExpiresAt,
-	).Scan(&ban.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create ban: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create). Composite (server,user) PK.
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM bans WHERE server_id = ? AND user_id = ?", ban.ServerID, ban.UserID).Scan(&ban.CreatedAt)
 
 	return nil
 }

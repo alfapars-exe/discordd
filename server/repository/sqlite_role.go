@@ -166,10 +166,15 @@ func (r *sqliteRoleRepo) GetMaxPosition(ctx context.Context, serverID string) (i
 // ─── Write ───
 
 func (r *sqliteRoleRepo) Create(ctx context.Context, role *models.Role) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to create role: %w", err)
+	}
+	role.ID = id
+
 	query := `
 		INSERT INTO roles (id, server_id, name, color, position, permissions, is_default, is_owner, mentionable)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	isDefault := 0
 	if role.IsDefault {
@@ -184,13 +189,15 @@ func (r *sqliteRoleRepo) Create(ctx context.Context, role *models.Role) error {
 		mentionable = 1
 	}
 
-	err := r.db.QueryRowContext(ctx, query,
-		role.ServerID, role.Name, role.Color, role.Position, role.Permissions, isDefault, isOwner, mentionable,
-	).Scan(&role.ID, &role.CreatedAt)
-
-	if err != nil {
+	if _, err := r.db.ExecContext(ctx, query,
+		role.ID, role.ServerID, role.Name, role.Color, role.Position, role.Permissions, isDefault, isOwner, mentionable,
+	); err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM roles WHERE id = ?", role.ID).Scan(&role.CreatedAt)
 
 	return nil
 }

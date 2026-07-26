@@ -1,6 +1,6 @@
 /** MemberItem — Single member row in the member list with context menu and profile card. */
 
-import { useState, useRef, useCallback } from "react";
+import { memo, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import Avatar from "../shared/Avatar";
@@ -400,4 +400,7 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
   );
 }
 
-export default MemberItem;
+// Memoized: the member list re-renders on every presence_update, but each row
+// only depends on its own member object + isOnline + nowMs. Shallow-prop memo
+// keeps a presence change to O(1) row re-renders instead of O(N).
+export default memo(MemberItem);

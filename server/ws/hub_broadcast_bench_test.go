@@ -40,6 +40,7 @@ func benchServerHub(b *testing.B, n int, slow bool) (*Hub, string, func()) {
 			hub:       h,
 			userID:    fmt.Sprintf("bench-user-%d", i),
 			send:      make(chan []byte, sendBufferSize),
+			done:      make(chan struct{}),
 			serverIDs: []string{sid},
 		}
 		h.addClient(c)
@@ -128,7 +129,7 @@ func BenchmarkBroadcastToServer_SlowClients(b *testing.B) {
 // continuously-drained human client so every call takes the fast path.
 func BenchmarkDeliver(b *testing.B) {
 	h := NewHub()
-	c := &Client{hub: h, userID: "bench-single", send: make(chan []byte, sendBufferSize)}
+	c := &Client{hub: h, userID: "bench-single", send: make(chan []byte, sendBufferSize), done: make(chan struct{})}
 
 	done := make(chan struct{})
 	go func() {

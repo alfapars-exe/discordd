@@ -34,7 +34,7 @@ function ChannelChatProvider({
   const messages = useMessageStore(
     (s) => (channelId ? s.messagesByChannel[channelId] : undefined) as ChatMessage[] | undefined
   ) ?? EMPTY_MESSAGES;
-  const isLoading = useMessageStore((s) => s.isLoading);
+  const isLoading = useMessageStore((s) => !!s.isLoadingByChannel[channelId]);
   const isLoadingMore = useMessageStore((s) => s.isLoadingMore);
   const hasMore = useMessageStore((s) =>
     channelId ? s.hasMoreByChannel[channelId] ?? false : false

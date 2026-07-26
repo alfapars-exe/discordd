@@ -95,10 +95,10 @@ function App() {
 
   if (!isInitialized) {
     const spinner = (
-      <div className="flex h-full items-center justify-center bg-background" style={{ flex: 1, minHeight: 0 }}>
-        <div className="text-center">
-          <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-surface border-t-brand" />
-          <p className="text-base text-text-muted">
+      <div className="app-loading">
+        <div className="app-loading-inner">
+          <div className="app-loading-spinner" />
+          <p className="app-loading-text">
             {initPhase === "waking" ? t("serverWaking", { defaultValue: t("loading") }) : t("loading")}
           </p>
         </div>
@@ -182,10 +182,10 @@ function App() {
   // Re-using it keeps the perceived transition consistent regardless of
   // whether the lazy chunk arrives in 5ms (cached) or 500ms (cold load).
   const lazyFallback = (
-    <div className="flex h-full items-center justify-center bg-background" style={{ flex: 1, minHeight: 0 }}>
-      <div className="text-center">
-        <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-surface border-t-brand" />
-        <p className="text-base text-text-muted">{t("loading")}</p>
+    <div className="app-loading">
+      <div className="app-loading-inner">
+        <div className="app-loading-spinner" />
+        <p className="app-loading-text">{t("loading")}</p>
       </div>
     </div>
   );

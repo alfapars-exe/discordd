@@ -26,6 +26,12 @@ func (h *Hub) deliver(client *Client, op string, data []byte) {
 	}
 	select {
 	case client.send <- data:
+	case <-client.done:
+		// Client already removed (mirrors sendEvent): WritePump has exited,
+		// nothing drains send. Drop silently instead of filling a dead
+		// buffer and re-queueing an already-removed client on every
+		// subsequent broadcast. When done is closed AND send has room the
+		// select picks either case at random — both outcomes are harmless.
 	default:
 		h.queueUnregister(client)
 	}

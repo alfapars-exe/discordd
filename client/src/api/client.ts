@@ -236,6 +236,14 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  /**
+   * Abort the request after this many ms and resolve with `isTimeout: true`.
+   * Opt-in per call site — there is deliberately NO global default: large
+   * multipart uploads and slow-but-progressing GETs must not be cut off.
+   * Used by the chat send path so a stalled connection can't freeze the
+   * composer indefinitely.
+   */
+  timeoutMs?: number;
 };
 
 /**
@@ -245,11 +253,42 @@ type RequestOptions = {
  *   const data = await apiClient<User[]>("/users");
  *   const user = await apiClient<User>("/users/me", { method: "PATCH", body: { display_name: "New" } });
  */
+/**
+ * Runs fetch with an optional timeout. A FRESH AbortController per physical
+ * fetch: the 401-refresh retry re-fetches with the same RequestInit, and a
+ * shared already-aborted signal would make that retry fail instantly.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs?: number
+): Promise<Response> {
+  if (!timeoutMs) return fetch(url, init);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Envelope for a request cut off by RequestOptions.timeoutMs. */
+function timeoutResponse<T>(): APIResponse<T> {
+  // No isNetworkError: retry helpers must not auto-retry a send that may
+  // have been persisted server-side (duplicate risk, no idempotency key).
+  return { success: false, error: "timeout", isTimeout: true } as APIResponse<T>;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<APIResponse<T>> {
-  const { method = "GET", body, headers: extraHeaders } = options;
+  const { method = "GET", body, headers: extraHeaders, timeoutMs } = options;
 
   const headers: Record<string, string> = withUpstreamHeader({
     ...extraHeaders,
@@ -293,8 +332,12 @@ export async function apiClient<T>(
   let res: Response;
 
   try {
-    res = await fetch(apiUrl(endpoint), fetchOptions);
+    res = await fetchWithTimeout(apiUrl(endpoint), fetchOptions, timeoutMs);
   } catch (err) {
+    if (isAbortError(err)) {
+      console.error(`[apiClient] ${method} ${endpoint}: timed out after ${timeoutMs}ms`);
+      return timeoutResponse<T>();
+    }
     const message =
       err instanceof Error ? err.message : "Network request failed";
     console.error(`[apiClient] ${method} ${endpoint}:`, message);
@@ -322,14 +365,21 @@ export async function apiClient<T>(
     if (refreshed) {
       headers["Authorization"] = `Bearer ${getAccessToken()}`;
       try {
-        res = await fetch(apiUrl(endpoint), {
-          ...fetchOptions,
-          headers,
-        });
+        res = await fetchWithTimeout(
+          apiUrl(endpoint),
+          { ...fetchOptions, headers },
+          timeoutMs
+        );
         if (isDev) {
           console.warn(`[apiClient] retry after refresh: ${method} ${endpoint} status=${res.status}`);
         }
       } catch (err) {
+        if (isAbortError(err)) {
+          if (isDev) {
+            console.error(`[apiClient] ${method} ${endpoint} (retry): timed out after ${timeoutMs}ms`);
+          }
+          return timeoutResponse<T>();
+        }
         const message =
           err instanceof Error ? err.message : "Network request failed";
         if (isDev) {

@@ -31,22 +31,30 @@ func scanAttachment(rows *sql.Rows) (models.Attachment, error) {
 }
 
 func (r *sqliteAttachmentRepo) Create(ctx context.Context, attachment *models.Attachment) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to create attachment: %w", err)
+	}
+	attachment.ID = id
+
 	query := `
 		INSERT INTO attachments (id, message_id, filename, file_url, file_size, mime_type)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
+		attachment.ID,
 		attachment.MessageID,
 		attachment.Filename,
 		attachment.FileURL,
 		attachment.FileSize,
 		attachment.MimeType,
-	).Scan(&attachment.ID, &attachment.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create attachment: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM attachments WHERE id = ?", attachment.ID).Scan(&attachment.CreatedAt)
 
 	return nil
 }

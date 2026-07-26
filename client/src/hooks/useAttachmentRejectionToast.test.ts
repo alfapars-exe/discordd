@@ -52,24 +52,12 @@ describe("useAttachmentRejectionToast", () => {
     expect(message).toContain("fileTooLarge");
   });
 
-  it("reports a single disallowed type", () => {
-    const { result } = renderHook(() => useAttachmentRejectionToast());
-    const rejections: FileRejection[] = [
-      { file: makeFile("script.exe"), reason: "type_not_allowed" },
-    ];
-    result.current(rejections);
-    expect(addToast).toHaveBeenCalledTimes(1);
-    const [type, message] = addToast.mock.calls[0]!;
-    expect(type).toBe("error");
-    expect(message).toContain("script.exe");
-    expect(message).toContain("fileTypeNotAllowed");
-  });
-
   it("aggregates multiple rejections into one toast", () => {
+    // Since every file type is uploadable, size is the only reason left.
     const { result } = renderHook(() => useAttachmentRejectionToast());
     const rejections: FileRejection[] = [
       { file: makeFile("a.png"), reason: "too_large" },
-      { file: makeFile("b.exe"), reason: "type_not_allowed" },
+      { file: makeFile("b.exe"), reason: "too_large" },
       { file: makeFile("c.png"), reason: "too_large" },
     ];
     result.current(rejections);

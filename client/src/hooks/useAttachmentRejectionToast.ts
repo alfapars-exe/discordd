@@ -22,13 +22,10 @@ export function useAttachmentRejectionToast(): (rejections: FileRejection[]) => 
       if (rejections.length === 0) return;
 
       const maxMB = Math.floor(MAX_FILE_SIZE / MB);
-      const lines = rejections.map(({ file, reason }) => {
-        const reasonText =
-          reason === "too_large"
-            ? t("fileTooLarge", { max: maxMB })
-            : t("fileTypeNotAllowed");
-        return `${file.name} — ${reasonText}`;
-      });
+      // Size is the only rejection reason left — every file type uploads.
+      const lines = rejections.map(
+        ({ file }) => `${file.name} — ${t("fileTooLarge", { max: maxMB })}`
+      );
       addToast("error", lines.join("\n"), REJECTION_TOAST_MS);
     },
     [addToast, t]

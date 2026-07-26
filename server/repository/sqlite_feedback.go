@@ -164,14 +164,15 @@ func (r *sqliteFeedbackRepo) DeleteTicket(ctx context.Context, id string) error 
 }
 
 func (r *sqliteFeedbackRepo) CreateReply(ctx context.Context, reply *models.FeedbackReply) error {
-	query := `INSERT INTO feedback_replies (id, ticket_id, user_id, is_admin, content) VALUES (?, ?, ?, ?, ?)
-		RETURNING created_at`
-	err := r.db.QueryRowContext(ctx, query,
+	query := `INSERT INTO feedback_replies (id, ticket_id, user_id, is_admin, content) VALUES (?, ?, ?, ?, ?)`
+	if _, err := r.db.ExecContext(ctx, query,
 		reply.ID, reply.TicketID, reply.UserID, reply.IsAdmin, reply.Content,
-	).Scan(&reply.CreatedAt)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create feedback reply: %w", err)
 	}
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM feedback_replies WHERE id = ?", reply.ID).Scan(&reply.CreatedAt)
 
 	// Update ticket's updated_at timestamp
 	updateQuery := `UPDATE feedback_tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`

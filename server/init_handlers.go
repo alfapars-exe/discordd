@@ -65,7 +65,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Pin:               handlers.NewPinHandler(svcs.Pin),
 		Search:            handlers.NewSearchHandler(svcs.Search),
 		ReadState:         handlers.NewReadStateHandler(svcs.ReadState),
-		DM:                handlers.NewDMHandler(svcs.DM, svcs.DMUpload, cfg.Upload.MaxSize, limiters.Message, limiters.Upload),
+		DM:                handlers.NewDMHandler(svcs.DM, svcs.DMUpload, cfg.Upload.MaxSize, limiters.DMMessage, limiters.Upload),
 		Reaction:          handlers.NewReactionHandler(svcs.Reaction),
 		ChannelPermission: handlers.NewChannelPermissionHandler(svcs.ChannelPermission),
 		Friendship:        handlers.NewFriendshipHandler(svcs.Friendship),
@@ -91,7 +91,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog),
 		ClientLog:         handlers.NewClientLogHandler(svcs.AppLog),
-		UploadDownload:    handlers.NewUploadDownloadHandler(cfg.Upload.Dir, repos.Attachment, repos.DM, repos.Message, svcs.ChannelPermission, svcs.Auth),
+		UploadDownload:    handlers.NewUploadDownloadHandler(cfg.Upload.Dir, services.NewMediaAccessService(repos.Attachment, repos.Message, repos.DM, svcs.ChannelPermission), svcs.Auth),
 		WS:                ws.NewHandler(hub, svcs.Auth, svcs.WSTicket, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute, botService),
 	}
 }

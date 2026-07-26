@@ -168,7 +168,9 @@ func (h *Hub) queueUnregister(c *Client) {
 // Shutdown closes all client connections (graceful shutdown).
 //
 // Two-phase close (audit 2026-05-27):
-//  1. close(client.send) — WritePump exits cleanly via its `<-c.send` path
+//  1. client.closeDone() — closes the done channel; WritePump exits via its
+//     `<-c.done` path after flushing any buffered send. send is never closed
+//     (see Client.done) so in-flight sendEvent writes can't panic.
 //  2. client.conn.Close() — unblocks ReadPump's blocking ReadMessage() so
 //     it exits in microseconds instead of waiting up to pongWait (90s) for
 //     the read deadline to fire.
@@ -192,10 +194,10 @@ func (h *Hub) Shutdown() {
 	h.mu.Unlock()
 
 	// Close outside the mutex to avoid holding it for 10k iterations.
-	// Send-channel close fans out to WritePump, conn.Close fans out to
-	// ReadPump — both run concurrently per client and unblock instantly.
+	// closeDone fans out to WritePump, conn.Close fans out to ReadPump —
+	// both run concurrently per client and unblock instantly.
 	for _, client := range clientList {
-		close(client.send)
+		client.closeDone()
 		_ = client.conn.Close() // already-closed is acceptable
 	}
 	hubLogger.Info("hub shut down", "connections_closed", len(clientList))

@@ -309,7 +309,7 @@ func Load() (*Config, error) {
 			User: getEnv("DIAG_SMTP_USER", ""),
 			Pass: getEnv("DIAG_SMTP_PASS", ""),
 			From: getEnv("DIAG_SMTP_FROM", ""),
-			To:   getEnv("DIAG_REPORT_TO", "harun.benli.hb@gmail.com"),
+			To:   getEnv("DIAG_REPORT_TO", ""),
 		},
 		Klipy: KlipyConfig{
 			APIKey: getEnv("KLIPY_API_KEY", ""),

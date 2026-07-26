@@ -19,19 +19,10 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useBadgeStore } from "../../stores/badgeStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useAuditStore } from "../../stores/auditStore";
+import { useUIStore } from "../../stores/uiStore";
 import type {
   WSMessage,
-  MemberWithRoles,
-  Role,
-  Server,
-  ServerListItem,
   UserStatus,
-  FriendshipWithUser,
-  P2PCall,
-  P2PSignalPayload,
-  AuditLog,
-  SoundboardSound,
-  SoundboardPlayEvent,
 } from "../../types";
 import type { WSHandlerContext } from "./types";
 
@@ -55,13 +46,7 @@ export async function handleSystemEvent(
       return true;
 
     case "ready": {
-      const data = msg.d as {
-        online_user_ids: string[];
-        servers: ServerListItem[];
-        muted_server_ids: string[];
-        muted_channel_ids: string[];
-        pref_status: string;
-      };
+      const data = msg.d;
 
       if (data.servers) useServerStore.getState().setServersFromReady(data.servers);
       if (data.muted_server_ids) useServerStore.getState().setMutedServersFromReady(data.muted_server_ids);
@@ -89,8 +74,21 @@ export async function handleSystemEvent(
       // it's opened (its guard is no longer armed).
       if (hadReadyBefore) {
         useMessageStore.getState().invalidateFetchedFlags();
+        // Heal what the user can actually SEE: the active text tab of every
+        // panel (split view shows several channels at once), each with its
+        // OWN serverId — the sidebar selection alone may not even be visible
+        // and would resolve cross-server tabs against the wrong server.
+        // Background tabs heal lazily (their fetched-guard is disarmed).
+        const healed = new Set<string>();
+        for (const panel of Object.values(useUIStore.getState().panels)) {
+          const tab = panel.tabs.find((t) => t.id === panel.activeTabId);
+          if (tab?.type === "text" && !healed.has(tab.channelId)) {
+            healed.add(tab.channelId);
+            useMessageStore.getState().fetchMessages(tab.channelId, tab.serverInfo?.serverId);
+          }
+        }
         const activeChannelId = useChannelStore.getState().selectedChannelId;
-        if (activeChannelId) {
+        if (activeChannelId && !healed.has(activeChannelId)) {
           useMessageStore.getState().fetchMessages(activeChannelId);
         }
       }
@@ -131,7 +129,7 @@ export async function handleSystemEvent(
     }
 
     case "presence_update": {
-      const data = msg.d as { user_id: string; status: UserStatus };
+      const data = msg.d;
       useMemberStore.getState().handlePresenceUpdate(data.user_id, data.status);
       const myId = useAuthStore.getState().user?.id;
       if (data.user_id === myId) {
@@ -142,7 +140,7 @@ export async function handleSystemEvent(
 
     case "member_join": {
       const serverId = msg.server_id;
-      if (serverId) useMemberStore.getState().handleMemberJoin(serverId, msg.d as MemberWithRoles);
+      if (serverId) useMemberStore.getState().handleMemberJoin(serverId, msg.d);
       return true;
     }
 
@@ -152,16 +150,16 @@ export async function handleSystemEvent(
       // Skipped silently if we haven't fetched the server's audit yet —
       // the store handles that case (avoids showing a lone live event in
       // an otherwise empty panel).
-      useAuditStore.getState().handleAuditEvent(msg.d as AuditLog);
+      useAuditStore.getState().handleAuditEvent(msg.d);
       return true;
     }
     case "member_leave": {
       const serverId = msg.server_id;
-      if (serverId) useMemberStore.getState().handleMemberLeave(serverId, (msg.d as { user_id: string }).user_id);
+      if (serverId) useMemberStore.getState().handleMemberLeave(serverId, msg.d.user_id);
       return true;
     }
     case "member_update": {
-      const updatedMember = msg.d as MemberWithRoles;
+      const updatedMember = msg.d;
       const serverId = msg.server_id;
       if (serverId) {
         // Server-scoped update (role change, nickname, etc.)
@@ -196,13 +194,7 @@ export async function handleSystemEvent(
       // Moderator applied or extended a timeout. The store reschedules
       // its local expiry timer so an extension doesn't fire at the old
       // (earlier) time and prematurely clear the muted badge.
-      const data = msg.d as {
-        server_id: string;
-        user_id: string;
-        expires_at: string;
-        reason?: string;
-        applied_by?: string;
-      };
+      const data = msg.d;
       const serverId = msg.server_id || data.server_id;
       if (serverId) {
         useMemberStore.getState().handleMemberTimeout(serverId, {
@@ -216,7 +208,7 @@ export async function handleSystemEvent(
     }
 
     case "member_timeout_remove": {
-      const data = msg.d as { server_id: string; user_id: string };
+      const data = msg.d;
       const serverId = msg.server_id || data.server_id;
       if (serverId) {
         useMemberStore.getState().handleMemberTimeoutRemove(serverId, data.user_id);
@@ -228,7 +220,7 @@ export async function handleSystemEvent(
     case "role_create": {
       const serverId = msg.server_id;
       if (!serverId) return true;
-      const role = msg.d as Role;
+      const role = msg.d;
       useMemberStore.getState().handleRoleCreate(serverId, role);
       useRoleStore.getState().handleRoleCreate(serverId, role);
       return true;
@@ -236,7 +228,7 @@ export async function handleSystemEvent(
     case "role_update": {
       const serverId = msg.server_id;
       if (!serverId) return true;
-      const role = msg.d as Role;
+      const role = msg.d;
       useMemberStore.getState().handleRoleUpdate(serverId, role);
       useRoleStore.getState().handleRoleUpdate(serverId, role);
       useChannelStore.getState().fetchChannels();
@@ -245,7 +237,7 @@ export async function handleSystemEvent(
     case "role_delete": {
       const serverId = msg.server_id;
       if (!serverId) return true;
-      const roleId = (msg.d as { id: string }).id;
+      const roleId = msg.d.id;
       useMemberStore.getState().handleRoleDelete(serverId, roleId);
       useRoleStore.getState().handleRoleDelete(serverId, roleId);
       useChannelStore.getState().fetchChannels();
@@ -254,7 +246,7 @@ export async function handleSystemEvent(
     case "roles_reorder": {
       const serverId = msg.server_id;
       if (!serverId) return true;
-      const roles = msg.d as Role[];
+      const roles = msg.d;
       useRoleStore.getState().handleRolesReorder(serverId, roles);
       useMemberStore.getState().handleRolesReorder(serverId, roles);
       return true;
@@ -262,7 +254,7 @@ export async function handleSystemEvent(
 
     // ─── Servers ───
     case "server_update": {
-      const updatedServer = msg.d as Server;
+      const updatedServer = msg.d;
       useServerStore.getState().handleServerUpdate(updatedServer);
       // Trigger recovery password prompt if E2EE was just enabled
       if (updatedServer.e2ee_enabled) {
@@ -271,10 +263,10 @@ export async function handleSystemEvent(
       return true;
     }
     case "server_create":
-      useServerStore.getState().handleServerCreate(msg.d as ServerListItem);
+      useServerStore.getState().handleServerCreate(msg.d);
       return true;
     case "server_delete": {
-      const deletedId = (msg.d as { id: string }).id;
+      const deletedId = msg.d.id;
       if (useVoiceStore.getState().currentVoiceChannelId) {
         useVoiceStore.getState().handleForceDisconnect();
       }
@@ -284,45 +276,45 @@ export async function handleSystemEvent(
 
     // ─── Friends ───
     case "friend_request_create":
-      useFriendStore.getState().handleFriendRequestCreate(msg.d as FriendshipWithUser);
+      useFriendStore.getState().handleFriendRequestCreate(msg.d);
       return true;
     case "friend_request_accept":
-      useFriendStore.getState().handleFriendRequestAccept(msg.d as FriendshipWithUser);
+      useFriendStore.getState().handleFriendRequestAccept(msg.d);
       return true;
     case "friend_request_decline":
-      useFriendStore.getState().handleFriendRequestDecline(msg.d as { id: string; user_id: string });
+      useFriendStore.getState().handleFriendRequestDecline(msg.d);
       return true;
     case "friend_remove":
-      useFriendStore.getState().handleFriendRemove(msg.d as { user_id: string });
+      useFriendStore.getState().handleFriendRemove(msg.d);
       return true;
 
     // ─── Blocks ───
     case "user_block":
-      useBlockStore.getState().handleUserBlock(msg.d as { user_id: string; blocked_user_id: string });
+      useBlockStore.getState().handleUserBlock(msg.d);
       return true;
     case "user_unblock":
-      useBlockStore.getState().handleUserUnblock(msg.d as { user_id: string; unblocked_user_id: string });
+      useBlockStore.getState().handleUserUnblock(msg.d);
       return true;
 
     // ─── P2P Calls ───
     case "p2p_call_initiate":
-      useP2PCallStore.getState().handleCallInitiate(msg.d as P2PCall);
+      useP2PCallStore.getState().handleCallInitiate(msg.d);
       window.electronAPI?.flashFrame();
       return true;
     case "p2p_call_accept":
-      useP2PCallStore.getState().handleCallAccept(msg.d as { call_id: string });
+      useP2PCallStore.getState().handleCallAccept(msg.d);
       return true;
     case "p2p_call_decline":
-      useP2PCallStore.getState().handleCallDecline(msg.d as { call_id: string; reason?: string });
+      useP2PCallStore.getState().handleCallDecline(msg.d);
       return true;
     case "p2p_call_end":
-      useP2PCallStore.getState().handleCallEnd(msg.d as { call_id: string; reason?: string });
+      useP2PCallStore.getState().handleCallEnd(msg.d);
       return true;
     case "p2p_call_busy":
-      useP2PCallStore.getState().handleCallBusy(msg.d as { receiver_id: string });
+      useP2PCallStore.getState().handleCallBusy(msg.d);
       return true;
     case "p2p_signal":
-      useP2PCallStore.getState().handleSignal(msg.d as P2PSignalPayload);
+      useP2PCallStore.getState().handleSignal(msg.d);
       return true;
 
     // ─── E2EE ───
@@ -336,26 +328,24 @@ export async function handleSystemEvent(
 
     // ─── Badges ───
     case "badge_assign":
-      useBadgeStore.getState().handleBadgeAssign(
-        msg.d as { user_id: string; user_badge: import("../../types").UserBadge }
-      );
+      useBadgeStore.getState().handleBadgeAssign(msg.d);
       return true;
     case "badge_unassign":
-      useBadgeStore.getState().handleBadgeUnassign(msg.d as { user_id: string; badge_id: string });
+      useBadgeStore.getState().handleBadgeUnassign(msg.d);
       return true;
 
     // ─── Soundboard ───
     case "soundboard_sound_create":
-      useSoundboardStore.getState().handleSoundCreate(msg.d as SoundboardSound);
+      useSoundboardStore.getState().handleSoundCreate(msg.d);
       return true;
     case "soundboard_sound_update":
-      useSoundboardStore.getState().handleSoundUpdate(msg.d as SoundboardSound);
+      useSoundboardStore.getState().handleSoundUpdate(msg.d);
       return true;
     case "soundboard_sound_delete":
-      useSoundboardStore.getState().handleSoundDelete(msg.d as { id: string; server_id: string });
+      useSoundboardStore.getState().handleSoundDelete(msg.d);
       return true;
     case "soundboard_play":
-      useSoundboardStore.getState().handleSoundPlay(msg.d as SoundboardPlayEvent);
+      useSoundboardStore.getState().handleSoundPlay(msg.d);
       return true;
 
     default:

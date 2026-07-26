@@ -1,4 +1,5 @@
 {
+  "selectChannel": "Bir kanal seç",
   "messagePlaceholder": "#{{channel}} kanalına mesaj yaz",
   "editMessage": "Mesajı Düzenle",
   "deleteMessage": "Mesajı Sil",
@@ -12,7 +13,6 @@
   "edited": "(düzenlendi)",
   "uploadFile": "Dosya Yükle",
   "fileTooLarge": "Dosya çok büyük (maks. {{max}}MB)",
-  "fileTypeNotAllowed": "Bu dosya tipi kabul edilmiyor",
   "noChannel": "Bir kanal seçin",
   "editCancel": "iptal",
   "editSave": "kaydet",
@@ -67,6 +67,11 @@
   "gifNoResults": "GIF bulunamadı",
   "gifLoading": "GIF'ler yükleniyor...",
   "gifUnavailable": "GIF arama kullanılamıyor",
+
+  "imagePreview": "Görsel önizleme",
+  "lightboxOpenOriginal": "Orijinali aç",
+  "lightboxDownload": "İndir",
+  "lightboxImageFailed": "Görsel yüklenemedi",
 
   "jumpToMention": "Bahsedilene git"
 }

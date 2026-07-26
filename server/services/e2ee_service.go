@@ -154,7 +154,7 @@ func (s *e2eeService) authorizeGroupSession(ctx context.Context, serverID, chann
 	if err != nil {
 		return fmt.Errorf("failed to resolve channel permissions: %w", err)
 	}
-	if !perms.Has(models.PermViewChannel) || !perms.Has(models.PermReadMessages) {
+	if !models.PermCanReadChannel(perms) {
 		return fmt.Errorf("%w: read messages permission required", pkg.ErrForbidden)
 	}
 	if requireSend && !perms.Has(models.PermSendMessages) {

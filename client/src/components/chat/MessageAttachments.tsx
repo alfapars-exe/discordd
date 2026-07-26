@@ -1,10 +1,10 @@
 /** MessageAttachments — Renders file/image attachments for a message. */
 
-import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ensureFreshToken } from "../../api/client";
 import { resolveAssetUrl } from "../../utils/constants";
 import { mimeTypeFromExtension } from "../../utils/fileValidation";
+import { useAuthImageRetry } from "../../hooks/useAuthImageRetry";
+import { useLightboxStore, isPlainLeftClick } from "../../stores/lightboxStore";
 import EncryptedAttachment from "./EncryptedAttachment";
 import type { ChatMessage, ChatAttachment } from "../../hooks/useChatContext";
 
@@ -56,42 +56,38 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
 }
 
 /**
- * `/api/uploads/*` is auth-gated, and an <img> can't carry an Authorization
- * header — it authenticates with the `hichat_media` cookie, whose value is the
- * access token but whose Max-Age (30d) far outlives it. A tab left idle past
- * the access TTL therefore serves a stale cookie and the image 401s.
- *
- * So the first error is treated as "probably stale token": refresh once, then
- * re-request with a busted URL (the browser would otherwise replay the cached
- * failure). Only a second error means the file is genuinely unrenderable and
- * we degrade to the file card. Latching on the *first* error was the bug —
- * the tile stayed a generic card for the life of the render even after the
- * next API call had already refreshed the cookie.
+ * Stale-token 401 retry lives in useAuthImageRetry (shared with the
+ * lightbox — see the hook's doc comment for the hichat_media cookie trap).
+ * Plain left-click opens the fullscreen preview; modifier/middle clicks
+ * keep the anchor's native open-in-tab / save-as behavior.
  */
 function PlaintextAttachment({ attachment }: Readonly<{ attachment: ChatAttachment }>) {
   const url = resolveAssetUrl(attachment.file_url);
-  const [imgFailed, setImgFailed] = useState(false);
-  const [src, setSrc] = useState(url);
-  const retriedRef = useRef(false);
+  const { src, failed, handleError } = useAuthImageRetry(url, true);
+  const openLightbox = useLightboxStore((s) => s.open);
 
-  const handleError = () => {
-    if (retriedRef.current) {
-      setImgFailed(true);
-      return;
-    }
-    retriedRef.current = true;
-    // ensureFreshToken() no-ops when the in-memory token is still valid and
-    // collapses concurrent callers onto one shared refresh, so a screenful of
-    // simultaneously-failing images costs a single /auth/refresh. A failed
-    // refresh still gets the one retry; a second error then latches.
-    void ensureFreshToken()
-      .catch(() => undefined)
-      .then(() => setSrc(`${url}${url.includes("?") ? "&" : "?"}r=1`));
-  };
-
-  if (isImageAttachment(attachment) && !imgFailed) {
+  if (isImageAttachment(attachment) && !failed) {
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => {
+          if (!isPlainLeftClick(e)) return;
+          e.preventDefault();
+          // Message rows have their own hover/long-press handlers.
+          e.stopPropagation();
+          // Pass the CURRENT src (post-retry) so a fresh-cookie image
+          // renders straight from the browser cache.
+          openLightbox({
+            kind: "remote",
+            src,
+            href: url,
+            filename: attachment.filename,
+            authRetry: true,
+          });
+        }}
+      >
         <img
           src={src}
           alt={attachment.filename}

@@ -28,20 +28,29 @@ func scanCategory(rows *sql.Rows) (models.Category, error) {
 }
 
 func (r *sqliteCategoryRepo) Create(ctx context.Context, category *models.Category) error {
-	query := `
-		INSERT INTO categories (id, server_id, name, position)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?)
-		RETURNING id, created_at`
-
-	err := r.db.QueryRowContext(ctx, query,
-		category.ServerID,
-		category.Name,
-		category.Position,
-	).Scan(&category.ID, &category.CreatedAt)
-
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create category: %w", err)
 	}
+	category.ID = id
+
+	query := `
+		INSERT INTO categories (id, server_id, name, position)
+		VALUES (?, ?, ?, ?)`
+
+	if _, err := r.db.ExecContext(ctx, query,
+		category.ID,
+		category.ServerID,
+		category.Name,
+		category.Position,
+	); err != nil {
+		return fmt.Errorf("failed to create category: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at — RETURNING is
+	// avoided so a dropped Turso/Hrana stream can't 500 the write (see
+	// sqlite_user.go Create + database/retry.go).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM categories WHERE id = ?", category.ID).Scan(&category.CreatedAt)
 
 	return nil
 }

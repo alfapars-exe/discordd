@@ -245,3 +245,52 @@ jobs:
 
       - name: electron:test (resolve-path + regression suite)
         run: npm run electron:test
+
+  # ─── Prod image build (HF Space Dockerfile) ───
+  # The root Dockerfile is what HF Space actually builds on `git push origin`.
+  # It was previously exercised only on release tags (build-desktop.yml's
+  # docker-publish job) and by the live HF build itself — so a Dockerfile
+  # break surfaced only in production. Build it here on every PR to catch
+  # breakage pre-merge. Build-only (push: false) — PRs carry no registry
+  # credentials and we only need to prove the image compiles.
+  docker-build:
+    name: Prod image build (HF Dockerfile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build prod image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Migration filename hygiene ───
+  # Migrations apply in lexicographic filename order (database.go sort.Strings).
+  # Two files sharing a numeric prefix still run, but ordering becomes fragile:
+  # a future same-number collision between dependent migrations would apply in
+  # the wrong order silently. The 072_ pair (attachments_file_url_unique +
+  # bot_accounts) is grandfathered; fail CI on any NEW duplicate prefix.
+  migration-hygiene:
+    name: Migration filename hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check for duplicate migration numeric prefixes
+        run: |
+          cd server/database/migrations
+          dupes=$(ls *.sql | sed -E 's/^([0-9]+)_.*/\1/' | sort | uniq -d)
+          unexpected=$(printf '%s\n' "$dupes" | grep -vx '072' | grep -vx '' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::Duplicate migration numeric prefix(es): $unexpected"
+            echo "Each migration needs a unique NNN_ prefix. Only 072 is grandfathered."
+            exit 1
+          fi
+          echo "Migration prefixes OK (072 grandfathered)."

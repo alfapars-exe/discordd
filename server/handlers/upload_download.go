@@ -26,15 +26,16 @@
 package handlers
 
 import (
-	"errors"
+	"io"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -58,27 +59,18 @@ type AccessTokenValidator interface {
 
 type UploadDownloadHandler struct {
 	uploadDir      string
-	attachmentRepo repository.AttachmentRepository
-	dmRepo         repository.DMRepository
-	messageRepo    repository.MessageRepository
-	permResolver   services.ChannelPermResolver
+	mediaAuth      services.MediaAccessService
 	tokenValidator AccessTokenValidator
 }
 
 func NewUploadDownloadHandler(
 	uploadDir string,
-	attachmentRepo repository.AttachmentRepository,
-	dmRepo repository.DMRepository,
-	messageRepo repository.MessageRepository,
-	permResolver services.ChannelPermResolver,
+	mediaAuth services.MediaAccessService,
 	tokenValidator AccessTokenValidator,
 ) *UploadDownloadHandler {
 	return &UploadDownloadHandler{
 		uploadDir:      uploadDir,
-		attachmentRepo: attachmentRepo,
-		dmRepo:         dmRepo,
-		messageRepo:    messageRepo,
-		permResolver:   permResolver,
+		mediaAuth:      mediaAuth,
 		tokenValidator: tokenValidator,
 	}
 }
@@ -142,76 +134,135 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 
 	fileURL := "/api/uploads/" + name
 
-	// Channel-attachment lookup. file_url is the unique disk URL we generated
-	// when the upload was saved, so the EQ lookup hits at most one row.
-	if att, err := h.attachmentRepo.GetByFileURL(r.Context(), fileURL); err == nil {
-		userID, ok := h.authUserID(r)
-		if !ok {
-			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
-			return
-		}
-		msg, err := h.messageRepo.GetByID(r.Context(), att.MessageID)
-		if err != nil {
-			// Attachment row points to a deleted message — treat as 404
-			// rather than 403 so we don't disclose the orphan.
-			http.NotFound(w, r)
-			return
-		}
-		perms, err := h.permResolver.ResolveChannelPermissions(r.Context(), userID, msg.ChannelID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if perms&models.PermReadMessages == 0 {
-			pkg.ErrorWithMessage(w, http.StatusForbidden, "no access to this channel")
-			return
-		}
-		h.serveFile(w, r, name)
-		return
-	} else if !errors.Is(err, pkg.ErrNotFound) {
-		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "attachment lookup failed", err)
+	// The authorization decision (attachment -> channel permission, DM ->
+	// participant, else public) lives in MediaAccessService. Auth is resolved
+	// lazily — the service only calls it when fileURL is an access-controlled
+	// attachment, so public assets still load without touching the token.
+	decision, err := h.mediaAuth.Authorize(r.Context(), fileURL, func() (string, bool) {
+		return h.authUserID(r)
+	})
+	if err != nil {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "media access lookup failed", err)
 		return
 	}
 
-	// DM-attachment lookup.
-	if dmAtt, err := h.dmRepo.GetAttachmentByFileURL(r.Context(), fileURL); err == nil {
-		userID, ok := h.authUserID(r)
-		if !ok {
-			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
-			return
-		}
-		dmMsg, err := h.dmRepo.GetMessageByID(r.Context(), dmAtt.DMMessageID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		dmChan, err := h.dmRepo.GetChannelByID(r.Context(), dmMsg.DMChannelID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if dmChan.User1ID != userID && dmChan.User2ID != userID {
-			pkg.ErrorWithMessage(w, http.StatusForbidden, "not a participant of this DM")
-			return
-		}
+	switch decision {
+	case services.MediaRequiresAuth:
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
+	case services.MediaForbidden:
+		pkg.ErrorWithMessage(w, http.StatusForbidden, "no access to this resource")
+	case services.MediaNotFound:
+		http.NotFound(w, r)
+	case services.MediaPublic, services.MediaAllowed:
 		h.serveFile(w, r, name)
-		return
-	} else if !errors.Is(err, pkg.ErrNotFound) {
-		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "dm attachment lookup failed", err)
-		return
+	default:
+		// Unreachable — every MediaDecision is handled above. Fail closed.
+		http.NotFound(w, r)
+	}
+}
+
+// inlineMimes are the only sniffed types the browser may render INLINE from
+// the app origin. Everything else — text/html, image/svg+xml (sniffs as
+// text/xml), text/javascript, fonts, wasm, unknown blobs — is served as
+// application/octet-stream with Content-Disposition: attachment, because
+// with all file types uploadable, rendering active content inline from
+// this origin would be stored XSS (the SPA and its tokens live here).
+var inlineMimes = map[string]bool{
+	"image/jpeg":      true,
+	"image/png":       true,
+	"image/gif":       true,
+	"image/webp":      true,
+	"image/bmp":       true,
+	"image/avif":      true,
+	"image/x-icon":    true,
+	"video/mp4":       true,
+	"video/webm":      true,
+	"audio/mpeg":      true,
+	"audio/ogg":       true,
+	"application/ogg": true,
+	"audio/wave":      true,
+	"application/pdf": true,
+}
+
+// diskPrefixRe matches the random hex prefix the upload services prepend to
+// every stored file ("{16 hex}_{original name}").
+var diskPrefixRe = regexp.MustCompile(`^[0-9a-f]{16}_`)
+
+// downloadName recovers a user-facing filename from the on-disk name by
+// stripping the random prefix. The disk name embeds the sanitized original
+// filename, so no DB lookup is needed here.
+func downloadName(name string) string {
+	base := diskPrefixRe.ReplaceAllString(path.Base(name), "")
+	if base == "" || base == "." {
+		return "download"
+	}
+	return base
+}
+
+// rfc5987Encode percent-encodes everything outside RFC 5987 attr-char for
+// the Content-Disposition filename* parameter.
+func rfc5987Encode(s string) string {
+	const hexDigits = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		isAttrChar := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || strings.IndexByte("!#$&+-.^_`|~", c) >= 0
+		if isAttrChar {
+			b.WriteByte(c)
+		} else {
+			b.WriteByte('%')
+			b.WriteByte(hexDigits[c>>4])
+			b.WriteByte(hexDigits[c&0xf])
+		}
+	}
+	return b.String()
+}
+
+// contentDisposition builds an RFC 6266 dual-form header value: an ASCII
+// fallback (filename="...", quotes/backslashes escaped, non-ASCII replaced)
+// plus the RFC 5987 extended form (filename*=UTF-8''...) for the real
+// unicode name. Control characters are stripped first — the filename is
+// user-supplied, and a raw CR/LF here would be header injection.
+func contentDisposition(disp, filename string) string {
+	clean := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, filename)
+	if clean == "" {
+		clean = "download"
 	}
 
-	// Neither attachment table claims this path — it's an avatar, server icon,
-	// badge icon, soundboard sample, or branding. Intentionally public: these
-	// are already rendered to every viewer of the entity and must load in
-	// unauthenticated <img> contexts.
-	h.serveFile(w, r, name)
+	var ascii strings.Builder
+	for _, r := range clean {
+		switch {
+		case r == '"' || r == '\\':
+			ascii.WriteByte('\\')
+			ascii.WriteRune(r)
+		case r > 0x7e:
+			ascii.WriteByte('_')
+		default:
+			ascii.WriteRune(r)
+		}
+	}
+
+	return disp + `; filename="` + ascii.String() + `"; filename*=UTF-8''` + rfc5987Encode(clean)
 }
 
 // serveFile resolves <name> against uploadDir and writes the file to
 // the response. filepath.Clean + the SafeJoin check together prevent
 // path traversal even if a malicious name slipped past the prefix-level
 // check above.
+//
+// Serving is hardened for the all-file-types era: the response Content-Type
+// comes from re-sniffing the BYTES on disk (never the recorded MimeType or
+// the extension), and only types in inlineMimes may render inline. The
+// global securityHeaders middleware supplies nosniff + the app CSP, but the
+// app CSP alone would still let an uploaded .html reference an uploaded .js
+// (both same-origin) — the octet-stream + attachment + sandbox trio below
+// is what actually breaks that stored-XSS chain.
 func (h *UploadDownloadHandler) serveFile(w http.ResponseWriter, r *http.Request, name string) {
 	// path.Clean normalises any "./" or doubled slashes that the URL
 	// parser might preserve. We use path.Clean (forward-slash semantics)
@@ -230,6 +281,31 @@ func (h *UploadDownloadHandler) serveFile(w http.ResponseWriter, r *http.Request
 	// Filepath separator normalisation for cross-platform safety.
 	full = filepath.FromSlash(full)
 
+	f, err := os.Open(full) // #nosec G304 — path containment verified by SafeJoin
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+
+	buf := make([]byte, pkg.SniffBufferSize)
+	n, readErr := io.ReadFull(f, buf)
+	if readErr != nil && readErr != io.ErrUnexpectedEOF && readErr != io.EOF {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to read file", readErr)
+		return
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to rewind file", err)
+		return
+	}
+	mime := pkg.RefineMIME(pkg.NormalizeMIME(http.DetectContentType(buf[:n])), name)
+
 	// `private` is load-bearing: the paths above decide per-user whether the
 	// caller may see these bytes, so a SHARED cache (corporate proxy, CDN)
 	// must never store a response and replay it to a different requester —
@@ -238,6 +314,28 @@ func (h *UploadDownloadHandler) serveFile(w http.ResponseWriter, r *http.Request
 	// per-profile cache is safe and desirable: without it every re-render of
 	// a channel refetches every image.
 	w.Header().Set("Cache-Control", "private, max-age=3600")
+	// Explicit (also set globally): the Content-Type below is a security
+	// decision and the browser must not second-guess it.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	http.ServeFile(w, r, full)
+	fname := downloadName(name)
+	if inlineMimes[mime] {
+		w.Header().Set("Content-Type", mime)
+		w.Header().Set("Content-Disposition", contentDisposition("inline", fname))
+	} else {
+		// Content-Type MUST be set before ServeContent, or net/http would
+		// re-derive one from the extension/bytes and undo this decision.
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", contentDisposition("attachment", fname))
+		// Belt and braces: even if some viewer renders the download in
+		// place, it runs with no scripts, no origin, no form submission.
+		// Set() replaces the app CSP on this response only — nothing
+		// renders on a forced download, so nothing needs the app policy.
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	}
+
+	// Empty name: ServeContent must not consult the extension for a
+	// Content-Type (we just set it). Range and If-Modified-Since handling
+	// are preserved.
+	http.ServeContent(w, r, "", fi.ModTime(), f)
 }

@@ -69,8 +69,18 @@ type AuditLog struct {
 }
 
 // AuditLogFilter parameters for paginated list queries.
+//
+// Pagination is keyset on (created_at, id). BeforeID (the id of the last row
+// the client already has) is the preferred cursor: the repo looks that row's
+// created_at up server-side and pages on the (created_at, id) pair, so a page
+// boundary that lands among rows sharing a created_at (two moderation actions
+// in the same second) no longer skips or repeats entries. Before (a raw
+// created_at) is the legacy cursor an older client may still send; when only
+// Before is set the repo falls back to the created_at-only comparison (the
+// edge-case-prone behaviour), so upgrading the server never breaks it.
 type AuditLogFilter struct {
 	ServerID string
-	Before   *time.Time // cursor — return rows strictly older than this
+	Before   *time.Time // legacy cursor — created_at of the last row (fallback)
+	BeforeID *string    // preferred cursor — id of the last row the client has
 	Limit    int
 }

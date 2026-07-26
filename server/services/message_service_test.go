@@ -770,3 +770,57 @@ func TestBroadcastCreate_RecipientsMatchBulkResolver(t *testing.T) {
 		t.Errorf("broadcast still scales with member count: %d queries", queries)
 	}
 }
+
+// TestBroadcastCreate_DegradesToAuthorEchoOnResolveFailure pins the failure
+// mode that used to be a silent no-op: when the viewer set can't be resolved
+// (channel fetch / bulk resolve error), the message was persisted and the
+// sender got a 201, but NOBODY received the WS event. The degraded path must
+// echo to the author only (they provably have access — they just posted) and
+// must NOT fall back to a server-wide broadcast, which would leak the message
+// past channel permissions.
+func TestBroadcastCreate_DegradesToAuthorEchoOnResolveFailure(t *testing.T) {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return nil, errors.New("turso timeout")
+		},
+	}
+
+	var usersCalls int
+	var echoedTo []string
+	var echoedOps []string
+	hub := &testutil.MockBroadcastAndOnline{
+		MockBroadcaster: testutil.MockBroadcaster{
+			BroadcastToUsersFn: func(_ []string, _ ws.Event) { usersCalls++ },
+			BroadcastToUserFn: func(userID string, event ws.Event) {
+				echoedTo = append(echoedTo, userID)
+				echoedOps = append(echoedOps, event.Op)
+			},
+		},
+		GetOnlineUserIDsForServerFn: func(_ string) []string { return []string{"viewer-1"} },
+	}
+
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{},
+		&testutil.MockAttachmentRepo{},
+		channelRepo,
+		&testutil.MockUserRepo{},
+		&testutil.MockMentionRepo{},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		hub,
+		&testutil.MockChannelPermResolver{},
+	)
+
+	svc.BroadcastCreate(&models.Message{ID: "m1", ChannelID: "ch1", UserID: "author-1"})
+
+	if usersCalls != 0 {
+		t.Fatalf("BroadcastToUsers called %d times on resolve failure, want 0 (no permission-blind fan-out)", usersCalls)
+	}
+	if len(echoedTo) != 1 || echoedTo[0] != "author-1" {
+		t.Fatalf("author echo recipients = %v, want exactly [author-1]", echoedTo)
+	}
+	if echoedOps[0] != ws.OpMessageCreate {
+		t.Errorf("echo op = %q, want %q", echoedOps[0], ws.OpMessageCreate)
+	}
+}

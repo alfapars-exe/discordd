@@ -48,7 +48,7 @@ vi.mock("../../stores/messageStore", async () => {
     useMessageStore: create(() => ({
       messagesByChannel: {},
       hasMoreByChannel: {},
-      isLoading: false,
+      isLoadingByChannel: {} as Record<string, boolean>,
       isLoadingMore: false,
       typingUsers: {},
       replyingTo: null,

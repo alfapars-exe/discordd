@@ -61,8 +61,13 @@ type Services struct {
 }
 
 type RateLimiters struct {
-	Login     *ratelimit.LoginRateLimiter
-	Message   *ratelimit.MessageRateLimiter
+	Login   *ratelimit.LoginRateLimiter
+	Message *ratelimit.MessageRateLimiter
+	// DMMessage is a SEPARATE instance from Message: the two endpoints used
+	// to share one per-user budget, so a busy DM conversation silently ate
+	// the channel-send allowance (and vice versa) — surfacing as "random"
+	// 429s in whichever surface the user touched second.
+	DMMessage *ratelimit.MessageRateLimiter
 	Register  *ratelimit.LoginRateLimiter
 	ForgotPwd *ratelimit.LoginRateLimiter
 	ResetPwd  *ratelimit.LoginRateLimiter
@@ -190,7 +195,14 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	// Rate limiters
 	loginLimiter := ratelimit.NewLoginRateLimiter(5, 2*time.Minute)
-	messageLimiter := ratelimit.NewMessageRateLimiter(5, 5*time.Second, 15*time.Second)
+	// Chat messages: 10 per trailing 5s, sliding window, NO hard lockout
+	// (cooldown=0). The previous 5/5s fixed window + 15s lockout was
+	// trivially tripped by fast-but-normal typists — six quick lines cost a
+	// hard 15-second freeze that users read as "sending is stuck". Channel
+	// and DM budgets are separate instances so DM traffic can't starve
+	// channel sends (or vice versa).
+	messageLimiter := ratelimit.NewMessageRateLimiter(10, 5*time.Second, 0)
+	dmMessageLimiter := ratelimit.NewMessageRateLimiter(10, 5*time.Second, 0)
 	registerLimiter := ratelimit.NewLoginRateLimiter(3, 10*time.Minute)                  // 3 registrations per 10 min per IP
 	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute)                  // 3 forgot-password per 5 min per IP
 	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)                   // 5 reset attempts per 5 min per IP
@@ -262,6 +274,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	limiters := &RateLimiters{
 		Login:      loginLimiter,
 		Message:    messageLimiter,
+		DMMessage:  dmMessageLimiter,
 		Register:   registerLimiter,
 		ForgotPwd:  forgotPwdLimiter,
 		ResetPwd:   resetPwdLimiter,

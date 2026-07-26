@@ -223,22 +223,14 @@ export const DEFAULT_MESSAGE_LIMIT = 50;
 /** Max message length (characters) — synced with backend models.MaxMessageLength */
 export const MAX_MESSAGE_LENGTH = 999;
 
-/** Max file upload size (bytes) — 25MB */
+/**
+ * Max file upload size (bytes) — 25MB.
+ *
+ * The only client-side upload gate: every file TYPE is accepted (the server
+ * serves non-displayable types as forced downloads, so nothing hostile can
+ * execute inline — see the upload download handler's hardening).
+ */
 export const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
-/** Allowed file MIME types for upload */
-export const ALLOWED_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "video/mp4",
-  "video/webm",
-  "audio/mpeg",
-  "audio/ogg",
-  "application/pdf",
-  "text/plain",
-] as const;
 
 /** Idle detection — timeout in ms. User becomes "idle" after 5 minutes of inactivity. */
 export const IDLE_TIMEOUT = 5 * 60 * 1000;

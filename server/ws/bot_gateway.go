@@ -69,6 +69,7 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 		conn:       conn,
 		userID:     botUserID,
 		send:       make(chan []byte, sendBufferSize),
+		done:       make(chan struct{}),
 		prefStatus: "online",
 		serverIDs:  serverIDs,
 		isBot:      true,

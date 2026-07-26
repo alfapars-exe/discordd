@@ -13,9 +13,10 @@ import (
 )
 
 // DMHandler handles DM endpoints.
-// messageLimiter is shared with MessageHandler (user-based total rate).
-// uploadLimiter is a separate per-user cap that only fires on multipart
-// requests (20/min); text-only DMs don't touch it.
+// messageLimiter is the DM-message budget — its OWN instance, deliberately
+// not shared with MessageHandler, so DM traffic and channel traffic can't
+// starve each other's allowance. uploadLimiter is a separate per-user cap
+// that only fires on multipart requests (20/min); text-only DMs don't touch it.
 type DMHandler struct {
 	dmService       services.DMService
 	dmUploadService services.DMUploadService

@@ -28,6 +28,48 @@ updates:
       npm-minor-patch:
         update-types: ["minor", "patch"]
 
+  # Electron desktop shell (root package.json) — electron / electron-builder /
+  # electron-updater carry the highest CVE surface in the repo and were
+  # previously untracked (only /client and /server were covered).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Playwright E2E harness (separate lockfile).
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # welcome-bot — separate Go module, otherwise unscanned by any CI or bump.
+  - package-ecosystem: gomod
+    directory: /bots/welcome-bot
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Docker base images — root HF prod image, self-host server, nginx client.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /server
+      - /client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
   # Pin/refresh the GitHub Actions used by the workflows themselves.
   - package-ecosystem: github-actions
     directory: /

@@ -37,35 +37,34 @@ func (r *sqliteAuditLogRepo) Insert(ctx context.Context, entry *models.AuditLog)
 		metadata = "{}"
 	}
 
-	// INSERT ... RETURNING populates entry.ID and entry.CreatedAt from the
-	// DB-side defaults (`lower(hex(randomblob(8)))` and `datetime('now')`)
-	// so callers can broadcast the row with its canonical id immediately.
-	//
-	// Without RETURNING the caller would receive a struct with an empty ID
-	// and zero CreatedAt — that's a real-world bug we hit (Track R):
-	// audit_log_service broadcasts the entry over WebSocket right after
-	// insert; with empty IDs every event after the first one collides in
-	// the client-side dedupe-by-id step and gets silently dropped.
-	// Sequential moderation actions (kick → move → mute) all looked like
-	// duplicates of the first event. RETURNING fixes the root cause in one
-	// place rather than asking callers to remember to re-fetch.
-	//
-	// SQLite ≥ 3.35 and libSQL/Turso both implement RETURNING with the
-	// same syntax, so this works on every backend we ship to.
-	query := `
-		INSERT INTO audit_logs (
-			server_id, actor_user_id, target_user_id,
-			event_type, metadata, actor_snapshot, target_snapshot
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
-
-	err = r.db.QueryRowContext(ctx, query,
-		entry.ServerID, entry.ActorUserID, entry.TargetUserID,
-		entry.EventType, metadata, actorJSON, targetJSON,
-	).Scan(&entry.ID, &entry.CreatedAt)
+	// entry.ID is generated in Go (same 16-hex shape as the DB default) so the
+	// audit_log_service can broadcast the row with its canonical id right after
+	// insert. Track R was a real bug: an empty ID made every WS audit event
+	// after the first collide in the client dedupe-by-id and get dropped, so
+	// sequential moderation actions (kick → move → mute) vanished. created_at
+	// is read back best-effort. INSERT..RETURNING is avoided so a dropped
+	// Turso/Hrana stream can't 500 the write (see retry.go).
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("insert audit log: %w", err)
 	}
+	entry.ID = id
+
+	query := `
+		INSERT INTO audit_logs (
+			id, server_id, actor_user_id, target_user_id,
+			event_type, metadata, actor_snapshot, target_snapshot
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	if _, err = r.db.ExecContext(ctx, query,
+		entry.ID, entry.ServerID, entry.ActorUserID, entry.TargetUserID,
+		entry.EventType, metadata, actorJSON, targetJSON,
+	); err != nil {
+		return fmt.Errorf("insert audit log: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at (see sqlite_user.go).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM audit_logs WHERE id = ?", entry.ID).Scan(&entry.CreatedAt)
 	return nil
 }
 
@@ -83,32 +82,42 @@ func (r *sqliteAuditLogRepo) ListByServer(
 		limit = 50
 	}
 
-	// Pagination is cursor-based on created_at. The idx_audit_logs_server_created
-	// index covers (server_id, created_at DESC) so this stays cheap as the
-	// table grows.
-	var rows *sql.Rows
-	var err error
-	if filter.Before != nil {
-		rows, err = r.db.QueryContext(ctx, `
-			SELECT id, server_id, actor_user_id, target_user_id,
-			       event_type, metadata, actor_snapshot, target_snapshot, created_at
-			FROM audit_logs
-			WHERE server_id = ? AND created_at < ?
-			ORDER BY created_at DESC, id DESC
-			LIMIT ?`,
-			filter.ServerID, *filter.Before, limit,
-		)
-	} else {
-		rows, err = r.db.QueryContext(ctx, `
-			SELECT id, server_id, actor_user_id, target_user_id,
-			       event_type, metadata, actor_snapshot, target_snapshot, created_at
-			FROM audit_logs
-			WHERE server_id = ?
-			ORDER BY created_at DESC, id DESC
-			LIMIT ?`,
-			filter.ServerID, limit,
-		)
+	// Keyset pagination. The idx_audit_logs_server_created index covers
+	// (server_id, created_at DESC) so this stays cheap as the table grows.
+	// The cursor is built to match ORDER BY created_at DESC, id DESC:
+	//   - BeforeID → keyset on (created_at, id) via BOOLEAN EXPANSION, not a
+	//     row-value comparison: row-value isn't portable across the modernc
+	//     and libsql/Turso engines (same rationale as sqlite_message.go). The
+	//     cursor row's created_at is looked up server-side from its id, so no
+	//     client timestamp round-trip can drift the stored format (§4 trap).
+	//     A page boundary among rows sharing a created_at (two moderation
+	//     actions in the same second) then neither skips nor repeats.
+	//   - Before only → legacy created_at < ?, kept so an older client that
+	//     sends just `before` keeps paginating (edge-case-prone but unbroken).
+	//   - neither → first page.
+	// Query fragments are static; only the cursor values are bound.
+	where := "server_id = ?"
+	args := []any{filter.ServerID}
+	switch {
+	case filter.BeforeID != nil:
+		where += ` AND ( created_at < (SELECT created_at FROM audit_logs WHERE id = ?)
+		            OR ( created_at = (SELECT created_at FROM audit_logs WHERE id = ?) AND id < ? ) )`
+		args = append(args, *filter.BeforeID, *filter.BeforeID, *filter.BeforeID)
+	case filter.Before != nil:
+		where += " AND created_at < ?"
+		args = append(args, *filter.Before)
 	}
+	args = append(args, limit)
+
+	query := `
+		SELECT id, server_id, actor_user_id, target_user_id,
+		       event_type, metadata, actor_snapshot, target_snapshot, created_at
+		FROM audit_logs
+		WHERE ` + where + `
+		ORDER BY created_at DESC, id DESC
+		LIMIT ?`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list audit logs: %w", err)
 	}

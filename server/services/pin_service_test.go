@@ -20,6 +20,16 @@ func newTestPinService(
 	return NewPinService(pinRepo, msgRepo, chanRepo, hub, permResolver)
 }
 
+// manageResolver grants ManageMessages in the channel — the precondition the
+// pin write paths now enforce (channel-resolved, so a deny-override is honoured).
+func manageResolver() *testutil.MockChannelPermResolver {
+	return &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+			return models.PermManageMessages, nil
+		},
+	}
+}
+
 // ─── Cross-tenant IDOR: channel belongs to a different server than the URL ───
 //
 // Regression guard for the BOLA where Pin/Unpin/GetPinnedMessages trusted the
@@ -71,7 +81,7 @@ func TestUnpinCrossServerChannel(t *testing.T) {
 		&testutil.MockChannelPermResolver{},
 	)
 
-	err := svc.Unpin(context.Background(), "srv1", "m1", "ch1")
+	err := svc.Unpin(context.Background(), "srv1", "m1", "ch1", "u1")
 	if !errors.Is(err, pkg.ErrNotFound) {
 		t.Errorf("Unpin cross-server: expected ErrNotFound, got %v", err)
 	}
@@ -149,7 +159,7 @@ func TestPinHappyPath(t *testing.T) {
 		},
 		sameServerChannelRepo,
 		&testutil.MockBroadcastAndOnline{},
-		&testutil.MockChannelPermResolver{},
+		manageResolver(),
 	)
 
 	pin, err := svc.Pin(context.Background(), "srv1", "m1", "ch1", "u1")
@@ -180,7 +190,7 @@ func TestPinMessageNotInChannel(t *testing.T) {
 		},
 		sameServerChannelRepo,
 		&testutil.MockBroadcastAndOnline{},
-		&testutil.MockChannelPermResolver{},
+		manageResolver(),
 	)
 
 	_, err := svc.Pin(context.Background(), "srv1", "m1", "ch1", "u1")
@@ -209,7 +219,7 @@ func TestPinLimitReached(t *testing.T) {
 		},
 		sameServerChannelRepo,
 		&testutil.MockBroadcastAndOnline{},
-		&testutil.MockChannelPermResolver{},
+		manageResolver(),
 	)
 
 	_, err := svc.Pin(context.Background(), "srv1", "m1", "ch1", "u1")
@@ -240,10 +250,10 @@ func TestUnpinHappyPath(t *testing.T) {
 		},
 		sameServerChannelRepo,
 		&testutil.MockBroadcastAndOnline{},
-		&testutil.MockChannelPermResolver{},
+		manageResolver(),
 	)
 
-	if err := svc.Unpin(context.Background(), "srv1", "m1", "ch1"); err != nil {
+	if err := svc.Unpin(context.Background(), "srv1", "m1", "ch1", "u1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !unpinCalled {
@@ -283,5 +293,97 @@ func TestGetPinnedMessagesHappyPath(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].MessageID != "m1" {
 		t.Errorf("unexpected pinned messages: %+v", got)
+	}
+}
+
+// ─── Channel-level ManageMessages deny-override blocks the write paths (P2-1) ───
+//
+// The route middleware grants server-wide ManageMessages; these prove the
+// service additionally honours a per-channel deny-override, matching how
+// GetPinnedMessages already gates reads.
+
+// deniedResolver resolves to read-only perms — the shape a channel
+// ManageMessages deny-override produces for a user who holds it server-wide.
+func deniedResolver() *testutil.MockChannelPermResolver {
+	return &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+			return models.PermViewChannel | models.PermReadMessages, nil
+		},
+	}
+}
+
+func sameServerRepo() *testutil.MockChannelRepo {
+	return &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+		},
+	}
+}
+
+func msgInChannel() *testutil.MockMessageRepo {
+	return &testutil.MockMessageRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Message, error) {
+			return &models.Message{ID: "m1", ChannelID: "ch1"}, nil
+		},
+	}
+}
+
+func TestPinDeniedByChannelOverride(t *testing.T) {
+	pinCalled := false
+	svc := newTestPinService(
+		&testutil.MockPinRepo{PinFn: func(context.Context, *models.PinnedMessage) error { pinCalled = true; return nil }},
+		msgInChannel(),
+		sameServerRepo(),
+		&testutil.MockBroadcastAndOnline{},
+		deniedResolver(),
+	)
+
+	_, err := svc.Pin(context.Background(), "srv1", "m1", "ch1", "u1")
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Errorf("Pin without channel ManageMessages: expected ErrForbidden, got %v", err)
+	}
+	if pinCalled {
+		t.Error("the pin must not be written when the channel denies ManageMessages")
+	}
+}
+
+func TestUnpinDeniedByChannelOverride(t *testing.T) {
+	unpinCalled := false
+	svc := newTestPinService(
+		&testutil.MockPinRepo{UnpinFn: func(context.Context, string) error { unpinCalled = true; return nil }},
+		msgInChannel(),
+		sameServerRepo(),
+		&testutil.MockBroadcastAndOnline{},
+		deniedResolver(),
+	)
+
+	err := svc.Unpin(context.Background(), "srv1", "m1", "ch1", "u1")
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Errorf("Unpin without channel ManageMessages: expected ErrForbidden, got %v", err)
+	}
+	if unpinCalled {
+		t.Error("the unpin must not run when the channel denies ManageMessages")
+	}
+}
+
+func TestPinAdminBypassesChannelOverride(t *testing.T) {
+	pinCalled := false
+	svc := newTestPinService(
+		&testutil.MockPinRepo{PinFn: func(context.Context, *models.PinnedMessage) error { pinCalled = true; return nil }},
+		msgInChannel(),
+		sameServerRepo(),
+		&testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermAdmin, nil // admin passes ManageMessages via Has's bypass
+			},
+		},
+	)
+
+	if _, err := svc.Pin(context.Background(), "srv1", "m1", "ch1", "u1"); err != nil {
+		t.Fatalf("admin Pin: %v", err)
+	}
+	if !pinCalled {
+		t.Error("admin must be able to pin regardless of a channel override")
 	}
 }

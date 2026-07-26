@@ -1,4 +1,5 @@
 {
+  "selectChannel": "Select a channel",
   "messagePlaceholder": "Message #{{channel}}",
   "editMessage": "Edit Message",
   "deleteMessage": "Delete Message",
@@ -12,7 +13,6 @@
   "edited": "(edited)",
   "uploadFile": "Upload File",
   "fileTooLarge": "File is too large (max {{max}}MB)",
-  "fileTypeNotAllowed": "File type not allowed",
   "noChannel": "Select a channel",
   "editCancel": "cancel",
   "editSave": "save",
@@ -67,6 +67,11 @@
   "gifNoResults": "No GIFs found",
   "gifLoading": "Loading GIFs...",
   "gifUnavailable": "GIF search is not available",
+
+  "imagePreview": "Image preview",
+  "lightboxOpenOriginal": "Open original",
+  "lightboxDownload": "Download",
+  "lightboxImageFailed": "Image could not be loaded",
 
   "jumpToMention": "Jump to mention"
 }

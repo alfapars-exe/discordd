@@ -113,7 +113,9 @@ func TestSQLiteUserCreate_DuplicateEmail(t *testing.T) {
 
 func TestSQLiteUserCreateWithSession_HappyPath(t *testing.T) {
 	db := newTestDB(t)
-	repo := NewSQLiteUserRepo(db.Conn)
+	// Through the production retry wrapper (wrapForRepo) so rawDB = RawDB(db)
+	// must unwrap to reach *sql.DB — the path that broke in prod 2026-07-19.
+	repo := NewSQLiteUserRepo(wrapForRepo(db))
 	ctx := context.Background()
 
 	user := newTestUser("atomic-happy-user")
@@ -154,7 +156,7 @@ func TestSQLiteUserCreateWithSession_HappyPath(t *testing.T) {
 // the user row was never persisted either.
 func TestSQLiteUserCreateWithSession_RollsBackUserOnSessionFailure(t *testing.T) {
 	db := newTestDB(t)
-	repo := NewSQLiteUserRepo(db.Conn)
+	repo := NewSQLiteUserRepo(wrapForRepo(db)) // wrapped, like prod (see wrapForRepo)
 	ctx := context.Background()
 
 	const refreshToken = "refresh-token-collision"

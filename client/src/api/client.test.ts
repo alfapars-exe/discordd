@@ -268,3 +268,50 @@ describe("same-origin proxy (packaged Electron shell)", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE_URL}/users/me`);
   });
 });
+
+describe("apiClient timeoutMs (send-path hang guard)", () => {
+  /**
+   * A stalled POST used to hang forever (no AbortSignal anywhere) and froze
+   * the composer, which keeps the textarea read-only while a send is in
+   * flight. timeoutMs is opt-in per call site; the resulting envelope is
+   * isTimeout — deliberately NOT isNetworkError, so retry helpers won't
+   * auto-resend a request that may already have been persisted server-side.
+   */
+  it("aborts a stalled request and resolves with isTimeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const { apiClient } = await loadClient();
+      fetchMock.mockImplementation(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("The operation was aborted.", "AbortError"))
+            );
+          })
+      );
+
+      const promise = apiClient("/servers/s/channels/c/messages", {
+        method: "POST",
+        body: { content: "x" },
+        timeoutMs: 15_000,
+      });
+      await vi.advanceTimersByTimeAsync(15_001);
+      const res = await promise;
+
+      expect(res.success).toBe(false);
+      expect(res.isTimeout).toBe(true);
+      expect(res.isNetworkError).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("attaches no AbortSignal when timeoutMs is absent (uploads must not be cut off)", async () => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValue(jsonResponse({ success: true, data: null }));
+
+    await apiClient("/users/me");
+
+    expect(initOf(fetchMock.mock.calls[0])?.signal).toBeUndefined();
+  });
+});

@@ -13,6 +13,7 @@ import { useReadStateStore } from "./readStateStore";
 import { useToastStore } from "./toastStore";
 import { encryptChannelMessage, decryptChannelMessages } from "../crypto/channelEncryption";
 import { encodePayload } from "../crypto/e2eePayload";
+import * as keyStorage from "../crypto/keyStorage";
 import type { Message, ReactionGroup } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
@@ -29,7 +30,12 @@ type MessageState = {
   /** channelId -> Message[] */
   messagesByChannel: Record<string, Message[]>;
   hasMoreByChannel: Record<string, boolean>;
-  isLoading: boolean;
+  /**
+   * channelId -> fetch in flight. Per-channel, not global: with split panes
+   * several channels are visible at once, and one channel's fetch must not
+   * blank every other pane's message list with a skeleton.
+   */
+  isLoadingByChannel: Record<string, boolean>;
   isLoadingMore: boolean;
   /** channelId -> username[] */
   typingUsers: Record<string, string[]>;
@@ -101,10 +107,22 @@ function abortChannelFetch(channelId: string): void {
   }
 }
 
+/**
+ * Extracts the created Message from a send response. 201 returns the message
+ * directly; 207 Multi-Status (some attachments failed) wraps it as
+ * `{ message, upload_failures }`.
+ */
+function unwrapSentMessage(data: unknown): Message | null {
+  if (!data || typeof data !== "object") return null;
+  if ("id" in data) return data as Message;
+  const wrapped = (data as { message?: Message }).message;
+  return wrapped && typeof wrapped === "object" && "id" in wrapped ? wrapped : null;
+}
+
 export const useMessageStore = create<MessageState>((set, get) => ({
   messagesByChannel: {},
   hasMoreByChannel: {},
-  isLoading: false,
+  isLoadingByChannel: {},
   isLoadingMore: false,
   typingUsers: {},
   lastDeleted: null,
@@ -152,12 +170,24 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     const controller = new AbortController();
     inflightFetches.set(channelId, controller);
 
-    set({ isLoading: true });
+    const setLoading = (loading: boolean) =>
+      set((state) => ({
+        isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: loading },
+      }));
+    // Abort paths must clear the flag too — but only when no NEWER fetch
+    // owns this channel, or the replacement fetch's own flag would be
+    // clobbered by the aborted one resolving late (permanent skeleton bug).
+    const clearLoadingIfOwner = () => {
+      const owner = inflightFetches.get(channelId);
+      if (!owner || owner === controller) setLoading(false);
+    };
+
+    setLoading(true);
 
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) {
       inflightFetches.delete(channelId);
-      set({ isLoading: false });
+      setLoading(false);
       return;
     }
 
@@ -167,19 +197,28 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     // invalidate also aborts, so this branch covers both user-switch and
     // E2EE-rotation cases without polluting messagesByChannel.
     if (controller.signal.aborted) {
+      clearLoadingIfOwner();
       return;
     }
-    inflightFetches.delete(channelId);
 
     if (res.success && res.data) {
-      fetchedChannels.add(channelId);
-
       // Go nil slice -> JSON null; fallback to empty array
       const apiMessages = await decryptChannelMessages(res.data.messages ?? []);
 
       // Re-check abort after the async decrypt — a fast channel-switch
-      // during decryption would otherwise still write stale content.
-      if (controller.signal.aborted) return;
+      // during decryption would otherwise still write stale content. The
+      // controller stays registered in inflightFetches until AFTER this
+      // check so invalidateFetchCache during the decrypt still reaches it.
+      if (controller.signal.aborted) {
+        clearLoadingIfOwner();
+        return;
+      }
+      inflightFetches.delete(channelId);
+
+      // Mark fetched only now that we're committed to writing the result.
+      // Marking earlier left an aborted channel flagged as fetched-but-empty,
+      // which the guard at the top then made permanently unfetchable.
+      fetchedChannels.add(channelId);
 
       set((state) => {
         // Merge WS-buffered messages that arrived during fetch
@@ -196,7 +235,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             ...state.hasMoreByChannel,
             [channelId]: res.data!.has_more,
           },
-          isLoading: false,
+          isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: false },
         };
       });
 
@@ -207,7 +246,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         useReadStateStore.getState().markAsRead(channelId, lastMsg.id);
       }
     } else {
-      set({ isLoading: false });
+      inflightFetches.delete(channelId);
+      setLoading(false);
     }
   },
 
@@ -287,6 +327,29 @@ export const useMessageStore = create<MessageState>((set, get) => ({
               replyToId
             )
           );
+          if (res.success) {
+            const created = unwrapSentMessage(res.data);
+            if (created) {
+              // Insert the 201 body so the sender's own message never depends
+              // on the WS echo (a dropped socket loses it). The body carries
+              // ciphertext with content:null — inserting it raw would make the
+              // later decrypted echo hit the id-dedupe and leave the message
+              // permanently unreadable, so overlay the plaintext we just
+              // encrypted. handleMessageCreate dedupes by id either way.
+              get().handleMessageCreate({ ...created, content, e2ee_file_keys: fileMetas });
+              if (content) {
+                // Sender-key ratchets can't re-decrypt our own past messages
+                // on refetch — persist the plaintext like the echo path does.
+                keyStorage.cacheDecryptedMessage({
+                  messageId: created.id,
+                  channelId,
+                  dmChannelId: null,
+                  content,
+                  timestamp: new Date(created.created_at).getTime(),
+                }).catch(() => {});
+              }
+            }
+          }
           return res.success;
         } catch (err) {
           console.error("[messageStore] E2EE encryption failed:", err);
@@ -300,6 +363,14 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     const res = await sendWithRetryAndToast(() =>
       messageApi.sendMessage(serverId, channelId, content, files, replyToId)
     );
+    if (res.success) {
+      // Insert the 201 body directly: the sender's view of their own message
+      // must not depend on the WS echo, which a dead/reconnecting socket
+      // silently loses. handleMessageCreate dedupes by id, so the echo
+      // arriving before or after this insert is harmless.
+      const created = unwrapSentMessage(res.data);
+      if (created) get().handleMessageCreate(created);
+    }
     return res.success;
   },
 

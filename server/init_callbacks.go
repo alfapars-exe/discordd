@@ -227,7 +227,7 @@ func registerHubCallbacks(
 			if uid == senderUserID {
 				continue
 			}
-			if perms[uid].Has(models.PermViewChannel) && perms[uid].Has(models.PermReadMessages) {
+			if models.PermCanReadChannel(perms[uid]) {
 				recipients = append(recipients, uid)
 			}
 		}

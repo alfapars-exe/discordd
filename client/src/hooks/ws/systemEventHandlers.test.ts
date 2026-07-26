@@ -9,8 +9,10 @@
  * their message vanish and concludes the send failed.
  *
  * On a RE-connect `ready` (not the first one) we drop the fetched-flags so
- * the window can be rebuilt, and eagerly refetch the channel the user is
- * actually looking at. Other channels heal lazily on next visit.
+ * the window can be rebuilt, and eagerly refetch what the user can actually
+ * SEE: the active text tab of every panel (split view shows several channels
+ * at once), each with its own serverId, plus the sidebar selection. Background
+ * tabs heal lazily on next visit.
  *
  * Each test re-imports the module under test through vi.resetModules() so
  * the module-level "have we been ready before" flag starts clean.
@@ -79,6 +81,44 @@ vi.mock("../../stores/soundboardStore", () => ({
   useSoundboardStore: { getState: () => ({}) },
 }));
 vi.mock("../../stores/auditStore", () => ({ useAuditStore: { getState: () => ({}) } }));
+// Two panels: panel-1's ACTIVE tab is a cross-server channel (its own
+// serverId), with a background tab that must NOT be eagerly healed; panel-2's
+// active tab shows the sidebar-selected channel.
+vi.mock("../../stores/uiStore", () => ({
+  useUIStore: {
+    getState: () => ({
+      panels: {
+        "panel-1": {
+          id: "panel-1",
+          activeTabId: "tab-1",
+          tabs: [
+            {
+              id: "tab-1",
+              channelId: "ch-tab-1",
+              type: "text",
+              label: "genel",
+              serverInfo: { serverId: "srv-9", serverName: "Other", serverIconUrl: null },
+            },
+            { id: "tab-bg", channelId: "ch-bg", type: "text", label: "arka-plan" },
+          ],
+        },
+        "panel-2": {
+          id: "panel-2",
+          activeTabId: "tab-2",
+          tabs: [
+            {
+              id: "tab-2",
+              channelId: "ch-active",
+              type: "text",
+              label: "aktif",
+              serverInfo: { serverId: "srv-1", serverName: "Main", serverIconUrl: null },
+            },
+          ],
+        },
+      },
+    }),
+  },
+}));
 
 const ctx: WSHandlerContext = { sendVoiceJoin: vi.fn() };
 
@@ -127,15 +167,20 @@ describe("handleSystemEvent — ready reconnect refetch", () => {
     expect(fetchMessages).not.toHaveBeenCalled();
   });
 
-  it("invalidates fetched flags and refetches the active channel on a re-connect ready", async () => {
+  it("invalidates fetched flags and refetches every panel's ACTIVE tab (own serverId) on a re-connect ready", async () => {
     const { handleSystemEvent, invalidateFetchedFlags, fetchMessages } = await loadFresh();
 
     await handleSystemEvent(readyMsg, ctx, vi.fn());
     await handleSystemEvent(readyMsg, ctx, vi.fn());
 
     expect(invalidateFetchedFlags).toHaveBeenCalledTimes(1);
-    expect(fetchMessages).toHaveBeenCalledTimes(1);
-    expect(fetchMessages).toHaveBeenCalledWith("ch-active");
+    // panel-1 active tab (cross-server, explicit serverId) + panel-2 active
+    // tab (which also covers the sidebar selection — no duplicate fetch).
+    expect(fetchMessages).toHaveBeenCalledTimes(2);
+    expect(fetchMessages).toHaveBeenCalledWith("ch-tab-1", "srv-9");
+    expect(fetchMessages).toHaveBeenCalledWith("ch-active", "srv-1");
+    // Background tabs heal lazily — never eagerly fetched.
+    expect(fetchMessages).not.toHaveBeenCalledWith("ch-bg", undefined);
   });
 
   it("keeps invalidating on every subsequent reconnect", async () => {

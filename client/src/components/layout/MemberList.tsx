@@ -3,7 +3,7 @@
  * Panel width is CSS-transitioned via .members-panel.open toggle.
  */
 
-import { useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useMemberStore, useActiveMembers } from "../../stores/memberStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -16,7 +16,7 @@ import { resolveAssetUrl } from "../../utils/constants";
 import MemberItem from "../members/MemberItem";
 import { MemberSkeleton } from "../shared/Skeleton";
 import { IconMembers } from "../shared/Icons";
-import type { MemberWithRoles, Role } from "../../types";
+import { partitionMembers } from "./memberGrouping";
 
 /** Member panel width bounds (px) */
 const MEMBERS_MIN = 160;
@@ -40,52 +40,6 @@ function saveCollapsed(collapsed: Set<string>): void {
   try {
     localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
   } catch { /* localStorage full */ }
-}
-
-/** Returns the member's highest-position role (used for grouping). */
-function getHighestRole(member: MemberWithRoles): Role | null {
-  if (member.roles.length === 0) return null;
-  return member.roles.reduce((highest, role) =>
-    role.position > highest.position ? role : highest
-  );
-}
-
-/** Members sharing the same highest role. */
-type RoleGroup = {
-  role: Role;
-  members: MemberWithRoles[];
-};
-
-/** Groups members by highest role, sorted by role position DESC. */
-function groupByHighestRole(members: MemberWithRoles[]): RoleGroup[] {
-  const groups = new Map<string, RoleGroup>();
-
-  for (const member of members) {
-    const highest = getHighestRole(member);
-    if (!highest) continue;
-
-    const existing = groups.get(highest.id);
-    if (existing) {
-      existing.members.push(member);
-    } else {
-      groups.set(highest.id, { role: highest, members: [member] });
-    }
-  }
-
-  // Sort groups by position DESC, members within each group by username
-  const result = Array.from(groups.values()).sort(
-    (a, b) => b.role.position - a.role.position
-  );
-
-  for (const group of result) {
-    group.members.sort((a, b) => {
-      const nameA = a.display_name ?? a.username ?? "";
-      const nameB = b.display_name ?? b.username ?? "";
-      return nameA.localeCompare(nameB);
-    });
-  }
-
-  return result;
 }
 
 function MemberList() {
@@ -123,24 +77,13 @@ function MemberList() {
     storageKey: "mqvi_members_width",
   });
 
-  // Split members into online/offline
-  const onlineMembers = members.filter((m) => onlineUserIds.has(m.id));
-  const offlineMembers = members.filter((m) => !onlineUserIds.has(m.id));
-
-  // Group online members by role
-  const onlineGroups = groupByHighestRole(onlineMembers);
-
-  // Online members with no roles (ungrouped)
-  const ungroupedOnline = onlineMembers.filter(
-    (m) => m.roles.length === 0
+  // Split into online/offline, group online by role, sort — see memberGrouping.
+  // Memoized so a presence_update (which bumps onlineUserIds) doesn't re-run
+  // the filter + double-sort unless members or the presence set actually changed.
+  const { onlineGroups, ungroupedOnline, sortedOffline } = useMemo(
+    () => partitionMembers(members, onlineUserIds),
+    [members, onlineUserIds]
   );
-
-  // Offline members sorted by name (no grouping)
-  const sortedOffline = [...offlineMembers].sort((a, b) => {
-    const nameA = a.display_name ?? a.username ?? "";
-    const nameB = b.display_name ?? b.username ?? "";
-    return nameA.localeCompare(nameB);
-  });
 
   /** Dynamic width when open, 0 when closed */
   const panelWidth = membersOpen ? width : 0;

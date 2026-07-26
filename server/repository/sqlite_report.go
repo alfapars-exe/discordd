@@ -21,17 +21,18 @@ func NewSQLiteReportRepo(db database.TxQuerier) ReportRepository {
 func (r *sqliteReportRepo) Create(ctx context.Context, report *models.Report) error {
 	query := `
 		INSERT INTO reports (id, reporter_id, reported_user_id, reason, description)
-		VALUES (?, ?, ?, ?, ?)
-		RETURNING created_at`
+		VALUES (?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
 		report.ID, report.ReporterID, report.ReportedUserID,
 		report.Reason, report.Description,
-	).Scan(&report.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create report: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM reports WHERE id = ?", report.ID).Scan(&report.CreatedAt)
 	return nil
 }
 
@@ -215,18 +216,24 @@ func (r *sqliteReportRepo) HasPendingReport(ctx context.Context, reporterID, tar
 }
 
 func (r *sqliteReportRepo) CreateAttachment(ctx context.Context, att *models.ReportAttachment) error {
-	query := `
-		INSERT INTO report_attachments (report_id, filename, file_url, file_size, mime_type)
-		VALUES (?, ?, ?, ?, ?)
-		RETURNING id, created_at`
-
-	err := r.db.QueryRowContext(ctx, query,
-		att.ReportID, att.Filename, att.FileURL, att.FileSize, att.MimeType,
-	).Scan(&att.ID, &att.CreatedAt)
-
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create report attachment: %w", err)
 	}
+	att.ID = id
+
+	query := `
+		INSERT INTO report_attachments (id, report_id, filename, file_url, file_size, mime_type)
+		VALUES (?, ?, ?, ?, ?, ?)`
+
+	if _, err := r.db.ExecContext(ctx, query,
+		att.ID, att.ReportID, att.Filename, att.FileURL, att.FileSize, att.MimeType,
+	); err != nil {
+		return fmt.Errorf("failed to create report attachment: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at (see sqlite_user.go).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM report_attachments WHERE id = ?", att.ID).Scan(&att.CreatedAt)
 	return nil
 }
 

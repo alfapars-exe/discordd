@@ -21,13 +21,19 @@ func NewSQLiteMessageRepo(db database.TxQuerier) MessageRepository {
 }
 
 func (r *sqliteMessageRepo) Create(ctx context.Context, message *models.Message) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to create message: %w", err)
+	}
+	message.ID = id
+
 	query := `
 		INSERT INTO messages (id, channel_id, user_id, content, reply_to_id,
 			encryption_version, ciphertext, sender_device_id, e2ee_metadata)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
+		message.ID,
 		message.ChannelID,
 		message.UserID,
 		message.Content,
@@ -36,11 +42,15 @@ func (r *sqliteMessageRepo) Create(ctx context.Context, message *models.Message)
 		message.Ciphertext,
 		message.SenderDeviceID,
 		message.E2EEMetadata,
-	).Scan(&message.ID, &message.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create). created_at feeds the
+	// WS broadcast; on the rare read-back miss it stays zero rather than 500ing
+	// the send — the row itself is persisted with the correct timestamp.
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM messages WHERE id = ?", message.ID).Scan(&message.CreatedAt)
 
 	return nil
 }

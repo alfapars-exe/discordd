@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import MessageAttachments from "./MessageAttachments";
 import { ensureFreshToken } from "../../api/client";
+import { useLightboxStore } from "../../stores/lightboxStore";
 import type { ChatMessage, ChatAttachment } from "../../hooks/useChatContext";
 
 vi.mock("../../api/client", () => ({
@@ -190,5 +191,56 @@ describe("MessageAttachments", () => {
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByText("example.png")).toBeInTheDocument();
     expect(screen.getByText(/e2eeKeyMissing/)).toBeInTheDocument();
+  });
+});
+
+describe("MessageAttachments — lightbox integration", () => {
+  beforeEach(() => {
+    useLightboxStore.getState().close();
+  });
+
+  it("plain left-click on an image opens the lightbox instead of navigating", () => {
+    const msg = makeMessage({ attachments: [makeAttachment()] });
+    render(<MessageAttachments message={msg} />);
+    const anchor = screen.getByRole("img", { name: "example.png" }).closest("a")!;
+
+    fireEvent.click(anchor);
+
+    expect(useLightboxStore.getState().item).toMatchObject({
+      kind: "remote",
+      href: "https://cdn.test//files/example.png",
+      filename: "example.png",
+      authRetry: true,
+    });
+  });
+
+  it("ctrl-click keeps the anchor's native new-tab behavior (no lightbox)", () => {
+    const msg = makeMessage({ attachments: [makeAttachment()] });
+    render(<MessageAttachments message={msg} />);
+    const anchor = screen.getByRole("img", { name: "example.png" }).closest("a")!;
+
+    fireEvent.click(anchor, { ctrlKey: true });
+
+    expect(useLightboxStore.getState().item).toBeNull();
+  });
+});
+
+describe("MessageAttachments — non-displayable types stay file cards", () => {
+  it("text/html attachments never render inline (stored-XSS guard)", () => {
+    const msg = makeMessage({
+      attachments: [makeAttachment({ mime_type: "text/html", filename: "page.html" })],
+    });
+    render(<MessageAttachments message={msg} />);
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText("page.html")).toBeInTheDocument();
+  });
+
+  it("svg attachments (server sniffs them as text/xml) render as a file card", () => {
+    const msg = makeMessage({
+      attachments: [makeAttachment({ mime_type: "text/xml", filename: "pic.svg" })],
+    });
+    render(<MessageAttachments message={msg} />);
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText("pic.svg")).toBeInTheDocument();
   });
 });

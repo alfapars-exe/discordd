@@ -22,7 +22,8 @@
  *   applog.ts      — runtime app logs
  *   audit.ts       — moderation event feed
  *   auth.ts        — login/register/tokens
- *   api.ts         — APIResponse, WSMessage envelopes
+ *   api.ts         — APIResponse envelope
+ *   ws.ts          — WSMessage discriminated union + WSPayloadMap
  *   e2ee.ts        — Signal Protocol device + key + envelope shapes
  *   soundboard.ts  — uploaded sound clips
  *   music.ts       — music bot identity + queue
@@ -51,6 +52,7 @@ export * from "./applog";
 export * from "./audit";
 export * from "./auth";
 export * from "./api";
+export * from "./ws";
 export * from "./e2ee";
 export * from "./soundboard";
 export * from "./music";

@@ -132,6 +132,7 @@ export const useAuditStore = create<AuditState>((set, get) => ({
       const res = await listServerAudit(serverId, {
         limit: PAGE_SIZE,
         before: oldest.created_at,
+        beforeId: oldest.id,
       });
       if (res.success && res.data) {
         // Snapshot the narrowed payload — see fetchInitial for the
