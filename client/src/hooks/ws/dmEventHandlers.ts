@@ -10,15 +10,15 @@ import { decryptDMMessage, popSentPlaintext, popEditPlaintext } from "../../cryp
 import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
-import type { WSMessage, DMChannelWithUser, DMMessage, ReactionGroup } from "../../types";
+import type { WSMessage } from "../../types";
 
 export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
   switch (msg.op) {
     case "dm_channel_create":
-      useDMStore.getState().handleDMChannelCreate(msg.d as DMChannelWithUser);
+      useDMStore.getState().handleDMChannelCreate(msg.d);
       return true;
     case "dm_channel_update": {
-      const dmChannel = msg.d as DMChannelWithUser;
+      const dmChannel = msg.d;
       useDMStore.getState().handleDMChannelUpdate(dmChannel);
       // Trigger recovery password prompt if E2EE was just enabled
       if (dmChannel.e2ee_enabled) {
@@ -28,7 +28,7 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "dm_message_create": {
-      let dmMsg = msg.d as DMMessage;
+      let dmMsg = msg.d;
       const dmCurrentUserId = useAuthStore.getState().user?.id;
 
       if (dmMsg.encryption_version === 1 && dmMsg.ciphertext && dmMsg.sender_device_id) {
@@ -109,7 +109,7 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "dm_message_update": {
-      let dmUpdateMsg = msg.d as DMMessage;
+      let dmUpdateMsg = msg.d;
       const dmEditCurrentUserId = useAuthStore.getState().user?.id;
 
       if (dmUpdateMsg.encryption_version === 1 && dmUpdateMsg.ciphertext && dmUpdateMsg.sender_device_id) {
@@ -159,7 +159,7 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "dm_message_delete": {
-      const dmDelData = msg.d as { id: string; dm_channel_id: string };
+      const dmDelData = msg.d;
       const dmState = useDMStore.getState();
       const dmUnread = dmState.dmUnreadCounts[dmDelData.dm_channel_id] ?? 0;
       if (dmUnread > 0) {
@@ -175,38 +175,38 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "dm_reaction_update": {
-      const data = msg.d as { dm_message_id: string; dm_channel_id: string; reactions: ReactionGroup[] };
+      const data = msg.d;
       useDMStore.getState().handleDMReactionUpdate(data);
       return true;
     }
 
     case "dm_typing_start": {
-      const data = msg.d as { user_id: string; username: string; dm_channel_id: string };
+      const data = msg.d;
       useDMStore.getState().handleDMTypingStart(data.dm_channel_id, data.username);
       return true;
     }
 
     case "dm_message_pin":
-      useDMStore.getState().handleDMMessagePin(msg.d as { dm_channel_id: string; message: DMMessage });
+      useDMStore.getState().handleDMMessagePin(msg.d);
       return true;
     case "dm_message_unpin":
-      useDMStore.getState().handleDMMessageUnpin(msg.d as { dm_channel_id: string; message_id: string });
+      useDMStore.getState().handleDMMessageUnpin(msg.d);
       return true;
 
     case "dm_settings_update":
-      useDMStore.getState().handleDMSettingsUpdate(msg.d as { dm_channel_id: string; action: string });
+      useDMStore.getState().handleDMSettingsUpdate(msg.d);
       return true;
 
     case "dm_channel_status_change": {
-      const statusData = msg.d as { dm_channel_id: string; status: "accepted" | "pending"; initiated_by: string | null };
+      const statusData = msg.d;
       useDMStore.getState().handleDMChannelStatusChange(statusData);
       return true;
     }
     case "dm_request_accept":
-      useDMStore.getState().handleDMRequestAccept(msg.d as { dm_channel_id: string });
+      useDMStore.getState().handleDMRequestAccept(msg.d);
       return true;
     case "dm_request_decline":
-      useDMStore.getState().handleDMRequestDecline(msg.d as { dm_channel_id: string });
+      useDMStore.getState().handleDMRequestDecline(msg.d);
       return true;
 
     default:

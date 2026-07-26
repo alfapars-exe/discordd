@@ -16,15 +16,7 @@ import { decryptChannelMessage } from "../../crypto/channelEncryption";
 import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
-import type {
-  WSMessage,
-  Channel,
-  Category,
-  Message,
-  ReactionGroup,
-  PinnedMessage,
-  ChannelPermissionOverride,
-} from "../../types";
+import type { WSMessage } from "../../types";
 
 export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
   switch (msg.op) {
@@ -32,33 +24,33 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
       useChannelStore.getState().fetchChannels();
       return true;
     case "channel_update": {
-      const ch = msg.d as Channel;
+      const ch = msg.d;
       useChannelStore.getState().handleChannelUpdate(ch);
       useUIStore.getState().updateTabLabel(ch.id, ch.name);
       return true;
     }
     case "channel_delete":
-      useChannelStore.getState().handleChannelDelete((msg.d as { id: string }).id);
+      useChannelStore.getState().handleChannelDelete(msg.d.id);
       return true;
     case "channel_reorder":
       useChannelStore.getState().fetchChannels();
       return true;
 
     case "category_create":
-      useChannelStore.getState().handleCategoryCreate(msg.d as Category);
+      useChannelStore.getState().handleCategoryCreate(msg.d);
       return true;
     case "category_update":
-      useChannelStore.getState().handleCategoryUpdate(msg.d as Category);
+      useChannelStore.getState().handleCategoryUpdate(msg.d);
       return true;
     case "category_delete":
-      useChannelStore.getState().handleCategoryDelete((msg.d as { id: string }).id);
+      useChannelStore.getState().handleCategoryDelete(msg.d.id);
       return true;
     case "category_reorder":
       useChannelStore.getState().handleCategoryReorder();
       return true;
 
     case "message_create": {
-      let message = msg.d as Message;
+      let message = msg.d;
 
       const e2eeReady = useE2EEStore.getState().initStatus === "ready";
       if (e2eeReady && message.encryption_version === 1 && message.ciphertext && message.sender_device_id) {
@@ -131,7 +123,7 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "message_update": {
-      let updatedMsg = msg.d as Message;
+      let updatedMsg = msg.d;
 
       const e2eeReadyForUpdate = useE2EEStore.getState().initStatus === "ready";
       if (e2eeReadyForUpdate && updatedMsg.encryption_version === 1 && updatedMsg.ciphertext && updatedMsg.sender_device_id) {
@@ -158,7 +150,7 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "message_delete": {
-      const delData = msg.d as { id: string; channel_id: string };
+      const delData = msg.d;
 
       const unreadCount = useReadStateStore.getState().unreadCounts[delData.channel_id] ?? 0;
       if (unreadCount > 0) {
@@ -176,23 +168,20 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "typing_start": {
-      const data = msg.d as { channel_id: string; username: string };
+      const data = msg.d;
       useMessageStore.getState().handleTypingStart(data.channel_id, data.username);
       return true;
     }
 
     case "message_pin":
-      usePinStore.getState().handleMessagePin(msg.d as PinnedMessage);
+      usePinStore.getState().handleMessagePin(msg.d);
       return true;
     case "message_unpin":
-      usePinStore.getState().handleMessageUnpin(msg.d as { message_id: string; channel_id: string });
+      usePinStore.getState().handleMessageUnpin(msg.d);
       return true;
 
     case "reaction_update": {
-      const reactionData = msg.d as {
-        message_id: string; channel_id: string; reactions: ReactionGroup[];
-        actor_id: string; message_author_id: string; added: boolean;
-      };
+      const reactionData = msg.d;
       useMessageStore.getState().handleReactionUpdate(reactionData);
 
       if (reactionData.added) {
@@ -212,8 +201,8 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
     }
 
     case "channel_permission_update": {
-      useChannelPermissionStore.getState().handleOverrideUpdate(msg.d as ChannelPermissionOverride);
-      const cpUpd = msg.d as ChannelPermissionOverride;
+      useChannelPermissionStore.getState().handleOverrideUpdate(msg.d);
+      const cpUpd = msg.d;
       useChannelStore.getState().fetchChannels().then(() => {
         const allVisible = useChannelStore.getState().categories.flatMap((c) => c.channels);
         if (!allVisible.some((ch) => ch.id === cpUpd.channel_id)) {
@@ -223,7 +212,7 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
       return true;
     }
     case "channel_permission_delete": {
-      const cpDel = msg.d as { channel_id: string; role_id: string };
+      const cpDel = msg.d;
       useChannelPermissionStore.getState().handleOverrideDelete(cpDel.channel_id, cpDel.role_id);
       useChannelStore.getState().fetchChannels().then(() => {
         const allVisible = useChannelStore.getState().categories.flatMap((c) => c.channels);

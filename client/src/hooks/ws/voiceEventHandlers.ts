@@ -11,7 +11,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { useToastStore } from "../../stores/toastStore";
 import { playJoinSound, playLeaveSound } from "../../utils/sounds";
 import i18n from "../../i18n";
-import type { WSMessage, VoiceState, VoiceStateUpdateData, MusicBotChannelState } from "../../types";
+import type { WSMessage } from "../../types";
 import type { WSHandlerContext } from "./types";
 import { isVoiceRecoveryAllowed } from "../../stores/shared/voiceRecovery";
 
@@ -21,7 +21,7 @@ export async function handleVoiceEvent(
 ): Promise<boolean> {
   switch (msg.op) {
     case "voice_state_update": {
-      const voiceData = msg.d as VoiceStateUpdateData;
+      const voiceData = msg.d;
       const voiceState = useVoiceStore.getState();
 
       const prevStates = voiceState.voiceStates[voiceData.channel_id] ?? [];
@@ -71,10 +71,7 @@ export async function handleVoiceEvent(
     }
 
     case "screen_share_viewer_update": {
-      const viewerData = msg.d as {
-        streamer_user_id: string; channel_id: string;
-        viewer_count: number; viewer_user_id: string; action: string;
-      };
+      const viewerData = msg.d;
       useVoiceStore.getState().handleScreenShareViewerUpdate(viewerData);
 
       const myId = useAuthStore.getState().user?.id;
@@ -86,7 +83,7 @@ export async function handleVoiceEvent(
     }
 
     case "voice_states_sync": {
-      const syncData = msg.d as { states: VoiceState[] };
+      const syncData = msg.d;
       const vs = useVoiceStore.getState();
       vs.handleVoiceStatesSync(syncData.states);
 
@@ -157,7 +154,7 @@ export async function handleVoiceEvent(
     }
 
     case "voice_force_move": {
-      const forceMoveData = msg.d as { channel_id: string; channel_name?: string };
+      const forceMoveData = msg.d;
       const voiceStore = useVoiceStore.getState();
 
       // Preserve user's mute/deafen state across the move
@@ -195,7 +192,7 @@ export async function handleVoiceEvent(
 
     case "voice_afk_kick": {
       console.warn("[ws] voice_afk_kick RECEIVED", { timestamp: new Date().toISOString() });
-      const afkData = msg.d as { channel_name: string; server_name: string };
+      const afkData = msg.d;
       useVoiceStore.getState().handleAFKKick(afkData.channel_name, afkData.server_name);
       return true;
     }
@@ -211,7 +208,7 @@ export async function handleVoiceEvent(
       // store so subsequent LiveKit (re)connects use the new key, then
       // emit a re-key request. The just-departed user does NOT receive
       // this event — they're already off the recipient list server-side.
-      const data = msg.d as { channel_id: string; passphrase: string };
+      const data = msg.d;
       const vs = useVoiceStore.getState();
       if (vs.currentVoiceChannelId !== data.channel_id) {
         // Stale event for a channel we're no longer in — ignore.
@@ -233,7 +230,7 @@ export async function handleVoiceEvent(
     case "music_bot_state": {
       // Backend pushes the full per-channel state on every queue/track/pause
       // change. We just overwrite our cache; the panel re-renders.
-      const data = msg.d as { channel_id?: string; state?: MusicBotChannelState };
+      const data = msg.d;
       if (data?.channel_id && data.state) {
         useVoiceStore.getState().setMusicBotState(data.channel_id, data.state);
       }
@@ -248,7 +245,7 @@ export async function handleVoiceEvent(
       // self-diagnose: "yt-dlp start: …" → binary missing on server,
       // "ogg parse: …" → codec issue, etc. Without the reason the user
       // would have to open DevTools console to see what broke.
-      const data = msg.d as { track_title?: string; reason?: string };
+      const data = msg.d;
       const title = data?.track_title?.trim() || i18n.t("music:unknownTrack", { defaultValue: "track" });
       const reasonRaw = data?.reason?.trim() ?? "";
       // Trim to the first ~120 chars so the toast doesn't wrap forever
