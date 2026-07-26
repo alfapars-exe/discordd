@@ -24,19 +24,26 @@ func NewSQLiteServerRepo(db database.TxQuerier) ServerRepository {
 // ─── Server CRUD ───
 
 func (r *sqliteServerRepo) Create(ctx context.Context, server *models.Server) error {
-	query := `
-		INSERT INTO servers (id, name, icon_url, owner_id, invite_required, e2ee_enabled, livekit_instance_id)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
-
-	err := r.db.QueryRowContext(ctx, query,
-		server.Name, server.IconURL, server.OwnerID,
-		server.InviteRequired, server.E2EEEnabled, server.LiveKitInstanceID,
-	).Scan(&server.ID, &server.CreatedAt)
-
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
+	server.ID = id
+
+	query := `
+		INSERT INTO servers (id, name, icon_url, owner_id, invite_required, e2ee_enabled, livekit_instance_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+	if _, err := r.db.ExecContext(ctx, query,
+		server.ID, server.Name, server.IconURL, server.OwnerID,
+		server.InviteRequired, server.E2EEEnabled, server.LiveKitInstanceID,
+	); err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM servers WHERE id = ?", server.ID).Scan(&server.CreatedAt)
 
 	return nil
 }
