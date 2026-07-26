@@ -82,32 +82,42 @@ func (r *sqliteAuditLogRepo) ListByServer(
 		limit = 50
 	}
 
-	// Pagination is cursor-based on created_at. The idx_audit_logs_server_created
-	// index covers (server_id, created_at DESC) so this stays cheap as the
-	// table grows.
-	var rows *sql.Rows
-	var err error
-	if filter.Before != nil {
-		rows, err = r.db.QueryContext(ctx, `
-			SELECT id, server_id, actor_user_id, target_user_id,
-			       event_type, metadata, actor_snapshot, target_snapshot, created_at
-			FROM audit_logs
-			WHERE server_id = ? AND created_at < ?
-			ORDER BY created_at DESC, id DESC
-			LIMIT ?`,
-			filter.ServerID, *filter.Before, limit,
-		)
-	} else {
-		rows, err = r.db.QueryContext(ctx, `
-			SELECT id, server_id, actor_user_id, target_user_id,
-			       event_type, metadata, actor_snapshot, target_snapshot, created_at
-			FROM audit_logs
-			WHERE server_id = ?
-			ORDER BY created_at DESC, id DESC
-			LIMIT ?`,
-			filter.ServerID, limit,
-		)
+	// Keyset pagination. The idx_audit_logs_server_created index covers
+	// (server_id, created_at DESC) so this stays cheap as the table grows.
+	// The cursor is built to match ORDER BY created_at DESC, id DESC:
+	//   - BeforeID → keyset on (created_at, id) via BOOLEAN EXPANSION, not a
+	//     row-value comparison: row-value isn't portable across the modernc
+	//     and libsql/Turso engines (same rationale as sqlite_message.go). The
+	//     cursor row's created_at is looked up server-side from its id, so no
+	//     client timestamp round-trip can drift the stored format (§4 trap).
+	//     A page boundary among rows sharing a created_at (two moderation
+	//     actions in the same second) then neither skips nor repeats.
+	//   - Before only → legacy created_at < ?, kept so an older client that
+	//     sends just `before` keeps paginating (edge-case-prone but unbroken).
+	//   - neither → first page.
+	// Query fragments are static; only the cursor values are bound.
+	where := "server_id = ?"
+	args := []any{filter.ServerID}
+	switch {
+	case filter.BeforeID != nil:
+		where += ` AND ( created_at < (SELECT created_at FROM audit_logs WHERE id = ?)
+		            OR ( created_at = (SELECT created_at FROM audit_logs WHERE id = ?) AND id < ? ) )`
+		args = append(args, *filter.BeforeID, *filter.BeforeID, *filter.BeforeID)
+	case filter.Before != nil:
+		where += " AND created_at < ?"
+		args = append(args, *filter.Before)
 	}
+	args = append(args, limit)
+
+	query := `
+		SELECT id, server_id, actor_user_id, target_user_id,
+		       event_type, metadata, actor_snapshot, target_snapshot, created_at
+		FROM audit_logs
+		WHERE ` + where + `
+		ORDER BY created_at DESC, id DESC
+		LIMIT ?`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list audit logs: %w", err)
 	}

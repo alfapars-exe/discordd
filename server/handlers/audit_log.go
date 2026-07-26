@@ -1,8 +1,9 @@
 // Package handlers — audit_log: read-only endpoint backing the audit channel UI.
 //
-// GET /api/servers/{id}/audit?limit=50&before=<RFC3339 timestamp>
+// GET /api/servers/{id}/audit?limit=50&before=<RFC3339 timestamp>&before_id=<id>
 //
-// Returns a server's audit log entries, paginated by created_at cursor.
+// Returns a server's audit log entries, paginated by a keyset cursor on
+// (created_at, id). `before`+`before_id` are the last row the client holds.
 // Permission is enforced inside audit_log_service.List — the user must
 // have PermAdmin OR any of Kick/Ban/Mute/Deafen members on the server.
 package handlers
@@ -40,8 +41,11 @@ func (h *AuditLogHandler) ListServerAudit(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Optional pagination params. `before` is an RFC3339 timestamp — older
-	// rows are returned. `limit` is clamped to [1, 100] inside the service.
+	// Optional pagination params. `before` is an RFC3339 timestamp and
+	// `before_id` the matching row id — together they form the keyset cursor;
+	// older rows are returned. `before_id` is optional (older clients omit it,
+	// falling back to the created_at-only cursor). `limit` is clamped inside
+	// the service.
 	filter := models.AuditLogFilter{
 		ServerID: serverID,
 		Limit:    50,
@@ -55,6 +59,9 @@ func (h *AuditLogHandler) ListServerAudit(w http.ResponseWriter, r *http.Request
 		if t, err := time.Parse(time.RFC3339Nano, b); err == nil {
 			filter.Before = &t
 		}
+	}
+	if bid := r.URL.Query().Get("before_id"); bid != "" {
+		filter.BeforeID = &bid
 	}
 
 	entries, err := h.svc.List(r.Context(), user.ID, filter)
