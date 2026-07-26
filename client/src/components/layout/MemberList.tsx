@@ -3,7 +3,7 @@
  * Panel width is CSS-transitioned via .members-panel.open toggle.
  */
 
-import { useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useMemberStore, useActiveMembers } from "../../stores/memberStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -78,9 +78,11 @@ function MemberList() {
   });
 
   // Split into online/offline, group online by role, sort — see memberGrouping.
-  const { onlineGroups, ungroupedOnline, sortedOffline } = partitionMembers(
-    members,
-    onlineUserIds
+  // Memoized so a presence_update (which bumps onlineUserIds) doesn't re-run
+  // the filter + double-sort unless members or the presence set actually changed.
+  const { onlineGroups, ungroupedOnline, sortedOffline } = useMemo(
+    () => partitionMembers(members, onlineUserIds),
+    [members, onlineUserIds]
   );
 
   /** Dynamic width when open, 0 when closed */
