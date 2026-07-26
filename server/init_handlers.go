@@ -65,7 +65,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Pin:               handlers.NewPinHandler(svcs.Pin),
 		Search:            handlers.NewSearchHandler(svcs.Search),
 		ReadState:         handlers.NewReadStateHandler(svcs.ReadState),
-		DM:                handlers.NewDMHandler(svcs.DM, svcs.DMUpload, cfg.Upload.MaxSize, limiters.Message, limiters.Upload),
+		DM:                handlers.NewDMHandler(svcs.DM, svcs.DMUpload, cfg.Upload.MaxSize, limiters.DMMessage, limiters.Upload),
 		Reaction:          handlers.NewReactionHandler(svcs.Reaction),
 		ChannelPermission: handlers.NewChannelPermissionHandler(svcs.ChannelPermission),
 		Friendship:        handlers.NewFriendshipHandler(svcs.Friendship),
