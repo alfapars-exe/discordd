@@ -26,7 +26,6 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -34,7 +33,6 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -58,27 +56,18 @@ type AccessTokenValidator interface {
 
 type UploadDownloadHandler struct {
 	uploadDir      string
-	attachmentRepo repository.AttachmentRepository
-	dmRepo         repository.DMRepository
-	messageRepo    repository.MessageRepository
-	permResolver   services.ChannelPermResolver
+	mediaAuth      services.MediaAccessService
 	tokenValidator AccessTokenValidator
 }
 
 func NewUploadDownloadHandler(
 	uploadDir string,
-	attachmentRepo repository.AttachmentRepository,
-	dmRepo repository.DMRepository,
-	messageRepo repository.MessageRepository,
-	permResolver services.ChannelPermResolver,
+	mediaAuth services.MediaAccessService,
 	tokenValidator AccessTokenValidator,
 ) *UploadDownloadHandler {
 	return &UploadDownloadHandler{
 		uploadDir:      uploadDir,
-		attachmentRepo: attachmentRepo,
-		dmRepo:         dmRepo,
-		messageRepo:    messageRepo,
-		permResolver:   permResolver,
+		mediaAuth:      mediaAuth,
 		tokenValidator: tokenValidator,
 	}
 }
@@ -142,70 +131,31 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 
 	fileURL := "/api/uploads/" + name
 
-	// Channel-attachment lookup. file_url is the unique disk URL we generated
-	// when the upload was saved, so the EQ lookup hits at most one row.
-	if att, err := h.attachmentRepo.GetByFileURL(r.Context(), fileURL); err == nil {
-		userID, ok := h.authUserID(r)
-		if !ok {
-			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
-			return
-		}
-		msg, err := h.messageRepo.GetByID(r.Context(), att.MessageID)
-		if err != nil {
-			// Attachment row points to a deleted message — treat as 404
-			// rather than 403 so we don't disclose the orphan.
-			http.NotFound(w, r)
-			return
-		}
-		perms, err := h.permResolver.ResolveChannelPermissions(r.Context(), userID, msg.ChannelID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if perms&models.PermReadMessages == 0 {
-			pkg.ErrorWithMessage(w, http.StatusForbidden, "no access to this channel")
-			return
-		}
-		h.serveFile(w, r, name)
-		return
-	} else if !errors.Is(err, pkg.ErrNotFound) {
-		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "attachment lookup failed", err)
+	// The authorization decision (attachment -> channel permission, DM ->
+	// participant, else public) lives in MediaAccessService. Auth is resolved
+	// lazily — the service only calls it when fileURL is an access-controlled
+	// attachment, so public assets still load without touching the token.
+	decision, err := h.mediaAuth.Authorize(r.Context(), fileURL, func() (string, bool) {
+		return h.authUserID(r)
+	})
+	if err != nil {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "media access lookup failed", err)
 		return
 	}
 
-	// DM-attachment lookup.
-	if dmAtt, err := h.dmRepo.GetAttachmentByFileURL(r.Context(), fileURL); err == nil {
-		userID, ok := h.authUserID(r)
-		if !ok {
-			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
-			return
-		}
-		dmMsg, err := h.dmRepo.GetMessageByID(r.Context(), dmAtt.DMMessageID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		dmChan, err := h.dmRepo.GetChannelByID(r.Context(), dmMsg.DMChannelID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		if dmChan.User1ID != userID && dmChan.User2ID != userID {
-			pkg.ErrorWithMessage(w, http.StatusForbidden, "not a participant of this DM")
-			return
-		}
+	switch decision {
+	case services.MediaRequiresAuth:
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "authentication required")
+	case services.MediaForbidden:
+		pkg.ErrorWithMessage(w, http.StatusForbidden, "no access to this resource")
+	case services.MediaNotFound:
+		http.NotFound(w, r)
+	case services.MediaPublic, services.MediaAllowed:
 		h.serveFile(w, r, name)
-		return
-	} else if !errors.Is(err, pkg.ErrNotFound) {
-		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "dm attachment lookup failed", err)
-		return
+	default:
+		// Unreachable — every MediaDecision is handled above. Fail closed.
+		http.NotFound(w, r)
 	}
-
-	// Neither attachment table claims this path — it's an avatar, server icon,
-	// badge icon, soundboard sample, or branding. Intentionally public: these
-	// are already rendered to every viewer of the entity and must load in
-	// unauthenticated <img> contexts.
-	h.serveFile(w, r, name)
 }
 
 // serveFile resolves <name> against uploadDir and writes the file to

@@ -42,7 +42,9 @@ func newUploadTestAuthService() services.AuthService {
 }
 
 func newTestUploadHandler(uploadDir string) *UploadDownloadHandler {
-	return NewUploadDownloadHandler(uploadDir, nil, nil, nil, nil, newUploadTestAuthService())
+	// These tests exercise authUserID / serveFile directly, not Serve, so the
+	// media access service is unused — nil is fine.
+	return NewUploadDownloadHandler(uploadDir, nil, newUploadTestAuthService())
 }
 
 // signUploadTestToken mints a JWT with an explicit scope and TTL. Signing by
@@ -283,7 +285,7 @@ var (
 // chan-1), one DM attachment (dm-msg-1 in dm-chan-1 between serveDMUser1ID and
 // serveDMUser2ID) and nothing claiming the avatar. Returns the upload dir so
 // traversal tests can plant a secret next to it.
-func newServeWorld(t *testing.T) (*UploadDownloadHandler, string) {
+func newServeWorld(t *testing.T) (*UploadDownloadHandler, string, *serveAttachmentRepo) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -351,8 +353,9 @@ func newServeWorld(t *testing.T) (*UploadDownloadHandler, string) {
 		},
 	}
 
-	h := NewUploadDownloadHandler(dir, attachments, dmRepo, messages, perms, newUploadTestAuthService())
-	return h, dir
+	mediaAuth := services.NewMediaAccessService(attachments, messages, dmRepo, perms)
+	h := NewUploadDownloadHandler(dir, mediaAuth, newUploadTestAuthService())
+	return h, dir, attachments
 }
 
 // serveAs issues GET <path> as userID ("" = no credential at all) through the
@@ -372,7 +375,7 @@ func serveAs(t *testing.T, h *UploadDownloadHandler, path, userID string) *httpt
 }
 
 func TestServe_AuthGating(t *testing.T) {
-	h, _ := newServeWorld(t)
+	h, _, _ := newServeWorld(t)
 
 	tests := []struct {
 		name       string
@@ -482,7 +485,7 @@ func TestServe_AuthGating(t *testing.T) {
 // raw name (prefix check) and serveFile rejects again after path.Clean +
 // SafeJoin; both layers are exercised.
 func TestServe_RefusesPathTraversal(t *testing.T) {
-	h, uploadDir := newServeWorld(t)
+	h, uploadDir, _ := newServeWorld(t)
 
 	const secret = "TOP-SECRET-OUTSIDE-UPLOAD-DIR"
 	secretPath := filepath.Join(filepath.Dir(uploadDir), "secret.txt")
@@ -539,9 +542,10 @@ func TestServe_RefusesPathTraversal(t *testing.T) {
 // branch — that fall-through would be an auth bypass.
 func TestServe_OrphanAndLookupFailures(t *testing.T) {
 	t.Run("attachment pointing at a deleted message is 404", func(t *testing.T) {
-		h, _ := newServeWorld(t)
-		// msg-2 is unknown to the message repo → GetByID returns ErrNotFound.
-		att := h.attachmentRepo.(*serveAttachmentRepo)
+		h, _, att := newServeWorld(t)
+		// msg-gone is unknown to the message repo → GetByID returns ErrNotFound.
+		// The service holds this same *serveAttachmentRepo, so injecting into
+		// its map here is visible to the Serve path below.
 		att.byURL["/api/uploads/"+servePublicFile] = &models.Attachment{
 			ID: "att-orphan", MessageID: "msg-gone", FileURL: "/api/uploads/" + servePublicFile,
 		}
@@ -557,8 +561,9 @@ func TestServe_OrphanAndLookupFailures(t *testing.T) {
 			t.Fatalf("write fixture: %v", err)
 		}
 		boom := &boomAttachmentRepo{MockAttachmentRepo: &testutil.MockAttachmentRepo{}}
-		h := NewUploadDownloadHandler(dir, boom, &serveDMRepo{MockDMRepo: &testutil.MockDMRepo{}},
-			&testutil.MockMessageRepo{}, &testutil.MockChannelPermResolver{}, newUploadTestAuthService())
+		mediaAuth := services.NewMediaAccessService(boom, &testutil.MockMessageRepo{},
+			&serveDMRepo{MockDMRepo: &testutil.MockDMRepo{}}, &testutil.MockChannelPermResolver{})
+		h := NewUploadDownloadHandler(dir, mediaAuth, newUploadTestAuthService())
 
 		rec := serveAs(t, h, "/api/uploads/"+servePublicFile, serveChannelMemberID)
 		if rec.Code != http.StatusInternalServerError {
