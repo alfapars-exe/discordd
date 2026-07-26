@@ -77,7 +77,13 @@ func (h *PinHandler) Unpin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.pinService.Unpin(r.Context(), serverID, messageID, channelID); err != nil {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	if err := h.pinService.Unpin(r.Context(), serverID, messageID, channelID, user.ID); err != nil {
 		pkg.Error(w, err)
 		return
 	}

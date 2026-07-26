@@ -18,7 +18,7 @@ const MaxPinsPerChannel = 50
 
 type PinService interface {
 	Pin(ctx context.Context, serverID, messageID, channelID, pinnedBy string) (*models.PinnedMessageWithDetails, error)
-	Unpin(ctx context.Context, serverID, messageID, channelID string) error
+	Unpin(ctx context.Context, serverID, messageID, channelID, userID string) error
 	GetPinnedMessages(ctx context.Context, serverID, channelID, userID string) ([]models.PinnedMessageWithDetails, error)
 }
 
@@ -77,8 +77,27 @@ func (s *pinService) allowedViewers(channelID string) []string {
 	return allowed
 }
 
+// requireManageMessages honours a channel-level ManageMessages override on the
+// pin write paths. The route middleware already verified server-wide
+// ManageMessages; this additionally resolves the user's EFFECTIVE permission in
+// this channel, so a per-channel deny-override is respected — matching how
+// GetPinnedMessages already gates reads. Admin bypasses via Permission.Has.
+func (s *pinService) requireManageMessages(ctx context.Context, userID, channelID string) error {
+	perms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve channel permissions: %w", err)
+	}
+	if !perms.Has(models.PermManageMessages) {
+		return fmt.Errorf("%w: manage messages permission required for this channel", pkg.ErrForbidden)
+	}
+	return nil
+}
+
 func (s *pinService) Pin(ctx context.Context, serverID, messageID, channelID, pinnedBy string) (*models.PinnedMessageWithDetails, error) {
 	if _, err := s.validateChannelScope(ctx, serverID, channelID); err != nil {
+		return nil, err
+	}
+	if err := s.requireManageMessages(ctx, pinnedBy, channelID); err != nil {
 		return nil, err
 	}
 
@@ -121,8 +140,11 @@ func (s *pinService) Pin(ctx context.Context, serverID, messageID, channelID, pi
 	return result, nil
 }
 
-func (s *pinService) Unpin(ctx context.Context, serverID, messageID, channelID string) error {
+func (s *pinService) Unpin(ctx context.Context, serverID, messageID, channelID, userID string) error {
 	if _, err := s.validateChannelScope(ctx, serverID, channelID); err != nil {
+		return err
+	}
+	if err := s.requireManageMessages(ctx, userID, channelID); err != nil {
 		return err
 	}
 
