@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { decryptFile } from "../../crypto/fileEncryption";
 import { resolveAssetUrl } from "../../utils/constants";
+import { useLightboxStore, isPlainLeftClick } from "../../stores/lightboxStore";
 import type { EncryptedFileMeta } from "../../crypto/fileEncryption";
 import type { ChatAttachment } from "../../hooks/useChatContext";
 
@@ -24,6 +25,11 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
   const [state, setState] = useState<DecryptState>("idle");
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const revokeRef = useRef<string | null>(null);
+  // The decrypted File itself, for the lightbox: our blob URL dies with this
+  // tile (revoked on unmount below), but a File handed to the store survives
+  // — the lightbox mints its own URL from it.
+  const fileRef = useRef<File | null>(null);
+  const openLightbox = useLightboxStore((s) => s.open);
 
   const isImage = fileMeta.mimeType.startsWith("image/");
 
@@ -44,6 +50,7 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
     try {
       const url = resolveAssetUrl(attachment.file_url);
       const decryptedFile = await decryptFile(url, fileMeta);
+      fileRef.current = decryptedFile;
 
       const blobUrl = URL.createObjectURL(decryptedFile);
 
@@ -98,9 +105,23 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
       );
     }
 
-    // ready — show decrypted image
+    // ready — show decrypted image; plain left-click opens the lightbox
     return (
-      <a href={objectUrl!} target="_blank" rel="noopener noreferrer">
+      <a
+        href={objectUrl!}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => {
+          if (!isPlainLeftClick(e) || !fileRef.current) return;
+          e.preventDefault();
+          e.stopPropagation();
+          openLightbox({
+            kind: "blob",
+            file: fileRef.current,
+            filename: fileMeta.filename,
+          });
+        }}
+      >
         <img
           src={objectUrl!}
           alt={fileMeta.filename}

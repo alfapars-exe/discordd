@@ -1748,6 +1748,17 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .crop-modal-footer { display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--bg3); }
 .crop-modal-reset { background:none;border:none;color:var(--primary);cursor:pointer;font-size:14px;font-weight:600;padding:0; }
 .crop-modal-reset:hover { text-decoration:underline; }
+
+/* ── Image Lightbox ── */
+.image-lightbox-backdrop { position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:calc(12px + var(--safe-area-inset-top)) 16px calc(12px + var(--safe-area-inset-bottom));cursor:zoom-out; }
+.image-lightbox-topbar { display:flex;align-items:center;gap:16px;width:100%;max-width:900px;color:#fff;cursor:default; }
+.image-lightbox-filename { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600; }
+.image-lightbox-action { color:rgba(255,255,255,0.8);font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap; }
+.image-lightbox-action:hover { color:#fff;text-decoration:underline; }
+.image-lightbox-close { background:none;border:none;color:rgba(255,255,255,0.8);cursor:pointer;font-size:18px;line-height:1;padding:6px;border-radius:6px; }
+.image-lightbox-close:hover { color:#fff;background:rgba(255,255,255,0.12); }
+.image-lightbox-img { max-width:100%;max-height:calc(100vh - 96px - var(--safe-area-inset-top) - var(--safe-area-inset-bottom));object-fit:contain;border-radius:8px;cursor:default; }
+.image-lightbox-error { color:rgba(255,255,255,0.85);font-size:14px;cursor:default; }
 .crop-modal-actions { display:flex;gap:8px; }
 
 /* Color picker */

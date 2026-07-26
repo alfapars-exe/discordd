@@ -22,6 +22,7 @@ import MemberList from "./MemberList";
 import Sidebar from "./Sidebar";
 import ToastContainer from "../shared/ToastContainer";
 import ConfirmDialog from "../shared/ConfirmDialog";
+import ImageLightbox from "../shared/ImageLightbox";
 import DownloadPromptModal from "../shared/DownloadPromptModal";
 import WelcomeModal from "../shared/WelcomeModal";
 import SettingsModal from "../settings/SettingsModal";
@@ -311,6 +312,9 @@ function AppLayout() {
 
       {/* Confirm dialog */}
       <ConfirmDialog />
+
+      {/* Fullscreen image preview (attachment/link images) */}
+      <ImageLightbox />
 
       {/* Toast notifications */}
       <ToastContainer />
