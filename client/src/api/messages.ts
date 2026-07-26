@@ -11,6 +11,14 @@ import { apiClient } from "./client";
 import type { Message, MessagePage } from "../types";
 import { API_BASE_URL } from "../utils/constants";
 
+/**
+ * Timeout for text-only sends. A stalled connection (HF edge, mobile radio
+ * handoff) must not freeze the composer indefinitely — MessageInput keeps
+ * the textarea read-only while the send is in flight. Multipart sends get
+ * NO timeout: a 25MB upload on a slow uplink legitimately takes minutes.
+ */
+const SEND_TIMEOUT_MS = 15_000;
+
 export async function getMessages(
   serverId: string,
   channelId: string,
@@ -57,6 +65,7 @@ export async function sendMessage(
   return apiClient<Message>(`/servers/${serverId}/channels/${channelId}/messages`, {
     method: "POST",
     body: { content, reply_to_id: replyToId },
+    timeoutMs: SEND_TIMEOUT_MS,
   });
 }
 
@@ -101,6 +110,7 @@ export async function sendEncryptedMessage(
       e2ee_metadata: metadata,
       ...(replyToId ? { reply_to_id: replyToId } : {}),
     },
+    timeoutMs: SEND_TIMEOUT_MS,
   });
 }
 

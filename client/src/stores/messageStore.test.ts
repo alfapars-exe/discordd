@@ -64,9 +64,12 @@ vi.mock("./toastStore", () => ({
 
 import { useMessageStore } from "./messageStore";
 import * as messageApi from "../api/messages";
+import { decryptChannelMessages } from "../crypto/channelEncryption";
 import type { APIResponse, Message, MessagePage } from "../types";
 
 const getMessages = vi.mocked(messageApi.getMessages);
+const sendMessage = vi.mocked(messageApi.sendMessage);
+const decryptMock = vi.mocked(decryptChannelMessages);
 
 /** Same minimal Message shape SearchPanel.test.tsx builds. */
 function makeMessage(id: string, channelId = "ch-1"): Message {
@@ -108,7 +111,7 @@ function resetStore() {
   useMessageStore.setState({
     messagesByChannel: {},
     hasMoreByChannel: {},
-    isLoading: false,
+    isLoadingByChannel: {},
     isLoadingMore: false,
     typingUsers: {},
     lastDeleted: null,
@@ -120,6 +123,9 @@ function resetStore() {
 beforeEach(() => {
   resetStore();
   getMessages.mockReset();
+  sendMessage.mockReset();
+  decryptMock.mockReset();
+  decryptMock.mockImplementation(async (msgs) => msgs as Message[]);
 });
 
 describe("messageStore — handleMessageCreate dedup", () => {
@@ -152,7 +158,7 @@ describe("messageStore — WS buffering during fetch", () => {
 
     const msgs = useMessageStore.getState().messagesByChannel["ch-1"];
     expect(msgs.map((m) => m.id)).toEqual(["api-1", "dup-1", "ws-1"]);
-    expect(useMessageStore.getState().isLoading).toBe(false);
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(false);
   });
 });
 
@@ -248,6 +254,102 @@ describe("messageStore — invalidateFetchedFlags (WS reconnect)", () => {
     stale.resolve(ok([makeMessage("stale-1")]));
     await fetching;
 
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+  });
+});
+
+describe("messageStore — per-channel loading & abort hygiene", () => {
+  it("loading is per-channel: one channel's fetch doesn't flag others", async () => {
+    const api = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(api.promise);
+
+    const fetching = useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(true);
+    expect(!!useMessageStore.getState().isLoadingByChannel["ch-2"]).toBe(false);
+
+    api.resolve(ok([]));
+    await fetching;
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(false);
+  });
+
+  it("an abort during decrypt neither marks the channel fetched nor leaves it loading", async () => {
+    // The permanent-skeleton bug: fetchedChannels.add() used to run BEFORE
+    // the post-decrypt abort check, and the abort branches returned without
+    // clearing isLoading — leaving a forever-skeleton, forever-unfetchable
+    // channel. This drives the abort into the decrypt phase specifically.
+    const api = deferred<APIResponse<MessagePage>>();
+    const decrypt = deferred<Message[]>();
+    getMessages.mockReturnValueOnce(api.promise);
+    decryptMock.mockImplementationOnce(() => decrypt.promise);
+
+    const fetching = useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    api.resolve(ok([makeMessage("stale-1")]));
+    // Let the store advance past the request-phase abort check into decrypt.
+    await new Promise((r) => setTimeout(r, 0));
+
+    useMessageStore.getState().invalidateFetchCache();
+    decrypt.resolve([makeMessage("stale-1")]);
+    await fetching;
+
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(false);
+
+    // The channel must remain fetchable — the guard was never armed.
+    getMessages.mockResolvedValueOnce(ok([makeMessage("m-1")]));
+    await useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    expect(
+      useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)
+    ).toEqual(["m-1"]);
+  });
+});
+
+describe("messageStore — sendMessage inserts the POST body", () => {
+  it("renders the sender's message from the 201 response, without waiting for the WS echo", async () => {
+    const created = makeMessage("sent-1");
+    sendMessage.mockResolvedValueOnce({ success: true, data: created });
+
+    const okSend = await useMessageStore.getState().sendMessage("ch-1", "hello");
+    expect(okSend).toBe(true);
+    expect(
+      useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)
+    ).toEqual(["sent-1"]);
+
+    // The WS echo arriving afterwards dedupes by id — still one message.
+    useMessageStore.getState().handleMessageCreate(created);
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toHaveLength(1);
+  });
+
+  it("echo-first then 201-insert also dedupes to one message", async () => {
+    const created = makeMessage("sent-2");
+    const api = deferred<APIResponse<Message>>();
+    sendMessage.mockReturnValueOnce(api.promise);
+
+    const sending = useMessageStore.getState().sendMessage("ch-1", "hello");
+    // Synchronous broadcast path: echo can land before the HTTP response.
+    useMessageStore.getState().handleMessageCreate(created);
+    api.resolve({ success: true, data: created });
+    await sending;
+
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toHaveLength(1);
+  });
+
+  it("unwraps the 207 multi-status envelope ({message, upload_failures})", async () => {
+    const created = makeMessage("sent-3");
+    sendMessage.mockResolvedValueOnce({
+      success: true,
+      data: { message: created, upload_failures: [{ filename: "x.png", error: "boom" }] },
+    } as unknown as APIResponse<Message>);
+
+    await useMessageStore.getState().sendMessage("ch-1", "hello");
+    expect(
+      useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)
+    ).toEqual(["sent-3"]);
+  });
+
+  it("inserts nothing on failure", async () => {
+    sendMessage.mockResolvedValueOnce({ success: false, error: "nope", status: 403 });
+    const okSend = await useMessageStore.getState().sendMessage("ch-1", "hello");
+    expect(okSend).toBe(false);
     expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
   });
 });

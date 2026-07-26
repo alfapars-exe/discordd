@@ -86,6 +86,32 @@ describe("sendWithRetryAndToast", () => {
     expect(addToast).toHaveBeenCalledWith("warning", "chat:tooManyMessages");
   });
 
+  it("retries once on the HF cold-boot sentinel (502/503/504 → service_unavailable:)", async () => {
+    const send = vi
+      .fn<() => Promise<APIResponse<{ id: string }>>>()
+      .mockResolvedValueOnce({ success: false, error: "service_unavailable: HTTP 503", status: 503 })
+      .mockResolvedValueOnce(ok({ id: "m-1" }));
+    const promise = sendWithRetryAndToast(send);
+    await vi.runAllTimersAsync();
+    const res = await promise;
+    expect(res.success).toBe(true);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("does NOT retry a timed-out send (duplicate risk without idempotency keys)", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValue({ success: false, error: "timeout", isTimeout: true } as APIResponse<unknown>);
+    const promise = sendWithRetryAndToast(send);
+    await vi.runAllTimersAsync();
+    const res = await promise;
+    expect(res.success).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(addToast).toHaveBeenCalledTimes(1);
+    expect(addToast.mock.calls[0]![0]).toBe("error");
+  });
+
   it("shows a generic error toast when both attempts fail with network error", async () => {
     const send = vi.fn().mockResolvedValue(netErr());
     const promise = sendWithRetryAndToast(send);

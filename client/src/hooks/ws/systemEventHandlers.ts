@@ -19,6 +19,7 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useBadgeStore } from "../../stores/badgeStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useAuditStore } from "../../stores/auditStore";
+import { useUIStore } from "../../stores/uiStore";
 import type {
   WSMessage,
   UserStatus,
@@ -73,8 +74,21 @@ export async function handleSystemEvent(
       // it's opened (its guard is no longer armed).
       if (hadReadyBefore) {
         useMessageStore.getState().invalidateFetchedFlags();
+        // Heal what the user can actually SEE: the active text tab of every
+        // panel (split view shows several channels at once), each with its
+        // OWN serverId — the sidebar selection alone may not even be visible
+        // and would resolve cross-server tabs against the wrong server.
+        // Background tabs heal lazily (their fetched-guard is disarmed).
+        const healed = new Set<string>();
+        for (const panel of Object.values(useUIStore.getState().panels)) {
+          const tab = panel.tabs.find((t) => t.id === panel.activeTabId);
+          if (tab?.type === "text" && !healed.has(tab.channelId)) {
+            healed.add(tab.channelId);
+            useMessageStore.getState().fetchMessages(tab.channelId, tab.serverInfo?.serverId);
+          }
+        }
         const activeChannelId = useChannelStore.getState().selectedChannelId;
-        if (activeChannelId) {
+        if (activeChannelId && !healed.has(activeChannelId)) {
           useMessageStore.getState().fetchMessages(activeChannelId);
         }
       }

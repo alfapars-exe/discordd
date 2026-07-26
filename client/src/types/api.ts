@@ -30,4 +30,11 @@ export type APIResponse<T = unknown> = {
    * a generic 5xx.
    */
   status?: number;
+  /**
+   * True when the request was aborted by the caller-requested timeout
+   * (RequestOptions.timeoutMs). Deliberately distinct from isNetworkError:
+   * a timed-out POST may have been persisted server-side, so retry helpers
+   * must NOT auto-retry it (duplicate risk without an idempotency key).
+   */
+  isTimeout?: boolean;
 };
