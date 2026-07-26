@@ -91,23 +91,31 @@ func (r *sqlitePinRepo) GetByChannelID(ctx context.Context, channelID string) ([
 
 // Pin pins a message. Returns ErrAlreadyExists if already pinned (UNIQUE constraint).
 func (r *sqlitePinRepo) Pin(ctx context.Context, pin *models.PinnedMessage) error {
+	id, err := generateID()
+	if err != nil {
+		return fmt.Errorf("failed to pin message: %w", err)
+	}
+	pin.ID = id
+
 	query := `
 		INSERT INTO pinned_messages (id, message_id, channel_id, pinned_by)
-		VALUES (lower(hex(randomblob(8))), ?, ?, ?)
-		RETURNING id, created_at`
+		VALUES (?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
+		pin.ID,
 		pin.MessageID,
 		pin.ChannelID,
 		pin.PinnedBy,
-	).Scan(&pin.ID, &pin.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
 			return fmt.Errorf("%w: message is already pinned", pkg.ErrAlreadyExists)
 		}
 		return fmt.Errorf("failed to pin message: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM pinned_messages WHERE id = ?", pin.ID).Scan(&pin.CreatedAt)
 
 	return nil
 }
