@@ -328,13 +328,23 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 //
 // Runs post-commit from a broadcast goroutine with no request context to
 // inherit, hence the bounded background context.
-func (s *messageService) allowedViewers(channelID string) []string {
+//
+// The bool reports whether the viewer set could actually be RESOLVED: (nil,
+// true) means "resolved, nobody online may read this channel" while (nil,
+// false) means "resolve failed — the empty set says nothing". Callers that
+// can degrade gracefully (BroadcastCreate) branch on it; edit/delete
+// broadcasts stay fail-closed and ignore it.
+func (s *messageService) allowedViewers(channelID string) ([]string, bool) {
 	ctx, cancel := BroadcastContext()
 	defer cancel()
 
 	channel, err := s.channelRepo.GetByID(ctx, channelID)
 	if err != nil || channel == nil {
-		return nil
+		// Loud, not silent: this used to return nil with no trace, which made
+		// "message persisted but nobody received it" undiagnosable in prod.
+		messageLogger.Error("allowedViewers channel fetch failed",
+			"channel_id", channelID, "err", pkg.ErrText(err))
+		return nil, false
 	}
 
 	onlineUsers := s.hub.GetOnlineUserIDsForServer(channel.ServerID)
@@ -343,7 +353,7 @@ func (s *messageService) allowedViewers(channelID string) []string {
 		// Fail closed — better a missed broadcast (clients refetch) than
 		// leaking a message into a channel someone may not read.
 		messageLogger.Error("bulk permission resolve failed", "channel_id", channelID, "err", pkg.ErrText(err))
-		return nil
+		return nil, false
 	}
 
 	allowed := make([]string, 0, len(onlineUsers))
@@ -353,13 +363,28 @@ func (s *messageService) allowedViewers(channelID string) []string {
 		}
 	}
 
-	return allowed
+	return allowed, true
 }
 
 // BroadcastCreate sends the message via WS after file uploads complete.
 // Only sends to users with ViewChannel + ReadMessages permission on the channel.
 func (s *messageService) BroadcastCreate(message *models.Message) {
-	s.hub.BroadcastToUsers(s.allowedViewers(message.ChannelID), ws.Event{
+	viewers, ok := s.allowedViewers(message.ChannelID)
+	if !ok {
+		// Viewer resolve failed (transient DB error / 5s broadcast budget
+		// exceeded). Do NOT fall back to BroadcastToServer — that would leak
+		// the message to members without ViewChannel. The author provably has
+		// access (they just posted): echo to them so their own message doesn't
+		// silently vanish; everyone else heals via refetch on reconnect.
+		messageLogger.Error("message_create broadcast degraded to author-only echo",
+			"message_id", message.ID, "channel_id", message.ChannelID)
+		s.hub.BroadcastToUser(message.UserID, ws.Event{
+			Op:   ws.OpMessageCreate,
+			Data: message,
+		})
+		return
+	}
+	s.hub.BroadcastToUsers(viewers, ws.Event{
 		Op:   ws.OpMessageCreate,
 		Data: message,
 	})
@@ -456,7 +481,10 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 		message.RoleMentions = []string{}
 	}
 
-	s.hub.BroadcastToUsers(s.allowedViewers(message.ChannelID), ws.Event{
+	// Fail-closed on resolve failure (ok ignored): an undelivered edit is
+	// recoverable via refetch and never leaks content to the wrong users.
+	updateViewers, _ := s.allowedViewers(message.ChannelID)
+	s.hub.BroadcastToUsers(updateViewers, ws.Event{
 		Op:   ws.OpMessageUpdate,
 		Data: message,
 	})
@@ -497,7 +525,10 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 		messageLogger.Error("failed to decrement unread counts on delete", "channel_id", message.ChannelID, "err", pkg.ErrText(err))
 	}
 
-	s.hub.BroadcastToUsers(s.allowedViewers(message.ChannelID), ws.Event{
+	// Fail-closed on resolve failure (ok ignored) — same rationale as the
+	// update broadcast above.
+	deleteViewers, _ := s.allowedViewers(message.ChannelID)
+	s.hub.BroadcastToUsers(deleteViewers, ws.Event{
 		Op: ws.OpMessageDelete,
 		Data: map[string]string{
 			"id":         id,

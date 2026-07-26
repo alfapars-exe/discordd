@@ -8,14 +8,16 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
 
 // MessageHandler handles message endpoints.
-// messageLimiter is shared with DMHandler (user-based, controls total message rate).
-// uploadLimiter is a separate per-user cap that only fires on multipart requests
-// (20/min); text-only sends don't touch it.
+// messageLimiter is the CHANNEL-message budget (per-user sliding window);
+// DMHandler carries its own separate instance so the two surfaces can't
+// starve each other. uploadLimiter is a separate per-user cap that only
+// fires on multipart requests (20/min); text-only sends don't touch it.
 type MessageHandler struct {
 	messageService services.MessageService
 	uploadService  services.UploadService
@@ -217,11 +219,20 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Set transient server_id so clients can route cross-server notifications
+	// Set transient server_id so clients can route cross-server notifications.
+	// Must happen BEFORE the broadcast goroutine spawns — after this point
+	// `message` is read-only (both the JSON encode below and the broadcast
+	// goroutine only read it; adding a later mutation would be a data race).
 	message.ServerID = serverID
 
-	// Broadcast after uploads so all clients see attachments
-	h.messageService.BroadcastCreate(message)
+	// Broadcast after uploads so all clients see attachments — but OFF the
+	// request goroutine: allowedViewers costs a channel fetch + bulk perms
+	// resolve (up to the 5s broadcast budget) against a small remote DB pool,
+	// and the 201 must not wait on it. The sender's own view doesn't depend
+	// on the echo either — the client inserts this response body directly.
+	logx.Go("handlers.message.broadcast", func() {
+		h.messageService.BroadcastCreate(message)
+	})
 
 	// If some attachments failed to upload, return a multi-status response
 	// (the message itself was created, but some files didn't make it). The

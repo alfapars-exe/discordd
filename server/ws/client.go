@@ -13,9 +13,23 @@ import (
 
 const (
 	writeWait      = 10 * time.Second
-	pongWait       = 90 * time.Second // 3 missed heartbeats (30s × 3)
-	maxMessageSize = 32768            // 32KB — WebRTC SDP + E2EE base64 overhead
+	maxMessageSize = 32768 // 32KB — WebRTC SDP + E2EE base64 overhead
 	sendBufferSize = 256
+)
+
+// pongWait/pingPeriod are package vars (not consts) so integration tests can
+// shorten them to exercise the keepalive path without multi-second sleeps.
+var (
+	pongWait = 90 * time.Second // 3 missed heartbeats (30s × 3)
+
+	// pingPeriod drives the protocol-level ping ticker in WritePump. Must be
+	// comfortably < pongWait so a healthy peer always gets a deadline refresh
+	// in time. Protocol pings matter beyond the app-level heartbeat op:
+	// browsers answer them in the network stack even when JS timers are
+	// throttled (backgrounded tab), so idle-but-healthy tabs stay connected —
+	// and a dead TCP peer fails the ping write within writeWait, surfacing
+	// the dead socket in ~pingPeriod+writeWait instead of the full pongWait.
+	pingPeriod = 30 * time.Second
 )
 
 // dispatchLogger tags every per-connection event-handling log line
@@ -82,6 +96,13 @@ func (c *Client) ReadPump() {
 		dispatchLogger.Error("failed to set read deadline", "user_id", c.userID, "err", pkg.ErrText(err))
 		return
 	}
+
+	// Protocol pong (reply to WritePump's ping) refreshes the read deadline.
+	// The app-level heartbeat op does the same (client_dispatch.go) — belt
+	// and braces: throttled background tabs miss heartbeats but still pong.
+	c.conn.SetPongHandler(func(string) error {
+		return c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
 
 	for {
 		_, rawMessage, err := c.conn.ReadMessage()
@@ -163,10 +184,20 @@ func (c *Client) sendEvent(event Event) {
 func (c *Client) WritePump() {
 	defer c.conn.Close()
 
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case message := <-c.send:
 			if err := c.writeMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			// Protocol keepalive — see the pingPeriod comment. A failed ping
+			// write means the peer is unreachable; exit and let ReadPump's
+			// deadline/close path unregister the client.
+			if err := c.writeMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		case <-c.done:
