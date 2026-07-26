@@ -87,6 +87,18 @@ func (c *Client) handleEvent(event Event) {
 		c.hub.queueUnregister(c)
 	}()
 
+	// Bots are read-only gateway consumers (bot_gateway.go): they act via the
+	// REST API, never by sending ops over the socket. Enforce that here — the
+	// single inbound chokepoint, symmetric with deliver's outbound bot filter
+	// (hub_broadcast.go) — so a bot token can't drive voice moves, presence, or
+	// P2P signalling over WS. Heartbeat is exempt: it carries no action and
+	// refreshes the read deadline (handleHeartbeat), so a heartbeat keepalive
+	// still works.
+	if c.isBot && event.Op != OpHeartbeat {
+		dispatchLogger.Warn("bot inbound op rejected", "user_id", c.userID, "op", event.Op)
+		return
+	}
+
 	if c.rateLimit == nil {
 		c.rateLimit = newClientRateLimiter()
 	}
