@@ -37,8 +37,13 @@ func scanRows[T any](rows *sql.Rows, entity string, scan func(*sql.Rows) (T, err
 // QueryRowContext+Scan on a RETURNING clause, which is the fragile part
 // against Turso/libSQL's Hrana stream. Mirrors the pattern already used for
 // invite codes in services/invite_service.go.
-func generateID() (string, error) {
-	b := make([]byte, 8)
+func generateID() (string, error) { return generateIDN(8) }
+
+// generateIDN is generateID for a caller that needs a different width — e.g. a
+// 16-byte (32-char) id matching lower(hex(randomblob(16))). Same Turso/Hrana
+// rationale as generateID.
+func generateIDN(n int) (string, error) {
+	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("failed to generate id: %w", err)
 	}

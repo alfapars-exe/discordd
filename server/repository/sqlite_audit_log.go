@@ -37,35 +37,34 @@ func (r *sqliteAuditLogRepo) Insert(ctx context.Context, entry *models.AuditLog)
 		metadata = "{}"
 	}
 
-	// INSERT ... RETURNING populates entry.ID and entry.CreatedAt from the
-	// DB-side defaults (`lower(hex(randomblob(8)))` and `datetime('now')`)
-	// so callers can broadcast the row with its canonical id immediately.
-	//
-	// Without RETURNING the caller would receive a struct with an empty ID
-	// and zero CreatedAt — that's a real-world bug we hit (Track R):
-	// audit_log_service broadcasts the entry over WebSocket right after
-	// insert; with empty IDs every event after the first one collides in
-	// the client-side dedupe-by-id step and gets silently dropped.
-	// Sequential moderation actions (kick → move → mute) all looked like
-	// duplicates of the first event. RETURNING fixes the root cause in one
-	// place rather than asking callers to remember to re-fetch.
-	//
-	// SQLite ≥ 3.35 and libSQL/Turso both implement RETURNING with the
-	// same syntax, so this works on every backend we ship to.
-	query := `
-		INSERT INTO audit_logs (
-			server_id, actor_user_id, target_user_id,
-			event_type, metadata, actor_snapshot, target_snapshot
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
-		RETURNING id, created_at`
-
-	err = r.db.QueryRowContext(ctx, query,
-		entry.ServerID, entry.ActorUserID, entry.TargetUserID,
-		entry.EventType, metadata, actorJSON, targetJSON,
-	).Scan(&entry.ID, &entry.CreatedAt)
+	// entry.ID is generated in Go (same 16-hex shape as the DB default) so the
+	// audit_log_service can broadcast the row with its canonical id right after
+	// insert. Track R was a real bug: an empty ID made every WS audit event
+	// after the first collide in the client dedupe-by-id and get dropped, so
+	// sequential moderation actions (kick → move → mute) vanished. created_at
+	// is read back best-effort. INSERT..RETURNING is avoided so a dropped
+	// Turso/Hrana stream can't 500 the write (see retry.go).
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("insert audit log: %w", err)
 	}
+	entry.ID = id
+
+	query := `
+		INSERT INTO audit_logs (
+			id, server_id, actor_user_id, target_user_id,
+			event_type, metadata, actor_snapshot, target_snapshot
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	if _, err = r.db.ExecContext(ctx, query,
+		entry.ID, entry.ServerID, entry.ActorUserID, entry.TargetUserID,
+		entry.EventType, metadata, actorJSON, targetJSON,
+	); err != nil {
+		return fmt.Errorf("insert audit log: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at (see sqlite_user.go).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM audit_logs WHERE id = ?", entry.ID).Scan(&entry.CreatedAt)
 	return nil
 }
 

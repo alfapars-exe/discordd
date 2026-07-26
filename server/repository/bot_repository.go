@@ -20,24 +20,29 @@ func NewBotRepository(db database.TxQuerier) *BotRepository { return &BotReposit
 // returns the SQLite-generated id. owner_user_id has a FK to users(id), so the
 // owner row must already exist.
 func (r *BotRepository) InsertBotUser(ctx context.Context, username, displayName, ownerID string) (string, error) {
-	var id string
-	err := r.db.QueryRowContext(ctx,
+	id, err := generateID()
+	if err != nil {
+		return "", err
+	}
+	_, err = r.db.ExecContext(ctx,
 		`INSERT INTO users (id, username, display_name, password_hash, status, language, is_bot, owner_user_id)
-		 VALUES (lower(hex(randomblob(8))), ?, ?, '!disabled!', 'online', 'en', 1, ?)
-		 RETURNING id`,
-		username, displayName, ownerID).Scan(&id)
+		 VALUES (?, ?, ?, '!disabled!', 'online', 'en', 1, ?)`,
+		id, username, displayName, ownerID)
 	return id, err
 }
 
 // InsertToken stores a bot token by its hash and returns the generated token id.
 // bot_tokens.id is a TEXT PRIMARY KEY with no default, so it is generated here.
 func (r *BotRepository) InsertToken(ctx context.Context, botUserID, hash string, name *string) (string, error) {
-	var id string
-	err := r.db.QueryRowContext(ctx,
+	// 16 bytes (32 hex chars) to match the previous lower(hex(randomblob(16))).
+	id, err := generateIDN(16)
+	if err != nil {
+		return "", err
+	}
+	_, err = r.db.ExecContext(ctx,
 		`INSERT INTO bot_tokens (id, bot_user_id, token_hash, name)
-		 VALUES (lower(hex(randomblob(16))), ?, ?, ?)
-		 RETURNING id`,
-		botUserID, hash, name).Scan(&id)
+		 VALUES (?, ?, ?, ?)`,
+		id, botUserID, hash, name)
 	return id, err
 }
 

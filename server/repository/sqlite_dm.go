@@ -145,18 +145,23 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 }
 
 func (r *sqliteDMRepo) CreateChannel(ctx context.Context, channel *models.DMChannel) error {
-	var lastMsgAt sql.NullTime
-	err := r.db.QueryRowContext(ctx,
-		"INSERT INTO dm_channels (user1_id, user2_id, status, initiated_by) VALUES (?, ?, ?, ?) RETURNING id, created_at, last_message_at",
-		channel.User1ID, channel.User2ID, channel.Status, channel.InitiatedBy,
-	).Scan(&channel.ID, &channel.CreatedAt, &lastMsgAt)
-
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create DM channel: %w", err)
 	}
-	if lastMsgAt.Valid {
-		channel.LastMessageAt = &lastMsgAt.Time
+	channel.ID = id
+
+	if _, err := r.db.ExecContext(ctx,
+		"INSERT INTO dm_channels (id, user1_id, user2_id, status, initiated_by) VALUES (?, ?, ?, ?, ?)",
+		channel.ID, channel.User1ID, channel.User2ID, channel.Status, channel.InitiatedBy,
+	); err != nil {
+		return fmt.Errorf("failed to create DM channel: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create). last_message_at is
+	// NULL for a brand-new channel, so LastMessageAt stays nil.
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM dm_channels WHERE id = ?", channel.ID).Scan(&channel.CreatedAt)
 	return nil
 }
 
@@ -383,17 +388,25 @@ func (r *sqliteDMRepo) CreateMessage(ctx context.Context, msg *models.DMMessage)
 		contentPtr = msg.Content
 	}
 
-	err := r.db.QueryRowContext(ctx,
-		`INSERT INTO dm_messages (dm_channel_id, user_id, content, reply_to_id,
-			encryption_version, ciphertext, sender_device_id, e2ee_metadata)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at`,
-		msg.DMChannelID, msg.UserID, contentPtr, msg.ReplyToID,
-		msg.EncryptionVersion, msg.Ciphertext, msg.SenderDeviceID, msg.E2EEMetadata,
-	).Scan(&msg.ID, &msg.CreatedAt)
-
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create DM message: %w", err)
 	}
+	msg.ID = id
+
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO dm_messages (id, dm_channel_id, user_id, content, reply_to_id,
+			encryption_version, ciphertext, sender_device_id, e2ee_metadata)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		msg.ID, msg.DMChannelID, msg.UserID, contentPtr, msg.ReplyToID,
+		msg.EncryptionVersion, msg.Ciphertext, msg.SenderDeviceID, msg.E2EEMetadata,
+	); err != nil {
+		return fmt.Errorf("failed to create DM message: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM dm_messages WHERE id = ?", msg.ID).Scan(&msg.CreatedAt)
 	msg.CreatedAt = msg.CreatedAt.UTC()
 	return nil
 }
@@ -629,15 +642,22 @@ func (r *sqliteDMRepo) GetPinnedMessages(ctx context.Context, channelID string) 
 // ─── Attachment Operations ───
 
 func (r *sqliteDMRepo) CreateAttachment(ctx context.Context, attachment *models.DMAttachment) error {
-	err := r.db.QueryRowContext(ctx,
-		`INSERT INTO dm_attachments (dm_message_id, filename, file_url, file_size, mime_type)
-		 VALUES (?, ?, ?, ?, ?) RETURNING id, created_at`,
-		attachment.DMMessageID, attachment.Filename, attachment.FileURL, attachment.FileSize, attachment.MimeType,
-	).Scan(&attachment.ID, &attachment.CreatedAt)
-
+	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create DM attachment: %w", err)
 	}
+	attachment.ID = id
+
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO dm_attachments (id, dm_message_id, filename, file_url, file_size, mime_type)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		attachment.ID, attachment.DMMessageID, attachment.Filename, attachment.FileURL, attachment.FileSize, attachment.MimeType,
+	); err != nil {
+		return fmt.Errorf("failed to create DM attachment: %w", err)
+	}
+
+	// Best-effort read-back of the DB-side default created_at (see sqlite_user.go).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM dm_attachments WHERE id = ?", attachment.ID).Scan(&attachment.CreatedAt)
 	return nil
 }
 
