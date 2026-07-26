@@ -10,6 +10,18 @@ import (
 	"github.com/argeinfina/hichat/services"
 )
 
+// routeRegistrar is the subset of *http.ServeMux that initRoutes needs.
+// Taking it as an interface (rather than the concrete *http.ServeMux) lets
+// tests inject a recording registrar that snapshots the exact ordered set of
+// registered patterns — the golden route-set net (see init_routes_test.go)
+// that guards these registrations against accidental drift when the body is
+// split into per-domain helpers. *http.ServeMux satisfies it, so the main.go
+// call site is unchanged.
+type routeRegistrar interface {
+	Handle(pattern string, handler http.Handler)
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
 // initRoutes registers all API endpoints.
 // Literal paths must be registered before parametric ones
 // (e.g. "/api/servers/join" before "/api/servers/{serverId}").
@@ -23,7 +35,7 @@ import (
 // kick / ban / role-reassign → immediate invalidation instead of the 5s
 // TTL).
 func initRoutes(
-	mux *http.ServeMux,
+	mux routeRegistrar,
 	h *Handlers,
 	authService services.AuthService,
 	userRepo repository.UserRepository,
