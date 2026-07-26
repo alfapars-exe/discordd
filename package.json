@@ -17,7 +17,7 @@
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
-    "concurrently": "^9",
+    "concurrently": "^10",
     "electron": "^42",
     "electron-builder": "^26",
     "rcedit": "^5.0.2",
