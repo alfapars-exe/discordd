@@ -9,7 +9,7 @@
 # Stage 3: Alpine runtime with the binary + ca-certificates.
 
 # ─── Stage 1: React (Vite) ───
-FROM node:22-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
