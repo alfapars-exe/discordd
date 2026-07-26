@@ -328,7 +328,7 @@ function MessageList() {
   }
 
   if (!channelId) {
-    return <div className="no-channel">Select a channel</div>;
+    return <div className="no-channel">{t("selectChannel")}</div>;
   }
 
   if (isLoading) {

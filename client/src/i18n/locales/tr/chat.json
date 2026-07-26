@@ -1,4 +1,5 @@
 {
+  "selectChannel": "Bir kanal seç",
   "messagePlaceholder": "#{{channel}} kanalına mesaj yaz",
   "editMessage": "Mesajı Düzenle",
   "deleteMessage": "Mesajı Sil",
