@@ -21,17 +21,18 @@ func NewSQLiteReportRepo(db database.TxQuerier) ReportRepository {
 func (r *sqliteReportRepo) Create(ctx context.Context, report *models.Report) error {
 	query := `
 		INSERT INTO reports (id, reporter_id, reported_user_id, reason, description)
-		VALUES (?, ?, ?, ?, ?)
-		RETURNING created_at`
+		VALUES (?, ?, ?, ?, ?)`
 
-	err := r.db.QueryRowContext(ctx, query,
+	if _, err := r.db.ExecContext(ctx, query,
 		report.ID, report.ReporterID, report.ReportedUserID,
 		report.Reason, report.Description,
-	).Scan(&report.CreatedAt)
-
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to create report: %w", err)
 	}
+
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create).
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM reports WHERE id = ?", report.ID).Scan(&report.CreatedAt)
 	return nil
 }
 

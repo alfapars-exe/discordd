@@ -26,14 +26,15 @@ func (r *sqliteMemberTimeoutRepo) Upsert(ctx context.Context, t *models.MemberTi
 	query := `
 		INSERT OR REPLACE INTO member_timeouts
 			(server_id, user_id, expires_at, applied_by, reason)
-		VALUES (?, ?, ?, ?, ?)
-		RETURNING created_at`
-	err := r.db.QueryRowContext(ctx, query,
+		VALUES (?, ?, ?, ?, ?)`
+	if _, err := r.db.ExecContext(ctx, query,
 		t.ServerID, t.UserID, t.ExpiresAt, t.AppliedBy, t.Reason,
-	).Scan(&t.CreatedAt)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("upsert member_timeout: %w", err)
 	}
+	// Best-effort read-back of the DB-side default created_at (RETURNING avoided
+	// for Turso/Hrana safety — see sqlite_user.go Create). Composite (server,user) PK.
+	_ = r.db.QueryRowContext(ctx, "SELECT created_at FROM member_timeouts WHERE server_id = ? AND user_id = ?", t.ServerID, t.UserID).Scan(&t.CreatedAt)
 	return nil
 }
 
