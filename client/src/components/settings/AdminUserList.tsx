@@ -78,7 +78,7 @@ function compareSortValue(
   key: SortKey,
   dir: "asc" | "desc",
 ): number {
-  let result = 0;
+  let result: number;
 
   switch (key) {
     case "username":
