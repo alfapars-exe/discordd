@@ -13,12 +13,14 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import * as keyStorage from "./keyStorage";
 import { toBase64, fromBase64 } from "./signalProtocol";
 import {
   type StoredSenderKey,
   type SenderKeyDistributionData,
   type SenderKeyMessage,
+  SENDER_KEY_PROTOCOL_VERSION,
   SENDER_KEY_ROTATION_MESSAGES,
   SENDER_KEY_ROTATION_DAYS,
   SENDER_KEY_REPLAY_WINDOW,
@@ -96,11 +98,21 @@ function recordIteration(senderKey: StoredSenderKey, iteration: number): void {
 // Sender Key Distribution
 // ──────────────────────────────────
 
-/** Create a new outbound Sender Key distribution for a channel. */
+/**
+ * Create a new outbound Sender Key distribution for a channel.
+ *
+ * `recipientFingerprint` records WHICH roster the caller is about to seal this
+ * distribution for (see computeRecipientFingerprint). It is stamped onto the
+ * stored key so a later send can tell "the roster moved, this key can no
+ * longer reach everyone" apart from "the roster is unchanged, keep ratcheting".
+ * Optional because the protocol layer itself does not require a roster — the
+ * orchestration layer (channelEncryption) owns that policy.
+ */
 export async function createDistribution(
   channelId: string,
   userId: string,
-  deviceId: string
+  deviceId: string,
+  recipientFingerprint?: string
 ): Promise<SenderKeyDistributionData> {
   // Generate random chain key and distribution ID
   const chainKey = crypto.getRandomValues(new Uint8Array(32));
@@ -119,6 +131,8 @@ export async function createDistribution(
     publicSigningKey: signingPublicKey,
     iteration: 0,
     createdAt: Date.now(),
+    protocolVersion: SENDER_KEY_PROTOCOL_VERSION,
+    recipientFingerprint,
   };
 
   await keyStorage.saveSenderKey(senderKey);
@@ -134,6 +148,7 @@ export async function createDistribution(
     chainKey: toBase64(chainKey),
     publicSigningKey: toBase64(signingPublicKey),
     iteration: 0,
+    version: SENDER_KEY_PROTOCOL_VERSION,
   };
 }
 
@@ -155,9 +170,35 @@ export async function processDistribution(
     publicSigningKey: fromBase64(distribution.publicSigningKey),
     iteration: distribution.iteration,
     createdAt: Date.now(),
+    // Reaching processDistribution at all means the distribution arrived
+    // sealed inside our Signal session, so it is v2 by construction. Stamped
+    // for diagnostics only — see StoredSenderKey.protocolVersion for why this
+    // must NOT be turned into a receive-side rotation trigger.
+    protocolVersion: SENDER_KEY_PROTOCOL_VERSION,
   };
 
   await keyStorage.saveSenderKey(senderKey);
+}
+
+/**
+ * Fingerprint of the device roster a distribution is sealed for.
+ *
+ * Canonical form: "userId:deviceId" per device, sorted lexicographically,
+ * joined with "\n", hashed with SHA-256 and rendered as hex. Sorting makes it
+ * order-independent (the server may return the roster in any order); the
+ * newline separator keeps ids unambiguous.
+ *
+ * This is a change DETECTOR, not a security boundary — it only decides when
+ * to rotate. Confidentiality comes from the per-device Signal envelopes.
+ */
+export async function computeRecipientFingerprint(
+  recipients: Array<{ userId: string; deviceId: string }>
+): Promise<string> {
+  const canonical = recipients
+    .map((r) => `${r.userId}:${r.deviceId}`)
+    .sort()
+    .join("\n");
+  return bytesToHex(sha256(new TextEncoder().encode(canonical)));
 }
 
 // ──────────────────────────────────
@@ -381,11 +422,21 @@ export async function decryptGroupMessage(
 // Key Rotation
 // ──────────────────────────────────
 
-/** Public wrapper for rotation check, used by channelEncryption. */
+/**
+ * Public wrapper for rotation check, used by channelEncryption.
+ *
+ * ⛔ Called on the RECEIVE path (ensureSenderKeyForDecryption) with INBOUND
+ * keys. It therefore deliberately checks age/count only and MUST NOT grow a
+ * protocol-version clause: a v1 inbound key cannot be re-fetched (its v1
+ * distribution row no longer exists server-side), so declaring it stale would
+ * make that sender's entire message history permanently undecryptable.
+ * Version-forced rotation lives in needsSenderKeyRotation — outbound only.
+ */
 export function needsRotationCheck(senderKey: StoredSenderKey): boolean {
   return needsRotation(senderKey);
 }
 
+/** Age/count rotation policy. Shared by both directions — version-agnostic. */
 function needsRotation(senderKey: StoredSenderKey): boolean {
   // Message count check
   if (senderKey.iteration >= SENDER_KEY_ROTATION_MESSAGES) {
@@ -402,7 +453,16 @@ function needsRotation(senderKey: StoredSenderKey): boolean {
   return false;
 }
 
-/** Check if sender key rotation is needed for a channel. Used by e2eeStore. */
+/**
+ * Check if OUTBOUND sender key rotation is needed for a channel.
+ * Used by channelEncryption (send path) and e2eeStore.
+ *
+ * This is the only place the protocol version forces a rotation: an outbound
+ * key minted under v1 had its chain key uploaded in the clear, so it must be
+ * replaced before we encrypt anything else with it. Re-minting is always
+ * possible on the send side (we own the key), which is exactly why the mirror
+ * check is safe here and unsafe in needsRotationCheck.
+ */
 export async function needsSenderKeyRotation(
   channelId: string,
   userId: string,
@@ -415,6 +475,7 @@ export async function needsSenderKeyRotation(
   );
 
   if (!senderKey) return true; // No key — needs creation
+  if (senderKey.protocolVersion !== SENDER_KEY_PROTOCOL_VERSION) return true;
   return needsRotation(senderKey);
 }
 

@@ -41,7 +41,7 @@ func (f *fakeBackupRepo) Delete(_ context.Context, _ string) error {
 func TestKeyBackup_RoundTripAndTamperDetection(t *testing.T) {
 	repo := &fakeBackupRepo{}
 	key := crypto.DeriveBackupHMACKey([]byte("test-master-key-0123456789abcdef"))
-	svc := NewE2EEService(repo, nil, nil, nil, nil, key)
+	svc := NewE2EEService(repo, nil, nil, nil, nil, nil, nil, key)
 	ctx := context.Background()
 
 	req := &models.CreateKeyBackupRequest{

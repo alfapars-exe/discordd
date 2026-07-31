@@ -49,6 +49,7 @@
 
   "decryptionError": "Bu mesaj çözülemedi",
   "encryptionFailed": "Mesaj şifrelenemedi",
+  "rosterSuppressed": "Mesaj gönderilmedi: bu kanalı okuyabilen başka üyeler olmasına rağmen sunucu hiç alıcı bildirmedi. Mesajınız kimse tarafından okunamayacaktı.",
   "encryptedMessage": "Şifreli mesaj",
   "e2eeIndicator": "Uçtan uca şifreli",
 

@@ -170,6 +170,7 @@ POST /api/servers/{serverId}/invites
 DELETE /api/servers/{serverId}/invites/{code}
 POST /api/servers/{serverId}/channels/{channelId}/group-sessions
 GET /api/servers/{serverId}/channels/{channelId}/group-sessions
+GET /api/servers/{serverId}/channels/{channelId}/sender-key-recipients
 GET /api/servers/{serverId}/search
 POST /api/servers/{serverId}/voice/token
 POST /api/servers/{serverId}/voice/screen-token

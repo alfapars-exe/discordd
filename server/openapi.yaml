@@ -290,6 +290,14 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/WsTicketOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403':
+          description: >-
+            Caller is a bot account. Bots authenticate with `hb_` tokens and are accepted by the
+            shared auth middleware, but they must not hold a human socket — they use the read-only
+            `GET /api/bot/gateway` instead.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '404':
           description: WS ticket service not enabled on this server (falls back to the legacy ?token= WS path).
           content:
@@ -2619,11 +2627,19 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
 
-  # ── E2EE Group Sessions ──
+  # ── E2EE Group Sessions (pentest C-03: per-recipient sealed envelopes) ──
   /api/servers/{serverId}/channels/{channelId}/group-sessions:
     post:
       operationId: e2eeCreateGroupSession
-      summary: Distribute/rotate a sender-key group session for an E2EE channel.
+      summary: >-
+        Upload a v2 Sender Key distribution: N opaque envelopes, one per
+        recipient device, each individually sealed (Signal PreKey/Whisper
+        message). Body is models.CreateSenderKeyDistributionRequest
+        { session_id, version, envelopes: [{ recipient_user_id,
+        recipient_device_id, message_type, ciphertext }] }. There is no
+        compatibility path for the pre-v2 single shared-blob format: version
+        != 2, an empty envelopes list, or a body carrying the legacy
+        "session_data" field are all rejected with 400.
       tags: [E2EE-GroupSessions]
       parameters:
         - $ref: '#/components/parameters/ServerId'
@@ -2642,13 +2658,53 @@ paths:
         '404': { $ref: '#/components/responses/NotFoundError' }
     get:
       operationId: e2eeGetGroupSessions
-      summary: Fetch group sessions for an E2EE channel.
+      summary: >-
+        Fetch Sender Key envelopes sealed for exactly the caller's own
+        (user_id, device_id) — never another recipient's ciphertext.
+        Response items are models.SenderKeyEnvelopeResponse { sender_user_id,
+        sender_device_id, session_id, version, message_type, ciphertext,
+        created_at }.
       tags: [E2EE-GroupSessions]
       parameters:
         - $ref: '#/components/parameters/ServerId'
         - $ref: '#/components/parameters/ChannelId'
+        - name: device_id
+          in: query
+          required: true
+          schema: { type: string }
+          description: Caller's own device ID. Must belong to the authenticated caller (403 otherwise).
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /api/servers/{serverId}/channels/{channelId}/sender-key-recipients:
+    get:
+      operationId: e2eeGetSenderKeyRecipients
+      summary: >-
+        Prekey bundle roster a sender needs to seal one Sender Key envelope
+        per recipient device: every device of every channel member with
+        read access (PermViewChannel + PermReadMessages), excluding the
+        caller's own calling device (its other devices ARE included).
+        Response items are models.SenderKeyRecipient { user_id, device_id,
+        registration_id, identity_key, signing_key, signed_prekey_id,
+        signed_prekey, signed_prekey_signature, one_time_prekey_id,
+        one_time_prekey }. Requires send permission on the channel (the
+        caller is about to distribute a new session).
+      tags: [E2EE-GroupSessions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - name: device_id
+          in: query
+          required: true
+          schema: { type: string }
+          description: Caller's own device ID, excluded from the returned roster.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }

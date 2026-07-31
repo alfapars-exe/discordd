@@ -16,6 +16,14 @@ var deviceLogger = logx.Component("service.device")
 // PrekeyLowThreshold — when prekey pool drops below this, a "prekey_low" WS event is sent.
 const PrekeyLowThreshold = 10
 
+// UserServerLister lists the server IDs a user belongs to. Used to fan out
+// device add/remove broadcasts to every server the user shares with other
+// members, not just back to the device owner — see BULGU 4 (pentest C-03
+// follow-up finding 4). Satisfied by repository.ServerRepository.
+type UserServerLister interface {
+	GetMemberServerIDs(ctx context.Context, userID string) ([]string, error)
+}
+
 // DeviceService handles E2EE device registration and prekey management.
 type DeviceService interface {
 	RegisterDevice(ctx context.Context, userID string, req *models.RegisterDeviceRequest) (*models.Device, error)
@@ -31,14 +39,16 @@ type DeviceService interface {
 }
 
 type deviceService struct {
-	deviceRepo repository.DeviceRepository
-	hub        ws.Broadcaster
+	deviceRepo   repository.DeviceRepository
+	hub          ws.Broadcaster
+	serverLister UserServerLister
 }
 
-func NewDeviceService(deviceRepo repository.DeviceRepository, hub ws.Broadcaster) DeviceService {
+func NewDeviceService(deviceRepo repository.DeviceRepository, hub ws.Broadcaster, serverLister UserServerLister) DeviceService {
 	return &deviceService{
-		deviceRepo: deviceRepo,
-		hub:        hub,
+		deviceRepo:   deviceRepo,
+		hub:          hub,
+		serverLister: serverLister,
 	}
 }
 
@@ -74,10 +84,16 @@ func (s *deviceService) RegisterDevice(ctx context.Context, userID string, req *
 		}
 	}
 
-	s.hub.BroadcastToUser(userID, ws.Event{
+	// BULGU 4 (pentest C-03 follow-up): a new device is invisible to a
+	// shared server otherwise -- senders only learn about it when unrelated
+	// traffic (e.g. a member_update) happens to mark their sender-key roster
+	// stale. BroadcastToUser still covers the device's own other sessions.
+	event := ws.Event{
 		Op:   ws.OpDeviceListUpdate,
 		Data: DeviceListUpdateData{UserID: userID, Action: "added", DeviceID: req.DeviceID},
-	})
+	}
+	s.hub.BroadcastToUser(userID, event)
+	s.broadcastToUserServers(ctx, userID, event)
 
 	return device, nil
 }
@@ -109,10 +125,15 @@ func (s *deviceService) DeleteDevice(ctx context.Context, userID, deviceID strin
 		return fmt.Errorf("failed to delete device: %w", err)
 	}
 
-	s.hub.BroadcastToUser(userID, ws.Event{
+	// BULGU 4 (pentest C-03 follow-up): fan out the removal the same way as
+	// the add above -- other members' senders should stop sealing envelopes
+	// for a device that's gone.
+	event := ws.Event{
 		Op:   ws.OpDeviceListUpdate,
 		Data: DeviceListUpdateData{UserID: userID, Action: "removed", DeviceID: deviceID},
-	})
+	}
+	s.hub.BroadcastToUser(userID, event)
+	s.broadcastToUserServers(ctx, userID, event)
 
 	return nil
 }
@@ -189,6 +210,25 @@ func (s *deviceService) checkPrekeyLevels(ctx context.Context, userID string) {
 				},
 			})
 		}
+	}
+}
+
+// broadcastToUserServers fans out event to every server userID belongs to,
+// in addition to the direct-to-owner BroadcastToUser call already made by
+// the caller. Best-effort: a failure to list the user's servers is logged,
+// not returned -- the device write it follows already succeeded, and a
+// missed broadcast must never turn that into an error response.
+func (s *deviceService) broadcastToUserServers(ctx context.Context, userID string, event ws.Event) {
+	if s.serverLister == nil {
+		return
+	}
+	serverIDs, err := s.serverLister.GetMemberServerIDs(ctx, userID)
+	if err != nil {
+		deviceLogger.Error("failed to list user servers for device broadcast", "user_id", userID, "err", pkg.ErrText(err))
+		return
+	}
+	for _, serverID := range serverIDs {
+		s.hub.BroadcastToServer(serverID, event)
 	}
 }
 

@@ -20,6 +20,10 @@ import { useBadgeStore } from "../../stores/badgeStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useAuditStore } from "../../stores/auditStore";
 import { useUIStore } from "../../stores/uiStore";
+import {
+  decryptChannelMessage,
+  markAllChannelRecipientsStale,
+} from "../../crypto/channelEncryption";
 import type {
   WSMessage,
   UserStatus,
@@ -60,6 +64,12 @@ export async function handleSystemEvent(
       useFriendStore.getState().fetchFriends();
       useFriendStore.getState().fetchRequests();
       useBlockStore.getState().fetchBlocked();
+
+      // Roster/device changes missed while offline can't be caught by the
+      // per-event member_join/leave/update marks below — bump the epoch so
+      // every channel re-checks its Sender Key recipients once on the next
+      // send.
+      markAllChannelRecipientsStale();
 
       setConnectionStatus("connected");
 
@@ -141,6 +151,9 @@ export async function handleSystemEvent(
     case "member_join": {
       const serverId = msg.server_id;
       if (serverId) useMemberStore.getState().handleMemberJoin(serverId, msg.d);
+      // New member — every channel's Sender Key recipient set potentially
+      // grew; payload carries no per-channel breakdown, so mark all.
+      markAllChannelRecipientsStale();
       return true;
     }
 
@@ -156,11 +169,18 @@ export async function handleSystemEvent(
     case "member_leave": {
       const serverId = msg.server_id;
       if (serverId) useMemberStore.getState().handleMemberLeave(serverId, msg.d.user_id);
+      // A member leaving can also shrink the recipient set (e.g. removed
+      // from a role-gated channel indirectly) — mark all, same reasoning
+      // as member_join.
+      markAllChannelRecipientsStale();
       return true;
     }
     case "member_update": {
       const updatedMember = msg.d;
       const serverId = msg.server_id;
+      // Role/nickname changes can add or remove role-gated channel access —
+      // mark all, same reasoning as member_join/member_leave.
+      markAllChannelRecipientsStale();
       if (serverId) {
         // Server-scoped update (role change, nickname, etc.)
         useMemberStore.getState().handleMemberUpdate(serverId, updatedMember);
@@ -321,10 +341,68 @@ export async function handleSystemEvent(
     case "prekey_low":
       useE2EEStore.getState().handlePrekeyLow();
       return true;
-    case "device_list_update":
+    case "device_list_update": {
+      // This event now arrives for OTHER members too (server-wide fan-out), so
+      // the two effects have to be split:
+      //   - a roster re-check is always warranted — somebody in this server
+      //     gained or lost a device, and a v2 sender key only reaches the
+      //     devices it was sealed to. Over-signalling is cheap by design: the
+      //     mark costs one roster read on the next send, and only rotates if
+      //     the fingerprint actually moved.
+      //   - fetchDevices() reads OUR OWN device list, so running it for every
+      //     other member's device change is pure waste.
+      markAllChannelRecipientsStale();
+      if (msg.d?.user_id === useAuthStore.getState().user?.id) {
+        useE2EEStore.getState().fetchDevices();
+      }
+      return true;
+    }
     case "device_key_change":
+      // Owner-only: a signed-prekey rotation leaves the device set unchanged,
+      // so the roster fingerprint cannot move and no re-seal is due.
       useE2EEStore.getState().fetchDevices();
       return true;
+
+    case "group_session_new": {
+      // A v2 envelope was just sealed to us specifically (BroadcastToUsers
+      // to recipients only, not server-wide). Future message_create/
+      // message_update events already self-heal via the lazy envelope
+      // fetch inside decryptChannelMessage, so there's nothing to do for
+      // those. What does NOT self-heal is a message that already failed
+      // and is sitting on screen with content=null — nothing else
+      // re-triggers it. If the channel is open, retry those now and clear
+      // the channel's decryption-error banners for whatever comes back.
+      const data = msg.d;
+      const isChannelOpen = Object.values(useUIStore.getState().panels).some((panel) => {
+        const activeTab = panel.tabs.find((t) => t.id === panel.activeTabId);
+        return activeTab?.type === "text" && activeTab.channelId === data.channel_id;
+      });
+      if (!isChannelOpen) return true;
+
+      const failedMessages = (
+        useMessageStore.getState().messagesByChannel[data.channel_id] ?? []
+      ).filter((m) => m.encryption_version === 1 && m.content === null);
+
+      let recovered = false;
+      for (const m of failedMessages) {
+        if (!m.ciphertext || !m.sender_device_id) continue;
+        try {
+          const payload = await decryptChannelMessage(m.user_id, m.channel_id, m.ciphertext, m.sender_device_id);
+          if (payload?.content) {
+            useMessageStore.getState().handleMessageUpdate({
+              ...m,
+              content: payload.content,
+              e2ee_file_keys: payload.file_keys,
+            });
+            recovered = true;
+          }
+        } catch (err) {
+          console.error("[ws] group_session_new retry decrypt failed:", err);
+        }
+      }
+      if (recovered) useE2EEStore.getState().clearDecryptionErrors(data.channel_id);
+      return true;
+    }
 
     // ─── Badges ───
     case "badge_assign":

@@ -85,8 +85,29 @@ export interface WSPayloadMap {
   p2p_call_busy: { receiver_id: string };
   p2p_signal: P2PSignalPayload;
   prekey_low: unknown;
-  device_list_update: unknown;
+  // Since the C-03 follow-up, device_list_update is ALSO broadcast to every
+  // server the owner belongs to (device_service.broadcastToUserServers), not
+  // just to the owner's own sessions — other members must learn that a new
+  // device exists, or the sender-key roster never re-seals for it.
+  // device_key_change stays owner-only: a signed-prekey rotation does not
+  // change the device SET, and the roster fingerprint is computed over
+  // userId:deviceId pairs, so it cannot move.
+  device_list_update: {
+    user_id: string;
+    action: "added" | "removed";
+    device_id: string;
+  };
   device_key_change: unknown;
+  // Sent via BroadcastToUsers to the recipients of a v2 sender-key envelope
+  // set (not server-wide) whenever a channel's Sender Key is (re)sealed —
+  // e.g. after a roster change triggers rotation. See channelEncryption.ts
+  // for the lazy-pull envelope fetch this notification complements.
+  group_session_new: {
+    channel_id: string;
+    sender_user_id: string;
+    sender_device_id: string;
+    session_id: string;
+  };
   badge_assign: { user_id: string; user_badge: UserBadge };
   badge_unassign: { user_id: string; badge_id: string };
   soundboard_sound_create: SoundboardSound;

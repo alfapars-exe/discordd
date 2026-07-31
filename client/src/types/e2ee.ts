@@ -62,16 +62,46 @@ export type KeyBackupResponse = {
   updated_at: string;
 };
 
-/** Channel Sender Key group session. */
+/**
+ * One sealed Sender Key distribution addressed to THIS device.
+ *
+ * GET .../group-sessions?device_id=<me> is already filtered server-side to the
+ * requesting device, so rows carry no recipient fields. `ciphertext` is a
+ * JSON-serialized SignalWireMessage — the group chain key only exists inside
+ * it, never as a readable column (pentest C-03).
+ */
 export type ChannelGroupSessionResponse = {
-  id: string;
-  channel_id: string;
   sender_user_id: string;
   sender_device_id: string;
+  /** Equals the distributionId inside the sealed distribution. */
   session_id: string;
-  session_data: string;
-  message_index: number;
+  /** Distribution wire-protocol version — 2 is the only accepted value. */
+  version: number;
+  /** SignalMessageTypeValue — 2=Whisper, 3=PreKey */
+  message_type: number;
+  ciphertext: string;
   created_at: string;
+};
+
+/**
+ * One device that must receive a channel's Sender Key distribution.
+ *
+ * Same prekey-bundle shape as PreKeyBundleResponse plus the owning user id,
+ * because the sender needs a Signal session per (user, device) pair.
+ * `signing_key` is null for devices registered before the dedicated Ed25519
+ * signing key existed — those are skipped and flagged as incompatible.
+ */
+export type SenderKeyRecipient = {
+  user_id: string;
+  device_id: string;
+  registration_id: number;
+  identity_key: string;
+  signing_key: string | null;
+  signed_prekey_id: number;
+  signed_prekey: string;
+  signed_prekey_signature: string;
+  one_time_prekey_id: number | null;
+  one_time_prekey: string | null;
 };
 
 /** Per-device encrypted envelope for DM (Signal Protocol). */

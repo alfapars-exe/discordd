@@ -86,6 +86,11 @@ type RateLimiters struct {
 	// public E2EE key material (GET /api/users/{id}/devices and
 	// .../prekey-bundles), which expose identity keys for arbitrary users.
 	DeviceEnum *ratelimit.LoginRateLimiter
+	// GroupSession added 2026-07-31 (pentest C-03 follow-up finding 3): caps
+	// per-user POST .../group-sessions uploads. Sized like Upload — a
+	// distribution is re-sealed per stale channel, not per message, so a
+	// legitimate multi-channel re-seal burst stays well under 20/min.
+	GroupSession *ratelimit.MessageRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -158,11 +163,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	reportService := services.NewReportService(repos.Report, repos.User)
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
-	deviceService := services.NewDeviceService(repos.Device, hub)
+	deviceService := services.NewDeviceService(repos.Device, hub, repos.Server)
 	// E2EE key-backup integrity MAC key (P0-BD-01): an HKDF subkey of the
 	// server master key, so a DB-only tamper of a stored backup is detectable.
 	backupHMACKey := crypto.DeriveBackupHMACKey(encryptionKey)
-	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, hub, repos.Channel, channelPermService, backupHMACKey)
+	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, repos.Device, repos.Server, hub, repos.Channel, channelPermService, backupHMACKey)
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
 	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, repos.LiveKit, hub, emailSender)
@@ -225,6 +230,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// database impractical from a single source.
 	deviceEnumLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
 
+	// GroupSession (pentest C-03 follow-up finding 3): 20 per minute per
+	// user, 30s cooldown once exceeded -- same shape as uploadLimiter above.
+	groupSessionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
+
 	svcs := &Services{
 		Auth:              authService,
 		Server:            serverService,
@@ -272,16 +281,17 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}
 
 	limiters := &RateLimiters{
-		Login:      loginLimiter,
-		Message:    messageLimiter,
-		DMMessage:  dmMessageLimiter,
-		Register:   registerLimiter,
-		ForgotPwd:  forgotPwdLimiter,
-		ResetPwd:   resetPwdLimiter,
-		Feedback:   feedbackLimiter,
-		WSTicket:   wsTicketLimiter,
-		DeviceEnum: deviceEnumLimiter,
-		Upload:     uploadLimiter,
+		Login:        loginLimiter,
+		Message:      messageLimiter,
+		DMMessage:    dmMessageLimiter,
+		Register:     registerLimiter,
+		ForgotPwd:    forgotPwdLimiter,
+		ResetPwd:     resetPwdLimiter,
+		Feedback:     feedbackLimiter,
+		WSTicket:     wsTicketLimiter,
+		DeviceEnum:   deviceEnumLimiter,
+		Upload:       uploadLimiter,
+		GroupSession: groupSessionLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

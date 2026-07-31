@@ -29,5 +29,14 @@ type DeviceRepository interface {
 	// GetPrekeyBundle returns the full X3DH prekey bundle. Consumes a one-time prekey if available.
 	GetPrekeyBundle(ctx context.Context, userID, deviceID string) (*models.PrekeyBundle, error)
 	// GetPrekeyBundles returns prekey bundles for all of a user's devices.
+	// Consumes one one-time prekey per device — only call this for a real
+	// X3DH handshake (see ListDeviceBundlesNoOTP for a non-consuming read).
 	GetPrekeyBundles(ctx context.Context, userID string) ([]models.PrekeyBundle, error)
+	// ListDeviceBundlesNoOTP returns the same bundle fields as
+	// GetPrekeyBundles for all of a user's devices WITHOUT consuming any
+	// one-time prekeys — one_time_prekey_id/one_time_prekey are always nil.
+	// Used by callers that need the roster/identity material repeatedly
+	// (e.g. the sender-key-recipients roster) and must not drain the OTP
+	// pool that real X3DH handshakes depend on.
+	ListDeviceBundlesNoOTP(ctx context.Context, userID string) ([]models.PrekeyBundle, error)
 }

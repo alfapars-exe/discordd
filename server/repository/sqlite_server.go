@@ -399,6 +399,32 @@ func (r *sqliteServerRepo) GetMemberServerIDs(ctx context.Context, userID string
 	return ids, nil
 }
 
+// ListMemberIDs returns every member user ID of a server (online or not).
+func (r *sqliteServerRepo) ListMemberIDs(ctx context.Context, serverID string) ([]string, error) {
+	query := `SELECT user_id FROM server_members WHERE server_id = ?`
+
+	rows, err := r.db.QueryContext(ctx, query, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list member ids: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan member id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating member ids: %w", err)
+	}
+
+	return ids, nil
+}
+
 func (r *sqliteServerRepo) CountOwnedMqviHostedServers(ctx context.Context, ownerID string) (int, error) {
 	query := `
 		SELECT COUNT(*) FROM servers s

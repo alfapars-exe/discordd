@@ -3,7 +3,11 @@
 -- channel_group_sessions: Tracks Megolm/Sender Key group sessions.
 -- Each sender device creates an "outbound session" for each channel.
 -- Other members receive the "inbound" copy of that session to decrypt messages.
--- session_data is stored on the server as an opaque blob — the server cannot read it.
+-- ⚠ CORRECTION (2026-07-31, pentest C-03): session_data is NOT opaque. The client
+-- uploads the Sender Key distribution as plain JSON, chainKey included, so the server
+-- CAN decrypt channel messages. Channel E2EE shields messages from other members, not
+-- from the operator. (DM E2EE is genuinely end-to-end.) Comment corrected in place —
+-- the SQL below is unchanged and this file has already been applied.
 --
 -- e2ee_key_backups: The user's optional key backup.
 -- A blob encrypted with the recovery password. The server does not know the password.
