@@ -137,14 +137,19 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// near initRoutes for the full rationale.
 	serverService := services.NewServerService(
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
-		repos.Category, repos.User, inviteService, hub, encryptionKey,
+		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey,
 	)
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
 		voiceService, encryptionKey, cfg.HetznerAPIToken,
 	)
 	pinService := services.NewPinService(repos.Pin, repos.Message, repos.Channel, hub, channelPermService)
-	searchService := services.NewSearchService(repos.Search)
+	// H-05: search results are scoped to the channels the caller may
+	// actually read, so it needs both the server's channel list
+	// (repos.Channel) and the per-channel permission resolver
+	// (channelPermService) — same combination ChannelService.GetAllGrouped
+	// already uses for sidebar visibility.
+	searchService := services.NewSearchService(repos.Search, repos.Channel, channelPermService)
 	readStateService := services.NewReadStateService(repos.ReadState, channelPermService)
 
 	// BlockService before DMService (DMService uses it as BlockChecker)

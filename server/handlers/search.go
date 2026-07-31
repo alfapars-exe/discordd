@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/services"
 )
@@ -17,11 +18,18 @@ func NewSearchHandler(searchService services.SearchService) *SearchHandler {
 }
 
 // Search handles GET /api/servers/{serverId}/search?q=query&channel_id=optional&limit=25&offset=0
-// FTS5 full-text search scoped to the server's channels.
+// FTS5 full-text search scoped to the server's channels, further filtered by
+// the caller's own channel-read permission (H-05) — the service, not this
+// handler, resolves and applies that filter.
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
 	if !ok || serverID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -50,7 +58,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := h.searchService.Search(r.Context(), serverID, query, channelID, limit, offset)
+	result, err := h.searchService.Search(r.Context(), serverID, user.ID, query, channelID, limit, offset)
 	if err != nil {
 		pkg.Error(w, err)
 		return
