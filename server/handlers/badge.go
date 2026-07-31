@@ -239,10 +239,19 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to save icon", err)
 		return
 	}
-	defer dest.Close()
 
-	if _, err := io.Copy(dest, file); err != nil {
-		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", err)
+	// Explicit close before any error path — os.Remove fails on Windows
+	// while the handle is open, leaving orphans behind.
+	_, copyErr := io.Copy(dest, file)
+	closeErr := dest.Close()
+	if copyErr != nil {
+		_ = os.Remove(destPath) // #nosec G703 -- destPath verified by SafeJoin above, same as os.Create
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", copyErr)
+		return
+	}
+	if closeErr != nil {
+		_ = os.Remove(destPath) // #nosec G703 -- destPath verified by SafeJoin above, same as os.Create
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to finalize icon", closeErr)
 		return
 	}
 

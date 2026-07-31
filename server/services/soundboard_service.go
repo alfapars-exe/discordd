@@ -156,11 +156,18 @@ func (s *soundboardService) Create(
 	if err != nil {
 		return nil, fmt.Errorf("create file: %w", err)
 	}
-	defer destFile.Close()
 
-	if _, err := io.Copy(destFile, file); err != nil {
-		os.Remove(destPath)
-		return nil, fmt.Errorf("save file: %w", err)
+	// Explicit close before any error path — os.Remove fails on Windows
+	// while the handle is open, leaving orphans behind.
+	_, copyErr := io.Copy(destFile, file)
+	closeErr := destFile.Close()
+	if copyErr != nil {
+		_ = os.Remove(destPath)
+		return nil, fmt.Errorf("save file: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(destPath)
+		return nil, fmt.Errorf("finalize file: %w", closeErr)
 	}
 
 	sound := &models.SoundboardSound{

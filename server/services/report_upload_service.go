@@ -79,11 +79,18 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
-	defer destFile.Close()
 
-	if _, err := io.Copy(destFile, file); err != nil {
+	// Explicit close before any error path — os.Remove fails on Windows
+	// while the handle is open, leaving orphans behind.
+	_, copyErr := io.Copy(destFile, file)
+	closeErr := destFile.Close()
+	if copyErr != nil {
 		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
+		return nil, fmt.Errorf("failed to save file: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(destPath)
+		return nil, fmt.Errorf("failed to finalize file: %w", closeErr)
 	}
 
 	fileSize := header.Size
@@ -96,7 +103,7 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 	}
 
 	if err := s.reportRepo.CreateAttachment(ctx, att); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath) // best-effort cleanup; we're already returning the DB error
 		return nil, fmt.Errorf("failed to create report attachment record: %w", err)
 	}
 
