@@ -209,14 +209,16 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate filename
+	// Generate filename. The extension comes from the validated MIME, never
+	// from header.Filename: mimeToExt maps the allow-listed set above onto a
+	// fixed set of literals, so no part of the destination path is derived
+	// from client input. Trusting filepath.Ext(header.Filename) instead meant
+	// the stored extension could disagree with the actual bytes, and left the
+	// only thing standing between an attacker-chosen suffix and the filesystem
+	// as SafeJoin — correct, but the last line rather than the only one.
 	randBytes := make([]byte, 8)
 	_, _ = rand.Read(randBytes)
-	ext := filepath.Ext(header.Filename)
-	if ext == "" {
-		ext = mimeToExt(mime)
-	}
-	filename := fmt.Sprintf("badge_%s%s", hex.EncodeToString(randBytes), ext)
+	filename := fmt.Sprintf("badge_%s%s", hex.EncodeToString(randBytes), mimeToExt(mime))
 
 	// Ensure badges subdirectory exists. 0750: group-readable for the
 	// operator, closed to "other" so a shared host can't enumerate badges.
