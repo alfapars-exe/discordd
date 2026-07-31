@@ -196,7 +196,14 @@ export async function computeRecipientFingerprint(
 ): Promise<string> {
   const canonical = recipients
     .map((r) => `${r.userId}:${r.deviceId}`)
-    .sort()
+    // Explicit code-unit ordering. What this needs is DETERMINISM across
+    // devices, not alphabetical correctness: every participant must derive the
+    // same fingerprint from the same roster or they would rotate against each
+    // other forever. localeCompare is the wrong tool precisely because it is
+    // locale-dependent — two clients with different language settings could
+    // order the same roster differently and never agree. Ids are ASCII, so a
+    // plain code-unit compare is total and stable everywhere.
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
     .join("\n");
   return bytesToHex(sha256(new TextEncoder().encode(canonical)));
 }

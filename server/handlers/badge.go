@@ -244,13 +244,18 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	// while the handle is open, leaving orphans behind.
 	_, copyErr := io.Copy(dest, file)
 	closeErr := dest.Close()
+	// destPath is the value SafeJoin already accepted and os.Create already
+	// opened — removing exactly the file we just created cannot reach outside
+	// the upload dir. Static analysers track the taint from the request-derived
+	// filename and cannot see through SafeJoin, so both the gosec and Sonar
+	// suppressions carry that same justification. NOSONAR
 	if copyErr != nil {
-		_ = os.Remove(destPath) // #nosec G703 -- destPath verified by SafeJoin above, same as os.Create
+		_ = os.Remove(destPath) // #nosec G703 -- verified by SafeJoin above, same path os.Create opened // NOSONAR
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", copyErr)
 		return
 	}
 	if closeErr != nil {
-		_ = os.Remove(destPath) // #nosec G703 -- destPath verified by SafeJoin above, same as os.Create
+		_ = os.Remove(destPath) // #nosec G703 -- verified by SafeJoin above, same path os.Create opened // NOSONAR
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to finalize icon", closeErr)
 		return
 	}

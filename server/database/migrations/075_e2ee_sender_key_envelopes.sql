@@ -32,4 +32,6 @@ CREATE INDEX IF NOT EXISTS idx_cske_recipient
 -- Pre-v2 distributions are invalid under the new per-recipient wire format
 -- and were server-readable plaintext to begin with (C-03) — treat them as
 -- already compromised rather than migrating them.
-DELETE FROM channel_group_sessions;
+-- The missing WHERE is the point: every pre-v2 row is invalid, so this is a
+-- deliberate full-table wipe, not an omission. NOSONAR
+DELETE FROM channel_group_sessions; -- NOSONAR
