@@ -65,6 +65,84 @@ func mustExecE2EE(t *testing.T, ctx context.Context, db *database.DB, q string, 
 	}
 }
 
+// ─── Service-level test wiring ───
+
+// e2eeTestServiceConfig holds newE2EEServiceForTest's overridable
+// collaborators. Zero value matches its defaults: no member lister, a
+// permission resolver with no bulk override (falls back to the single-user
+// answer per testutil.MockChannelPermResolver), and a no-op broadcaster.
+type e2eeTestServiceConfig struct {
+	permBulkFn   func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error)
+	memberLister ServerMemberLister
+	hub          ws.Broadcaster
+}
+
+// e2eeTestServiceOption customizes newE2EEServiceForTest's collaborators for
+// tests that need more than the shared defaults.
+type e2eeTestServiceOption func(*e2eeTestServiceConfig)
+
+// withPermBulk sets ResolveChannelPermissionsBulk on the permission resolver
+// -- needed by tests that exercise UpsertGroupSession's authorized-roster
+// check, where the bulk answer must differ per recipient.
+func withPermBulk(fn func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error)) e2eeTestServiceOption {
+	return func(c *e2eeTestServiceConfig) { c.permBulkFn = fn }
+}
+
+// withMemberLister overrides the (nil-by-default) server member lister --
+// needed by tests that exercise the roster's server-membership check.
+func withMemberLister(l ServerMemberLister) e2eeTestServiceOption {
+	return func(c *e2eeTestServiceConfig) { c.memberLister = l }
+}
+
+// withBroadcaster overrides the default no-op broadcaster -- needed by
+// tests that assert on which recipients got notified.
+func withBroadcaster(hub ws.Broadcaster) e2eeTestServiceOption {
+	return func(c *e2eeTestServiceConfig) { c.hub = hub }
+}
+
+// newE2EEServiceForTest wires the collaborators every group-session test
+// needs: the channel resolves inside serverID, the caller has full channel
+// permissions (View+Read+Send), and ownedDevices maps user id -> the one
+// device id that user owns -- any other (user, device) pairing returns
+// pkg.ErrNotFound, mirroring the real DeviceRepository.GetByUserAndDevice.
+func newE2EEServiceForTest(
+	t *testing.T,
+	serverID, channelID string,
+	repo repository.GroupSessionRepository,
+	ownedDevices map[string]string,
+	opts ...e2eeTestServiceOption,
+) E2EEService {
+	t.Helper()
+
+	cfg := e2eeTestServiceConfig{hub: &testutil.MockBroadcaster{}}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	channelGetter := &testutil.MockChannelRepo{
+		GetByIDFn: func(context.Context, string) (*models.Channel, error) {
+			return &models.Channel{ID: channelID, ServerID: serverID}, nil
+		},
+	}
+	permResolver := &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
+			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
+		},
+		ResolveChannelPermissionsBulkFn: cfg.permBulkFn,
+	}
+	deviceRepo := &mockDeviceRepo{
+		GetByUserAndDeviceFn: func(_ context.Context, userID, deviceID string) (*models.Device, error) {
+			if owned, ok := ownedDevices[userID]; ok && owned == deviceID {
+				return &models.Device{UserID: userID, DeviceID: deviceID}, nil
+			}
+			return nil, pkg.ErrNotFound
+		},
+	}
+
+	return NewE2EEService(nil, repo, deviceRepo, cfg.memberLister,
+		cfg.hub, channelGetter, permResolver, nil)
+}
+
 // ─── Repository-level: recipient isolation (the SQL WHERE clause itself) ───
 
 // TestGroupSessionRepo_RecipientIsolation is the core C-03 guarantee at the
@@ -166,27 +244,8 @@ func TestE2EEService_GetGroupSessions_RecipientIsolation(t *testing.T) {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	channelGetter := &testutil.MockChannelRepo{
-		GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-			return &models.Channel{ID: channelID, ServerID: serverID}, nil
-		},
-	}
-	permResolver := &testutil.MockChannelPermResolver{
-		ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
-			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
-		},
-	}
-	deviceRepo := &mockDeviceRepo{
-		GetByUserAndDeviceFn: func(_ context.Context, userID, deviceID string) (*models.Device, error) {
-			owned := map[string]string{"user-a": "dev-a1", "user-b": "dev-b1"}
-			if owned[userID] == deviceID {
-				return &models.Device{UserID: userID, DeviceID: deviceID}, nil
-			}
-			return nil, pkg.ErrNotFound
-		},
-	}
-	svc := NewE2EEService(nil, groupSessionRepo, deviceRepo, nil,
-		&testutil.MockBroadcaster{}, channelGetter, permResolver, nil)
+	svc := newE2EEServiceForTest(t, serverID, channelID, groupSessionRepo,
+		map[string]string{"user-a": "dev-a1", "user-b": "dev-b1"})
 
 	got, err := svc.GetGroupSessions(ctx, serverID, channelID, "user-b", "dev-b1")
 	if err != nil {
@@ -218,28 +277,10 @@ func TestE2EEService_GetGroupSessions_ForeignDeviceForbidden(t *testing.T) {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	channelGetter := &testutil.MockChannelRepo{
-		GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-			return &models.Channel{ID: channelID, ServerID: serverID}, nil
-		},
-	}
-	permResolver := &testutil.MockChannelPermResolver{
-		ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
-			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
-		},
-	}
-	// dev-a1 belongs to user-a, not user-b: GetByUserAndDevice returns
-	// ErrNotFound for the (user-b, dev-a1) pair, matching the real repo.
-	deviceRepo := &mockDeviceRepo{
-		GetByUserAndDeviceFn: func(_ context.Context, userID, deviceID string) (*models.Device, error) {
-			if userID == "user-a" && deviceID == "dev-a1" {
-				return &models.Device{UserID: userID, DeviceID: deviceID}, nil
-			}
-			return nil, pkg.ErrNotFound
-		},
-	}
-	svc := NewE2EEService(nil, groupSessionRepo, deviceRepo, nil,
-		&testutil.MockBroadcaster{}, channelGetter, permResolver, nil)
+	// dev-a1 belongs to user-a only -- newE2EEServiceForTest's deviceRepo
+	// returns pkg.ErrNotFound for any other (user, device) pairing.
+	svc := newE2EEServiceForTest(t, serverID, channelID, groupSessionRepo,
+		map[string]string{"user-a": "dev-a1"})
 
 	// user-b (authenticated) tries to read as if it owned dev-a1.
 	_, err := svc.GetGroupSessions(ctx, serverID, channelID, "user-b", "dev-a1")
@@ -371,46 +412,31 @@ func TestE2EEService_UpsertGroupSession_NotifiesRecipientsOnly(t *testing.T) {
 	serverID, channelID := seedE2EEFixture(t, db)
 	groupSessionRepo := repository.NewSQLiteGroupSessionRepo(db.Conn)
 
-	channelGetter := &testutil.MockChannelRepo{
-		GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-			return &models.Channel{ID: channelID, ServerID: serverID}, nil
-		},
-	}
-	permResolver := &testutil.MockChannelPermResolver{
-		ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
-			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
-		},
-		// BULGU 2: UpsertGroupSession now resolves the same authorized-roster
-		// set the sender-key-recipients roster does; user-b must be in it for
-		// this envelope to be accepted.
-		ResolveChannelPermissionsBulkFn: func(context.Context, string, []string) (map[string]models.Permission, error) {
-			return map[string]models.Permission{
-				"user-a": models.PermViewChannel | models.PermReadMessages | models.PermSendMessages,
-				"user-b": models.PermViewChannel | models.PermReadMessages,
-			}, nil
-		},
-	}
-	memberLister := &testutil.MockServerRepo{
-		ListMemberIDsFn: func(context.Context, string) ([]string, error) {
-			return []string{"user-a", "user-b"}, nil
-		},
-	}
-	// BULGU 7: the write path now checks the caller owns the sending device.
-	deviceRepo := &mockDeviceRepo{
-		GetByUserAndDeviceFn: func(_ context.Context, userID, deviceID string) (*models.Device, error) {
-			if userID == "user-a" && deviceID == "dev-a1" {
-				return &models.Device{UserID: userID, DeviceID: deviceID}, nil
-			}
-			return nil, pkg.ErrNotFound
-		},
-	}
 	var broadcastToServerCalled bool
 	var notifiedUserIDs []string
 	hub := &testutil.MockBroadcaster{
 		BroadcastToServerFn: func(string, ws.Event) { broadcastToServerCalled = true },
 		BroadcastToUsersFn:  func(userIDs []string, _ ws.Event) { notifiedUserIDs = userIDs },
 	}
-	svc := NewE2EEService(nil, groupSessionRepo, deviceRepo, memberLister, hub, channelGetter, permResolver, nil)
+	svc := newE2EEServiceForTest(t, serverID, channelID, groupSessionRepo,
+		// BULGU 7: the write path now checks the caller owns the sending device.
+		map[string]string{"user-a": "dev-a1"},
+		withMemberLister(&testutil.MockServerRepo{
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"user-a", "user-b"}, nil
+			},
+		}),
+		// BULGU 2: UpsertGroupSession now resolves the same authorized-roster
+		// set the sender-key-recipients roster does; user-b must be in it for
+		// this envelope to be accepted.
+		withPermBulk(func(context.Context, string, []string) (map[string]models.Permission, error) {
+			return map[string]models.Permission{
+				"user-a": models.PermViewChannel | models.PermReadMessages | models.PermSendMessages,
+				"user-b": models.PermViewChannel | models.PermReadMessages,
+			}, nil
+		}),
+		withBroadcaster(hub),
+	)
 
 	req := &models.CreateSenderKeyDistributionRequest{
 		SessionID: "sess-1",
@@ -550,40 +576,24 @@ func TestE2EEService_UpsertGroupSession_RejectsRosterExternalRecipient(t *testin
 	serverID, channelID := seedE2EEFixture(t, db)
 	groupSessionRepo := repository.NewSQLiteGroupSessionRepo(db.Conn)
 
-	channelGetter := &testutil.MockChannelRepo{
-		GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-			return &models.Channel{ID: channelID, ServerID: serverID}, nil
-		},
-	}
-	permResolver := &testutil.MockChannelPermResolver{
-		ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
-			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
-		},
-		ResolveChannelPermissionsBulkFn: func(_ context.Context, _ string, userIDs []string) (map[string]models.Permission, error) {
+	svc := newE2EEServiceForTest(t, serverID, channelID, groupSessionRepo,
+		map[string]string{"user-a": "dev-a1"},
+		// "user-outsider" is deliberately not a member -- the roster the
+		// service resolves never includes it, regardless of what the
+		// sender's client claims.
+		withMemberLister(&testutil.MockServerRepo{
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"user-a"}, nil
+			},
+		}),
+		withPermBulk(func(_ context.Context, _ string, userIDs []string) (map[string]models.Permission, error) {
 			out := make(map[string]models.Permission, len(userIDs))
 			for _, id := range userIDs {
 				out[id] = models.PermViewChannel | models.PermReadMessages | models.PermSendMessages
 			}
 			return out, nil
-		},
-	}
-	// "user-outsider" is deliberately not a member -- the roster the service
-	// resolves never includes it, regardless of what the sender's client claims.
-	memberLister := &testutil.MockServerRepo{
-		ListMemberIDsFn: func(context.Context, string) ([]string, error) {
-			return []string{"user-a"}, nil
-		},
-	}
-	deviceRepo := &mockDeviceRepo{
-		GetByUserAndDeviceFn: func(_ context.Context, userID, deviceID string) (*models.Device, error) {
-			if userID == "user-a" && deviceID == "dev-a1" {
-				return &models.Device{UserID: userID, DeviceID: deviceID}, nil
-			}
-			return nil, pkg.ErrNotFound
-		},
-	}
-	svc := NewE2EEService(nil, groupSessionRepo, deviceRepo, memberLister,
-		&testutil.MockBroadcaster{}, channelGetter, permResolver, nil)
+		}),
+	)
 
 	req := &models.CreateSenderKeyDistributionRequest{
 		SessionID: "sess-1",
@@ -617,28 +627,10 @@ func TestE2EEService_UpsertGroupSession_ForeignDeviceForbidden(t *testing.T) {
 	serverID, channelID := seedE2EEFixture(t, db)
 	groupSessionRepo := repository.NewSQLiteGroupSessionRepo(db.Conn)
 
-	channelGetter := &testutil.MockChannelRepo{
-		GetByIDFn: func(context.Context, string) (*models.Channel, error) {
-			return &models.Channel{ID: channelID, ServerID: serverID}, nil
-		},
-	}
-	permResolver := &testutil.MockChannelPermResolver{
-		ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
-			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
-		},
-	}
-	// dev-a1 belongs to user-a, not user-b: GetByUserAndDevice returns
-	// ErrNotFound for the (user-b, dev-a1) pair, matching the real repo.
-	deviceRepo := &mockDeviceRepo{
-		GetByUserAndDeviceFn: func(_ context.Context, userID, deviceID string) (*models.Device, error) {
-			if userID == "user-a" && deviceID == "dev-a1" {
-				return &models.Device{UserID: userID, DeviceID: deviceID}, nil
-			}
-			return nil, pkg.ErrNotFound
-		},
-	}
-	svc := NewE2EEService(nil, groupSessionRepo, deviceRepo, nil,
-		&testutil.MockBroadcaster{}, channelGetter, permResolver, nil)
+	// dev-a1 belongs to user-a only -- newE2EEServiceForTest's deviceRepo
+	// returns pkg.ErrNotFound for any other (user, device) pairing.
+	svc := newE2EEServiceForTest(t, serverID, channelID, groupSessionRepo,
+		map[string]string{"user-a": "dev-a1"})
 
 	req := &models.CreateSenderKeyDistributionRequest{
 		SessionID: "sess-1",

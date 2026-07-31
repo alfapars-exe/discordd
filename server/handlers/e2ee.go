@@ -102,34 +102,59 @@ func (h *E2EEHandler) DeleteKeyBackup(w http.ResponseWriter, r *http.Request) {
 
 // ── Group Session Endpoints (pentest C-03: per-recipient sealed envelopes) ──
 
+// groupSessionRequest carries the four values every group-session handler
+// needs: the authenticated user, the validated server context, the channel
+// path param, and the caller's device_id query param.
+type groupSessionRequest struct {
+	user      *models.User
+	serverID  string
+	channelID string
+	deviceID  string
+}
+
+// readGroupSessionRequest reads and validates the fields shared by every
+// group-session handler (CreateGroupSession, GetGroupSessions,
+// GetSenderKeyRecipients), writing the matching error response itself on
+// failure. ok is false when a response has ALREADY been written -- the
+// caller must return immediately without writing another one.
+func readGroupSessionRequest(w http.ResponseWriter, r *http.Request) (groupSessionRequest, bool) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return groupSessionRequest{}, false
+	}
+
+	channelID := r.PathValue("channelId")
+	if channelID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
+		return groupSessionRequest{}, false
+	}
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
+		return groupSessionRequest{}, false
+	}
+
+	deviceID := r.URL.Query().Get("device_id")
+	if deviceID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "device_id query param is required")
+		return groupSessionRequest{}, false
+	}
+
+	return groupSessionRequest{user: user, serverID: serverID, channelID: channelID, deviceID: deviceID}, true
+}
+
 // CreateGroupSession stores a Sender Key distribution as N opaque envelopes,
 // one per recipient device. version must be 2 -- there is no compatibility
 // path for the legacy single-blob format: a request carrying the old
 // "session_data" field is rejected outright (400), never accepted.
 // POST /api/servers/{serverId}/channels/{channelId}/group-sessions
 func (h *E2EEHandler) CreateGroupSession(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	gsReq, ok := readGroupSessionRequest(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-
-	channelID := r.PathValue("channelId")
-	if channelID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
-		return
-	}
-	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
-	if !ok || serverID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
-		return
-	}
-
-	deviceID := r.URL.Query().Get("device_id")
-	if deviceID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "device_id query param is required")
-		return
-	}
+	user, serverID, channelID, deviceID := gsReq.user, gsReq.serverID, gsReq.channelID, gsReq.deviceID
 
 	if h.groupSessionLimiter != nil && !h.groupSessionLimiter.Allow(user.ID) {
 		retryAfter := h.groupSessionLimiter.CooldownSeconds(user.ID)
@@ -179,30 +204,12 @@ func (h *E2EEHandler) CreateGroupSession(w http.ResponseWriter, r *http.Request)
 // device_id is required; it must belong to the authenticated caller (403 if not).
 // GET /api/servers/{serverId}/channels/{channelId}/group-sessions
 func (h *E2EEHandler) GetGroupSessions(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	gsReq, ok := readGroupSessionRequest(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	channelID := r.PathValue("channelId")
-	if channelID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
-		return
-	}
-	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
-	if !ok || serverID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
-		return
-	}
-
-	deviceID := r.URL.Query().Get("device_id")
-	if deviceID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "device_id query param is required")
-		return
-	}
-
-	sessions, err := h.e2eeService.GetGroupSessions(r.Context(), serverID, channelID, user.ID, deviceID)
+	sessions, err := h.e2eeService.GetGroupSessions(r.Context(), gsReq.serverID, gsReq.channelID, gsReq.user.ID, gsReq.deviceID)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -217,30 +224,12 @@ func (h *E2EEHandler) GetGroupSessions(w http.ResponseWriter, r *http.Request) {
 // device (its other devices ARE included).
 // GET /api/servers/{serverId}/channels/{channelId}/sender-key-recipients?device_id=<callerDeviceId>
 func (h *E2EEHandler) GetSenderKeyRecipients(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	gsReq, ok := readGroupSessionRequest(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	channelID := r.PathValue("channelId")
-	if channelID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
-		return
-	}
-	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
-	if !ok || serverID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
-		return
-	}
-
-	deviceID := r.URL.Query().Get("device_id")
-	if deviceID == "" {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "device_id query param is required")
-		return
-	}
-
-	recipients, err := h.e2eeService.GetSenderKeyRecipients(r.Context(), serverID, channelID, user.ID, deviceID)
+	recipients, err := h.e2eeService.GetSenderKeyRecipients(r.Context(), gsReq.serverID, gsReq.channelID, gsReq.user.ID, gsReq.deviceID)
 	if err != nil {
 		pkg.Error(w, err)
 		return

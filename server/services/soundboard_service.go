@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -152,22 +151,8 @@ func (s *soundboardService) Create(
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
 
-	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
-	if err != nil {
-		return nil, fmt.Errorf("create file: %w", err)
-	}
-
-	// Explicit close before any error path — os.Remove fails on Windows
-	// while the handle is open, leaving orphans behind.
-	_, copyErr := io.Copy(destFile, file)
-	closeErr := destFile.Close()
-	if copyErr != nil {
-		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("save file: %w", copyErr)
-	}
-	if closeErr != nil {
-		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("finalize file: %w", closeErr)
+	if err := writeUploadFile(destPath, file, "create file", "save file", "finalize file"); err != nil {
+		return nil, err
 	}
 
 	sound := &models.SoundboardSound{

@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"os"
 	"strings"
@@ -75,22 +74,8 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
-	}
-
-	// Explicit close before any error path — os.Remove fails on Windows
-	// while the handle is open, leaving orphans behind.
-	_, copyErr := io.Copy(destFile, file)
-	closeErr := destFile.Close()
-	if copyErr != nil {
-		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to save file: %w", copyErr)
-	}
-	if closeErr != nil {
-		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to finalize file: %w", closeErr)
+	if err := writeUploadFile(destPath, file, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
+		return nil, err
 	}
 
 	fileSize := header.Size
