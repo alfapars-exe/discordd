@@ -44,7 +44,11 @@ func (r *sqliteGroupSessionRepo) Upsert(ctx context.Context, channelID, senderUs
 	if err != nil {
 		return fmt.Errorf("failed to prepare envelope upsert: %w", err)
 	}
-	defer stmt.Close()
+	// Explicitly discarded: the statement is scoped to the caller's
+	// transaction, so a close error here cannot lose data — the commit is what
+	// decides. Matches the `defer func() { _ = x.Close() }()` form used
+	// elsewhere in this package and keeps errcheck quiet.
+	defer func() { _ = stmt.Close() }()
 
 	for _, env := range req.Envelopes {
 		if _, err := stmt.ExecContext(ctx,
