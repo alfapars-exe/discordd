@@ -78,7 +78,7 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			att, uploadErr := h.uploadService.Upload(r.Context(), ticket.ID, nil, f, fh)
-			f.Close()
+			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
 					fmt.Sprintf("failed to upload file %s for ticket %s: %v", fh.Filename, ticket.ID, uploadErr), nil)
@@ -282,7 +282,7 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 				continue
 			}
 			att, uploadErr := h.uploadService.Upload(r.Context(), ticketID, &reply.ID, f, fh)
-			f.Close()
+			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
 					fmt.Sprintf("failed to upload reply attachment %s: %v", fh.Filename, uploadErr), nil)

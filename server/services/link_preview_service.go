@@ -212,7 +212,7 @@ func (s *linkPreviewService) fetchYouTubeOEmbed(ctx context.Context, originalURL
 	if err != nil {
 		return nil, fmt.Errorf("oembed fetch failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 
 	if resp.StatusCode != http.StatusOK {
 		// 401/404 here means the video is private / deleted / age-restricted
@@ -269,7 +269,7 @@ func (s *linkPreviewService) fetchAndParse(ctx context.Context, normalizedURL st
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)

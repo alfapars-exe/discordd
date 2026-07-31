@@ -318,7 +318,7 @@ func (h *UploadDownloadHandler) serveFile(w http.ResponseWriter, r *http.Request
 		http.NotFound(w, r)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 
 	fi, err := f.Stat()
 	if err != nil || fi.IsDir() {

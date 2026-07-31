@@ -29,10 +29,12 @@ import (
 func init() {
 	// Windows registry can return wrong MIME types for some extensions.
 	// Force correct values so http.FileServer serves them properly.
-	mime.AddExtensionType(".svg", "image/svg+xml")
-	mime.AddExtensionType(".wasm", "application/wasm")
-	mime.AddExtensionType(".js", "text/javascript")
-	mime.AddExtensionType(".css", "text/css")
+	// Errors are ignored — the extension/type pairs are fixed literals
+	// known valid at compile time, nothing runtime input could break.
+	_ = mime.AddExtensionType(".svg", "image/svg+xml")
+	_ = mime.AddExtensionType(".wasm", "application/wasm")
+	_ = mime.AddExtensionType(".js", "text/javascript")
+	_ = mime.AddExtensionType(".css", "text/css")
 }
 
 func main() {
@@ -344,7 +346,7 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Write(indexHTMLWeb)
+		_, _ = w.Write(indexHTMLWeb) // error means the peer is gone; nothing left to do
 	})
 
 	// 17. Security headers

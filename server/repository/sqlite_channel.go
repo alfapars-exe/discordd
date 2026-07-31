@@ -156,19 +156,19 @@ func (r *sqliteChannelRepo) UpdatePositions(ctx context.Context, items []models.
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op once Commit succeeds (ErrTxDone), expected on the happy path
 
 	stmtPos, err := tx.PrepareContext(ctx, `UPDATE channels SET position = ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare position statement: %w", err)
 	}
-	defer stmtPos.Close()
+	defer func() { _ = stmtPos.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	stmtPosCat, err := tx.PrepareContext(ctx, `UPDATE channels SET position = ?, category_id = ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare position+category statement: %w", err)
 	}
-	defer stmtPosCat.Close()
+	defer func() { _ = stmtPosCat.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	for _, item := range items {
 		var result sql.Result

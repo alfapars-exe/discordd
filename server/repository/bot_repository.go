@@ -70,7 +70,7 @@ func (r *BotRepository) ListByOwner(ctx context.Context, ownerID string) ([]mode
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 
 	var out []models.User
 	for rows.Next() {

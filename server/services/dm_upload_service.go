@@ -103,7 +103,7 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	}
 
 	if err := s.dmRepo.CreateAttachment(ctx, attachment); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath) // best-effort cleanup; we're already returning the DB error
 		return nil, fmt.Errorf("failed to create DM attachment record: %w", err)
 	}
 

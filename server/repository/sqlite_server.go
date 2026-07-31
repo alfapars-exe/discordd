@@ -283,7 +283,7 @@ func (r *sqliteServerRepo) UpdateMemberPositions(ctx context.Context, userID str
 	if err != nil {
 		return fmt.Errorf("failed to prepare position update: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	for _, item := range items {
 		if _, err := stmt.ExecContext(ctx, item.Position, item.ID, userID); err != nil {

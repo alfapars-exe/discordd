@@ -29,6 +29,10 @@ func TestSniffContentType_recognizesMagicBytes(t *testing.T) {
 		{"gif", gifMagic, "image/gif"},
 		{"pdf", pdfMagic, "application/pdf"},
 		{"plaintext", []byte("hello world"), "text/plain"},
+		// The raw sniff for an OGG container is the generic
+		// "application/ogg" — RefineMIME (tested separately below) is
+		// what upgrades this to "audio/ogg" via the extension fallback.
+		{"ogg", oggMagic, "application/ogg"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

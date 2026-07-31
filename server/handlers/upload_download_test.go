@@ -316,7 +316,17 @@ func TestContentDisposition_EscapingAndInjection(t *testing.T) {
 		t.Errorf("missing RFC 5987 extended form: %q", got)
 	}
 	// The ASCII fallback segment (before filename*) must be pure ASCII.
-	fallback := got[:strings.Index(got, "filename*=")]
+	//
+	// Index is checked rather than sliced blind: on -1 the slice would panic
+	// and report a confusing index-out-of-range instead of the actual problem,
+	// which is that the extended form is missing. The assertion above already
+	// covers that case, so reaching here with -1 means the two checks have
+	// drifted apart.
+	extIdx := strings.Index(got, "filename*=")
+	if extIdx < 0 {
+		t.Fatalf("no filename*= segment to split on: %q", got)
+	}
+	fallback := got[:extIdx]
 	for i := 0; i < len(fallback); i++ {
 		if fallback[i] > 0x7e {
 			t.Errorf("non-ASCII byte %#x leaked into the fallback segment: %q", fallback[i], fallback)
