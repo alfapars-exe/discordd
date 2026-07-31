@@ -22,7 +22,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -33,9 +35,50 @@ import (
 
 // stubMessageService returns a fixed created message and records broadcasts.
 // Only Create/BroadcastCreate are exercised; the rest satisfy the interface.
+// Create fans the broadcast out on its own goroutine (logx.Go in
+// handlers/message.go), so `broadcasts` is written from that goroutine and read
+// from the test goroutine. Both halves need the mutex, and a positive assertion
+// additionally has to WAIT for the append rather than sampling whenever the
+// handler happens to return — without that the test either reads zero or, under
+// -race, reports the write/read pair as a data race (it did: CI runs
+// `go test -race`, a plain `go test` never saw it).
 type stubMessageService struct {
-	createFn   func(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error)
+	createFn func(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error)
+
+	mu         sync.Mutex
 	broadcasts []*models.Message
+}
+
+// broadcastCount reports how many broadcasts have landed so far.
+func (s *stubMessageService) broadcastCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.broadcasts)
+}
+
+// waitForBroadcasts blocks until n broadcasts have landed, or fails the test.
+// Use for POSITIVE assertions ("it does broadcast").
+func (s *stubMessageService) waitForBroadcasts(t *testing.T, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.broadcastCount() >= n {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Errorf("BroadcastCreate called %d times, want %d", s.broadcastCount(), n)
+}
+
+// assertNoBroadcast gives the goroutine a window to misbehave in, then asserts
+// it never did. Use for NEGATIVE assertions ("it must not broadcast") — reading
+// immediately would pass even if the broadcast were merely late.
+func (s *stubMessageService) assertNoBroadcast(t *testing.T) {
+	t.Helper()
+	time.Sleep(150 * time.Millisecond)
+	if n := s.broadcastCount(); n != 0 {
+		t.Errorf("broadcast sent %d time(s) for a message that was never created", n)
+	}
 }
 
 func (s *stubMessageService) GetByChannelID(_ context.Context, _, _, _ string, _ string, _ int) (*models.MessagePage, error) {
@@ -51,6 +94,8 @@ func (s *stubMessageService) Create(ctx context.Context, serverID, channelID, us
 }
 
 func (s *stubMessageService) BroadcastCreate(message *models.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.broadcasts = append(s.broadcasts, message)
 }
 
@@ -243,9 +288,7 @@ func TestMessageCreate_PartialUploadFailureReturns207(t *testing.T) {
 	// The message is broadcast regardless: recipients see it with whatever
 	// attachments made it, and the sender learns about the failures from the
 	// 207 body.
-	if len(msgSvc.broadcasts) != 1 {
-		t.Errorf("BroadcastCreate called %d times, want 1", len(msgSvc.broadcasts))
-	}
+	msgSvc.waitForBroadcasts(t, 1)
 }
 
 // TestMessageCreate_MultipartStatusMatrix walks the three outcomes so the 207
@@ -373,9 +416,7 @@ func TestMessageCreate_ServiceFailureIsNot207(t *testing.T) {
 	if len(upSvc.seen) != 0 {
 		t.Errorf("uploads attempted after message creation failed: %v", upSvc.seen)
 	}
-	if len(msgSvc.broadcasts) != 0 {
-		t.Errorf("broadcast sent for a message that was never created")
-	}
+	msgSvc.assertNoBroadcast(t)
 }
 
 // TestMessageCreate_E2EEFieldConsistency pins the two multipart-only
