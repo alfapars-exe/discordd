@@ -318,6 +318,17 @@ func (h *AuthHandler) WSTicket(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
+	// Bots must never obtain a human WS ticket. AuthMiddleware.Require accepts
+	// `hb_` bot tokens (middleware/auth.go), so without this gate a bot could
+	// mint a ticket, open `GET /ws` as a human client and receive DMs, voice
+	// state, presence and audit events — both bot isolation layers
+	// (hub_broadcast's BotReadableOps filter and client_dispatch's inbound op
+	// gate) key off Client.isBot, which the human path never sets.
+	// Bots have their own read-only route: `GET /api/bot/gateway`.
+	if user.IsBot {
+		pkg.ErrorWithMessage(w, http.StatusForbidden, "bots must connect via the bot gateway")
+		return
+	}
 	if h.wsTicketService == nil {
 		// Server started without WS ticket service — fall back to the
 		// legacy `?token=` path on the WS handler. Returning 503 here
