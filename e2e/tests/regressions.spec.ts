@@ -11,7 +11,7 @@ import {
   expectImageActuallyLoaded,
   messageList,
   openFreshChannel,
-  writeDisallowedFixture,
+  writeOversizeFixture,
   writePngFixture,
 } from "./helpers";
 
@@ -59,8 +59,17 @@ test("image attachment renders as a loaded <img>, not a file card", async ({ pag
  * bug this pins (A1, "attachments sometimes disappear") was rejected files
  * being dropped silently, so the user saw a short message with no explanation.
  *
- * Selecting one allowed PNG plus one disallowed .bin must do BOTH things: post
- * the message with exactly one attachment, and toast the rejection.
+ * Selecting one acceptable PNG plus one over-size file must do BOTH things:
+ * post the message with exactly one attachment, and toast the rejection.
+ *
+ * The rejected file used to be a disallowed TYPE. cdb6601f ("accept all file
+ * types; harden serving against stored XSS") removed the type allow-list on
+ * purpose — the boundary moved to serve time — and left `too_large` as the
+ * only rejection reason in fileValidation.ts. This test kept asserting the
+ * deleted "File type not allowed" toast and had been red ever since. It is
+ * retargeted rather than deleted, because the regression it guards (Bug A1,
+ * rejected files dropped SILENTLY) is still live: the partition/toast path
+ * is the same code, only the reason changed.
  */
 test("mixed upload posts the valid file and toasts the rejected one", async ({ page }) => {
   const stream = messageList(page);
@@ -71,12 +80,12 @@ test("mixed upload posts the valid file and toasts the rejected one", async ({ p
   await page
     .locator('input[type="file"]')
     .first()
-    .setInputFiles([writePngFixture(okName), writeDisallowedFixture(badName)]);
+    .setInputFiles([writePngFixture(okName), writeOversizeFixture(badName)]);
 
   // Rejection toast fires at selection time, before any send.
   const rejectionToast = page.getByRole("alert").filter({ hasText: badName });
   await expect(rejectionToast).toBeVisible({ timeout: 10_000 });
-  await expect(rejectionToast).toContainText(/File type not allowed/i);
+  await expect(rejectionToast).toContainText(/too large/i);
 
   const marker = `partition check ${stamp}`;
   await composer(page).fill(marker);
