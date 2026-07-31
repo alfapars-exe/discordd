@@ -79,7 +79,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Report:            handlers.NewReportHandler(svcs.Report, svcs.ReportUpload, cfg.Upload.MaxSize),
 		Gif:               handlers.NewGifHandler(cfg.Klipy.APIKey),
 		Device:            handlers.NewDeviceHandler(svcs.Device),
-		E2EE:              handlers.NewE2EEHandler(svcs.E2EE),
+		E2EE:              handlers.NewE2EEHandler(svcs.E2EE, limiters.GroupSession),
 		LinkPreview:       handlers.NewLinkPreviewHandler(svcs.LinkPreview),
 		Badge:             handlers.NewBadgeHandler(svcs.Badge, cfg.Upload.Dir),
 		Preferences:       handlers.NewPreferencesHandler(svcs.Preferences),

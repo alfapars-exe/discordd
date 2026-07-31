@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -49,8 +48,8 @@ type SoundboardService interface {
 	List(ctx context.Context, serverID string) ([]models.SoundboardSound, error)
 	Get(ctx context.Context, id string) (*models.SoundboardSound, error)
 	Create(ctx context.Context, serverID, userID string, req *models.CreateSoundboardSoundRequest, file multipart.File, header *multipart.FileHeader, durationMs int) (*models.SoundboardSound, error)
-	Update(ctx context.Context, id string, req *models.UpdateSoundboardSoundRequest) (*models.SoundboardSound, error)
-	Delete(ctx context.Context, id string) error
+	Update(ctx context.Context, serverID, id string, req *models.UpdateSoundboardSoundRequest) (*models.SoundboardSound, error)
+	Delete(ctx context.Context, serverID, id string) error
 	Play(ctx context.Context, serverID, soundID, userID, username string) error
 }
 
@@ -152,15 +151,8 @@ func (s *soundboardService) Create(
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
 
-	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
-	if err != nil {
-		return nil, fmt.Errorf("create file: %w", err)
-	}
-	defer destFile.Close()
-
-	if _, err := io.Copy(destFile, file); err != nil {
-		os.Remove(destPath)
-		return nil, fmt.Errorf("save file: %w", err)
+	if err := writeUploadFile(destPath, file, "create file", "save file", "finalize file"); err != nil {
+		return nil, err
 	}
 
 	sound := &models.SoundboardSound{
@@ -193,10 +185,19 @@ func (s *soundboardService) Create(
 	return created, nil
 }
 
-func (s *soundboardService) Update(ctx context.Context, id string, req *models.UpdateSoundboardSoundRequest) (*models.SoundboardSound, error) {
+func (s *soundboardService) Update(ctx context.Context, serverID, id string, req *models.UpdateSoundboardSoundRequest) (*models.SoundboardSound, error) {
 	sound, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+
+	// Cross-tenant guard: a sound fetched by ID must actually belong to the
+	// server in the URL, otherwise the caller could edit a sound living on a
+	// server they don't have ManageSoundboard on. ErrNotFound (not
+	// ErrBadRequest) so cross-tenant existence isn't leaked — mirrors
+	// resolveChannelInServer.
+	if sound.ServerID != serverID {
+		return nil, fmt.Errorf("%w: sound not found", pkg.ErrNotFound)
 	}
 
 	if req.Name != nil {
@@ -227,10 +228,17 @@ func (s *soundboardService) Update(ctx context.Context, id string, req *models.U
 	return updated, nil
 }
 
-func (s *soundboardService) Delete(ctx context.Context, id string) error {
+func (s *soundboardService) Delete(ctx context.Context, serverID, id string) error {
 	sound, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// Cross-tenant guard: must run before the disk delete below, otherwise a
+	// caller with ManageSoundboard on server A could delete an audio file
+	// belonging to server B by guessing its soundID.
+	if sound.ServerID != serverID {
+		return fmt.Errorf("%w: sound not found", pkg.ErrNotFound)
 	}
 
 	// Delete file from disk

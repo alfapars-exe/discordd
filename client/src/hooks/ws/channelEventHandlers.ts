@@ -12,7 +12,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { usePinStore } from "../../stores/pinStore";
 import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
-import { decryptChannelMessage } from "../../crypto/channelEncryption";
+import { decryptChannelMessage, markChannelRecipientsStale } from "../../crypto/channelEncryption";
 import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
@@ -203,6 +203,10 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
     case "channel_permission_update": {
       useChannelPermissionStore.getState().handleOverrideUpdate(msg.d);
       const cpUpd = msg.d;
+      // A permission override can change who is allowed to read the
+      // channel — the Sender Key recipient roster must be re-checked
+      // before the next send.
+      markChannelRecipientsStale(cpUpd.channel_id);
       useChannelStore.getState().fetchChannels().then(() => {
         const allVisible = useChannelStore.getState().categories.flatMap((c) => c.channels);
         if (!allVisible.some((ch) => ch.id === cpUpd.channel_id)) {
@@ -214,6 +218,9 @@ export async function handleChannelEvent(msg: WSMessage): Promise<boolean> {
     case "channel_permission_delete": {
       const cpDel = msg.d;
       useChannelPermissionStore.getState().handleOverrideDelete(cpDel.channel_id, cpDel.role_id);
+      // Removing an override can also change who can read the channel —
+      // same reasoning as channel_permission_update.
+      markChannelRecipientsStale(cpDel.channel_id);
       useChannelStore.getState().fetchChannels().then(() => {
         const allVisible = useChannelStore.getState().categories.flatMap((c) => c.channels);
         if (!allVisible.some((ch) => ch.id === cpDel.channel_id)) {

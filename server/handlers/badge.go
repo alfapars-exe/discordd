@@ -209,14 +209,16 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate filename
+	// Generate filename. The extension comes from the validated MIME, never
+	// from header.Filename: mimeToExt maps the allow-listed set above onto a
+	// fixed set of literals, so no part of the destination path is derived
+	// from client input. Trusting filepath.Ext(header.Filename) instead meant
+	// the stored extension could disagree with the actual bytes, and left the
+	// only thing standing between an attacker-chosen suffix and the filesystem
+	// as SafeJoin — correct, but the last line rather than the only one.
 	randBytes := make([]byte, 8)
 	_, _ = rand.Read(randBytes)
-	ext := filepath.Ext(header.Filename)
-	if ext == "" {
-		ext = mimeToExt(mime)
-	}
-	filename := fmt.Sprintf("badge_%s%s", hex.EncodeToString(randBytes), ext)
+	filename := fmt.Sprintf("badge_%s%s", hex.EncodeToString(randBytes), mimeToExt(mime))
 
 	// Ensure badges subdirectory exists. 0750: group-readable for the
 	// operator, closed to "other" so a shared host can't enumerate badges.
@@ -234,15 +236,46 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid filename")
 		return
 	}
-	dest, err := os.Create(destPath) // #nosec G304,G703 -- verified by SafeJoin (pkg/safepath.go: rejects .., absolute paths, and any resolved path outside baseDir)
+	// Write to a temp file in the same directory, then rename into place.
+	//
+	// Publishing atomically is the point: badges are served straight off disk
+	// by the static handler, so writing directly to destPath would expose a
+	// half-written icon at its final URL for the duration of the copy, and a
+	// failure would leave that truncated file behind for the cleanup to chase.
+	// os.Rename within one directory is atomic, so the icon either does not
+	// exist or is complete.
+	//
+	// It also keeps the cleanup path off any request-derived value: the temp
+	// name comes from os.CreateTemp, so nothing user-controlled reaches
+	// os.Remove. destPath itself is still SafeJoin-verified.
+	tmp, err := os.CreateTemp(badgesDir, ".upload-*")
 	if err != nil {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to save icon", err)
 		return
 	}
-	defer dest.Close()
+	tmpPath := tmp.Name()
+	// Safety net for the early returns below; the success path has already
+	// renamed the file away, so this becomes a no-op there.
+	defer func() { _ = os.Remove(tmpPath) }()
 
-	if _, err := io.Copy(dest, file); err != nil {
-		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", err)
+	// Close before any rename/remove — Windows refuses both while the handle
+	// is open. Close is checked because a buffered write failure surfaces
+	// there and nowhere else; discarding it would publish a truncated icon.
+	_, copyErr := io.Copy(tmp, file)
+	closeErr := tmp.Close()
+	if copyErr != nil {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", copyErr)
+		return
+	}
+	if closeErr != nil {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to finalize icon", closeErr)
+		return
+	}
+	// #nosec G703 -- destPath is the SafeJoin result verified above; tmpPath is
+	// os.CreateTemp's own name inside the same directory. Neither operand is a
+	// raw request value, but the taint tracker cannot see through SafeJoin.
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to publish icon", err)
 		return
 	}
 

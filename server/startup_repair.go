@@ -162,6 +162,13 @@ func repairOrphanedServerData(db *database.DB) {
 		{"channel_group_sessions", `DELETE FROM channel_group_sessions WHERE channel_id IN (
 			SELECT id FROM channels c WHERE NOT EXISTS (
 				SELECT 1 FROM servers s WHERE s.id = c.server_id))`},
+		// channel_sender_key_envelopes (migration 075, pentest C-03) --
+		// same orphan shape as channel_group_sessions above, same reason it
+		// needs an explicit repair statement rather than trusting its
+		// declared ON DELETE CASCADE (see repository/server_cascade.go).
+		{"channel_sender_key_envelopes", `DELETE FROM channel_sender_key_envelopes WHERE channel_id IN (
+			SELECT id FROM channels c WHERE NOT EXISTS (
+				SELECT 1 FROM servers s WHERE s.id = c.server_id))`},
 		// The DELETE target itself is referenced by its real table name, not
 		// an alias — this SQLite build rejects `DELETE FROM table alias`.
 		{"channels", `DELETE FROM channels WHERE NOT EXISTS (

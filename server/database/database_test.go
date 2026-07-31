@@ -155,7 +155,7 @@ func TestAllMigrationsApplyCleanly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded migrations failed to apply on a fresh DB: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	// Migration 070 (P0-BD-01) must have added the integrity-MAC column.
 	if _, err := db.Conn.Exec("SELECT backup_hmac FROM e2ee_key_backups LIMIT 0"); err != nil {

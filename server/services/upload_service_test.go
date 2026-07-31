@@ -77,7 +77,7 @@ func TestUploadService_acceptsPNG(t *testing.T) {
 	repo := &testutil.MockAttachmentRepo{}
 	svc, dir := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "photo.png", "image/png", pngMagic)
-	defer file.Close()
+	defer func() { _ = file.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestUploadService_recoversOggByExtension(t *testing.T) {
 	repo := &testutil.MockAttachmentRepo{}
 	svc, _ := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "clip.ogg", "audio/ogg", oggMagic)
-	defer file.Close()
+	defer func() { _ = file.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
 	if err != nil {
@@ -123,7 +123,7 @@ func TestUploadService_acceptsUnknownTypeAsOctetStream(t *testing.T) {
 	svc, dir := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "shell.exe", "application/octet-stream",
 		[]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05})
-	defer file.Close()
+	defer func() { _ = file.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
 	if err != nil {

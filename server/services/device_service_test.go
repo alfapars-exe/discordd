@@ -14,14 +14,16 @@ import (
 // mockDeviceRepo is a test-local DeviceRepository. Only the methods a test
 // wires are meaningful; the rest satisfy the interface as no-ops.
 type mockDeviceRepo struct {
-	RegisterFn          func(ctx context.Context, device *models.Device) error
-	ListByUserFn        func(ctx context.Context, userID string) ([]models.Device, error)
-	ListPublicByUserFn  func(ctx context.Context, userID string) ([]models.DevicePublicInfo, error)
-	DeleteFn            func(ctx context.Context, userID, deviceID string) error
-	UpdateSignedPrekeyFn func(ctx context.Context, userID, deviceID string, req *models.UpdateSignedPrekeyRequest) error
-	UploadPrekeysFn     func(ctx context.Context, userID, deviceID string, prekeys []models.OTPKey) error
-	CountPrekeysFn      func(ctx context.Context, userID, deviceID string) (int, error)
-	GetPrekeyBundlesFn  func(ctx context.Context, userID string) ([]models.PrekeyBundle, error)
+	RegisterFn               func(ctx context.Context, device *models.Device) error
+	GetByUserAndDeviceFn     func(ctx context.Context, userID, deviceID string) (*models.Device, error)
+	ListByUserFn             func(ctx context.Context, userID string) ([]models.Device, error)
+	ListPublicByUserFn       func(ctx context.Context, userID string) ([]models.DevicePublicInfo, error)
+	DeleteFn                 func(ctx context.Context, userID, deviceID string) error
+	UpdateSignedPrekeyFn     func(ctx context.Context, userID, deviceID string, req *models.UpdateSignedPrekeyRequest) error
+	UploadPrekeysFn          func(ctx context.Context, userID, deviceID string, prekeys []models.OTPKey) error
+	CountPrekeysFn           func(ctx context.Context, userID, deviceID string) (int, error)
+	GetPrekeyBundlesFn       func(ctx context.Context, userID string) ([]models.PrekeyBundle, error)
+	ListDeviceBundlesNoOTPFn func(ctx context.Context, userID string) ([]models.PrekeyBundle, error)
 }
 
 func (m *mockDeviceRepo) Register(ctx context.Context, device *models.Device) error {
@@ -30,7 +32,10 @@ func (m *mockDeviceRepo) Register(ctx context.Context, device *models.Device) er
 	}
 	return nil
 }
-func (m *mockDeviceRepo) GetByUserAndDevice(context.Context, string, string) (*models.Device, error) {
+func (m *mockDeviceRepo) GetByUserAndDevice(ctx context.Context, userID, deviceID string) (*models.Device, error) {
+	if m.GetByUserAndDeviceFn != nil {
+		return m.GetByUserAndDeviceFn(ctx, userID, deviceID)
+	}
 	return nil, nil
 }
 func (m *mockDeviceRepo) ListByUser(ctx context.Context, userID string) ([]models.Device, error) {
@@ -82,6 +87,12 @@ func (m *mockDeviceRepo) GetPrekeyBundles(ctx context.Context, userID string) ([
 	}
 	return nil, nil
 }
+func (m *mockDeviceRepo) ListDeviceBundlesNoOTP(ctx context.Context, userID string) ([]models.PrekeyBundle, error) {
+	if m.ListDeviceBundlesNoOTPFn != nil {
+		return m.ListDeviceBundlesNoOTPFn(ctx, userID)
+	}
+	return nil, nil
+}
 
 // captureHub records BroadcastToUser events for assertions.
 func captureHub(events *[]ws.Event) *testutil.MockBroadcaster {
@@ -105,7 +116,7 @@ func TestRegisterDevice(t *testing.T) {
 	t.Run("invalid request is rejected before any write", func(t *testing.T) {
 		called := false
 		repo := &mockDeviceRepo{RegisterFn: func(context.Context, *models.Device) error { called = true; return nil }}
-		svc := NewDeviceService(repo, &testutil.MockBroadcaster{})
+		svc := NewDeviceService(repo, &testutil.MockBroadcaster{}, nil)
 		if _, err := svc.RegisterDevice(ctx, "u1", &models.RegisterDeviceRequest{}); !errors.Is(err, pkg.ErrBadRequest) {
 			t.Errorf("err = %v, want ErrBadRequest", err)
 		}
@@ -117,7 +128,7 @@ func TestRegisterDevice(t *testing.T) {
 	t.Run("valid request registers and broadcasts an add", func(t *testing.T) {
 		var events []ws.Event
 		repo := &mockDeviceRepo{}
-		svc := NewDeviceService(repo, captureHub(&events))
+		svc := NewDeviceService(repo, captureHub(&events), nil)
 		if _, err := svc.RegisterDevice(ctx, "u1", validRegisterReq()); err != nil {
 			t.Fatalf("RegisterDevice: %v", err)
 		}
@@ -136,7 +147,7 @@ func TestRegisterDevice(t *testing.T) {
 			uploaded = true
 			return nil
 		}}
-		svc := NewDeviceService(repo, &testutil.MockBroadcaster{})
+		svc := NewDeviceService(repo, &testutil.MockBroadcaster{}, nil)
 		req := validRegisterReq()
 		req.OneTimePrekeys = []models.OTPKey{{PublicKey: "pk1"}}
 		if _, err := svc.RegisterDevice(ctx, "u1", req); err != nil {
@@ -150,7 +161,7 @@ func TestRegisterDevice(t *testing.T) {
 
 func TestListDevices_NilNormalizesToEmpty(t *testing.T) {
 	repo := &mockDeviceRepo{ListByUserFn: func(context.Context, string) ([]models.Device, error) { return nil, nil }}
-	svc := NewDeviceService(repo, &testutil.MockBroadcaster{})
+	svc := NewDeviceService(repo, &testutil.MockBroadcaster{}, nil)
 	got, err := svc.ListDevices(context.Background(), "u1")
 	if err != nil {
 		t.Fatalf("ListDevices: %v", err)
@@ -167,7 +178,7 @@ func TestDeleteDevice_BroadcastsRemoval(t *testing.T) {
 	var events []ws.Event
 	deleted := false
 	repo := &mockDeviceRepo{DeleteFn: func(context.Context, string, string) error { deleted = true; return nil }}
-	svc := NewDeviceService(repo, captureHub(&events))
+	svc := NewDeviceService(repo, captureHub(&events), nil)
 	if err := svc.DeleteDevice(context.Background(), "u1", "dev-1"); err != nil {
 		t.Fatalf("DeleteDevice: %v", err)
 	}
@@ -182,8 +193,57 @@ func TestDeleteDevice_BroadcastsRemoval(t *testing.T) {
 	}
 }
 
+// TestRegisterDevice_FansOutToUserServers proves BULGU 4 (pentest C-03
+// follow-up finding 4): a new device is broadcast not just to the owner's
+// own sessions (BroadcastToUser) but to every server the owner shares with
+// other members (BroadcastToServer) -- otherwise those members' senders
+// never learn the device exists and keep sealing envelopes for a roster that
+// silently left one device out.
+func TestRegisterDevice_FansOutToUserServers(t *testing.T) {
+	repo := &mockDeviceRepo{}
+	var serverBroadcasts []string
+	hub := &testutil.MockBroadcaster{
+		BroadcastToServerFn: func(serverID string, _ ws.Event) { serverBroadcasts = append(serverBroadcasts, serverID) },
+	}
+	serverLister := &testutil.MockServerRepo{
+		GetMemberServerIDsFn: func(context.Context, string) ([]string, error) { return []string{"srv-1", "srv-2"}, nil },
+	}
+	svc := NewDeviceService(repo, hub, serverLister)
+
+	if _, err := svc.RegisterDevice(context.Background(), "u1", validRegisterReq()); err != nil {
+		t.Fatalf("RegisterDevice: %v", err)
+	}
+
+	if len(serverBroadcasts) != 2 {
+		t.Fatalf("BroadcastToServer called for %v, want exactly [srv-1 srv-2]", serverBroadcasts)
+	}
+}
+
+// TestDeleteDevice_FansOutToUserServers is the removal-side twin of the test
+// above: other members' senders should stop sealing envelopes for a device
+// that's gone, not just the owner's own other sessions.
+func TestDeleteDevice_FansOutToUserServers(t *testing.T) {
+	repo := &mockDeviceRepo{}
+	var serverBroadcasts []string
+	hub := &testutil.MockBroadcaster{
+		BroadcastToServerFn: func(serverID string, _ ws.Event) { serverBroadcasts = append(serverBroadcasts, serverID) },
+	}
+	serverLister := &testutil.MockServerRepo{
+		GetMemberServerIDsFn: func(context.Context, string) ([]string, error) { return []string{"srv-1"}, nil },
+	}
+	svc := NewDeviceService(repo, hub, serverLister)
+
+	if err := svc.DeleteDevice(context.Background(), "u1", "dev-1"); err != nil {
+		t.Fatalf("DeleteDevice: %v", err)
+	}
+
+	if len(serverBroadcasts) != 1 || serverBroadcasts[0] != "srv-1" {
+		t.Fatalf("BroadcastToServer called for %v, want exactly [srv-1]", serverBroadcasts)
+	}
+}
+
 func TestUpdateSignedPrekey_InvalidRejected(t *testing.T) {
-	svc := NewDeviceService(&mockDeviceRepo{}, &testutil.MockBroadcaster{})
+	svc := NewDeviceService(&mockDeviceRepo{}, &testutil.MockBroadcaster{}, nil)
 	if err := svc.UpdateSignedPrekey(context.Background(), "u1", "dev-1", &models.UpdateSignedPrekeyRequest{}); !errors.Is(err, pkg.ErrBadRequest) {
 		t.Errorf("err = %v, want ErrBadRequest", err)
 	}
@@ -205,7 +265,7 @@ func TestGetPrekeyBundles_EmitsPrekeyLowBelowThreshold(t *testing.T) {
 			return PrekeyLowThreshold + 50, nil // above -> no alert
 		},
 	}
-	svc := NewDeviceService(repo, captureHub(&events))
+	svc := NewDeviceService(repo, captureHub(&events), nil)
 	if _, err := svc.GetPrekeyBundles(context.Background(), "u1"); err != nil {
 		t.Fatalf("GetPrekeyBundles: %v", err)
 	}

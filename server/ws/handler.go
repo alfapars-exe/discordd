@@ -444,6 +444,17 @@ func (h *Handler) authorizeUser(w http.ResponseWriter, r *http.Request, claims *
 			http.Error(w, "account suspended", http.StatusForbidden)
 			return "", "", "", false
 		}
+		// Defense in depth against the ticket path (handlers.WSTicket rejects
+		// bots at mint time). `HandleConnection` is the *human* gateway; bots
+		// have their own read-only route (`GET /api/bot/gateway`,
+		// HandleBotConnection), which builds its Client with isBot:true. A bot
+		// reaching this function is therefore always wrong — reject rather
+		// than propagate isBot, so the connection never exists at all.
+		if user.IsBot {
+			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: bot on human gateway", nil)
+			http.Error(w, "bots must use the bot gateway", http.StatusForbidden)
+			return "", "", "", false
+		}
 		// Always sync username from the live DB row. The ticket path
 		// (above) synthesises an empty-Username claims object, and even
 		// the JWT path can carry a stale username if the user renamed

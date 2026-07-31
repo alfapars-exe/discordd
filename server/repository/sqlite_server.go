@@ -283,7 +283,7 @@ func (r *sqliteServerRepo) UpdateMemberPositions(ctx context.Context, userID str
 	if err != nil {
 		return fmt.Errorf("failed to prepare position update: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	for _, item := range items {
 		if _, err := stmt.ExecContext(ctx, item.Position, item.ID, userID); err != nil {
@@ -376,10 +376,25 @@ func (r *sqliteServerRepo) UpdateLastVoiceActivity(ctx context.Context, serverID
 
 func (r *sqliteServerRepo) GetMemberServerIDs(ctx context.Context, userID string) ([]string, error) {
 	query := `SELECT server_id FROM server_members WHERE user_id = ?`
+	return r.queryStringColumn(ctx, "failed to get member server ids", "server id", query, userID)
+}
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
+// ListMemberIDs returns every member user ID of a server (online or not).
+func (r *sqliteServerRepo) ListMemberIDs(ctx context.Context, serverID string) ([]string, error) {
+	query := `SELECT user_id FROM server_members WHERE server_id = ?`
+	return r.queryStringColumn(ctx, "failed to list member ids", "member id", query, serverID)
+}
+
+// queryStringColumn runs a single-string-column query and collects the
+// results, centralizing the rows.Next()/Scan()/rows.Err() loop shared by
+// GetMemberServerIDs and ListMemberIDs. outerErr labels the query-failure
+// wrap; scanLabel names a single row's value for the scan-failure wrap and
+// is reused with a trailing "s" for the rows.Err() wrap -- callers pass
+// their own historical labels so wrapped error text is unchanged.
+func (r *sqliteServerRepo) queryStringColumn(ctx context.Context, outerErr, scanLabel, query string, args ...any) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get member server ids: %w", err)
+		return nil, fmt.Errorf("%s: %w", outerErr, err)
 	}
 	defer rows.Close()
 
@@ -387,13 +402,13 @@ func (r *sqliteServerRepo) GetMemberServerIDs(ctx context.Context, userID string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan server id: %w", err)
+			return nil, fmt.Errorf("failed to scan %s: %w", scanLabel, err)
 		}
 		ids = append(ids, id)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating server ids: %w", err)
+		return nil, fmt.Errorf("error iterating %ss: %w", scanLabel, err)
 	}
 
 	return ids, nil

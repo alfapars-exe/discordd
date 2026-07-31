@@ -268,8 +268,12 @@ func (r *sqliteDeviceRepo) GetPrekeyBundle(ctx context.Context, userID, deviceID
 	return bundle, nil
 }
 
-// GetPrekeyBundles returns prekey bundles for all of a user's devices.
-func (r *sqliteDeviceRepo) GetPrekeyBundles(ctx context.Context, userID string) ([]models.PrekeyBundle, error) {
+// listDeviceRowsForBundles returns the base bundle fields (everything except
+// one-time prekeys) for every device of userID. Shared by GetPrekeyBundles
+// (which then consumes an OTP per device) and ListDeviceBundlesNoOTP (which
+// deliberately does not), so the two never drift on which columns/ordering
+// they read.
+func (r *sqliteDeviceRepo) listDeviceRowsForBundles(ctx context.Context, userID string) ([]models.PrekeyBundle, error) {
 	query := `
 		SELECT device_id, registration_id, identity_key, signing_key,
 			signed_prekey_id, signed_prekey, signed_prekey_signature
@@ -297,6 +301,18 @@ func (r *sqliteDeviceRepo) GetPrekeyBundles(ctx context.Context, userID string) 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	return bundles, nil
+}
+
+// GetPrekeyBundles returns prekey bundles for all of a user's devices,
+// consuming one one-time prekey per device. Only call this for a real X3DH
+// handshake initiation — see ListDeviceBundlesNoOTP for a read that does not
+// touch the OTP pool.
+func (r *sqliteDeviceRepo) GetPrekeyBundles(ctx context.Context, userID string) ([]models.PrekeyBundle, error) {
+	bundles, err := r.listDeviceRowsForBundles(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 
 	for i := range bundles {
 		otp, err := r.ConsumePrekey(ctx, userID, bundles[i].DeviceID)
@@ -313,6 +329,29 @@ func (r *sqliteDeviceRepo) GetPrekeyBundles(ctx context.Context, userID string) 
 		return nil, nil
 	}
 
+	return bundles, nil
+}
+
+// ListDeviceBundlesNoOTP returns the same bundle fields as GetPrekeyBundles
+// for all of a user's devices WITHOUT consuming any one-time prekeys —
+// one_time_prekey_id/one_time_prekey are always nil on the result.
+//
+// Pentest C-03 follow-up finding 1: the sender-key-recipients roster used to
+// call GetPrekeyBundles, silently draining one OTP per device on every
+// roster fetch (far more often than a genuine first contact — the client
+// re-fetches the roster on every "stale" channel), which also bypassed the
+// deviceService.GetPrekeyBundles wrapper's prekey_low refill signal. This
+// variant is for exactly that "just show me the roster" case; real X3DH
+// initiation still goes through GetPrekeyBundles via
+// /api/users/{userId}/prekey-bundles.
+func (r *sqliteDeviceRepo) ListDeviceBundlesNoOTP(ctx context.Context, userID string) ([]models.PrekeyBundle, error) {
+	bundles, err := r.listDeviceRowsForBundles(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(bundles) == 0 {
+		return nil, nil
+	}
 	return bundles, nil
 }
 

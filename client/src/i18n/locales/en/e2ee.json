@@ -49,6 +49,7 @@
 
   "decryptionError": "Unable to decrypt this message",
   "encryptionFailed": "Failed to encrypt message",
+  "rosterSuppressed": "Message not sent: the server listed no recipients for this channel even though other members can read it. Your message would have been unreadable.",
   "encryptedMessage": "Encrypted message",
   "e2eeIndicator": "End-to-end encrypted",
 

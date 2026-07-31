@@ -385,7 +385,7 @@ func (s *livekitAdminService) GetInstanceMetrics(ctx context.Context, instanceID
 	if reqErr == nil {
 		resp, httpErr := s.httpClient.Do(req)
 		if httpErr == nil {
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 			if resp.StatusCode == http.StatusOK {
 				body, readErr := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
 				if readErr == nil {

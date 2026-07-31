@@ -19,7 +19,7 @@ var reactionLogger = logx.Component("service.reaction")
 const MaxEmojiLength = 32
 
 type ReactionService interface {
-	ToggleReaction(ctx context.Context, messageID, userID, emoji string) error
+	ToggleReaction(ctx context.Context, serverID, messageID, userID, emoji string) error
 }
 
 type reactionService struct {
@@ -48,7 +48,7 @@ func NewReactionService(
 
 // ToggleReaction adds or removes an emoji reaction on a message.
 // Same endpoint toggles: call again to remove.
-func (s *reactionService) ToggleReaction(ctx context.Context, messageID, userID, emoji string) error {
+func (s *reactionService) ToggleReaction(ctx context.Context, serverID, messageID, userID, emoji string) error {
 	if emoji == "" {
 		return fmt.Errorf("%w: emoji is required", pkg.ErrBadRequest)
 	}
@@ -60,6 +60,24 @@ func (s *reactionService) ToggleReaction(ctx context.Context, messageID, userID,
 	message, err := s.messageRepo.GetByID(ctx, messageID)
 	if err != nil {
 		return err
+	}
+
+	// Scope: the message's channel must belong to serverID before we touch
+	// the reaction store — otherwise a member of server A could react to a
+	// message living in server B by guessing/observing its messageID.
+	channel, err := resolveChannelInServer(ctx, s.channelRepo, serverID, message.ChannelID)
+	if err != nil {
+		return err
+	}
+
+	// Actor must be able to view + read this channel (mirrors the
+	// pinService.GetPinnedMessages gate).
+	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, message.ChannelID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve channel permissions: %w", err)
+	}
+	if !models.PermCanReadChannel(channelPerms) {
+		return fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
 	added, err := s.reactionRepo.Toggle(ctx, messageID, userID, emoji)
@@ -83,12 +101,6 @@ func (s *reactionService) ToggleReaction(ctx context.Context, messageID, userID,
 			"message_author_id": message.UserID,
 			"added":             added,
 		},
-	}
-
-	// Scope permission checks to the channel's server members.
-	channel, chErr := s.channelRepo.GetByID(ctx, message.ChannelID)
-	if chErr != nil || channel == nil {
-		return nil
 	}
 
 	// One bulk resolve for the whole recipient list — resolving per online

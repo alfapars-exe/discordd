@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"os"
 	"strings"
@@ -71,15 +70,8 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
-	}
-	defer destFile.Close()
-
-	if _, err := io.Copy(destFile, file); err != nil {
-		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
+	if err := writeUploadFile(destPath, file, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
+		return nil, err
 	}
 
 	fileSize := header.Size
@@ -94,7 +86,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 	}
 
 	if err := s.feedbackRepo.CreateAttachment(ctx, att); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath) // best-effort cleanup; we're already returning the DB error
 		return nil, fmt.Errorf("failed to create feedback attachment record: %w", err)
 	}
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
 )
 
@@ -965,4 +966,239 @@ func TestResolveChannelPermissionsBulk_RepoErrors(t *testing.T) {
 			t.Fatal("expected error when the override lookup fails")
 		}
 	})
+}
+
+// ─── N-03: SetOverride / DeleteOverride escalation + hierarchy guards ───
+//
+// Both are gated on the actor's own CHANNEL-scoped effective permission
+// (ResolveChannelPermissions), not the server-wide role OR the route's
+// authServerPerm(PermManageChannels) middleware already checked, and on the
+// role-hierarchy rule RoleService applies to role edits (Position vs the
+// actor's highest role position).
+
+const (
+	n03ServerID  = "srv-n03"
+	n03ChannelID = "chan-n03"
+	n03ActorID   = "actor-n03"
+	n03TargetID  = "role-target"
+)
+
+// n03Fixture wires a channel, a target role and an actor whose own role has
+// the given Position/Permissions — everything checkChannelOverrideHierarchy
+// and checkOverrideEscalation read.
+type n03Fixture struct {
+	actorPosition    int
+	actorPermissions models.Permission
+	targetPosition   int
+	// actorChannelOverride optionally further restricts/extends the actor's
+	// own channel-scoped permission, proving the escalation check reads the
+	// CHANNEL-scoped resolution and not just the raw role bits.
+	actorChannelOverride *models.ChannelPermissionOverride
+}
+
+func (f n03Fixture) build(setCalled *bool, deleteCalled *bool) ChannelPermissionService {
+	const actorRoleID = "role-actor"
+
+	actorRole := models.Role{ID: actorRoleID, Position: f.actorPosition, Permissions: f.actorPermissions}
+	targetRole := &models.Role{ID: n03TargetID, ServerID: n03ServerID, Position: f.targetPosition}
+
+	permRepo := &testutil.MockChannelPermRepo{
+		GetByChannelAndRolesFn: func(_ context.Context, _ string, _ []string) ([]models.ChannelPermissionOverride, error) {
+			if f.actorChannelOverride != nil {
+				return []models.ChannelPermissionOverride{*f.actorChannelOverride}, nil
+			}
+			return nil, nil
+		},
+		SetFn: func(_ context.Context, _ *models.ChannelPermissionOverride) error {
+			if setCalled != nil {
+				*setCalled = true
+			}
+			return nil
+		},
+		DeleteFn: func(_ context.Context, _, _ string) error {
+			if deleteCalled != nil {
+				*deleteCalled = true
+			}
+			return nil
+		},
+	}
+	roleRepo := &testutil.MockRoleRepo{
+		GetByUserIDAndServerFn: func(_ context.Context, userID, _ string) ([]models.Role, error) {
+			if userID == n03ActorID {
+				return []models.Role{actorRole}, nil
+			}
+			return nil, nil
+		},
+		GetByIDFn: func(_ context.Context, id string) (*models.Role, error) {
+			if id == n03TargetID {
+				return targetRole, nil
+			}
+			return nil, errors.New("unknown role")
+		},
+	}
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+			return &models.Channel{ID: id, ServerID: n03ServerID}, nil
+		},
+	}
+
+	return newTestChannelPermService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+}
+
+func TestSetOverride_RejectsAllowBitActorDoesNotHold(t *testing.T) {
+	fixture := n03Fixture{
+		actorPosition:    5,
+		actorPermissions: models.PermManageChannels, // ManageChannels is not channel-overridable and grants nothing here
+		targetPosition:   3,
+	}
+	var setCalled bool
+	svc := fixture.build(&setCalled, nil)
+
+	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
+	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+	if setCalled {
+		t.Error("permRepo.Set must not be called when the actor lacks the requested Allow bit")
+	}
+}
+
+func TestSetOverride_RejectsDenyBitActorDoesNotHold(t *testing.T) {
+	// KULLANICI KARARI: Deny is checked exactly like Allow — denying a bit
+	// the actor doesn't hold can lock a higher-privileged role out of the
+	// channel, the mirror image of granting escalated privilege.
+	fixture := n03Fixture{
+		actorPosition:    5,
+		actorPermissions: models.PermManageChannels,
+		targetPosition:   3,
+	}
+	var setCalled bool
+	svc := fixture.build(&setCalled, nil)
+
+	req := &models.SetOverrideRequest{Deny: models.PermManageMessages}
+	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+	if setCalled {
+		t.Error("permRepo.Set must not be called when the actor lacks the requested Deny bit")
+	}
+}
+
+func TestSetOverride_AllowsBitActorHolds(t *testing.T) {
+	fixture := n03Fixture{
+		actorPosition:    5,
+		actorPermissions: models.PermManageChannels | models.PermManageMessages,
+		targetPosition:   3,
+	}
+	var setCalled bool
+	svc := fixture.build(&setCalled, nil)
+
+	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
+	if err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !setCalled {
+		t.Error("permRepo.Set must be called when the actor holds every requested bit")
+	}
+}
+
+func TestSetOverride_RejectsEqualOrHigherTargetPosition(t *testing.T) {
+	fixture := n03Fixture{
+		actorPosition:    5,
+		actorPermissions: models.PermManageChannels | models.PermManageMessages,
+		targetPosition:   5, // equal to actor's own position
+	}
+	var setCalled bool
+	svc := fixture.build(&setCalled, nil)
+
+	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
+	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for an equal-or-higher target role position, got %v", err)
+	}
+	if setCalled {
+		t.Error("permRepo.Set must not be called when the hierarchy check fails")
+	}
+}
+
+func TestSetOverride_AdminBypassesEscalationCheck(t *testing.T) {
+	fixture := n03Fixture{
+		actorPosition:    10,
+		actorPermissions: models.PermAdmin,
+		targetPosition:   3,
+	}
+	var setCalled bool
+	svc := fixture.build(&setCalled, nil)
+
+	// A bit the admin doesn't literally hold via a specific flag — PermAdmin
+	// bypasses the check entirely (ResolveChannelPermissions resolves admin
+	// to PermAll).
+	req := &models.SetOverrideRequest{Allow: models.PermManageMessages, Deny: models.PermConnectVoice}
+	if err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req); err != nil {
+		t.Fatalf("admin actor must bypass the escalation check: %v", err)
+	}
+	if !setCalled {
+		t.Error("permRepo.Set must be called for the admin bypass case")
+	}
+}
+
+func TestSetOverride_ChannelScopedNotServerWide(t *testing.T) {
+	// The actor's role grants ManageMessages server-wide, but this specific
+	// channel has a Deny override stripping it back out — the escalation
+	// check must use the CHANNEL-scoped resolution, not the raw role bits,
+	// or an actor demoted on one channel could still re-grant the bit there.
+	fixture := n03Fixture{
+		actorPosition:    5,
+		actorPermissions: models.PermManageChannels | models.PermManageMessages,
+		targetPosition:   3,
+		actorChannelOverride: &models.ChannelPermissionOverride{
+			ChannelID: n03ChannelID, RoleID: "role-actor", Deny: models.PermManageMessages,
+		},
+	}
+	var setCalled bool
+	svc := fixture.build(&setCalled, nil)
+
+	req := &models.SetOverrideRequest{Allow: models.PermManageMessages}
+	err := svc.SetOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID, req)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden once the channel-scoped override strips the actor's bit, got %v", err)
+	}
+	if setCalled {
+		t.Error("permRepo.Set must not be called once the channel override removes the actor's bit")
+	}
+}
+
+func TestDeleteOverride_RejectsEqualOrHigherTargetPosition(t *testing.T) {
+	fixture := n03Fixture{
+		actorPosition:  5,
+		targetPosition: 5,
+	}
+	var deleteCalled bool
+	svc := fixture.build(nil, &deleteCalled)
+
+	err := svc.DeleteOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for an equal-or-higher target role position, got %v", err)
+	}
+	if deleteCalled {
+		t.Error("permRepo.Delete must not be called when the hierarchy check fails")
+	}
+}
+
+func TestDeleteOverride_AllowsLowerPositionTarget(t *testing.T) {
+	fixture := n03Fixture{
+		actorPosition:  5,
+		targetPosition: 3,
+	}
+	var deleteCalled bool
+	svc := fixture.build(nil, &deleteCalled)
+
+	if err := svc.DeleteOverride(context.Background(), n03ServerID, n03ChannelID, n03TargetID, n03ActorID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !deleteCalled {
+		t.Error("permRepo.Delete must be called once the hierarchy check passes")
+	}
 }

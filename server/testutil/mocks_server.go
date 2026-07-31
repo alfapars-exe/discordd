@@ -24,6 +24,7 @@ type MockServerRepo struct {
 	IsMemberFn                    func(ctx context.Context, serverID, userID string) (bool, error)
 	GetMemberCountFn              func(ctx context.Context, serverID string) (int, error)
 	GetMemberServerIDsFn          func(ctx context.Context, userID string) ([]string, error)
+	ListMemberIDsFn               func(ctx context.Context, serverID string) ([]string, error)
 	GetNicknameFn                 func(ctx context.Context, serverID, userID string) (*string, error)
 	SetNicknameFn                 func(ctx context.Context, serverID, userID string, nickname *string) error
 	GetNicknamesForServerFn       func(ctx context.Context, serverID string) (map[string]string, error)
@@ -91,6 +92,12 @@ func (m *MockServerRepo) GetMemberCount(ctx context.Context, serverID string) (i
 func (m *MockServerRepo) GetMemberServerIDs(ctx context.Context, userID string) ([]string, error) {
 	if m.GetMemberServerIDsFn != nil {
 		return m.GetMemberServerIDsFn(ctx, userID)
+	}
+	return nil, nil
+}
+func (m *MockServerRepo) ListMemberIDs(ctx context.Context, serverID string) ([]string, error) {
+	if m.ListMemberIDsFn != nil {
+		return m.ListMemberIDsFn(ctx, serverID)
 	}
 	return nil, nil
 }

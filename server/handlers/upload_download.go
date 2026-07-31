@@ -131,6 +131,38 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// Reject non-canonical paths. The authorization decision below keys off the
+	// exact fileURL string recorded at upload time, while serveFile resolves the
+	// bytes through path.Clean. When those two disagree the ACL is bypassed
+	// entirely: `/api/uploads/%2e/<name>` arrives as `./<name>` (Go's ServeMux
+	// does not canonicalise %2e into a path segment), misses both attachment
+	// tables, is therefore classified MediaPublic — and then path.Clean folds it
+	// back to the real file. A private DM or channel attachment is served with
+	// no authentication at all.
+	//
+	// Rejecting is safe because every server-generated name is already canonical:
+	// a single segment {16 hex}_{sanitizeFilename} (services.UploadService), or
+	// the two-segment "soundboard/{16 hex}_…", and sanitizeFilename strips
+	// separators. So a non-canonical request is never legitimate.
+	//
+	// Fixing it here rather than in MediaAccessService is deliberate: that
+	// service's MediaPublic fallback is what serves avatars, server icons,
+	// soundboard samples and branding — none of which have an attachment row —
+	// so making it fail-closed would break every public asset. (Badge icons are
+	// NOT in that set: they are returned as /uploads/badges/… without the /api
+	// prefix and never reach this handler.) The defect was two views of one
+	// path, so the canonical form is enforced once, here.
+	//
+	// INVARIANT: this equalises the two path STRINGS, which is sufficient only
+	// while the ACL lookup and the disk read agree on case. The lookup is a
+	// BINARY-collated `WHERE file_url = ?`; the read is os.Open. On a
+	// case-insensitive filesystem an upper-cased hex variant would miss the row
+	// and still open the file. Production is a case-sensitive Linux container —
+	// if that ever changes, this guard needs a name-shape check too.
+	if path.Clean("/"+name) != "/"+name {
+		http.NotFound(w, r)
+		return
+	}
 
 	fileURL := "/api/uploads/" + name
 
@@ -286,7 +318,7 @@ func (h *UploadDownloadHandler) serveFile(w http.ResponseWriter, r *http.Request
 		http.NotFound(w, r)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 
 	fi, err := f.Stat()
 	if err != nil || fi.IsDir() {

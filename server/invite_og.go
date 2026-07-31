@@ -43,7 +43,8 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 	preview, err := inviteSvc.GetPreview(r.Context(), code)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, `<!DOCTYPE html><html><head>
+		// Error means the crawler already disconnected — nothing to do.
+		_, _ = fmt.Fprint(w, `<!DOCTYPE html><html><head>
 <meta property="og:title" content="HiChat! — Davet">
 <meta property="og:description" content="Bu davet geçersiz veya süresi dolmuş">
 <meta property="og:site_name" content="HiChat!">
@@ -80,7 +81,8 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 	// members" integer format with no injectable content. gosec's G705 taint
 	// tracker does not appear to recognise html.EscapeString as a sanitizer,
 	// but it escapes the exact character set html/template would here.
-	fmt.Fprintf(w, `<!DOCTYPE html>
+	// Fprintf errors below mean the crawler already disconnected — nothing to do.
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -92,24 +94,25 @@ func serveInviteOG(w http.ResponseWriter, r *http.Request, inviteSvc services.In
 		html.EscapeString(rawTitle), description, html.EscapeString(inviteURL))
 
 	if imageURL != "" {
-		fmt.Fprintf(w, `
+		_, _ = fmt.Fprintf(w, `
 <meta property="og:image" content="%s">`, html.EscapeString(imageURL))
 	}
 
 	// #nosec G705 -- same reasoning as the DOCTYPE Fprintf above: rawTitle is
 	// escaped inline, description is a pure integer format.
-	fmt.Fprintf(w, `
+	_, _ = fmt.Fprintf(w, `
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="%s">
 <meta name="twitter:description" content="%s">`,
 		html.EscapeString(rawTitle), description)
 
 	if imageURL != "" {
-		fmt.Fprintf(w, `
+		_, _ = fmt.Fprintf(w, `
 <meta name="twitter:image" content="%s">`, html.EscapeString(imageURL))
 	}
 
-	fmt.Fprint(w, `
+	// Error means the crawler already disconnected — nothing to do.
+	_, _ = fmt.Fprint(w, `
 </head>
 <body></body>
 </html>`)

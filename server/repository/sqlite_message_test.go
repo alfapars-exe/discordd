@@ -597,7 +597,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 		newMessage(t, ctx, repo, msgChannel, msgAuthor, "alakasiz dolgu mesaji")
 		msg := newMessage(t, ctx, repo, msgChannel, msgAuthor, "parolam hunter2 olarak ayarlandi")
 
-		before, err := search.Search(ctx, "hunter2", "srv-1", nil, 25, 0)
+		before, err := search.Search(ctx, "hunter2", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search: %v", err)
 		}
@@ -611,7 +611,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 			t.Fatalf("Update: %v", err)
 		}
 
-		after, err := search.Search(ctx, "hunter2", "srv-1", nil, 25, 0)
+		after, err := search.Search(ctx, "hunter2", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search after edit: %v", err)
 		}
@@ -622,7 +622,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 
 		// The new text must be findable, i.e. a fix must not simply stop
 		// indexing edits.
-		fresh, err := search.Search(ctx, "degistirdim", "srv-1", nil, 25, 0)
+		fresh, err := search.Search(ctx, "degistirdim", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search new term: %v", err)
 		}
@@ -681,7 +681,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 		// next message inserted lands on the freed rowid and inherits the
 		// deleted message's tokens.
 		fresh := newMessage(t, ctx, repo, msgChannel, msgAuthor, "tamamen alakasiz")
-		res, err := search.Search(ctx, "gizli", "srv-1", nil, 25, 0)
+		res, err := search.Search(ctx, "gizli", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search after delete: %v", err)
 		}
@@ -691,7 +691,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 		}
 
 		// The replacement message must still be findable by its OWN text.
-		own, err := search.Search(ctx, "alakasiz", "srv-1", nil, 25, 0)
+		own, err := search.Search(ctx, "alakasiz", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search for the new message: %v", err)
 		}
@@ -729,7 +729,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 			t.Errorf("FTS integrity-check after deleting an unindexed message: %v", err)
 		}
 
-		res, err := search.Search(ctx, "kalici", "srv-1", nil, 25, 0)
+		res, err := search.Search(ctx, "kalici", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search: %v", err)
 		}

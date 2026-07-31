@@ -259,7 +259,7 @@ func (r *sqliteRoleRepo) UpdatePositions(ctx context.Context, items []models.Pos
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	for _, item := range items {
 		result, err := stmt.ExecContext(ctx, item.Position, item.ID)

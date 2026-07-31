@@ -10,7 +10,7 @@ func TestRawDB_returnsSqlDBDirectly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	if got := RawDB(db); got != db {
 		t.Errorf("RawDB(*sql.DB) = %v, want the same *sql.DB back", got)
@@ -50,7 +50,7 @@ func TestRawDB_returnsNilForATransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op once Commit succeeds (ErrTxDone), expected on the happy path
 
 	// A *sql.Tx has nothing further to unwrap — there is no raw *sql.DB to
 	// hand back, and callers (e.g. sqliteUserRepo constructed inside another

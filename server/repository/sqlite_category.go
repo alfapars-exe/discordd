@@ -132,13 +132,13 @@ func (r *sqliteCategoryRepo) UpdatePositions(ctx context.Context, items []models
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op once Commit succeeds (ErrTxDone), expected on the happy path
 
 	stmt, err := tx.PrepareContext(ctx, `UPDATE categories SET position = ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	for _, item := range items {
 		result, err := stmt.ExecContext(ctx, item.Position, item.ID)
