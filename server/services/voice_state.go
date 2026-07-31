@@ -23,6 +23,73 @@ func (s *voiceService) broadcastToServer(serverID string, event ws.Event) {
 	s.hub.BroadcastToServer(serverID, event)
 }
 
+// authorizeJoin gates JoinChannel (N-01): the caller must be an active
+// member of the channel's server AND hold PermConnectVoice on the channel
+// — unless they're the target of a live force-move grant for this exact
+// channel (see MoveUser in voice_admin.go).
+func (s *voiceService) authorizeJoin(ctx context.Context, userID, serverID, channelID string) error {
+	isMember, err := s.afkTimeoutGetter.IsMember(ctx, serverID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to check server membership: %w", err)
+	}
+	if !isMember {
+		return fmt.Errorf("%w: not a member of this server", pkg.ErrForbidden)
+	}
+
+	effectivePerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve channel permissions: %w", err)
+	}
+	if effectivePerms.Has(models.PermConnectVoice) {
+		return nil
+	}
+	// Already placed in this exact channel — accept without PermConnectVoice.
+	//
+	// This is what actually carries the force-move case. The client requests
+	// the LiveKit token BEFORE it sends voice_join (voiceEventHandlers.ts), and
+	// GenerateToken *consumes* the one-time grant, so by the time we get here
+	// hasForceMoveGrant is already false and the grant check below never fires
+	// for a real client. MoveUser has meanwhile written the new ChannelID into
+	// the user's state, so "state already says this channel" is the durable
+	// signal that an admin authorized the placement.
+	//
+	// Not a bypass: states[userID].ChannelID is only ever written by a
+	// JoinChannel that passed this same gate, or by MoveUser, which checks the
+	// mover's permissions. Server membership is still required above — a user
+	// removed from the server after being moved does not get back in.
+	if s.alreadyInChannel(userID, channelID) {
+		return nil
+	}
+	// Kept for the non-client callers (and the token-first ordering is not
+	// contractual): a grant that has not been consumed yet still authorizes.
+	if s.hasForceMoveGrant(userID, channelID) {
+		return nil
+	}
+	return fmt.Errorf("%w: missing voice connect permission", pkg.ErrForbidden)
+}
+
+// alreadyInChannel reports whether userID's current voice state is already this
+// exact channel. Read-locked: authorizeJoin runs before JoinChannel takes the
+// write lock.
+func (s *voiceService) alreadyInChannel(userID, channelID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st, ok := s.states[userID]
+	return ok && st.ChannelID == channelID
+}
+
+// hasForceMoveGrant reports whether userID holds a live (unexpired,
+// channel-matching) force-move grant, without consuming it. GenerateToken
+// (voice_token.go) remains the single point that deletes the grant on
+// actual token issuance — this is a read-only peek so JoinChannel's
+// state-sync call doesn't race the token call for the one-time bypass.
+func (s *voiceService) hasForceMoveGrant(userID, channelID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	grant, ok := s.forceMoveGrants[userID]
+	return ok && grant.channelID == channelID && time.Now().Before(grant.expiresAt)
+}
+
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
 	// Resolve channel's parent server before locking — all voice broadcasts are server-scoped.
 	ctx := context.Background()
@@ -31,6 +98,15 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		return fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
 	}
 	serverID := channel.ServerID
+
+	// N-01: reject phantom voice-state injection. Without this gate a WS
+	// client could send voice_join for a channel it was never authorized
+	// to enter — the resulting ghost state is counted by
+	// remainingChannelMembers/UserLimit and, worse, receives the plaintext
+	// SFrame E2EE passphrase on the channel's next rotation (voice_e2ee.go).
+	if err := s.authorizeJoin(ctx, userID, serverID, channelID); err != nil {
+		return err
+	}
 
 	// Resolve LiveKit instance for quota tracking. Failure here is non-fatal —
 	// the join still happens, we just won't be able to attribute the session

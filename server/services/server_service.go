@@ -36,6 +36,7 @@ type serverService struct {
 	channelRepo   repository.ChannelRepository
 	categoryRepo  repository.CategoryRepository
 	userRepo      repository.UserRepository
+	banRepo       repository.BanRepository // N-02: JoinServer's ban gate
 	inviteService InviteService
 	hub           ws.BroadcastAndManage
 	encryptionKey []byte // AES-256-GCM for LiveKit credentials
@@ -67,6 +68,7 @@ func NewServerService(
 	channelRepo repository.ChannelRepository,
 	categoryRepo repository.CategoryRepository,
 	userRepo repository.UserRepository,
+	banRepo repository.BanRepository,
 	inviteService InviteService,
 	hub ws.BroadcastAndManage,
 	encryptionKey []byte,
@@ -79,6 +81,7 @@ func NewServerService(
 		channelRepo:   channelRepo,
 		categoryRepo:  categoryRepo,
 		userRepo:      userRepo,
+		banRepo:       banRepo,
 		inviteService: inviteService,
 		hub:           hub,
 		encryptionKey: encryptionKey,

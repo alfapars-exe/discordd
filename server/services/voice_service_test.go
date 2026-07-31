@@ -2,10 +2,12 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 )
@@ -33,6 +35,11 @@ func (m *mockLiveKitGetter) MigrateOneServer(_ context.Context, _, _ string) err
 	return nil
 }
 
+// newTestVoiceService wires happy-path defaults: caller is a server member
+// with every permission (PermAll), so the N-01 authorization gate added to
+// JoinChannel doesn't have to be re-satisfied by every pre-existing test in
+// this package. Tests that specifically exercise the gate (denied/allowed
+// paths) build their own harness — see TestVoiceJoinChannel_Authorization*.
 func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 	hub := &testutil.MockBroadcaster{}
 	svc := NewVoiceService(
@@ -42,13 +49,181 @@ func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 			},
 		},
 		&mockLiveKitGetter{},
-		&testutil.MockChannelPermResolver{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermAll, nil
+			},
+		},
 		hub,
 		nil, // onlineChecker
-		nil, // afkTimeoutGetter
+		&testutil.MockServerRepo{
+			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
+				return true, nil
+			},
+		}, // afkTimeoutGetter — also backs the N-01 membership check
 		nil, // encryptionKey
 	)
 	return svc, hub
+}
+
+// newAuthVoiceService builds a voiceService harness with a configurable
+// membership flag and permission resolver, for tests that specifically
+// exercise JoinChannel's N-01 authorization gate. See newTestVoiceService's
+// doc comment for the happy-path default used by every other test here.
+func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, userID, channelID string) (models.Permission, error)) (VoiceService, *testutil.MockBroadcaster) {
+	hub := &testutil.MockBroadcaster{}
+	svc := NewVoiceService(
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+				return &models.Channel{ID: id, ServerID: "srv1", Type: models.ChannelTypeVoice}, nil
+			},
+		},
+		&mockLiveKitGetter{},
+		&testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: resolvePerms},
+		hub,
+		nil, // onlineChecker
+		&testutil.MockServerRepo{
+			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
+				return isMember, nil
+			},
+		},
+		nil, // encryptionKey
+	)
+	return svc, hub
+}
+
+// ─── N-01: JoinChannel authorization gate ───
+
+// TestVoiceJoinChannel_Authorization_NonMemberRejected pins the core N-01
+// fix: a WS client can no longer inject voice state for a server it never
+// joined. GetChannelParticipants staying empty and zero broadcasts prove
+// nothing was injected — a returned error alone wouldn't rule out a
+// state leak that happened before the error was produced.
+func TestVoiceJoinChannel_Authorization_NonMemberRejected(t *testing.T) {
+	svc, hub := newAuthVoiceService(false, func(_ context.Context, _, _ string) (models.Permission, error) {
+		return models.PermAll, nil
+	})
+	var broadcasts []ws.Event
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
+		broadcasts = append(broadcasts, event)
+	}
+
+	err := svc.JoinChannel("intruder", "intruder", "Intruder", "", "ch1", false, false)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
+	}
+	if participants := svc.GetChannelParticipants("ch1"); len(participants) != 0 {
+		t.Errorf("expected 0 participants after rejected join, got %d", len(participants))
+	}
+	if len(broadcasts) != 0 {
+		t.Errorf("expected 0 broadcasts after rejected join, got %d", len(broadcasts))
+	}
+}
+
+// TestVoiceJoinChannel_Authorization_MissingConnectVoiceRejected covers the
+// second half of the gate: server membership alone isn't enough — the
+// channel-level PermConnectVoice check must also hold.
+func TestVoiceJoinChannel_Authorization_MissingConnectVoiceRejected(t *testing.T) {
+	svc, hub := newAuthVoiceService(true, func(_ context.Context, _, _ string) (models.Permission, error) {
+		// PermSendMessages only — deliberately excludes both PermConnectVoice
+		// and PermAdmin (Has() gives Admin an all-permissions bypass, so
+		// PermAll&^PermConnectVoice would still pass the check we're testing).
+		return models.PermSendMessages, nil
+	})
+	var broadcasts []ws.Event
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
+		broadcasts = append(broadcasts, event)
+	}
+
+	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
+	}
+	if participants := svc.GetChannelParticipants("ch1"); len(participants) != 0 {
+		t.Errorf("expected 0 participants after rejected join, got %d", len(participants))
+	}
+	if len(broadcasts) != 0 {
+		t.Errorf("expected 0 broadcasts after rejected join, got %d", len(broadcasts))
+	}
+}
+
+// TestVoiceJoinChannel_Authorization_PermittedMemberJoins proves the gate
+// isn't a blanket deny: a real member with PermConnectVoice still joins and
+// still gets its broadcast.
+func TestVoiceJoinChannel_Authorization_PermittedMemberJoins(t *testing.T) {
+	svc, hub := newAuthVoiceService(true, func(_ context.Context, _, _ string) (models.Permission, error) {
+		return models.PermConnectVoice, nil
+	})
+	var broadcasts []ws.Event
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
+		broadcasts = append(broadcasts, event)
+	}
+
+	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if participants := svc.GetChannelParticipants("ch1"); len(participants) != 1 {
+		t.Errorf("expected 1 participant after permitted join, got %d", len(participants))
+	}
+	if len(broadcasts) != 1 {
+		t.Errorf("expected 1 broadcast after permitted join, got %d", len(broadcasts))
+	}
+}
+
+// TestVoiceJoinChannel_Authorization_ForceMoveGrantAllowsJoin is the
+// carve-out regression pin: an admin-moved user who lacks PermConnectVoice
+// on the destination channel must still be able to (re)join it — otherwise
+// MoveUser's force-move immediately breaks the moved user's own voice
+// session. The grant is checked (not consumed) here; GenerateToken
+// (voice_token.go) remains the single consumption point.
+func TestVoiceJoinChannel_Authorization_ForceMoveGrantAllowsJoin(t *testing.T) {
+	ctx := context.Background()
+	svc, hub := newAuthVoiceService(true, func(_ context.Context, userID, channelID string) (models.Permission, error) {
+		if userID == "victim" && channelID == "ch2" {
+			return 0, nil // no ConnectVoice in the admin-only destination channel
+		}
+		return models.PermAll, nil
+	})
+	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
+
+	// Victim starts in ch1, where they have full permissions.
+	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
+		t.Fatalf("victim initial join failed: %v", err)
+	}
+
+	// Admin force-moves victim into ch2 — victim has no ConnectVoice there,
+	// but MoveUser only requires the mover to hold PermMoveMembers/ConnectVoice.
+	if err := svc.MoveUser(ctx, "admin", "victim", "ch2"); err != nil {
+		t.Fatalf("MoveUser failed: %v", err)
+	}
+
+	// PRODUCTION ORDER: the grant is already spent by the time voice_join
+	// arrives. The client asks for the LiveKit token FIRST and only then sends
+	// voice_join (client/src/hooks/ws/voiceEventHandlers.ts), and GenerateToken
+	// deletes the one-time grant. The first version of this test skipped that
+	// step and so passed against an ordering no real client produces, while the
+	// actual flow returned ErrForbidden.
+	//
+	// The grant is dropped directly rather than by calling GenerateToken: that
+	// path needs a LiveKit instance and an encryption key, and pulling all of
+	// it in would make this test about token plumbing instead of about
+	// authorization. What matters is the post-condition GenerateToken leaves
+	// behind — no grant — and that is reproduced exactly.
+	concrete, ok := svc.(*voiceService)
+	if !ok {
+		t.Fatal("expected *voiceService")
+	}
+	concrete.mu.Lock()
+	delete(concrete.forceMoveGrants, "victim")
+	concrete.mu.Unlock()
+
+	// Victim's client now re-syncs voice state for the channel it was just
+	// force-moved into. With the grant gone, what has to carry this is
+	// MoveUser having written ch2 into the victim's state.
+	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch2", false, false); err != nil {
+		t.Fatalf("expected force-move placement to allow join into ch2, got error: %v", err)
+	}
 }
 
 func TestVoiceJoinChannel(t *testing.T) {

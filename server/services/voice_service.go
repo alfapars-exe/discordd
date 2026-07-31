@@ -53,9 +53,13 @@ type OnlineUserChecker interface {
 	GetOnlineUserIDs() []string
 }
 
-// AFKTimeoutGetter retrieves a server's AFK timeout. Satisfied by repository.ServerRepository.
+// AFKTimeoutGetter retrieves a server's AFK timeout and checks server
+// membership. Satisfied by repository.ServerRepository. IsMember backs
+// JoinChannel's N-01 authorization gate — a WS client can't inject voice
+// state for a server it was never added to.
 type AFKTimeoutGetter interface {
 	GetByID(ctx context.Context, serverID string) (*models.Server, error)
+	IsMember(ctx context.Context, serverID, userID string) (bool, error)
 }
 
 // ─── VoiceService Interface ───

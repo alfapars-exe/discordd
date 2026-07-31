@@ -27,6 +27,18 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		return nil, fmt.Errorf("%w: already a member of this server", pkg.ErrBadRequest)
 	}
 
+	// N-02: a valid invite code doesn't override an active ban — without
+	// this check a banned user could just ask for (or reuse) an invite link
+	// to walk right back in. Exists() already excludes expired temp bans
+	// (see repository/sqlite_ban.go), so a lapsed ban never blocks the join.
+	banned, err := s.banRepo.Exists(ctx, serverID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check ban status: %w", err)
+	}
+	if banned {
+		return nil, fmt.Errorf("%w: you are banned from this server", pkg.ErrForbidden)
+	}
+
 	if err := s.serverRepo.AddMember(ctx, serverID, userID); err != nil {
 		return nil, fmt.Errorf("failed to add member: %w", err)
 	}
