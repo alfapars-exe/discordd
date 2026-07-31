@@ -181,9 +181,25 @@ export async function processDistribution(
 }
 
 /**
+ * Total order over the canonical roster entries, by UTF-16 code unit.
+ *
+ * Deliberately NOT String.localeCompare: that is locale-dependent, so two
+ * clients with different language settings could order the same roster
+ * differently, derive different fingerprints, and rotate sender keys against
+ * each other indefinitely. What this needs is agreement between devices, not
+ * alphabetical correctness for a reader. Ids are ASCII, so a code-unit compare
+ * is total and identical on every engine.
+ */
+function compareByCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+/**
  * Fingerprint of the device roster a distribution is sealed for.
  *
- * Canonical form: "userId:deviceId" per device, sorted lexicographically,
+ * Canonical form: "userId:deviceId" per device, sorted by code unit,
  * joined with "\n", hashed with SHA-256 and rendered as hex. Sorting makes it
  * order-independent (the server may return the roster in any order); the
  * newline separator keeps ids unambiguous.
@@ -203,7 +219,7 @@ export async function computeRecipientFingerprint(
     // locale-dependent — two clients with different language settings could
     // order the same roster differently and never agree. Ids are ASCII, so a
     // plain code-unit compare is total and stable everywhere.
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .sort(compareByCodeUnit)
     .join("\n");
   return bytesToHex(sha256(new TextEncoder().encode(canonical)));
 }
