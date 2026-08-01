@@ -528,6 +528,11 @@ func TestVoiceCleanupViewersForStreamer(t *testing.T) {
 	truev := true
 	_ = svc.UpdateState("streamer", nil, nil, &truev)
 
+	// N-19: WatchScreenShare now requires the viewer to be in the streamer's
+	// channel, so v1/v2 must join ch1 before they can be admitted as viewers.
+	_ = svc.JoinChannel("v1", "v1", "V1", "", "ch1", false, false)
+	_ = svc.JoinChannel("v2", "v2", "V2", "", "ch1", false, false)
+
 	svc.WatchScreenShare("v1", "streamer", true)
 	svc.WatchScreenShare("v2", "streamer", true)
 
@@ -539,6 +544,65 @@ func TestVoiceCleanupViewersForStreamer(t *testing.T) {
 
 	if svc.GetScreenShareViewerCount("streamer") != 0 {
 		t.Errorf("expected 0 viewers after cleanup, got %d", svc.GetScreenShareViewerCount("streamer"))
+	}
+}
+
+// TestWatchScreenShare_RejectsViewerOutsideStreamerChannel pins the N-19
+// fix: a viewer sitting in a different voice channel from the streamer must
+// not be admitted, even though the streamer is legitimately streaming.
+func TestWatchScreenShare_RejectsViewerOutsideStreamerChannel(t *testing.T) {
+	svc, hub := newTestVoiceService()
+	hub.BroadcastToAllFn = func(_ ws.Event) {}
+
+	_ = svc.JoinChannel("streamer", "alice", "Alice", "", "ch1", false, false)
+	truev := true
+	_ = svc.UpdateState("streamer", nil, nil, &truev)
+
+	_ = svc.JoinChannel("viewer", "bob", "Bob", "", "ch2", false, false)
+
+	svc.WatchScreenShare("viewer", "streamer", true)
+
+	if count := svc.GetScreenShareViewerCount("streamer"); count != 0 {
+		t.Errorf("viewer count = %d, want 0 (viewer is in a different channel)", count)
+	}
+}
+
+// TestWatchScreenShare_RejectsViewerNotInVoice pins the N-19 fix for a
+// viewer that never joined any voice channel at all.
+func TestWatchScreenShare_RejectsViewerNotInVoice(t *testing.T) {
+	svc, hub := newTestVoiceService()
+	hub.BroadcastToAllFn = func(_ ws.Event) {}
+
+	_ = svc.JoinChannel("streamer", "alice", "Alice", "", "ch1", false, false)
+	truev := true
+	_ = svc.UpdateState("streamer", nil, nil, &truev)
+
+	svc.WatchScreenShare("viewer", "streamer", true)
+
+	if count := svc.GetScreenShareViewerCount("streamer"); count != 0 {
+		t.Errorf("viewer count = %d, want 0 (viewer never joined voice)", count)
+	}
+}
+
+// TestWatchScreenShare_AllowsViewerInStreamerChannel is the positive
+// counterpart to the two rejection tests above: a legitimate viewer sitting
+// in the streamer's own channel must still be counted. Without this, a
+// "reject everything" mutation of the N-19 guard would pass the other two
+// tests too.
+func TestWatchScreenShare_AllowsViewerInStreamerChannel(t *testing.T) {
+	svc, hub := newTestVoiceService()
+	hub.BroadcastToAllFn = func(_ ws.Event) {}
+
+	_ = svc.JoinChannel("streamer", "alice", "Alice", "", "ch1", false, false)
+	truev := true
+	_ = svc.UpdateState("streamer", nil, nil, &truev)
+
+	_ = svc.JoinChannel("viewer", "bob", "Bob", "", "ch1", false, false)
+
+	svc.WatchScreenShare("viewer", "streamer", true)
+
+	if count := svc.GetScreenShareViewerCount("streamer"); count != 1 {
+		t.Errorf("viewer count = %d, want 1 (viewer shares streamer's channel)", count)
 	}
 }
 

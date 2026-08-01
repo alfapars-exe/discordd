@@ -17,6 +17,23 @@ func (s *voiceService) WatchScreenShare(viewerUserID, streamerUserID string, wat
 		return
 	}
 
+	// security scan 2026-07-31, finding N-19: the viewer must be sitting in
+	// the streamer's own voice channel. Without this any authenticated user
+	// could inflate a stranger's viewer count and make the streamer's server
+	// broadcast a bogus screen_share_viewer_update naming them.
+	//
+	// This check also runs when watching == false. A viewer who has already
+	// left the streamer's channel can no longer send a valid "stop watching"
+	// either, but that's fine: LeaveChannel and CleanupViewersForStreamer
+	// already remove that viewer from screenShareViewers on channel exit, so
+	// there's nothing left here for a late "stop" to clean up. Allowing it
+	// through would just be a second, redundant code path.
+	viewerState, viewerOK := s.states[viewerUserID]
+	if !viewerOK || viewerState.ChannelID != streamerState.ChannelID {
+		s.mu.Unlock()
+		return
+	}
+
 	if watching {
 		if s.screenShareViewers[streamerUserID] == nil {
 			s.screenShareViewers[streamerUserID] = make(map[string]bool)

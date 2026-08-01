@@ -119,8 +119,9 @@ func TestVoice_ConcurrentScreenShareViewerChurn(t *testing.T) {
 	const viewers = 30
 	const togglesPerViewer = 20
 
-	// Sequential setup — viewers share the streamer's channel for realism,
-	// though WatchScreenShare only validates the streamer's state.
+	// Sequential setup — viewers must share the streamer's channel:
+	// WatchScreenShare (N-19) now rejects admission for a viewer sitting in
+	// a different channel from the streamer.
 	for v := 0; v < viewers; v++ {
 		viewerID := fmt.Sprintf("viewer%d", v)
 		if err := svc.JoinChannel(viewerID, viewerID, viewerID, "", "ch1", false, false); err != nil {
