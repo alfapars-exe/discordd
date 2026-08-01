@@ -242,7 +242,11 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// the user's raw input if yt-dlp didn't return a webpage URL. Without
 	// the terminator a crafted URL would let the dequeue path inherit the
 	// same argument-injection risk fixed in extractTracks.
-	yt := exec.CommandContext(ctx, "yt-dlp", playTrackYtdlpArgs(track.URL)...) // #nosec G204 -- fixed argv; track.URL passes validateMusicURLNetwork above (host allow-list + post-DNS private/reserved-IP check, see music_url_guard.go) and is isolated behind `--` in playTrackYtdlpArgs
+	ytBin, err := ytDlpPath()
+	if err != nil {
+		return fmt.Errorf("yt-dlp not available: %w", err)
+	}
+	yt := exec.CommandContext(ctx, ytBin, playTrackYtdlpArgs(track.URL)...) // #nosec G204 -- fixed argv; ytBin is an absolute path resolved once by ytDlpPath (see music_bot_metadata.go); track.URL passes validateMusicURLNetwork above (host allow-list + post-DNS private/reserved-IP check, see music_url_guard.go) and is isolated behind `--` in playTrackYtdlpArgs
 	ff := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "warning",
 		"-i", "pipe:0",

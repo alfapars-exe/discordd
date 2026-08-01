@@ -6,10 +6,30 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 )
+
+// ytDlpPath resolves the yt-dlp binary to an absolute path once, instead of
+// letting exec walk $PATH on every invocation.
+//
+// Two reasons. Passing a bare name means the lookup is repeated per call and
+// can resolve differently over the process's lifetime; this container runs as
+// root (no active USER in the Dockerfile), so a write primitive into any
+// directory on PATH would be a root-level code-execution path. Resolving once
+// also turns "yt-dlp isn't installed" into a single clear error rather than a
+// surprise on whichever /play happens to be first.
+//
+// The production image installs it at /usr/local/bin/yt-dlp, checksum-pinned;
+// LookPath is kept rather than hardcoding that so self-hosted and local dev
+// installs keep working. ffmpeg is still invoked by bare name in
+// music_bot_pipeline.go — giving both binaries a configured absolute path is a
+// separate, codebase-wide change.
+var ytDlpPath = sync.OnceValues(func() (string, error) {
+	return exec.LookPath("yt-dlp")
+})
 
 // extractTracks — call yt-dlp to resolve a URL into one or more tracks.
 //
@@ -50,7 +70,11 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	// (argument injection → RCE under the server process). Handlers also
 	// allow-list the URL scheme, but this is the defense-in-depth layer
 	// closest to the actual subprocess.
-	cmd := exec.CommandContext(ctx, "yt-dlp", extractTracksArgs(urlStr)...) // #nosec G204 -- urlStr is user-supplied, but the binary name is a fixed literal, exec.CommandContext never invokes a shell (no metacharacter-injection vector), validateMusicURLNetwork above enforces a host allow-list (SSRF's primary control here — see music_url_guard.go doc comment) plus a post-DNS private/reserved-IP check, and "--" in extractTracksArgs stops urlStr from being parsed as a yt-dlp flag
+	bin, err := ytDlpPath()
+	if err != nil {
+		return nil, fmt.Errorf("yt-dlp not available: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, bin, extractTracksArgs(urlStr)...) // #nosec G204 -- urlStr is user-supplied, but bin is an absolute path resolved once by ytDlpPath, exec.CommandContext never invokes a shell (no metacharacter-injection vector), validateMusicURLNetwork above enforces a host allow-list (SSRF's primary control here — see music_url_guard.go doc comment) plus a post-DNS private/reserved-IP check, and "--" in extractTracksArgs stops urlStr from being parsed as a yt-dlp flag
 	stdout, err := cmd.Output()
 	if err != nil {
 		// yt-dlp returns non-zero on partial playlist failures even when
