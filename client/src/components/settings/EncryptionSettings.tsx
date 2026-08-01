@@ -1,6 +1,6 @@
 /** EncryptionSettings — E2EE status, recovery password, and device management. */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
@@ -19,6 +19,8 @@ function EncryptionSettings() {
   const fetchDevices = useE2EEStore((s) => s.fetchDevices);
   const removeDevice = useE2EEStore((s) => s.removeDevice);
   const setRecoveryPassword = useE2EEStore((s) => s.setRecoveryPassword);
+  const peerTrustAlerts = useE2EEStore((s) => s.peerTrustAlerts);
+  const clearPeerTrustAlert = useE2EEStore((s) => s.clearPeerTrustAlert);
 
   // Recovery password form state
   const [password, setPassword] = useState("");
@@ -81,10 +83,15 @@ function EncryptionSettings() {
     setIsSavingPassword(false);
   }, [password, confirmPassword, setRecoveryPassword, addToast, t]);
 
-  /** Remove device */
-  async function handleRemoveDevice(deviceId: string) {
+  /**
+   * Remove device. Also clears any outstanding trust alert for it — otherwise
+   * a removed device's own_new_device warning would linger as a ghost entry
+   * in peerTrustAlerts with nothing left in the device list to attach it to.
+   */
+  async function handleRemoveDevice(userId: string, deviceId: string) {
     try {
       await removeDevice(deviceId);
+      clearPeerTrustAlert(userId, deviceId);
       addToast("success", t("removeDeviceSuccess"));
     } catch {
       addToast("error", t("removeDeviceError"));
@@ -112,6 +119,19 @@ function EncryptionSettings() {
   }
 
   const isReady = initStatus === "ready";
+
+  // own_new_device alerts (a device the server injected under our own
+  // account) surface first — burying that warning below already-known
+  // devices would defeat the point of showing it at all.
+  const sortedDevices = useMemo(() => {
+    return [...devices].sort((a, b) => {
+      const aFlagged = peerTrustAlerts[`${a.user_id}:${a.device_id}`]?.kind === "own_new_device";
+      const bFlagged = peerTrustAlerts[`${b.user_id}:${b.device_id}`]?.kind === "own_new_device";
+      if (aFlagged && !bFlagged) return -1;
+      if (!aFlagged && bFlagged) return 1;
+      return 0;
+    });
+  }, [devices, peerTrustAlerts]);
 
   return (
     <div className="settings-section">
@@ -213,31 +233,52 @@ function EncryptionSettings() {
             {devices.length === 0 ? (
               <p className="settings-hint">{t("noDevices")}</p>
             ) : (
-              devices.map((device) => {
+              sortedDevices.map((device) => {
                 const isThisDevice = device.device_id === localDeviceId;
+                const alert = peerTrustAlerts[`${device.user_id}:${device.device_id}`];
+                const isUntrusted = alert?.kind === "own_new_device";
 
                 return (
-                  <div key={device.id} className="e2ee-device-item">
+                  <div
+                    key={device.id}
+                    className={isUntrusted ? "e2ee-device-item is-untrusted" : "e2ee-device-item"}
+                  >
                     <div className="e2ee-device-info">
                       <span className="e2ee-device-name">
                         {device.display_name ?? device.device_id.slice(0, 8)}
                         {isThisDevice && (
                           <span className="e2ee-device-this"> ({t("thisDevice")})</span>
                         )}
+                        {isUntrusted && (
+                          <span className="e2ee-device-alert-badge">{t("ownDeviceAlertBadge")}</span>
+                        )}
                       </span>
                       <span className="e2ee-device-meta">
                         {t("lastSeen", { time: formatDate(device.last_seen_at) })}
                       </span>
+                      {isUntrusted && (
+                        <span className="e2ee-device-alert-hint">{t("ownDeviceAlertHint")}</span>
+                      )}
                     </div>
 
-                    {!isThisDevice && (
-                      <button
-                        onClick={() => handleRemoveDevice(device.device_id)}
-                        className="settings-btn settings-btn-danger e2ee-device-remove"
-                      >
-                        {t("removeDevice")}
-                      </button>
-                    )}
+                    <div className="e2ee-device-actions">
+                      {isUntrusted && (
+                        <button
+                          onClick={() => clearPeerTrustAlert(device.user_id, device.device_id)}
+                          className="settings-btn e2ee-device-acknowledge"
+                        >
+                          {t("ownDeviceAcknowledge")}
+                        </button>
+                      )}
+                      {!isThisDevice && (
+                        <button
+                          onClick={() => handleRemoveDevice(device.user_id, device.device_id)}
+                          className="settings-btn settings-btn-danger e2ee-device-remove"
+                        >
+                          {t("removeDevice")}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })

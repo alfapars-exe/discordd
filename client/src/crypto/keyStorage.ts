@@ -501,6 +501,72 @@ export async function getAllTrustedIdentities(): Promise<TrustedIdentity[]> {
   return (await db.getAll("trustedIdentities")) as TrustedIdentity[];
 }
 
+/**
+ * Device IDs of every trusted identity currently pinned for a user.
+ *
+ * Prefix scan over the `${userId}:${deviceId}` out-of-line key — same shape as
+ * deleteAllSessionsForUser. The trailing ':' in the prefix is load-bearing:
+ * without it, user "u1" would also match "u10:dev". The deviceId is everything
+ * AFTER that first ':', so device IDs that themselves contain ':' survive.
+ *
+ * Semantics callers must respect: an EMPTY set means "no baseline for this
+ * user" (first contact / TOFU), not "this user has no devices". Treating an
+ * empty set as a baseline would flag every device of a brand-new conversation
+ * as newly added.
+ *
+ * Reads keys only (no values), so it never materializes key material.
+ */
+export async function getTrustedDeviceIdsForUser(
+  userId: string
+): Promise<Set<string>> {
+  const db = await getDB();
+  const prefix = `${userId}:`;
+  const keys = await db.getAllKeys("trustedIdentities");
+
+  const deviceIds = new Set<string>();
+  for (const key of keys) {
+    if (typeof key === "string" && key.startsWith(prefix)) {
+      deviceIds.add(key.slice(prefix.length));
+    }
+  }
+
+  return deviceIds;
+}
+
+/**
+ * Flips the manual-verification flag on an EXISTING pinned identity.
+ *
+ * Read-modify-write inside one readwrite transaction so the flag update cannot
+ * be built on a copy that another writer has already superseded.
+ *
+ * Returns false and writes NOTHING when no pin exists. `verified` is a claim
+ * about a key this device has actually seen; fabricating a record here would
+ * insert a trusted identity with no identity key, which the TOFU comparison in
+ * signalProtocol would then treat as the baseline for that peer.
+ *
+ * Note the flag is reset to false by signalProtocol whenever the pinned
+ * identity key changes — verification is a statement about one specific key.
+ */
+export async function setTrustedIdentityVerified(
+  userId: string,
+  deviceId: string,
+  verified: boolean
+): Promise<boolean> {
+  const db = await getDB();
+  const key = trustedIdentityKey(userId, deviceId);
+  const tx = db.transaction("trustedIdentities", "readwrite");
+
+  const existing = (await tx.store.get(key)) as TrustedIdentity | undefined;
+  if (!existing) {
+    await tx.done;
+    return false;
+  }
+
+  await tx.store.put({ ...existing, verified }, key);
+  await tx.done;
+  return true;
+}
+
 // ──────────────────────────────────
 // Message Cache Operations
 // ──────────────────────────────────

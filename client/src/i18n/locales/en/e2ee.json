@@ -96,5 +96,20 @@
   "recoveryPromptHint": "You can manage this anytime from Settings > Encryption.",
   "recoveryPromptSetPassword": "Set Recovery Password",
   "recoveryPromptContinueNewKeys": "Continue with New Keys",
-  "recoveryPromptDismiss": "Later"
+  "recoveryPromptDismiss": "Later",
+
+  "trustAlertIdentityChanged": "This person's encryption key changed. They may have reinstalled the app or switched devices — but it's worth confirming their safety number to be sure.",
+  "trustAlertNewDevice": "This person is messaging from a device we haven't seen before. Confirming their safety number can help rule out an unexpected device.",
+  "trustPanelTitle": "Verify Safety Number",
+  "trustPanelDescription": "Compare this safety number with the other person through another channel (in person, by phone) to confirm you're talking to them and not an impostor.",
+  "trustPanelHint": "Only devices this conversation has actually exchanged keys with are listed here.",
+  "trustPanelEmpty": "No devices to verify yet — a safety number appears once a session has been established with this person.",
+  "markVerified": "Mark as Verified",
+  "markVerifiedDone": "Device marked as verified",
+  "verifyAction": "Verify",
+
+  "trustAlertOwnNewDevice": "A device we don't recognize was added to your own account. Until you remove it or confirm it was you, it receives a copy of every message you send — in every conversation.",
+  "ownDeviceAlertBadge": "Unrecognized",
+  "ownDeviceAlertHint": "Didn't add this device yourself? Remove it now. If it was you, confirm below.",
+  "ownDeviceAcknowledge": "This was me"
 }

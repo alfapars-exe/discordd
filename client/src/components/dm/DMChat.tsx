@@ -3,10 +3,10 @@
  * Split into DMChat (provider wrapper) and DMChatContent (needs ChatContext).
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useDMStore } from "../../stores/dmStore";
-import { useE2EEStore } from "../../stores/e2eeStore";
+import { useE2EEStore, type PeerTrustAlert, type PeerTrustAlertKind } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useBlockStore } from "../../stores/blockStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
@@ -19,6 +19,7 @@ import MessageInput from "../chat/MessageInput";
 import TypingIndicator from "../chat/TypingIndicator";
 import DMPinnedMessages from "./DMPinnedMessages";
 import DMSearchPanel from "./DMSearchPanel";
+import DMSafetyNumberPanel from "./DMSafetyNumberPanel";
 import FileDropOverlay from "../shared/FileDropOverlay";
 import Avatar from "../shared/Avatar";
 import * as e2eeApi from "../../api/e2ee";
@@ -28,6 +29,16 @@ import type { User } from "../../types";
 type DMChatProps = {
   channelId: string;
   sendDMTyping: (dmChannelId: string) => void;
+};
+
+// Explicit per-kind mapping (not a ternary) so a new PeerTrustAlertKind is a
+// compile error here instead of silently falling through to the wrong
+// label — own_new_device is about OUR OWN account and must never be shown
+// with peer-facing copy (see e2eeStore's PeerTrustAlertKind doc comment).
+const TRUST_ALERT_LABEL_KEYS: Record<PeerTrustAlertKind, string> = {
+  identity_changed: "trustAlertIdentityChanged",
+  new_device: "trustAlertNewDevice",
+  own_new_device: "trustAlertOwnNewDevice",
 };
 
 /** DMChat — Provider wrapper. Delegates content to DMChatContent. */
@@ -73,6 +84,7 @@ function DMChatContent({
   const fetchMessages = useDMStore((s) => s.fetchMessages);
   const toggleE2EE = useDMStore((s) => s.toggleE2EE);
   const e2eeInitStatus = useE2EEStore((s) => s.initStatus);
+  const peerTrustAlerts = useE2EEStore((s) => s.peerTrustAlerts);
   const channels = useDMStore((s) => s.channels);
   const dmE2EEEnabled = channels.find((ch) => ch.id === channelId)?.e2ee_enabled ?? false;
   const addToast = useToastStore((s) => s.addToast);
@@ -88,6 +100,7 @@ function DMChatContent({
 
   const [showPins, setShowPins] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showSafetyNumber, setShowSafetyNumber] = useState(false);
   const [recipientHasKeys, setRecipientHasKeys] = useState(true); // default true — assume ok until checked
   const pendingSearchChannelId = useDMStore((s) => s.pendingSearchChannelId);
   const setPendingSearchChannelId = useDMStore((s) => s.setPendingSearchChannelId);
@@ -158,6 +171,26 @@ function DMChatContent({
   const handleToggleSearch = useCallback(() => {
     setShowSearch((prev) => !prev);
   }, []);
+
+  /** Toggle safety number / device verification panel */
+  const handleToggleSafetyNumber = useCallback(() => {
+    setShowSafetyNumber((prev) => !prev);
+  }, []);
+
+  // Most severe outstanding trust alert for this peer (any device), used to
+  // drive the warning banner. identity_changed outranks new_device — see
+  // markPeerTrustAlert in e2eeStore for why the store enforces that order too.
+  const otherUserMostSevereTrustAlert = useMemo(() => {
+    if (!otherUser) return null;
+    const prefix = `${otherUser.id}:`;
+    let mostSevere: PeerTrustAlert | null = null;
+    for (const [key, alert] of Object.entries(peerTrustAlerts)) {
+      if (!key.startsWith(prefix)) continue;
+      if (alert.kind === "identity_changed") return alert;
+      mostSevere = mostSevere ?? alert;
+    }
+    return mostSevere;
+  }, [peerTrustAlerts, otherUser]);
 
   // ─── Drag-drop ───
   const handleFileDrop = useCallback(
@@ -259,6 +292,18 @@ function DMChatContent({
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
+          {/* Safety number / device verification toggle — always available,
+              not gated on an active trust alert, so verification can happen
+              proactively too. */}
+          <button
+            className={showSafetyNumber ? "active" : ""}
+            onClick={handleToggleSafetyNumber}
+            title={tE2EE("verifyAction")}
+          >
+            <svg style={{ width: 16, height: 16 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -269,6 +314,21 @@ function DMChatContent({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>{tE2EE("recipientNoKeysBanner")}</span>
+        </div>
+      )}
+
+      {/* ─── Peer Trust Alert Banner (MITM / new-device surface) ─── */}
+      {otherUserMostSevereTrustAlert && (
+        <div className="e2ee-warning-banner">
+          <svg style={{ width: 16, height: 16, flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            {tE2EE(TRUST_ALERT_LABEL_KEYS[otherUserMostSevereTrustAlert.kind])}
+          </span>
+          <button className="e2ee-warning-banner-btn" onClick={handleToggleSafetyNumber}>
+            {tE2EE("verifyAction")}
+          </button>
         </div>
       )}
 
@@ -316,6 +376,14 @@ function DMChatContent({
         <DMSearchPanel
           channelId={channelId}
           onClose={() => setShowSearch(false)}
+        />
+      )}
+
+      {/* ─── DM Safety Number / Device Verification Panel ─── */}
+      {showSafetyNumber && otherUser && (
+        <DMSafetyNumberPanel
+          otherUser={otherUser}
+          onClose={() => setShowSafetyNumber(false)}
         />
       )}
 
