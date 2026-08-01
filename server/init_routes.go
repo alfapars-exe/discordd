@@ -41,6 +41,11 @@ type routeDeps struct {
 	// .../prekey-bundles.
 	deviceEnumMw func(http.Handler) http.Handler
 
+	// refreshMw is the per-IP throttle for POST /api/auth/refresh (resource
+	// scan 2026-07-31, finding N-14): the endpoint has no auth middleware
+	// (it hands out the auth) and previously had no rate limit at all.
+	refreshMw func(http.Handler) http.Handler
+
 	botHandler *handlers.BotHandler
 }
 
@@ -69,6 +74,10 @@ func (d *routeDeps) deviceEnum(handler http.Handler) http.Handler {
 	return d.deviceEnumMw(handler)
 }
 
+func (d *routeDeps) refresh(handler http.HandlerFunc) http.Handler {
+	return d.refreshMw(handler)
+}
+
 // initRoutes registers all API endpoints.
 // Literal paths must be registered before parametric ones
 // (e.g. "/api/servers/join" before "/api/servers/{serverId}").
@@ -89,6 +98,7 @@ func initRoutes(
 	roleRepo repository.RoleRepository,
 	serverRepo repository.ServerRepository,
 	deviceEnumLimiter middleware.IPRateLimiter,
+	refreshLimiter middleware.IPRateLimiter,
 	botService *services.BotService,
 ) (*middleware.AuthMiddleware, *middleware.PermissionMiddleware) {
 	// Middleware. *services.BotService satisfies middleware.BotTokenValidator
@@ -114,7 +124,10 @@ func initRoutes(
 		// Per-IP throttle for public E2EE key-material enumeration (P0-BD-02):
 		// caps GET /api/users/{id}/devices and .../prekey-bundles.
 		deviceEnumMw: middleware.RateLimitByIP(deviceEnumLimiter),
-		botHandler:   botHandler,
+		// Per-IP throttle for POST /api/auth/refresh (resource scan
+		// 2026-07-31, finding N-14): see refreshMw's field doc.
+		refreshMw:  middleware.RateLimitByIP(refreshLimiter),
+		botHandler: botHandler,
 	}
 
 	// ╔══════════════════════════════════════════╗

@@ -22,6 +22,14 @@ import (
 // parse even runs.
 const maxGroupSessionBody = 1 << 20 // 1 MiB
 
+// maxKeyBackupBody bounds a key-backup upsert (resource-scan 2026-07-31,
+// finding N-14): CreateKeyBackupRequest.EncryptedData carries the base64 of a
+// user's entire E2EE session state and was previously decoded with no cap at
+// all — the largest unbounded authenticated JSON body in the codebase. 4 MiB
+// sits under the global 8 MiB request-body cap (middleware/body_limit.go) but
+// is generous enough for a full session backup.
+const maxKeyBackupBody = 4 << 20 // 4 MiB
+
 // E2EEHandler handles E2EE key backup and Sender Key envelope distribution.
 type E2EEHandler struct {
 	e2eeService services.E2EEService
@@ -50,6 +58,8 @@ func (h *E2EEHandler) UpsertKeyBackup(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxKeyBackupBody)
 
 	var req models.CreateKeyBackupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
