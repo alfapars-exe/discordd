@@ -96,23 +96,3 @@ func TestToPublicUser_NilInput(t *testing.T) {
 		t.Errorf("ToPublicUser(nil) = %+v, want nil", got)
 	}
 }
-
-// containsKey checks for a JSON key by its quoted-name prefix (works for
-// both `"key":value` and truncated `"key"` matches used above).
-func containsKey(jsonBody, key string) bool {
-	return len(jsonBody) > 0 && stringsContains(jsonBody, key)
-}
-
-func stringsContains(s, substr string) bool {
-	return len(s) >= len(substr) && indexOf(s, substr) >= 0
-}
-
-func indexOf(s, substr string) int {
-	n := len(substr)
-	for i := 0; i+n <= len(s); i++ {
-		if s[i:i+n] == substr {
-			return i
-		}
-	}
-	return -1
-}

@@ -3327,7 +3327,7 @@ components:
             MemberWithRoles (which suppresses this field when
             pref_status="offline" — see models.ToMemberWithRoles), this
             User schema does NOT apply the invisible-mode suppression; it
-            is only ever returned to the user themselves (GET /api/auth/me
+            is only ever returned to the user themselves (GET /api/users/me
             and the login/register response), never embedded in another
             user's payload. Message/DM/pin author fields use PublicUser
             instead, which omits this field entirely.

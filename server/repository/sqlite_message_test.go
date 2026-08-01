@@ -34,8 +34,13 @@ const (
 func seedMessageWorld(t testing.TB, db *database.DB) {
 	t.Helper()
 	execSeed(t, db, []seedStmt{
-		{`INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, 'x')`,
-			[]any{msgAuthor, "author", "Yazar"}},
+		// custom_status is set here (not left NULL) so the PublicUser
+		// round-trip assertions in "get by id joins the author" are
+		// value-checked, not vacuously true on a zero value. See finding N-09
+		// follow-up: the author LEFT JOIN's SELECT list used to omit
+		// custom_status and created_at entirely.
+		{`INSERT INTO users (id, username, display_name, custom_status, password_hash) VALUES (?, ?, ?, ?, 'x')`,
+			[]any{msgAuthor, "author", "Yazar", "brb"}},
 		{`INSERT INTO users (id, username, password_hash) VALUES (?, ?, 'x')`,
 			[]any{msgSecondUser, "second"}},
 		{`INSERT INTO channels (id, name, type, server_id) VALUES (?, ?, 'text', 'srv-1')`,
@@ -93,6 +98,17 @@ func TestMessageRepo_CreateGetDelete(t *testing.T) {
 		}
 		if got.Author.DisplayName == nil || *got.Author.DisplayName != "Yazar" {
 			t.Errorf("author.display_name = %v, want Yazar", got.Author.DisplayName)
+		}
+		// REGRESSION GUARD (security scan 2026-07-31, finding N-09 follow-up):
+		// the author LEFT JOIN's SELECT list carried u.status but not
+		// u.custom_status or u.created_at, so every embedded author silently
+		// serialized custom_status:null and created_at as the zero time
+		// ("0001-01-01T00:00:00Z") regardless of what the row actually held.
+		if got.Author.CustomStatus == nil || *got.Author.CustomStatus != "brb" {
+			t.Errorf("author.custom_status = %v, want %q", got.Author.CustomStatus, "brb")
+		}
+		if got.Author.CreatedAt.IsZero() {
+			t.Error("author.created_at is zero — u.created_at was not selected")
 		}
 		// Author is a models.PublicUser (not models.User), so there is no
 		// PasswordHash field to leak by construction. Confirm the JSON the

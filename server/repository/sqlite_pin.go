@@ -28,20 +28,24 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 	var msg models.Message
 	var author models.PublicUser
 	var authorID sql.NullString
+	var authorCreatedAt sql.NullTime
 	var pinnedByUser models.PublicUser
-	var pinnedByID sql.NullString
+	var pinnedByID, pinnedByStatus sql.NullString
 
 	if err := rows.Scan(
 		&pin.ID, &pin.MessageID, &pin.ChannelID, &pin.PinnedBy, &pin.CreatedAt,
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
-		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL,
+		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status, &author.CustomStatus, &authorCreatedAt,
+		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL, &pinnedByStatus,
 	); err != nil {
 		return pin, err
 	}
 
 	if authorID.Valid {
 		author.ID = authorID.String
+		if authorCreatedAt.Valid {
+			author.CreatedAt = authorCreatedAt.Time
+		}
 		msg.Author = &author
 	}
 	msg.Attachments = []models.Attachment{} // empty slice, not null
@@ -49,6 +53,9 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 
 	if pinnedByID.Valid {
 		pinnedByUser.ID = pinnedByID.String
+		if pinnedByStatus.Valid {
+			pinnedByUser.Status = models.UserStatus(pinnedByStatus.String)
+		}
 		pin.PinnedByUser = &pinnedByUser
 	}
 
@@ -61,8 +68,8 @@ func (r *sqlitePinRepo) GetByChannelID(ctx context.Context, channelID string) ([
 	query := `
 		SELECT p.id, p.message_id, p.channel_id, p.pinned_by, p.created_at,
 		       m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
-		       u.id, u.username, u.display_name, u.avatar_url, u.status,
-		       pb.id, pb.username, pb.display_name, pb.avatar_url
+		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
+		       pb.id, pb.username, pb.display_name, pb.avatar_url, pb.status
 		FROM pinned_messages p
 		LEFT JOIN messages m ON p.message_id = m.id
 		LEFT JOIN users u ON m.user_id = u.id

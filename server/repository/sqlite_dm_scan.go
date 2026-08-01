@@ -21,21 +21,23 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 	var msg models.DMMessage
 	var author models.PublicUser
 	var authorID, authorUsername, authorStatus sql.NullString
+	var authorCreatedAt sql.NullTime
 	var content sql.NullString
 	var editedAt sql.NullTime
-	var displayName, avatarURL sql.NullString
+	var displayName, avatarURL, customStatus sql.NullString
 	var isPinned int
 
 	var refMsgID, refMsgContent sql.NullString
-	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus sql.NullString
+	var refAuthorCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&msg.ID, &msg.DMChannelID, &msg.UserID, &content, &editedAt, &msg.CreatedAt,
 		&msg.ReplyToID, &isPinned,
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus,
+		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus, &customStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
-		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorCustomStatus, &refAuthorCreatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan DM message: %w", err)
 	}
@@ -57,12 +59,18 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 		if avatarURL.Valid {
 			author.AvatarURL = &avatarURL.String
 		}
+		if customStatus.Valid {
+			author.CustomStatus = &customStatus.String
+		}
+		if authorCreatedAt.Valid {
+			author.CreatedAt = authorCreatedAt.Time
+		}
 		msg.Author = &author
 	}
 
 	msg.ReferencedMessage = buildMessageReference(
 		msg.ReplyToID, refMsgID, refMsgContent,
-		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL,
+		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus, refAuthorCreatedAt,
 	)
 
 	return &msg, nil
