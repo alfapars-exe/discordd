@@ -24,6 +24,45 @@ import (
 	"github.com/argeinfina/hichat/testutil"
 )
 
+// assertRejected asserts the "byte-sniffed reject" contract shared by
+// ReportUploadService.Upload, FeedbackUploadService.Upload, and
+// SoundboardService.Create: err must wrap pkg.ErrBadRequest, and nothing
+// must have been written under dir (the reject path runs before any file
+// is created).
+func assertRejected(t *testing.T, dir string, err error) {
+	t.Helper()
+	if !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("expected ErrBadRequest, got %v", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("rejected upload wrote %d files to disk", len(entries))
+	}
+}
+
+// assertBytesPreservedOnDisk asserts dir holds exactly one file whose
+// contents are byte-identical to want. This is the only check that catches
+// a caller writing the original multipart `file` instead of the sniff's
+// replay reader to disk — SniffContentType consumes up to
+// pkg.SniffBufferSize (512) bytes from its source, so writing `file` would
+// silently drop the first 512 bytes without any error.
+func assertBytesPreservedOnDisk(t *testing.T, dir string, want []byte) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("dir entries = %d, want 1", len(entries))
+	}
+	got, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("disk bytes diverge from input — replay reader not used")
+	}
+}
+
 // ─── ReportUploadService ───
 
 func TestReportUpload_rejectsHTMLDisguisedAsPNG(t *testing.T) {
@@ -35,12 +74,7 @@ func TestReportUpload_rejectsHTMLDisguisedAsPNG(t *testing.T) {
 	defer func() { _ = file.Close() }()
 
 	_, err := svc.Upload(context.Background(), "report-1", file, fh)
-	if !errors.Is(err, pkg.ErrBadRequest) {
-		t.Fatalf("expected ErrBadRequest, got %v", err)
-	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Errorf("rejected upload wrote %d files to disk", len(entries))
-	}
+	assertRejected(t, dir, err)
 }
 
 func TestReportUpload_acceptsRealPNGAndPreservesBytes(t *testing.T) {
@@ -60,18 +94,7 @@ func TestReportUpload_acceptsRealPNGAndPreservesBytes(t *testing.T) {
 	if att.MimeType == nil || *att.MimeType != "image/png" {
 		t.Errorf("MimeType = %v, want image/png", att.MimeType)
 	}
-
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
-		t.Fatalf("uploadDir entries = %d, want 1", len(entries))
-	}
-	got, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if !bytes.Equal(got, body) {
-		t.Errorf("disk bytes diverge from input — replay reader not used")
-	}
+	assertBytesPreservedOnDisk(t, dir, body)
 }
 
 // stubReportRepo is a minimal repository.ReportRepository implementation
@@ -114,12 +137,7 @@ func TestFeedbackUpload_rejectsHTMLDisguisedAsPNG(t *testing.T) {
 	defer func() { _ = file.Close() }()
 
 	_, err := svc.Upload(context.Background(), "ticket-1", nil, file, fh)
-	if !errors.Is(err, pkg.ErrBadRequest) {
-		t.Fatalf("expected ErrBadRequest, got %v", err)
-	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Errorf("rejected upload wrote %d files to disk", len(entries))
-	}
+	assertRejected(t, dir, err)
 }
 
 func TestFeedbackUpload_acceptsRealPNGAndPreservesBytes(t *testing.T) {
@@ -136,18 +154,7 @@ func TestFeedbackUpload_acceptsRealPNGAndPreservesBytes(t *testing.T) {
 	if att.MimeType == nil || *att.MimeType != "image/png" {
 		t.Errorf("MimeType = %v, want image/png", att.MimeType)
 	}
-
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
-		t.Fatalf("uploadDir entries = %d, want 1", len(entries))
-	}
-	got, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if !bytes.Equal(got, body) {
-		t.Errorf("disk bytes diverge from input — replay reader not used")
-	}
+	assertBytesPreservedOnDisk(t, dir, body)
 }
 
 // stubFeedbackRepo is a minimal repository.FeedbackRepository implementation,
@@ -204,18 +211,7 @@ func TestSoundboardUpload_acceptsRIFFWaveClaimedAsAudioWav(t *testing.T) {
 		t.Fatalf("expected RIFF/WAVE upload to be accepted, got: %v", err)
 	}
 
-	soundDir := filepath.Join(dir, soundboardSubdir)
-	entries, _ := os.ReadDir(soundDir)
-	if len(entries) != 1 {
-		t.Fatalf("soundboard dir entries = %d, want 1", len(entries))
-	}
-	got, err := os.ReadFile(filepath.Join(soundDir, entries[0].Name()))
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if !bytes.Equal(got, body) {
-		t.Errorf("disk bytes diverge from input — replay reader not used")
-	}
+	assertBytesPreservedOnDisk(t, filepath.Join(dir, soundboardSubdir), body)
 }
 
 func TestSoundboardUpload_rejectsHTMLDisguisedAsMPEG(t *testing.T) {
@@ -228,13 +224,7 @@ func TestSoundboardUpload_rejectsHTMLDisguisedAsMPEG(t *testing.T) {
 
 	req := &models.CreateSoundboardSoundRequest{Name: "boop"}
 	_, err := svc.Create(context.Background(), "srv1", "user1", req, file, fh, 500)
-	if !errors.Is(err, pkg.ErrBadRequest) {
-		t.Fatalf("expected ErrBadRequest, got %v", err)
-	}
-	soundDir := filepath.Join(dir, soundboardSubdir)
-	if entries, _ := os.ReadDir(soundDir); len(entries) != 0 {
-		t.Errorf("rejected upload wrote %d files to disk", len(entries))
-	}
+	assertRejected(t, filepath.Join(dir, soundboardSubdir), err)
 }
 
 func TestSoundboardUpload_acceptsGenericBinaryByExtensionFallback(t *testing.T) {

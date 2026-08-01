@@ -69,12 +69,17 @@ func countBadgeFiles(t *testing.T, uploadDir string) []os.DirEntry {
 	return entries
 }
 
-func TestUploadBadgeIcon_rejectsHTMLDisguisedAsPNG(t *testing.T) {
-	dir := t.TempDir()
+// assertBadgeIconRejected posts an icon upload with claimedType/body through
+// UploadBadgeIcon and asserts the standard "byte-sniffed reject" contract:
+// a 400 response and zero files written under dir (the reject path never
+// reaches os.MkdirAll). Shared by the PNG- and SVG-disguise regressions
+// below, which differ only in the claimed type and payload.
+func assertBadgeIconRejected(t *testing.T, dir, claimedType string, body []byte) {
+	t.Helper()
 	h := NewBadgeHandler(nil, dir)
 
 	rec := httptest.NewRecorder()
-	req := newBadgeIconRequest(t, "image/png", []byte("<!DOCTYPE html><html><body>boo</body></html>"))
+	req := newBadgeIconRequest(t, claimedType, body)
 	h.UploadBadgeIcon(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
@@ -85,28 +90,40 @@ func TestUploadBadgeIcon_rejectsHTMLDisguisedAsPNG(t *testing.T) {
 	}
 }
 
-func TestUploadBadgeIcon_acceptsRealPNGAndPreservesBytes(t *testing.T) {
-	dir := t.TempDir()
+// uploadBadgeIconAccepted posts an icon upload expected to succeed and
+// returns the single resulting disk filename, for the caller's own
+// extension/byte assertions. Shared by the PNG and SVG accept regressions
+// below.
+func uploadBadgeIconAccepted(t *testing.T, dir, claimedType string, body []byte) string {
+	t.Helper()
 	h := NewBadgeHandler(nil, dir)
 
-	// Body deliberately exceeds pkg.SniffBufferSize (512): if the handler
-	// wrote the original multipart file instead of the sniff's replay
-	// reader, the first 512 bytes would be missing from disk.
-	body := append(append([]byte{}, badgePNGMagic...), bytes.Repeat([]byte{0xAB}, 600)...)
-
 	rec := httptest.NewRecorder()
-	req := newBadgeIconRequest(t, "image/png", body)
+	req := newBadgeIconRequest(t, claimedType, body)
 	h.UploadBadgeIcon(rec, req)
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201, body: %s", rec.Code, rec.Body.String())
 	}
-
 	entries := countBadgeFiles(t, dir)
 	if len(entries) != 1 {
 		t.Fatalf("badges dir entries = %d, want 1", len(entries))
 	}
-	name := entries[0].Name()
+	return entries[0].Name()
+}
+
+func TestUploadBadgeIcon_rejectsHTMLDisguisedAsPNG(t *testing.T) {
+	assertBadgeIconRejected(t, t.TempDir(), "image/png", []byte("<!DOCTYPE html><html><body>boo</body></html>"))
+}
+
+func TestUploadBadgeIcon_acceptsRealPNGAndPreservesBytes(t *testing.T) {
+	dir := t.TempDir()
+	// Body deliberately exceeds pkg.SniffBufferSize (512): if the handler
+	// wrote the original multipart file instead of the sniff's replay
+	// reader, the first 512 bytes would be missing from disk.
+	body := append(append([]byte{}, badgePNGMagic...), bytes.Repeat([]byte{0xAB}, 600)...)
+
+	name := uploadBadgeIconAccepted(t, dir, "image/png", body)
 	if filepath.Ext(name) != ".png" {
 		t.Errorf("disk filename = %q, want .png suffix", name)
 	}
@@ -121,36 +138,12 @@ func TestUploadBadgeIcon_acceptsRealPNGAndPreservesBytes(t *testing.T) {
 
 func TestUploadBadgeIcon_acceptsSVGClaimWithXMLProlog(t *testing.T) {
 	dir := t.TempDir()
-	h := NewBadgeHandler(nil, dir)
-
-	rec := httptest.NewRecorder()
-	req := newBadgeIconRequest(t, "image/svg+xml", []byte(`<?xml version="1.0"?><svg/>`))
-	h.UploadBadgeIcon(rec, req)
-
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want 201, body: %s", rec.Code, rec.Body.String())
-	}
-	entries := countBadgeFiles(t, dir)
-	if len(entries) != 1 {
-		t.Fatalf("badges dir entries = %d, want 1", len(entries))
-	}
-	if filepath.Ext(entries[0].Name()) != ".svg" {
-		t.Errorf("disk filename = %q, want .svg suffix", entries[0].Name())
+	name := uploadBadgeIconAccepted(t, dir, "image/svg+xml", []byte(`<?xml version="1.0"?><svg/>`))
+	if filepath.Ext(name) != ".svg" {
+		t.Errorf("disk filename = %q, want .svg suffix", name)
 	}
 }
 
 func TestUploadBadgeIcon_rejectsHTMLDisguisedAsSVG(t *testing.T) {
-	dir := t.TempDir()
-	h := NewBadgeHandler(nil, dir)
-
-	rec := httptest.NewRecorder()
-	req := newBadgeIconRequest(t, "image/svg+xml", []byte("<!DOCTYPE html><html>"))
-	h.UploadBadgeIcon(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400, body: %s", rec.Code, rec.Body.String())
-	}
-	if entries := countBadgeFiles(t, dir); len(entries) != 0 {
-		t.Errorf("rejected upload wrote %d files to disk", len(entries))
-	}
+	assertBadgeIconRejected(t, t.TempDir(), "image/svg+xml", []byte("<!DOCTYPE html><html>"))
 }

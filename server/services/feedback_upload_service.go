@@ -48,19 +48,12 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	// The client-declared Content-Type header is attacker-controlled and
-	// never trusted for the allowlist decision — sniff the actual bytes
-	// instead (mirrors upload_service.go / dm_upload_service.go). replay
-	// MUST be what's written to disk: SniffContentType consumes up to 512
-	// bytes from file, so writing file itself would silently truncate the
-	// upload's first 512 bytes.
-	sniffed, replay, err := pkg.SniffContentType(file)
+	// sniffImageUpload (report_upload_service.go, same package) never trusts
+	// the client-declared Content-Type header; replay is the reader that
+	// MUST be written to disk instead of file, see its doc comment.
+	sniffed, replay, err := sniffImageUpload(file, allowedFeedbackMimeTypes, "only images are allowed")
 	if err != nil {
-		return nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
-	}
-
-	if !allowedFeedbackMimeTypes[sniffed] {
-		return nil, fmt.Errorf("%w: only images are allowed (got: %s)", pkg.ErrBadRequest, sniffed)
+		return nil, err
 	}
 
 	randomBytes := make([]byte, 8)

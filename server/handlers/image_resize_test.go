@@ -161,34 +161,41 @@ func TestResizeAvatarBytes_DimensionBoundary(t *testing.T) {
 	})
 }
 
-// TestResizeAvatarBytes_RoundTripPNG is the regression test for the
-// Seek(0) rewind between image.DecodeConfig and image.Decode: without it,
-// image.Decode would read from wherever DecodeConfig left off (past the
-// header) and fail on every real image, not just the bomb fixture.
-//
-// The fixture is uniformly semi-transparent (A: 200) so the alpha survives
-// the CatmullRom downscale at every pixel, keeping the PNG (alpha)
-// encoding path deterministic regardless of resample rounding at the
-// edges.
-func TestResizeAvatarBytes_RoundTripPNG(t *testing.T) {
-	src := encodePNGFixture(t, newSolidRGBA(300, 200, color.RGBA{R: 50, G: 100, B: 150, A: 200}))
-
+// assertResizeRoundTrip runs src through ResizeAvatarBytes, asserts the
+// returned extension is wantExt, then re-decodes the output and asserts its
+// bounds fit within avatarMaxDim. Shared by the PNG and JPEG round-trip
+// regressions below for the Seek(0) rewind between image.DecodeConfig and
+// image.Decode: without it, image.Decode would read from wherever
+// DecodeConfig left off (past the header) and fail on every real image,
+// not just the bomb fixture.
+func assertResizeRoundTrip(t *testing.T, src []byte, wantExt string) {
+	t.Helper()
 	out, ext, err := ResizeAvatarBytes(bytes.NewReader(src))
 	if err != nil {
 		t.Fatalf("ResizeAvatarBytes: %v", err)
 	}
-	if ext != ".png" {
-		t.Fatalf("expected .png extension for a source with alpha, got %q", ext)
+	if ext != wantExt {
+		t.Fatalf("expected %q extension, got %q", wantExt, ext)
 	}
 
 	decoded, _, err := image.Decode(bytes.NewReader(out))
 	if err != nil {
-		t.Fatalf("re-decoding resized PNG output: %v", err)
+		t.Fatalf("re-decoding resized output: %v", err)
 	}
 	b := decoded.Bounds()
 	if b.Dx() > avatarMaxDim || b.Dy() > avatarMaxDim {
 		t.Fatalf("resized image exceeds avatarMaxDim (%d): got %dx%d", avatarMaxDim, b.Dx(), b.Dy())
 	}
+}
+
+// TestResizeAvatarBytes_RoundTripPNG pins the alpha-preserving PNG output
+// path. The fixture is uniformly semi-transparent (A: 200) so the alpha
+// survives the CatmullRom downscale at every pixel, keeping the PNG (alpha)
+// encoding path deterministic regardless of resample rounding at the
+// edges.
+func TestResizeAvatarBytes_RoundTripPNG(t *testing.T) {
+	src := encodePNGFixture(t, newSolidRGBA(300, 200, color.RGBA{R: 50, G: 100, B: 150, A: 200}))
+	assertResizeRoundTrip(t, src, ".png")
 }
 
 // TestResizeAvatarBytes_RoundTripJPEG mirrors the PNG round-trip for a
@@ -199,23 +206,7 @@ func TestResizeAvatarBytes_RoundTripJPEG(t *testing.T) {
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
 		t.Fatalf("encode fixture jpeg: %v", err)
 	}
-
-	out, ext, err := ResizeAvatarBytes(bytes.NewReader(buf.Bytes()))
-	if err != nil {
-		t.Fatalf("ResizeAvatarBytes: %v", err)
-	}
-	if ext != ".jpg" {
-		t.Fatalf("expected .jpg extension for an alpha-less source, got %q", ext)
-	}
-
-	decoded, _, err := image.Decode(bytes.NewReader(out))
-	if err != nil {
-		t.Fatalf("re-decoding resized JPEG output: %v", err)
-	}
-	b := decoded.Bounds()
-	if b.Dx() > avatarMaxDim || b.Dy() > avatarMaxDim {
-		t.Fatalf("resized image exceeds avatarMaxDim (%d): got %dx%d", avatarMaxDim, b.Dx(), b.Dy())
-	}
+	assertResizeRoundTrip(t, buf.Bytes(), ".jpg")
 }
 
 // TestResizeAvatarBytes_RejectsUnregisteredFormat pins the decoder set: the
