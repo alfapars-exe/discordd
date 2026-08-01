@@ -7,7 +7,7 @@
 // `/api/uploads/%2e/<name>` arrived as `./<name>`:
 //
 //	ACL lookup  -> "/api/uploads/./<name>"  misses both attachment tables
-//	              -> MediaPublic (the correct default for avatars/icons/badges)
+//	              -> MediaPublic (the fail-open default at the time of the finding)
 //	byte read   -> path.Clean folds it back to the real private file
 //
 // Result: any DM or private-channel attachment was downloadable with NO
@@ -18,11 +18,15 @@
 // makes the ACL string and the disk path disagree. That is the gap this file
 // pins.
 //
-// Fix location note: the guard lives in Serve, not in MediaAccessService. That
-// service's MediaPublic fallback is correct by design — avatars, server icons,
-// badges, soundboard samples and branding exist in no attachment table — so
-// making it fail-closed would break every public asset. The real defect is the
-// two views of one path, so the canonical form is enforced once, up front.
+// Fix location note: the guard lives in Serve, not only in MediaAccessService.
+// MediaAccessService has since been rewritten to fail closed (a fileURL that
+// matches no ownership table and no positive public-asset check now resolves
+// to MediaNotFound, not MediaPublic — see services/media_access_service.go),
+// which independently closes the auth-bypass angle of this finding. But the
+// canonical-path guard here stays as a second, cheaper layer: it removes the
+// ACL-string-vs-disk-path disagreement at the source instead of relying on
+// every current and future MediaAccessService check to keep failing closed on
+// a mismatched string.
 package handlers
 
 import (
@@ -94,8 +98,17 @@ func TestServe_CanonicalPathsStillWork(t *testing.T) {
 
 	t.Run("public asset, unauthenticated -> 200", func(t *testing.T) {
 		// The MediaPublic path is load-bearing for avatars, server icons,
-		// soundboard samples and branding. If the fix had been applied in
-		// MediaAccessService instead, this would break.
+		// soundboard samples and branding. servePublicFile is registered as
+		// a positive public asset in newServeWorld's fake publicAssets repo
+		// (see upload_download_test.go), so it passes MediaAccessService's
+		// POSITIVE public-asset check and still resolves to MediaPublic even
+		// after the fail-closed rewrite. This row does not exercise the
+		// fail-closed dip — the dip only changed the outcome for paths that
+		// match NEITHER an ownership table NOR a positive public-asset check,
+		// which this one is not, so it stays green either way. (Previously
+		// this comment said the opposite — that the fix "would break" this
+		// case if applied in MediaAccessService — which contradicted the
+		// file's own header above once the fix landed there too.)
 		rec := serveAs(t, h, "/api/uploads/"+servePublicFile, "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())

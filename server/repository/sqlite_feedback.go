@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 type sqliteFeedbackRepo struct {
@@ -243,4 +245,24 @@ func (r *sqliteFeedbackRepo) GetAttachmentsByTicketID(ctx context.Context, ticke
 		atts = append(atts, a)
 	}
 	return atts, nil
+}
+
+// GetAttachmentByFileURL resolves a /api/uploads/{name} download URL back to
+// its feedback attachment row. Mirrors sqlite_attachment.go's GetByFileURL so
+// media access authorization can find feedback evidence files the same way
+// it finds channel attachments.
+func (r *sqliteFeedbackRepo) GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.FeedbackAttachment, error) {
+	query := `SELECT id, ticket_id, reply_id, filename, file_url, file_size, mime_type, created_at
+		FROM feedback_attachments WHERE file_url = ? LIMIT 1`
+	var a models.FeedbackAttachment
+	err := r.db.QueryRowContext(ctx, query, fileURL).Scan(
+		&a.ID, &a.TicketID, &a.ReplyID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, pkg.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get feedback attachment by file_url: %w", err)
+	}
+	return &a, nil
 }

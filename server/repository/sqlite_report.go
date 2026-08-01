@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/argeinfina/hichat/database"
@@ -267,4 +268,24 @@ func (r *sqliteReportRepo) GetAttachmentsByReportID(ctx context.Context, reportI
 		attachments = []models.ReportAttachment{}
 	}
 	return attachments, nil
+}
+
+// GetAttachmentByFileURL resolves a /api/uploads/{name} download URL back to
+// its report attachment row. Mirrors sqlite_attachment.go's GetByFileURL so
+// media access authorization can find report evidence files the same way it
+// finds channel attachments.
+func (r *sqliteReportRepo) GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.ReportAttachment, error) {
+	query := `SELECT id, report_id, filename, file_url, file_size, mime_type, created_at
+		FROM report_attachments WHERE file_url = ? LIMIT 1`
+	var a models.ReportAttachment
+	err := r.db.QueryRowContext(ctx, query, fileURL).Scan(
+		&a.ID, &a.ReportID, &a.Filename, &a.FileURL, &a.FileSize, &a.MimeType, &a.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, pkg.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get report attachment by file_url: %w", err)
+	}
+	return &a, nil
 }

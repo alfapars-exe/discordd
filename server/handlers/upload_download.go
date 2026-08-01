@@ -18,11 +18,14 @@
 //     has read access to the channel via ChannelPermResolver.
 //  3. For requests that match a DM attachment, verifies the user is one
 //     of the two participants in the DM channel.
-//  4. For requests that don't match either (avatars, server icons, badge
-//     icons, soundboard sounds, feedback/report screenshots), serves
-//     publicly — these resources are intentionally visible to everyone who
-//     can see the entity and there's no per-resource scoping table to
-//     consult, so they must load in unauthenticated <img> contexts too.
+//  4. For requests that match a report or feedback attachment (moderation
+//     evidence / support-ticket screenshots), verifies the caller is the
+//     reporter/ticket owner or a platform admin.
+//  5. Everything else is decided by a positive public-asset check
+//     (MediaAssetRepository.IsPublicAsset — avatars, wallpapers, server
+//     icons/banners — plus soundboard/badges path prefixes). A path that
+//     matches NONE of the above 404s rather than falling open — see
+//     services/media_access_service.go.
 package handlers
 
 import (
@@ -118,10 +121,13 @@ func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
 // Serve handles GET /api/uploads/<name>.
 //
 // Channel and DM attachments are access-controlled (channel-read permission /
-// DM participation); auth is accepted via Bearer header OR the hichat_media
-// HttpOnly cookie so rendered <img>/<video> tags work without JS. Everything
-// else (avatars, server icons, badge icons, soundboard samples, branding) is
-// served publicly — it's already visible to everyone who can see the entity.
+// DM participation); report and feedback attachments are access-controlled
+// (reporter/ticket owner or platform admin). Auth is accepted via Bearer
+// header OR the hichat_media HttpOnly cookie so rendered <img>/<video> tags
+// work without JS. Everything else is decided by a positive public-asset
+// check (avatars, server icons, soundboard samples, badge icons); a path that
+// matches none of the above is a 404, not a public serve — see
+// services/media_access_service.go for the full decision order.
 //
 // Path traversal is blocked here (prefix reject) and again in serveFile
 // (path.Clean + SafeJoin) as defense-in-depth.
@@ -133,25 +139,30 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 	// Reject non-canonical paths. The authorization decision below keys off the
 	// exact fileURL string recorded at upload time, while serveFile resolves the
-	// bytes through path.Clean. When those two disagree the ACL is bypassed
-	// entirely: `/api/uploads/%2e/<name>` arrives as `./<name>` (Go's ServeMux
-	// does not canonicalise %2e into a path segment), misses both attachment
-	// tables, is therefore classified MediaPublic — and then path.Clean folds it
-	// back to the real file. A private DM or channel attachment is served with
-	// no authentication at all.
+	// bytes through path.Clean. When those two disagree, the ACL lookup and the
+	// disk read are looking at two different strings: `/api/uploads/%2e/<name>`
+	// arrives as `./<name>` (Go's ServeMux does not canonicalise %2e into a path
+	// segment), so the non-canonical fileURL misses every ownership table AND
+	// the positive public-asset check in MediaAccessService — but path.Clean
+	// then folds it back to the real file on disk.
+	//
+	// As of the fail-closed rewrite (see MediaAccessService.Authorize /
+	// MediaNotFound), that mismatch alone no longer serves a private DM or
+	// channel attachment with no authentication: a non-canonical path that
+	// matches nothing now resolves to MediaNotFound, not MediaPublic. But it
+	// still relies on every current AND future ownership/public-asset check in
+	// MediaAccessService being an exact-string lookup to keep failing closed.
+	// Rejecting the non-canonical form here removes that dependency outright,
+	// as a second, independent layer on top of the service's own fail-closed
+	// default (defense-in-depth; pentest 2026-07-26 finding C-02).
 	//
 	// Rejecting is safe because every server-generated name is already canonical:
 	// a single segment {16 hex}_{sanitizeFilename} (services.UploadService), or
 	// the two-segment "soundboard/{16 hex}_…", and sanitizeFilename strips
 	// separators. So a non-canonical request is never legitimate.
 	//
-	// Fixing it here rather than in MediaAccessService is deliberate: that
-	// service's MediaPublic fallback is what serves avatars, server icons,
-	// soundboard samples and branding — none of which have an attachment row —
-	// so making it fail-closed would break every public asset. (Badge icons are
-	// NOT in that set: they are returned as /uploads/badges/… without the /api
-	// prefix and never reach this handler.) The defect was two views of one
-	// path, so the canonical form is enforced once, here.
+	// (Badge icons never reach this handler at all: they are returned as
+	// /uploads/badges/… without the /api prefix.)
 	//
 	// INVARIANT: this equalises the two path STRINGS, which is sufficient only
 	// while the ACL lookup and the disk read agree on case. The lookup is a

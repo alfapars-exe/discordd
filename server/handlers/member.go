@@ -305,6 +305,15 @@ func (h *MemberHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// AvatarURL is silently discarded: Validate() never checks it, so a caller
+	// could otherwise point avatar_url at an arbitrary /api/uploads path —
+	// including someone else's orphaned private attachment — and launder it
+	// into MediaAssetRepository.IsPublicAsset's positive public-asset check
+	// (services/media_access_service.go), bypassing the fail-closed default.
+	// The only legitimate way to set an avatar is handlers/avatar.go, which
+	// calls MemberService.UpdateProfile directly and never goes through this
+	// JSON body.
+	req.AvatarURL = nil
 
 	member, err := h.memberService.UpdateProfile(r.Context(), user.ID, &req)
 	if err != nil {

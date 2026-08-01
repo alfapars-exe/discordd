@@ -124,6 +124,9 @@ func (stubReportRepo) CreateAttachment(context.Context, *models.ReportAttachment
 func (stubReportRepo) GetAttachmentsByReportID(context.Context, string) ([]models.ReportAttachment, error) {
 	return nil, nil
 }
+func (stubReportRepo) GetAttachmentByFileURL(context.Context, string) (*models.ReportAttachment, error) {
+	return nil, pkg.ErrNotFound
+}
 
 var _ repository.ReportRepository = stubReportRepo{}
 
@@ -186,6 +189,9 @@ func (stubFeedbackRepo) CreateAttachment(context.Context, *models.FeedbackAttach
 }
 func (stubFeedbackRepo) GetAttachmentsByTicketID(context.Context, string) ([]models.FeedbackAttachment, error) {
 	return nil, nil
+}
+func (stubFeedbackRepo) GetAttachmentByFileURL(context.Context, string) (*models.FeedbackAttachment, error) {
+	return nil, pkg.ErrNotFound
 }
 
 var _ repository.FeedbackRepository = stubFeedbackRepo{}
