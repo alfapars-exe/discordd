@@ -381,13 +381,19 @@ const (
 	serveDMUser1ID       = "user-dm-one"
 	serveDMUser2ID       = "user-dm-two"
 	serveOutsiderID      = "user-outsider"
+	serveReportOwnerID   = "user-report-owner"
+	serveFeedbackOwnerID = "user-feedback-owner"
+	servePlatformAdminID = "user-platform-admin"
 )
 
 // Files on disk under the upload dir.
 const (
-	serveChannelFile = "aabbccdd-channel-secret.png"
-	serveDMFile      = "eeff0011-dm-secret.png"
-	servePublicFile  = "22334455-avatar.png"
+	serveChannelFile   = "aabbccdd-channel-secret.png"
+	serveDMFile        = "eeff0011-dm-secret.png"
+	servePublicFile    = "22334455-avatar.png"
+	serveReportFile    = "33445566-report-evidence.png"
+	serveFeedbackFile  = "44556677-feedback-evidence.png"
+	serveUnclaimedFile = "77889900-unclaimed-orphan.png"
 )
 
 // serveAttachmentRepo answers GetByFileURL from a fixture map and reports
@@ -419,6 +425,72 @@ func (s *serveDMRepo) GetAttachmentByFileURL(_ context.Context, fileURL string) 
 	return nil, pkg.ErrNotFound
 }
 
+// serveReportRepo / serveFeedbackRepo / serveUserRepo / serveMediaAssetRepo
+// are minimal fakes for MediaAccessService's newer dependencies (A-22 fix).
+// They satisfy the narrow structural interfaces NewMediaAccessService takes
+// (services.mediaReportGetter etc.) rather than the full repository
+// interfaces — narrower than serveAttachmentRepo/serveDMRepo above because
+// there's no full-interface testutil mock to embed for these yet.
+type serveReportRepo struct {
+	attByURL map[string]*models.ReportAttachment
+	byID     map[string]*models.Report
+}
+
+func (s *serveReportRepo) GetAttachmentByFileURL(_ context.Context, fileURL string) (*models.ReportAttachment, error) {
+	if att, ok := s.attByURL[fileURL]; ok {
+		return att, nil
+	}
+	return nil, pkg.ErrNotFound
+}
+
+func (s *serveReportRepo) GetByID(_ context.Context, id string) (*models.Report, error) {
+	if r, ok := s.byID[id]; ok {
+		return r, nil
+	}
+	return nil, pkg.ErrNotFound
+}
+
+type serveFeedbackRepo struct {
+	attByURL map[string]*models.FeedbackAttachment
+	byID     map[string]*models.FeedbackTicketWithUser
+}
+
+func (s *serveFeedbackRepo) GetAttachmentByFileURL(_ context.Context, fileURL string) (*models.FeedbackAttachment, error) {
+	if att, ok := s.attByURL[fileURL]; ok {
+		return att, nil
+	}
+	return nil, pkg.ErrNotFound
+}
+
+func (s *serveFeedbackRepo) GetTicketByID(_ context.Context, id string) (*models.FeedbackTicketWithUser, error) {
+	if t, ok := s.byID[id]; ok {
+		return t, nil
+	}
+	return nil, pkg.ErrNotFound
+}
+
+type serveUserRepo struct {
+	byID map[string]*models.User
+}
+
+func (s *serveUserRepo) GetByID(_ context.Context, id string) (*models.User, error) {
+	if u, ok := s.byID[id]; ok {
+		return u, nil
+	}
+	return nil, pkg.ErrNotFound
+}
+
+// serveMediaAssetRepo fakes MediaAssetRepository.IsPublicAsset — the positive
+// public-asset check the fail-closed rewrite added. servePublicFile is the
+// only fixture path in it; everything else is "not public".
+type serveMediaAssetRepo struct {
+	public map[string]bool
+}
+
+func (s *serveMediaAssetRepo) IsPublicAsset(_ context.Context, fileURL string) (bool, error) {
+	return s.public[fileURL], nil
+}
+
 var (
 	_ repository.AttachmentRepository = (*serveAttachmentRepo)(nil)
 	_ repository.DMRepository         = (*serveDMRepo)(nil)
@@ -426,16 +498,23 @@ var (
 	_ services.ChannelPermResolver    = (*testutil.MockChannelPermResolver)(nil)
 )
 
-// newServeWorld wires a handler over a temp upload dir containing all three
+// newServeWorld wires a handler over a temp upload dir containing all six
 // fixture files, with repos describing one channel attachment (msg-1 in
 // chan-1), one DM attachment (dm-msg-1 in dm-chan-1 between serveDMUser1ID and
-// serveDMUser2ID) and nothing claiming the avatar. Returns the upload dir so
-// traversal tests can plant a secret next to it.
+// serveDMUser2ID), one report attachment (report-1, reported by
+// serveReportOwnerID), one feedback attachment (ticket-1, owned by
+// serveFeedbackOwnerID), the avatar as a positively-public asset, and
+// serveUnclaimedFile claimed by NOTHING (the A-21 orphan-on-disk case).
+// Returns the upload dir so traversal tests can plant a secret next to it.
 func newServeWorld(t *testing.T) (*UploadDownloadHandler, string, *serveAttachmentRepo) {
 	t.Helper()
 
 	dir := t.TempDir()
-	for _, name := range []string{serveChannelFile, serveDMFile, servePublicFile} {
+	files := []string{
+		serveChannelFile, serveDMFile, servePublicFile,
+		serveReportFile, serveFeedbackFile, serveUnclaimedFile,
+	}
+	for _, name := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("bytes-of-"+name), 0o600); err != nil {
 			t.Fatalf("write fixture %s: %v", name, err)
 		}
@@ -499,7 +578,49 @@ func newServeWorld(t *testing.T) (*UploadDownloadHandler, string, *serveAttachme
 		},
 	}
 
-	mediaAuth := services.NewMediaAccessService(attachments, messages, dmRepo, perms)
+	reports := &serveReportRepo{
+		attByURL: map[string]*models.ReportAttachment{
+			"/api/uploads/" + serveReportFile: {
+				ID:       "report-att-1",
+				ReportID: "report-1",
+				Filename: "report-evidence.png",
+				FileURL:  "/api/uploads/" + serveReportFile,
+			},
+		},
+		byID: map[string]*models.Report{
+			"report-1": {ID: "report-1", ReporterID: serveReportOwnerID},
+		},
+	}
+
+	feedback := &serveFeedbackRepo{
+		attByURL: map[string]*models.FeedbackAttachment{
+			"/api/uploads/" + serveFeedbackFile: {
+				ID:       "feedback-att-1",
+				TicketID: "ticket-1",
+				Filename: "feedback-evidence.png",
+				FileURL:  "/api/uploads/" + serveFeedbackFile,
+			},
+		},
+		byID: map[string]*models.FeedbackTicketWithUser{
+			"ticket-1": {FeedbackTicket: models.FeedbackTicket{ID: "ticket-1", UserID: serveFeedbackOwnerID}},
+		},
+	}
+
+	users := &serveUserRepo{
+		byID: map[string]*models.User{
+			serveReportOwnerID:   {ID: serveReportOwnerID},
+			serveFeedbackOwnerID: {ID: serveFeedbackOwnerID},
+			servePlatformAdminID: {ID: servePlatformAdminID, IsPlatformAdmin: true},
+			serveOutsiderID:      {ID: serveOutsiderID},
+			serveChannelMemberID: {ID: serveChannelMemberID},
+		},
+	}
+
+	mediaAssets := &serveMediaAssetRepo{
+		public: map[string]bool{"/api/uploads/" + servePublicFile: true},
+	}
+
+	mediaAuth := services.NewMediaAccessService(attachments, messages, dmRepo, perms, reports, feedback, users, mediaAssets)
 	h := NewUploadDownloadHandler(dir, mediaAuth, newUploadTestAuthService())
 	return h, dir, attachments
 }
@@ -626,6 +747,122 @@ func TestServe_AuthGating(t *testing.T) {
 	}
 }
 
+// TestServe_ReportAndFeedbackAttachments pins the A-22 fix: report/feedback
+// evidence files, which used to fall through to MediaPublic (any URL holder
+// could download moderation evidence with no credential at all), are now
+// access-controlled the same way channel/DM attachments are — visible only
+// to the reporter/ticket owner or a platform admin.
+func TestServe_ReportAndFeedbackAttachments(t *testing.T) {
+	h, _, _ := newServeWorld(t)
+
+	tests := []struct {
+		name       string
+		path       string
+		userID     string // "" = anonymous
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "report evidence visible to the reporter",
+			path:       "/api/uploads/" + serveReportFile,
+			userID:     serveReportOwnerID,
+			wantStatus: http.StatusOK,
+			wantBody:   "bytes-of-" + serveReportFile,
+		},
+		{
+			name:       "report evidence visible to a platform admin",
+			path:       "/api/uploads/" + serveReportFile,
+			userID:     servePlatformAdminID,
+			wantStatus: http.StatusOK,
+			wantBody:   "bytes-of-" + serveReportFile,
+		},
+		{
+			name:       "report evidence forbidden to an unrelated user",
+			path:       "/api/uploads/" + serveReportFile,
+			userID:     serveOutsiderID,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "report evidence refused outright without a credential",
+			path:       "/api/uploads/" + serveReportFile,
+			userID:     "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "feedback evidence visible to the ticket owner",
+			path:       "/api/uploads/" + serveFeedbackFile,
+			userID:     serveFeedbackOwnerID,
+			wantStatus: http.StatusOK,
+			wantBody:   "bytes-of-" + serveFeedbackFile,
+		},
+		{
+			name:       "feedback evidence visible to a platform admin",
+			path:       "/api/uploads/" + serveFeedbackFile,
+			userID:     servePlatformAdminID,
+			wantStatus: http.StatusOK,
+			wantBody:   "bytes-of-" + serveFeedbackFile,
+		},
+		{
+			name:       "feedback evidence forbidden to an unrelated user",
+			path:       "/api/uploads/" + serveFeedbackFile,
+			userID:     serveOutsiderID,
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "feedback evidence refused outright without a credential",
+			path:       "/api/uploads/" + serveFeedbackFile,
+			userID:     "",
+			wantStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serveAs(t, h, tc.path, tc.userID)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body %q)", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			if tc.wantBody != "" && rec.Body.String() != tc.wantBody {
+				t.Errorf("body = %q, want %q", rec.Body.String(), tc.wantBody)
+			}
+			if tc.wantStatus != http.StatusOK && strings.Contains(rec.Body.String(), "bytes-of-") {
+				t.Errorf("denied response leaked file content: %q", rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestServe_UnclaimedDiskFileFailsClosed is the A-21 pin. A file can end up
+// on disk with NO table claiming its fileURL: message/report/ticket deletion
+// never removes the file from disk, and on prod's remote libSQL/Turso branch
+// `foreign_keys` is never enabled, so `ON DELETE CASCADE` doesn't even clean
+// up the attachment ROW either. Before the fail-closed rewrite, "nothing
+// claims this path" fell through to MediaPublic — the file became MORE
+// exposed the moment its owning row disappeared. It must now 404 for every
+// caller, authenticated or not.
+func TestServe_UnclaimedDiskFileFailsClosed(t *testing.T) {
+	h, _, _ := newServeWorld(t)
+
+	for _, tc := range []struct {
+		name   string
+		userID string
+	}{
+		{"anonymous caller", ""},
+		{"authenticated caller who is nobody in particular", serveOutsiderID},
+		{"authenticated platform admin", servePlatformAdminID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serveAs(t, h, "/api/uploads/"+serveUnclaimedFile, tc.userID)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404 (body %q)", rec.Code, rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), "bytes-of-") {
+				t.Fatalf("unclaimed on-disk file leaked despite the fail-closed default: %q", rec.Body.String())
+			}
+		})
+	}
+}
+
 // TestServe_RefusesPathTraversal plants a secret file one directory ABOVE the
 // upload dir and confirms no spelling of ".." reaches it. Serve rejects on the
 // raw name (prefix check) and serveFile rejects again after path.Clean +
@@ -708,7 +945,8 @@ func TestServe_OrphanAndLookupFailures(t *testing.T) {
 		}
 		boom := &boomAttachmentRepo{MockAttachmentRepo: &testutil.MockAttachmentRepo{}}
 		mediaAuth := services.NewMediaAccessService(boom, &testutil.MockMessageRepo{},
-			&serveDMRepo{MockDMRepo: &testutil.MockDMRepo{}}, &testutil.MockChannelPermResolver{})
+			&serveDMRepo{MockDMRepo: &testutil.MockDMRepo{}}, &testutil.MockChannelPermResolver{},
+			&serveReportRepo{}, &serveFeedbackRepo{}, &serveUserRepo{}, &serveMediaAssetRepo{})
 		h := NewUploadDownloadHandler(dir, mediaAuth, newUploadTestAuthService())
 
 		rec := serveAs(t, h, "/api/uploads/"+servePublicFile, serveChannelMemberID)

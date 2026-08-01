@@ -51,7 +51,13 @@ func (d *routeDeps) registerUploadRoutes() {
 	// or DM), where the transaction binds the file to a message the caller
 	// just authored, and no client ever invoked the standalone form.
 
-	// Upload download — attachments are access-controlled, the rest is public.
+	// Upload download — access is decided per category, in this order: channel
+	// attachment -> DM attachment -> report attachment (reporter or platform
+	// admin) -> feedback attachment (ticket owner or platform admin) ->
+	// positive public-asset match (users.avatar_url|wallpaper_url,
+	// servers.icon_url|banner_url) -> soundboard/badges path prefix -> 404 for
+	// anything matching none of the above. See services/media_access_service.go
+	// for the full decision order and why it fails closed rather than public.
 	//
 	// F-1 (audit 2026-05-29): the earlier A4 auth boundary had been reverted to
 	// a fully-public serve because a native `<img>` can't carry a Bearer header.

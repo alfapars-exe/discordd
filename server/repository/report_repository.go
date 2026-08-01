@@ -20,4 +20,7 @@ type ReportRepository interface {
 	// CreateAttachment adds an evidence file to a report.
 	CreateAttachment(ctx context.Context, att *models.ReportAttachment) error
 	GetAttachmentsByReportID(ctx context.Context, reportID string) ([]models.ReportAttachment, error)
+	// GetAttachmentByFileURL resolves a /api/uploads/{name} download URL back
+	// to its report attachment row, mirroring AttachmentRepository.GetByFileURL.
+	GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.ReportAttachment, error)
 }
