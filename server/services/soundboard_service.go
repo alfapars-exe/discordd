@@ -180,7 +180,13 @@ func (s *soundboardService) Create(
 	}
 	refined := pkg.RefineMIME(sniffed, header.Filename)
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(header.Filename), "."))
-	if !soundAllowedSniffedTypes[refined] && !(sniffed == "application/octet-stream" && soundGenericExts[ext]) {
+	// Two ways in: the bytes sniff as a known audio type, or they sniff as
+	// nothing in particular and the extension is one Go's sniffer has no
+	// signature for (aac/m4a). Stated positively so the acceptance rule reads
+	// as a rule rather than as a pair of negations.
+	accepted := soundAllowedSniffedTypes[refined] ||
+		(sniffed == "application/octet-stream" && soundGenericExts[ext])
+	if !accepted {
 		return nil, fmt.Errorf("%w: file contents are not audio", pkg.ErrBadRequest)
 	}
 
