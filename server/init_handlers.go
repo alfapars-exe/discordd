@@ -69,7 +69,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Reaction:          handlers.NewReactionHandler(svcs.Reaction),
 		ChannelPermission: handlers.NewChannelPermissionHandler(svcs.ChannelPermission),
 		Friendship:        handlers.NewFriendshipHandler(svcs.Friendship),
-		Avatar:            handlers.NewAvatarHandler(repos.User, svcs.Member, svcs.Server, cfg.Upload.Dir),
+		Avatar:            handlers.NewAvatarHandler(repos.User, svcs.Member, svcs.Server, cfg.Upload.Dir, limiters.Upload),
 		Stats:             handlers.NewStatsHandler(repos.User),
 		Admin:             handlers.NewAdminHandler(svcs.LiveKitAdmin, svcs.MetricsHistory, svcs.AdminUser, svcs.AdminServer, svcs.Report, svcs.AppLog, svcs.Voice),
 		ServerMute:        handlers.NewServerMuteHandler(svcs.ServerMute),

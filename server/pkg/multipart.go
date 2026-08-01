@@ -19,6 +19,7 @@
 package pkg
 
 import (
+	"fmt"
 	"mime/multipart"
 	"net/http"
 )
@@ -46,6 +47,12 @@ func LimitedParseMultipartForm(w http.ResponseWriter, r *http.Request, maxBytes 
 // is the per-file limit, n is the maximum number of files the endpoint
 // accepts. The total cap is `maxBytesPerFile * n + overhead`.
 //
+// After parsing, the total number of file parts across ALL form field
+// names is checked against n; if it exceeds n, the parsed form is
+// discarded and an error wrapping ErrBadRequest is returned. This is a
+// field-name-agnostic count — a caller that spreads files across
+// multiple field names is still bounded by n in aggregate.
+//
 // `n` should be set conservatively — a handler that loops over an
 // unbounded number of files should pick a sane attachment-count limit
 // (most chat backends settle on 5-10).
@@ -55,7 +62,26 @@ func LimitedParseMultipartFormN(w http.ResponseWriter, r *http.Request, maxBytes
 	}
 	totalCap := maxBytesPerFile*int64(n) + multipartHeaderOverhead
 	r.Body = http.MaxBytesReader(w, r.Body, totalCap)
-	return r.ParseMultipartForm(maxBytesPerFile) // #nosec G120 -- r.Body was just wrapped in http.MaxBytesReader on the line above; gosec's pattern match doesn't trace that mutation, but the parse is bounded (this whole file exists to provide that bound)
+	if err := r.ParseMultipartForm(maxBytesPerFile); err != nil { // #nosec G120 -- r.Body was just wrapped in http.MaxBytesReader on the line above; gosec's pattern match doesn't trace that mutation, but the parse is bounded (this whole file exists to provide that bound)
+		return err
+	}
+	if r.MultipartForm == nil {
+		return nil
+	}
+	total := 0
+	for _, parts := range r.MultipartForm.File {
+		total += len(parts)
+	}
+	if total > n {
+		// Free the parsed tempfiles/memory now rather than waiting for
+		// net/http's end-of-request cleanup — the caller is about to
+		// reject the request anyway, no reason to hold the spilled data.
+		// This does NOT fix a leak (net/http already cleans up at the
+		// end of the request regardless); it's purely an early release.
+		_ = r.MultipartForm.RemoveAll()
+		return fmt.Errorf("%w: too many files (max %d)", ErrBadRequest, n)
+	}
+	return nil
 }
 
 // Compile-time guard that the package still imports multipart — the

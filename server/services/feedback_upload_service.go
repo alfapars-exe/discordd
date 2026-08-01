@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"mime/multipart"
 	"os"
-	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -49,14 +48,12 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	mimeBase := strings.TrimSpace(strings.Split(contentType, ";")[0])
-
-	if !allowedFeedbackMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: only images are allowed (got: %s)", pkg.ErrBadRequest, mimeBase)
+	// sniffImageUpload (report_upload_service.go, same package) never trusts
+	// the client-declared Content-Type header; replay is the reader that
+	// MUST be written to disk instead of file, see its doc comment.
+	sniffed, replay, err := sniffImageUpload(file, allowedFeedbackMimeTypes, "only images are allowed")
+	if err != nil {
+		return nil, err
 	}
 
 	randomBytes := make([]byte, 8)
@@ -70,7 +67,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	if err := writeUploadFile(destPath, file, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
+	if err := writeUploadFile(destPath, replay, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +79,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		Filename: header.Filename,
 		FileURL:  "/api/uploads/" + diskFilename,
 		FileSize: &fileSize,
-		MimeType: &mimeBase,
+		MimeType: &sniffed,
 	}
 
 	if err := s.feedbackRepo.CreateAttachment(ctx, att); err != nil {

@@ -202,9 +202,31 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Validate MIME type
-	mime := header.Header.Get("Content-Type")
-	if !allowedBadgeIconMimes[mime] {
+	// Validate content: the client-declared Content-Type header is
+	// attacker-controlled, so the allowlist decision is derived from the
+	// bytes themselves (pkg.SniffContentType), never from the claim. SVG is
+	// the one exception Go's sniffer can't resolve on its own — it never
+	// returns "image/svg+xml" (an XML-prolog SVG sniffs as "text/xml", a
+	// bare "<svg" root sniffs as "text/plain") — so an SVG claim is honored
+	// only when the bytes sniff to one of those two generic XML/text
+	// results. "text/html" is deliberately NOT accepted here even though an
+	// HTML file can also sniff as text/plain in edge cases: badges are
+	// served from a static handler with no serve-time re-sniff (see the
+	// comment above the URL below), so this is the only checkpoint.
+	sniffed, replay, err := pkg.SniffContentType(file)
+	if err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "unreadable upload")
+		return
+	}
+	claim := strings.TrimSpace(strings.Split(header.Header.Get("Content-Type"), ";")[0])
+
+	var effectiveMIME string
+	switch {
+	case allowedBadgeIconSniffedMimes[sniffed]:
+		effectiveMIME = sniffed
+	case claim == "image/svg+xml" && (sniffed == "text/xml" || sniffed == "text/plain"):
+		effectiveMIME = "image/svg+xml"
+	default:
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "only PNG, JPEG, GIF, WEBP, and SVG are allowed")
 		return
 	}
@@ -218,7 +240,7 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	// as SafeJoin — correct, but the last line rather than the only one.
 	randBytes := make([]byte, 8)
 	_, _ = rand.Read(randBytes)
-	filename := fmt.Sprintf("badge_%s%s", hex.EncodeToString(randBytes), mimeToExt(mime))
+	filename := fmt.Sprintf("badge_%s%s", hex.EncodeToString(randBytes), mimeToExt(effectiveMIME))
 
 	// Ensure badges subdirectory exists. 0750: group-readable for the
 	// operator, closed to "other" so a shared host can't enumerate badges.
@@ -261,7 +283,7 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	// Close before any rename/remove — Windows refuses both while the handle
 	// is open. Close is checked because a buffered write failure surfaces
 	// there and nowhere else; discarding it would publish a truncated icon.
-	_, copyErr := io.Copy(tmp, file)
+	_, copyErr := io.Copy(tmp, replay)
 	closeErr := tmp.Close()
 	if copyErr != nil {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to write icon", copyErr)
@@ -285,12 +307,14 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusCreated, map[string]string{"url": urlPath})
 }
 
-var allowedBadgeIconMimes = map[string]bool{
-	"image/jpeg":    true,
-	"image/png":     true,
-	"image/gif":     true,
-	"image/webp":    true,
-	"image/svg+xml": true,
+// allowedBadgeIconSniffedMimes is what http.DetectContentType actually
+// returns for the four raster formats — never "image/svg+xml", which Go's
+// sniffer cannot produce (see the SVG branch in UploadBadgeIcon).
+var allowedBadgeIconSniffedMimes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/gif":  true,
+	"image/webp": true,
 }
 
 func mimeToExt(mime string) string {

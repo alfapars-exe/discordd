@@ -256,8 +256,11 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.HasPrefix(contentType, "multipart/") {
-		// Replies allow up to 3 attachments.
-		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 3); err != nil {
+		// Client caps reply attachments at 4 (FeedbackSettings.tsx
+		// MAX_FILES); the server ceiling is kept above the client cap
+		// (symmetric with CreateTicket's n=5 above) so a legitimate
+		// client-side upload never trips the server's file-count check.
+		if err := pkg.LimitedParseMultipartFormN(w, r, h.maxUploadSize, 5); err != nil {
 			return nil, fmt.Errorf("%w: invalid multipart form", pkg.ErrBadRequest)
 		}
 		req.Content = r.FormValue("content")

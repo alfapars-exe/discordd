@@ -1,12 +1,15 @@
 // Package handlers -- AvatarHandler: user avatar and server icon upload endpoints.
 //
 // Separate from UploadService because avatar uploads update User/Server records
-// directly (no messageID or Attachment record), and only image MIME types are accepted.
+// directly (no messageID or Attachment record), and only files that
+// successfully decode as images (via ResizeAvatarBytes) are accepted --
+// see processUpload.
 package handlers
 
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,25 +18,27 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/services"
 )
 
 const avatarMaxSize = 8 << 20 // 8MB
 
-var allowedImageMimes = map[string]bool{
-	"image/jpeg": true,
-	"image/png":  true,
-	"image/gif":  true,
-	"image/webp": true,
-}
+// retryAfterHeader is the standard HTTP header used to tell a rate-limited
+// client how long to wait before retrying.
+const retryAfterHeader = "Retry-After"
 
 // AvatarHandler handles avatar and icon upload endpoints.
+// uploadLimiter is the same per-user upload budget MessageHandler/DMHandler
+// apply to multipart message attachments (message.go) — avatars share the
+// storage/bandwidth cost concern, so they share the limiter wiring.
 type AvatarHandler struct {
 	userRepo      repository.UserRepository
 	memberService services.MemberService
 	serverService services.ServerService
 	uploadDir     string
+	uploadLimiter *ratelimit.MessageRateLimiter
 }
 
 func NewAvatarHandler(
@@ -41,13 +46,32 @@ func NewAvatarHandler(
 	memberService services.MemberService,
 	serverService services.ServerService,
 	uploadDir string,
+	uploadLimiter *ratelimit.MessageRateLimiter,
 ) *AvatarHandler {
 	return &AvatarHandler{
 		userRepo:      userRepo,
 		memberService: memberService,
 		serverService: serverService,
 		uploadDir:     uploadDir,
+		uploadLimiter: uploadLimiter,
 	}
+}
+
+// rateLimited checks the upload limiter for userID and, if the budget is
+// exhausted, writes the Retry-After header plus a 429 response body and
+// returns true so the caller can bail out. A nil limiter (disabled) or a
+// user still within budget returns false without writing anything.
+func (h *AvatarHandler) rateLimited(w http.ResponseWriter, userID string) bool {
+	if h.uploadLimiter == nil || h.uploadLimiter.Allow(userID) {
+		return false
+	}
+
+	retryAfter := h.uploadLimiter.CooldownSeconds(userID)
+	w.Header().Set(retryAfterHeader, fmt.Sprintf("%d", retryAfter))
+	pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+		fmt.Sprintf("too many uploads, please wait %s",
+			ratelimit.FormatRetryMessage(retryAfter)))
+	return true
 }
 
 // UploadUserAvatar uploads the current user's avatar.
@@ -57,6 +81,10 @@ func (h *AvatarHandler) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	if h.rateLimited(w, user.ID) {
 		return
 	}
 
@@ -87,6 +115,10 @@ func (h *AvatarHandler) UploadUserWallpaper(w http.ResponseWriter, r *http.Reque
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	if h.rateLimited(w, user.ID) {
 		return
 	}
 
@@ -135,6 +167,17 @@ func (h *AvatarHandler) UploadServerIcon(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// This route doesn't otherwise need the caller's user record (permission
+	// is already enforced by authServerPerm upstream) — it's read here only
+	// to key the upload limiter. If it's missing for any reason, skip the
+	// limiter rather than reject the request; don't change this route's
+	// existing auth behavior.
+	if user, ok := r.Context().Value(UserContextKey).(*models.User); ok {
+		if h.rateLimited(w, user.ID) {
+			return
+		}
+	}
+
 	fileURL, err := h.processUpload(w, r)
 	if err != nil {
 		pkg.Error(w, err)
@@ -178,29 +221,30 @@ func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request) (s
 		return "", fmt.Errorf("%w: file too large (max 8MB)", pkg.ErrBadRequest)
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	mimeBase := strings.Split(contentType, ";")[0]
-	mimeBase = strings.TrimSpace(mimeBase)
-
-	if !allowedImageMimes[mimeBase] {
-		return "", fmt.Errorf("%w: only image files are allowed (jpeg, png, gif, webp)", pkg.ErrBadRequest)
-	}
-
-	// Downscale + re-encode before touching disk. ResizeAvatarBytes accepts
-	// any image MIME we allow, caps the longest edge at avatarMaxDim, and
-	// returns the encoder-chosen extension (.png for alpha, .jpg otherwise).
-	// The resize step also strips EXIF / colour-profile metadata, so a user
-	// can't accidentally publish GPS-tagged photos as their avatar.
+	// No client-declared-MIME allowlist here on purpose: the multipart
+	// Content-Type header is attacker-controlled and was never actually
+	// validated against the file bytes. ResizeAvatarBytes below is the only
+	// gate — the binary links exactly one decoder set (jpeg/png/gif/webp;
+	// see image_resize.go's imports and pkg/thumbnail's matching set), so a
+	// successful full decode IS proof of allowlist membership, and it comes
+	// from the real bytes instead of a 512-byte sniff.
+	//
+	// Downscale + re-encode before touching disk. ResizeAvatarBytes decodes
+	// any image format the binary supports, caps the longest edge at
+	// avatarMaxDim, and returns the encoder-chosen extension (.png for
+	// alpha, .jpg otherwise). The resize step also strips EXIF /
+	// colour-profile metadata, so a user can't accidentally publish
+	// GPS-tagged photos as their avatar.
 	//
 	// Pre-resize avatars routinely hit ~1.3 MiB on disk (the Lighthouse audit
 	// from Mayıs 28 2026 showed five concurrent member-list avatars eating
 	// ~5.9 MiB of bandwidth). Post-resize each one fits in ~6-15 KB.
 	resized, ext, err := ResizeAvatarBytes(file)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", pkg.ErrBadRequest, err)
+		if errors.Is(err, ErrImageTooLarge) {
+			return "", fmt.Errorf("%w: %v", pkg.ErrBadRequest, err)
+		}
+		return "", fmt.Errorf("%w: only image files are allowed (jpeg, png, gif, webp)", pkg.ErrBadRequest)
 	}
 
 	randomBytes := make([]byte, 8)

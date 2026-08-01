@@ -4508,6 +4508,27 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 }
 
 /* ═══════════════════════════════════════
+   DM Safety Number Panel (peer trust verification)
+   ═══════════════════════════════════════ */
+.e2ee-warning-banner-btn { margin-left:auto;flex-shrink:0;padding:4px 12px;border:1px solid var(--yellow);border-radius:6px;background:transparent;color:var(--yellow);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit; }
+.e2ee-warning-banner-btn:hover { background:var(--yellow);color:#1a1a1a; }
+
+.trust-panel-description { font-size:13px;color:var(--t2);padding:10px 14px 0;line-height:1.4; }
+.trust-panel-hint { font-size:12px;color:var(--t3);padding:8px 14px;border-top:1px solid var(--b1);line-height:1.4; }
+.trust-list { flex:1;overflow-y:auto;padding:8px 14px; }
+.trust-item { padding:10px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;margin-bottom:8px; }
+.trust-item-alert { border-color:var(--yellow); }
+.trust-item-alert-tag { font-size:12px;color:var(--yellow);background:var(--yellow-s);padding:6px 10px;border-radius:6px;margin-bottom:8px;line-height:1.4; }
+.trust-item-header { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px; }
+.trust-item-device { font-family:var(--f-m);font-size:13px;color:var(--t0); }
+.trust-item-badge { font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px; }
+.trust-item-badge.verified { background:var(--green-s);color:var(--green); }
+.trust-item-badge.unverified { background:rgba(160,160,160,.1);color:var(--t2); }
+.trust-item .e2ee-fingerprint { display:block;font-size:13px;padding:8px 12px;margin:6px 0; }
+.trust-verify-btn { margin-top:8px;padding:6px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit; }
+.trust-verify-btn:hover { background:var(--primary-h); }
+
+/* ═══════════════════════════════════════
    AUDIT CHANNEL
    Read-only system log; no composer; rows are denser than chat messages.
    ═══════════════════════════════════════ */
@@ -4959,3 +4980,15 @@ body.neon-off .electron-app-wrapper::after {
 }
 
 body.reduce-motion .lightning-overlay { display: none; }
+
+/* ═══════════════════════════════════════
+   EncryptionSettings — own_new_device device-list alert
+   (server-injected device on the user's own account; see e2eeStore
+   PeerTrustAlertKind doc comment for the threat model)
+   ═══════════════════════════════════════ */
+.e2ee-device-item.is-untrusted { border-color:var(--red); background:var(--red-s); }
+.e2ee-device-alert-badge { margin-left:8px;font-size:11px;font-weight:600;color:var(--red);background:var(--red-s);border:1px solid var(--red);border-radius:4px;padding:1px 6px;vertical-align:middle; }
+.e2ee-device-alert-hint { font-size:12px;color:var(--red);line-height:1.4;margin-top:4px; }
+.e2ee-device-actions { display:flex;align-items:center;gap:8px;flex-shrink:0; }
+.e2ee-device-acknowledge { background:var(--green-s);color:var(--green); }
+.e2ee-device-acknowledge:hover { background:var(--green);color:#fff; }

@@ -7,9 +7,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"os"
-	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -46,20 +46,37 @@ var allowedReportMimeTypes = map[string]bool{
 	"image/webp": true,
 }
 
+// sniffImageUpload validates file's actual bytes (never the client-claimed
+// Content-Type) against allowed and returns the sniffed MIME plus the
+// replay reader that MUST be written to disk in place of file:
+// pkg.SniffContentType consumes up to 512 bytes from file, so writing file
+// itself would silently truncate the upload's first 512 bytes. rejectMsg
+// lets each caller keep its own rejection wording (e.g. "for report
+// evidence") verbatim instead of this helper picking one.
+//
+// Shared by ReportUploadService.Upload and FeedbackUploadService.Upload —
+// both sniff-then-allowlist an image the same way.
+func sniffImageUpload(file multipart.File, allowed map[string]bool, rejectMsg string) (mime string, replay io.Reader, err error) {
+	sniffed, body, err := pkg.SniffContentType(file)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
+	}
+
+	if !allowed[sniffed] {
+		return "", nil, fmt.Errorf("%w: %s (got: %s)", pkg.ErrBadRequest, rejectMsg, sniffed)
+	}
+
+	return sniffed, body, nil
+}
+
 func (s *reportUploadService) Upload(ctx context.Context, reportID string, file multipart.File, header *multipart.FileHeader) (*models.ReportAttachment, error) {
 	if header.Size > s.maxSize {
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	mimeBase := strings.Split(contentType, ";")[0]
-	mimeBase = strings.TrimSpace(mimeBase)
-
-	if !allowedReportMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: only images are allowed for report evidence (got: %s)", pkg.ErrBadRequest, mimeBase)
+	sniffed, replay, err := sniffImageUpload(file, allowedReportMimeTypes, "only images are allowed for report evidence")
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate unique filename — sanitizeFilename defined in upload_service.go (same package)
@@ -74,7 +91,7 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	if err := writeUploadFile(destPath, file, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
+	if err := writeUploadFile(destPath, replay, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
 		return nil, err
 	}
 
@@ -84,7 +101,7 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 		Filename: header.Filename,
 		FileURL:  "/api/uploads/" + diskFilename,
 		FileSize: &fileSize,
-		MimeType: &mimeBase,
+		MimeType: &sniffed,
 	}
 
 	if err := s.reportRepo.CreateAttachment(ctx, att); err != nil {

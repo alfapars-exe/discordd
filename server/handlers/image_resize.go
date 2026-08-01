@@ -23,6 +23,7 @@ package handlers
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -44,11 +45,67 @@ import (
 // the avatar preview in profile settings while staying ~6-15 KB on wire.
 const avatarMaxDim = 256
 
+// maxAvatarDecodePixels caps the W×H the decoder is allowed to allocate a
+// pixel buffer for. image.DecodeConfig reads only the header (IHDR / JFIF
+// SOF / etc.) — no IDAT/scan data — so this check runs BEFORE any pixel
+// buffer is allocated.
+//
+// Measured 2026-08-01, Docker (`--memory=2g`): a 72-byte PNG carrying a
+// valid IHDR declaring 30000×30000 plus an immediately truncated IDAT drove
+// image.DecodeConfig's heap to ~1 MB, then image.Decode's heap to ~3433 MB
+// for the same input — but the process did NOT die; the decoder returned
+// "png: invalid format: not enough pixel data" instead of crashing, because
+// Go's large slice allocations go through mmap and pages that are never
+// touched don't become resident RSS. So a guaranteed process kill is not
+// what this guard is proven to prevent. What is proven: a handful of input
+// bytes can force a multi-GB buffer *reservation* keyed only off attacker-
+// controlled header fields, at negligible cost to the attacker, and that
+// reservation multiplies with concurrent requests — see decodeSlots below
+// for the concurrency half of this fix.
+//
+// The output is downscaled to avatarMaxDim (256 px) regardless of input
+// size, so 25 megapixels (e.g. 5000×5000, ≈380x the pixel count a 256 px
+// avatar actually needs) is ample headroom for any legitimate upload while
+// bounding the worst-case RGBA decode buffer to ~100 MB.
+const maxAvatarDecodePixels = 25_000_000
+
+// ErrImageTooLarge is returned when the source image's declared dimensions
+// exceed maxAvatarDecodePixels. Callers should map this to a 400 response
+// distinct from "not a supported image format".
+var ErrImageTooLarge = errors.New("image dimensions too large")
+
 // jpegQuality is the encoder quality used when the source has no alpha
 // channel. 85 is the sweet spot for photographic content (a recurring
 // recommendation in libjpeg-turbo's docs) — visually lossless, ~25% smaller
 // than the default 75 you'd get from image/jpeg.Encode without options.
 const jpegQuality = 85
+
+// decodeSlots bounds how many full-image decodes (the allocation-heavy step
+// maxAvatarDecodePixels caps per-request) run concurrently.
+//
+// Rate limiting bounds how OFTEN a user may upload; it does not bound how
+// many decodes run AT ONCE. Without this, N concurrent uploads each hold a
+// full-size pixel buffer simultaneously and the ceiling is N × maxPixels,
+// not maxPixels. Four is enough to keep the CPU busy on the single
+// production container while capping the decode arena at ~400 MB.
+var decodeSlots = make(chan struct{}, 4)
+
+// decodeAndScale decodes the full pixel data from src and downscales it to
+// maxDim, holding a decodeSlots slot for the duration of both steps. The
+// pixel-count guard in ResizeAvatarBytes (image.DecodeConfig + the
+// maxAvatarDecodePixels check) deliberately runs before this call and
+// outside the semaphore: it only reads the header, never allocates a pixel
+// buffer, so it doesn't need to queue.
+func decodeAndScale(src io.Reader, maxDim int) (image.Image, error) {
+	decodeSlots <- struct{}{}
+	defer func() { <-decodeSlots }()
+
+	img, _, err := image.Decode(src)
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
+	return scaleToFit(img, maxDim), nil
+}
 
 // ResizeAvatarBytes downscales the image read from src (any of jpeg / png /
 // gif / webp) so its longest edge is at most avatarMaxDim, then re-encodes
@@ -61,13 +118,36 @@ const jpegQuality = 85
 // Images already smaller than avatarMaxDim are still re-encoded — this
 // normalizes the output format and strips any non-image metadata that may
 // have been packed into the source (EXIF GPS tags etc.).
-func ResizeAvatarBytes(src io.Reader) ([]byte, string, error) {
-	img, _, err := image.Decode(src)
+//
+// src must be an io.ReadSeeker (not just io.Reader): image.DecodeConfig
+// below consumes bytes from src to read the header, and the full
+// image.Decode call afterward needs to start from byte 0 again. A
+// MultiReader replay (buffer the first N bytes, then chain) is not enough
+// here — a JPEG's SOF marker (which carries the width/height we need to
+// bounds-check) can sit 64 KB+ into the file behind EXIF segments, so a
+// small fixed-size replay buffer would truncate legitimate JPEGs. Buffering
+// the whole upload instead would cost ~8 MB of extra RSS per request. Seek
+// back to the start is exact and free. Both call sites already hand us a
+// seekable value: multipart.File embeds io.Seeker (avatar.go), and
+// cmd/resize_avatars/main.go opens files via os.Root, which returns *os.File.
+func ResizeAvatarBytes(src io.ReadSeeker) ([]byte, string, error) {
+	cfg, _, err := image.DecodeConfig(src)
 	if err != nil {
-		return nil, "", fmt.Errorf("decode image: %w", err)
+		return nil, "", fmt.Errorf("decode image config: %w", err)
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 ||
+		int64(cfg.Width)*int64(cfg.Height) > maxAvatarDecodePixels {
+		return nil, "", fmt.Errorf("%w: %dx%d exceeds %d pixels",
+			ErrImageTooLarge, cfg.Width, cfg.Height, maxAvatarDecodePixels)
+	}
+	if _, err := src.Seek(0, io.SeekStart); err != nil {
+		return nil, "", fmt.Errorf("rewind image: %w", err)
 	}
 
-	resized := scaleToFit(img, avatarMaxDim)
+	resized, err := decodeAndScale(src, avatarMaxDim)
+	if err != nil {
+		return nil, "", err
+	}
 	hasAlpha := imageHasAlpha(resized)
 
 	var buf bytes.Buffer
