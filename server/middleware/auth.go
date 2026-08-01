@@ -51,8 +51,10 @@ func NewAuthMiddleware(authService services.AuthService, userRepo repository.Use
 }
 
 // InvalidateUser drops the cached user row. Wire into the user/profile
-// update path and into ChangePassword so a session that just changed its
-// password doesn't keep an old user view for up to userCacheTTL.
+// update path and into any credential-lifecycle event (ChangePassword,
+// ResetPassword, LogoutAllDevices — see AuthService.revokeAllSessions) so a
+// session that just changed its credentials doesn't keep a stale cached
+// view for up to userCacheTTL.
 func (m *AuthMiddleware) InvalidateUser(userID string) {
 	m.userCache.Delete(userID)
 }
@@ -157,8 +159,11 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 		// IsPlatformBanned in the previous turn — TokenVersion now
 		// follows the same rule. For instant invalidation (rare),
 		// password change / logout-from-all-devices / ban paths should
-		// call AuthMiddleware.InvalidateUser to drop the cached row
-		// (see authService.ChangePassword wiring for the existing path).
+		// call AuthMiddleware.InvalidateUser to drop the cached row —
+		// AuthService does this via revokeAllSessions, wired to this
+		// middleware through AuthService.SetUserCacheInvalidator in
+		// main.go (AdminUserService's ban/delete path is wired the
+		// same way).
 		if claims.TokenVersion < user.TokenVersion {
 			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "token revoked (logged out from all devices)")
 			return

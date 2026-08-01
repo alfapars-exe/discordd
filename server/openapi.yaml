@@ -241,9 +241,29 @@ paths:
         optional; a missing token still returns 200), invalidates it
         server-side if present, and always clears both the hichat_refresh
         and hichat_media cookies. Response message is literally
-        "logged out".
+        "logged out". Only the ONE session identified by the presented
+        refresh token is revoked — see POST /api/auth/logout-all to end
+        every session at once.
       tags: [Auth]
       requestBody: { $ref: '#/components/requestBodies/RefreshTokenRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/auth/logout-all:
+    post:
+      operationId: authLogoutAll
+      summary: Invalidate every session the caller has, on every device.
+      description: >-
+        Deletes every refresh-session row for the caller, bumps
+        token_version (invalidating every outstanding access token, not
+        just the one on this request), and disconnects any open
+        WebSocket. Also clears the caller's own hichat_refresh and
+        hichat_media cookies, since the session behind this very request
+        is revoked too — there is no way for the server to distinguish
+        "this" session from any other, so the caller ends up logged out
+        here as well and must sign in again. Response message is
+        literally "logged out from all devices".
+      tags: [Auth]
       responses:
         '200': { $ref: '#/components/responses/MessageOnlyOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
@@ -270,8 +290,12 @@ paths:
       summary: Complete a password reset using the emailed token.
       description: >-
         IP rate limited. Validates the token (SHA-256 hash lookup), updates
-        the password, and deletes the token (one-time use). Response
-        message is literally "password has been reset successfully".
+        the password, deletes the token (one-time use), and invalidates
+        every existing session for the account — deletes all
+        refresh-session rows, bumps token_version, and disconnects any
+        open WebSocket. Every client (including a possible attacker's)
+        must sign in again with the new password. Response message is
+        literally "password has been reset successfully".
       tags: [Auth]
       security: []
       requestBody: { $ref: '#/components/requestBodies/ResetPasswordRequestBody' }
@@ -336,10 +360,15 @@ paths:
       summary: Change the caller's password.
       description: >-
         Requires current_password even though the caller is already
-        authenticated — defense-in-depth against a stolen/XSS'd JWT.
-        Bumps token_version on success, invalidating every other
-        outstanding access token for this user. Response message is
-        literally "password changed".
+        authenticated — defense-in-depth against a stolen/XSS'd JWT. On
+        success, invalidates every session for this user: deletes all
+        refresh-session rows, bumps token_version (so every outstanding
+        access token dies, not just future ones), and disconnects any
+        open WebSocket. This includes the CALLER's own session — the
+        server has no way to identify "this" session as distinct from any
+        other (the refresh cookie is scoped Path=/api/auth and isn't sent
+        on this endpoint) — so the caller must sign in again too.
+        Response message is literally "password changed".
       tags: [Users]
       requestBody: { $ref: '#/components/requestBodies/ChangePasswordRequestBody' }
       responses:

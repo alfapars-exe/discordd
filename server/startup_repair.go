@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
+	"time"
 
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
@@ -26,23 +28,72 @@ var startupLogger = logx.Component("startup")
 // privilege it grants — without a server-side bootstrap there's no way to
 // promote the very first admin without manual DB access.
 //
-// Safe to leave in place: the UPDATE is a no-op once the user is already an
-// admin, and ignores users who don't exist yet (e.g. before they register).
+// H-07 fix: the UPDATE only fires while the platform has zero admins
+// (`AND NOT EXISTS (SELECT 1 FROM users WHERE is_platform_admin = 1)`). The
+// moment any admin exists — whether created by this bootstrap or via the
+// in-app endpoint above — the statement becomes a permanent no-op. The
+// existence of the first admin IS the one-time-bootstrap marker, so no extra
+// table is needed. This also closes the username-reuse vector: usernames are
+// mutable (models.UpdateProfileRequest.Username), so if the configured admin
+// later renames themselves and someone else claims the freed username, that
+// person can no longer be promoted on the next boot — an admin already
+// exists by then. `is_bot = 0` is defense in depth: bot accounts are
+// user-created (072_bot_accounts.sql) and a bot row that happens to carry
+// the configured username must not be able to grab the privilege.
+//
+// Residual risk this does NOT close: on a genuinely fresh install (zero
+// admins yet, e.g. right after first deploy) an attacker who registers the
+// configured username before the real operator does still gets promoted on
+// the next boot. That's inherent to bootstrapping-by-username, not something
+// a single UPDATE predicate can rule out. Because a normal first-time
+// bootstrap and this attack look identical to the query, every promotion is
+// logged at Warn (not Info) with the promoted account's id and created_at,
+// so an operator who wasn't expecting a promotion has a signal to check.
 func bootstrapPlatformAdmin(db *database.DB, username string) {
 	if username == "" {
 		return
 	}
-	res, err := db.Conn.ExecContext(context.Background(),
-		`UPDATE users SET is_platform_admin = 1 WHERE username = ? AND is_platform_admin = 0`,
+	ctx := context.Background()
+	res, err := db.Conn.ExecContext(ctx,
+		`UPDATE users SET is_platform_admin = 1
+		 WHERE username = ?
+		   AND is_platform_admin = 0
+		   AND is_bot = 0
+		   AND NOT EXISTS (SELECT 1 FROM users WHERE is_platform_admin = 1)`,
 		username,
 	)
 	if err != nil {
-		startupLogger.Error("bootstrap platform admin failed", "username", username, "err", pkg.ErrText(err))
+		// username is operator-configured but reaches the log via a
+		// structured attr; strconv.Quote still wraps it so a username
+		// containing control characters can't forge/split log lines (G706).
+		startupLogger.Error("bootstrap platform admin failed", "username", strconv.Quote(username), "err", pkg.ErrText(err))
 		return
 	}
-	if affected, _ := res.RowsAffected(); affected > 0 {
-		startupLogger.Info("bootstrapped platform admin", "username", username)
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return
 	}
+
+	// Best-effort read-back of the promoted row's id/created_at for the
+	// warning below. RETURNING is deliberately avoided here for Turso/Hrana
+	// safety (same reasoning as sqlite_role.go/sqlite_user.go Create) — a
+	// failed read-back still logs the promotion, just without the extra
+	// detail.
+	var id string
+	var createdAt time.Time
+	if scanErr := db.Conn.QueryRowContext(ctx,
+		`SELECT id, created_at FROM users WHERE username = ? AND is_platform_admin = 1`,
+		username,
+	).Scan(&id, &createdAt); scanErr != nil {
+		startupLogger.Warn("bootstrapped platform admin (id/created_at lookup failed)",
+			"username", strconv.Quote(username), "err", pkg.ErrText(scanErr))
+		return
+	}
+	startupLogger.Warn("bootstrapped platform admin",
+		"username", strconv.Quote(username),
+		"user_id", strconv.Quote(id),
+		"created_at", createdAt,
+	)
 }
 
 // repairCorruptIDs fixes empty-string ID rows left by an old bug. The

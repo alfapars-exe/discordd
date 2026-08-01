@@ -12,6 +12,7 @@ func (d *routeDeps) registerAuthRoutes() {
 	d.mux.HandleFunc("POST /api/auth/login", d.h.Auth.Login)
 	d.mux.HandleFunc("POST /api/auth/refresh", d.h.Auth.Refresh)
 	d.mux.Handle("POST /api/auth/logout", d.auth(d.h.Auth.Logout))
+	d.mux.Handle("POST /api/auth/logout-all", d.auth(d.h.Auth.LogoutAll))
 	d.mux.HandleFunc("POST /api/auth/forgot-password", d.h.Auth.ForgotPassword)
 	d.mux.HandleFunc("POST /api/auth/reset-password", d.h.Auth.ResetPassword)
 	d.mux.Handle("POST /api/auth/ws-ticket", d.auth(d.h.Auth.WSTicket))

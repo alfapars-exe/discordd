@@ -338,7 +338,18 @@ func (h *AuthHandler) WSTicket(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusNotFound, "ws ticket service not enabled")
 		return
 	}
-	ticket, err := h.wsTicketService.Issue(user.ID)
+	// Stamp the ticket with the caller's token_version so the WS handshake
+	// can apply the same revocation gate the legacy ?token= path uses (see
+	// wsTokenRevoked in ws/handler.go).
+	//
+	// `user` is AuthMiddleware's cached users row (userCacheTTL, 30s —
+	// middleware/auth.go), not a live read and not a JWT claim.
+	// revokeAllSessions invalidates that cache, but a stamp taken from a
+	// stale entry can only be LOWER than the live token_version, never
+	// higher. The handshake compares it against a fresh DB read, so
+	// staleness costs a spurious rejection at worst — it can never open a
+	// bypass window. That asymmetry is what makes this safe to stamp here.
+	ticket, err := h.wsTicketService.Issue(user.ID, user.TokenVersion)
 	if err != nil {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to issue ws ticket", err)
 		return
@@ -472,6 +483,30 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	clearRefreshCookie(w)
 	clearMediaCookie(w)
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
+}
+
+// LogoutAll handles POST /api/auth/logout-all. Revokes every session and
+// outstanding access token the caller has anywhere (see
+// AuthService.LogoutAllDevices), including the session that made this very
+// request — the server has no way to identify "this" session as distinct
+// from any other (see the design note on ChangePassword in
+// services/auth_password.go). Clears the caller's own cookies too, since
+// they now reference a revoked session.
+func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	if err := h.authService.LogoutAllDevices(r.Context(), user.ID); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	clearRefreshCookie(w)
+	clearMediaCookie(w)
+	pkg.JSON(w, http.StatusOK, map[string]string{"message": "logged out from all devices"})
 }
 
 // Me handles GET /api/users/me (requires auth middleware).

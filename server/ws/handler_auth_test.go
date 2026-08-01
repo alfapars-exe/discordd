@@ -25,12 +25,13 @@ import (
 // --- minimal stubs for the interfaces HandleConnection depends on ---
 
 type stubTicketConsumer struct {
-	userID string
-	err    error
+	userID       string
+	tokenVersion int
+	err          error
 }
 
-func (s stubTicketConsumer) Consume(ticket string) (string, error) {
-	return s.userID, s.err
+func (s stubTicketConsumer) Consume(ticket string) (string, int, error) {
+	return s.userID, s.tokenVersion, s.err
 }
 
 type stubTokenValidator struct {
@@ -229,4 +230,66 @@ func TestHandleConnection_RejectMatrix(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHandleConnection_TicketTokenVersionGate is the primary evidence for
+// security review finding 1 (2026-08-01): a WS ticket must carry the
+// caller's token_version stamp from mint time and be gated by it exactly
+// like the legacy ?token= path, instead of being unconditionally exempt.
+//
+// Regression this guards: before the fix, a ticket's synthesized claims
+// always carried token_version=0 and wsTokenRevoked special-cased
+// fromTicket=true to `return false` — so a ticket minted from a stolen
+// access token kept authenticating forever, riding out "log out from all
+// devices" indefinitely (~25s ticket lifetime meant an attacker could just
+// keep re-minting).
+func TestHandleConnection_TicketTokenVersionGate(t *testing.T) {
+	t.Run("ticket minted BEFORE a token_version bump is rejected", func(t *testing.T) {
+		h := &Handler{
+			hub: NewHub(),
+			// Ticket stamped tokenVersion=1 — minted before the user's
+			// token_version advanced to 2 (password change / logout-all /
+			// refresh-reuse).
+			ticketConsumer: stubTicketConsumer{userID: "u1", tokenVersion: 1},
+			userInfoProvider: stubUserInfoProvider{user: &models.User{
+				ID:           "u1",
+				Username:     "alice",
+				TokenVersion: 2,
+				PrefStatus:   models.UserStatusOnline,
+			}},
+		}
+
+		rec := httptest.NewRecorder()
+		h.HandleConnection(rec, httptest.NewRequest(http.MethodGet, "/ws?ticket=x", nil))
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("stale ticket: status = %d, want %d (body: %q)", rec.Code, http.StatusUnauthorized, rec.Body.String())
+		}
+	})
+
+	t.Run("ticket minted AFTER a token_version bump is accepted", func(t *testing.T) {
+		h := &Handler{
+			hub: NewHub(),
+			// Ticket stamped tokenVersion=2 — minted after the bump, so it
+			// matches the user's current token_version exactly.
+			ticketConsumer: stubTicketConsumer{userID: "u1", tokenVersion: 2},
+			userInfoProvider: stubUserInfoProvider{user: &models.User{
+				ID:           "u1",
+				Username:     "alice",
+				TokenVersion: 2,
+				PrefStatus:   models.UserStatusOnline,
+			}},
+		}
+
+		rec := httptest.NewRecorder()
+		h.HandleConnection(rec, httptest.NewRequest(http.MethodGet, "/ws?ticket=x", nil))
+
+		// httptest.NewRecorder cannot hijack the connection, so a fresh
+		// ticket still fails at upgrader.Upgrade — but it must get PAST the
+		// revocation gate first. Any 401/403 here means the gate wrongly
+		// rejected a current-version ticket.
+		if rec.Code == http.StatusUnauthorized || rec.Code == http.StatusForbidden {
+			t.Errorf("fresh ticket: got status %d, want no auth rejection (body: %q)", rec.Code, rec.Body.String())
+		}
+	})
 }
