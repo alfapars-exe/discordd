@@ -51,6 +51,7 @@
   "noContent": "Eki görmek için tıklayın",
   "noSendPermission": "Bu kanalda mesaj gönderme yetkiniz yok",
   "noSendPermissionSlashHint": "Mesaj yetkisi yok — sadece /play /skip gibi müzik komutları çalışır",
+  "timedOutPlaceholder": "Susturuldun — şu an mesaj gönderemezsin",
   "attachFile": "Dosya ekle",
   "emoji": "Emoji",
   "welcomeDM": "{{user}} ile konuşmanıza hoş geldiniz!",

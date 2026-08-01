@@ -40,6 +40,8 @@
   "minimize": "Küçült",
   "livekitConnectionError": "Ses sunucusuna bağlanılamadı. Lütfen sunucunun çalıştığından emin olun ve tekrar deneyin.",
   "voiceDisconnectedHint": "Ses bağlantısı koptu — ses sunucusu erişilemez olabilir",
+  "voiceJoinFailed": "Ses kanalına katılınamadı.",
+  "voiceJoinTimedOut": "Susturulmuşken ses kanallarına katılamazsın.",
   "ping": "Gecikme",
   "userVolume": "Kullanıcı Sesi",
   "localMute": "Benim İçin Sustur",

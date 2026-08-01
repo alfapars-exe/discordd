@@ -29,6 +29,7 @@ import ReportModal from "../shared/ReportModal";
 import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatDate } from "../../utils/dateFormat";
+import { showApiError } from "../../utils/apiError";
 
 const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 
@@ -142,7 +143,11 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     if (!ok) return;
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    await memberApi.kickMember(serverId, userId);
+    const res = await memberApi.kickMember(serverId, userId);
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:kickError" });
+      return;
+    }
     onClose();
   }
 
@@ -155,7 +160,11 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     if (!ok) return;
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    await memberApi.banMember(serverId, userId, "");
+    const res = await memberApi.banMember(serverId, userId, "");
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:banError" });
+      return;
+    }
     onClose();
   }
 
@@ -163,7 +172,13 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     setPickerMode(null);
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    await memberApi.timeoutMember(serverId, userId, seconds, "");
+    const res = await memberApi.timeoutMember(serverId, userId, seconds, "");
+    if (!res.success) {
+      // Don't close the popover on failure (e.g. 403) — closing made the
+      // mod think the timeout applied when it silently didn't.
+      showApiError(res, { fallbackKey: "common:timeoutError" });
+      return;
+    }
     onClose();
   }
 
@@ -173,7 +188,11 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   async function handleRemoveTimeout() {
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    await memberApi.removeTimeout(serverId, userId);
+    const res = await memberApi.removeTimeout(serverId, userId);
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:removeTimeoutError" });
+      return;
+    }
     // No onClose here — the banner disappears via WS event and the mod
     // may want to perform follow-up actions (kick / ban) without
     // reopening the popover.
@@ -183,7 +202,11 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
     setPickerMode(null);
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return;
-    await memberApi.banMember(serverId, userId, "", seconds);
+    const res = await memberApi.banMember(serverId, userId, "", seconds);
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:tempBanError" });
+      return;
+    }
     onClose();
   }
 
@@ -345,6 +368,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
           title={t("timeoutTitle")}
           subtitle={t("timeoutForUser", { username: displayName ?? username })}
           variant="timeout"
+          hint={t("timeoutPickerHint")}
           presets={TIMEOUT_PRESETS}
           onPick={handleTimeoutPick}
           onCancel={() => setPickerMode(null)}
@@ -355,6 +379,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
           title={t("tempBanTitle")}
           subtitle={t("timeoutForUser", { username: displayName ?? username })}
           variant="ban"
+          hint={t("tempBanPickerWarning")}
           presets={TEMPBAN_PRESETS}
           onPick={handleTempBanPick}
           onCancel={() => setPickerMode(null)}

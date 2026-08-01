@@ -16,8 +16,9 @@ func newTestReactionService(
 	chanRepo *testutil.MockChannelRepo,
 	hub *testutil.MockBroadcastAndOnline,
 	permResolver ChannelPermResolver,
+	timeoutChecker MemberTimeoutChecker,
 ) ReactionService {
-	return NewReactionService(reactionRepo, msgRepo, chanRepo, hub, permResolver)
+	return NewReactionService(reactionRepo, msgRepo, chanRepo, hub, permResolver, timeoutChecker)
 }
 
 // readResolver grants ViewChannel+ReadMessages — the precondition ToggleReaction
@@ -60,6 +61,7 @@ func TestToggleReactionCrossServerChannel(t *testing.T) {
 		crossServerChannelRepo,
 		&testutil.MockBroadcastAndOnline{},
 		readResolver(),
+		nil,
 	)
 
 	err := svc.ToggleReaction(context.Background(), "srv1", "m1", "u1", "👍")
@@ -100,6 +102,7 @@ func TestToggleReactionMissingReadPermission(t *testing.T) {
 				return models.PermSendMessages, nil // no ViewChannel/ReadMessages
 			},
 		},
+		nil,
 	)
 
 	err := svc.ToggleReaction(context.Background(), "srv1", "m1", "u1", "👍")
@@ -142,6 +145,7 @@ func TestToggleReactionHappyPath(t *testing.T) {
 		sameServerChannelRepo,
 		&testutil.MockBroadcastAndOnline{},
 		readResolver(),
+		nil,
 	)
 
 	err := svc.ToggleReaction(context.Background(), "srv1", "m1", "u1", "👍")
@@ -150,5 +154,84 @@ func TestToggleReactionHappyPath(t *testing.T) {
 	}
 	if !toggleCalled {
 		t.Error("expected repo Toggle to be called")
+	}
+}
+
+// ─── Timeout gate (A5) ───
+
+func TestToggleReaction_TimedOutUserBlocked(t *testing.T) {
+	sameServerChannelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+		},
+	}
+
+	var toggleCalled bool
+	svc := newTestReactionService(
+		&testutil.MockReactionRepo{
+			ToggleFn: func(_ context.Context, _, _, _ string) (bool, error) {
+				toggleCalled = true
+				return true, nil
+			},
+		},
+		&testutil.MockMessageRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Message, error) {
+				return &models.Message{ID: "m1", ChannelID: "ch1"}, nil
+			},
+		},
+		sameServerChannelRepo,
+		&testutil.MockBroadcastAndOnline{},
+		readResolver(),
+		&testutil.MockMemberTimeoutRepo{
+			IsActiveFn: func(_ context.Context, _, _ string) (bool, error) {
+				return true, nil
+			},
+		},
+	)
+
+	err := svc.ToggleReaction(context.Background(), "srv1", "m1", "u1", "👍")
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Errorf("ToggleReaction timed-out user: expected ErrForbidden, got %v", err)
+	}
+	if toggleCalled {
+		t.Error("the reaction must not be written for a timed-out user")
+	}
+}
+
+func TestToggleReaction_NilTimeoutChecker_Allows(t *testing.T) {
+	sameServerChannelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+		},
+	}
+
+	var toggleCalled bool
+	svc := newTestReactionService(
+		&testutil.MockReactionRepo{
+			ToggleFn: func(_ context.Context, _, _, _ string) (bool, error) {
+				toggleCalled = true
+				return true, nil
+			},
+			GetByMessageIDFn: func(_ context.Context, _ string) ([]models.ReactionGroup, error) {
+				return []models.ReactionGroup{{Emoji: "👍", Count: 1}}, nil
+			},
+		},
+		&testutil.MockMessageRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Message, error) {
+				return &models.Message{ID: "m1", ChannelID: "ch1"}, nil
+			},
+		},
+		sameServerChannelRepo,
+		&testutil.MockBroadcastAndOnline{},
+		readResolver(),
+		nil,
+	)
+
+	err := svc.ToggleReaction(context.Background(), "srv1", "m1", "u1", "👍")
+	if err != nil {
+		t.Fatalf("unexpected error with nil timeoutChecker: %v", err)
+	}
+	if !toggleCalled {
+		t.Error("expected repo Toggle to be called when timeoutChecker is nil")
 	}
 }

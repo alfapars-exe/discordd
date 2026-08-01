@@ -178,12 +178,15 @@ func (s *memberService) IsBanned(ctx context.Context, serverID, userID string) (
 	return s.banRepo.Exists(ctx, serverID, userID)
 }
 
-// Timeout — apply or extend a Discord-style timeout. Unlike Ban, the
-// user stays in the server: no membership removal, no voice kick (we
-// could disconnect from voice but we leave them connected so the UX
-// matches "muted in their seat"; voiceService blocks new joins).
-// Hierarchy check is the same as Ban — moderators can't mute their
-// equals or the server owner.
+// Timeout — apply or extend a Discord-style timeout. Unlike Ban, the user
+// stays in the server: no membership removal. The user IS force-disconnected
+// from voice (Discord-parity) — muted-in-their-seat is not the desired UX,
+// since a timed-out user could otherwise keep talking in an existing voice
+// session indefinitely. Re-joining voice is blocked at two independent
+// gates: authorizeJoin (voice_state.go, covers WS voice_join/reconnect) and
+// GenerateToken (voice_token.go, covers the LiveKit token request). Hierarchy
+// check is the same as Ban — moderators can't mute their equals or the
+// server owner.
 func (s *memberService) Timeout(
 	ctx context.Context,
 	serverID, actorID, targetID string,
@@ -206,6 +209,14 @@ func (s *memberService) Timeout(
 	if err := s.timeoutRepo.Upsert(ctx, t); err != nil {
 		return fmt.Errorf("failed to apply timeout: %w", err)
 	}
+
+	// Drop any live voice session immediately — same pattern as kick/ban
+	// (removeFromServer above). Nil-safe: existing tests/bootstrap paths
+	// that haven't wired voiceKick keep working.
+	if s.voiceKick != nil {
+		s.voiceKick.DisconnectUser(targetID)
+	}
+
 	// Broadcast so every connected client refreshes its muted-member
 	// state immediately — no polling. Both the target's clients (so
 	// their UI shows "you are timed out until …") and other members

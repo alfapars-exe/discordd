@@ -602,6 +602,119 @@ func TestMessageUpdate_EncryptionVersionMismatch(t *testing.T) {
 	}
 }
 
+// ─── Timeout gate (A1 regression coverage + DM bypass) ───
+
+// TestMessageCreate_TimedOutUserBlocked wires the service directly (not via
+// newTestMessageService, which hard-codes noopTimeoutRepo) with a
+// MockMemberTimeoutRepo reporting an active timeout, and asserts Create
+// rejects the write before ever touching the message repo.
+func TestMessageCreate_TimedOutUserBlocked(t *testing.T) {
+	msgRepo := &testutil.MockMessageRepo{
+		CreateFn: func(_ context.Context, _ *models.Message) error {
+			t.Fatal("message repo Create should not be called for a timed-out user")
+			return nil
+		},
+	}
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+		},
+	}
+	userRepo := &testutil.MockUserRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.User, error) {
+			return &models.User{ID: "u1", Username: "alice"}, nil
+		},
+		GetByUsernameFn: func(_ context.Context, _ string) (*models.User, error) {
+			return nil, pkg.ErrNotFound
+		},
+	}
+	timeoutRepo := &testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, serverID, userID string) (bool, error) {
+			if serverID != "srv1" || userID != "u1" {
+				t.Errorf("IsActive called with unexpected args: %s %s", serverID, userID)
+			}
+			return true, nil
+		},
+	}
+	mentionRepo := &testutil.MockMentionRepo{}
+	roleMentionRepo := &testutil.MockRoleMentionRepo{}
+	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
+		Message:     msgRepo,
+		Mention:     mentionRepo,
+		RoleMention: roleMentionRepo,
+		ReadState:   noopReadStateRepo{},
+	}}
+	svc := NewMessageService(
+		msgRepo, &testutil.MockAttachmentRepo{}, channelRepo, userRepo,
+		mentionRepo, roleMentionRepo, &testutil.MockRoleRepo{}, &testutil.MockReactionRepo{},
+		noopReadStateRepo{}, timeoutRepo,
+		runner, &testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
+			},
+		},
+	)
+
+	req := &models.CreateMessageRequest{Content: "hello"}
+	_, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Errorf("Create for timed-out user: expected ErrForbidden, got %v", err)
+	}
+}
+
+// TestMessageCreate_DMChannelSkipsTimeoutCheck pins the channel.ServerID != ""
+// guard in messageService.Create: DM channels (ServerID == "") never call
+// IsActive — the timeout system is server-scoped and has no concept of
+// timing a user out of their own DMs.
+func TestMessageCreate_DMChannelSkipsTimeoutCheck(t *testing.T) {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+			return &models.Channel{ID: "ch-dm", ServerID: ""}, nil
+		},
+	}
+	userRepo := &testutil.MockUserRepo{
+		GetByIDFn: func(_ context.Context, _ string) (*models.User, error) {
+			return &models.User{ID: "u1", Username: "alice"}, nil
+		},
+		GetByUsernameFn: func(_ context.Context, _ string) (*models.User, error) {
+			return nil, pkg.ErrNotFound
+		},
+	}
+	timeoutRepo := &testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, _, _ string) (bool, error) {
+			t.Fatal("IsActive must not be called for a DM (server-less) channel")
+			return false, nil
+		},
+	}
+	msgRepo := &testutil.MockMessageRepo{}
+	mentionRepo := &testutil.MockMentionRepo{}
+	roleMentionRepo := &testutil.MockRoleMentionRepo{}
+	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
+		Message:     msgRepo,
+		Mention:     mentionRepo,
+		RoleMention: roleMentionRepo,
+		ReadState:   noopReadStateRepo{},
+	}}
+	svc := NewMessageService(
+		msgRepo, &testutil.MockAttachmentRepo{}, channelRepo, userRepo,
+		mentionRepo, roleMentionRepo, &testutil.MockRoleRepo{}, &testutil.MockReactionRepo{},
+		noopReadStateRepo{}, timeoutRepo,
+		runner, &testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
+			},
+		},
+	)
+
+	req := &models.CreateMessageRequest{Content: "hello"}
+	_, err := svc.Create(context.Background(), "", "ch-dm", "u1", req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // ─── Transactional create: mention failure must fail the whole Create ───
 //
 // Before the tx refactor, a mention-save failure was only logged and the

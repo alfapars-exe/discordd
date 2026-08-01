@@ -354,6 +354,8 @@
   "memberKickError": "Failed to kick member",
   "memberBanned": "Member has been banned",
   "memberBanError": "Failed to ban member",
+  "memberTimeoutRemoved": "Timeout removed",
+  "memberTimeoutApplied": "Member timed out",
   "bannedMembers": "Bans",
   "noBannedMembers": "No banned members",
   "selectBannedMember": "Select a banned member to view details",

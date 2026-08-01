@@ -26,7 +26,11 @@ func (s *voiceService) broadcastToServer(serverID string, event ws.Event) {
 // authorizeJoin gates JoinChannel (N-01): the caller must be an active
 // member of the channel's server AND hold PermConnectVoice on the channel
 // — unless they're the target of a live force-move grant for this exact
-// channel (see MoveUser in voice_admin.go).
+// channel (see MoveUser in voice_admin.go). Also rejects currently
+// timed-out users (matches the GenerateToken gate in voice_token.go) —
+// this covers WS reconnect / same-session rejoin paths that skip a fresh
+// token request, including force-move, so a muted user can't re-enter
+// voice through any route while their timeout is active.
 func (s *voiceService) authorizeJoin(ctx context.Context, userID, serverID, channelID string) error {
 	isMember, err := s.afkTimeoutGetter.IsMember(ctx, serverID, userID)
 	if err != nil {
@@ -34,6 +38,16 @@ func (s *voiceService) authorizeJoin(ctx context.Context, userID, serverID, chan
 	}
 	if !isMember {
 		return fmt.Errorf("%w: not a member of this server", pkg.ErrForbidden)
+	}
+
+	if s.timeoutChecker != nil && serverID != "" {
+		active, err := s.timeoutChecker.IsActive(ctx, serverID, userID)
+		if err != nil {
+			return fmt.Errorf("check timeout: %w", err)
+		}
+		if active {
+			return fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
 	}
 
 	effectivePerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)

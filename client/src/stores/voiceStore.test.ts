@@ -16,6 +16,13 @@ vi.mock("./preferencesStore", () => ({
 vi.mock("./serverStore", () => ({
   useServerStore: { getState: () => ({ activeServerId: "srv1" }) },
 }));
+// Identity translator — assertions check the raw i18n key, same pattern as
+// apiError.test.ts / voiceEventHandlers.test.ts for this module.
+vi.mock("../i18n", () => ({ default: { t: (k: string) => k } }));
+const addToast = vi.fn();
+vi.mock("./toastStore", () => ({
+  useToastStore: { getState: () => ({ addToast }) },
+}));
 
 function resetStore() {
   useVoiceStore.setState({
@@ -502,6 +509,55 @@ describe("voiceStore", () => {
         streamer_user_id: "u3",
         watching: false,
       });
+    });
+  });
+
+  // ─── Join Failure Toasts ───
+  //
+  // getVoiceToken failing with a moderator-timeout message must surface a
+  // distinct "you can't join while timed out" toast instead of the generic
+  // connection-failure one, so the user knows why the join was refused.
+
+  describe("joinVoiceChannel — failure toasts", () => {
+    beforeEach(() => {
+      addToast.mockReset();
+    });
+
+    it("returns null and toasts the timed-out-specific message when the server reports an active timeout", async () => {
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValue({
+        success: false,
+        error: "you are timed out on this server",
+      });
+
+      const result = await useVoiceStore.getState().joinVoiceChannel("ch1");
+
+      expect(result).toBeNull();
+      expect(addToast).toHaveBeenCalledWith("error", "voice:voiceJoinTimedOut");
+    });
+
+    it("returns null and toasts a generic failure message for any other error", async () => {
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValue({
+        success: false,
+        error: "internal server error",
+        status: 500,
+      });
+
+      const result = await useVoiceStore.getState().joinVoiceChannel("ch1");
+
+      expect(result).toBeNull();
+      expect(addToast).toHaveBeenCalledTimes(1);
+      const [variant, message] = addToast.mock.calls[0]!;
+      expect(variant).toBe("error");
+      expect(message).toBe("voice:voiceJoinFailed");
+    });
+
+    it("toasts a generic failure message when getVoiceToken rejects unexpectedly", async () => {
+      vi.mocked(voiceApi.getVoiceToken).mockRejectedValue(new Error("network down"));
+
+      const result = await useVoiceStore.getState().joinVoiceChannel("ch1");
+
+      expect(result).toBeNull();
+      expect(addToast).toHaveBeenCalledWith("error", "voice:voiceJoinFailed");
     });
   });
 

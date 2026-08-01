@@ -8,12 +8,13 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAuthStore } from "../../stores/authStore";
-import { useActiveMembers } from "../../stores/memberStore";
+import { useActiveMembers, useMemberTimeout } from "../../stores/memberStore";
 import { useChannelStore } from "../../stores/channelStore";
 import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
 import { hasPermission, Permissions, resolveChannelPermissions } from "../../utils/permissions";
 import { useServerStore } from "../../stores/serverStore";
 import * as memberApi from "../../api/members";
+import { showApiError } from "../../utils/apiError";
 import Avatar from "../shared/Avatar";
 import { IconSpeaker, IconSpeakerOff, IconSpeakerMuted, IconMic, IconMicMuted, IconHeadphones, IconHeadphonesMuted } from "../shared/Icons";
 import ModDurationPicker from "../members/ModDurationPicker";
@@ -88,6 +89,11 @@ function VoiceUserContextMenu({
   const isMe = userId === currentUser?.id;
   const canTimeout = !isMe && hasPermission(basePerms, Permissions.TimeoutMembers);
   const canBanTemp = !isMe && hasPermission(basePerms, Permissions.BanMembers);
+
+  // Target's active moderator timeout (if any) — surfaces a "Remove
+  // timeout" entry alongside the regular Timeout action below.
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const targetTimeout = useMemberTimeout(activeServerId, userId);
 
   const hasAnyModPerm = canMuteMembers || canDeafenMembers || canMoveMembers || canTimeout || canBanTemp;
 
@@ -232,7 +238,11 @@ function VoiceUserContextMenu({
       setPickerMode(null);
       const serverId = useServerStore.getState().activeServerId;
       if (!serverId) return;
-      await memberApi.timeoutMember(serverId, userId, seconds, "");
+      const res = await memberApi.timeoutMember(serverId, userId, seconds, "");
+      if (!res.success) {
+        showApiError(res, { fallbackKey: "common:timeoutError" });
+        return;
+      }
       onClose();
     },
     [userId, onClose]
@@ -243,11 +253,26 @@ function VoiceUserContextMenu({
       setPickerMode(null);
       const serverId = useServerStore.getState().activeServerId;
       if (!serverId) return;
-      await memberApi.banMember(serverId, userId, "", seconds);
+      const res = await memberApi.banMember(serverId, userId, "", seconds);
+      if (!res.success) {
+        showApiError(res, { fallbackKey: "common:tempBanError" });
+        return;
+      }
       onClose();
     },
     [userId, onClose]
   );
+
+  const handleRemoveTimeout = useCallback(async () => {
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const res = await memberApi.removeTimeout(serverId, userId);
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:removeTimeoutError" });
+      return;
+    }
+    onClose();
+  }, [userId, onClose]);
 
   return createPortal(
     <>
@@ -363,7 +388,22 @@ function VoiceUserContextMenu({
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                {t("timeout", { ns: "common", defaultValue: "Sustur" })}
+                {t("timeout", { ns: "common" })}
+              </button>
+            )}
+
+            {/* Remove timeout — only shown when the target currently has one. */}
+            {canTimeout && targetTimeout && (
+              <button
+                className="voice-ctx-item danger"
+                onClick={handleRemoveTimeout}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                  <line x1="4.93" y1="19.07" x2="19.07" y2="4.93" />
+                </svg>
+                {t("removeTimeout", { ns: "common" })}
               </button>
             )}
 
@@ -379,7 +419,7 @@ function VoiceUserContextMenu({
                   <circle cx="12" cy="12" r="10" />
                   <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
                 </svg>
-                {t("tempBan", { ns: "common", defaultValue: "Geçici yasak" })}
+                {t("tempBan", { ns: "common" })}
               </button>
             )}
 
@@ -429,9 +469,10 @@ function VoiceUserContextMenu({
         ModDurationPicker has its own backdrop + Escape handling. */}
     {pickerMode === "timeout" && (
       <ModDurationPicker
-        title={t("timeout", { ns: "common", defaultValue: "Sustur" })}
+        title={t("timeout", { ns: "common" })}
         subtitle={t("timeoutForUser", { ns: "common", username: name })}
         variant="timeout"
+        hint={t("timeoutPickerHint", { ns: "common" })}
         presets={TIMEOUT_PRESETS}
         onPick={handleTimeoutPick}
         onCancel={() => setPickerMode(null)}
@@ -439,9 +480,10 @@ function VoiceUserContextMenu({
     )}
     {pickerMode === "tempban" && (
       <ModDurationPicker
-        title={t("tempBan", { ns: "common", defaultValue: "Geçici yasak" })}
+        title={t("tempBan", { ns: "common" })}
         subtitle={t("timeoutForUser", { ns: "common", username: name })}
         variant="ban"
+        hint={t("tempBanPickerWarning", { ns: "common" })}
         presets={TEMPBAN_PRESETS}
         onPick={handleTempBanPick}
         onCancel={() => setPickerMode(null)}

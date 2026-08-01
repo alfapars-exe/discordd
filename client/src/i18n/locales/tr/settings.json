@@ -354,6 +354,8 @@
   "memberKickError": "Üye atılırken hata oluştu",
   "memberBanned": "Üye yasaklandı",
   "memberBanError": "Üye yasaklanırken hata oluştu",
+  "memberTimeoutRemoved": "Susturma kaldırıldı",
+  "memberTimeoutApplied": "Üye susturuldu",
   "bannedMembers": "Yasaklılar",
   "noBannedMembers": "Yasaklanmış üye yok",
   "selectBannedMember": "Detayları görmek için yasaklı bir üye seçin",

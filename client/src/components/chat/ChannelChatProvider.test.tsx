@@ -94,7 +94,12 @@ function makeMember(effectivePerms: number): MemberWithRoles {
 
 function CanSendProbe() {
   const ctx = useContext(ChatContext);
-  return <span data-testid="can-send">{String(ctx?.canSend)}</span>;
+  return (
+    <>
+      <span data-testid="can-send">{String(ctx?.canSend)}</span>
+      <span data-testid="self-timeout">{ctx?.selfTimeoutExpiresAt ?? ""}</span>
+    </>
+  );
 }
 
 function renderProvider() {
@@ -145,5 +150,77 @@ describe("ChannelChatProvider — canSend", () => {
     });
 
     expect(renderProvider()).toBe("true");
+  });
+});
+
+// ─── Self-timeout gate (B5) ───
+//
+// A moderator timeout blocks the viewer's own sends even though they hold
+// SendMessages — the store-known timeout is a live fact, not something
+// still in flight, so (unlike the loading-optimism above) it always wins.
+describe("ChannelChatProvider — self timeout gate", () => {
+  it("is false when the viewer has an active timeout, despite holding SendMessages", () => {
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [makeMember(Permissions.SendMessages)] },
+    });
+    useMemberStore.getState().handleMemberTimeout("srv-1", {
+      user_id: "u-me",
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    expect(renderProvider()).toBe("false");
+  });
+
+  it("exposes the expiry timestamp as selfTimeoutExpiresAt on the context", () => {
+    const expires = new Date(Date.now() + 60_000).toISOString();
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [makeMember(Permissions.SendMessages)] },
+    });
+    useMemberStore.getState().handleMemberTimeout("srv-1", {
+      user_id: "u-me",
+      expires_at: expires,
+    });
+
+    render(
+      <ChannelChatProvider channelId="ch-1" channelName="general" serverId="srv-1" sendTyping={vi.fn()}>
+        <CanSendProbe />
+      </ChannelChatProvider>
+    );
+    expect(screen.getByTestId("self-timeout").textContent).toBe(expires);
+  });
+
+  it("returns to true after handleMemberTimeoutRemove", () => {
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [makeMember(Permissions.SendMessages)] },
+    });
+    useMemberStore.getState().handleMemberTimeout("srv-1", {
+      user_id: "u-me",
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+    useMemberStore.getState().handleMemberTimeoutRemove("srv-1", "u-me");
+
+    expect(renderProvider()).toBe("true");
+  });
+
+  it("returns to true automatically once the timeout expires (fake timers)", () => {
+    vi.useFakeTimers();
+    try {
+      useMemberStore.setState({
+        membersByServer: { "srv-1": [makeMember(Permissions.SendMessages)] },
+      });
+      useMemberStore.getState().handleMemberTimeout("srv-1", {
+        user_id: "u-me",
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+      });
+      expect(useMemberStore.getState().timeoutsByServer["srv-1"]?.["u-me"]).toBeDefined();
+
+      vi.advanceTimersByTime(60_001);
+
+      // The client-side expiry timer (memberStore.test.ts covers its
+      // mechanics directly) clears the slice, which is what canSend reads.
+      expect(useMemberStore.getState().timeoutsByServer["srv-1"]?.["u-me"]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -18,6 +18,7 @@ import type { ChatContextValue } from "../../hooks/useChatContext";
 const mockSendMessage = vi.fn();
 const mockSetReplyingTo = vi.fn();
 const mockSendTyping = vi.fn();
+const mockRunMusicCommand = vi.fn().mockResolvedValue(false);
 
 function makeChatContext(overrides: Partial<ChatContextValue> = {}): ChatContextValue {
   return {
@@ -59,7 +60,7 @@ vi.mock("../../hooks/useChatContext", () => ({
 }));
 
 vi.mock("../../hooks/useMusicSlashCommand", () => ({
-  useMusicSlashCommand: () => vi.fn().mockResolvedValue(false),
+  useMusicSlashCommand: () => mockRunMusicCommand,
 }));
 
 vi.mock("../../hooks/useAttachmentRejectionToast", () => ({
@@ -82,8 +83,13 @@ vi.mock("./ReplyBar", () => ({
   default: () => null,
 }));
 
+// initReactI18next is re-exported because MessageInput's imports (via
+// utils/dateFormat + utils/apiError) transitively load src/i18n/index.ts,
+// which calls .use(initReactI18next) — omitting it makes i18next throw
+// "No initReactI18next export is defined on the react-i18next mock".
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
 import MessageInput from "./MessageInput";
@@ -96,6 +102,8 @@ beforeEach(() => {
   mockSendMessage.mockReset();
   mockSetReplyingTo.mockReset();
   mockSendTyping.mockReset();
+  mockRunMusicCommand.mockReset();
+  mockRunMusicCommand.mockResolvedValue(false);
   currentContext = makeChatContext();
 });
 
@@ -210,6 +218,65 @@ describe("MessageInput", () => {
         isComposing: true,
       });
     });
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageInput — timeout gate (B5)", () => {
+  function timedOutContext(overrides: Partial<ChatContextValue> = {}) {
+    return makeChatContext({
+      selfTimeoutExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      ...overrides,
+    });
+  }
+
+  it("renders the timeout banner", () => {
+    currentContext = timedOutContext();
+    render(<MessageInput />, { wrapper: Wrapper });
+    expect(screen.getByText("common:youAreTimedOut")).toBeInTheDocument();
+  });
+
+  it("uses the timed-out placeholder instead of the normal one", () => {
+    currentContext = timedOutContext();
+    render(<MessageInput />, { wrapper: Wrapper });
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(textarea.placeholder).toBe("timedOutPlaceholder");
+  });
+
+  it("disables the send button even with content in the box", async () => {
+    currentContext = timedOutContext();
+    render(<MessageInput />, { wrapper: Wrapper });
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "hello" } });
+    });
+    expect(screen.getByTitle("sendMessage")).toBeDisabled();
+  });
+
+  it("Enter does not call sendMessage", async () => {
+    currentContext = timedOutContext();
+    render(<MessageInput />, { wrapper: Wrapper });
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "hello" } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter", code: "Enter" });
+    });
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not run a slash command (music-bot escape hatch is closed)", async () => {
+    currentContext = timedOutContext();
+    render(<MessageInput />, { wrapper: Wrapper });
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "/play x" } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter", code: "Enter" });
+    });
+    expect(mockRunMusicCommand).not.toHaveBeenCalled();
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 });

@@ -542,6 +542,140 @@ func TestVoiceCleanupViewersForStreamer(t *testing.T) {
 	}
 }
 
+// ─── Timeout gates (A3/A6): voice join + token issuance ───
+
+func TestGenerateToken_TimedOutRejected(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	svc.SetMemberTimeoutChecker(&testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, serverID, userID string) (bool, error) {
+			if serverID != "srv1" || userID != "u1" {
+				t.Errorf("IsActive called with unexpected args: %s %s", serverID, userID)
+			}
+			return true, nil
+		},
+	})
+
+	// mockLiveKitGetter (wired by newTestVoiceService) always errors — if the
+	// timeout gate didn't fire before the LiveKit lookup, GenerateToken would
+	// return that unrelated lookup error instead of ErrForbidden.
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
+	}
+	if resp != nil {
+		t.Error("expected nil token response for timed-out user")
+	}
+}
+
+func TestGenerateToken_TimeoutCheckerError_FailsClosed(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	checkerErr := fmt.Errorf("timeout store unavailable")
+	svc.SetMemberTimeoutChecker(&testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, _, _ string) (bool, error) {
+			return false, checkerErr
+		},
+	})
+
+	resp, err := svc.GenerateToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	if err == nil {
+		t.Fatal("expected error when the timeout checker itself fails (fail-closed), got nil")
+	}
+	if !errors.Is(err, checkerErr) {
+		t.Errorf("expected wrapped checker error, got %v", err)
+	}
+	if resp != nil {
+		t.Error("expected nil token response when the timeout check errors")
+	}
+}
+
+func TestGenerateScreenShareToken_TimedOutRejected(t *testing.T) {
+	svc, _ := newTestVoiceService()
+	svc.SetMemberTimeoutChecker(&testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+	})
+
+	resp, err := svc.GenerateScreenShareToken(context.Background(), "u1", "alice", "Alice", "ch1")
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
+	}
+	if resp != nil {
+		t.Error("expected nil token response for timed-out user")
+	}
+}
+
+func TestVoiceJoinChannel_TimedOutRejected(t *testing.T) {
+	svc, hub := newTestVoiceService()
+	svc.SetMemberTimeoutChecker(&testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+	})
+	var broadcasts []ws.Event
+	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
+		broadcasts = append(broadcasts, event)
+	}
+
+	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
+	}
+	if participants := svc.GetChannelParticipants("ch1"); len(participants) != 0 {
+		t.Errorf("expected 0 participants after rejected join, got %d", len(participants))
+	}
+	if len(broadcasts) != 0 {
+		t.Errorf("expected 0 broadcasts after rejected join, got %d", len(broadcasts))
+	}
+}
+
+func TestVoiceJoinChannel_NilTimeoutChecker_Allows(t *testing.T) {
+	// newTestVoiceService never calls SetMemberTimeoutChecker — svc.timeoutChecker
+	// stays nil, which must not block joins (bootstrap / not-yet-wired paths).
+	svc, hub := newTestVoiceService()
+	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
+
+	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
+	if err != nil {
+		t.Fatalf("unexpected error with nil timeoutChecker: %v", err)
+	}
+	if participants := svc.GetChannelParticipants("ch1"); len(participants) != 1 {
+		t.Errorf("expected 1 participant, got %d", len(participants))
+	}
+}
+
+// TestVoiceJoinChannel_TimedOut_RejectedEvenWhenAlreadyInChannel pins that the
+// timeout gate in authorizeJoin runs on EVERY JoinChannel call, including the
+// same-channel "silent reconnect" path — not just first-time joins. Without
+// this, a user timed out mid-session could keep refreshing their WS
+// connection and silently stay in voice via the reconnect fast path.
+func TestVoiceJoinChannel_TimedOut_RejectedEvenWhenAlreadyInChannel(t *testing.T) {
+	svc, hub := newTestVoiceService()
+	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
+
+	var active bool
+	svc.SetMemberTimeoutChecker(&testutil.MockMemberTimeoutRepo{
+		IsActiveFn: func(_ context.Context, _, _ string) (bool, error) {
+			return active, nil
+		},
+	})
+
+	// First join succeeds — not timed out yet.
+	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
+		t.Fatalf("initial join failed: %v", err)
+	}
+	if state := svc.GetUserVoiceState("u1"); state == nil || state.ChannelID != "ch1" {
+		t.Fatal("expected u1 to be in ch1 after initial join")
+	}
+
+	// Timeout kicks in; same-channel rejoin (e.g. WS reconnect) must now be rejected.
+	active = true
+	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden on rejoin while timed out, got %v", err)
+	}
+}
+
 func TestVoiceState_ServerMuteDeafen(t *testing.T) {
 	svc, hub := newTestVoiceService()
 	hub.BroadcastToAllFn = func(_ ws.Event) {}

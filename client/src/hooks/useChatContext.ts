@@ -93,6 +93,10 @@ export type ChatContextValue = {
   canManageMessages: boolean;
   showRoleColors: boolean;
   members: MemberWithRoles[];
+  /** ISO timestamp of the viewer's own active moderator timeout on this
+   *  server, if any. Optional — DMs never set it (no server, no timeouts),
+   *  so DMChatProvider's ChatContextValue compiles unchanged. */
+  selfTimeoutExpiresAt?: string;
 };
 
 // ─── Context ───

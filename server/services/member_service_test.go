@@ -171,6 +171,39 @@ func TestRemoveTimeout_DeletesAndBroadcasts(t *testing.T) {
 	}
 }
 
+// TestTimeout_DisconnectsVoice pins A4: applying a timeout must immediately
+// drop any live voice session (Discord-parity) — otherwise a just-timed-out
+// user could keep talking in an existing call until they leave on their own.
+func TestTimeout_DisconnectsVoice(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "srv1", "mod1", "victim1"
+	h.stubHierarchy(actor, target, srv)
+
+	err := h.svc.Timeout(context.Background(), srv, actor, target, time.Now().Add(5*time.Minute), "spam")
+	if err != nil {
+		t.Fatalf("Timeout returned error: %v", err)
+	}
+	if len(h.voiceKick.DisconnectedIDs) != 1 || h.voiceKick.DisconnectedIDs[0] != target {
+		t.Errorf("DisconnectedIDs = %v, want [%q]", h.voiceKick.DisconnectedIDs, target)
+	}
+}
+
+// TestRemoveTimeout_DoesNotDisconnectVoice pins that lifting a timeout is a
+// pure permission change — it must not touch the user's voice session (they
+// were never force-disconnected by RemoveTimeout, only by Timeout itself).
+func TestRemoveTimeout_DoesNotDisconnectVoice(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "srv1", "mod1", "victim1"
+
+	err := h.svc.RemoveTimeout(context.Background(), srv, actor, target)
+	if err != nil {
+		t.Fatalf("RemoveTimeout returned error: %v", err)
+	}
+	if len(h.voiceKick.DisconnectedIDs) != 0 {
+		t.Errorf("RemoveTimeout must not disconnect voice, got %v", h.voiceKick.DisconnectedIDs)
+	}
+}
+
 // ─── GetByID populates TimeoutExpiresAt ───
 
 func TestGetByID_IncludesTimeoutExpiresAt(t *testing.T) {

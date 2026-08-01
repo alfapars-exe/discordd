@@ -210,6 +210,18 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
 	}
 
+	// Timeout gate — same rationale as GenerateToken above: a timed-out user
+	// must not be able to pick up a screen share sub-participant token either.
+	if s.timeoutChecker != nil && channel.ServerID != "" {
+		active, tErr := s.timeoutChecker.IsActive(ctx, channel.ServerID, userID)
+		if tErr != nil {
+			return nil, fmt.Errorf("check timeout: %w", tErr)
+		}
+		if active {
+			return nil, fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
+	}
+
 	// User must already be in this voice channel to screen share
 	s.mu.RLock()
 	state, inVoice := s.states[userID]
