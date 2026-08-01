@@ -84,6 +84,20 @@ FROM debian:bookworm-slim
 # tampering instead of silently shipping an unknown binary.
 ARG YT_DLP_VERSION=2024.11.04
 
+# huggingface_hub pinned for the same reason as yt-dlp above (security scan
+# 2026-07-31, finding N-16). The constraint used to be `>=0.20` with no upper
+# bound, so every rebuild silently took whatever PyPI served that day —
+# including the 0.x -> 1.x major bump. 1.26.0 is what an unpinned build
+# resolves to today, so this pin freezes current behaviour rather than
+# changing it. Override with --build-arg HF_HUB_VERSION=... to move.
+#
+# Note this pins the version, not the artifact: unlike the yt-dlp download
+# below there is no checksum check, because `pip --require-hashes` demands
+# hashes for the full transitive closure and that needs a lockfile this image
+# does not have. Version pinning removes the day-to-day drift; artifact
+# pinning would need a requirements.txt with hashes.
+ARG HF_HUB_VERSION=1.26.0
+
 # ffmpeg + tzdata + ca-certificates from apt are still pulled "latest
 # in distro" — Debian's bookworm-slim apt snapshot is reproducible
 # within the lifetime of the base image tag, which is good enough for
@@ -103,9 +117,33 @@ RUN set -eux; \
     # hf CLI for backup snapshots to the configured HF Storage Bucket.
     # `--break-system-packages` is required on Debian Bookworm (PEP 668);
     # the image is dedicated to this app so the venv ceremony would add
-    # disk for no isolation gain. hf_transfer is a Rust-based parallel
-    # uploader that the backup service auto-enables via env var.
-    pip3 install --no-cache-dir --break-system-packages 'huggingface_hub[hf_transfer]>=0.20'; \
+    # disk for no isolation gain.
+    #
+    # The `[hf_transfer]` extra this line used to carry was dropped: it has
+    # not existed since huggingface_hub 1.0, so pip was silently ignoring it
+    # and the package was never in the image. Verified against 1.26.0, whose
+    # extras are all/dev/fastai/gradio/hf-xet/mcp/oauth/quality/testing/
+    # torch/typing. Removing it changes nothing that was installed; it only
+    # stops this line claiming to install something it does not.
+    #
+    # Consequence, NOT fixed here: services/backup_service_util.go still sets
+    # HF_HUB_ENABLE_HF_TRANSFER=1, which 1.x only answers with a FutureWarning
+    # ("hf_transfer is not used anymore, use HF_XET_HIGH_PERFORMANCE"). The hf
+    # CLI still exits 0, so backups work — they just upload without the
+    # accelerated path anyone reading that env var would assume is active.
+    # Restoring it is only an env-var swap, NOT a new dependency: hf_xet
+    # already ships as a transitive dependency of huggingface_hub 1.26.0
+    # (verified importable in the built image on both amd64 and arm64), and
+    # HF_XET_HIGH_PERFORMANCE=1 is accepted without any warning. It is left
+    # out of this commit because it changes production upload behaviour, not
+    # because it is expensive.
+    #
+    # --only-binary :all: refuses source distributions, so no dependency can
+    # run a setup.py at install time (Sonar docker:S8541). Wheels only.
+    # Verified on linux/arm64 under qemu as well, because the multi-arch
+    # build only runs on release tags (build-desktop.yml) and never on a PR:
+    # all 15 packages resolve to wheels there too, hf imports and runs.
+    pip3 install --no-cache-dir --break-system-packages --only-binary :all: "huggingface_hub==${HF_HUB_VERSION}"; \
     BASE="https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}"; \
     curl -fsSL "${BASE}/yt-dlp" -o /usr/local/bin/yt-dlp; \
     curl -fsSL "${BASE}/SHA2-256SUMS" -o /tmp/yt-dlp-sums; \

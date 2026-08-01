@@ -245,6 +245,16 @@ func (s *memberService) Timeout(
 }
 
 func (s *memberService) RemoveTimeout(ctx context.Context, serverID, actorID, targetID string) error {
+	// security scan 2026-07-31, finding N-20: mirror the gates Timeout
+	// already applies. Without them a PermTimeoutMembers holder could lift
+	// their OWN timeout, or undo a higher-ranked moderator's decision. Both
+	// run before the repo write so a rejected call leaves no trace.
+	if actorID == targetID {
+		return fmt.Errorf("%w: cannot remove your own timeout", pkg.ErrBadRequest)
+	}
+	if err := s.checkHierarchy(ctx, serverID, actorID, targetID); err != nil {
+		return err
+	}
 	if err := s.timeoutRepo.Delete(ctx, serverID, targetID); err != nil {
 		return err
 	}
