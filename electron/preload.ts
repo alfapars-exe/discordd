@@ -234,6 +234,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeAllListeners("ptt-global-up");
   },
 
+  // ─── Global Mute Hotkey Shortcut ───
+  // Mirrors the Global PTT block above — shares the same uIOhook hook
+  // (electron/push-to-talk.ts) but latches instead of firing down/up pairs.
+
+  /** Register a key for the global mute-toggle hotkey (works even when app is unfocused) */
+  registerMuteHotkeyShortcut: (keyCode: string): Promise<boolean> =>
+    ipcRenderer.invoke("register-mute-hotkey-shortcut", keyCode),
+
+  /** Unregister the global mute-toggle hotkey */
+  unregisterMuteHotkeyShortcut: (): Promise<void> =>
+    ipcRenderer.invoke("unregister-mute-hotkey-shortcut"),
+
+  /** Mute hotkey pressed globally (main → renderer) */
+  onMuteHotkeyGlobal: (cb: () => void): void => {
+    ipcRenderer.on("mute-hotkey-global", () => cb());
+  },
+
+  /** Remove global mute hotkey listeners to prevent accumulation across sessions */
+  removeMuteHotkeyListeners: (): void => {
+    ipcRenderer.removeAllListeners("mute-hotkey-global");
+  },
+
   // ─── Credential Storage (Remember Me) ───
 
   /** Save credentials encrypted via safeStorage */

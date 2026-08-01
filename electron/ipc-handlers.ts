@@ -66,7 +66,7 @@ import { startCapture, stopCapture } from "./audio-capture";
 import { consumeLastCrash } from "./crash-reporter";
 import { appendDiagnostic } from "./diagnostic-log";
 import { clearCredentials, loadCredentials, saveCredentials } from "./credentials";
-import { registerPTT, unregisterPTT } from "./push-to-talk";
+import { registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
 import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
@@ -334,4 +334,12 @@ export function registerIpcHandlers(): void {
     return registerPTT(keyCode);
   });
   ipcMain.handle("unregister-ptt-shortcut", () => unregisterPTT());
+
+  // ─── Global mute-toggle hotkey (uIOhook, shares the PTT hook) ────
+  ipcMain.handle("register-mute-hotkey-shortcut", (_e, keyCode: unknown) => {
+    // Same validation policy as register-ptt-shortcut above.
+    assertString(keyCode, "mute hotkey keyCode", MAX_PTT_KEYCODE_LEN);
+    return registerMuteHotkey(keyCode);
+  });
+  ipcMain.handle("unregister-mute-hotkey-shortcut", () => unregisterMuteHotkey());
 }

@@ -1,17 +1,20 @@
 /**
- * electron/push-to-talk.ts — Global push-to-talk via uIOhook native keyboard hook.
+ * electron/push-to-talk.ts — Global keyboard hotkeys via uIOhook native hook.
  *
- * Single responsibility: capture a single bound keycode globally
- * (works when window is unfocused) and forward keydown/keyup as IPC
- * events to the renderer. The renderer maps these to mic mute/unmute.
+ * Single responsibility: own the shared uIOhook keyboard hook and BOTH
+ * bindings that ride on it — push-to-talk (momentary) and the global
+ * mute-toggle hotkey (latched) — routing raw keycodes through
+ * hotkey-router.ts and forwarding the resulting signals as IPC events to
+ * the renderer. The renderer maps these to mic mute/unmute.
  *
  * The keycode map (KeyboardEvent.code → uiohook native code) is defined
  * here rather than passed in, since it's tightly coupled to uIOhook's
- * UiohookKey enum.
+ * UiohookKey enum. Both registerPTT and registerMuteHotkey reuse it.
  */
 
 import { uIOhook, UiohookKey } from "uiohook-napi";
 import { getMainWindow } from "./window";
+import { isActive, keyDown, keyUp, setMute, setPtt } from "./hotkey-router";
 
 /** KeyboardEvent.code → uiohook native keycode. */
 const codeToUiohook: Record<string, number> = {
@@ -66,41 +69,43 @@ const codeToUiohook: Record<string, number> = {
   NumpadEnter: UiohookKey.NumpadEnter,
 };
 
-let pttTargetKeycode: number | null = null;
 let uiohookRunning = false;
 
-// Privacy-conscious PTT key listener.
+// Privacy-conscious global hotkey listener.
 //
 // uIOhook is a global keyboard hook — every keystroke on the system flows
 // through these callbacks before being filtered. That makes it equivalent
 // (in capability) to a keylogger; only our code's discipline keeps it from
 // being one. Two safeguards:
 //
-//   1. We stop the hook entirely when no PTT key is registered. uIOhook
-//      is only spinning while a PTT binding exists, so a user who never
-//      configures PTT never has the hook running at all.
+//   1. We stop the hook entirely when NEITHER binding (PTT nor mute) is
+//      registered — see hotkey-router's isActive(). A user who never
+//      configures either global hotkey never has the hook running at all.
 //
-//   2. We branch as early as possible — first thing we do is keycode
-//      comparison. We never read modifiers, never log the keycode, never
-//      hold a reference to the event object beyond the if-condition.
-//      A future contributor extending these callbacks should preserve
-//      that property (see the // PRIVACY comments).
+//   2. All keycode routing lives in hotkey-router.ts, a dependency-free
+//      module that does keycode comparison and nothing else. The callbacks
+//      below hand it e.keycode and forward the resulting signals — they
+//      never read e.altKey, e.shiftKey, e.rawcode, e.time, or hold a
+//      reference to the event object beyond that call. A future
+//      contributor extending these callbacks should preserve that property.
 //
-// The keycode itself never leaves the main process: we forward a plain
-// boolean ("ptt-global-down" / "ptt-global-up") to the renderer. The
-// renderer cannot reconstruct which physical key was pressed from those
-// signals.
+// The keycode itself never leaves the main process: we forward plain signal
+// names ("ptt-global-down" / "ptt-global-up" / "mute-hotkey-global") to the
+// renderer. The renderer cannot reconstruct which physical key was pressed
+// from those signals.
 uIOhook.on("keydown", (e) => {
-  // PRIVACY: branch on keycode FIRST. If the event is not the PTT key,
-  // return immediately — we don't read e.altKey, e.shiftKey, e.rawcode
-  // or any other field. The event object is dropped on the next GC.
-  if (pttTargetKeycode === null || e.keycode !== pttTargetKeycode) return;
-  getMainWindow()?.webContents.send("ptt-global-down");
+  // PRIVACY: keycode comparison happens inside hotkey-router; nothing else
+  // on `e` is read here.
+  for (const signal of keyDown(e.keycode)) {
+    if (signal === "ptt-down") getMainWindow()?.webContents.send("ptt-global-down");
+    else if (signal === "mute-toggle") getMainWindow()?.webContents.send("mute-hotkey-global");
+  }
 });
 uIOhook.on("keyup", (e) => {
   // PRIVACY: see keydown rationale.
-  if (pttTargetKeycode === null || e.keycode !== pttTargetKeycode) return;
-  getMainWindow()?.webContents.send("ptt-global-up");
+  for (const signal of keyUp(e.keycode)) {
+    if (signal === "ptt-up") getMainWindow()?.webContents.send("ptt-global-up");
+  }
 });
 
 function startUiohook(): void {
@@ -109,37 +114,60 @@ function startUiohook(): void {
   uiohookRunning = true;
   // Log without revealing the bound key — operators reading the log
   // shouldn't be able to learn user keybindings.
-  console.log("[ptt] uIOhook started (global keyboard listener active)");
+  console.log("[hotkeys] uIOhook started (global keyboard listener active)");
 }
 
 function stopUiohook(): void {
   if (!uiohookRunning) return;
   uIOhook.stop();
   uiohookRunning = false;
-  console.log("[ptt] uIOhook stopped");
+  console.log("[hotkeys] uIOhook stopped");
 }
 
 /** Register a PTT shortcut by KeyboardEvent.code. Returns false on unknown key. */
 export function registerPTT(keyCode: string): boolean {
   const uiCode = codeToUiohook[keyCode];
   if (uiCode === undefined) {
-    console.warn(`[ptt] unknown key code: ${keyCode}`);
+    console.warn("[hotkeys] unknown PTT key code");
     return false;
   }
-  pttTargetKeycode = uiCode;
+  setPtt(uiCode);
   startUiohook();
-  console.log(`[ptt] registered: ${keyCode} → uiohook ${uiCode}`);
+  // No keycode in the log — see privacy note above.
+  console.log("[hotkeys] PTT registered");
   return true;
 }
 
 export function unregisterPTT(): void {
-  pttTargetKeycode = null;
-  stopUiohook();
-  console.log("[ptt] unregistered");
+  setPtt(null);
+  // Only stop the shared hook if the mute binding isn't keeping it alive.
+  if (!isActive()) stopUiohook();
+  console.log("[hotkeys] PTT unregistered");
 }
 
-/** Stop the hook entirely (called during app shutdown). */
-export function shutdownPTT(): void {
-  pttTargetKeycode = null;
+/** Register a global mute-toggle shortcut by KeyboardEvent.code. Returns false on unknown key. */
+export function registerMuteHotkey(keyCode: string): boolean {
+  const uiCode = codeToUiohook[keyCode];
+  if (uiCode === undefined) {
+    console.warn("[hotkeys] unknown mute hotkey key code");
+    return false;
+  }
+  setMute(uiCode);
+  startUiohook();
+  console.log("[hotkeys] mute hotkey registered");
+  return true;
+}
+
+export function unregisterMuteHotkey(): void {
+  setMute(null);
+  // Only stop the shared hook if the PTT binding isn't keeping it alive.
+  if (!isActive()) stopUiohook();
+  console.log("[hotkeys] mute hotkey unregistered");
+}
+
+/** Stop the hook entirely and clear both bindings (called during app shutdown). */
+export function shutdownGlobalHotkeys(): void {
+  setPtt(null);
+  setMute(null);
   stopUiohook();
 }

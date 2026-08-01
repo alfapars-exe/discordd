@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
+import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
 import * as voiceApi from "../api/voice";
 
 // Mock external dependencies that voiceStore imports at module level
@@ -424,6 +425,45 @@ describe("voiceStore", () => {
       });
       useVoiceStore.getState().handleAFKKick("Genel", "Sunucu");
       expect(useVoiceStore.getState().connectionQuality).toEqual({});
+    });
+  });
+
+  // ─── Mute Hotkey Settings ───
+  //
+  // Persistence is debounced (400ms) — these assert only the in-memory
+  // state update, not the localStorage write.
+
+  describe("mute hotkey settings", () => {
+    it("DEFAULT_SETTINGS ships the hotkey disabled (opt-in) with KeyL bound", () => {
+      // Asserts the exported default object directly — robust against test
+      // ordering, unlike reading the live store (which the tests below mutate).
+      expect(DEFAULT_SETTINGS.muteHotkeyEnabled).toBe(false);
+      expect(DEFAULT_SETTINGS.muteHotkey).toBe("KeyL");
+    });
+
+    it("DEFAULT_SETTINGS ships the global (unfocused) scope disabled", () => {
+      expect(DEFAULT_SETTINGS.muteHotkeyGlobal).toBe(false);
+    });
+
+    it("setMuteHotkeyEnabled updates in-memory state", () => {
+      useVoiceStore.getState().setMuteHotkeyEnabled(true);
+      expect(useVoiceStore.getState().muteHotkeyEnabled).toBe(true);
+
+      useVoiceStore.getState().setMuteHotkeyEnabled(false);
+      expect(useVoiceStore.getState().muteHotkeyEnabled).toBe(false);
+    });
+
+    it("setMuteHotkey updates the bound key code", () => {
+      useVoiceStore.getState().setMuteHotkey("KeyP");
+      expect(useVoiceStore.getState().muteHotkey).toBe("KeyP");
+    });
+
+    it("setMuteHotkeyGlobal updates in-memory state", () => {
+      useVoiceStore.getState().setMuteHotkeyGlobal(true);
+      expect(useVoiceStore.getState().muteHotkeyGlobal).toBe(true);
+
+      useVoiceStore.getState().setMuteHotkeyGlobal(false);
+      expect(useVoiceStore.getState().muteHotkeyGlobal).toBe(false);
     });
   });
 

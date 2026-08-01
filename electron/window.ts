@@ -5,8 +5,13 @@
  * and expose a reference for other modules. Close-to-tray, F12 devtools,
  * and ready-to-show flicker prevention live here.
  *
- * Does NOT register IPC. Does NOT touch tray/audio/PTT — those modules
- * import `getMainWindow()` when they need to send events to the renderer.
+ * Does NOT register IPC. Does NOT send anything through the window — other
+ * modules import `getMainWindow()` when they need to reach the renderer.
+ * The one exception is push-to-talk.ts: this file calls its
+ * shutdownGlobalHotkeys() when the window's renderer is gone (crashed or
+ * the window itself closed), so the global uIOhook keyboard hook never
+ * outlives the window that owns it. That's a one-way cleanup call, not a
+ * binding or a signal — push-to-talk.ts still owns all hotkey state.
  */
 
 import { app, BrowserWindow, Menu, screen, shell } from "electron";
@@ -18,6 +23,13 @@ import { getSettings, getWindowBounds, saveWindowBounds, WindowBounds } from "./
 // makes this file unloadable outside the Electron runtime, so the policy
 // itself is kept separate the same way resolve-path.ts is.
 import { isInternalNavigation } from "./navigation-policy";
+
+// See the header note above — the only reason this file reaches into
+// push-to-talk.ts. Referenced only inside event-handler callbacks below
+// (never at module load time), so the require cycle with push-to-talk.ts
+// (which imports getMainWindow from this file) resolves safely: both
+// modules are fully loaded well before either callback can fire.
+import { shutdownGlobalHotkeys } from "./push-to-talk";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -211,6 +223,16 @@ export function createMainWindow(): BrowserWindow {
     }
   });
 
+  // If the renderer dies (crash, OOM, killed) the global keyboard hook has
+  // no one left to signal — registerPTT/registerMuteHotkey's IPC listeners
+  // are gone with it, so the hook would otherwise keep running (and keep
+  // comparing every system keystroke) for a dead window until the whole
+  // app quits. Shut it down here; a future createMainWindow() call (or the
+  // renderer coming back) re-registers whatever the user still has enabled.
+  mainWindow.webContents.on("render-process-gone", () => {
+    shutdownGlobalHotkeys();
+  });
+
   // Close-to-tray: hide instead of quit unless tray Quit was clicked.
   //
   // Exception: when an update installer is downloaded and waiting, bypass
@@ -231,6 +253,12 @@ export function createMainWindow(): BrowserWindow {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+    // Same reasoning as the render-process-gone handler above: the window
+    // (and its IPC listeners) are gone, so the hook must not keep running.
+    // "closed" only fires on real destruction, never on hide-to-tray (that
+    // path calls e.preventDefault() in the "close" handler above), so this
+    // never interrupts the close-to-tray flow.
+    shutdownGlobalHotkeys();
   });
 
   return mainWindow;

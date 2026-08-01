@@ -1486,6 +1486,8 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .vs-keybind { display:inline-flex;align-items:center;justify-content:center;min-width:120px;height:38px;padding:0 20px;background:var(--input-bg);border:2px solid var(--input-border);border-radius:6px;color:var(--t0);font-size:14px;font-weight:500;font-family:var(--f-m);cursor:pointer;transition:border-color .15s,color .15s; }
 .vs-keybind:hover { border-color:var(--primary);color:var(--primary); }
 .vs-keybind.listening { border-color:var(--primary);color:var(--primary);animation:pulse 1.5s ease-in-out infinite; }
+.vs-keybind:disabled { opacity:.5;cursor:not-allowed; }
+.vs-keybind:disabled:hover { border-color:var(--input-border);color:var(--t0); }
 
 /* Toggle switch — on/off with clear state */
 .vs-toggle-row { display:flex;align-items:center;justify-content:space-between;gap:16px; }
