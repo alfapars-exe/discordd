@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -75,11 +76,21 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 
 	tracks, err := h.music.Enqueue(r.Context(), user.ID, channelID, req.URL)
 	if err != nil {
-		// Surface the real error message instead of letting pkg.Error swallow
-		// it into a generic 500. The user reported "Müzik başlatılamadı" with
-		// no console detail; this puts the actual failure (yt-dlp / livekit /
-		// pipeline) in the HTTP response body so it reaches the toast.
-		pkg.ErrorWithMessage(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, pkg.ErrBadRequest) {
+			// URL guard rejection (music_url_guard.go) — client-caused, 400,
+			// message is already safe to echo (it never contains resolved
+			// IPs or the raw error chain, see validateMusicURLNetwork).
+			pkg.Error(w, err)
+			return
+		}
+		// 5xx: never put err in the response body. pkg.ErrText renders an
+		// error for logging — it only strips a fixed list of known credential
+		// query-params (see pkg/redact.go), so a Turso hostname, SQL
+		// fragment, or file path embedded in a driver error would still reach
+		// the client. ErrorCtx applies pkg.Error's CWE-209 policy instead: a
+		// generic client-facing message, with the real err logged
+		// server-side (slog, request-scoped) via ErrText.
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to queue track", err)
 		return
 	}
 	pkg.JSON(w, http.StatusOK, playResponse{AddedTracks: tracks})

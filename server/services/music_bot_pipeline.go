@@ -204,6 +204,28 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) error {
 	musicBotLogger.Info("playTrack start", "channel_id", bot.channelID, "video_id", track.VideoID, "title", track.Title)
 
+	// track.URL is NOT validated at the HTTP edge — it comes from the
+	// fallback chain in music_bot_metadata.go:toTrack(), i.e. yt-dlp's own
+	// JSON output (webpage_url / original_url / url), and can fall all the
+	// way back to the user's raw input if none of those are present. The
+	// handler only validates the URL the user originally typed, not what
+	// ends up here. So this call site needs its own guard, independent of
+	// extractTracks's.
+	//
+	// Runs on its own bounded context, checked and released before
+	// bot.cancelFn is ever set: at this point the stall watchdog doesn't
+	// exist yet (it's armed further down), so a guard tied to the pipeline's
+	// own un-timed context could block this goroutine on a wedged DNS
+	// resolver forever. Ordering it before the cancelFn assignment also
+	// means a rejection here never leaves bot.cancelFn pointing at a
+	// pipeline that was never started.
+	guardCtx, guardCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	guardErr := validateMusicURLNetwork(guardCtx, track.URL)
+	guardCancel()
+	if guardErr != nil {
+		return guardErr
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -220,13 +242,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// the user's raw input if yt-dlp didn't return a webpage URL. Without
 	// the terminator a crafted URL would let the dequeue path inherit the
 	// same argument-injection risk fixed in extractTracks.
-	yt := exec.CommandContext(ctx, "yt-dlp", // #nosec G204 -- fixed argv; track.URL is scheme-validated at the HTTP edge (handlers/music.go) and isolated behind `--`
-		"-f", "bestaudio",
-		"--no-warnings",
-		"-o", "-",
-		"--",
-		track.URL,
-	)
+	yt := exec.CommandContext(ctx, "yt-dlp", playTrackYtdlpArgs(track.URL)...) // #nosec G204 -- fixed argv; track.URL passes validateMusicURLNetwork above (host allow-list + post-DNS private/reserved-IP check, see music_url_guard.go) and is isolated behind `--` in playTrackYtdlpArgs
 	ff := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "warning",
 		"-i", "pipe:0",
@@ -307,6 +323,23 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		return fmt.Errorf("playback stalled: no audio progress for %s", stallTimeout)
 	}
 	return pumpErr
+}
+
+// playTrackYtdlpArgs builds playTrack's yt-dlp argv. Factored out (rather
+// than inlined at the exec.CommandContext call) so a test can assert
+// "--use-extractors Youtube.*" is actually present without spawning the
+// subprocess — see TestPlayTrackYtdlpArgs_RestrictsToYoutubeExtractors.
+// "--use-extractors" mirrors extractTracksArgs in music_bot_metadata.go —
+// see that file's comment for why GenericIE must stay disabled here too.
+func playTrackYtdlpArgs(url string) []string {
+	return []string{
+		"-f", "bestaudio",
+		"--no-warnings",
+		"--use-extractors", "Youtube.*",
+		"-o", "-",
+		"--",
+		url,
+	}
 }
 
 // stallThresholds returns the live watchdog timings — the consts above unless
