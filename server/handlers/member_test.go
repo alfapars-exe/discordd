@@ -19,10 +19,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -34,6 +36,19 @@ type stubMemberService struct {
 	lastReq *models.UpdateProfileRequest
 	result  *models.MemberWithRoles
 	err     error
+
+	// Timeout capture/err — used by TestTimeoutHandler.
+	timeoutServerID string
+	timeoutActor    string
+	timeoutTarget   string
+	timeoutExpiry   time.Time
+	timeoutReason   string
+	timeoutCalled   bool
+	timeoutErr      error
+
+	// RemoveTimeout capture/err — used by TestRemoveTimeoutHandler.
+	removeTimeoutCalled bool
+	removeTimeoutErr    error
 }
 
 func (s *stubMemberService) GetAll(context.Context, string) ([]models.MemberWithRoles, error) {
@@ -77,12 +92,19 @@ func (s *stubMemberService) IsBanned(context.Context, string, string) (bool, err
 	return false, nil
 }
 
-func (s *stubMemberService) Timeout(context.Context, string, string, string, time.Time, string) error {
-	return nil
+func (s *stubMemberService) Timeout(_ context.Context, serverID, actorID, targetID string, expiresAt time.Time, reason string) error {
+	s.timeoutCalled = true
+	s.timeoutServerID = serverID
+	s.timeoutActor = actorID
+	s.timeoutTarget = targetID
+	s.timeoutExpiry = expiresAt
+	s.timeoutReason = reason
+	return s.timeoutErr
 }
 
 func (s *stubMemberService) RemoveTimeout(context.Context, string, string, string) error {
-	return nil
+	s.removeTimeoutCalled = true
+	return s.removeTimeoutErr
 }
 
 func (s *stubMemberService) IsTimedOut(context.Context, string, string) (*models.MemberTimeout, error) {
@@ -98,6 +120,198 @@ func (s *stubMemberService) SetAuditLogger(services.AuditWriter) {}
 func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator) {}
 
 var _ services.MemberService = (*stubMemberService)(nil)
+
+// newModerationRequest builds a request carrying an authenticated actor and
+// (optionally) a server context, mirroring what the auth -> authServer ->
+// authServerPerm middleware chain leaves in place for a server-scoped
+// member moderation route. targetID, if non-empty, is set as the "id" path
+// value (routes are /api/servers/{serverId}/members/{id}/...).
+func newModerationRequest(method, path, body, serverID, targetID string) *http.Request {
+	var req *http.Request
+	if body != "" {
+		req = httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	} else {
+		req = httptest.NewRequest(method, path, nil)
+	}
+	actor := &models.User{ID: "mod-1", Username: "mod"}
+	ctx := context.WithValue(req.Context(), UserContextKey, actor)
+	if serverID != "" {
+		ctx = context.WithValue(ctx, ServerIDContextKey, serverID)
+	}
+	req = req.WithContext(ctx)
+	if targetID != "" {
+		req.SetPathValue("id", targetID)
+	}
+	return req
+}
+
+// TestTimeoutHandler exercises PUT /api/servers/{serverId}/members/{id}/timeout.
+func TestTimeoutHandler(t *testing.T) {
+	t.Run("success — 200 and the service receives the decoded/expanded args", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		before := time.Now().UTC()
+		req := newModerationRequest(http.MethodPut, "/api/servers/srv1/members/victim1/timeout",
+			`{"duration_seconds":300,"reason":"spam"}`, "srv1", "victim1")
+		h.Timeout(rec, req)
+		after := time.Now().UTC()
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+		}
+		if !stub.timeoutCalled {
+			t.Fatal("expected the service's Timeout to be called")
+		}
+		if stub.timeoutServerID != "srv1" || stub.timeoutActor != "mod-1" || stub.timeoutTarget != "victim1" {
+			t.Errorf("unexpected args: server=%q actor=%q target=%q",
+				stub.timeoutServerID, stub.timeoutActor, stub.timeoutTarget)
+		}
+		if stub.timeoutReason != "spam" {
+			t.Errorf("reason = %q, want %q", stub.timeoutReason, "spam")
+		}
+		wantMin := before.Add(300 * time.Second)
+		wantMax := after.Add(300 * time.Second)
+		if stub.timeoutExpiry.Before(wantMin) || stub.timeoutExpiry.After(wantMax) {
+			t.Errorf("expiry = %v, want between %v and %v", stub.timeoutExpiry, wantMin, wantMax)
+		}
+	})
+
+	t.Run("malformed JSON body — 400, service not called", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodPut, "/api/servers/srv1/members/victim1/timeout",
+			`{not valid json`, "srv1", "victim1")
+		h.Timeout(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+		if stub.timeoutCalled {
+			t.Error("service must not be called for a malformed body")
+		}
+	})
+
+	t.Run("zero duration fails Validate — 400, service not called", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodPut, "/api/servers/srv1/members/victim1/timeout",
+			`{"duration_seconds":0,"reason":""}`, "srv1", "victim1")
+		h.Timeout(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+		if stub.timeoutCalled {
+			t.Error("service must not be called when duration fails validation")
+		}
+	})
+
+	t.Run("duration over 28 days fails Validate — 400, service not called", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		const overCap = 28*24*60*60 + 1
+		req := newModerationRequest(http.MethodPut, "/api/servers/srv1/members/victim1/timeout",
+			`{"duration_seconds":`+strconv.Itoa(overCap)+`,"reason":""}`, "srv1", "victim1")
+		h.Timeout(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+		if stub.timeoutCalled {
+			t.Error("service must not be called when duration exceeds the 28-day cap")
+		}
+	})
+
+	t.Run("service returns ErrForbidden — 403", func(t *testing.T) {
+		stub := &stubMemberService{timeoutErr: pkg.ErrForbidden}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodPut, "/api/servers/srv1/members/victim1/timeout",
+			`{"duration_seconds":60,"reason":""}`, "srv1", "victim1")
+		h.Timeout(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403 (body %q)", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("missing server context — 400", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodPut, "/api/servers//members/victim1/timeout",
+			`{"duration_seconds":60,"reason":""}`, "", "victim1")
+		h.Timeout(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+		if stub.timeoutCalled {
+			t.Error("service must not be called without a server context")
+		}
+	})
+}
+
+// TestRemoveTimeoutHandler exercises DELETE /api/servers/{serverId}/members/{id}/timeout.
+func TestRemoveTimeoutHandler(t *testing.T) {
+	t.Run("success — 200", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodDelete, "/api/servers/srv1/members/victim1/timeout",
+			"", "srv1", "victim1")
+		h.RemoveTimeout(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+		}
+		if !stub.removeTimeoutCalled {
+			t.Error("expected the service's RemoveTimeout to be called")
+		}
+	})
+
+	t.Run("missing id path value — 400, service not called", func(t *testing.T) {
+		stub := &stubMemberService{}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodDelete, "/api/servers/srv1/members//timeout",
+			"", "srv1", "")
+		h.RemoveTimeout(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rec.Code)
+		}
+		if stub.removeTimeoutCalled {
+			t.Error("service must not be called without a target id")
+		}
+	})
+
+	t.Run("service error passthrough — 403", func(t *testing.T) {
+		stub := &stubMemberService{removeTimeoutErr: pkg.ErrForbidden}
+		h := NewMemberHandler(stub)
+		rec := httptest.NewRecorder()
+
+		req := newModerationRequest(http.MethodDelete, "/api/servers/srv1/members/victim1/timeout",
+			"", "srv1", "victim1")
+		h.RemoveTimeout(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403 (body %q)", rec.Code, rec.Body.String())
+		}
+	})
+}
 
 // newUpdateProfileRequest builds a PATCH /api/users/me/profile request with
 // an authenticated caller in context, the way AuthMiddleware would leave it

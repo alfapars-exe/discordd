@@ -22,17 +22,18 @@ func NewSQLiteSearchRepo(db database.TxQuerier) SearchRepository {
 // the author (nullable via LEFT JOIN) and an empty attachments slice.
 func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 	var msg models.Message
-	var author models.User
+	var author models.PublicUser
 	// Every joined author column must be nullable, not just the id: a dangling
 	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL landing
 	// in a plain string fails the row scan — which here would drop the whole
 	// page of search results, not just the one message. Same defect and same
 	// fix as sqlite_message.go's scanMessage.
 	var authorID, authorUsername, authorStatus sql.NullString
+	var authorCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus, &author.CustomStatus, &authorCreatedAt,
 	); err != nil {
 		return msg, err
 	}
@@ -41,7 +42,9 @@ func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 		author.ID = authorID.String
 		author.Username = authorUsername.String
 		author.Status = models.UserStatus(authorStatus.String)
-		author.PasswordHash = ""
+		if authorCreatedAt.Valid {
+			author.CreatedAt = authorCreatedAt.Time
+		}
 		msg.Author = &author
 	}
 	msg.Attachments = []models.Attachment{}
@@ -98,7 +101,7 @@ func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID st
 
 	dataQuery := `
 		SELECT m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
-		       u.id, u.username, u.display_name, u.avatar_url, u.status
+		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at
 		FROM messages_fts fts
 		JOIN messages m ON m.rowid = fts.rowid
 		JOIN channels ch ON ch.id = m.channel_id

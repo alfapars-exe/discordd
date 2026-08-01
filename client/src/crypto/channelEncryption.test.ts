@@ -57,7 +57,7 @@ import type {
   SenderKeyRecipient,
 } from "../types/e2ee";
 import type { Message } from "../types/message";
-import type { User } from "../types/user";
+import type { PublicUser } from "../types/user";
 import type { MemberWithRoles } from "../types/role";
 import type { ChannelPermissionOverride } from "../types/channel";
 import type { EncryptedFileMeta } from "./fileEncryption";
@@ -500,7 +500,7 @@ function baseMessage(id: string, overrides: Partial<Message>): Message {
     created_at: "2026-01-01T00:00:00.000Z",
     reply_to_id: null,
     referenced_message: null,
-    author: {} as User,
+    author: {} as PublicUser,
     attachments: [],
     mentions: [],
     role_mentions: [],

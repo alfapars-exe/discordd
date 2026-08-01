@@ -6,9 +6,11 @@ import { useChatContext } from "../../hooks/useChatContext";
 import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
 import { useAttachmentRejectionToast } from "../../hooks/useAttachmentRejectionToast";
 import { useIsTouch } from "../../hooks/useMediaQuery";
+import { useNowTick } from "../../hooks/useNowTick";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH } from "../../utils/constants";
 import { convertMentionTokens } from "../../utils/mention";
+import { formatRelativeFuture } from "../../utils/dateFormat";
 import EmojiPicker from "../shared/EmojiPicker";
 import GifPicker from "../shared/GifPicker";
 import FilePreview from "./FilePreview";
@@ -16,7 +18,7 @@ import MentionAutocomplete, { type MentionSelection } from "./MentionAutocomplet
 import ReplyBar from "./ReplyBar";
 
 function MessageInput() {
-  const { t } = useTranslation("chat");
+  const { t, i18n } = useTranslation("chat");
   const reportRejections = useAttachmentRejectionToast();
   // On a touch device, calling textarea.focus() summons the soft keyboard
   // uninvited (channel switch, reply, post-send restore). Gate every
@@ -34,7 +36,11 @@ function MessageInput() {
     setReplyingTo,
     sendTyping,
     addFilesRef,
+    selfTimeoutExpiresAt,
   } = useChatContext();
+  // Refreshes the "ends in X" countdown in the timeout banner — same
+  // shared-ticker pattern as MemberList's offline "last seen" labels.
+  const nowTick = useNowTick(30_000);
 
   const [content, setContent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -117,6 +123,10 @@ function MessageInput() {
   const handleSend = useCallback(async () => {
     if (!channelId) return;
     if (!content.trim() && files.length === 0) return;
+    // Timed-out users can't send anything — including slash commands.
+    // Checked before runMusicCommand below so /play etc. can't be used to
+    // bypass the composer gate while muted.
+    if (selfTimeoutExpiresAt) return;
     // Ref-based guard runs BEFORE React batches the state update — closes
     // the same-tick double-fire race that the previous `isSending` state
     // guard could not (state hadn't propagated by the second handleSend).
@@ -163,7 +173,7 @@ function MessageInput() {
       // dismissed it deliberately, and forcing focus would reopen it.
       if (!isTouch) requestAnimationFrame(() => textareaRef.current?.focus());
     }
-  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend, isTouch]);
+  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend, isTouch, selfTimeoutExpiresAt]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -371,12 +381,16 @@ function MessageInput() {
 
   // Placeholder: "#channel" in channel mode, "@user" in DM mode.
   // When canSend is false the user gets a hint that only slash commands
-  // will go through; the textarea stays editable.
-  const placeholder = !canSend
-    ? t("noSendPermissionSlashHint")
-    : mode === "dm"
-      ? t("dmPlaceholder", { user: channelName })
-      : t("messagePlaceholder", { channel: channelName });
+  // will go through; the textarea stays editable. A timeout takes
+  // priority over the generic no-permission hint — timed-out users can't
+  // use slash commands either (see handleSend), so that hint would lie.
+  const placeholder = selfTimeoutExpiresAt
+    ? t("timedOutPlaceholder")
+    : !canSend
+      ? t("noSendPermissionSlashHint")
+      : mode === "dm"
+        ? t("dmPlaceholder", { user: channelName })
+        : t("messagePlaceholder", { channel: channelName });
 
   return (
     <div className="input-area">
@@ -400,6 +414,20 @@ function MessageInput() {
 
       {/* File previews */}
       <FilePreview files={files} onRemove={handleFileRemove} />
+
+      {/* Self-timeout banner — replaces the normal composer affordance while
+          a moderator timeout is active. Relative "ends in X" text refreshes
+          off nowTick so it doesn't go stale for someone sitting on the tab. */}
+      {selfTimeoutExpiresAt && (
+        <div className="input-timeout-banner" role="status">
+          <span>{t("common:youAreTimedOut")}</span>
+          <span key={nowTick}>
+            {t("common:timeoutExpiresIn", {
+              rel: formatRelativeFuture(selfTimeoutExpiresAt, i18n.language),
+            })}
+          </span>
+        </div>
+      )}
 
       <div className="input-box">
         {/* File upload button */}
@@ -493,7 +521,8 @@ function MessageInput() {
 
         {/* Send button — explicit click target for users who don't use Enter
             (touch devices, accessibility). Disabled when there's no content
-            and no attachments, or while a previous send is in flight. */}
+            and no attachments, while a previous send is in flight, or while
+            timed out (full send block — even slash commands). */}
         <button
           className="input-action-btn input-send-btn"
           title={t("sendMessage")}
@@ -503,7 +532,8 @@ function MessageInput() {
             (content.trim().length === 0 && files.length === 0) ||
             // canSend=false locks regular sends; slash commands bypass the
             // text-channel send permission and stay tappable.
-            (!canSend && !isSlashCommand)
+            (!canSend && !isSlashCommand) ||
+            !!selfTimeoutExpiresAt
           }
           aria-label={t("sendMessage")}
         >

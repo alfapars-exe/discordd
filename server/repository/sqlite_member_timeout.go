@@ -27,8 +27,13 @@ func (r *sqliteMemberTimeoutRepo) Upsert(ctx context.Context, t *models.MemberTi
 		INSERT OR REPLACE INTO member_timeouts
 			(server_id, user_id, expires_at, applied_by, reason)
 		VALUES (?, ?, ?, ?, ?)`
+	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
+	// the raw time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
+	// which sorts lexically AFTER sqlite's datetime('now') output because 'T' >
+	// ' ', so every expiry-comparison read below would never see the row as
+	// expired. Format/writer and datetime('now')/reader must stay in sync.
 	if _, err := r.db.ExecContext(ctx, query,
-		t.ServerID, t.UserID, t.ExpiresAt, t.AppliedBy, t.Reason,
+		t.ServerID, t.UserID, t.ExpiresAt.UTC().Format("2006-01-02 15:04:05"), t.AppliedBy, t.Reason,
 	); err != nil {
 		return fmt.Errorf("upsert member_timeout: %w", err)
 	}

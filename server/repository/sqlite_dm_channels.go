@@ -67,7 +67,7 @@ func (r *sqliteDMRepo) GetChannelByID(ctx context.Context, id string) (*models.D
 func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]models.DMChannelWithUser, error) {
 	query := `
 		SELECT dc.id, dc.e2ee_enabled, dc.status, dc.initiated_by, dc.created_at, dc.last_message_at,
-			u.id, u.username, u.display_name, u.avatar_url, u.status,
+			u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			COALESCE(ds.is_pinned, 0),
 			CASE WHEN ds.muted_until IS NOT NULL AND ds.muted_until > datetime('now') THEN 1 ELSE 0 END
 		FROM dm_channels dc
@@ -90,14 +90,14 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 	var channels []models.DMChannelWithUser
 	for rows.Next() {
 		var ch models.DMChannelWithUser
-		var user models.User
-		var displayName, avatarURL, initiatedBy sql.NullString
-		var lastMsgAt sql.NullTime
+		var user models.PublicUser
+		var displayName, avatarURL, initiatedBy, customStatus sql.NullString
+		var lastMsgAt, userCreatedAt sql.NullTime
 		var isPinned, isMuted int
 
 		if err := rows.Scan(
 			&ch.ID, &ch.E2EEEnabled, &ch.Status, &initiatedBy, &ch.CreatedAt, &lastMsgAt,
-			&user.ID, &user.Username, &displayName, &avatarURL, &user.Status,
+			&user.ID, &user.Username, &displayName, &avatarURL, &user.Status, &customStatus, &userCreatedAt,
 			&isPinned, &isMuted,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan DM channel: %w", err)
@@ -111,6 +111,12 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		}
 		if avatarURL.Valid {
 			user.AvatarURL = &avatarURL.String
+		}
+		if customStatus.Valid {
+			user.CustomStatus = &customStatus.String
+		}
+		if userCreatedAt.Valid {
+			user.CreatedAt = userCreatedAt.Time
 		}
 		if initiatedBy.Valid {
 			ch.InitiatedBy = &initiatedBy.String

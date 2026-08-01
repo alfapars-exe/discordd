@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
+import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
 import * as voiceApi from "../api/voice";
 
 // Mock external dependencies that voiceStore imports at module level
@@ -15,6 +16,13 @@ vi.mock("./preferencesStore", () => ({
 }));
 vi.mock("./serverStore", () => ({
   useServerStore: { getState: () => ({ activeServerId: "srv1" }) },
+}));
+// Identity translator — assertions check the raw i18n key, same pattern as
+// apiError.test.ts / voiceEventHandlers.test.ts for this module.
+vi.mock("../i18n", () => ({ default: { t: (k: string) => k } }));
+const addToast = vi.fn();
+vi.mock("./toastStore", () => ({
+  useToastStore: { getState: () => ({ addToast }) },
 }));
 
 function resetStore() {
@@ -420,6 +428,45 @@ describe("voiceStore", () => {
     });
   });
 
+  // ─── Mute Hotkey Settings ───
+  //
+  // Persistence is debounced (400ms) — these assert only the in-memory
+  // state update, not the localStorage write.
+
+  describe("mute hotkey settings", () => {
+    it("DEFAULT_SETTINGS ships the hotkey disabled (opt-in) with KeyL bound", () => {
+      // Asserts the exported default object directly — robust against test
+      // ordering, unlike reading the live store (which the tests below mutate).
+      expect(DEFAULT_SETTINGS.muteHotkeyEnabled).toBe(false);
+      expect(DEFAULT_SETTINGS.muteHotkey).toBe("KeyL");
+    });
+
+    it("DEFAULT_SETTINGS ships the global (unfocused) scope disabled", () => {
+      expect(DEFAULT_SETTINGS.muteHotkeyGlobal).toBe(false);
+    });
+
+    it("setMuteHotkeyEnabled updates in-memory state", () => {
+      useVoiceStore.getState().setMuteHotkeyEnabled(true);
+      expect(useVoiceStore.getState().muteHotkeyEnabled).toBe(true);
+
+      useVoiceStore.getState().setMuteHotkeyEnabled(false);
+      expect(useVoiceStore.getState().muteHotkeyEnabled).toBe(false);
+    });
+
+    it("setMuteHotkey updates the bound key code", () => {
+      useVoiceStore.getState().setMuteHotkey("KeyP");
+      expect(useVoiceStore.getState().muteHotkey).toBe("KeyP");
+    });
+
+    it("setMuteHotkeyGlobal updates in-memory state", () => {
+      useVoiceStore.getState().setMuteHotkeyGlobal(true);
+      expect(useVoiceStore.getState().muteHotkeyGlobal).toBe(true);
+
+      useVoiceStore.getState().setMuteHotkeyGlobal(false);
+      expect(useVoiceStore.getState().muteHotkeyGlobal).toBe(false);
+    });
+  });
+
   // ─── Local Mute ───
 
   describe("toggleLocalMute", () => {
@@ -502,6 +549,85 @@ describe("voiceStore", () => {
         streamer_user_id: "u3",
         watching: false,
       });
+    });
+
+    // Cross-channel switch consistency (server-side JoinChannel now carries
+    // IsServerMuted/IsServerDeafened forward to the new channel, Discord-
+    // like — a moderator's server-mute survives the muted user changing
+    // channels themselves).
+    //
+    // leaveVoiceChannel() is the FULL-leave primitive — resetting these two
+    // fields here is correct (no active session left to enforce a mic lock
+    // against). A cross-channel switch reuses this same primitive (see
+    // useVoice.ts's joinVoice), so the field DOES still drop to false right
+    // here — that's why the preserve/restore for a *switch* deliberately
+    // lives one layer up, in the orchestration hooks that call
+    // leaveVoiceChannel()+joinVoiceChannel() back-to-back (useVoice.ts and
+    // voiceEventHandlers.ts's voice_force_move handler both snapshot
+    // isServerMuted/isServerDeafened before calling this function and
+    // restore them right after — see voiceEventHandlers.test.ts and
+    // useVoice.ts for that coverage). joinVoiceChannel() itself never sets
+    // these fields, by design — it can't know the new channel's moderation
+    // state ahead of the server's join broadcast.
+    it("resets isServerMuted/isServerDeafened — full-leave primitive; a channel SWITCH restores them one layer up (see voiceEventHandlers.test.ts / useVoice.ts)", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "ch1",
+        isServerMuted: true,
+        isServerDeafened: true,
+      });
+      useVoiceStore.getState().leaveVoiceChannel();
+      const state = useVoiceStore.getState();
+      expect(state.isServerMuted).toBe(false);
+      expect(state.isServerDeafened).toBe(false);
+    });
+  });
+
+  // ─── Join Failure Toasts ───
+  //
+  // getVoiceToken failing with a moderator-timeout message must surface a
+  // distinct "you can't join while timed out" toast instead of the generic
+  // connection-failure one, so the user knows why the join was refused.
+
+  describe("joinVoiceChannel — failure toasts", () => {
+    beforeEach(() => {
+      addToast.mockReset();
+    });
+
+    it("returns null and toasts the timed-out-specific message when the server reports an active timeout", async () => {
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValue({
+        success: false,
+        error: "you are timed out on this server",
+      });
+
+      const result = await useVoiceStore.getState().joinVoiceChannel("ch1");
+
+      expect(result).toBeNull();
+      expect(addToast).toHaveBeenCalledWith("error", "voice:voiceJoinTimedOut");
+    });
+
+    it("returns null and toasts a generic failure message for any other error", async () => {
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValue({
+        success: false,
+        error: "internal server error",
+        status: 500,
+      });
+
+      const result = await useVoiceStore.getState().joinVoiceChannel("ch1");
+
+      expect(result).toBeNull();
+      expect(addToast).toHaveBeenCalledTimes(1);
+      const [variant, message] = addToast.mock.calls[0]!;
+      expect(variant).toBe("error");
+      expect(message).toBe("voice:voiceJoinFailed");
+    });
+
+    it("toasts a generic failure message when getVoiceToken rejects unexpectedly", async () => {
+      vi.mocked(voiceApi.getVoiceToken).mockRejectedValue(new Error("network down"));
+
+      const result = await useVoiceStore.getState().joinVoiceChannel("ch1");
+
+      expect(result).toBeNull();
+      expect(addToast).toHaveBeenCalledWith("error", "voice:voiceJoinFailed");
     });
   });
 

@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -380,6 +382,55 @@ func TestSendMessage_secondMessageToMessageRequestUserBlocked(t *testing.T) {
 		&models.CreateDMMessageRequest{Content: "please respond"})
 	if err == nil || !strings.Contains(err.Error(), "dm_request_pending") {
 		t.Fatalf("expected dm_request_pending, got %v", err)
+	}
+}
+
+// TestSendMessage_AuthorPayloadHasNoPII is the regression guard for the leak
+// fixed by models.PublicUser (security scan 2026-07-31, finding N-09):
+// dm_message.go used to embed the full author *models.User (only blanking
+// PasswordHash) into the DM message response and WS broadcast payload,
+// shipping email, admin/ban flags and other PII to the other DM participant.
+func TestSendMessage_AuthorPayloadHasNoPII(t *testing.T) {
+	f := newDMFixture()
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{
+			ID: id, User1ID: "alice", User2ID: "bob",
+			Status: models.DMStatusAccepted,
+		}, nil
+	}
+
+	email := "alice@example.com"
+	lastSeen := time.Now()
+	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{
+			ID:               id,
+			Username:         "alice",
+			DMPrivacy:        "accepted",
+			Email:            &email,
+			IsPlatformAdmin:  true,
+			IsPlatformBanned: true,
+			Language:         "tr",
+			PrefStatus:       models.UserStatusOnline,
+			LastSeenAt:       &lastSeen,
+			PasswordHash:     "bcrypt-hash-should-never-appear",
+		}, nil
+	}
+
+	msg, err := f.svc.SendMessage(context.Background(), "alice", "ch-1",
+		&models.CreateDMMessageRequest{Content: "hi bob"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	body, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal DM message: %v", err)
+	}
+	leaked := []string{`"email"`, `"is_platform_admin"`, `"is_platform_banned"`, `"dm_privacy"`, `"language"`, `"last_seen_at"`, `"password`}
+	for _, key := range leaked {
+		if strings.Contains(string(body), key) {
+			t.Errorf("DM message payload leaks PII field %s: %s", key, body)
+		}
 	}
 }
 

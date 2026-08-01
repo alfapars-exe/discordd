@@ -30,7 +30,7 @@ import { useChannelInlineRename } from "../../hooks/useChannelInlineRename";
 import { useChannelTreeDragDrop } from "../../hooks/useChannelTreeDragDrop";
 import { useChannelTreeMenus } from "../../hooks/useChannelTreeMenus";
 import * as channelApi from "../../api/channels";
-import type { Channel, User } from "../../types";
+import type { Channel, PublicUser } from "../../types";
 
 type ChannelTreeProps = {
   onJoinVoice: (channelId: string) => void;
@@ -57,7 +57,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
 
   // User profile card state (shared between sections)
   const [userCardTarget, setUserCardTarget] = useState<{
-    user: User;
+    user: PublicUser;
     top: number;
     left: number;
   } | null>(null);
@@ -234,7 +234,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   }
 
   // Callback for FriendsSection / DMSection to show user profile card
-  const handleShowUserCard = useCallback((user: User, top: number, left: number) => {
+  const handleShowUserCard = useCallback((user: PublicUser, top: number, left: number) => {
     setUserCardTarget({ user, top, left });
   }, []);
 

@@ -26,23 +26,35 @@ func NewSQLitePinRepo(db database.TxQuerier) PinRepository {
 func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 	var pin models.PinnedMessageWithDetails
 	var msg models.Message
-	var author models.User
-	var authorID sql.NullString
-	var pinnedByUser models.User
-	var pinnedByID sql.NullString
+	var author models.PublicUser
+	// Every joined user column must be nullable, not just the id. A dangling
+	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL
+	// landing in a plain string aborts the row scan — which scanRows turns
+	// into an error for the WHOLE pin listing, not just the offending row.
+	// Same widening sqlite_message.go/sqlite_dm_scan.go already carry; this
+	// query was missed when those were fixed.
+	var authorID, authorUsername, authorStatus sql.NullString
+	var authorCreatedAt sql.NullTime
+	var pinnedByUser models.PublicUser
+	var pinnedByID, pinnedByUsername, pinnedByStatus sql.NullString
+	var pinnedByCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&pin.ID, &pin.MessageID, &pin.ChannelID, &pin.PinnedBy, &pin.CreatedAt,
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status,
-		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus, &author.CustomStatus, &authorCreatedAt,
+		&pinnedByID, &pinnedByUsername, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL, &pinnedByStatus, &pinnedByUser.CustomStatus, &pinnedByCreatedAt,
 	); err != nil {
 		return pin, err
 	}
 
 	if authorID.Valid {
 		author.ID = authorID.String
-		author.PasswordHash = ""
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
+		if authorCreatedAt.Valid {
+			author.CreatedAt = authorCreatedAt.Time
+		}
 		msg.Author = &author
 	}
 	msg.Attachments = []models.Attachment{} // empty slice, not null
@@ -50,7 +62,13 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 
 	if pinnedByID.Valid {
 		pinnedByUser.ID = pinnedByID.String
-		pinnedByUser.PasswordHash = ""
+		pinnedByUser.Username = pinnedByUsername.String
+		if pinnedByStatus.Valid {
+			pinnedByUser.Status = models.UserStatus(pinnedByStatus.String)
+		}
+		if pinnedByCreatedAt.Valid {
+			pinnedByUser.CreatedAt = pinnedByCreatedAt.Time
+		}
 		pin.PinnedByUser = &pinnedByUser
 	}
 
@@ -63,8 +81,8 @@ func (r *sqlitePinRepo) GetByChannelID(ctx context.Context, channelID string) ([
 	query := `
 		SELECT p.id, p.message_id, p.channel_id, p.pinned_by, p.created_at,
 		       m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
-		       u.id, u.username, u.display_name, u.avatar_url, u.status,
-		       pb.id, pb.username, pb.display_name, pb.avatar_url
+		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
+		       pb.id, pb.username, pb.display_name, pb.avatar_url, pb.status, pb.custom_status, pb.created_at
 		FROM pinned_messages p
 		LEFT JOIN messages m ON p.message_id = m.id
 		LEFT JOIN users u ON m.user_id = u.id

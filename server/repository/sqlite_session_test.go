@@ -8,6 +8,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,4 +142,106 @@ func TestSQLiteSession_DeleteExpired(t *testing.T) {
 	if _, err := sessionRepo.GetByRefreshToken(ctx, "live"); err != nil {
 		t.Errorf("the live session must survive DeleteExpired: %v", err)
 	}
+}
+
+// ─── A-28 format guard + migration 077 (session family) ───
+
+// rawSessionExpiresAt reads the column's ACTUAL stored bytes. CAST(...
+// AS TEXT) forces SQLite to hand back the stored text verbatim, bypassing
+// the driver-side round trip through time.Time that would otherwise mask
+// the write format — see rawExpiresAt in sqlite_member_timeout_test.go.
+func rawSessionExpiresAt(t testing.TB, db *database.DB, sessionID string) string {
+	t.Helper()
+	var raw string
+	if err := db.Conn.QueryRow(
+		`SELECT CAST(expires_at AS TEXT) FROM sessions WHERE id = ?`,
+		sessionID,
+	).Scan(&raw); err != nil {
+		t.Fatalf("read raw expires_at: %v", err)
+	}
+	return raw
+}
+
+// TestSQLiteSession_ExpiresAtFormatGuard pins the A-28 fix: Create must bind
+// a "YYYY-MM-DD HH:MM:SS" string, not the raw time.Time (see sqlite_session.go).
+func TestSQLiteSession_ExpiresAtFormatGuard(t *testing.T) {
+	db, userRepo, sessionRepo := newSessionRepos(t)
+	ctx := context.Background()
+	userID := seedSessionUser(t, userRepo, "format-guard-owner")
+
+	session := &models.Session{UserID: userID, RefreshToken: "format-guard-token", ExpiresAt: time.Now().Add(time.Hour)}
+	if err := sessionRepo.Create(ctx, session); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	raw := rawSessionExpiresAt(t, db, session.ID)
+	if !expiryFormatRe.MatchString(raw) {
+		t.Errorf("stored expires_at = %q, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
+	}
+}
+
+// read077Migration returns the real embedded migration SQL so the test
+// exercises the exact statements that ship, not a hand-copied approximation.
+func read077Migration(t testing.TB) string {
+	t.Helper()
+	content, err := fs.ReadFile(database.EmbeddedMigrations, "migrations/077_fix_session_reset_dm_mute_expiry_format.sql")
+	if err != nil {
+		t.Fatalf("read embedded migration 077: %v", err)
+	}
+	return string(content)
+}
+
+// exec077Migration runs 077's statements against db directly — see
+// exec076Migration in sqlite_member_timeout_test.go for why (newTestDB
+// already applied 077 once at boot against empty tables; this simulates a
+// re-run against a row planted after boot).
+func exec077Migration(t testing.TB, db *database.DB) {
+	t.Helper()
+	if _, err := db.Conn.Exec(read077Migration(t)); err != nil {
+		t.Fatalf("exec 077 migration: %v", err)
+	}
+}
+
+// TestSQLiteSession_Migration077_NormalizesLegacyRFC3339Row plants a
+// pre-A-28-fix RFC3339 expires_at directly via raw SQL — bypassing Create,
+// which now always writes the correct format — and proves 077 normalizes it,
+// is idempotent, and that DeleteExpired (previously silently no-op on such
+// rows) now actually deletes it.
+func TestSQLiteSession_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
+	db, userRepo, sessionRepo := newSessionRepos(t)
+	ctx := context.Background()
+	userID := seedSessionUser(t, userRepo, "migration077-owner")
+
+	legacyExpiry := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	const sessionID = "legacy-sess-077"
+	if _, err := db.Conn.Exec(
+		`INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at) VALUES (?, ?, 'h', 'h', ?)`,
+		sessionID, userID, legacyExpiry,
+	); err != nil {
+		t.Fatalf("plant legacy RFC3339 row: %v", err)
+	}
+
+	raw := rawSessionExpiresAt(t, db, sessionID)
+	if !strings.Contains(raw, "T") {
+		t.Fatalf("setup: expected planted row to contain 'T' (RFC3339), got %q", raw)
+	}
+
+	exec077Migration(t, db)
+
+	raw = rawSessionExpiresAt(t, db, sessionID)
+	if !expiryFormatRe.MatchString(raw) {
+		t.Errorf("after 077: expires_at = %q, want YYYY-MM-DD HH:MM:SS format", raw)
+	}
+
+	// Before the fix, DeleteExpired's `expires_at < CURRENT_TIMESTAMP` never
+	// matched an RFC3339 row; after normalization it must.
+	if err := sessionRepo.DeleteExpired(ctx); err != nil {
+		t.Fatalf("DeleteExpired: %v", err)
+	}
+	if n := countRows(t, db, `SELECT COUNT(*) FROM sessions WHERE id = ?`, sessionID); n != 0 {
+		t.Errorf("expected the normalized expired session to be deleted, %d rows remain", n)
+	}
+
+	// Idempotent: running it again must not error.
+	exec077Migration(t, db)
 }

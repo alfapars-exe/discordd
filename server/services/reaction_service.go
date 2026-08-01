@@ -23,11 +23,12 @@ type ReactionService interface {
 }
 
 type reactionService struct {
-	reactionRepo repository.ReactionRepository
-	messageRepo  repository.MessageRepository
-	channelRepo  repository.ChannelRepository
-	hub          ws.BroadcastAndOnline
-	permResolver ChannelPermResolver
+	reactionRepo   repository.ReactionRepository
+	messageRepo    repository.MessageRepository
+	channelRepo    repository.ChannelRepository
+	hub            ws.BroadcastAndOnline
+	permResolver   ChannelPermResolver
+	timeoutChecker MemberTimeoutChecker
 }
 
 func NewReactionService(
@@ -36,13 +37,15 @@ func NewReactionService(
 	channelRepo repository.ChannelRepository,
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
+	timeoutChecker MemberTimeoutChecker,
 ) ReactionService {
 	return &reactionService{
-		reactionRepo: reactionRepo,
-		messageRepo:  messageRepo,
-		channelRepo:  channelRepo,
-		hub:          hub,
-		permResolver: permResolver,
+		reactionRepo:   reactionRepo,
+		messageRepo:    messageRepo,
+		channelRepo:    channelRepo,
+		hub:            hub,
+		permResolver:   permResolver,
+		timeoutChecker: timeoutChecker,
 	}
 }
 
@@ -68,6 +71,21 @@ func (s *reactionService) ToggleReaction(ctx context.Context, serverID, messageI
 	channel, err := resolveChannelInServer(ctx, s.channelRepo, serverID, message.ChannelID)
 	if err != nil {
 		return err
+	}
+
+	// Timeout gate — same rationale as messageService.Create and the voice
+	// join/token gates: a timed-out user can't react to messages either.
+	// channel.ServerID != "" is structural defense-in-depth — DM channels
+	// never reach here because resolveChannelInServer above already scopes
+	// message.ChannelID to serverID, but the guard costs nothing.
+	if s.timeoutChecker != nil && channel.ServerID != "" {
+		active, err := s.timeoutChecker.IsActive(ctx, channel.ServerID, userID)
+		if err != nil {
+			return fmt.Errorf("check timeout: %w", err)
+		}
+		if active {
+			return fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
 	}
 
 	// Actor must be able to view + read this channel (mirrors the

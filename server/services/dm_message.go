@@ -187,8 +187,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message author: %w", err)
 	}
-	author.PasswordHash = ""
-	msg.Author = author
+	msg.Author = models.ToPublicUser(author)
 
 	// Load reply reference
 	if msg.ReplyToID != nil && *msg.ReplyToID != "" {
@@ -199,7 +198,6 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 				Content: refMsg.Content,
 			}
 			if refMsg.Author != nil {
-				refMsg.Author.PasswordHash = ""
 				ref.Author = refMsg.Author
 			}
 			msg.ReferencedMessage = ref

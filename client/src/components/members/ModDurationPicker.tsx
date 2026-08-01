@@ -25,12 +25,16 @@ type Props = {
   subtitle?: string;
   /** Variant just tweaks the confirm-button colour (red for ban). */
   variant?: "timeout" | "ban";
+  /** Optional explanatory line under the subtitle — a soft hint for
+   *  timeout (stays in server, just muted) or a danger-toned warning
+   *  for temp-ban (removes the user from the server). */
+  hint?: string;
   presets: DurationPreset[];
   onPick: (seconds: number) => void;
   onCancel: () => void;
 };
 
-function ModDurationPicker({ title, subtitle, variant = "timeout", presets, onPick, onCancel }: Props) {
+function ModDurationPicker({ title, subtitle, variant = "timeout", hint, presets, onPick, onCancel }: Props) {
   const { t } = useTranslation("common");
 
   useEffect(() => {
@@ -46,6 +50,11 @@ function ModDurationPicker({ title, subtitle, variant = "timeout", presets, onPi
       <div className="mod-picker" onClick={(e) => e.stopPropagation()}>
         <div className="mod-picker-title">{title}</div>
         {subtitle && <div className="mod-picker-subtitle">{subtitle}</div>}
+        {hint && (
+          <div className={variant === "ban" ? "mod-picker-warning" : "mod-picker-hint"}>
+            {hint}
+          </div>
+        )}
         <div className="mod-picker-grid">
           {presets.map((p) => (
             <button
