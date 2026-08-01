@@ -495,7 +495,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     const key = `${alert.userId}:${alert.deviceId}`;
     const current = get().peerTrustAlerts;
     const existing = current[key];
-    if (existing && existing.kind === alert.kind) {
+    if (existing?.kind === alert.kind) {
       // Already flagged with the same kind — avoid re-rendering subscribers.
       return;
     }

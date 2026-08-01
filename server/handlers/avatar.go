@@ -25,6 +25,10 @@ import (
 
 const avatarMaxSize = 8 << 20 // 8MB
 
+// retryAfterHeader is the standard HTTP header used to tell a rate-limited
+// client how long to wait before retrying.
+const retryAfterHeader = "Retry-After"
+
 // AvatarHandler handles avatar and icon upload endpoints.
 // uploadLimiter is the same per-user upload budget MessageHandler/DMHandler
 // apply to multipart message attachments (message.go) — avatars share the
@@ -53,6 +57,23 @@ func NewAvatarHandler(
 	}
 }
 
+// rateLimited checks the upload limiter for userID and, if the budget is
+// exhausted, writes the Retry-After header plus a 429 response body and
+// returns true so the caller can bail out. A nil limiter (disabled) or a
+// user still within budget returns false without writing anything.
+func (h *AvatarHandler) rateLimited(w http.ResponseWriter, userID string) bool {
+	if h.uploadLimiter == nil || h.uploadLimiter.Allow(userID) {
+		return false
+	}
+
+	retryAfter := h.uploadLimiter.CooldownSeconds(userID)
+	w.Header().Set(retryAfterHeader, fmt.Sprintf("%d", retryAfter))
+	pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+		fmt.Sprintf("too many uploads, please wait %s",
+			ratelimit.FormatRetryMessage(retryAfter)))
+	return true
+}
+
 // UploadUserAvatar uploads the current user's avatar.
 // Deletes the old avatar file from disk if present.
 // POST /api/users/me/avatar (multipart/form-data)
@@ -63,12 +84,7 @@ func (h *AvatarHandler) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if h.uploadLimiter != nil && !h.uploadLimiter.Allow(user.ID) {
-		retryAfter := h.uploadLimiter.CooldownSeconds(user.ID)
-		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
-			fmt.Sprintf("too many uploads, please wait %s",
-				ratelimit.FormatRetryMessage(retryAfter)))
+	if h.rateLimited(w, user.ID) {
 		return
 	}
 
@@ -102,12 +118,7 @@ func (h *AvatarHandler) UploadUserWallpaper(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if h.uploadLimiter != nil && !h.uploadLimiter.Allow(user.ID) {
-		retryAfter := h.uploadLimiter.CooldownSeconds(user.ID)
-		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
-			fmt.Sprintf("too many uploads, please wait %s",
-				ratelimit.FormatRetryMessage(retryAfter)))
+	if h.rateLimited(w, user.ID) {
 		return
 	}
 
@@ -161,13 +172,8 @@ func (h *AvatarHandler) UploadServerIcon(w http.ResponseWriter, r *http.Request)
 	// to key the upload limiter. If it's missing for any reason, skip the
 	// limiter rather than reject the request; don't change this route's
 	// existing auth behavior.
-	if user, ok := r.Context().Value(UserContextKey).(*models.User); ok && h.uploadLimiter != nil {
-		if !h.uploadLimiter.Allow(user.ID) {
-			retryAfter := h.uploadLimiter.CooldownSeconds(user.ID)
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-			pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
-				fmt.Sprintf("too many uploads, please wait %s",
-					ratelimit.FormatRetryMessage(retryAfter)))
+	if user, ok := r.Context().Value(UserContextKey).(*models.User); ok {
+		if h.rateLimited(w, user.ID) {
 			return
 		}
 	}

@@ -444,7 +444,7 @@ describe("keyStorage — setTrustedIdentityVerified", () => {
 
     expect((await keyStorage.getTrustedIdentity("u1", "dA"))?.verified).toBe(true);
     expect((await keyStorage.getTrustedIdentity("u1", "dB"))?.verified).toBe(false);
-    expect((await keyStorage.getAllTrustedIdentities()).length).toBe(2);
+    expect(await keyStorage.getAllTrustedIdentities()).toHaveLength(2);
   });
 });
 

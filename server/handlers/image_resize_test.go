@@ -235,6 +235,36 @@ func TestResizeAvatarBytes_RejectsUnregisteredFormat(t *testing.T) {
 	}
 }
 
+// concurrentDecodeRoundTrip encodes a solid w x h PNG, resizes it through
+// ResizeAvatarBytes, and reports the round-tripped bounds.
+//
+// This is called from a goroutine spawned by
+// TestResizeAvatarBytes_ConcurrentDecodesSucceed below, so -- like
+// encodePNGFixture's doc comment warns -- it must never call t.Fatal/
+// t.FailNow (only the goroutine running the test function may do that);
+// every failure is reported through the returned error instead.
+func concurrentDecodeRoundTrip(w, h int, c color.RGBA) (gotW, gotH int, err error) {
+	var srcBuf bytes.Buffer
+	if err := png.Encode(&srcBuf, newSolidRGBA(w, h, c)); err != nil {
+		return 0, 0, fmt.Errorf("encode fixture png: %w", err)
+	}
+
+	out, ext, err := ResizeAvatarBytes(bytes.NewReader(srcBuf.Bytes()))
+	if err != nil {
+		return 0, 0, fmt.Errorf("ResizeAvatarBytes: %w", err)
+	}
+	if ext != ".jpg" {
+		return 0, 0, fmt.Errorf("expected .jpg for an opaque source, got %q", ext)
+	}
+
+	decoded, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		return 0, 0, fmt.Errorf("re-decoding resized output: %w", err)
+	}
+	b := decoded.Bounds()
+	return b.Dx(), b.Dy(), nil
+}
+
 // TestResizeAvatarBytes_ConcurrentDecodesSucceed exercises the decodeSlots
 // semaphore: many goroutines call ResizeAvatarBytes at once, each with its
 // own small real PNG of a distinct size and color. decodeSlots caps how
@@ -264,33 +294,7 @@ func TestResizeAvatarBytes_ConcurrentDecodesSucceed(t *testing.T) {
 			w := 40 + i
 			h := 30 + i
 			c := color.RGBA{R: uint8(i * 15), G: uint8(255 - i*15), B: 128, A: 255}
-
-			// Encode inline rather than via encodePNGFixture: that helper
-			// calls t.Fatalf on error, and Fatal/FailNow may only be
-			// called from the goroutine running the test function, not
-			// from goroutines the test spawns.
-			var srcBuf bytes.Buffer
-			if err := png.Encode(&srcBuf, newSolidRGBA(w, h, c)); err != nil {
-				errs[i] = fmt.Errorf("encode fixture png: %w", err)
-				return
-			}
-
-			out, ext, err := ResizeAvatarBytes(bytes.NewReader(srcBuf.Bytes()))
-			if err != nil {
-				errs[i] = fmt.Errorf("ResizeAvatarBytes: %w", err)
-				return
-			}
-			if ext != ".jpg" {
-				errs[i] = fmt.Errorf("expected .jpg for an opaque source, got %q", ext)
-				return
-			}
-			decoded, _, decErr := image.Decode(bytes.NewReader(out))
-			if decErr != nil {
-				errs[i] = fmt.Errorf("re-decoding resized output: %w", decErr)
-				return
-			}
-			b := decoded.Bounds()
-			gotW[i], gotH[i] = b.Dx(), b.Dy()
+			gotW[i], gotH[i], errs[i] = concurrentDecodeRoundTrip(w, h, c)
 		}(i)
 	}
 	wg.Wait()

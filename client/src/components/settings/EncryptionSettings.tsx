@@ -264,6 +264,7 @@ function EncryptionSettings() {
                     <div className="e2ee-device-actions">
                       {isUntrusted && (
                         <button
+                          type="button"
                           onClick={() => clearPeerTrustAlert(device.user_id, device.device_id)}
                           className="settings-btn e2ee-device-acknowledge"
                         >

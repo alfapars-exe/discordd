@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -74,6 +75,41 @@ var soundGenericExts = map[string]bool{
 	"ogg":  true,
 	"webm": true,
 	"mp4":  true,
+}
+
+// validateSoundUpload checks the client-claimed Content-Type as a cheap
+// pre-filter (not the security boundary — the client fully controls that
+// header), then sniffs the real bytes, which is the actual gate.
+//
+// Returns the replay reader that MUST be written to disk in place of file:
+// pkg.SniffContentType consumes up to 512 bytes from file, so writing file
+// itself instead of the returned reader would silently save a headerless
+// (truncated) file with no error.
+func validateSoundUpload(file multipart.File, header *multipart.FileHeader) (io.Reader, error) {
+	contentType := header.Header.Get("Content-Type")
+	mimeBase := strings.Split(contentType, ";")[0]
+	mimeBase = strings.TrimSpace(mimeBase)
+	if !soundAllowedMimeTypes[mimeBase] {
+		return nil, fmt.Errorf("%w: audio file type not allowed: %s", pkg.ErrBadRequest, mimeBase)
+	}
+
+	sniffed, replay, err := pkg.SniffContentType(file)
+	if err != nil {
+		return nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
+	}
+	refined := pkg.RefineMIME(sniffed, header.Filename)
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(header.Filename), "."))
+	// Two ways in: the bytes sniff as a known audio type, or they sniff as
+	// nothing in particular and the extension is one Go's sniffer has no
+	// signature for (aac/m4a). Stated positively so the acceptance rule reads
+	// as a rule rather than as a pair of negations.
+	accepted := soundAllowedSniffedTypes[refined] ||
+		(sniffed == "application/octet-stream" && soundGenericExts[ext])
+	if !accepted {
+		return nil, fmt.Errorf("%w: file contents are not audio", pkg.ErrBadRequest)
+	}
+
+	return replay, nil
 }
 
 // VoiceStateGetter retrieves a user's current voice state.
@@ -162,32 +198,11 @@ func (s *soundboardService) Create(
 		return nil, fmt.Errorf("%w: file too large", pkg.ErrBadRequest)
 	}
 
-	// Cheap pre-filter on the client-claimed Content-Type — harmless to keep,
-	// but NOT the security boundary: the client fully controls this header.
-	contentType := header.Header.Get("Content-Type")
-	mimeBase := strings.Split(contentType, ";")[0]
-	mimeBase = strings.TrimSpace(mimeBase)
-	if !soundAllowedMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: audio file type not allowed: %s", pkg.ErrBadRequest, mimeBase)
-	}
-
-	// The real gate: sniff the actual bytes. replay MUST be what's written
-	// to disk below — SniffContentType consumes up to 512 bytes from file,
-	// so writing file itself would silently truncate the upload.
-	sniffed, replay, err := pkg.SniffContentType(file)
+	// replay MUST be what's written to disk below, not file — see
+	// validateSoundUpload's doc comment.
+	replay, err := validateSoundUpload(file, header)
 	if err != nil {
-		return nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
-	}
-	refined := pkg.RefineMIME(sniffed, header.Filename)
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(header.Filename), "."))
-	// Two ways in: the bytes sniff as a known audio type, or they sniff as
-	// nothing in particular and the extension is one Go's sniffer has no
-	// signature for (aac/m4a). Stated positively so the acceptance rule reads
-	// as a rule rather than as a pair of negations.
-	accepted := soundAllowedSniffedTypes[refined] ||
-		(sniffed == "application/octet-stream" && soundGenericExts[ext])
-	if !accepted {
-		return nil, fmt.Errorf("%w: file contents are not audio", pkg.ErrBadRequest)
+		return nil, err
 	}
 
 	count, err := s.repo.CountByServer(ctx, serverID)

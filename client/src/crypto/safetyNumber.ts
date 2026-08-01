@@ -60,11 +60,22 @@ const GROUP_SIZE = 4;
 /**
  * Renders a hex digest as the displayed safety number: the first 32 hex
  * characters in space-separated groups of 4.
+ *
+ * Chunked by slicing rather than a regex: for a string with no line
+ * terminators — which a hex digest never has — a greedy left-to-right
+ * `.{1,4}` global match and this loop produce byte-identical groups,
+ * including the short trailing group and the empty-input case. The display
+ * form is part of the cross-device determinism contract above, so the
+ * grouping must stay a pure function of length, never of locale or engine
+ * regex behaviour.
  */
 function formatGroups(hexDigest: string): string {
   const shown = hexDigest.slice(0, DISPLAY_HEX_LENGTH);
-  const groups = shown.match(new RegExp(`.{1,${GROUP_SIZE}}`, "g"));
-  return groups ? groups.join(" ") : shown;
+  const groups: string[] = [];
+  for (let i = 0; i < shown.length; i += GROUP_SIZE) {
+    groups.push(shown.slice(i, i + GROUP_SIZE));
+  }
+  return groups.join(" ");
 }
 
 /**

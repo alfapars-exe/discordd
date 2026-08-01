@@ -326,7 +326,7 @@ function DMChatContent({
           <span>
             {tE2EE(TRUST_ALERT_LABEL_KEYS[otherUserMostSevereTrustAlert.kind])}
           </span>
-          <button className="e2ee-warning-banner-btn" onClick={handleToggleSafetyNumber}>
+          <button type="button" className="e2ee-warning-banner-btn" onClick={handleToggleSafetyNumber}>
             {tE2EE("verifyAction")}
           </button>
         </div>
@@ -344,6 +344,7 @@ function DMChatContent({
               {tDM("dmRequestDecline")}
             </button>
             <button
+              type="button"
               className="dm-request-block"
               onClick={() => {
                 if (otherUser) {

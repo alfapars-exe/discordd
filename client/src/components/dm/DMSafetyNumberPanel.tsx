@@ -28,7 +28,7 @@ const TRUST_ALERT_LABEL_KEYS: Record<PeerTrustAlertKind, string> = {
   own_new_device: "trustAlertOwnNewDevice",
 };
 
-function DMSafetyNumberPanel({ otherUser, onClose }: DMSafetyNumberPanelProps) {
+function DMSafetyNumberPanel({ otherUser, onClose }: Readonly<DMSafetyNumberPanelProps>) {
   const { t } = useTranslation("e2ee");
   const addToast = useToastStore((s) => s.addToast);
   const peerTrustAlerts = useE2EEStore((s) => s.peerTrustAlerts);
@@ -89,7 +89,7 @@ function DMSafetyNumberPanel({ otherUser, onClose }: DMSafetyNumberPanelProps) {
       {/* Header */}
       <div className="search-header">
         <span className="search-header-title">{t("trustPanelTitle")}</span>
-        <button onClick={onClose} className="search-close">
+        <button type="button" onClick={onClose} className="search-close">
           <svg style={{ width: 16, height: 16 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -132,6 +132,7 @@ function DMSafetyNumberPanel({ otherUser, onClose }: DMSafetyNumberPanelProps) {
                 {safetyNumber && <code className="e2ee-fingerprint">{safetyNumber}</code>}
                 {!ti.verified && (
                   <button
+                    type="button"
                     className="trust-verify-btn"
                     onClick={() => handleMarkVerified(ti.deviceId)}
                   >
