@@ -4,11 +4,12 @@
 // PinnedMessageWithDetails.Message.Author and .PinnedByUser moved from
 // *models.User to *models.PublicUser, which requires status/custom_status/
 // created_at, but scanPin's SELECT list never picked up pb.status at all
-// (author's u.custom_status and u.created_at were also missing). A wrong
-// column here serializes pinned_by_user.status as "" — a value outside the
-// UserStatus enum the client and openapi contract declare — and the pin
-// panel's author card shows a null custom status and a year-1 "member
-// since" date.
+// (author's u.custom_status and u.created_at were also missing, and pb's
+// custom_status/created_at were still missing after a first-pass fix added
+// pb.status). A wrong column here serializes pinned_by_user.status as "" —
+// a value outside the UserStatus enum the client and openapi contract
+// declare — and the pin panel's author card shows a null custom status and
+// a year-1 "member since" date.
 //
 // DB harness / fixtures: testdb_test.go.
 package repository
@@ -36,8 +37,8 @@ func seedPinWorld(t *testing.T, db *database.DB) {
 	execSeed(t, db, []seedStmt{
 		{`INSERT INTO users (id, username, display_name, custom_status, status, password_hash) VALUES (?, ?, ?, ?, ?, 'x')`,
 			[]any{pinAuthor, "pinauthor", "Pin Author", "brb", "online"}},
-		{`INSERT INTO users (id, username, status, password_hash) VALUES (?, ?, ?, 'x')`,
-			[]any{pinPinner, "pinner", "idle"}},
+		{`INSERT INTO users (id, username, custom_status, status, password_hash) VALUES (?, ?, ?, ?, 'x')`,
+			[]any{pinPinner, "pinner", "pinning now", "idle"}},
 		{`INSERT INTO channels (id, name, type, server_id) VALUES (?, ?, 'text', 'srv-1')`,
 			[]any{pinChannel, "genel"}},
 	})
@@ -78,6 +79,16 @@ func TestPinRepo_GetByChannelID_PublicUserFields(t *testing.T) {
 	}
 	if p.PinnedByUser.Status != models.UserStatusIdle {
 		t.Errorf("pinned_by_user.status = %q, want %q", p.PinnedByUser.Status, models.UserStatusIdle)
+	}
+
+	// pb.custom_status and pb.created_at were missing from the SELECT too,
+	// so pinned_by_user.created_at always serialized as the zero time
+	// ("0001-01-01T00:00:00Z") regardless of the row's actual value.
+	if p.PinnedByUser.CustomStatus == nil || *p.PinnedByUser.CustomStatus != "pinning now" {
+		t.Errorf("pinned_by_user.custom_status = %v, want %q", p.PinnedByUser.CustomStatus, "pinning now")
+	}
+	if p.PinnedByUser.CreatedAt.IsZero() {
+		t.Error("pinned_by_user.created_at is zero — pb.created_at was not selected")
 	}
 
 	// u.custom_status and u.created_at were also missing from the SELECT.

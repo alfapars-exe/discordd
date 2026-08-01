@@ -28,7 +28,7 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 	var isPinned int
 
 	var refMsgID, refMsgContent sql.NullString
-	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus sql.NullString
 	var refAuthorCreatedAt sql.NullTime
 
 	if err := rows.Scan(
@@ -37,7 +37,7 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
 		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus, &customStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
-		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorCustomStatus, &refAuthorCreatedAt,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan DM message: %w", err)
 	}
@@ -70,7 +70,7 @@ func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 
 	msg.ReferencedMessage = buildMessageReference(
 		msg.ReplyToID, refMsgID, refMsgContent,
-		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus, refAuthorCreatedAt,
+		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus, refAuthorCreatedAt,
 	)
 
 	return &msg, nil

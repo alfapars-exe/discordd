@@ -25,7 +25,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
-			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM dm_messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
@@ -52,7 +52,7 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
-			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM dm_messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
@@ -98,7 +98,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
-		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		LEFT JOIN users u ON m.user_id = u.id
 		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
@@ -117,7 +117,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 	var isPinned int
 
 	var refMsgID, refMsgContent sql.NullString
-	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus sql.NullString
 	var refAuthorCreatedAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -126,7 +126,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
 		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus, &customStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
-		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorCustomStatus, &refAuthorCreatedAt,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -164,7 +164,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 
 	msg.ReferencedMessage = buildMessageReference(
 		msg.ReplyToID, refMsgID, refMsgContent,
-		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus, refAuthorCreatedAt,
+		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus, refAuthorCreatedAt,
 	)
 
 	return &msg, nil
@@ -288,7 +288,7 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
-		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		JOIN dm_messages_fts fts ON fts.rowid = m.rowid
 		LEFT JOIN users u ON m.user_id = u.id

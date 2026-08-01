@@ -53,7 +53,7 @@ func (r *sqliteDMRepo) GetPinnedMessages(ctx context.Context, channelID string) 
 		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
-		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		LEFT JOIN users u ON m.user_id = u.id
 		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id

@@ -63,7 +63,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
-		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM messages m
 		LEFT JOIN users u ON m.user_id = u.id
 		LEFT JOIN messages rm ON m.reply_to_id = rm.id
@@ -79,7 +79,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 	var authorCreatedAt sql.NullTime
 
 	var refMsgID, refMsgContent sql.NullString
-	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus sql.NullString
 	var refAuthorCreatedAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -87,7 +87,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
 		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus, &author.CustomStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
-		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorCustomStatus, &refAuthorCreatedAt,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -107,7 +107,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 		msg.Author = &author
 	}
 
-	msg.ReferencedMessage = buildMessageReference(msg.ReplyToID, refMsgID, refMsgContent, refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus, refAuthorCreatedAt)
+	msg.ReferencedMessage = buildMessageReference(msg.ReplyToID, refMsgID, refMsgContent, refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus, refAuthorCreatedAt)
 
 	return msg, nil
 }
@@ -131,7 +131,7 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 	var authorCreatedAt sql.NullTime
 
 	var refMsgID, refMsgContent sql.NullString
-	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus sql.NullString
 	var refAuthorCreatedAt sql.NullTime
 
 	if err := rows.Scan(
@@ -139,7 +139,7 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
 		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus, &author.CustomStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
-		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorCustomStatus, &refAuthorCreatedAt,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
 	); err != nil {
 		return msg, err
 	}
@@ -154,7 +154,7 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 		msg.Author = &author
 	}
 
-	msg.ReferencedMessage = buildMessageReference(msg.ReplyToID, refMsgID, refMsgContent, refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus, refAuthorCreatedAt)
+	msg.ReferencedMessage = buildMessageReference(msg.ReplyToID, refMsgID, refMsgContent, refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus, refAuthorCreatedAt)
 
 	return msg, nil
 }
@@ -172,7 +172,7 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
-			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN messages rm ON m.reply_to_id = rm.id
@@ -198,7 +198,7 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
 			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
-			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.custom_status, ru.created_at
+			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN messages rm ON m.reply_to_id = rm.id
@@ -294,7 +294,7 @@ func (r *sqliteMessageRepo) Delete(ctx context.Context, id string) error {
 func buildMessageReference(
 	replyToID *string,
 	refMsgID, refMsgContent sql.NullString,
-	refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorCustomStatus sql.NullString,
+	refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus sql.NullString,
 	refAuthorCreatedAt sql.NullTime,
 ) *models.MessageReference {
 	if replyToID == nil {
@@ -314,6 +314,9 @@ func buildMessageReference(
 			refAuthor := &models.PublicUser{
 				ID:       refAuthorID.String,
 				Username: refAuthorUsername.String,
+			}
+			if refAuthorStatus.Valid {
+				refAuthor.Status = models.UserStatus(refAuthorStatus.String)
 			}
 			if refAuthorDisplayName.Valid {
 				refAuthor.DisplayName = &refAuthorDisplayName.String

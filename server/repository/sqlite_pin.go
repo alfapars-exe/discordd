@@ -31,12 +31,13 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 	var authorCreatedAt sql.NullTime
 	var pinnedByUser models.PublicUser
 	var pinnedByID, pinnedByStatus sql.NullString
+	var pinnedByCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&pin.ID, &pin.MessageID, &pin.ChannelID, &pin.PinnedBy, &pin.CreatedAt,
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
 		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status, &author.CustomStatus, &authorCreatedAt,
-		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL, &pinnedByStatus,
+		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL, &pinnedByStatus, &pinnedByUser.CustomStatus, &pinnedByCreatedAt,
 	); err != nil {
 		return pin, err
 	}
@@ -56,6 +57,9 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 		if pinnedByStatus.Valid {
 			pinnedByUser.Status = models.UserStatus(pinnedByStatus.String)
 		}
+		if pinnedByCreatedAt.Valid {
+			pinnedByUser.CreatedAt = pinnedByCreatedAt.Time
+		}
 		pin.PinnedByUser = &pinnedByUser
 	}
 
@@ -69,7 +73,7 @@ func (r *sqlitePinRepo) GetByChannelID(ctx context.Context, channelID string) ([
 		SELECT p.id, p.message_id, p.channel_id, p.pinned_by, p.created_at,
 		       m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
-		       pb.id, pb.username, pb.display_name, pb.avatar_url, pb.status
+		       pb.id, pb.username, pb.display_name, pb.avatar_url, pb.status, pb.custom_status, pb.created_at
 		FROM pinned_messages p
 		LEFT JOIN messages m ON p.message_id = m.id
 		LEFT JOIN users u ON m.user_id = u.id

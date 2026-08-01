@@ -34,13 +34,15 @@ const (
 func seedMessageWorld(t testing.TB, db *database.DB) {
 	t.Helper()
 	execSeed(t, db, []seedStmt{
-		// custom_status is set here (not left NULL) so the PublicUser
-		// round-trip assertions in "get by id joins the author" are
-		// value-checked, not vacuously true on a zero value. See finding N-09
-		// follow-up: the author LEFT JOIN's SELECT list used to omit
-		// custom_status and created_at entirely.
-		{`INSERT INTO users (id, username, display_name, custom_status, password_hash) VALUES (?, ?, ?, ?, 'x')`,
-			[]any{msgAuthor, "author", "Yazar", "brb"}},
+		// status and custom_status are set here (not left NULL, and status is
+		// set away from the schema's DEFAULT 'offline') so the PublicUser
+		// round-trip assertions in "get by id joins the author" and
+		// TestMessageRepo_ReplyReference are value-checked, not vacuously true
+		// on a zero/default value. See finding N-09 follow-up: the author LEFT
+		// JOIN's SELECT list used to omit custom_status and created_at
+		// entirely, and the reply-author (ru) join omitted status too.
+		{`INSERT INTO users (id, username, display_name, custom_status, status, password_hash) VALUES (?, ?, ?, ?, ?, 'x')`,
+			[]any{msgAuthor, "author", "Yazar", "brb", "online"}},
 		{`INSERT INTO users (id, username, password_hash) VALUES (?, ?, 'x')`,
 			[]any{msgSecondUser, "second"}},
 		{`INSERT INTO channels (id, name, type, server_id) VALUES (?, ?, 'text', 'srv-1')`,
@@ -134,11 +136,11 @@ func TestMessageRepo_CreateGetDelete(t *testing.T) {
 	})
 
 	t.Run("a message whose author is missing stays readable with a nil author", func(t *testing.T) {
-		// KNOWN BUG — see the note on TestMessageRepo_NilAuthorScan_KnownBug
+		// REGRESSION GUARD — see the note on TestMessageRepo_NilAuthorScan_KnownBug
 		// at the bottom of this file. sqlite_message.go documents this LEFT
-		// JOIN as "message stays visible even if author is deleted", but the
-		// scan targets for the joined user columns are plain strings, so a
-		// NULL author makes the whole query error instead.
+		// JOIN as "message stays visible even if author is deleted", and the
+		// scan targets for the joined user columns are nullable now, so a
+		// NULL author no longer fails the whole query.
 		// database.New enforces foreign keys, so the dangling reference has to
 		// be planted through a second connection with enforcement off — which
 		// is also the realistic provenance of such a row.
@@ -511,6 +513,19 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 		if ref.Author == nil || ref.Author.ID != msgAuthor {
 			t.Errorf("ref.author = %+v, want %s", ref.Author, msgAuthor)
 		}
+		// REGRESSION GUARD: ru.status was missing from the reply-reference
+		// SELECT list entirely, so the reply-author's status always
+		// deserialized as the UserStatus zero value "" — a value outside the
+		// enum openapi.yaml and the client declare for this field.
+		if ref.Author != nil && ref.Author.Status != models.UserStatusOnline {
+			t.Errorf("ref.author.status = %q, want %q", ref.Author.Status, models.UserStatusOnline)
+		}
+		if ref.Author != nil && (ref.Author.CustomStatus == nil || *ref.Author.CustomStatus != "brb") {
+			t.Errorf("ref.author.custom_status = %v, want %q", ref.Author.CustomStatus, "brb")
+		}
+		if ref.Author != nil && ref.Author.CreatedAt.IsZero() {
+			t.Error("ref.author.created_at is zero — ru.created_at was not selected")
+		}
 	})
 
 	t.Run("the same reference appears in the channel listing", func(t *testing.T) {
@@ -534,6 +549,19 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 		}
 		if *found.ReferencedMessage.Content != "orijinal" {
 			t.Errorf("listing ref.content = %q, want orijinal", *found.ReferencedMessage.Content)
+		}
+		// scanMessage (GetByChannelID's path) shares buildMessageReference
+		// with GetByID but has its own SELECT list and Scan call — verify it
+		// carries ru.status/ru.custom_status/ru.created_at too.
+		refAuthor := found.ReferencedMessage.Author
+		if refAuthor == nil || refAuthor.Status != models.UserStatusOnline {
+			t.Errorf("listing ref.author.status = %+v, want %q", refAuthor, models.UserStatusOnline)
+		}
+		if refAuthor != nil && (refAuthor.CustomStatus == nil || *refAuthor.CustomStatus != "brb") {
+			t.Errorf("listing ref.author.custom_status = %v, want %q", refAuthor.CustomStatus, "brb")
+		}
+		if refAuthor != nil && refAuthor.CreatedAt.IsZero() {
+			t.Error("listing ref.author.created_at is zero — ru.created_at was not selected")
 		}
 	})
 
