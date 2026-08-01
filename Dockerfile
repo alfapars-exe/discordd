@@ -131,9 +131,19 @@ RUN set -eux; \
     # ("hf_transfer is not used anymore, use HF_XET_HIGH_PERFORMANCE"). The hf
     # CLI still exits 0, so backups work — they just upload without the
     # accelerated path anyone reading that env var would assume is active.
-    # Restoring it means the [hf-xet] extra plus HF_XET_HIGH_PERFORMANCE,
-    # which adds a dependency and changes production upload behaviour.
-    pip3 install --no-cache-dir --break-system-packages "huggingface_hub==${HF_HUB_VERSION}"; \
+    # Restoring it is only an env-var swap, NOT a new dependency: hf_xet
+    # already ships as a transitive dependency of huggingface_hub 1.26.0
+    # (verified importable in the built image on both amd64 and arm64), and
+    # HF_XET_HIGH_PERFORMANCE=1 is accepted without any warning. It is left
+    # out of this commit because it changes production upload behaviour, not
+    # because it is expensive.
+    #
+    # --only-binary :all: refuses source distributions, so no dependency can
+    # run a setup.py at install time (Sonar docker:S8541). Wheels only.
+    # Verified on linux/arm64 under qemu as well, because the multi-arch
+    # build only runs on release tags (build-desktop.yml) and never on a PR:
+    # all 15 packages resolve to wheels there too, hf imports and runs.
+    pip3 install --no-cache-dir --break-system-packages --only-binary :all: "huggingface_hub==${HF_HUB_VERSION}"; \
     BASE="https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}"; \
     curl -fsSL "${BASE}/yt-dlp" -o /usr/local/bin/yt-dlp; \
     curl -fsSL "${BASE}/SHA2-256SUMS" -o /tmp/yt-dlp-sums; \
