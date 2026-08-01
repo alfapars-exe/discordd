@@ -261,6 +261,12 @@ func main() {
 	// authenticated REST calls until the ~30s cache TTL expires (F-7).
 	svcs.AdminUser.SetUserCacheInvalidator(authMw)
 
+	// Same wiring for the auth service itself: ChangePassword, ResetPassword,
+	// and LogoutAllDevices all call revokeAllSessions, which drops the
+	// cached user row so a bumped token_version is enforced on the next
+	// HTTP request instead of up to ~30s later.
+	svcs.Auth.SetUserCacheInvalidator(authMw)
+
 	// Wire the server-level permission cache (middleware/permission.go) into
 	// the same PermissionInvalidator fan-out as channelPermService's
 	// per-channel cache. permMw only exists after initRoutes runs, so this

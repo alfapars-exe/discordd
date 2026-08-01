@@ -43,64 +43,60 @@ func TestWsScopeRejected(t *testing.T) {
 	}
 }
 
-// TestWsTokenRevoked locks the fix for the ticket-path token_version lockout.
-//
-// Regression: the WS ticket path synthesizes claims with no token_version
-// (int zero). The revocation gate `claimTV < userTV` therefore rejected
-// every user whose token_version had ever been bumped (password change,
-// logout-from-all-devices, refresh-token-reuse) with "token revoked" — even
-// though they could still authenticate over HTTP. The ticket is already
-// gated at mint time, so the ticket path must be exempt.
+// TestWsTokenRevoked locks the fix for security review finding 1
+// (2026-08-01): the WS ticket path used to be EXEMPT from this gate because
+// synthesized ticket claims carried no token_version, so a stolen access
+// token could be exchanged for a fresh ~30s ticket forever and ride out a
+// "log out from all devices" indefinitely. The fix stamps the ticket with
+// the caller's token_version at Issue time (services/ws_ticket_service.go)
+// and threads it through resolveConnectionAuth, so wsTokenRevoked no longer
+// takes a fromTicket flag at all — both callers now present a real
+// token_version and are compared identically.
 func TestWsTokenRevoked(t *testing.T) {
 	tests := []struct {
 		name        string
-		fromTicket  bool
 		claimTV     int
 		userTV      int
 		wantRevoked bool
 	}{
 		{
-			name:        "ticket path exempt when user token_version was bumped (the lockout regression)",
-			fromTicket:  true,
-			claimTV:     0, // synthesized ticket claims carry no tv
-			userTV:      3, // user changed password / logged out everywhere
-			wantRevoked: false,
-		},
-		{
-			name:        "ticket path exempt when versions match",
-			fromTicket:  true,
-			claimTV:     0,
-			userTV:      0,
-			wantRevoked: false,
-		},
-		{
-			name:        "legacy token path: stale token below current version is revoked",
-			fromTicket:  false,
+			name:        "stale credential below current version is revoked",
 			claimTV:     2,
 			userTV:      3,
 			wantRevoked: true,
 		},
 		{
-			name:        "legacy token path: current token is accepted",
-			fromTicket:  false,
+			name:        "current credential is accepted",
 			claimTV:     3,
 			userTV:      3,
 			wantRevoked: false,
 		},
 		{
-			name:        "legacy token path: token ahead of user version is accepted",
-			fromTicket:  false,
+			name:        "credential ahead of user version is accepted",
 			claimTV:     4,
 			userTV:      3,
 			wantRevoked: false,
+		},
+		{
+			name:        "both zero (never revoked) is accepted",
+			claimTV:     0,
+			userTV:      0,
+			wantRevoked: false,
+		},
+		{
+			name: "ticket minted before a bump (claimTV=0, user since revoked) is now" +
+				" revoked — the exact regression this fix closes",
+			claimTV:     0,
+			userTV:      1,
+			wantRevoked: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := wsTokenRevoked(tt.fromTicket, tt.claimTV, tt.userTV); got != tt.wantRevoked {
-				t.Errorf("wsTokenRevoked(fromTicket=%v, claimTV=%d, userTV=%d) = %v, want %v",
-					tt.fromTicket, tt.claimTV, tt.userTV, got, tt.wantRevoked)
+			if got := wsTokenRevoked(tt.claimTV, tt.userTV); got != tt.wantRevoked {
+				t.Errorf("wsTokenRevoked(claimTV=%d, userTV=%d) = %v, want %v",
+					tt.claimTV, tt.userTV, got, tt.wantRevoked)
 			}
 		})
 	}

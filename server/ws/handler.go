@@ -102,13 +102,14 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-// TicketConsumer exchanges a short-lived WS connect ticket for a userID
-// (one-shot, ~30s TTL). See services/ws_ticket_service.go for the
-// rationale (keeps the long-lived JWT out of WS URL query strings).
+// TicketConsumer exchanges a short-lived WS connect ticket for a userID and
+// the token_version it was stamped with at mint time (one-shot, ~30s TTL).
+// See services/ws_ticket_service.go for the rationale (keeps the long-lived
+// JWT out of WS URL query strings, and why the token_version stamp exists).
 // nil is acceptable — the handler then falls back to the legacy
 // `?token=JWT` query path for clients that haven't been upgraded yet.
 type TicketConsumer interface {
-	Consume(ticket string) (string, error)
+	Consume(ticket string) (userID string, tokenVersion int, err error)
 }
 
 // Handler handles WebSocket connection upgrades.
@@ -152,23 +153,20 @@ func NewHandler(
 }
 
 // wsTokenRevoked reports whether a WS connection must be rejected because
-// the presented access token predates the user's current token_version —
-// the revocation signal bumped by "logout from all devices", password
-// change, and refresh-token-reuse detection.
+// the presented credential predates the user's current token_version — the
+// revocation signal bumped by "logout from all devices", password change,
+// and refresh-token-reuse detection.
 //
-// The ticket path is EXEMPT. A ticket is only ever minted by the
-// authenticated POST /api/auth/ws-ticket endpoint, which runs behind
-// AuthMiddleware and has therefore ALREADY applied this exact gate against
-// the caller's real token. HandleConnection synthesizes ticket claims with
-// no token_version (the int zero value), so applying the `<` check to them
-// would reject every user whose token_version has ever been incremented —
-// i.e. anyone who changed their password or logged out everywhere could
-// authenticate over HTTP yet never open a WebSocket. Only the legacy
-// ?token= path carries a real token_version that still needs gating here.
-func wsTokenRevoked(fromTicket bool, claimTokenVersion, userTokenVersion int) bool {
-	if fromTicket {
-		return false
-	}
+// There is no ticket exemption. Both callers now carry a real token_version
+// by the time this runs: the legacy ?token= path from the JWT itself, and
+// the ticket path from the stamp WSTicketService.Issue took of the caller's
+// token_version at mint time (handlers.WSTicket -> Issue -> Consume, see
+// resolveConnectionAuth). A ticket minted before a revocation event is
+// therefore rejected here exactly like a stale JWT would be — closing the
+// gap where an attacker holding a stolen access token could keep minting
+// fresh ~30s tickets forever and never be logged out (security review
+// 2026-08-01, session-lifecycle finding 1).
+func wsTokenRevoked(claimTokenVersion, userTokenVersion int) bool {
 	return claimTokenVersion < userTokenVersion
 }
 
@@ -202,12 +200,12 @@ func wsScopeRejected(scope string) bool {
 // Retained during the rollout window so non-upgraded clients keep
 // connecting; remove once all official builds are pushing tickets.
 func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
-	claims, fromTicket, ok := h.resolveConnectionAuth(w, r)
+	claims, ok := h.resolveConnectionAuth(w, r)
 	if !ok {
 		return
 	}
 
-	displayName, avatarURL, dbPrefStatus, ok := h.authorizeUser(w, r, claims, fromTicket)
+	displayName, avatarURL, dbPrefStatus, ok := h.authorizeUser(w, r, claims)
 	if !ok {
 		return
 	}
@@ -312,23 +310,28 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 
 // resolveConnectionAuth resolves the caller's identity from either the
 // preferred one-shot ticket (?ticket=) or the legacy ?token= path, returning
-// the resulting claims. fromTicket reports whether the ticket path produced
-// the claims (it carries no token_version / scope). On every reject branch it
-// writes the same http.Error + audit log the inline code did and returns
-// ok=false; on success it returns the claims with ok=true.
-func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) (claims *models.TokenClaims, fromTicket bool, ok bool) {
+// the resulting claims. The ticket path fills claims.TokenVersion from the
+// stamp WSTicketService.Issue took at mint time (see Consume's signature) —
+// it carries a real token_version, just no `scope` (a ticket is never
+// minted for a scoped token; handlers.WSTicket rejects that at the source).
+// On every reject branch this writes the same http.Error + audit log the
+// inline code did and returns ok=false; on success it returns the claims
+// with ok=true.
+func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) (claims *models.TokenClaims, ok bool) {
 	var userIDFromTicket string
+	var ticketTokenVersion int
 	if h.ticketConsumer != nil {
 		if t := r.URL.Query().Get("ticket"); t != "" {
-			uid, err := h.ticketConsumer.Consume(t)
+			uid, tv, err := h.ticketConsumer.Consume(t)
 			if err != nil {
 				h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid ticket", map[string]string{
 					"error": err.Error(),
 				})
 				http.Error(w, "invalid ticket", http.StatusUnauthorized)
-				return nil, false, false
+				return nil, false
 			}
 			userIDFromTicket = uid
+			ticketTokenVersion = tv
 		}
 	}
 
@@ -337,7 +340,9 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 		// claims-like shape so the rest of the handler reads the
 		// userID uniformly. Username is filled below from
 		// userInfoProvider, the same way the JWT path does it.
-		claims = &models.TokenClaims{UserID: userIDFromTicket}
+		// TokenVersion carries the mint-time stamp so authorizeUser's
+		// wsTokenRevoked check applies uniformly to both paths.
+		claims = &models.TokenClaims{UserID: userIDFromTicket, TokenVersion: ticketTokenVersion}
 	} else {
 		// Legacy token path — defaults to REJECT after audit 2026-05-27.
 		//
@@ -360,12 +365,12 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 					"user_agent":  r.Header.Get("User-Agent"),
 				})
 			http.Error(w, "legacy token path disabled — use /api/auth/ws-ticket", http.StatusUnauthorized)
-			return nil, false, false
+			return nil, false
 		}
 
 		if token == "" {
 			http.Error(w, "missing ticket", http.StatusUnauthorized)
-			return nil, false, false
+			return nil, false
 		}
 
 		// Legacy path explicitly opted-in — validate, but always emit an
@@ -377,7 +382,7 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 				"error": err.Error(),
 			})
 			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return nil, false, false
+			return nil, false
 		}
 
 		// Scope gate — a media cookie must not become a WebSocket session.
@@ -389,7 +394,7 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 					"remote_addr": r.RemoteAddr,
 				})
 			http.Error(w, "token scope not valid for websocket", http.StatusUnauthorized)
-			return nil, false, false
+			return nil, false
 		}
 
 		h.hub.logEvent(models.LogLevelInfo, models.LogCategoryAuth, &claims.UserID,
@@ -399,7 +404,7 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 			})
 	}
 
-	return claims, userIDFromTicket != "", true
+	return claims, true
 }
 
 // authorizeUser fetches the live user row and applies the pre-upgrade gates —
@@ -409,7 +414,7 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 // On each reject branch it writes the same http.Error + audit log the inline
 // code did and returns ok=false; on success it returns the DB-derived
 // displayName, avatarURL, and pref_status with ok=true.
-func (h *Handler) authorizeUser(w http.ResponseWriter, r *http.Request, claims *models.TokenClaims, fromTicket bool) (displayName, avatarURL string, prefStatus models.UserStatus, ok bool) {
+func (h *Handler) authorizeUser(w http.ResponseWriter, r *http.Request, claims *models.TokenClaims) (displayName, avatarURL string, prefStatus models.UserStatus, ok bool) {
 	// Fetch user info before upgrade — reject banned users early
 	if h.userInfoProvider != nil {
 		user, err := h.userInfoProvider.GetByID(r.Context(), claims.UserID)
@@ -429,12 +434,12 @@ func (h *Handler) authorizeUser(w http.ResponseWriter, r *http.Request, claims *
 		// (defense-in-depth: a banned/revoked user can't keep a WS
 		// open just because their JWT still parses).
 		//
-		// The ticket path is exempt — see wsTokenRevoked. Its synthesized
-		// claims carry no token_version, and the ticket was already gated at
-		// mint time; without this exemption every user with a bumped
-		// token_version (password change / logout-all / reuse) could log in
-		// over HTTP yet never open a WebSocket.
-		if wsTokenRevoked(fromTicket, claims.TokenVersion, user.TokenVersion) {
+		// No ticket exemption — see wsTokenRevoked. The ticket path's
+		// claims.TokenVersion is the stamp WSTicketService.Issue took at
+		// mint time (resolveConnectionAuth), so a ticket minted before a
+		// revocation event (password change / logout-all / reuse) is
+		// rejected here exactly like a stale legacy JWT would be.
+		if wsTokenRevoked(claims.TokenVersion, user.TokenVersion) {
 			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: token revoked", nil)
 			http.Error(w, "token revoked", http.StatusUnauthorized)
 			return "", "", "", false

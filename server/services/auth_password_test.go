@@ -272,3 +272,66 @@ func TestResetPassword(t *testing.T) {
 		}
 	})
 }
+
+// TestResetPassword_RevokesAllSessions pins the ResetPassword half of H-06:
+// account recovery must invalidate every existing session for the token's
+// owner (session rows, token_version, the HTTP auth cache, and any live
+// WebSocket/voice connection), not leave them alive as before. Unlike
+// ChangePassword, there is no "caller's own session" to spare — see the
+// design note in auth_password.go. An expired/invalid token must touch none
+// of the revocation collaborators.
+//
+// DeleteByUserID is asserted at TWO calls — see the BULGU 2 comment on
+// revokeAllSessions in auth_service.go and the matching note on
+// TestChangePassword_RevokesAllSessions.
+func TestResetPassword_RevokesAllSessions(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success revokes every session for the token's owner", func(t *testing.T) {
+		userRepo := &testutil.MockUserRepo{}
+		resetRepo := &testutil.MockResetRepo{
+			GetByTokenHashFn: func(context.Context, string) (*models.PasswordResetToken, error) {
+				return &models.PasswordResetToken{ID: "t1", UserID: "u1", ExpiresAt: time.Now().Add(time.Minute)}, nil
+			},
+		}
+		svc, spy := newRevokeHarness(userRepo, &testutil.MockSessionRepo{}, resetRepo)
+
+		if err := svc.ResetPassword(ctx, "valid", "long-enough-password"); err != nil {
+			t.Fatalf("ResetPassword: %v", err)
+		}
+
+		if got := spy.deletedSessions; len(got) != 2 || got[0] != "u1" || got[1] != "u1" {
+			t.Errorf("DeleteByUserID calls = %v, want [u1 u1] (pre-bump sweep + post-bump re-sweep)", got)
+		}
+		if got := spy.bumpedVersions; len(got) != 1 || got[0] != "u1" {
+			t.Errorf("IncrementTokenVersion calls = %v, want [u1]", got)
+		}
+		if got := spy.invalidatedCache(); len(got) != 1 || got[0] != "u1" {
+			t.Errorf("InvalidateUser calls = %v, want [u1]", got)
+		}
+		if got := spy.disconnectedUsers; len(got) != 1 || got[0] != "u1" {
+			t.Errorf("DisconnectUser calls = %v, want [u1]", got)
+		}
+		if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != "u1" {
+			t.Errorf("voice DisconnectUser calls = %v, want [u1]", got)
+		}
+	})
+
+	t.Run("expired token touches none of the revocation collaborators", func(t *testing.T) {
+		userRepo := &testutil.MockUserRepo{}
+		resetRepo := &testutil.MockResetRepo{
+			GetByTokenHashFn: func(context.Context, string) (*models.PasswordResetToken, error) {
+				return &models.PasswordResetToken{ID: "t1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Minute)}, nil
+			},
+		}
+		svc, spy := newRevokeHarness(userRepo, &testutil.MockSessionRepo{}, resetRepo)
+
+		err := svc.ResetPassword(ctx, "expired", "long-enough-password")
+		if !errors.Is(err, pkg.ErrBadRequest) {
+			t.Fatalf("err = %v, want ErrBadRequest", err)
+		}
+		if len(spy.deletedSessions) != 0 || len(spy.bumpedVersions) != 0 || len(spy.invalidatedCache()) != 0 || len(spy.disconnectedUsers) != 0 || len(spy.voiceKit.DisconnectedIDs) != 0 {
+			t.Errorf("revocation collaborators must stay untouched on an expired reset token: %+v", spy)
+		}
+	})
+}

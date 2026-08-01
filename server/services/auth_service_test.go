@@ -30,6 +30,62 @@ func newTestAuthService(userRepo *testutil.MockUserRepo, sessionRepo *testutil.M
 	return NewAuthService(userRepo, sessionRepo, &testutil.MockResetRepo{}, &testutil.MockEventPublisher{}, &testutil.MockEmailSender{}, testJWTSecret, 15, 7)
 }
 
+// revokeSpy records everything revokeAllSessions fans out to — session
+// deletion (called TWICE per the BULGU 2 mitigation: once before the
+// token_version bump, once after — see revokeAllSessions), the token_version
+// bump, the auth-cache invalidation, and the WebSocket + voice disconnect —
+// so ChangePassword / ResetPassword / LogoutAllDevices tests can assert the
+// full guard fired for the right userID, and that a rejected/invalid request
+// touches none of it. The failDeleteSessions / failBumpVersion toggles let a
+// test prove the best-effort contract: one sub-step failing must not stop
+// the rest.
+type revokeSpy struct {
+	deletedSessions   []string
+	bumpedVersions    []string
+	disconnectedUsers []string
+	inval             *adminInvalStub
+	voiceKit          *testutil.MockVoiceDisconnecter
+
+	failDeleteSessions bool
+	failBumpVersion    bool
+}
+
+func (s *revokeSpy) invalidatedCache() []string { return s.inval.invalidated }
+
+// newRevokeHarness builds an AuthService with every revokeAllSessions
+// collaborator wired to the returned *revokeSpy. resetRepo is a parameter
+// (rather than a fixed empty mock) so ResetPassword tests can control the
+// token lookup while still getting the same revocation observability.
+func newRevokeHarness(userRepo *testutil.MockUserRepo, sessionRepo *testutil.MockSessionRepo, resetRepo *testutil.MockResetRepo) (AuthService, *revokeSpy) {
+	spy := &revokeSpy{inval: &adminInvalStub{}, voiceKit: &testutil.MockVoiceDisconnecter{}}
+
+	sessionRepo.DeleteByUserIDFn = func(_ context.Context, userID string) error {
+		spy.deletedSessions = append(spy.deletedSessions, userID)
+		if spy.failDeleteSessions {
+			return errors.New("delete sessions failed")
+		}
+		return nil
+	}
+	userRepo.IncrementTokenVersionFn = func(_ context.Context, userID string) error {
+		spy.bumpedVersions = append(spy.bumpedVersions, userID)
+		if spy.failBumpVersion {
+			return errors.New("bump token_version failed")
+		}
+		return nil
+	}
+
+	hub := &testutil.MockEventPublisher{
+		DisconnectUserFn: func(userID string) {
+			spy.disconnectedUsers = append(spy.disconnectedUsers, userID)
+		},
+	}
+
+	svc := NewAuthService(userRepo, sessionRepo, resetRepo, hub, &testutil.MockEmailSender{}, testJWTSecret, 15, 7)
+	svc.SetUserCacheInvalidator(spy.inval)
+	svc.SetVoiceDisconnecter(spy.voiceKit)
+	return svc, spy
+}
+
 func TestRegister(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -791,6 +847,126 @@ func TestChangePassword(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestChangePassword_RevokesAllSessions pins H-06: a successful password
+// change must invalidate every session for the user (session rows,
+// token_version, the HTTP auth cache, and any live WebSocket/voice
+// connection) — not just bump token_version and leave the sessions table
+// (and the socket) alive, which was the vacuous-guard bug. A rejected
+// attempt (wrong current password) must touch none of it — the guard only
+// fires once the password actually changes.
+//
+// DeleteByUserID is asserted at TWO calls (security review 2026-08-01,
+// finding 2): revokeAllSessions re-sweeps session rows after the
+// token_version bump to narrow the refresh-race window documented on
+// revokeAllSessions. A mutation that drops the second sweep call would
+// leave this assertion at 1 and must fail.
+func TestChangePassword_RevokesAllSessions(t *testing.T) {
+	hashedPassword := preHashPassword(t, "currentpass1")
+	ctx := context.Background()
+
+	newHarness := func() (AuthService, *revokeSpy, *testutil.MockUserRepo) {
+		userRepo := &testutil.MockUserRepo{
+			GetByIDFn: func(context.Context, string) (*models.User, error) {
+				return &models.User{ID: "user-1", PasswordHash: hashedPassword}, nil
+			},
+		}
+		svc, spy := newRevokeHarness(userRepo, &testutil.MockSessionRepo{}, &testutil.MockResetRepo{})
+		return svc, spy, userRepo
+	}
+
+	t.Run("success revokes sessions (twice), bumps token_version, invalidates the cache, and disconnects the socket + voice", func(t *testing.T) {
+		svc, spy, _ := newHarness()
+
+		if err := svc.ChangePassword(ctx, "user-1", "currentpass1", "newpassword1"); err != nil {
+			t.Fatalf("ChangePassword: %v", err)
+		}
+
+		if got := spy.deletedSessions; len(got) != 2 || got[0] != "user-1" || got[1] != "user-1" {
+			t.Errorf("DeleteByUserID calls = %v, want [user-1 user-1] (pre-bump sweep + post-bump re-sweep)", got)
+		}
+		if got := spy.bumpedVersions; len(got) != 1 || got[0] != "user-1" {
+			t.Errorf("IncrementTokenVersion calls = %v, want [user-1]", got)
+		}
+		if got := spy.invalidatedCache(); len(got) != 1 || got[0] != "user-1" {
+			t.Errorf("InvalidateUser calls = %v, want [user-1]", got)
+		}
+		if got := spy.disconnectedUsers; len(got) != 1 || got[0] != "user-1" {
+			t.Errorf("DisconnectUser calls = %v, want [user-1]", got)
+		}
+		if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != "user-1" {
+			t.Errorf("voice DisconnectUser calls = %v, want [user-1]", got)
+		}
+	})
+
+	t.Run("wrong current password touches none of the revocation collaborators", func(t *testing.T) {
+		svc, spy, _ := newHarness()
+
+		err := svc.ChangePassword(ctx, "user-1", "wrongpassword", "newpassword1")
+		if !errors.Is(err, pkg.ErrUnauthorized) {
+			t.Fatalf("err = %v, want ErrUnauthorized", err)
+		}
+		if len(spy.deletedSessions) != 0 || len(spy.bumpedVersions) != 0 || len(spy.invalidatedCache()) != 0 || len(spy.disconnectedUsers) != 0 || len(spy.voiceKit.DisconnectedIDs) != 0 {
+			t.Errorf("revocation collaborators must stay untouched on a rejected password change: %+v", spy)
+		}
+	})
+
+	t.Run("a failing sub-step does not stop the others (best-effort)", func(t *testing.T) {
+		svc, spy, _ := newHarness()
+		spy.failDeleteSessions = true
+
+		if err := svc.ChangePassword(ctx, "user-1", "currentpass1", "newpassword1"); err != nil {
+			t.Fatalf("ChangePassword must still succeed when session deletion fails (best-effort): %v", err)
+		}
+		if len(spy.bumpedVersions) != 1 || len(spy.invalidatedCache()) != 1 || len(spy.disconnectedUsers) != 1 || len(spy.voiceKit.DisconnectedIDs) != 1 {
+			t.Errorf("a failing DeleteByUserID must not stop the remaining revocation steps: %+v", spy)
+		}
+	})
+}
+
+// TestLogoutAllDevices pins the new POST /api/auth/logout-all backing
+// method: it must revoke every session for userID (same fan-out as
+// ChangePassword/ResetPassword, including the double session-delete sweep
+// and the voice disconnect — security review 2026-08-01, findings 2 and 3)
+// and mark the user offline, matching Logout's existing status-update
+// behavior.
+func TestLogoutAllDevices(t *testing.T) {
+	ctx := context.Background()
+	userRepo := &testutil.MockUserRepo{}
+	svc, spy := newRevokeHarness(userRepo, &testutil.MockSessionRepo{}, &testutil.MockResetRepo{})
+
+	var statusUpdated models.UserStatus
+	userRepo.UpdateStatusFn = func(_ context.Context, userID string, status models.UserStatus) error {
+		if userID != "user-9" {
+			t.Errorf("UpdateStatus userID = %q, want user-9", userID)
+		}
+		statusUpdated = status
+		return nil
+	}
+
+	if err := svc.LogoutAllDevices(ctx, "user-9"); err != nil {
+		t.Fatalf("LogoutAllDevices: %v", err)
+	}
+
+	if statusUpdated != models.UserStatusOffline {
+		t.Errorf("status = %v, want offline", statusUpdated)
+	}
+	if got := spy.deletedSessions; len(got) != 2 || got[0] != "user-9" || got[1] != "user-9" {
+		t.Errorf("DeleteByUserID calls = %v, want [user-9 user-9] (pre-bump sweep + post-bump re-sweep)", got)
+	}
+	if got := spy.bumpedVersions; len(got) != 1 || got[0] != "user-9" {
+		t.Errorf("IncrementTokenVersion calls = %v, want [user-9]", got)
+	}
+	if got := spy.invalidatedCache(); len(got) != 1 || got[0] != "user-9" {
+		t.Errorf("InvalidateUser calls = %v, want [user-9]", got)
+	}
+	if got := spy.disconnectedUsers; len(got) != 1 || got[0] != "user-9" {
+		t.Errorf("DisconnectUser calls = %v, want [user-9]", got)
+	}
+	if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != "user-9" {
+		t.Errorf("voice DisconnectUser calls = %v, want [user-9]", got)
 	}
 }
 

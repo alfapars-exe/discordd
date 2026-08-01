@@ -23,8 +23,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// ChangePassword sets a new password for the authenticated user. The session
-// is the proof-of-identity; we don't re-verify the current password.
 // ChangePassword updates the user's password after verifying the current one.
 //
 // Verifying currentPassword (not just the JWT) protects against:
@@ -62,15 +60,22 @@ func (s *authService) ChangePassword(ctx context.Context, userID, currentPasswor
 		return err
 	}
 
-	// Bump token_version so every outstanding JWT for this user is
-	// invalidated immediately. A password change is the strongest signal
-	// the user wants to lock out all current sessions — anything still
-	// using the old credentials (including the attacker who triggered
-	// the change) gets booted. Best-effort: if the bump fails, the
-	// password is still changed (caller's primary intent), we just log.
-	if err := s.userRepo.IncrementTokenVersion(ctx, userID); err != nil {
-		authLogger.Warn("failed to bump token_version after password change", "user_id", userID, "err", pkg.ErrText(err))
-	}
+	// Revoke every session and outstanding access token for this user (see
+	// revokeAllSessions in auth_service.go). A password change is the
+	// strongest signal the user wants to lock out all current sessions —
+	// anything still using the old credentials (including the attacker
+	// who triggered the change) gets booted, and any live WebSocket is
+	// disconnected too. Best-effort by construction: if a sub-step fails,
+	// the password is still changed (caller's primary intent) — failures
+	// are logged inside revokeAllSessions, not surfaced here.
+	//
+	// Design note: this drops the CALLER's own session as well. The
+	// server has no way to identify "this" session as distinct from any
+	// other — the refresh cookie is scoped Path=/api/auth (see
+	// setRefreshCookie in handlers/auth.go) and is never sent on this
+	// endpoint, so there is no session identifier available to spare. A
+	// user who just changed their password simply logs back in.
+	s.revokeAllSessions(ctx, userID)
 
 	return nil
 }
@@ -207,6 +212,16 @@ func (s *authService) ResetPassword(ctx context.Context, token, newPassword stri
 	if err := s.userRepo.UpdatePassword(ctx, resetToken.UserID, string(newHash)); err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
+
+	// Revoke every session and outstanding access token for this user (see
+	// revokeAllSessions in auth_service.go). ResetPassword is
+	// unauthenticated account recovery, so — unlike ChangePassword —
+	// there's no "caller's own session" to weigh against dropping
+	// everything: the anonymous requester proved control of the account
+	// via the emailed token, and every pre-existing session (including a
+	// possible attacker's) must die. Best-effort: failures are logged
+	// inside revokeAllSessions.
+	s.revokeAllSessions(ctx, resetToken.UserID)
 
 	// Delete all tokens for this user (one-time use)
 	if err := s.resetRepo.DeleteByUserID(ctx, resetToken.UserID); err != nil {

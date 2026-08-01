@@ -121,6 +121,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
 		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry,
 	)
+	// "Log out from all devices" / password change must also kick any live
+	// voice or screen-share session, mirroring adminUserService's ban/delete
+	// path (security review 2026-08-01, finding 3). voiceService already
+	// exists at this point (constructed above), so no ordering hazard.
+	authService.SetVoiceDisconnecter(voiceService)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService)
 	categoryService := services.NewCategoryService(repos.Category, hub)
 	messageService := services.NewMessageService(

@@ -29,6 +29,7 @@ type MockUserRepo struct {
 	DeleteAllMessagesByUserFn func(ctx context.Context, userID string) error
 	HardDeleteUserFn          func(ctx context.Context, userID string) error
 	SetPlatformAdminFn        func(ctx context.Context, userID string, isAdmin bool) error
+	IncrementTokenVersionFn   func(ctx context.Context, userID string) error
 }
 
 func (m *MockUserRepo) Create(ctx context.Context, user *models.User) error {
@@ -149,8 +150,12 @@ func (m *MockUserRepo) SetPlatformAdmin(ctx context.Context, userID string, isAd
 	return nil
 }
 
-// IncrementTokenVersion — stub; no test configures token-version bumps.
-func (m *MockUserRepo) IncrementTokenVersion(_ context.Context, _ string) error {
+// IncrementTokenVersion delegates to IncrementTokenVersionFn when set,
+// nil-safe otherwise (matches every other optional hook on this mock).
+func (m *MockUserRepo) IncrementTokenVersion(ctx context.Context, userID string) error {
+	if m.IncrementTokenVersionFn != nil {
+		return m.IncrementTokenVersionFn(ctx, userID)
+	}
 	return nil
 }
 
