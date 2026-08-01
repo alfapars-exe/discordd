@@ -37,6 +37,45 @@ var soundAllowedMimeTypes = map[string]bool{
 	"video/mp4":   true, // frontend extracts audio and converts to WAV before upload; kept as fallback
 }
 
+// soundAllowedSniffedTypes gates on what http.DetectContentType actually
+// reports for the byte-content-derived (never client-claimed) MIME, after
+// pkg.RefineMIME's generic-result cleanup. Note the values Go's sniffer
+// really returns for audio, which do NOT match the client-facing map above:
+// RIFF/WAVE sniffs as "audio/wave" (not "audio/wav"), OGG containers as
+// "audio/ogg"/"application/ogg", and WebM/MP4 containers carrying only an
+// audio track still sniff as the video container types since the sniffer
+// has no audio-only WebM/MP4 signature.
+var soundAllowedSniffedTypes = map[string]bool{
+	"audio/mpeg":      true,
+	"audio/wave":      true,
+	"audio/aiff":      true,
+	"audio/basic":     true,
+	"audio/ogg":       true,
+	"application/ogg": true,
+	"video/webm":      true,
+	"video/mp4":       true,
+	"audio/mp4":       true,
+}
+
+// soundGenericExts is the extension fallback for sniff results that come
+// back "application/octet-stream" — Go's sniff dictionary has no AAC or M4A
+// signature at all, and an ID3-less MP3 also sniffs as generic. Restricted
+// to the containers the client is known to produce (the frontend converts
+// captured audio to WAV before upload). Residual weakness: an attacker can
+// still store unclassifiable binary bytes under one of these extensions —
+// but every BYTE-classifiable type (text/html, image/*, application/pdf,
+// ...) is now rejected regardless of what extension it's given, which is
+// what closes off the "free file hosting" effect of an unchecked upload.
+var soundGenericExts = map[string]bool{
+	"mp3":  true,
+	"aac":  true,
+	"m4a":  true,
+	"wav":  true,
+	"ogg":  true,
+	"webm": true,
+	"mp4":  true,
+}
+
 // VoiceStateGetter retrieves a user's current voice state.
 type VoiceStateGetter interface {
 	GetUserVoiceState(userID string) *models.VoiceState
@@ -123,11 +162,26 @@ func (s *soundboardService) Create(
 		return nil, fmt.Errorf("%w: file too large", pkg.ErrBadRequest)
 	}
 
+	// Cheap pre-filter on the client-claimed Content-Type — harmless to keep,
+	// but NOT the security boundary: the client fully controls this header.
 	contentType := header.Header.Get("Content-Type")
 	mimeBase := strings.Split(contentType, ";")[0]
 	mimeBase = strings.TrimSpace(mimeBase)
 	if !soundAllowedMimeTypes[mimeBase] {
 		return nil, fmt.Errorf("%w: audio file type not allowed: %s", pkg.ErrBadRequest, mimeBase)
+	}
+
+	// The real gate: sniff the actual bytes. replay MUST be what's written
+	// to disk below — SniffContentType consumes up to 512 bytes from file,
+	// so writing file itself would silently truncate the upload.
+	sniffed, replay, err := pkg.SniffContentType(file)
+	if err != nil {
+		return nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
+	}
+	refined := pkg.RefineMIME(sniffed, header.Filename)
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(header.Filename), "."))
+	if !soundAllowedSniffedTypes[refined] && !(sniffed == "application/octet-stream" && soundGenericExts[ext]) {
+		return nil, fmt.Errorf("%w: file contents are not audio", pkg.ErrBadRequest)
 	}
 
 	count, err := s.repo.CountByServer(ctx, serverID)
@@ -151,7 +205,7 @@ func (s *soundboardService) Create(
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
 
-	if err := writeUploadFile(destPath, file, "create file", "save file", "finalize file"); err != nil {
+	if err := writeUploadFile(destPath, replay, "create file", "save file", "finalize file"); err != nil {
 		return nil, err
 	}
 

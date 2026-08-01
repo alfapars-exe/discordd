@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"mime/multipart"
 	"os"
-	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -49,14 +48,19 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
+	// The client-declared Content-Type header is attacker-controlled and
+	// never trusted for the allowlist decision — sniff the actual bytes
+	// instead (mirrors upload_service.go / dm_upload_service.go). replay
+	// MUST be what's written to disk: SniffContentType consumes up to 512
+	// bytes from file, so writing file itself would silently truncate the
+	// upload's first 512 bytes.
+	sniffed, replay, err := pkg.SniffContentType(file)
+	if err != nil {
+		return nil, fmt.Errorf("%w: unreadable upload", pkg.ErrBadRequest)
 	}
-	mimeBase := strings.TrimSpace(strings.Split(contentType, ";")[0])
 
-	if !allowedFeedbackMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: only images are allowed (got: %s)", pkg.ErrBadRequest, mimeBase)
+	if !allowedFeedbackMimeTypes[sniffed] {
+		return nil, fmt.Errorf("%w: only images are allowed (got: %s)", pkg.ErrBadRequest, sniffed)
 	}
 
 	randomBytes := make([]byte, 8)
@@ -70,7 +74,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	if err := writeUploadFile(destPath, file, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
+	if err := writeUploadFile(destPath, replay, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +86,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		Filename: header.Filename,
 		FileURL:  "/api/uploads/" + diskFilename,
 		FileSize: &fileSize,
-		MimeType: &mimeBase,
+		MimeType: &sniffed,
 	}
 
 	if err := s.feedbackRepo.CreateAttachment(ctx, att); err != nil {
