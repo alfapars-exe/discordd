@@ -12,12 +12,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 
@@ -355,5 +357,81 @@ func TestStopAll_StopsEveryBot(t *testing.T) {
 	svc.mu.RUnlock()
 	if remaining != 0 {
 		t.Fatalf("%d bot(s) still registered after StopAll", remaining)
+	}
+}
+
+// ─── playTrack's SSRF guard (security review, 2026-08-01) ───
+
+// TestPlayTrackYtdlpArgs_RestrictsToYoutubeExtractors mirrors
+// TestExtractTracksArgs_RestrictsToYoutubeExtractors (music_bot_metadata_test.go)
+// for playTrack's yt-dlp invocation — see that test's comment for why the
+// flag matters and why this test can only pin its presence in argv, not that
+// GenericIE actually stays disabled.
+func TestPlayTrackYtdlpArgs_RestrictsToYoutubeExtractors(t *testing.T) {
+	args := playTrackYtdlpArgs("https://www.youtube.com/watch?v=x")
+	assertHasAdjacentPair(t, args, "--use-extractors", "Youtube.*")
+}
+
+// stubHangingResolver blocks until its context is cancelled, then returns
+// the context's error — a stand-in for a wedged DNS resolution that never
+// completes on its own.
+type stubHangingResolver struct{}
+
+func (stubHangingResolver) LookupIPAddr(ctx context.Context, _ string) ([]net.IPAddr, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestPlayTrack_GuardHasOwnDeadline pins the guard's bounded timeout:
+// playTrack's SSRF guard call must carry its own deadline, independent of
+// the per-track pipeline context, which doesn't exist yet at guard time —
+// the stall watchdog that would otherwise catch a wedge isn't armed until
+// well after this call runs. Before the fix, this guard ran on a bare
+// context.WithCancel(Background()) with no deadline, so a wedged resolver
+// blocked the playLoop goroutine forever. The stub resolver here hangs until
+// ITS OWN context is cancelled, so this test only finishes quickly if
+// playTrack handed the guard a context with a deadline.
+func TestPlayTrack_GuardHasOwnDeadline(t *testing.T) {
+	origResolver := musicURLResolver
+	musicURLResolver = stubHangingResolver{}
+	t.Cleanup(func() { musicURLResolver = origResolver })
+
+	svc := &musicBotService{}
+	bot := &botInstance{channelID: "channel-1"}
+	track := &models.MusicTrack{VideoID: "vid", Title: "t", URL: "https://www.youtube.com/watch?v=x"}
+
+	done := make(chan error, 1)
+	go func() { done <- svc.playTrack(bot, track) }()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected a DNS-timeout rejection, got nil — the guard did not actually wait on the hanging resolver")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("playTrack did not return within 10s — the guard has no bounded deadline")
+	}
+}
+
+// TestPlayTrack_GuardRejectionLeavesCancelFnUnset pins the guard/cancelFn
+// ordering: a guard rejection must never leave bot.cancelFn pointing at a
+// pipeline that was never started. Before the fix, bot.cancelFn was assigned
+// before the guard ran; an early return on rejection skipped the defer that
+// nils it back out afterwards, leaving a stale cancelFn on the bot. Uses a
+// disallowed host so the guard rejects immediately with no DNS wait.
+func TestPlayTrack_GuardRejectionLeavesCancelFnUnset(t *testing.T) {
+	svc := &musicBotService{}
+	bot := &botInstance{channelID: "channel-1"}
+	track := &models.MusicTrack{VideoID: "vid", Title: "t", URL: "https://evil.example/watch?v=x"}
+
+	err := svc.playTrack(bot, track)
+	if !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("expected pkg.ErrBadRequest, got %v", err)
+	}
+
+	bot.mu.Lock()
+	defer bot.mu.Unlock()
+	if bot.cancelFn != nil {
+		t.Fatal("guard rejection left bot.cancelFn set — a later Skip()/Stop() would invoke a cancel func for a pipeline that never started")
 	}
 }
