@@ -9,7 +9,6 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Characterization for the credential-management flows (ChangeEmail,
@@ -20,15 +19,6 @@ import (
 
 func strptr(s string) *string { return &s }
 
-func bcryptHash(t *testing.T, password string) string {
-	t.Helper()
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
-	if err != nil {
-		t.Fatalf("bcrypt: %v", err)
-	}
-	return string(h)
-}
-
 // newAuthServiceForReset builds the full service with caller-controlled reset
 // repo + email sender so the reset flow's collaborators are observable.
 func newAuthServiceForReset(userRepo *testutil.MockUserRepo, resetRepo *testutil.MockResetRepo, email *testutil.MockEmailSender) AuthService {
@@ -37,7 +27,7 @@ func newAuthServiceForReset(userRepo *testutil.MockUserRepo, resetRepo *testutil
 
 func TestChangeEmail(t *testing.T) {
 	const pw = "correct-horse"
-	hash := bcryptHash(t, pw)
+	hash := preHashPassword(t, pw)
 	ctx := context.Background()
 
 	t.Run("wrong password is rejected", func(t *testing.T) {
@@ -300,21 +290,7 @@ func TestResetPassword_RevokesAllSessions(t *testing.T) {
 			t.Fatalf("ResetPassword: %v", err)
 		}
 
-		if got := spy.deletedSessions; len(got) != 2 || got[0] != "u1" || got[1] != "u1" {
-			t.Errorf("DeleteByUserID calls = %v, want [u1 u1] (pre-bump sweep + post-bump re-sweep)", got)
-		}
-		if got := spy.bumpedVersions; len(got) != 1 || got[0] != "u1" {
-			t.Errorf("IncrementTokenVersion calls = %v, want [u1]", got)
-		}
-		if got := spy.invalidatedCache(); len(got) != 1 || got[0] != "u1" {
-			t.Errorf("InvalidateUser calls = %v, want [u1]", got)
-		}
-		if got := spy.disconnectedUsers; len(got) != 1 || got[0] != "u1" {
-			t.Errorf("DisconnectUser calls = %v, want [u1]", got)
-		}
-		if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != "u1" {
-			t.Errorf("voice DisconnectUser calls = %v, want [u1]", got)
-		}
+		assertRevocationFired(t, spy, "u1")
 	})
 
 	t.Run("expired token touches none of the revocation collaborators", func(t *testing.T) {
@@ -330,8 +306,6 @@ func TestResetPassword_RevokesAllSessions(t *testing.T) {
 		if !errors.Is(err, pkg.ErrBadRequest) {
 			t.Fatalf("err = %v, want ErrBadRequest", err)
 		}
-		if len(spy.deletedSessions) != 0 || len(spy.bumpedVersions) != 0 || len(spy.invalidatedCache()) != 0 || len(spy.disconnectedUsers) != 0 || len(spy.voiceKit.DisconnectedIDs) != 0 {
-			t.Errorf("revocation collaborators must stay untouched on an expired reset token: %+v", spy)
-		}
+		assertRevocationUntouched(t, spy, "on an expired reset token")
 	})
 }

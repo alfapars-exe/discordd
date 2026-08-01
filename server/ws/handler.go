@@ -318,21 +318,9 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 // inline code did and returns ok=false; on success it returns the claims
 // with ok=true.
 func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) (claims *models.TokenClaims, ok bool) {
-	var userIDFromTicket string
-	var ticketTokenVersion int
-	if h.ticketConsumer != nil {
-		if t := r.URL.Query().Get("ticket"); t != "" {
-			uid, tv, err := h.ticketConsumer.Consume(t)
-			if err != nil {
-				h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid ticket", map[string]string{
-					"error": err.Error(),
-				})
-				http.Error(w, "invalid ticket", http.StatusUnauthorized)
-				return nil, false
-			}
-			userIDFromTicket = uid
-			ticketTokenVersion = tv
-		}
+	userIDFromTicket, ticketTokenVersion, ok := h.resolveTicketAuth(w, r)
+	if !ok {
+		return nil, false
 	}
 
 	if userIDFromTicket != "" {
@@ -343,66 +331,103 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 		// TokenVersion carries the mint-time stamp so authorizeUser's
 		// wsTokenRevoked check applies uniformly to both paths.
 		claims = &models.TokenClaims{UserID: userIDFromTicket, TokenVersion: ticketTokenVersion}
-	} else {
-		// Legacy token path — defaults to REJECT after audit 2026-05-27.
-		//
-		// JWT in query strings leaks via proxy/CDN logs, browser history,
-		// and network monitoring (P0-BC-01). The ticket flow (POST
-		// /api/auth/ws-ticket → ?ticket=<one-shot>) replaces it.
-		//
-		// During the client rollout, operators can opt back in by setting
-		// HICHAT_ALLOW_LEGACY_WS_TOKEN=1. Every legacy connection writes
-		// an audit event so the operator can track migration progress and
-		// remove the env var once usage drops to zero.
-		legacyAllowed := os.Getenv("HICHAT_ALLOW_LEGACY_WS_TOKEN") == "1"
-		token := r.URL.Query().Get("token")
-
-		if token != "" && !legacyAllowed {
-			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil,
-				"WS connect blocked: legacy ?token= path rejected (set HICHAT_ALLOW_LEGACY_WS_TOKEN=1 during rollout)",
-				map[string]string{
-					"remote_addr": r.RemoteAddr,
-					"user_agent":  r.Header.Get("User-Agent"),
-				})
-			http.Error(w, "legacy token path disabled — use /api/auth/ws-ticket", http.StatusUnauthorized)
-			return nil, false
-		}
-
-		if token == "" {
-			http.Error(w, "missing ticket", http.StatusUnauthorized)
-			return nil, false
-		}
-
-		// Legacy path explicitly opted-in — validate, but always emit an
-		// audit event so operator visibility is unaffected by log level.
-		var err error
-		claims, err = h.tokenValidator.ValidateAccessToken(token)
-		if err != nil {
-			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid token", map[string]string{
-				"error": err.Error(),
-			})
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return nil, false
-		}
-
-		// Scope gate — a media cookie must not become a WebSocket session.
-		// See wsScopeRejected for the rationale.
-		if wsScopeRejected(claims.Scope) {
-			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID,
-				"WS connect blocked: scoped token presented", map[string]string{
-					"scope":       claims.Scope,
-					"remote_addr": r.RemoteAddr,
-				})
-			http.Error(w, "token scope not valid for websocket", http.StatusUnauthorized)
-			return nil, false
-		}
-
-		h.hub.logEvent(models.LogLevelInfo, models.LogCategoryAuth, &claims.UserID,
-			"WS connect via legacy ?token= path (opted-in via HICHAT_ALLOW_LEGACY_WS_TOKEN)",
-			map[string]string{
-				"user_agent": r.Header.Get("User-Agent"),
-			})
+		return claims, true
 	}
+
+	return h.resolveLegacyTokenAuth(w, r)
+}
+
+// resolveTicketAuth exchanges a presented `?ticket=` for the userID and
+// token_version it was minted with (same values, same order the inline code
+// in resolveConnectionAuth used to compute). Returns ok=true with an empty
+// userID when no ticket consumer is wired or no ticket was presented at all
+// — the caller then falls back to resolveLegacyTokenAuth. On an invalid
+// ticket it writes the same reject response and audit log the inline code
+// did and returns ok=false.
+func (h *Handler) resolveTicketAuth(w http.ResponseWriter, r *http.Request) (userID string, tokenVersion int, ok bool) {
+	if h.ticketConsumer == nil {
+		return "", 0, true
+	}
+	t := r.URL.Query().Get("ticket")
+	if t == "" {
+		return "", 0, true
+	}
+	uid, tv, err := h.ticketConsumer.Consume(t)
+	if err != nil {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid ticket", map[string]string{
+			"error": err.Error(),
+		})
+		http.Error(w, "invalid ticket", http.StatusUnauthorized)
+		return "", 0, false
+	}
+	return uid, tv, true
+}
+
+// resolveLegacyTokenAuth resolves the caller's identity from the legacy
+// `?token=JWT` query path (same checks, same order the inline else-branch in
+// resolveConnectionAuth used to run). See HandleConnection's doc comment for
+// why this path is retained. On every reject branch it writes the same
+// http.Error + audit log the inline code did and returns ok=false; on
+// success it returns the parsed claims with ok=true.
+func (h *Handler) resolveLegacyTokenAuth(w http.ResponseWriter, r *http.Request) (claims *models.TokenClaims, ok bool) {
+	// Legacy token path — defaults to REJECT after audit 2026-05-27.
+	//
+	// JWT in query strings leaks via proxy/CDN logs, browser history,
+	// and network monitoring (P0-BC-01). The ticket flow (POST
+	// /api/auth/ws-ticket → ?ticket=<one-shot>) replaces it.
+	//
+	// During the client rollout, operators can opt back in by setting
+	// HICHAT_ALLOW_LEGACY_WS_TOKEN=1. Every legacy connection writes
+	// an audit event so the operator can track migration progress and
+	// remove the env var once usage drops to zero.
+	legacyAllowed := os.Getenv("HICHAT_ALLOW_LEGACY_WS_TOKEN") == "1"
+	token := r.URL.Query().Get("token")
+
+	if token != "" && !legacyAllowed {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil,
+			"WS connect blocked: legacy ?token= path rejected (set HICHAT_ALLOW_LEGACY_WS_TOKEN=1 during rollout)",
+			map[string]string{
+				"remote_addr": r.RemoteAddr,
+				"user_agent":  r.Header.Get("User-Agent"),
+			})
+		http.Error(w, "legacy token path disabled — use /api/auth/ws-ticket", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	if token == "" {
+		http.Error(w, "missing ticket", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	// Legacy path explicitly opted-in — validate, but always emit an
+	// audit event so operator visibility is unaffected by log level.
+	var err error
+	claims, err = h.tokenValidator.ValidateAccessToken(token)
+	if err != nil {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid token", map[string]string{
+			"error": err.Error(),
+		})
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	// Scope gate — a media cookie must not become a WebSocket session.
+	// See wsScopeRejected for the rationale.
+	if wsScopeRejected(claims.Scope) {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID,
+			"WS connect blocked: scoped token presented", map[string]string{
+				"scope":       claims.Scope,
+				"remote_addr": r.RemoteAddr,
+			})
+		http.Error(w, "token scope not valid for websocket", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	h.hub.logEvent(models.LogLevelInfo, models.LogCategoryAuth, &claims.UserID,
+		"WS connect via legacy ?token= path (opted-in via HICHAT_ALLOW_LEGACY_WS_TOKEN)",
+		map[string]string{
+			"user_agent": r.Header.Get("User-Agent"),
+		})
 
 	return claims, true
 }
@@ -417,80 +442,109 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) authorizeUser(w http.ResponseWriter, r *http.Request, claims *models.TokenClaims) (displayName, avatarURL string, prefStatus models.UserStatus, ok bool) {
 	// Fetch user info before upgrade — reject banned users early
 	if h.userInfoProvider != nil {
-		user, err := h.userInfoProvider.GetByID(r.Context(), claims.UserID)
-		if err != nil {
-			handlerLogger.Error("user info fetch failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
-			h.hub.logEvent(models.LogLevelError, models.LogCategoryWS, &claims.UserID, "WS connect: user lookup failed", map[string]string{
-				"error": err.Error(),
-			})
-			http.Error(w, "user not found", http.StatusUnauthorized)
+		var infoOK bool
+		displayName, avatarURL, prefStatus, infoOK = h.checkUserInfoGates(w, r, claims)
+		if !infoOK {
 			return "", "", "", false
 		}
-		// Token-version (revocation) gate. Previously verified inside
-		// AuthService.ValidateAccessToken; moved out so the HTTP
-		// middleware can satisfy a request from the userCache. The
-		// WS upgrade path doesn't go through that middleware, so we
-		// re-check here against the live user row we just fetched
-		// (defense-in-depth: a banned/revoked user can't keep a WS
-		// open just because their JWT still parses).
-		//
-		// No ticket exemption — see wsTokenRevoked. The ticket path's
-		// claims.TokenVersion is the stamp WSTicketService.Issue took at
-		// mint time (resolveConnectionAuth), so a ticket minted before a
-		// revocation event (password change / logout-all / reuse) is
-		// rejected here exactly like a stale legacy JWT would be.
-		if wsTokenRevoked(claims.TokenVersion, user.TokenVersion) {
-			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: token revoked", nil)
-			http.Error(w, "token revoked", http.StatusUnauthorized)
-			return "", "", "", false
-		}
-		if user.IsPlatformBanned {
-			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: account suspended", nil)
-			http.Error(w, "account suspended", http.StatusForbidden)
-			return "", "", "", false
-		}
-		// Defense in depth against the ticket path (handlers.WSTicket rejects
-		// bots at mint time). `HandleConnection` is the *human* gateway; bots
-		// have their own read-only route (`GET /api/bot/gateway`,
-		// HandleBotConnection), which builds its Client with isBot:true. A bot
-		// reaching this function is therefore always wrong — reject rather
-		// than propagate isBot, so the connection never exists at all.
-		if user.IsBot {
-			h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: bot on human gateway", nil)
-			http.Error(w, "bots must use the bot gateway", http.StatusForbidden)
-			return "", "", "", false
-		}
-		// Always sync username from the live DB row. The ticket path
-		// (above) synthesises an empty-Username claims object, and even
-		// the JWT path can carry a stale username if the user renamed
-		// after the token was issued. Without this, typing/voice WS
-		// events broadcast `username: ""` for ticket-connected clients,
-		// rendering as blank rows in other members' UIs.
-		claims.Username = user.Username
-		if user.DisplayName != nil {
-			displayName = *user.DisplayName
-		}
-		if user.AvatarURL != nil {
-			avatarURL = *user.AvatarURL
-		}
-		prefStatus = user.PrefStatus
 	}
 
 	// Server-scoped ban check
 	if h.banChecker != nil {
-		banned, err := h.banChecker.IsBanned(r.Context(), claims.UserID)
-		if err != nil {
-			handlerLogger.Error("ban check failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return "", "", "", false
-		}
-		if banned {
-			http.Error(w, "banned", http.StatusForbidden)
+		if !h.checkServerBan(w, r, claims.UserID) {
 			return "", "", "", false
 		}
 	}
 
 	return displayName, avatarURL, prefStatus, true
+}
+
+// checkUserInfoGates fetches the live user row for claims.UserID and applies
+// the token-revocation, platform-ban, and bot gates that were previously
+// inlined in authorizeUser (same checks, same order — this extraction moves
+// where the code lives, not what it does). It also syncs claims.Username
+// from the DB row (claims is passed by pointer, so the mutation is visible
+// to the caller). On any reject branch it writes the same http.Error +
+// audit log the inline code did and returns ok=false; on success it returns
+// the DB-derived displayName, avatarURL, and pref_status with ok=true.
+func (h *Handler) checkUserInfoGates(w http.ResponseWriter, r *http.Request, claims *models.TokenClaims) (displayName, avatarURL string, prefStatus models.UserStatus, ok bool) {
+	user, err := h.userInfoProvider.GetByID(r.Context(), claims.UserID)
+	if err != nil {
+		handlerLogger.Error("user info fetch failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
+		h.hub.logEvent(models.LogLevelError, models.LogCategoryWS, &claims.UserID, "WS connect: user lookup failed", map[string]string{
+			"error": err.Error(),
+		})
+		http.Error(w, "user not found", http.StatusUnauthorized)
+		return "", "", "", false
+	}
+	// Token-version (revocation) gate. Previously verified inside
+	// AuthService.ValidateAccessToken; moved out so the HTTP
+	// middleware can satisfy a request from the userCache. The
+	// WS upgrade path doesn't go through that middleware, so we
+	// re-check here against the live user row we just fetched
+	// (defense-in-depth: a banned/revoked user can't keep a WS
+	// open just because their JWT still parses).
+	//
+	// No ticket exemption — see wsTokenRevoked. The ticket path's
+	// claims.TokenVersion is the stamp WSTicketService.Issue took at
+	// mint time (resolveConnectionAuth), so a ticket minted before a
+	// revocation event (password change / logout-all / reuse) is
+	// rejected here exactly like a stale legacy JWT would be.
+	if wsTokenRevoked(claims.TokenVersion, user.TokenVersion) {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: token revoked", nil)
+		http.Error(w, "token revoked", http.StatusUnauthorized)
+		return "", "", "", false
+	}
+	if user.IsPlatformBanned {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: account suspended", nil)
+		http.Error(w, "account suspended", http.StatusForbidden)
+		return "", "", "", false
+	}
+	// Defense in depth against the ticket path (handlers.WSTicket rejects
+	// bots at mint time). `HandleConnection` is the *human* gateway; bots
+	// have their own read-only route (`GET /api/bot/gateway`,
+	// HandleBotConnection), which builds its Client with isBot:true. A bot
+	// reaching this function is therefore always wrong — reject rather
+	// than propagate isBot, so the connection never exists at all.
+	if user.IsBot {
+		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, &claims.UserID, "WS connect blocked: bot on human gateway", nil)
+		http.Error(w, "bots must use the bot gateway", http.StatusForbidden)
+		return "", "", "", false
+	}
+	// Always sync username from the live DB row. The ticket path
+	// (above) synthesises an empty-Username claims object, and even
+	// the JWT path can carry a stale username if the user renamed
+	// after the token was issued. Without this, typing/voice WS
+	// events broadcast `username: ""` for ticket-connected clients,
+	// rendering as blank rows in other members' UIs.
+	claims.Username = user.Username
+	if user.DisplayName != nil {
+		displayName = *user.DisplayName
+	}
+	if user.AvatarURL != nil {
+		avatarURL = *user.AvatarURL
+	}
+	prefStatus = user.PrefStatus
+
+	return displayName, avatarURL, prefStatus, true
+}
+
+// checkServerBan applies the server-scoped ban gate that was previously
+// inlined in authorizeUser (same checks, same order: fetch error first,
+// then the banned flag). On reject it writes the same http.Error the inline
+// code did and returns false.
+func (h *Handler) checkServerBan(w http.ResponseWriter, r *http.Request, userID string) bool {
+	banned, err := h.banChecker.IsBanned(r.Context(), userID)
+	if err != nil {
+		handlerLogger.Error("ban check failed", "user_id", userID, "err", pkg.ErrText(err))
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return false
+	}
+	if banned {
+		http.Error(w, "banned", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 // sendVoiceStatesSync sends the initial voice-states snapshot so the frontend

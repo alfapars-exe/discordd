@@ -86,6 +86,43 @@ func newRevokeHarness(userRepo *testutil.MockUserRepo, sessionRepo *testutil.Moc
 	return svc, spy
 }
 
+// assertRevocationFired checks that revokeAllSessions' full fan-out ran
+// exactly once for userID: the double DeleteByUserID sweep (pre-bump sweep +
+// post-bump re-sweep — see the BULGU 2 comment on revokeAllSessions), the
+// token_version bump, the auth-cache invalidation, and both the WebSocket and
+// voice disconnects. Shared by the ChangePassword, ResetPassword, and
+// LogoutAllDevices revocation tests, since a successful request on any of the
+// three triggers the same revokeAllSessions fan-out.
+func assertRevocationFired(t *testing.T, spy *revokeSpy, userID string) {
+	t.Helper()
+	if got := spy.deletedSessions; len(got) != 2 || got[0] != userID || got[1] != userID {
+		t.Errorf("DeleteByUserID calls = %v, want [%s %s] (pre-bump sweep + post-bump re-sweep)", got, userID, userID)
+	}
+	if got := spy.bumpedVersions; len(got) != 1 || got[0] != userID {
+		t.Errorf("IncrementTokenVersion calls = %v, want [%s]", got, userID)
+	}
+	if got := spy.invalidatedCache(); len(got) != 1 || got[0] != userID {
+		t.Errorf("InvalidateUser calls = %v, want [%s]", got, userID)
+	}
+	if got := spy.disconnectedUsers; len(got) != 1 || got[0] != userID {
+		t.Errorf("DisconnectUser calls = %v, want [%s]", got, userID)
+	}
+	if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != userID {
+		t.Errorf("voice DisconnectUser calls = %v, want [%s]", got, userID)
+	}
+}
+
+// assertRevocationUntouched checks that none of revokeAllSessions'
+// collaborators fired. Shared by the rejected/expired-input branches of the
+// same three flows, where the fan-out must never run. context names the
+// branch under test so a failure message says which one broke.
+func assertRevocationUntouched(t *testing.T, spy *revokeSpy, context string) {
+	t.Helper()
+	if len(spy.deletedSessions) != 0 || len(spy.bumpedVersions) != 0 || len(spy.invalidatedCache()) != 0 || len(spy.disconnectedUsers) != 0 || len(spy.voiceKit.DisconnectedIDs) != 0 {
+		t.Errorf("revocation collaborators must stay untouched %s: %+v", context, spy)
+	}
+}
+
 func TestRegister(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -884,21 +921,7 @@ func TestChangePassword_RevokesAllSessions(t *testing.T) {
 			t.Fatalf("ChangePassword: %v", err)
 		}
 
-		if got := spy.deletedSessions; len(got) != 2 || got[0] != "user-1" || got[1] != "user-1" {
-			t.Errorf("DeleteByUserID calls = %v, want [user-1 user-1] (pre-bump sweep + post-bump re-sweep)", got)
-		}
-		if got := spy.bumpedVersions; len(got) != 1 || got[0] != "user-1" {
-			t.Errorf("IncrementTokenVersion calls = %v, want [user-1]", got)
-		}
-		if got := spy.invalidatedCache(); len(got) != 1 || got[0] != "user-1" {
-			t.Errorf("InvalidateUser calls = %v, want [user-1]", got)
-		}
-		if got := spy.disconnectedUsers; len(got) != 1 || got[0] != "user-1" {
-			t.Errorf("DisconnectUser calls = %v, want [user-1]", got)
-		}
-		if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != "user-1" {
-			t.Errorf("voice DisconnectUser calls = %v, want [user-1]", got)
-		}
+		assertRevocationFired(t, spy, "user-1")
 	})
 
 	t.Run("wrong current password touches none of the revocation collaborators", func(t *testing.T) {
@@ -908,9 +931,7 @@ func TestChangePassword_RevokesAllSessions(t *testing.T) {
 		if !errors.Is(err, pkg.ErrUnauthorized) {
 			t.Fatalf("err = %v, want ErrUnauthorized", err)
 		}
-		if len(spy.deletedSessions) != 0 || len(spy.bumpedVersions) != 0 || len(spy.invalidatedCache()) != 0 || len(spy.disconnectedUsers) != 0 || len(spy.voiceKit.DisconnectedIDs) != 0 {
-			t.Errorf("revocation collaborators must stay untouched on a rejected password change: %+v", spy)
-		}
+		assertRevocationUntouched(t, spy, "on a rejected password change")
 	})
 
 	t.Run("a failing sub-step does not stop the others (best-effort)", func(t *testing.T) {
@@ -953,21 +974,7 @@ func TestLogoutAllDevices(t *testing.T) {
 	if statusUpdated != models.UserStatusOffline {
 		t.Errorf("status = %v, want offline", statusUpdated)
 	}
-	if got := spy.deletedSessions; len(got) != 2 || got[0] != "user-9" || got[1] != "user-9" {
-		t.Errorf("DeleteByUserID calls = %v, want [user-9 user-9] (pre-bump sweep + post-bump re-sweep)", got)
-	}
-	if got := spy.bumpedVersions; len(got) != 1 || got[0] != "user-9" {
-		t.Errorf("IncrementTokenVersion calls = %v, want [user-9]", got)
-	}
-	if got := spy.invalidatedCache(); len(got) != 1 || got[0] != "user-9" {
-		t.Errorf("InvalidateUser calls = %v, want [user-9]", got)
-	}
-	if got := spy.disconnectedUsers; len(got) != 1 || got[0] != "user-9" {
-		t.Errorf("DisconnectUser calls = %v, want [user-9]", got)
-	}
-	if got := spy.voiceKit.DisconnectedIDs; len(got) != 1 || got[0] != "user-9" {
-		t.Errorf("voice DisconnectUser calls = %v, want [user-9]", got)
-	}
+	assertRevocationFired(t, spy, "user-9")
 }
 
 func TestLogout(t *testing.T) {
