@@ -98,3 +98,66 @@ func (s *voiceService) CleanupViewersForStreamer(streamerUserID string) {
 	delete(s.screenShareViewers, streamerUserID)
 	s.mu.Unlock()
 }
+
+// closeOutScreenShareLocked closes out userID's screen-share involvement in
+// channelID (server serverID) as part of them vacating that channel —
+// whether via an explicit leave, an admin force-disconnect, an admin move,
+// or a self-initiated channel switch. Extracted from four call sites
+// (LeaveChannel and JoinChannel's cross-channel branch in voice_state.go;
+// MoveUser and AdminDisconnectUser in voice_admin.go) that carried this
+// exact sequence verbatim, differing only in which local variables held
+// the user/channel/server ids and whether wasStreaming came from a
+// snapshot-before-delete or a snapshot-before-reset. Pure extraction: the
+// logic, broadcast ops, payload fields, and ordering are unchanged from
+// what each site already did inline.
+//
+// Two independent cases, run unconditionally in this order:
+//  1. If wasStreaming (userID was themselves streaming in channelID),
+//     clear their own screenShareViewers entry and broadcast a "leave"
+//     OpScreenShareViewerUpdate for channelID (ViewerCount: 0) — this is
+//     the case a vacating streamer needs.
+//  2. Regardless of wasStreaming, scan every OTHER streamer's viewer set
+//     for userID (they may have been watching someone else's stream,
+//     possibly in a different channel) and remove them, broadcasting the
+//     updated viewer count to that streamer's own channel/server.
+//
+// "Locked" suffix: caller MUST already hold s.mu (write lock, not RLock —
+// this both reads and mutates s.screenShareViewers and reads s.states) for
+// the duration of the call. Every current call site is already inside its
+// own s.mu.Lock()/Unlock() bracket when it reaches this point.
+func (s *voiceService) closeOutScreenShareLocked(userID, channelID, serverID string, wasStreaming bool) {
+	if wasStreaming {
+		delete(s.screenShareViewers, userID)
+		s.broadcastToServer(serverID, ws.Event{
+			Op: ws.OpScreenShareViewerUpdate,
+			Data: ws.ScreenShareViewerUpdateData{
+				StreamerUserID: userID,
+				ChannelID:      channelID,
+				ViewerCount:    0,
+				ViewerUserID:   "",
+				Action:         "leave",
+			},
+		})
+	}
+	for streamerID, viewers := range s.screenShareViewers {
+		if viewers[userID] {
+			delete(viewers, userID)
+			viewerCount := len(viewers)
+			if viewerCount == 0 {
+				delete(s.screenShareViewers, streamerID)
+			}
+			if streamerState, ok := s.states[streamerID]; ok {
+				s.broadcastToServer(streamerState.ServerID, ws.Event{
+					Op: ws.OpScreenShareViewerUpdate,
+					Data: ws.ScreenShareViewerUpdateData{
+						StreamerUserID: streamerID,
+						ChannelID:      streamerState.ChannelID,
+						ViewerCount:    viewerCount,
+						ViewerUserID:   userID,
+						Action:         "leave",
+					},
+				})
+			}
+		}
+	}
+}

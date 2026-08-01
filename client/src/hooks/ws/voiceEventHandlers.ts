@@ -60,8 +60,19 @@ export async function handleVoiceEvent(
         voiceState.clearScreenShareQualityGrade(voiceData.user_id);
       }
 
-      // Enforce server mute/deafen on self — update store so VoiceStateManager syncs to LiveKit
-      if (isMe && voiceData.action === "update") {
+      // Enforce server mute/deafen on self — update store so VoiceStateManager syncs to LiveKit.
+      // Applies on "join" as well as "update": a cross-channel switch runs
+      // leaveVoiceChannel() (zeroes isServerMuted/isServerDeafened) followed
+      // by joinVoiceChannel() for the new channel, and the server carries
+      // the server-mute/deafen flags forward across that switch (Discord-
+      // like — a moderator's mute survives the muted user changing
+      // channels). This "join" broadcast for ourselves is what restores the
+      // flags; without it, switching channels would silently and
+      // permanently clear a moderator's server-mute on the client (the
+      // per-participant list stays correct via handleVoiceStateUpdate
+      // above, but the enforcement path — useMicSync via this store field —
+      // would not).
+      if (isMe && (voiceData.action === "update" || voiceData.action === "join")) {
         useVoiceStore.setState({
           isServerMuted: voiceData.is_server_muted,
           isServerDeafened: voiceData.is_server_deafened,
@@ -160,8 +171,20 @@ export async function handleVoiceEvent(
       // Preserve user's mute/deafen state across the move
       const prevMuted = voiceStore.isMuted;
       const prevDeafened = voiceStore.isDeafened;
+      // Preserve server-mute/deafen too — same Discord-like "survives a
+      // channel change" contract as the self-initiated switch path in
+      // useVoice.ts. A moderator force-moving a server-muted user must not
+      // accidentally unmute them; restoring right after leaveVoiceChannel()
+      // (before joinVoiceChannel() / LiveKit even starts) closes the same
+      // useInitialRoomSync race described there.
+      const prevServerMuted = voiceStore.isServerMuted;
+      const prevServerDeafened = voiceStore.isServerDeafened;
 
       voiceStore.leaveVoiceChannel();
+      useVoiceStore.setState({
+        isServerMuted: prevServerMuted,
+        isServerDeafened: prevServerDeafened,
+      });
       voiceStore.joinVoiceChannel(forceMoveData.channel_id).then((tokenResp) => {
         if (tokenResp) {
           // Restore mute/deafen state that was cleared by leave+join cycle

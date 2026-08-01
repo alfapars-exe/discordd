@@ -550,6 +550,36 @@ describe("voiceStore", () => {
         watching: false,
       });
     });
+
+    // Cross-channel switch consistency (server-side JoinChannel now carries
+    // IsServerMuted/IsServerDeafened forward to the new channel, Discord-
+    // like — a moderator's server-mute survives the muted user changing
+    // channels themselves).
+    //
+    // leaveVoiceChannel() is the FULL-leave primitive — resetting these two
+    // fields here is correct (no active session left to enforce a mic lock
+    // against). A cross-channel switch reuses this same primitive (see
+    // useVoice.ts's joinVoice), so the field DOES still drop to false right
+    // here — that's why the preserve/restore for a *switch* deliberately
+    // lives one layer up, in the orchestration hooks that call
+    // leaveVoiceChannel()+joinVoiceChannel() back-to-back (useVoice.ts and
+    // voiceEventHandlers.ts's voice_force_move handler both snapshot
+    // isServerMuted/isServerDeafened before calling this function and
+    // restore them right after — see voiceEventHandlers.test.ts and
+    // useVoice.ts for that coverage). joinVoiceChannel() itself never sets
+    // these fields, by design — it can't know the new channel's moderation
+    // state ahead of the server's join broadcast.
+    it("resets isServerMuted/isServerDeafened — full-leave primitive; a channel SWITCH restores them one layer up (see voiceEventHandlers.test.ts / useVoice.ts)", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "ch1",
+        isServerMuted: true,
+        isServerDeafened: true,
+      });
+      useVoiceStore.getState().leaveVoiceChannel();
+      const state = useVoiceStore.getState();
+      expect(state.isServerMuted).toBe(false);
+      expect(state.isServerDeafened).toBe(false);
+    });
   });
 
   // ─── Join Failure Toasts ───

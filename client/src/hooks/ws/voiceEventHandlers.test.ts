@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { useVoiceStore } from "../../stores/voiceStore";
 import { handleVoiceEvent } from "./voiceEventHandlers";
@@ -32,6 +32,9 @@ vi.mock("../../stores/authStore", () => ({
 vi.mock("../../i18n", () => ({ default: { t: (k: string) => k } }));
 vi.mock("../../stores/shared/voiceRecovery", () => ({
   isVoiceRecoveryAllowed: () => false,
+  // Partial-mock trap (PROJECT_MEMORY §4): the force-move path also calls
+  // clearVoiceRecoveryMark; a factory missing it fails at collect time.
+  clearVoiceRecoveryMark: vi.fn(),
 }));
 
 const ctx: WSHandlerContext = { sendVoiceJoin: vi.fn() };
@@ -294,5 +297,147 @@ describe("handleVoiceEvent — voice_states_sync streaming re-assert", () => {
 
     expect(sendVoiceJoin).toHaveBeenCalledWith("ch1");
     expect(wsSend).not.toHaveBeenCalled();
+  });
+});
+
+// Cross-channel switch consistency: the server now carries IsServerMuted/
+// IsServerDeafened forward to the new channel on a same-server channel
+// switch (Discord-like — a moderator's server-mute survives the muted user
+// changing channels, it doesn't silently lift). These tests pin the client
+// side of that contract.
+describe("handleVoiceEvent — voice_state_update self server-mute/deafen enforcement", () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  it("applies is_server_muted/is_server_deafened to self on a JOIN broadcast (not just 'update') — this is what restores the flags after a cross-channel switch", async () => {
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch2",
+      isServerMuted: false,
+      isServerDeafened: false,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_state_update",
+        d: {
+          ...baseStateUpdate,
+          user_id: "me",
+          channel_id: "ch2",
+          action: "join",
+          is_streaming: false,
+          is_server_muted: true,
+          is_server_deafened: true,
+        },
+      },
+      ctx,
+    );
+
+    const state = useVoiceStore.getState();
+    expect(state.isServerMuted).toBe(true);
+    expect(state.isServerDeafened).toBe(true);
+  });
+
+  it("still applies on an UPDATE broadcast (regression guard for the pre-existing behavior)", async () => {
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isServerMuted: false,
+      isServerDeafened: false,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_state_update",
+        d: {
+          ...baseStateUpdate,
+          user_id: "me",
+          action: "update",
+          is_streaming: false,
+          is_server_muted: true,
+          is_server_deafened: false,
+        },
+      },
+      ctx,
+    );
+
+    const state = useVoiceStore.getState();
+    expect(state.isServerMuted).toBe(true);
+    expect(state.isServerDeafened).toBe(false);
+  });
+
+  it("does not apply for another user's join/update — only self enforcement", async () => {
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isServerMuted: false,
+      isServerDeafened: false,
+    });
+
+    await handleVoiceEvent(
+      {
+        op: "voice_state_update",
+        d: { ...baseStateUpdate, user_id: "someone-else", action: "join", is_streaming: false, is_server_muted: true, is_server_deafened: true },
+      },
+      ctx,
+    );
+
+    const state = useVoiceStore.getState();
+    expect(state.isServerMuted).toBe(false);
+    expect(state.isServerDeafened).toBe(false);
+  });
+});
+
+describe("handleVoiceEvent — voice_force_move preserves server-mute/deafen across the move", () => {
+  let joinSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    resetStore();
+    // Isolate from joinVoiceChannel's real network/device side effects
+    // (token fetch, mic permission, native plugins) — the fix under test
+    // runs synchronously right after leaveVoiceChannel(), before this
+    // promise needs to settle either way.
+    joinSpy = vi
+      .spyOn(useVoiceStore.getState(), "joinVoiceChannel")
+      .mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    joinSpy.mockRestore();
+  });
+
+  it("restores isServerMuted/isServerDeafened immediately after the leave+join cycle starts — before the async join even settles", async () => {
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isServerMuted: true,
+      isServerDeafened: true,
+    });
+
+    await handleVoiceEvent(
+      { op: "voice_force_move", d: { channel_id: "ch2", channel_name: "General" } },
+      ctx,
+    );
+
+    // leaveVoiceChannel() resets these to false; the fix restores them
+    // synchronously right after, well before joinVoiceChannel() resolves.
+    const state = useVoiceStore.getState();
+    expect(state.isServerMuted).toBe(true);
+    expect(state.isServerDeafened).toBe(true);
+    expect(joinSpy).toHaveBeenCalledWith("ch2");
+  });
+
+  it("does not fabricate a server-mute that wasn't there before the move", async () => {
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1",
+      isServerMuted: false,
+      isServerDeafened: false,
+    });
+
+    await handleVoiceEvent(
+      { op: "voice_force_move", d: { channel_id: "ch2", channel_name: "General" } },
+      ctx,
+    );
+
+    const state = useVoiceStore.getState();
+    expect(state.isServerMuted).toBe(false);
+    expect(state.isServerDeafened).toBe(false);
   });
 });
