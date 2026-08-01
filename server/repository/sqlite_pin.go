@@ -27,23 +27,31 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 	var pin models.PinnedMessageWithDetails
 	var msg models.Message
 	var author models.PublicUser
-	var authorID sql.NullString
+	// Every joined user column must be nullable, not just the id. A dangling
+	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL
+	// landing in a plain string aborts the row scan — which scanRows turns
+	// into an error for the WHOLE pin listing, not just the offending row.
+	// Same widening sqlite_message.go/sqlite_dm_scan.go already carry; this
+	// query was missed when those were fixed.
+	var authorID, authorUsername, authorStatus sql.NullString
 	var authorCreatedAt sql.NullTime
 	var pinnedByUser models.PublicUser
-	var pinnedByID, pinnedByStatus sql.NullString
+	var pinnedByID, pinnedByUsername, pinnedByStatus sql.NullString
 	var pinnedByCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&pin.ID, &pin.MessageID, &pin.ChannelID, &pin.PinnedBy, &pin.CreatedAt,
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-		&authorID, &author.Username, &author.DisplayName, &author.AvatarURL, &author.Status, &author.CustomStatus, &authorCreatedAt,
-		&pinnedByID, &pinnedByUser.Username, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL, &pinnedByStatus, &pinnedByUser.CustomStatus, &pinnedByCreatedAt,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus, &author.CustomStatus, &authorCreatedAt,
+		&pinnedByID, &pinnedByUsername, &pinnedByUser.DisplayName, &pinnedByUser.AvatarURL, &pinnedByStatus, &pinnedByUser.CustomStatus, &pinnedByCreatedAt,
 	); err != nil {
 		return pin, err
 	}
 
 	if authorID.Valid {
 		author.ID = authorID.String
+		author.Username = authorUsername.String
+		author.Status = models.UserStatus(authorStatus.String)
 		if authorCreatedAt.Valid {
 			author.CreatedAt = authorCreatedAt.Time
 		}
@@ -54,6 +62,7 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 
 	if pinnedByID.Valid {
 		pinnedByUser.ID = pinnedByID.String
+		pinnedByUser.Username = pinnedByUsername.String
 		if pinnedByStatus.Valid {
 			pinnedByUser.Status = models.UserStatus(pinnedByStatus.String)
 		}

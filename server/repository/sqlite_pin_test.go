@@ -102,3 +102,120 @@ func TestPinRepo_GetByChannelID_PublicUserFields(t *testing.T) {
 		t.Error("author.created_at is zero — u.created_at was not selected")
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRESSION GUARD — scanPin could not tolerate a deleted user on either join.
+//
+// scanPin made only the two ids nullable (authorID, pinnedByID) while
+// author.Username, author.Status and pinnedByUser.Username stayed plain
+// strings. When a LEFT JOIN finds no user row EVERY joined column comes back
+// NULL, so the scan died with
+//
+//	converting NULL to string is unsupported
+//
+// and because scanRows propagates the first row error, GetByChannelID
+// returned an error for the ENTIRE channel's pin list rather than degrading
+// to a nil author. The `if authorID.Valid` / `if pinnedByID.Valid` branches
+// below the scan were dead code.
+//
+// This is the same defect sqlite_message.go and sqlite_dm_scan.go were fixed
+// for (see TestMessageRepo_NilAuthorScan_KnownBug); sqlite_pin.go was missed
+// in that sweep.
+//
+// Reachability: messages.user_id and pinned_messages.pinned_by are both
+// `REFERENCES users(id) ON DELETE CASCADE`, so with foreign keys enforced a
+// pin cannot outlive either user — which is why this never shows up locally.
+// But database.New sets foreign_keys(1) only on the LOCAL SQLite DSN; the
+// remote libSQL/Turso branch opens with no pragmas at all and the migration
+// runner strips every PRAGMA because Turso rejects them (see
+// database/integrity.go, which exists precisely to answer "are FKs enforced
+// in production?"). Production runs on Turso, and the repo already ships an
+// orphan census because dangling rows are a known production condition.
+//
+// execWithoutFKs plants the dangling row the same way production plausibly
+// gets one: through a connection where enforcement was not in effect.
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestPinRepo_GetByChannelID_ToleratesDeletedUsers(t *testing.T) {
+	// Each subtest needs its own DB: the deletions are destructive and the
+	// point is to observe ONE dangling join at a time.
+	cases := []struct {
+		name       string
+		deleteUser string
+		// check runs against the single returned pin.
+		check func(t *testing.T, p models.PinnedMessageWithDetails)
+	}{
+		{
+			name:       "message author deleted",
+			deleteUser: pinAuthor,
+			check: func(t *testing.T, p models.PinnedMessageWithDetails) {
+				if p.Message == nil {
+					t.Fatal("message is nil; the pin should still carry its message")
+				}
+				if p.Message.Author != nil {
+					t.Errorf("author = %+v, want nil for a deleted user", p.Message.Author)
+				}
+				// The other side is untouched and must still be populated,
+				// so a fix that nils out both would not pass.
+				if p.PinnedByUser == nil || p.PinnedByUser.Username != "pinner" {
+					t.Errorf("pinned_by_user = %+v, want the intact pinner", p.PinnedByUser)
+				}
+			},
+		},
+		{
+			name:       "pinning user deleted",
+			deleteUser: pinPinner,
+			check: func(t *testing.T, p models.PinnedMessageWithDetails) {
+				if p.PinnedByUser != nil {
+					t.Errorf("pinned_by_user = %+v, want nil for a deleted user", p.PinnedByUser)
+				}
+				if p.Message == nil || p.Message.Author == nil {
+					t.Fatal("message author is nil; only the pinner was deleted")
+				}
+				if p.Message.Author.Username != "pinauthor" {
+					t.Errorf("author.username = %q, want %q", p.Message.Author.Username, "pinauthor")
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, path := newTestDBWithPath(t)
+			seedPinWorld(t, db)
+
+			msgRepo := NewSQLiteMessageRepo(db.Conn)
+			pinRepo := NewSQLitePinRepo(db.Conn)
+			ctx := context.Background()
+
+			content := "pin me"
+			msg := &models.Message{ChannelID: pinChannel, UserID: pinAuthor, Content: &content}
+			if err := msgRepo.Create(ctx, msg); err != nil {
+				t.Fatalf("Create message: %v", err)
+			}
+			pin := &models.PinnedMessage{MessageID: msg.ID, ChannelID: pinChannel, PinnedBy: pinPinner}
+			if err := pinRepo.Pin(ctx, pin); err != nil {
+				t.Fatalf("Pin: %v", err)
+			}
+
+			// FKs off, so the delete does NOT cascade the message or the pin
+			// away — exactly the orphan shape Turso can produce.
+			execWithoutFKs(t, path, `DELETE FROM users WHERE id = '`+tc.deleteUser+`'`)
+
+			// Guard the fixture itself: if the cascade DID fire, the pin is
+			// gone and the assertions below would pass vacuously.
+			if n := countRows(t, db, `SELECT COUNT(*) FROM pinned_messages WHERE channel_id = ?`, pinChannel); n != 1 {
+				t.Fatalf("pinned_messages rows = %d, want 1 — the delete cascaded and the dangling row was never planted", n)
+			}
+
+			got, err := pinRepo.GetByChannelID(ctx, pinChannel)
+			if err != nil {
+				t.Fatalf("GetByChannelID returned an error for the whole listing: %v", err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("pins = %d, want 1 — the pin must survive a deleted user", len(got))
+			}
+			tc.check(t, got[0])
+		})
+	}
+}
