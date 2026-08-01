@@ -2514,6 +2514,10 @@ func TestBuildServerMutePermission_PreservesOtherFields(t *testing.T) {
 	if perm.CanPublish {
 		t.Error("expected CanPublish=false after muting")
 	}
+	// Recorder and Agent are deprecated upstream but still carried on the wire;
+	// buildServerMutePermission must preserve them like any other field, so the
+	// assertion has to touch them.
+	//nolint:staticcheck // SA1019: asserting deprecated fields survive the copy is the point
 	if !perm.CanSubscribe || !perm.CanPublishData || !perm.Hidden || !perm.Recorder ||
 		!perm.CanUpdateMetadata || !perm.Agent || !perm.CanSubscribeMetrics || !perm.CanManageAgentSession {
 		t.Errorf("expected every other permission field preserved, got %+v", perm)

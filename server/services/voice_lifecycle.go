@@ -691,7 +691,7 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 	if s.currentServerMute(userID, serverID) {
 		voiceLogger.Info("EnforceModerationOnJoin: re-applying server-mute grant on join",
 			"server_id", serverID, "channel_id", channelID, "user_id", userID)
-		go s.applyServerMuteToLiveKit(channelID, userID)
+		go s.applyServerMuteToLiveKit(channelID, userID) // #nosec G118 -- deliberately detached: this is the participant_joined backstop, best-effort by design and carrying its own context.Background()+timeout so it outlives the webhook request
 	}
 }
 
