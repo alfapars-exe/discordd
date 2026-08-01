@@ -91,6 +91,14 @@ type RateLimiters struct {
 	// distribution is re-sealed per stale channel, not per message, so a
 	// legitimate multi-channel re-seal burst stays well under 20/min.
 	GroupSession *ratelimit.MessageRateLimiter
+	// Refresh added 2026-07-31 (resource scan, finding N-14): POST
+	// /api/auth/refresh has no auth middleware (it hands out the auth in the
+	// first place) and, before this, no rate limit at all — the only
+	// unauthenticated + unthrottled endpoint left after the scan narrowed
+	// the original finding. Sized like WSTicket/DeviceEnum: refresh is called
+	// on reconnect/near-expiry, not per keystroke, so 30/min/IP is generous
+	// for legitimate traffic while bounding brute-force refresh-token guessing.
+	Refresh *ratelimit.LoginRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -244,6 +252,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// user, 30s cooldown once exceeded -- same shape as uploadLimiter above.
 	groupSessionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
 
+	// Refresh (security scan 2026-07-31, finding N-14): 30 per minute per IP,
+	// same shape and rationale as wsTicketLimiter above -- refresh is called
+	// on reconnect/near-expiry, not per keystroke.
+	refreshLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
+
 	svcs := &Services{
 		Auth:              authService,
 		Server:            serverService,
@@ -302,6 +315,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		DeviceEnum:   deviceEnumLimiter,
 		Upload:       uploadLimiter,
 		GroupSession: groupSessionLimiter,
+		Refresh:      refreshLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

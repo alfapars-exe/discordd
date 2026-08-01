@@ -152,3 +152,50 @@ func TestCreateGroupSession_RejectsOversizedBody(t *testing.T) {
 		t.Fatal("service must not be reached for an oversized body")
 	}
 }
+
+func newKeyBackupRequest(t *testing.T, body string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPut, "/api/e2ee/key-backup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	user := &models.User{ID: "user-1", Username: "tester"}
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
+	return req
+}
+
+// TestUpsertKeyBackup_RejectsOversizedBody proves the resource scan
+// 2026-07-31 finding N-14 fix: CreateKeyBackupRequest.EncryptedData carries
+// the base64 of a user's whole E2EE session state and was previously
+// decoded with no size cap at all -- the largest unbounded authenticated
+// JSON body in the codebase before maxKeyBackupBody.
+func TestUpsertKeyBackup_RejectsOversizedBody(t *testing.T) {
+	svc := &stubE2EEService{}
+	h := NewE2EEHandler(svc, nil)
+
+	oversized := strings.Repeat("a", maxKeyBackupBody+1)
+	body := `{"version":1,"algorithm":"aes-256-gcm","encrypted_data":"` + oversized + `","nonce":"n","salt":"s"}`
+
+	rec := httptest.NewRecorder()
+	h.UpsertKeyBackup(rec, newKeyBackupRequest(t, body))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for an oversized key-backup body, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestUpsertKeyBackup_AcceptsNormalBody is the positive control: a
+// realistically sized backup (well under maxKeyBackupBody) still reaches
+// the service and succeeds -- proves the cap doesn't reject legitimate
+// uploads.
+func TestUpsertKeyBackup_AcceptsNormalBody(t *testing.T) {
+	svc := &stubE2EEService{}
+	h := NewE2EEHandler(svc, nil)
+
+	body := `{"version":1,"algorithm":"aes-256-gcm","encrypted_data":"` + strings.Repeat("a", 1024) + `","nonce":"n","salt":"s"}`
+
+	rec := httptest.NewRecorder()
+	h.UpsertKeyBackup(rec, newKeyBackupRequest(t, body))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a normal key-backup body, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+}

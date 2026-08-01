@@ -22,6 +22,13 @@ var authHandlerLogger = logx.Component("handler.auth")
 // running in the renderer can read it).
 const refreshCookieName = "hichat_refresh"
 
+// maxRefreshBody caps POST /api/auth/refresh's JSON body (resource scan
+// 2026-07-31, finding N-14). The route has no auth middleware -- it hands
+// out the auth -- and the body is optional now (see extractRefreshToken):
+// the whole payload is at most one token string, so 64 KiB (matching
+// handlers/client_log.go's maxClientLogBody pattern) is generous.
+const maxRefreshBody = 64 * 1024
+
 // clientHintHeader is sent by every official HiChat client on every API
 // call, carrying "electron", "capacitor", or "web". It has two jobs:
 //
@@ -431,6 +438,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // clients that don't manage cookies. Empty body is allowed when the cookie
 // is present.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRefreshBody)
+
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
