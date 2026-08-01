@@ -34,6 +34,22 @@ var musicBotLogger = logx.Component("service.musicbot")
 // idle before it disconnects on its own. Matches Discord's ~2-5 min behaviour.
 const idleLeaveAfter = 5 * time.Minute
 
+// maxConcurrentMusicExtractions bounds concurrent extractTracks calls
+// (security scan 2026-07-31, finding N-15): each one spawns a yt-dlp
+// subprocess with no prior limit, so an unbounded fan-in of /music/play
+// requests was an unauthenticated-per-request fork bomb. Sized like
+// maxConcurrentDiagnosticsEmails (handlers/diagnostics.go) -- same shape of
+// problem, one subprocess/goroutine per concurrent request.
+const maxConcurrentMusicExtractions = 4
+
+// maxQueueLen caps a single channel's music queue (security scan 2026-07-31,
+// finding N-15): bot.queue was unbounded, and broadcastState serialises the
+// full queue to every connected client on the server on every Enqueue, so an
+// unbounded queue is also an unbounded per-message WS payload. 200 tracks is
+// generous for a voice-channel session (hours of playback) while bounding
+// both the in-memory slice and the broadcast payload size.
+const maxQueueLen = 200
+
 // MusicBotService — interface for the HTTP handlers (and voice_state.go's
 // "channel emptied → stop bot" hook).
 type MusicBotService interface {
@@ -103,10 +119,24 @@ type musicBotService struct {
 	// nil in production, where playLoop falls back to s.playTrack; tests set
 	// it so the loop can be driven without real subprocesses.
 	playTrackFn func(bot *botInstance, track *models.MusicTrack) error
+	// extractTracksFn is the yt-dlp extraction seam, same shape as
+	// playTrackFn: nil in production, where Enqueue falls back to the
+	// package-level extractTracks; tests substitute a stub so extraction
+	// concurrency can be driven without real yt-dlp subprocesses.
+	extractTracksFn func(ctx context.Context, urlStr, requesterID, requesterName string) ([]models.MusicTrack, error)
 	// stallTimeoutOverride / stallPollOverride shrink the stall watchdog's
 	// timings for tests. Zero means "use the trackStall* consts".
 	stallTimeoutOverride time.Duration
 	stallPollOverride    time.Duration
+
+	// extractSem bounds concurrent extractTracks calls to
+	// maxConcurrentMusicExtractions (security scan 2026-07-31, finding
+	// N-15). Non-blocking acquire (mirrors handlers/diagnostics.go's
+	// emailSem): unlike the fire-and-forget diagnostics email, the caller
+	// here is a synchronous HTTP request waiting on a response, so a full
+	// semaphore returns an explicit busy error instead of silently
+	// dropping the request.
+	extractSem chan struct{}
 }
 
 // MusicBotUserGetter — narrow contract for fetching the requester's display
@@ -133,6 +163,7 @@ func NewMusicBotService(
 		hub:           hub,
 		encryptionKey: encryptionKey,
 		users:         users,
+		extractSem:    make(chan struct{}, maxConcurrentMusicExtractions),
 	}
 }
 
@@ -167,8 +198,33 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 		}
 	}
 
+	// extractSem bounds concurrent yt-dlp spawns (security scan 2026-07-31,
+	// finding N-15). Non-blocking: the caller is a synchronous HTTP request,
+	// so when every slot is busy we fail fast with a client-actionable error
+	// rather than queuing the request behind a blocking channel send (which
+	// would just move the unbounded-fan-in problem from "subprocesses" to
+	// "goroutines parked on ctx" and could still pile up past ctx's deadline).
+	select {
+	case s.extractSem <- struct{}{}:
+	default:
+		musicBotLogger.Warn("enqueue: extraction backpressure, all slots busy", "channel_id", channelID)
+		return nil, fmt.Errorf("%w: music extraction is busy, try again shortly", pkg.ErrBadRequest)
+	}
+
+	extract := s.extractTracksFn
+	if extract == nil {
+		extract = extractTracks
+	}
 	extractStart := time.Now()
-	tracks, err := extractTracks(ctx, url, userID, requesterName)
+	// The release is deferred inside this closure (rather than a plain
+	// statement after the call) so a panic inside extract -- caught further
+	// up by middleware.Recover -- can't leak the semaphore slot for the rest
+	// of the process's lifetime.
+	var tracks []models.MusicTrack
+	func() {
+		defer func() { <-s.extractSem }()
+		tracks, err = extract(ctx, url, userID, requesterName)
+	}()
 	extractMs := time.Since(extractStart).Milliseconds()
 	if err != nil {
 		musicBotLogger.Error("enqueue: yt-dlp extract failed",
@@ -188,12 +244,34 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 
 	bot.mu.Lock()
 	wasIdle := bot.currentTrack == nil
-	bot.queue = append(bot.queue, tracks...)
+	// maxQueueLen cap (security scan 2026-07-31, finding N-15): compute the
+	// room BEFORE appending and truncate the accepted slice to fit, rather
+	// than appending everything and trimming after -- the untrimmed append
+	// would transiently let bot.queue (and the broadcastState payload it
+	// feeds) exceed the cap. accepted is what actually lands in the queue,
+	// and is what Enqueue returns, so a caller that requested a large
+	// playlist can tell it was truncated by comparing len(accepted) to the
+	// track count it expected.
+	room := maxQueueLen - len(bot.queue)
+	if room < 0 {
+		room = 0
+	}
+	accepted := tracks
+	truncated := false
+	if len(tracks) > room {
+		accepted = tracks[:room]
+		truncated = true
+	}
+	bot.queue = append(bot.queue, accepted...)
 	bot.user = &requesterMeta{userID: userID, name: requesterName}
 	bot.cancelIdleTimer()
 	queueLen := len(bot.queue)
 	bot.mu.Unlock()
 
+	if truncated {
+		musicBotLogger.Warn("enqueue: queue cap reached, extra tracks dropped",
+			"channel_id", channelID, "requested", len(tracks), "accepted", len(accepted), "max_queue_len", maxQueueLen)
+	}
 	musicBotLogger.Info("enqueue: appended to queue", "channel_id", channelID, "queue_len", queueLen, "was_idle", wasIdle)
 
 	if wasIdle {
@@ -201,7 +279,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	}
 
 	s.broadcastState(bot)
-	return tracks, nil
+	return accepted, nil
 }
 
 // Skip — kill the current track's subprocess; playLoop picks up the next
