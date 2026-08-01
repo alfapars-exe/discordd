@@ -5,6 +5,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 
 	"github.com/resend/resend-go/v3"
 )
@@ -34,7 +35,7 @@ func NewResendSender(apiKey, fromEmail, appURL string) EmailSender {
 func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token string) error {
 	resetLink := fmt.Sprintf("%s/reset-password?token=%s", s.appURL, token)
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	body := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -81,7 +82,7 @@ func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token str
 		From:    fmt.Sprintf("mqvi <%s>", s.fromEmail),
 		To:      []string{toEmail},
 		Subject: "Reset Your Password — mqvi",
-		Html:    html,
+		Html:    body,
 	}
 
 	_, err := s.client.Emails.SendWithContext(ctx, params)
@@ -92,8 +93,11 @@ func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token str
 	return nil
 }
 
-func (s *resendSender) SendPlatformBanNotification(ctx context.Context, toEmail, reason string) error {
-	html := fmt.Sprintf(`<!DOCTYPE html>
+// platformBanHTML renders the SendPlatformBanNotification body.
+// Extracted so the escaping below is reachable from a test without a
+// live Resend client (security scan 2026-07-31, finding N-26).
+func platformBanHTML(reason string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -129,27 +133,14 @@ func (s *resendSender) SendPlatformBanNotification(ctx context.Context, toEmail,
     </tr>
   </table>
 </body>
-</html>`, reason)
-
-	params := &resend.SendEmailRequest{
-		From:    fmt.Sprintf("mqvi <%s>", s.fromEmail),
-		To:      []string{toEmail},
-		Subject: "Your Account Has Been Suspended — mqvi",
-		Html:    html,
-	}
-
-	_, err := s.client.Emails.SendWithContext(ctx, params)
-	if err != nil {
-		return fmt.Errorf("failed to send platform ban notification: %w", err)
-	}
-
-	return nil
+</html>`, html.EscapeString(reason))
 }
 
-// SendAccountDeleteNotification must be called BEFORE the user is deleted
-// (otherwise we lose the email address).
-func (s *resendSender) SendAccountDeleteNotification(ctx context.Context, toEmail, reason string) error {
-	html := fmt.Sprintf(`<!DOCTYPE html>
+// accountDeleteHTML renders the SendAccountDeleteNotification body.
+// Extracted so the escaping below is reachable from a test without a
+// live Resend client (security scan 2026-07-31, finding N-26).
+func accountDeleteHTML(reason string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -186,25 +177,14 @@ func (s *resendSender) SendAccountDeleteNotification(ctx context.Context, toEmai
     </tr>
   </table>
 </body>
-</html>`, reason)
-
-	params := &resend.SendEmailRequest{
-		From:    fmt.Sprintf("mqvi <%s>", s.fromEmail),
-		To:      []string{toEmail},
-		Subject: "Your Account Has Been Deleted — mqvi",
-		Html:    html,
-	}
-
-	_, err := s.client.Emails.SendWithContext(ctx, params)
-	if err != nil {
-		return fmt.Errorf("failed to send account delete notification: %w", err)
-	}
-
-	return nil
+</html>`, html.EscapeString(reason))
 }
 
-func (s *resendSender) SendServerDeleteNotification(ctx context.Context, toEmail, serverName, reason string) error {
-	html := fmt.Sprintf(`<!DOCTYPE html>
+// serverDeleteHTML renders the SendServerDeleteNotification body.
+// Extracted so the escaping below is reachable from a test without a
+// live Resend client (security scan 2026-07-31, finding N-26).
+func serverDeleteHTML(serverName, reason string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -241,13 +221,55 @@ func (s *resendSender) SendServerDeleteNotification(ctx context.Context, toEmail
     </tr>
   </table>
 </body>
-</html>`, serverName, reason)
+</html>`, html.EscapeString(serverName), html.EscapeString(reason))
+}
+
+func (s *resendSender) SendPlatformBanNotification(ctx context.Context, toEmail, reason string) error {
+	body := platformBanHTML(reason)
+
+	params := &resend.SendEmailRequest{
+		From:    fmt.Sprintf("mqvi <%s>", s.fromEmail),
+		To:      []string{toEmail},
+		Subject: "Your Account Has Been Suspended — mqvi",
+		Html:    body,
+	}
+
+	_, err := s.client.Emails.SendWithContext(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to send platform ban notification: %w", err)
+	}
+
+	return nil
+}
+
+// SendAccountDeleteNotification must be called BEFORE the user is deleted
+// (otherwise we lose the email address).
+func (s *resendSender) SendAccountDeleteNotification(ctx context.Context, toEmail, reason string) error {
+	body := accountDeleteHTML(reason)
+
+	params := &resend.SendEmailRequest{
+		From:    fmt.Sprintf("mqvi <%s>", s.fromEmail),
+		To:      []string{toEmail},
+		Subject: "Your Account Has Been Deleted — mqvi",
+		Html:    body,
+	}
+
+	_, err := s.client.Emails.SendWithContext(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to send account delete notification: %w", err)
+	}
+
+	return nil
+}
+
+func (s *resendSender) SendServerDeleteNotification(ctx context.Context, toEmail, serverName, reason string) error {
+	body := serverDeleteHTML(serverName, reason)
 
 	params := &resend.SendEmailRequest{
 		From:    fmt.Sprintf("mqvi <%s>", s.fromEmail),
 		To:      []string{toEmail},
 		Subject: "Your Server Has Been Deleted — mqvi",
-		Html:    html,
+		Html:    body,
 	}
 
 	_, err := s.client.Emails.SendWithContext(ctx, params)
