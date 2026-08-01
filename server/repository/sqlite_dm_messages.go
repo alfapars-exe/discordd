@@ -106,7 +106,7 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		WHERE m.id = ?`
 
 	var msg models.DMMessage
-	var author models.User
+	var author models.PublicUser
 	// Nullable across every joined author column, not just the id — see
 	// scanDMMessageRow.
 	var authorID, authorUsername, authorStatus sql.NullString

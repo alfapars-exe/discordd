@@ -71,7 +71,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 		WHERE m.id = ?`
 
 	msg := &models.Message{}
-	var author models.User
+	var author models.PublicUser
 	// Every joined author column must be nullable, not just the id: a dangling
 	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL landing
 	// in a plain string fails the whole row scan. See scanMessage.
@@ -99,7 +99,6 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 		author.ID = authorID.String
 		author.Username = authorUsername.String
 		author.Status = models.UserStatus(authorStatus.String)
-		author.PasswordHash = "" // never expose password hash
 		msg.Author = &author
 	}
 
@@ -122,7 +121,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 // otherwise take down the entire page rather than just itself.
 func scanMessage(rows *sql.Rows) (models.Message, error) {
 	var msg models.Message
-	var author models.User
+	var author models.PublicUser
 	var authorID, authorUsername, authorStatus sql.NullString
 
 	var refMsgID, refMsgContent sql.NullString
@@ -142,7 +141,6 @@ func scanMessage(rows *sql.Rows) (models.Message, error) {
 		author.ID = authorID.String
 		author.Username = authorUsername.String
 		author.Status = models.UserStatus(authorStatus.String)
-		author.PasswordHash = ""
 		msg.Author = &author
 	}
 
@@ -302,7 +300,7 @@ func buildMessageReference(
 		}
 
 		if refAuthorID.Valid {
-			refAuthor := &models.User{
+			refAuthor := &models.PublicUser{
 				ID:       refAuthorID.String,
 				Username: refAuthorUsername.String,
 			}

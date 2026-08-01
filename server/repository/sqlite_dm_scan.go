@@ -19,7 +19,7 @@ import (
 // scanMessage in sqlite_message.go.
 func scanDMMessageRow(rows *sql.Rows) (*models.DMMessage, error) {
 	var msg models.DMMessage
-	var author models.User
+	var author models.PublicUser
 	var authorID, authorUsername, authorStatus sql.NullString
 	var content sql.NullString
 	var editedAt sql.NullTime

@@ -296,8 +296,7 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message author: %w", err)
 	}
-	author.PasswordHash = ""
-	message.Author = author
+	message.Author = models.ToPublicUser(author)
 	message.Attachments = []models.Attachment{}
 	message.Reactions = []models.ReactionGroup{}
 

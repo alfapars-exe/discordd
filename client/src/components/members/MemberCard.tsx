@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import type { MemberWithRoles, User } from "../../types";
+import type { MemberWithRoles, PublicUser } from "../../types";
 import RoleEditorPopup from "./RoleEditorPopup";
 import BadgeAssignModal from "./BadgeAssignModal";
 import MemberCardIdentity from "./memberCard/MemberCardIdentity";
@@ -35,7 +35,7 @@ const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
 
 type MemberCardProps = {
   member?: MemberWithRoles;
-  user?: User;
+  user?: PublicUser;
   position: { top: number; left: number };
   onClose: () => void;
 };

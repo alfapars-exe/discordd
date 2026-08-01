@@ -11,7 +11,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
@@ -92,10 +94,17 @@ func TestMessageRepo_CreateGetDelete(t *testing.T) {
 		if got.Author.DisplayName == nil || *got.Author.DisplayName != "Yazar" {
 			t.Errorf("author.display_name = %v, want Yazar", got.Author.DisplayName)
 		}
-		// The query explicitly blanks this — a leak here would ship a bcrypt
-		// hash to every client rendering the channel.
-		if got.Author.PasswordHash != "" {
-			t.Errorf("password_hash leaked into the message author: %q", got.Author.PasswordHash)
+		// Author is a models.PublicUser (not models.User), so there is no
+		// PasswordHash field to leak by construction. Confirm the JSON the
+		// client actually receives has no password or email key either —
+		// a leak here would ship a bcrypt hash or email to every client
+		// rendering the channel.
+		authorJSON, err := json.Marshal(got.Author)
+		if err != nil {
+			t.Fatalf("marshal author: %v", err)
+		}
+		if strings.Contains(string(authorJSON), `"password`) || strings.Contains(string(authorJSON), `"email`) {
+			t.Errorf("author JSON leaks PII: %s", authorJSON)
 		}
 		if got.ReferencedMessage != nil {
 			t.Errorf("referenced_message = %+v on a non-reply, want nil", got.ReferencedMessage)

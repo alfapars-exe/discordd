@@ -14,6 +14,6 @@ type PinnedMessage struct {
 // PinnedMessageWithDetails includes the full message and who pinned it.
 type PinnedMessageWithDetails struct {
 	PinnedMessage
-	Message  *Message `json:"message"`
-	PinnedByUser *User `json:"pinned_by_user,omitempty"`
+	Message      *Message    `json:"message"`
+	PinnedByUser *PublicUser `json:"pinned_by_user,omitempty"`
 }

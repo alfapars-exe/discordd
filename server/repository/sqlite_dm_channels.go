@@ -90,7 +90,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 	var channels []models.DMChannelWithUser
 	for rows.Next() {
 		var ch models.DMChannelWithUser
-		var user models.User
+		var user models.PublicUser
 		var displayName, avatarURL, initiatedBy sql.NullString
 		var lastMsgAt sql.NullTime
 		var isPinned, isMuted int

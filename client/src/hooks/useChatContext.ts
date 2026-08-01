@@ -8,7 +8,7 @@
  */
 
 import { createContext, useContext, type RefObject } from "react";
-import type { User, ReactionGroup, MessageReference, MemberWithRoles } from "../types";
+import type { PublicUser, ReactionGroup, MessageReference, MemberWithRoles } from "../types";
 import type { EncryptedFileMeta } from "../crypto/fileEncryption";
 
 // ─── ChatMessage — Common message type ───
@@ -30,7 +30,7 @@ export type ChatMessage = {
   created_at: string;
   reply_to_id: string | null;
   is_pinned: boolean;
-  author: User;
+  author: PublicUser;
   attachments: ChatAttachment[];
   reactions: ReactionGroup[];
   referenced_message: MessageReference | null;

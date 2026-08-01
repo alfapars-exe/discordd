@@ -26,9 +26,9 @@ func NewSQLitePinRepo(db database.TxQuerier) PinRepository {
 func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 	var pin models.PinnedMessageWithDetails
 	var msg models.Message
-	var author models.User
+	var author models.PublicUser
 	var authorID sql.NullString
-	var pinnedByUser models.User
+	var pinnedByUser models.PublicUser
 	var pinnedByID sql.NullString
 
 	if err := rows.Scan(
@@ -42,7 +42,6 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 
 	if authorID.Valid {
 		author.ID = authorID.String
-		author.PasswordHash = ""
 		msg.Author = &author
 	}
 	msg.Attachments = []models.Attachment{} // empty slice, not null
@@ -50,7 +49,6 @@ func scanPin(rows *sql.Rows) (models.PinnedMessageWithDetails, error) {
 
 	if pinnedByID.Valid {
 		pinnedByUser.ID = pinnedByID.String
-		pinnedByUser.PasswordHash = ""
 		pin.PinnedByUser = &pinnedByUser
 	}
 

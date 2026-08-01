@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -170,6 +172,71 @@ func TestMessageCreate(t *testing.T) {
 				t.Error("author should be populated")
 			}
 		})
+	}
+}
+
+// TestMessageCreate_AuthorPayloadHasNoPII is the regression guard for the
+// leak fixed by models.PublicUser (security scan 2026-07-31, finding N-09):
+// message_service used to embed the full author *models.User (only blanking
+// PasswordHash) into the API response and WS broadcast payload, shipping
+// email, admin/ban flags and other PII to every reader of the channel.
+func TestMessageCreate_AuthorPayloadHasNoPII(t *testing.T) {
+	email := "author@example.com"
+	lastSeen := time.Now()
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{},
+		&testutil.MockAttachmentRepo{},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
+		&testutil.MockUserRepo{
+			GetByIDFn: func(_ context.Context, id string) (*models.User, error) {
+				return &models.User{
+					ID:               id,
+					Username:         "alice",
+					Email:            &email,
+					IsPlatformAdmin:  true,
+					IsPlatformBanned: true,
+					DMPrivacy:        "friends_only",
+					Language:         "tr",
+					PrefStatus:       models.UserStatusOnline,
+					LastSeenAt:       &lastSeen,
+					PasswordHash:     "bcrypt-hash-should-never-appear",
+				}, nil
+			},
+			GetByUsernameFn: func(_ context.Context, _ string) (*models.User, error) {
+				return nil, pkg.ErrNotFound
+			},
+		},
+		&testutil.MockMentionRepo{},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		&testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: func(_ context.Context, _, _ string) (models.Permission, error) {
+				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
+			},
+		},
+	)
+
+	req := &models.CreateMessageRequest{Content: "hello"}
+	msg, err := svc.Create(context.Background(), "srv1", "ch1", "u1", req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	body, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal message: %v", err)
+	}
+	leaked := []string{`"email"`, `"is_platform_admin"`, `"is_platform_banned"`, `"dm_privacy"`, `"language"`, `"last_seen_at"`, `"password`}
+	for _, key := range leaked {
+		if strings.Contains(string(body), key) {
+			t.Errorf("message payload leaks PII field %s: %s", key, body)
+		}
 	}
 }
 

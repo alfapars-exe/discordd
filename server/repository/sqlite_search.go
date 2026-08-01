@@ -22,7 +22,7 @@ func NewSQLiteSearchRepo(db database.TxQuerier) SearchRepository {
 // the author (nullable via LEFT JOIN) and an empty attachments slice.
 func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 	var msg models.Message
-	var author models.User
+	var author models.PublicUser
 	// Every joined author column must be nullable, not just the id: a dangling
 	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL landing
 	// in a plain string fails the row scan — which here would drop the whole
@@ -41,7 +41,6 @@ func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 		author.ID = authorID.String
 		author.Username = authorUsername.String
 		author.Status = models.UserStatus(authorStatus.String)
-		author.PasswordHash = ""
 		msg.Author = &author
 	}
 	msg.Attachments = []models.Attachment{}

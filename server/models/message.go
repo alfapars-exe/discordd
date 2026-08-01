@@ -14,23 +14,23 @@ const MaxMessageLength = 999
 // MessageReference holds a preview of the replied-to message.
 // If the original message was deleted, Author and Content will be nil.
 type MessageReference struct {
-	ID      string  `json:"id"`
-	Author  *User   `json:"author,omitempty"`
-	Content *string `json:"content"`
+	ID      string      `json:"id"`
+	Author  *PublicUser `json:"author,omitempty"`
+	Content *string     `json:"content"`
 }
 
 type Message struct {
-	ID          string       `json:"id"`
-	ChannelID   string       `json:"channel_id"`
-	UserID      string       `json:"user_id"`
+	ID          string      `json:"id"`
+	ChannelID   string      `json:"channel_id"`
+	UserID      string      `json:"user_id"`
 	// ServerID is a transient field (not stored in DB) populated before WS broadcast
 	// so clients know which server a message belongs to without a channel lookup.
-	ServerID    string       `json:"server_id,omitempty"`
-	Content     *string      `json:"content"`
-	EditedAt    *time.Time   `json:"edited_at"`
-	CreatedAt   time.Time    `json:"created_at"`
-	ReplyToID   *string      `json:"reply_to_id"`
-	Author      *User        `json:"author,omitempty"`       // populated via JOIN
+	ServerID    string      `json:"server_id,omitempty"`
+	Content     *string     `json:"content"`
+	EditedAt    *time.Time  `json:"edited_at"`
+	CreatedAt   time.Time   `json:"created_at"`
+	ReplyToID   *string     `json:"reply_to_id"`
+	Author      *PublicUser `json:"author,omitempty"` // populated via JOIN
 	Attachments []Attachment    `json:"attachments,omitempty"`
 	Mentions     []string        `json:"mentions"`
 	RoleMentions []string        `json:"role_mentions"`
