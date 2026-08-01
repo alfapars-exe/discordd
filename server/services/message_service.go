@@ -403,9 +403,28 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 	if message.UserID != userID {
 		return nil, fmt.Errorf("%w: you can only edit your own messages", pkg.ErrForbidden)
 	}
-	if _, err := s.validateChannelScope(ctx, serverID, message.ChannelID); err != nil {
+	channel, err := s.validateChannelScope(ctx, serverID, message.ChannelID)
+	if err != nil {
 		return nil, err
 	}
+
+	// Timeout gate — mirrors Create's gate (~:206): a timed-out user can
+	// still own messages posted before the timeout, but can't edit them
+	// while it's active. channel.ServerID != "" is structural
+	// defense-in-depth — DM channels never reach here in practice (DM
+	// edits go through dm_message.go), but the guard costs nothing. Checked
+	// before the perm resolver for the same reason as Create: a specific
+	// "you are timed out" error beats a generic 403.
+	if channel.ServerID != "" && s.timeoutRepo != nil {
+		active, tErr := s.timeoutRepo.IsActive(ctx, channel.ServerID, userID)
+		if tErr != nil {
+			return nil, fmt.Errorf("check timeout: %w", tErr)
+		}
+		if active {
+			return nil, fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
+	}
+
 	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, message.ChannelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)

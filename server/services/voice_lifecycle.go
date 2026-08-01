@@ -159,9 +159,18 @@ func (s *voiceService) sweepOrphanStates() {
 
 	s.mu.Unlock()
 
-	// LiveKit cleanup outside lock (involves DB calls)
+	// LiveKit cleanup outside lock (involves DB calls). Dual-identity
+	// (A-29d): s.states (and so orphanEntry.userID above) is keyed only by
+	// the main voice identity — a "_ss" screen-share sub-participant is a
+	// separate LiveKit connection with no entry of its own in s.states, so
+	// it is NOT already caught by this loop; a WS client that drops offline
+	// mid-screen-share would otherwise leave its "_ss" identity connected
+	// until LiveKit's own ICE/DTLS timeout. This is exactly the "user's
+	// whole voice session is confirmed over" case the other three
+	// removeParticipantAndScreenShareFromLiveKit call sites cover, so it
+	// gets the same treatment here.
 	for _, o := range orphans {
-		s.removeParticipantFromLiveKit(o.channelID, o.userID)
+		s.removeParticipantAndScreenShareFromLiveKit(o.channelID, o.userID)
 		// Credit the abandoned session — duration counts up to the moment
 		// of cleanup, which is approximately when the user actually
 		// disconnected (within `orphanGracePeriod` of it).
@@ -169,18 +178,24 @@ func (s *voiceService) sweepOrphanStates() {
 	}
 }
 
-// removeParticipantFromLiveKit explicitly removes a participant from the LiveKit server.
-// Without this, phantom participants linger until ICE/DTLS timeout.
-// Best-effort: errors are logged but not propagated.
+// removeParticipantFromLiveKit explicitly removes a single LiveKit identity
+// from channelID's room. Without this, phantom participants linger until
+// ICE/DTLS timeout. Best-effort: errors are logged but not propagated.
 // MUST NOT be called under mu.Lock (does DB lookups).
-func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
+//
+// identity is usually userID (the main voice connection) but may also be
+// userID+"_ss" (a screen-share sub-participant, see GenerateScreenShareToken
+// in voice_token.go) — removeParticipantAndScreenShareFromLiveKit below
+// calls this once per identity for callers where a user's whole voice
+// session is ending and any screen share they were running should end too.
+func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
 	if err != nil {
 		voiceLogger.Error("removeParticipant: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
-		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: channel lookup failed", map[string]string{
+		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: channel lookup failed", map[string]string{
 			"channel_id": channelID, "error": err.Error(),
 		})
 		return
@@ -189,7 +204,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
 	if err != nil {
 		voiceLogger.Error("removeParticipant: livekit instance lookup failed", "server_id", channel.ServerID, "err", pkg.ErrText(err))
-		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: LiveKit instance lookup failed", map[string]string{
+		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: LiveKit instance lookup failed", map[string]string{
 			"server_id": channel.ServerID, "channel_id": channelID, "error": err.Error(),
 		})
 		return
@@ -198,7 +213,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
 	if err != nil {
 		voiceLogger.Error("removeParticipant: api key decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
-		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: API key decrypt failed", map[string]string{
+		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: API key decrypt failed", map[string]string{
 			"channel_id": channelID, "error": err.Error(),
 		})
 		return
@@ -206,7 +221,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
 	if err != nil {
 		voiceLogger.Error("removeParticipant: api secret decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
-		s.logError(models.LogCategoryVoice, &userID, "removeParticipant: API secret decrypt failed", map[string]string{
+		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: API secret decrypt failed", map[string]string{
 			"channel_id": channelID, "error": err.Error(),
 		})
 		return
@@ -217,24 +232,95 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, userID string) {
 
 	_, err = roomClient.RemoveParticipant(ctx, &livekit.RoomParticipantIdentity{
 		Room:     roomName,
-		Identity: userID,
+		Identity: identity,
 	})
 	if err != nil {
 		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": err.Error()}
 		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "not found") {
-			// Expected when participant already left LiveKit (e.g. network drop, orphan sweep after LiveKit timeout).
-			// Logged at INFO so the WARN channel stays meaningful — this branch always represents the success path
-			// after a benign race between WS disconnect, LiveKit timeout, and our 30s orphan sweep.
-			voiceLogger.Info("removeParticipant: participant already gone (not found)", "user_id", userID, "room", roomName)
-			s.logInfo(models.LogCategoryVoice, &userID, "removeParticipant: participant already left LiveKit", meta)
+			// Expected when the participant already left LiveKit (e.g. network drop, orphan sweep after LiveKit
+			// timeout), or — for a "_ss" identity — when the user simply never screen-shared. Logged at INFO so the
+			// WARN channel stays meaningful — this branch always represents an unremarkable outcome.
+			voiceLogger.Info("removeParticipant: participant already gone (not found)", "user_id", identity, "room", roomName)
+			s.logInfo(models.LogCategoryVoice, &identity, "removeParticipant: participant already left LiveKit", meta)
 		} else {
-			voiceLogger.Error("removeParticipant: LiveKit API call failed", "user_id", userID, "room", roomName, "err", pkg.ErrText(err))
-			s.logError(models.LogCategoryVoice, &userID, "removeParticipant: LiveKit API call failed", meta)
+			voiceLogger.Error("removeParticipant: LiveKit API call failed", "user_id", identity, "room", roomName, "err", pkg.ErrText(err))
+			s.logError(models.LogCategoryVoice, &identity, "removeParticipant: LiveKit API call failed", meta)
 		}
 		return
 	}
 
-	voiceLogger.Info("removeParticipant: successfully removed participant", "user_id", userID, "room", roomName)
+	voiceLogger.Info("removeParticipant: successfully removed participant", "user_id", identity, "room", roomName)
+}
+
+// removeParticipantAndScreenShareFromLiveKit evicts both a user's main
+// voice connection (identity == userID) and their screen-share
+// sub-participant, if any (identity == userID+"_ss"). Used by every path
+// where "this user's presence in channelID is over" — LeaveChannel/
+// DisconnectUser and the cross-channel branch of JoinChannel
+// (voice_state.go), EnforceModerationOnJoin and the orphan sweep (this
+// file), and MoveUser/AdminDisconnectUser (voice_admin.go) — should also
+// end anything they were broadcasting there; a plain
+// removeParticipantFromLiveKit(channelID, userID) call only ever targeted
+// the main identity, which left a moderated, departed, moved, or
+// disconnected user's screen share running to the room. Two independent,
+// sequential, best-effort
+// removeParticipantFromLiveKit calls (not a single shared LiveKit client)
+// — simpler than threading a shared client through, and this is a rare
+// background path, not a hot one, so the extra channel/instance lookup is
+// cheap. If the user never screen-shared, the second call's "_ss" identity
+// is a normal not-found (logged at INFO, see removeParticipantFromLiveKit).
+func (s *voiceService) removeParticipantAndScreenShareFromLiveKit(channelID, userID string) {
+	s.removeParticipantFromLiveKit(channelID, userID)
+	s.removeParticipantFromLiveKit(channelID, userID+"_ss")
+}
+
+// EnforceModerationOnJoin evicts userID from the LiveKit room for
+// (serverID, channelID) if they are currently timed out or banned on
+// serverID. Called from handlers.LiveKitWebhookHandler's participant_joined
+// callback (A-29a) — a defense-in-depth backstop, not a primary gate:
+// GenerateToken/JoinChannel (voice_token.go/voice_state.go) already reject
+// timed-out/banned users before a token is ever issued. This closes the
+// residual window a token issued moments before a ban/timeout lands stays
+// valid for (voiceTokenTTL, 15min) — LiveKit's webhook fires the moment the
+// participant actually connects, independent of when the token was minted.
+//
+// Fail-open on checker error: logged, not treated as "moderated". The
+// primary gates already fail closed on a genuine timeout/ban; a backstop
+// that also evicts on every transient DB hiccup would kick innocent
+// participants off a live call for reasons unrelated to moderation.
+func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string) {
+	moderated := false
+
+	if s.timeoutChecker != nil {
+		active, err := s.timeoutChecker.IsActive(ctx, serverID, userID)
+		if err != nil {
+			voiceLogger.Error("EnforceModerationOnJoin: timeout check failed", "server_id", serverID, "user_id", userID, "err", pkg.ErrText(err))
+		} else if active {
+			moderated = true
+		}
+	}
+
+	if !moderated && s.banChecker != nil {
+		banned, err := s.banChecker.Exists(ctx, serverID, userID)
+		if err != nil {
+			voiceLogger.Error("EnforceModerationOnJoin: ban check failed", "server_id", serverID, "user_id", userID, "err", pkg.ErrText(err))
+		} else if banned {
+			moderated = true
+		}
+	}
+
+	if !moderated {
+		return
+	}
+
+	voiceLogger.Info("EnforceModerationOnJoin: evicting moderated participant",
+		"server_id", serverID, "channel_id", channelID, "user_id", userID)
+	// Dual-identity removal (main + "_ss" screen-share sub-participant, if
+	// any) — a moderated user's screen share must not keep streaming after
+	// their voice session is evicted. See
+	// removeParticipantAndScreenShareFromLiveKit's own doc comment for the
+	// LiveKit call and error handling.
+	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
 }
 
 // StartAFKChecker periodically checks for inactive voice users and kicks them.

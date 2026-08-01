@@ -1,7 +1,7 @@
 // Package repository — DMSettingsRepository SQLite implementation.
 //
 // Uses UPSERT pattern: INSERT ... ON CONFLICT DO UPDATE.
-// Mute sentinel: forever mute uses muted_until = '9999-12-31T23:59:59Z'.
+// Mute sentinel: forever mute uses muted_until = '9999-12-31 23:59:59'.
 // NULL means "not muted", sentinel means "forever muted".
 // Lazy expiry: WHERE muted_until > datetime('now').
 package repository
@@ -71,7 +71,7 @@ func (r *sqliteDMSettingsRepo) SetPinned(ctx context.Context, userID, dmChannelI
 	return nil
 }
 
-// SetMutedUntil mutes a DM. mutedUntil is a datetime string or '9999-12-31T23:59:59Z' for forever.
+// SetMutedUntil mutes a DM. mutedUntil is a datetime string or '9999-12-31 23:59:59' for forever.
 func (r *sqliteDMSettingsRepo) SetMutedUntil(ctx context.Context, userID, dmChannelID string, mutedUntil *string) error {
 	query := `
 		INSERT INTO user_dm_settings (user_id, dm_channel_id, muted_until)
@@ -122,7 +122,7 @@ func (r *sqliteDMSettingsRepo) GetPinnedChannelIDs(ctx context.Context, userID s
 }
 
 // GetMutedChannelIDs returns muted DM channel IDs with lazy expiry.
-// Forever mute sentinel '9999-12-31T23:59:59Z' always passes the > now check.
+// Forever mute sentinel '9999-12-31 23:59:59' always passes the > now check.
 func (r *sqliteDMSettingsRepo) GetMutedChannelIDs(ctx context.Context, userID string) ([]string, error) {
 	query := `
 		SELECT dm_channel_id FROM user_dm_settings

@@ -216,9 +216,17 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 
 	s.mu.Unlock()
 
-	// Remove phantom participant from old LiveKit room (best-effort, outside lock)
+	// Remove phantom participant from old LiveKit room (best-effort, outside
+	// lock). Dual-identity (A-29d): the fresh models.VoiceState built above
+	// doesn't carry IsStreaming forward from the old state, so a user who
+	// switches channels while screen sharing is no longer tracked as
+	// streaming at all server-side — but their "_ss" LiveKit sub-participant
+	// is a separate connection that this JoinChannel call never touches, so
+	// it's left connected to oldChannelID's room until the client
+	// independently reconnects/tears it down. Same orphaned-stream risk as
+	// MoveUser and AdminDisconnectUser, so it gets the same cleanup.
 	if oldChannelID != "" && oldChannelID != channelID {
-		go s.removeParticipantFromLiveKit(oldChannelID, userID)
+		go s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID)
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
 		go s.creditUsage(oldInstanceID, oldIsCloud, oldJoinedAt)
@@ -338,8 +346,12 @@ func (s *voiceService) LeaveChannel(userID string) error {
 
 	s.mu.Unlock()
 
-	// Remove from LiveKit (best-effort, outside lock — involves DB calls)
-	go s.removeParticipantFromLiveKit(channelID, userID)
+	// Remove from LiveKit (best-effort, outside lock — involves DB calls).
+	// Dual-identity: also evicts the "_ss" screen-share sub-participant, if
+	// any, so a departing user's screen share doesn't keep streaming after
+	// their voice connection is gone (DisconnectUser routes through this
+	// same LeaveChannel, so it's covered too).
+	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
 	go s.creditUsage(leaveInstanceID, leaveIsCloud, leaveJoinedAt)

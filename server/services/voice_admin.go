@@ -247,8 +247,16 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		})
 	}
 
-	// Remove phantom from old LiveKit room (best-effort)
-	go s.removeParticipantFromLiveKit(sourceChannelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
+	// Remove phantom from old LiveKit room (best-effort). Dual-identity
+	// (A-29d): a screen share is a separate LiveKit connection
+	// (GenerateScreenShareToken, voice_token.go) that does NOT follow the
+	// user to targetChannelID — only the OpVoiceForceMove event above tells
+	// the client to switch rooms, and nothing here moves or restarts a
+	// screen-share sub-participant. If the moved user was streaming, their
+	// "_ss" identity is left orphaned in sourceChannelID exactly like the
+	// main identity was before this fix existed, so it gets the same
+	// best-effort cleanup.
+	go s.removeParticipantAndScreenShareFromLiveKit(sourceChannelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
 
 	// Audit: voice move (only when an admin moved someone else; self-moves
 	// are not moderation events and we don't log them).
@@ -338,7 +346,13 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 		})
 	}
 
-	go s.removeParticipantFromLiveKit(channelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
+	// Dual-identity (A-29d): AdminDisconnectUser ends the target's whole
+	// voice session (same as LeaveChannel), so a screen share they were
+	// running must end with it — a force-disconnected user's "_ss"
+	// sub-participant would otherwise keep streaming after their main
+	// connection is gone, same MEDIUM finding removeParticipantAndScreenShareFromLiveKit
+	// was added for.
+	go s.removeParticipantAndScreenShareFromLiveKit(channelID, targetUserID) // #nosec G118 -- deliberately detached: best-effort cleanup that must outlive this call (see removeParticipantFromLiveKit's own doc comment), so it carries its own context.Background()+10s timeout rather than one tied to a caller that may already be gone
 
 	// Audit: voice kick
 	disconnecter := disconnecterUserID

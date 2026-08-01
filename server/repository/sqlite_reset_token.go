@@ -23,7 +23,14 @@ func (r *sqliteResetTokenRepo) Create(ctx context.Context, token *models.Passwor
 	query := `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
 		VALUES (?, ?, ?)`
 
-	_, err := r.db.ExecContext(ctx, query, token.UserID, token.TokenHash, token.ExpiresAt)
+	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
+	// the raw time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
+	// same bug class as sqlite_ban.go. Expiry itself is checked in Go
+	// (auth_password.go: time.Now().After(resetToken.ExpiresAt)), so this did
+	// not let an expired token through; DeleteExpired's SQL-side
+	// `expires_at < CURRENT_TIMESTAMP` is the affected comparison — it never
+	// matched RFC3339 rows, leaving expired tokens undeleted.
+	_, err := r.db.ExecContext(ctx, query, token.UserID, token.TokenHash, token.ExpiresAt.UTC().Format("2006-01-02 15:04:05"))
 	if err != nil {
 		return fmt.Errorf("failed to create password reset token: %w", err)
 	}

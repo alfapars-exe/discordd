@@ -55,12 +55,20 @@ func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session)
 		INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at)
 		VALUES (?, ?, ?, ?, ?)`
 
+	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
+	// the raw time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
+	// same bug class as sqlite_ban.go. Session expiry itself is checked in Go
+	// (auth_service.go: time.Now().After(session.ExpiresAt), after Scan parses
+	// the stored text back into a time.Time), so an unformatted write did not
+	// let an expired refresh token through; the SQL-side DeleteExpired query
+	// below (`expires_at < CURRENT_TIMESTAMP`) is the one that silently never
+	// matched RFC3339 rows, leaving expired sessions undeleted housekeeping.
 	_, err = r.db.ExecContext(ctx, query,
 		session.ID,
 		session.UserID,
 		hash,
 		hash, // legacy NOT NULL + UNIQUE column — reuse hash for uniqueness
-		session.ExpiresAt,
+		session.ExpiresAt.UTC().Format("2006-01-02 15:04:05"),
 	)
 
 	if err != nil {
