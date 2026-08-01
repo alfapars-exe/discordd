@@ -71,7 +71,10 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 		description = description[:maxDiagnosticsDescriptionLen]
 	}
 
-	file, header, err := r.FormFile("file")
+	// The multipart header is deliberately discarded: its Filename is the only
+	// field this handler ever read from it, and that is now a fixed constant
+	// (see below).
+	file, _, err := r.FormFile("file")
 	if err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "file is required")
 		return
@@ -84,10 +87,19 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := "hichat-diagnostics.json.gz"
-	if header != nil && header.Filename != "" {
-		filename = header.Filename
-	}
+	// The attachment name is fixed, not derived from header.Filename
+	// (security scan 2026-07-31, finding N-27). Every other upload path in the
+	// codebase runs the client's name through sanitizeFilename; this one used
+	// it raw, so a registered user could choose the filename that lands in the
+	// platform admin's inbox -- "report.pdf.exe", a name carrying an
+	// RTL-override, path separators, control characters.
+	//
+	// Pinning beats sanitizing here: this endpoint accepts exactly one thing,
+	// the gzip bundle the client builds, so the client's name carries no
+	// information worth keeping and the attacker-controlled string is removed
+	// rather than filtered. The reporter is already identified in the subject
+	// and body.
+	const filename = "hichat-diagnostics.json.gz"
 
 	// Email is best-effort and shouldn't hold the response on send latency.
 	// Concurrency is bounded by emailSem; when all slots are busy we skip the
