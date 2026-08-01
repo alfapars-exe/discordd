@@ -24,8 +24,43 @@ import {
   SENDER_KEY_ROTATION_MESSAGES,
   SENDER_KEY_ROTATION_DAYS,
   SENDER_KEY_REPLAY_WINDOW,
+  MAX_SKIP,
   HKDF_INFO,
 } from "./types";
+
+/**
+ * Highest `iteration` an inbound SenderKeyMessage may claim.
+ *
+ * Both chain-derivation loops in decryptGroupMessage are driven directly by
+ * this attacker-supplied number — the forward loop ratchets from the stored
+ * iteration up to it, the rewind loop ratchets from the initial chain key
+ * `iteration` times — and both run BEFORE AES-GCM can reject the frame. So the
+ * AEAD, which does bind the iteration through its AAD, only rejects after the
+ * work has already been done. An unbounded value is therefore CPU exhaustion,
+ * and a non-finite one is an unterminated loop: the transport parses the
+ * SenderKeyMessage with JSON.parse and casts it, so `1e999` on the wire
+ * arrives here as Infinity.
+ *
+ * A legitimate sender can never exceed SENDER_KEY_ROTATION_MESSAGES - 1,
+ * because encryptGroupMessage refuses to encrypt once the count cap is
+ * reached. MAX_SKIP is added as slack so the bound stays symmetric with the
+ * out-of-order tolerance the 1:1 path allows.
+ */
+const MAX_SENDER_KEY_ITERATION = SENDER_KEY_ROTATION_MESSAGES + MAX_SKIP;
+
+/**
+ * Shortest byte length a well-formed signed SenderKeyMessage frame can have.
+ *
+ * The frame encryptGroupMessage emits is signature(64) || iv(12) || gcmOutput,
+ * and gcmOutput always carries its 16-byte auth tag — so even an empty
+ * plaintext costs 64 + 12 + 16. Anything below this cannot hold a signature
+ * plus a complete GCM frame.
+ *
+ * Named rather than inlined so the arithmetic quoted in the rejection message
+ * and the value the guard actually enforces are the same expression, and
+ * cannot drift apart.
+ */
+const MIN_SENDER_KEY_FRAME_BYTES = 64 + 12 + 16;
 
 // ──────────────────────────────────
 // Replay Protection (Sliding Window)
@@ -256,6 +291,28 @@ export async function encryptGroupMessage(
     );
   }
 
+  // Load the signing key BEFORE the ratchet advances. Signing is mandatory
+  // (security review 2026-08-01, unsigned-frame emission): this used to be
+  // read after the chain key had already been advanced and persisted, so a
+  // device whose sk_signing metadata was gone silently shipped an UNSIGNED
+  // frame. Reading it here means the throw below happens while stored state is
+  // still untouched — a failed send must not burn an iteration.
+  //
+  // Recovery is automatic and lives on the send path: needsSenderKeyRotation
+  // treats a missing sk_signing as "rotate", so the next encryptChannelMessage
+  // mints a fresh distribution (and a fresh signing key) instead of dead-locking
+  // this channel until the age/count cap.
+  const signingPrivateKey = await keyStorage.getMetadata<Uint8Array>(
+    `sk_signing:${channelId}:${userId}:${deviceId}`
+  );
+
+  if (!signingPrivateKey) {
+    throw new Error(
+      `No sender key signing key for channel ${channelId}. ` +
+        "Refusing to send an unsigned group message — create a new distribution."
+    );
+  }
+
   // Derive message key from chain key (HMAC ratchet)
   const messageKey = deriveGroupMessageKey(senderKey.chainKey);
   const newChainKey = advanceChainKey(senderKey.chainKey);
@@ -271,30 +328,32 @@ export async function encryptGroupMessage(
 
   const iteration = senderKey.iteration;
 
-  // Update sender key
+  // Sign ciphertext — unconditional. Every frame this function emits carries a
+  // signature, which is what lets decryptGroupMessage require one.
+  // Ed25519 signature for message integrity + sender authentication.
+  //
+  // Signing depends on nothing persistent — only `ciphertext` and
+  // `signingPrivateKey`, both already in hand — so it runs while stored state
+  // is still untouched. That matters because a PRESENT but malformed
+  // sk_signing entry makes ed25519.sign throw: below the ratchet, each such
+  // attempt would burn an iteration while needsSenderKeyRotation kept
+  // reporting false (it only checks that the entry exists), so recovery would
+  // wait for the count cap instead of arriving on the next send.
+  const sig = ed25519.sign(
+    new Uint8Array(ciphertext),
+    new Uint8Array(signingPrivateKey)
+  );
+  // signature (64) + ciphertext
+  const signedCiphertext = new Uint8Array(sig.length + ciphertext.byteLength);
+  signedCiphertext.set(sig, 0);
+  signedCiphertext.set(new Uint8Array(ciphertext), sig.length);
+
+  // Update sender key. Last step on purpose: the ratchet advances only once
+  // the frame is fully built, so a send that fails does not consume an
+  // iteration or desynchronize this device from its receivers.
   senderKey.chainKey = newChainKey;
   senderKey.iteration++;
   await keyStorage.saveSenderKey(senderKey);
-
-  // Sign ciphertext
-  const signingPrivateKey = await keyStorage.getMetadata<Uint8Array>(
-    `sk_signing:${channelId}:${userId}:${deviceId}`
-  );
-
-  let signedCiphertext: Uint8Array;
-  if (signingPrivateKey) {
-    // Ed25519 signature for message integrity + sender authentication
-    const sig = ed25519.sign(
-      new Uint8Array(ciphertext),
-      new Uint8Array(signingPrivateKey)
-    );
-    // signature (64) + ciphertext
-    signedCiphertext = new Uint8Array(sig.length + ciphertext.byteLength);
-    signedCiphertext.set(sig, 0);
-    signedCiphertext.set(new Uint8Array(ciphertext), sig.length);
-  } else {
-    signedCiphertext = new Uint8Array(ciphertext);
-  }
 
   return {
     distributionId: senderKey.distributionId,
@@ -330,6 +389,30 @@ export async function decryptGroupMessage(
     );
   }
 
+  // ONE bound for BOTH derivation loops further down, and the only place the
+  // wire-supplied iteration is sanity-checked: nothing between the transport's
+  // JSON.parse and this line validates it. The forward loop walks from the
+  // stored iteration UP TO message.iteration and the rewind loop counts from 0
+  // TO message.iteration, so constraining this single value constrains both.
+  // Placed ahead of both, and ahead of any AES-GCM work, because the loops run
+  // before the AEAD gets a chance to reject the frame.
+  //
+  // Number.isSafeInteger also rejects Infinity, NaN and fractional values —
+  // Infinity being the shape that makes the forward loop non-terminating.
+  // Rejecting here leaves stored state pristine: every write on the paths below
+  // (chainKey, iteration, seenIterations) happens only after the AEAD succeeds.
+  if (
+    !Number.isSafeInteger(message.iteration) ||
+    message.iteration < 0 ||
+    message.iteration > MAX_SENDER_KEY_ITERATION
+  ) {
+    throw new Error(
+      `Invalid sender key iteration ${message.iteration} for distribution ` +
+        `${message.distributionId}: expected an integer in ` +
+        `[0, ${MAX_SENDER_KEY_ITERATION}]`
+    );
+  }
+
   // Replay protection: reject messages whose iteration we've already
   // accepted under this distribution. Without this, an attacker (or a
   // bug in delivery) can resurface an old ciphertext and the client will
@@ -344,27 +427,40 @@ export async function decryptGroupMessage(
 
   const rawData = fromBase64(message.ciphertext);
 
-  // Verify signature + extract ciphertext
-  let ciphertext: Uint8Array;
-  if (rawData.length > 64) {
-    const signature = rawData.slice(0, 64);
-    ciphertext = rawData.slice(64);
+  // Verify signature + extract ciphertext. Verification is MANDATORY: this
+  // branch used to fall back to "treat the whole frame as unsigned ciphertext"
+  // whenever rawData was short enough, so stripping the 64-byte signature
+  // prefix off a small message skipped authentication entirely (security
+  // review 2026-08-01, unsigned-frame acceptance).
+  //
+  // The floor is MIN_SENDER_KEY_FRAME_BYTES, the size of a signed frame around
+  // an empty plaintext. The guard enforces exactly that bound: a frame in the
+  // 65..91 range carries a full signature prefix but a truncated GCM frame, so
+  // it is rejected here instead of being handed to ed25519.verify over a body
+  // that could never have decrypted anyway.
+  if (rawData.length < MIN_SENDER_KEY_FRAME_BYTES) {
+    throw new Error(
+      `Sender key frame too short: ${rawData.length} bytes. A signed frame is ` +
+        `at least ${MIN_SENDER_KEY_FRAME_BYTES} bytes ` +
+        "(signature 64 + iv 12 + auth tag 16)."
+    );
+  }
 
-    // Ed25519 signature verification
-    try {
-      const valid = ed25519.verify(
-        signature,
-        ciphertext,
-        senderKey.publicSigningKey
-      );
-      if (!valid) {
-        throw new Error("Sender key signature verification failed");
-      }
-    } catch {
+  const signature = rawData.slice(0, 64);
+  const ciphertext = rawData.slice(64);
+
+  // Ed25519 signature verification
+  try {
+    const valid = ed25519.verify(
+      signature,
+      ciphertext,
+      senderKey.publicSigningKey
+    );
+    if (!valid) {
       throw new Error("Sender key signature verification failed");
     }
-  } else {
-    ciphertext = rawData;
+  } catch {
+    throw new Error("Sender key signature verification failed");
   }
 
   // Advance chain key to sender's iteration
@@ -478,13 +574,14 @@ function needsRotation(senderKey: StoredSenderKey): boolean {
 
 /**
  * Check if OUTBOUND sender key rotation is needed for a channel.
- * Used by channelEncryption (send path) and e2eeStore.
+ * Used by channelEncryption (send path).
  *
  * This is the only place the protocol version forces a rotation: an outbound
  * key minted under v1 had its chain key uploaded in the clear, so it must be
  * replaced before we encrypt anything else with it. Re-minting is always
  * possible on the send side (we own the key), which is exactly why the mirror
- * check is safe here and unsafe in needsRotationCheck.
+ * check is safe here and unsafe in needsRotationCheck. The signing-key clause
+ * below is outbound-only for the very same reason.
  */
 export async function needsSenderKeyRotation(
   channelId: string,
@@ -499,6 +596,24 @@ export async function needsSenderKeyRotation(
 
   if (!senderKey) return true; // No key — needs creation
   if (senderKey.protocolVersion !== SENDER_KEY_PROTOCOL_VERSION) return true;
+
+  // A stored key with no signing key can no longer send: encryptGroupMessage
+  // now refuses to emit an unsigned frame. createDistribution writes the key
+  // row and the sk_signing metadata in two separate IndexedDB transactions, so
+  // the pair can come apart. Declaring it stale makes the next send mint a new
+  // distribution — the deadlock repairs itself instead of lasting until the
+  // age/count cap.
+  //
+  // ⛔ OUTBOUND ONLY — must never move into needsRotation/needsRotationCheck.
+  // Inbound keys NEVER have an sk_signing entry (the signing private key
+  // exists only on the sending device), so on the shared path this clause
+  // would mark every inbound key stale, trigger a re-fetch that cannot be
+  // satisfied, and make the user's whole channel history unreadable.
+  const signingPrivateKey = await keyStorage.getMetadata<Uint8Array>(
+    `sk_signing:${channelId}:${userId}:${deviceId}`
+  );
+  if (!signingPrivateKey) return true;
+
   return needsRotation(senderKey);
 }
 
