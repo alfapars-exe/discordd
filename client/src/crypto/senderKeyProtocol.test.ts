@@ -23,7 +23,7 @@ import type {
   StoredSenderKey,
   SenderKeyMessage,
 } from "./types";
-import { SENDER_KEY_ROTATION_MESSAGES } from "./types";
+import { SENDER_KEY_ROTATION_MESSAGES, MAX_SKIP } from "./types";
 
 // Two isolated in-memory stores plus an "active" pointer. vi.hoisted so the
 // state exists before the hoisted vi.mock factory runs.
@@ -72,6 +72,7 @@ import {
   encryptGroupMessage,
   decryptGroupMessage,
   needsSenderKeyRotation,
+  needsRotationCheck,
   clearChannelSenderKeys,
 } from "./senderKeyProtocol";
 import * as keyStorage from "./keyStorage";
@@ -82,6 +83,18 @@ const CH = "channel-1";
 const USER = "user-alice";
 const DEV = "device-1";
 
+/** IndexedDB metadata key holding the OUTBOUND Ed25519 signing private key. */
+const SIGNING_META_KEY = `sk_signing:${CH}:${USER}:${DEV}`;
+
+/**
+ * Mirror of senderKeyProtocol's internal iteration ceiling.
+ *
+ * Recomputed here from the same two exported constants instead of importing
+ * the module's value, so a test cannot be satisfied by whatever the module
+ * happens to compute — the two have to agree independently.
+ */
+const MAX_ITERATION = SENDER_KEY_ROTATION_MESSAGES + MAX_SKIP;
+
 /** Flip one byte of the base64 ciphertext at the given index. */
 function flipCiphertextByte(
   msg: SenderKeyMessage,
@@ -90,6 +103,42 @@ function flipCiphertextByte(
   const raw = fromBase64(msg.ciphertext);
   raw[index] = raw[index] ^ 0xff;
   return { ...msg, ciphertext: toBase64(raw) };
+}
+
+/**
+ * Decrypts and returns the rejection message.
+ *
+ * Used where a test must distinguish WHICH guard fired rather than merely
+ * assert "it threw" — resolving is itself a failure.
+ */
+async function decryptFailureMessage(
+  msg: SenderKeyMessage
+): Promise<string> {
+  try {
+    await decryptGroupMessage(CH, USER, DEV, msg);
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+  throw new Error(
+    "decryptGroupMessage resolved, but this message had to be rejected"
+  );
+}
+
+/**
+ * Encrypts and returns the rejection message.
+ *
+ * Send-path mirror of decryptFailureMessage, for tests that must prove WHICH
+ * guard refused a send rather than merely that one did.
+ */
+async function encryptFailureMessage(plaintext: string): Promise<string> {
+  try {
+    await encryptGroupMessage(CH, USER, DEV, plaintext);
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+  throw new Error(
+    "encryptGroupMessage resolved, but this send had to be rejected"
+  );
 }
 
 describe("senderKeyProtocol — group encryption round-trip and guards", () => {
@@ -271,5 +320,302 @@ describe("senderKeyProtocol — group encryption round-trip and guards", () => {
     await clearChannelSenderKeys(CH);
     expect(keyStorage.deleteAllSenderKeysForChannel).toHaveBeenCalledWith(CH);
     expect(await keyStorage.getSenderKey(CH, USER, DEV)).toBeNull();
+  });
+
+  it("rejects a frame whose signature prefix was stripped, and still decrypts the untouched one", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    // 2-byte plaintext → signature(64) + iv(12) + body(2) + tag(16) = 94 bytes.
+    // Dropping the signature leaves 30 bytes, well inside the range the old
+    // length heuristic accepted as "unsigned, verify nothing".
+    const msg = await encryptGroupMessage(CH, USER, DEV, "hi");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    const raw = fromBase64(msg.ciphertext);
+    expect(raw.length).toBe(94);
+    const stripped: SenderKeyMessage = {
+      ...msg,
+      ciphertext: toBase64(raw.slice(64)),
+    };
+
+    // Negative case must run FIRST: a successful decrypt records iteration 0
+    // in the replay window, after which the stripped frame would be rejected
+    // as a replay and prove nothing about the signature requirement.
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, stripped)
+    ).rejects.toThrow(/frame too short/i);
+
+    // POSITIVE CONTROL — same key, same iteration, untouched bytes. Without it
+    // this test cannot tell "the unsigned frame was rejected" apart from "the
+    // guard rejects everything and the channel is dead".
+    expect(await decryptGroupMessage(CH, USER, DEV, msg)).toBe("hi");
+  });
+
+  it("rejects frames below the 92-byte floor, but not the floor itself", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const msg = await encryptGroupMessage(CH, USER, DEV, "hi");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    const raw = fromBase64(msg.ciphertext);
+    expect(raw.length).toBe(94);
+
+    // The 65..91 band: long enough to carry a full 64-byte signature prefix,
+    // too short to carry iv(12) + auth tag(16) behind it. A length guard
+    // written as `<= 64` passes this entire band through to ed25519.verify,
+    // so asserting merely "it threw" would hold under both bounds and pin
+    // nothing. Matching the specific rejection is what distinguishes them:
+    // under the looser bound these die as "signature verification failed".
+    for (const length of [65, 80, 91]) {
+      const truncated: SenderKeyMessage = {
+        ...msg,
+        ciphertext: toBase64(raw.slice(0, length)),
+      };
+      expect(await decryptFailureMessage(truncated)).toMatch(
+        /frame too short/i
+      );
+    }
+
+    // Exactly at the floor the length guard must stay SILENT: 92 bytes is a
+    // real frame size — signature(64) + iv(12) + tag(16) around an empty
+    // plaintext. This frame is still rejected, because truncating the body
+    // invalidates the signature over it, but by verification rather than by
+    // length. That is what shows the bound is inclusive instead of off by one.
+    const atFloor = await decryptFailureMessage({
+      ...msg,
+      ciphertext: toBase64(raw.slice(0, 92)),
+    });
+    expect(atFloor).not.toMatch(/frame too short/i);
+    expect(atFloor).toMatch(/signature verification failed/i);
+
+    // POSITIVE CONTROL — untouched frame, same key and iteration. Runs last:
+    // every rejection above happens before any state write, but a SUCCESS
+    // records iteration 0 in the replay window, which would mask the rest.
+    expect(await decryptGroupMessage(CH, USER, DEV, msg)).toBe("hi");
+  });
+
+  it("refuses to encrypt without a signing key, leaving the stored key untouched", async () => {
+    h.active = h.sender;
+    await createDistribution(CH, USER, DEV);
+
+    const stored = await keyStorage.getSenderKey(CH, USER, DEV);
+    expect(stored).not.toBeNull();
+    // Snapshot by value: the store hands back the live object, so copies are
+    // the only way to observe an in-place mutation.
+    const iterationBefore = stored!.iteration;
+    const chainKeyBefore = Array.from(stored!.chainKey);
+
+    // Reproduces the one real way the pair comes apart: createDistribution
+    // writes the key row and the sk_signing metadata in two separate IndexedDB
+    // transactions, so the second can fail on its own.
+    expect(h.sender.meta.has(SIGNING_META_KEY)).toBe(true);
+    h.sender.meta.delete(SIGNING_META_KEY);
+
+    await expect(
+      encryptGroupMessage(CH, USER, DEV, "would-be-unsigned")
+    ).rejects.toThrow(/signing key/i);
+
+    // The signing-key lookup has to happen BEFORE the ratchet: if it were
+    // still below the chain advance, every failed send would burn an iteration
+    // and desynchronize this device from every receiver.
+    const after = await keyStorage.getSenderKey(CH, USER, DEV);
+    expect(after!.iteration).toBe(iterationBefore);
+    expect(Array.from(after!.chainKey)).toEqual(chainKeyBefore);
+  });
+
+  it("does not burn an iteration when signing itself throws", async () => {
+    h.active = h.sender;
+    await createDistribution(CH, USER, DEV);
+
+    const stored = await keyStorage.getSenderKey(CH, USER, DEV);
+    expect(stored).not.toBeNull();
+    // Snapshot by value — the store hands back the live object.
+    const iterationBefore = stored!.iteration;
+    const chainKeyBefore = Array.from(stored!.chainKey);
+
+    // PRESENT but malformed, which is a different failure from the deleted
+    // entry above: the missing-key guard sees a truthy value and lets this
+    // through, so the throw comes from ed25519.sign, which accepts only a
+    // 32-byte secret key.
+    expect(h.sender.meta.has(SIGNING_META_KEY)).toBe(true);
+    h.sender.meta.set(SIGNING_META_KEY, new Uint8Array(5));
+
+    const failure = await encryptFailureMessage("would-be-signed");
+    // Proves the send died at signing, not at the missing-key guard that sits
+    // above the ratchet — otherwise this test would pass for the wrong reason
+    // and pin nothing about where sign() sits.
+    expect(failure).not.toMatch(/No sender key signing key/i);
+
+    // ed25519.sign must run BEFORE the chain advance and the store write.
+    // Below them, every retry against this corrupt entry burns an iteration
+    // and walks this device away from every receiver's chain position.
+    const after = await keyStorage.getSenderKey(CH, USER, DEV);
+    expect(after!.iteration).toBe(iterationBefore);
+    expect(Array.from(after!.chainKey)).toEqual(chainKeyBefore);
+
+    // Why burning iterations here would be especially costly: the self-heal
+    // clause only checks that sk_signing EXISTS, so a malformed entry still
+    // reads as "no rotation needed". Nothing rescues this channel early; it
+    // would limp to the count cap. Keeping the ratchet untouched is what
+    // holds that damage to zero.
+    expect(await needsSenderKeyRotation(CH, USER, DEV)).toBe(false);
+  });
+
+  it("requests OUTBOUND rotation when the signing key is missing (self-heal)", async () => {
+    h.active = h.sender;
+    await createDistribution(CH, USER, DEV);
+    // Positive control: a complete, fresh outbound key is not due for rotation.
+    expect(await needsSenderKeyRotation(CH, USER, DEV)).toBe(false);
+
+    h.sender.meta.delete(SIGNING_META_KEY);
+
+    // Without this clause the mandatory-signature rule above would be a
+    // deadlock: the device could not send in this channel until the age or
+    // count cap eventually forced a rotation. Reporting "rotate" makes the
+    // next send mint a new distribution — and a new signing key.
+    expect(await needsSenderKeyRotation(CH, USER, DEV)).toBe(true);
+  });
+
+  it("does NOT mark an inbound key stale for having no signing key (receive-path lock)", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    const inbound = await keyStorage.getSenderKey(CH, USER, DEV);
+    expect(inbound).not.toBeNull();
+    // Precondition: an inbound key NEVER has sk_signing — the signing private
+    // key exists only on the sending device.
+    expect(h.receiver.meta.has(SIGNING_META_KEY)).toBe(false);
+
+    // ⛔ This assertion is the reason the signing-key clause lives in
+    // needsSenderKeyRotation (send path) and nowhere else. needsRotationCheck
+    // is the RECEIVE path: if the clause ever leaks into it — or into the
+    // shared needsRotation helper it delegates to — then every inbound key in
+    // the user's IndexedDB reads as stale, the receive path asks for a
+    // re-fetch that can never be satisfied, and the entire channel history
+    // becomes permanently unreadable. Same failure shape as the protocol
+    // version check, which is outbound-only for exactly this reason.
+    expect(needsRotationCheck(inbound!)).toBe(false);
+  });
+
+  it("rejects an absurd iteration before deriving any chain key", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const msg = await encryptGroupMessage(CH, USER, DEV, "bounded");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+    vi.mocked(keyStorage.saveSenderKey).mockClear();
+
+    // The AAD binds the iteration, so AES-GCM would eventually reject this —
+    // but only AFTER the forward loop ran a billion HMAC steps on the main
+    // thread. The rejection therefore has to come from the ceiling guard, and
+    // asserting on the message is what proves it did.
+    const failure = await decryptFailureMessage({
+      ...msg,
+      iteration: 1_000_000_000,
+    });
+    expect(failure).toMatch(/Invalid sender key iteration/i);
+
+    // No state written: the guard sits ahead of every persistence point.
+    expect(keyStorage.saveSenderKey).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-finite iteration (the unterminated-loop case)", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const msg = await encryptGroupMessage(CH, USER, DEV, "infinite");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    // Provenance, not a hypothetical: the channel layer JSON.parses the wire
+    // message and casts it without validation, and JSON numbers that overflow
+    // the double range parse to Infinity.
+    const overflowed = (
+      JSON.parse('{"iteration":1e999}') as { iteration: number }
+    ).iteration;
+    expect(overflowed).toBe(Number.POSITIVE_INFINITY);
+
+    // `while (currentIteration < Infinity)` never exits — the tab freezes for
+    // good. This must be rejected up front, not by the AEAD.
+    const failure = await decryptFailureMessage({
+      ...msg,
+      iteration: overflowed,
+    });
+    expect(failure).toMatch(/Invalid sender key iteration/i);
+  });
+
+  it("bounds the iteration inclusively: the ceiling passes the guard, ceiling+1 does not", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const msg = await encryptGroupMessage(CH, USER, DEV, "edge");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    // Exactly at the ceiling the guard must stay silent. The message is still
+    // rejected — the forged iteration breaks the "distributionId:iteration"
+    // AAD — but it must be rejected by AES-GCM, which is what shows the bound
+    // is inclusive instead of off by one.
+    const atCeiling = await decryptFailureMessage({
+      ...msg,
+      iteration: MAX_ITERATION,
+    });
+    expect(atCeiling).not.toMatch(/Invalid sender key iteration/i);
+
+    const overCeiling = await decryptFailureMessage({
+      ...msg,
+      iteration: MAX_ITERATION + 1,
+    });
+    expect(overCeiling).toMatch(/Invalid sender key iteration/i);
+  });
+
+  it("rejects malformed iteration values (negative, fractional, unsafe, NaN)", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const msg = await encryptGroupMessage(CH, USER, DEV, "types");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    // NaN and 1.5 are caught only by the integer test: both compare false
+    // against the range bounds, so a range-only guard would let them through.
+    const malformed = [-1, 1.5, Number.MAX_SAFE_INTEGER + 2, Number.NaN];
+    for (const iteration of malformed) {
+      const failure = await decryptFailureMessage({ ...msg, iteration });
+      expect(failure).toMatch(/Invalid sender key iteration/i);
+    }
+  });
+
+  it("bounds the rewind branch too, not only the forward one", async () => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const msg = await encryptGroupMessage(CH, USER, DEV, "rewind");
+
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+
+    // Push the stored iteration far ahead so an over-ceiling claim is still
+    // BEHIND it. That is what selects the rewind path, whose loop re-derives
+    // from initialChainKey by counting 0..message.iteration — a second
+    // unbounded loop that the single guard also has to cover.
+    const inbound = await keyStorage.getSenderKey(CH, USER, DEV);
+    inbound!.iteration = 50_000_000;
+    await keyStorage.saveSenderKey(inbound!);
+    vi.mocked(keyStorage.saveSenderKey).mockClear();
+
+    const forged: SenderKeyMessage = { ...msg, iteration: MAX_ITERATION + 1 };
+    expect(forged.iteration).toBeLessThan(inbound!.iteration);
+
+    const failure = await decryptFailureMessage(forged);
+    expect(failure).toMatch(/Invalid sender key iteration/i);
+    expect(keyStorage.saveSenderKey).not.toHaveBeenCalled();
   });
 });
