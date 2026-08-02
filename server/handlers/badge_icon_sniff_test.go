@@ -1,9 +1,12 @@
 // Regression tests for UploadBadgeIcon's byte-derived (never
-// client-claimed) MIME gate. Badge icons are served from a static handler
-// with no serve-time re-sniff (see the comment in badge.go), so this
-// upload-time gate is the only checkpoint — these tests also pin the
-// "write the replay reader, not the original file" invariant, since a
-// regression there silently truncates every uploaded icon.
+// client-claimed) MIME gate. Badge icons are actually served through the
+// real, hardened /api/uploads/ handler (handlers/upload_download.go),
+// which re-sniffs at serve time — but the upload-time gate here is still
+// what decides whether a file is admitted at all, and it now rejects SVG
+// outright (see the doc comment above the sniff/allowlist check in
+// badge.go). These tests also pin the "write the replay reader, not the
+// original file" invariant, since a regression there silently truncates
+// every uploaded icon.
 package handlers
 
 import (
@@ -92,8 +95,7 @@ func assertBadgeIconRejected(t *testing.T, dir, claimedType string, body []byte)
 
 // uploadBadgeIconAccepted posts an icon upload expected to succeed and
 // returns the single resulting disk filename, for the caller's own
-// extension/byte assertions. Shared by the PNG and SVG accept regressions
-// below.
+// extension/byte assertions.
 func uploadBadgeIconAccepted(t *testing.T, dir, claimedType string, body []byte) string {
 	t.Helper()
 	h := NewBadgeHandler(nil, dir)
@@ -136,12 +138,15 @@ func TestUploadBadgeIcon_acceptsRealPNGAndPreservesBytes(t *testing.T) {
 	}
 }
 
-func TestUploadBadgeIcon_acceptsSVGClaimWithXMLProlog(t *testing.T) {
-	dir := t.TempDir()
-	name := uploadBadgeIconAccepted(t, dir, "image/svg+xml", []byte(`<?xml version="1.0"?><svg/>`))
-	if filepath.Ext(name) != ".svg" {
-		t.Errorf("disk filename = %q, want .svg suffix", name)
-	}
+// TestUploadBadgeIcon_rejectsSVGEvenWithXMLPrologClaim pins the Part C
+// hardening decision: SVG is no longer accepted at all, even a genuine SVG
+// with a matching client-claimed Content-Type. The real serving path
+// (/api/uploads/badges/…) would have re-sniffed and forced any accepted SVG
+// to a non-displayable download anyway (see handlers/upload_download.go),
+// so there is no remaining path that could render one inline — accepting
+// the upload would only cost trust in the client's claim for nothing.
+func TestUploadBadgeIcon_rejectsSVGEvenWithXMLPrologClaim(t *testing.T) {
+	assertBadgeIconRejected(t, t.TempDir(), "image/svg+xml", []byte(`<?xml version="1.0"?><svg/>`))
 }
 
 func TestUploadBadgeIcon_rejectsHTMLDisguisedAsSVG(t *testing.T) {

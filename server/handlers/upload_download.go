@@ -161,8 +161,11 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	// the two-segment "soundboard/{16 hex}_…", and sanitizeFilename strips
 	// separators. So a non-canonical request is never legitimate.
 	//
-	// (Badge icons never reach this handler at all: they are returned as
-	// /uploads/badges/… without the /api prefix.)
+	// Badge icons DO reach this handler: they're uploaded to
+	// {uploadDir}/badges/ and served at /api/uploads/badges/{name} (see
+	// handlers/badge.go UploadBadgeIcon and MediaPublic's badges/ prefix
+	// branch in services/media_access_service.go), same two-segment shape
+	// as soundboard clips above.
 	//
 	// INVARIANT: this equalises the two path STRINGS, which is sufficient only
 	// while the ACL lookup and the disk read agree on case. The lookup is a

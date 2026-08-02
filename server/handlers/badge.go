@@ -195,7 +195,10 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, header, err := r.FormFile("icon")
+	// header (multipart.FileHeader) is intentionally discarded: the
+	// destination filename is generated server-side from the sniffed MIME
+	// (see mimeToExt below), never from the client-supplied header.Filename.
+	file, _, err := r.FormFile("icon")
 	if err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "icon file is required")
 		return
@@ -204,30 +207,31 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 
 	// Validate content: the client-declared Content-Type header is
 	// attacker-controlled, so the allowlist decision is derived from the
-	// bytes themselves (pkg.SniffContentType), never from the claim. SVG is
-	// the one exception Go's sniffer can't resolve on its own — it never
-	// returns "image/svg+xml" (an XML-prolog SVG sniffs as "text/xml", a
-	// bare "<svg" root sniffs as "text/plain") — so an SVG claim is honored
-	// only when the bytes sniff to one of those two generic XML/text
-	// results. "text/html" is deliberately NOT accepted here even though an
-	// HTML file can also sniff as text/plain in edge cases: badges are
-	// served from a static handler with no serve-time re-sniff (see the
-	// comment above the URL below), so this is the only checkpoint.
+	// bytes themselves (pkg.SniffContentType), never from the claim.
+	//
+	// SVG is deliberately NOT accepted, even though the real serving path
+	// (/api/uploads/badges/…, see the URL comment below) re-sniffs at
+	// serve time and would force any SVG to a non-displayable download —
+	// making it safe to accept. It's rejected anyway: Go's sniffer can
+	// never itself produce "image/svg+xml" (an XML-prolog SVG sniffs as
+	// "text/xml", a bare "<svg" root as "text/plain"), so honoring an SVG
+	// upload would require trusting the client's Content-Type claim over
+	// those two generic, easily-spoofed sniffed results — and there is no
+	// path left that can render an accepted SVG inline for the icon to be
+	// worth that trust. See handlers/upload_download.go's serveFile for the
+	// re-sniff/nosniff/CSP-sandbox behavior this reasoning relies on.
 	sniffed, replay, err := pkg.SniffContentType(file)
 	if err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "unreadable upload")
 		return
 	}
-	claim := strings.TrimSpace(strings.Split(header.Header.Get("Content-Type"), ";")[0])
 
 	var effectiveMIME string
 	switch {
 	case allowedBadgeIconSniffedMimes[sniffed]:
 		effectiveMIME = sniffed
-	case claim == "image/svg+xml" && (sniffed == "text/xml" || sniffed == "text/plain"):
-		effectiveMIME = "image/svg+xml"
 	default:
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, "only PNG, JPEG, GIF, WEBP, and SVG are allowed")
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "only PNG, JPEG, GIF, and WEBP are allowed")
 		return
 	}
 
@@ -261,11 +265,11 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 	// Write to a temp file in the same directory, then rename into place.
 	//
 	// Publishing atomically is the point: badges are served straight off disk
-	// by the static handler, so writing directly to destPath would expose a
-	// half-written icon at its final URL for the duration of the copy, and a
-	// failure would leave that truncated file behind for the cleanup to chase.
-	// os.Rename within one directory is atomic, so the icon either does not
-	// exist or is complete.
+	// by the /api/uploads/ handler (see the URL comment below), so writing
+	// directly to destPath would expose a half-written icon at its final URL
+	// for the duration of the copy, and a failure would leave that truncated
+	// file behind for the cleanup to chase. os.Rename within one directory is
+	// atomic, so the icon either does not exist or is complete.
 	//
 	// It also keeps the cleanup path off any request-derived value: the temp
 	// name comes from os.CreateTemp, so nothing user-controlled reaches
@@ -301,15 +305,22 @@ func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return URL path relative to upload dir (served by static file handler)
-	urlPath := "/uploads/badges/" + filename
+	// Return URL path under the auth-hardened /api/uploads/ handler. Plain
+	// "/uploads/badges/…" is never mounted by anything — main.go only routes
+	// "/api/", "/static/", and "/ws"; everything else falls through to the
+	// SPA's index.html — so this MUST be the "/api/..." form or the returned
+	// URL 404s (well, 200s with an HTML body) the moment a client requests
+	// it. See handlers/upload_download.go's serveFile / media_access_service.go
+	// for the re-sniff + nosniff + forced-download hardening this path gets
+	// that a bare static handler wouldn't have had anyway.
+	urlPath := "/api/uploads/badges/" + filename
 
 	pkg.JSON(w, http.StatusCreated, map[string]string{"url": urlPath})
 }
 
 // allowedBadgeIconSniffedMimes is what http.DetectContentType actually
-// returns for the four raster formats — never "image/svg+xml", which Go's
-// sniffer cannot produce (see the SVG branch in UploadBadgeIcon).
+// returns for the four accepted raster formats. SVG is intentionally absent
+// — see the doc comment above the sniff/allowlist check in UploadBadgeIcon.
 var allowedBadgeIconSniffedMimes = map[string]bool{
 	"image/jpeg": true,
 	"image/png":  true,
@@ -327,8 +338,6 @@ func mimeToExt(mime string) string {
 		return ".gif"
 	case strings.Contains(mime, "webp"):
 		return ".webp"
-	case strings.Contains(mime, "svg"):
-		return ".svg"
 	default:
 		return ".png"
 	}

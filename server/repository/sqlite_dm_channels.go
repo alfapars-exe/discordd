@@ -194,6 +194,17 @@ func (r *sqliteDMRepo) CountMessagesBySender(ctx context.Context, channelID, use
 }
 
 func (r *sqliteDMRepo) DeleteChannel(ctx context.Context, channelID string) error {
+	// dm_attachments.dm_message_id declares ON DELETE CASCADE, but the
+	// production libSQL/Turso connection never turns the foreign_keys
+	// PRAGMA on (see database/integrity.go), so that constraint never
+	// fires there. Must run BEFORE the dm_messages delete below — the
+	// subquery identifies rows by joining through dm_messages, which
+	// disappears the moment that statement runs (cascade-ordering rule
+	// documented in repository/server_cascade.go:76-77).
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM dm_attachments WHERE dm_message_id IN (
+		SELECT id FROM dm_messages WHERE dm_channel_id = ?)`, channelID); err != nil {
+		return fmt.Errorf("failed to delete DM attachments: %w", err)
+	}
 	_, err := r.db.ExecContext(ctx, "DELETE FROM dm_messages WHERE dm_channel_id = ?", channelID)
 	if err != nil {
 		return fmt.Errorf("failed to delete DM messages: %w", err)

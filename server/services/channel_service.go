@@ -52,6 +52,7 @@ type ChannelService interface {
 	Delete(ctx context.Context, serverID, actorID, id string) error
 	ReorderChannels(ctx context.Context, serverID string, req *models.ReorderChannelsRequest, userID string) ([]models.CategoryWithChannels, error)
 	SetAuditLogger(logger AuditWriter)
+	SetUploadDir(dir string)
 }
 
 type channelService struct {
@@ -61,10 +62,19 @@ type channelService struct {
 	visChecker    ChannelVisibilityChecker
 	voiceProvider UserVoiceChannelProvider
 	auditLogger   AuditWriter
+	// uploadDir enables best-effort disk cleanup on channel delete (see
+	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
+	// wired in init_services.go so the constructor signature below stays
+	// unchanged.
+	uploadDir string
 }
 
 func (s *channelService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
+}
+
+func (s *channelService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -342,9 +352,21 @@ func (s *channelService) Delete(ctx context.Context, serverID, actorID, id strin
 		return fmt.Errorf("%w: audit channel cannot be deleted", pkg.ErrForbidden)
 	}
 
+	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
+	// A fetch failure here is logged and non-fatal — the delete still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	fileURLs, urlErr := s.channelRepo.GetFileURLsByChannelID(ctx, id)
+	if urlErr != nil {
+		channelLogger.Error("failed to fetch file urls before channel delete", "channel_id", id, "err", pkg.ErrText(urlErr))
+	}
+
 	if err := s.channelRepo.Delete(ctx, id); err != nil {
 		return err
 	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	removeUploadFilesByURL(s.uploadDir, fileURLs)
 
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelDelete,

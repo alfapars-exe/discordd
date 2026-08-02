@@ -144,6 +144,15 @@ func (s *adminUserService) PlatformUnbanUser(ctx context.Context, adminUserID, t
 
 // HardDeleteUser permanently deletes a user and all associated data.
 // Email notification is sent BEFORE deletion (email address is lost after delete).
+//
+// Deliberately NOT wired into the upload_cleanup.go best-effort disk cleanup
+// that message/DM-message/channel/server/feedback-ticket delete got: this
+// path is admin-only and rare, and "all associated data" here spans every
+// table with a user_id FK (messages, attachments across four tables,
+// avatars, etc.) via whatever CASCADE/explicit-delete shape
+// userRepo.HardDeleteUser implements — collecting every file_url that
+// implies is a distinct, larger piece of work than the per-resource delete
+// paths above and was scoped out rather than done partially.
 func (s *adminUserService) HardDeleteUser(ctx context.Context, adminUserID, targetUserID, reason string) error {
 	if adminUserID == targetUserID {
 		return fmt.Errorf("%w: cannot delete yourself", pkg.ErrBadRequest)

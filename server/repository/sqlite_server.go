@@ -106,6 +106,37 @@ func (r *sqliteServerRepo) Delete(ctx context.Context, serverID string) error {
 	return nil
 }
 
+// GetFileURLsByServerID returns every attachment file_url for messages in
+// any channel of the given server — the SELECT counterpart of the first
+// statement in deleteServerCascadeStmts. Callers must run this before
+// Delete: the attachments rows (and the messages/channels they scope
+// through) are gone once the cascade completes.
+func (r *sqliteServerRepo) GetFileURLsByServerID(ctx context.Context, serverID string) ([]string, error) {
+	query := `SELECT file_url FROM attachments WHERE message_id IN (
+		SELECT id FROM messages WHERE channel_id IN (
+			SELECT id FROM channels WHERE server_id = ?))`
+
+	rows, err := r.db.QueryContext(ctx, query, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file urls by server id: %w", err)
+	}
+	defer rows.Close()
+
+	var urls []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, fmt.Errorf("failed to scan file url: %w", err)
+		}
+		urls = append(urls, url)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate file url rows: %w", err)
+	}
+
+	return urls, nil
+}
+
 // ─── Membership ───
 
 func (r *sqliteServerRepo) GetUserServers(ctx context.Context, userID string) ([]models.ServerListItem, error) {

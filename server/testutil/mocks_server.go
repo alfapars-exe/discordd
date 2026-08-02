@@ -33,6 +33,7 @@ type MockServerRepo struct {
 	ListAllWithStatsFn            func(ctx context.Context) ([]models.AdminServerListItem, error)
 	UpdateLastVoiceActivityFn     func(ctx context.Context, serverID string) error
 	CountOwnedMqviHostedServersFn func(ctx context.Context, ownerID string) (int, error)
+	GetFileURLsByServerIDFn       func(ctx context.Context, serverID string) ([]string, error)
 }
 
 func (m *MockServerRepo) Create(ctx context.Context, server *models.Server) error {
@@ -148,4 +149,10 @@ func (m *MockServerRepo) CountOwnedMqviHostedServers(ctx context.Context, ownerI
 		return m.CountOwnedMqviHostedServersFn(ctx, ownerID)
 	}
 	return 0, nil
+}
+func (m *MockServerRepo) GetFileURLsByServerID(ctx context.Context, serverID string) ([]string, error) {
+	if m.GetFileURLsByServerIDFn != nil {
+		return m.GetFileURLsByServerIDFn(ctx, serverID)
+	}
+	return nil, nil
 }

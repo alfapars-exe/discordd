@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -445,6 +447,152 @@ func TestMessageDelete(t *testing.T) {
 				t.Error("delete should broadcast event")
 			}
 		})
+	}
+}
+
+// TestMessageDelete_RemovesAttachmentFileFromDisk pins the Part A cleanup
+// wiring: once the DB delete succeeds, any attachment file the deleted
+// message owned is removed from disk via SetUploadDir/removeUploadFilesByURL.
+func TestMessageDelete_RemovesAttachmentFileFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "att1.png")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	broadcastCalled := false
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Message, error) {
+				return &models.Message{ID: "m1", UserID: "u1", ChannelID: "ch1"}, nil
+			},
+		},
+		&testutil.MockAttachmentRepo{
+			GetByMessageIDFn: func(_ context.Context, _ string) ([]models.Attachment, error) {
+				return []models.Attachment{{ID: "a1", MessageID: "m1", FileURL: "/api/uploads/att1.png"}}, nil
+			},
+		},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
+		&testutil.MockUserRepo{},
+		&testutil.MockMentionRepo{},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		&testutil.MockBroadcastAndOnline{
+			MockBroadcaster: testutil.MockBroadcaster{
+				BroadcastToUsersFn: func(_ []string, _ ws.Event) { broadcastCalled = true },
+			},
+		},
+		&testutil.MockChannelPermResolver{},
+	)
+	svc.SetUploadDir(dir)
+
+	if err := svc.Delete(context.Background(), "srv1", "m1", "u1", 0); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !broadcastCalled {
+		t.Error("delete should broadcast event")
+	}
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Errorf("attachment file still exists on disk after delete: stat err = %v", err)
+	}
+}
+
+// TestMessageDelete_AttachmentFetchFailureStillDeletesMessage: a failed
+// pre-fetch (attachmentRepo.GetByMessageID errors) must not block the
+// message delete — it just means no files can be cleaned up this time.
+func TestMessageDelete_AttachmentFetchFailureStillDeletesMessage(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "att1.png")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	deleteCalled := false
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Message, error) {
+				return &models.Message{ID: "m1", UserID: "u1", ChannelID: "ch1"}, nil
+			},
+			DeleteFn: func(_ context.Context, _ string) error { deleteCalled = true; return nil },
+		},
+		&testutil.MockAttachmentRepo{
+			GetByMessageIDFn: func(_ context.Context, _ string) ([]models.Attachment, error) {
+				return nil, errors.New("attachment lookup boom")
+			},
+		},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
+		&testutil.MockUserRepo{},
+		&testutil.MockMentionRepo{},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		&testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{},
+	)
+	svc.SetUploadDir(dir)
+
+	if err := svc.Delete(context.Background(), "srv1", "m1", "u1", 0); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !deleteCalled {
+		t.Fatal("message delete must still run despite the attachment pre-fetch failure")
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Errorf("file must remain on disk when it couldn't be enumerated: stat err = %v", err)
+	}
+}
+
+// TestMessageDelete_DBFailureLeavesFileOnDisk: the file is only ever removed
+// AFTER the DB delete commits — a failed DB delete must leave the file (and
+// the live row still pointing at it) untouched.
+func TestMessageDelete_DBFailureLeavesFileOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "att1.png")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Message, error) {
+				return &models.Message{ID: "m1", UserID: "u1", ChannelID: "ch1"}, nil
+			},
+			DeleteFn: func(_ context.Context, _ string) error { return errors.New("db is down") },
+		},
+		&testutil.MockAttachmentRepo{
+			GetByMessageIDFn: func(_ context.Context, _ string) ([]models.Attachment, error) {
+				return []models.Attachment{{ID: "a1", MessageID: "m1", FileURL: "/api/uploads/att1.png"}}, nil
+			},
+		},
+		&testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, _ string) (*models.Channel, error) {
+				return &models.Channel{ID: "ch1", ServerID: "srv1"}, nil
+			},
+		},
+		&testutil.MockUserRepo{},
+		&testutil.MockMentionRepo{},
+		&testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{},
+		&testutil.MockReactionRepo{},
+		&testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{},
+	)
+	svc.SetUploadDir(dir)
+
+	if err := svc.Delete(context.Background(), "srv1", "m1", "u1", 0); err == nil {
+		t.Fatal("expected the failed DB delete to propagate")
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Errorf("file must remain on disk when the DB delete failed: stat err = %v", err)
 	}
 }
 

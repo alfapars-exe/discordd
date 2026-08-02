@@ -235,6 +235,13 @@ func (r *sqliteDMRepo) UpdateMessage(ctx context.Context, id string, req *models
 }
 
 func (r *sqliteDMRepo) DeleteMessage(ctx context.Context, id string) error {
+	// Explicit child delete before the parent: prod's remote libSQL/Turso
+	// branch never enables the foreign_keys PRAGMA, so ON DELETE CASCADE
+	// does not fire there (same rule as DeleteChannel in
+	// sqlite_dm_channels.go).
+	if _, err := r.db.ExecContext(ctx, "DELETE FROM dm_attachments WHERE dm_message_id = ?", id); err != nil {
+		return fmt.Errorf("failed to delete DM message attachments: %w", err)
+	}
 	result, err := r.db.ExecContext(ctx, "DELETE FROM dm_messages WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete DM message: %w", err)
