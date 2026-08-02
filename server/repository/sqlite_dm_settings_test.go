@@ -140,7 +140,16 @@ func TestDMSettingsRepo_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
 	repo := NewSQLiteDMSettingsRepo(wrapForRepo(db))
 	ctx := context.Background()
 
-	legacyMutedUntil := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	// Midnight of the CURRENT UTC date, not "an hour ago". The legacy-format
+	// bug this test demonstrates is a string comparison against
+	// datetime('now'), and it only bites when the date parts match: then
+	// 'T' (0x54) > ' ' (0x20) decides and the past timestamp wrongly reads
+	// as still muted. An hour before midnight UTC the dates differ,
+	// '...-08-01T23:..' < '...-08-02 00:..' compares on the date instead,
+	// and the row correctly reads as unmuted -- so the assertion below
+	// failed for one hour every day for a reason unrelated to the code
+	// under test. Midnight-of-today is always same-date and always <= now.
+	legacyMutedUntil := time.Now().UTC().Format("2006-01-02") + "T00:00:00Z"
 	if _, err := db.Conn.Exec(
 		`INSERT INTO user_dm_settings (user_id, dm_channel_id, muted_until) VALUES (?, ?, ?)`,
 		dmAlice, channelID, legacyMutedUntil,
