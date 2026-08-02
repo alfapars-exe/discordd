@@ -548,6 +548,47 @@ describe("keyStorage — metadata typed round-trip", () => {
     expect(await keyStorage.getMetadata<number>("n")).toBe(101);
     expect(await keyStorage.getMetadata<string[]>("arr")).toEqual(["a", "b", "c"]);
   });
+
+  // getAllMetadata exists so the backup rollback can reproduce a store whose
+  // key space is open-ended. Both halves of every pair matter: the keys are
+  // not derivable from the values, and a value handed back to setMetadata
+  // under the wrong key is as bad as losing it.
+  it("getAllMetadata returns every entry with its key, values intact", async () => {
+    await keyStorage.setMetadata("deviceId", "dev-1");
+    await keyStorage.setMetadata("nextPrekeyId", 501);
+    await keyStorage.setMetadata("legacyDeviceIds", ["old-1", "old-2"]);
+    await keyStorage.setMetadata("sk_signing:ch:u:d", { iteration: 3 });
+
+    const entries = await keyStorage.getAllMetadata();
+
+    expect(entries).toHaveLength(4);
+    expect(Object.fromEntries(entries)).toEqual({
+      deviceId: "dev-1",
+      nextPrekeyId: 501,
+      legacyDeviceIds: ["old-1", "old-2"],
+      "sk_signing:ch:u:d": { iteration: 3 },
+    });
+  });
+
+  it("getAllMetadata returns an empty list on an untouched store", async () => {
+    expect(await keyStorage.getAllMetadata()).toEqual([]);
+  });
+
+  it("getAllMetadata output can be replayed through setMetadata verbatim", async () => {
+    await keyStorage.setMetadata("deviceId", "dev-1");
+    await keyStorage.setMetadata("nextPrekeyId", 501);
+
+    const snapshot = await keyStorage.getAllMetadata();
+    await keyStorage.clearAllE2EEData();
+    expect(await keyStorage.getMetadata<string>("deviceId")).toBeNull();
+
+    for (const [key, value] of snapshot) {
+      await keyStorage.setMetadata(key, value);
+    }
+
+    expect(await keyStorage.getMetadata<string>("deviceId")).toBe("dev-1");
+    expect(await keyStorage.getMetadata<number>("nextPrekeyId")).toBe(501);
+  });
 });
 
 // ──────────────────────────────────
