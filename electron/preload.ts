@@ -262,9 +262,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCredentials: (username: string, password: string): Promise<void> =>
     ipcRenderer.invoke("save-credentials", username, password),
 
-  /** Load saved credentials (null if none) */
-  loadCredentials: (): Promise<{ username: string; password: string } | null> =>
+  /**
+   * Load the saved username (null if none). The password is deliberately not
+   * part of this — see loginWithSavedCredentials (pentest 2026-07-26, H-09).
+   */
+  loadCredentials: (): Promise<{ username: string } | null> =>
     ipcRenderer.invoke("load-credentials"),
+
+  /**
+   * Log in with the stored password, performed in the main process so the
+   * password never enters the renderer. Resolves to the upstream login
+   * response; rejects when nothing is stored.
+   */
+  loginWithSavedCredentials: (
+    upstreamOrigin: string,
+  ): Promise<{ status: number; body: unknown }> =>
+    ipcRenderer.invoke("login-with-saved-credentials", upstreamOrigin),
 
   /** Clear saved credentials */
   clearCredentials: (): Promise<void> =>
