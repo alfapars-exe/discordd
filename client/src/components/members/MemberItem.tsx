@@ -17,11 +17,14 @@ import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useConfirm } from "../../hooks/useConfirm";
 import { hasPermission, Permissions } from "../../utils/permissions";
 import * as memberApi from "../../api/members";
+import { showApiError } from "../../utils/apiError";
 import { useServerStore } from "../../stores/serverStore";
 import type { MemberWithRoles } from "../../types";
 import MemberCard from "./MemberCard";
 import RoleEditorPopup from "./RoleEditorPopup";
 import BadgeAssignModal from "./BadgeAssignModal";
+import ModDurationPicker from "./ModDurationPicker";
+import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatFullDateTime, lastSeenLabel } from "../../utils/dateFormat";
 
 /** The user ID that can assign badges to other users. */
@@ -105,6 +108,10 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
   const [showRoleEditor, setShowRoleEditor] = useState(false);
   const [roleEditorPos, setRoleEditorPos] = useState({ top: 0, left: 0 });
   const [showBadgeAssign, setShowBadgeAssign] = useState(false);
+  // Duration picker state — null when closed; "timeout"/"tempban" picks
+  // which preset list + API to fire on selection. Mirrors MemberCard's
+  // picker plumbing since this menu bypasses MemberCard entirely.
+  const [pickerMode, setPickerMode] = useState<"timeout" | "tempban" | null>(null);
   const itemRef = useRef<HTMLDivElement>(null);
   const roleType = getRoleType(member);
   const displayName = member.display_name ?? member.username;
@@ -130,6 +137,7 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
       const myPerms = currentMember?.effective_permissions ?? 0;
       const canKick = hasPermission(myPerms, Permissions.KickMembers);
       const canBan = hasPermission(myPerms, Permissions.BanMembers);
+      const canTimeout = hasPermission(myPerms, Permissions.TimeoutMembers);
       const canManageRoles = hasPermission(myPerms, Permissions.ManageRoles);
 
       const items: ContextMenuItem[] = [];
@@ -253,6 +261,31 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
         });
       }
 
+      // ─── Timeout / Remove Timeout ───
+      if (canTimeout && !isSelf) {
+        if (!timeoutExpiresAt) {
+          items.push({
+            label: t("timeout"),
+            danger: true,
+            onClick: () => setPickerMode("timeout"),
+          });
+        } else {
+          // Matches MemberCard.handleRemoveTimeout — one click, no
+          // confirmation dialog (low-cost reversal, mod can re-timeout).
+          items.push({
+            label: t("removeTimeout"),
+            onClick: async () => {
+              const serverId = useServerStore.getState().activeServerId;
+              if (!serverId) return;
+              const res = await memberApi.removeTimeout(serverId, member.id);
+              if (!res.success) {
+                showApiError(res, { fallbackKey: "common:removeTimeoutError" });
+              }
+            },
+          });
+        }
+      }
+
       // ─── Ban ───
       if (canBan && !isSelf) {
         items.push({
@@ -272,10 +305,39 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
         });
       }
 
+      // ─── Temp Ban ───
+      if (canBan && !isSelf) {
+        items.push({
+          label: t("tempBan"),
+          danger: true,
+          onClick: () => setPickerMode("tempban"),
+        });
+      }
+
       openMenu(e, items);
     },
-    [currentUser, member, members, friends, incoming, outgoing, openMenu, confirm, t]
+    [currentUser, member, members, friends, incoming, outgoing, timeoutExpiresAt, openMenu, confirm, t]
   );
+
+  async function handleTimeoutPick(seconds: number) {
+    setPickerMode(null);
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const res = await memberApi.timeoutMember(serverId, member.id, seconds, "");
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:timeoutError" });
+    }
+  }
+
+  async function handleTempBanPick(seconds: number) {
+    setPickerMode(null);
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const res = await memberApi.banMember(serverId, member.id, "", seconds);
+    if (!res.success) {
+      showApiError(res, { fallbackKey: "common:tempBanError" });
+    }
+  }
 
   const handleClick = useCallback(() => {
     if (showCard) {
@@ -396,6 +458,35 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
           onClose={() => setShowBadgeAssign(false)}
         />
       )}
+
+      {/* Timeout / Temp-ban duration picker (portal — MemberItem lives in a
+          scrollable list, mirrors the MemberCard picker plumbing). */}
+      {pickerMode === "timeout" &&
+        createPortal(
+          <ModDurationPicker
+            title={t("timeoutTitle")}
+            subtitle={t("timeoutForUser", { username: displayName })}
+            variant="timeout"
+            hint={t("timeoutPickerHint")}
+            presets={TIMEOUT_PRESETS}
+            onPick={handleTimeoutPick}
+            onCancel={() => setPickerMode(null)}
+          />,
+          document.body
+        )}
+      {pickerMode === "tempban" &&
+        createPortal(
+          <ModDurationPicker
+            title={t("tempBanTitle")}
+            subtitle={t("timeoutForUser", { username: displayName })}
+            variant="ban"
+            hint={t("tempBanPickerWarning")}
+            presets={TEMPBAN_PRESETS}
+            onPick={handleTempBanPick}
+            onCancel={() => setPickerMode(null)}
+          />,
+          document.body
+        )}
     </>
   );
 }

@@ -82,6 +82,15 @@ func (s *pinService) allowedViewers(channelID string) []string {
 // ManageMessages; this additionally resolves the user's EFFECTIVE permission in
 // this channel, so a per-channel deny-override is respected — matching how
 // GetPinnedMessages already gates reads. Admin bypasses via Permission.Has.
+//
+// A-29c audit note: Pin/Unpin deliberately do NOT add a member-timeout
+// gate (unlike message_service.Create/Update). Both already require
+// PermManageMessages here, so the only user who could exploit a missing
+// gate is a moderator who is themselves timed out — a self-contradictory,
+// low-probability edge case, and Pin/Unpin don't post attacker-controlled
+// content (they only reference an existing message id). Not worth the
+// extra IsActive round trip on every pin/unpin; revisit if timeout ever
+// starts stripping permissions instead of being an independent gate.
 func (s *pinService) requireManageMessages(ctx context.Context, userID, channelID string) error {
 	perms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
 	if err != nil {

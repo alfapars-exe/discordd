@@ -20,9 +20,9 @@ import ChannelPermissionEditor from "../settings/ChannelPermissionEditor";
 import Modal from "../shared/Modal";
 import EmojiPicker from "../shared/EmojiPicker";
 import type { UseChannelInlineRenameResult } from "../../hooks/useChannelInlineRename";
-import type { Channel, User } from "../../types";
+import type { Channel, PublicUser } from "../../types";
 
-type UserCardTarget = { user: User; top: number; left: number };
+type UserCardTarget = { user: PublicUser; top: number; left: number };
 type MutePickerTarget = { serverId: string; x: number; y: number };
 type InviteTarget = { serverId: string; serverName: string };
 type VoiceCtxMenuTarget = {

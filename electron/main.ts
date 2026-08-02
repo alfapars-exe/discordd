@@ -8,7 +8,8 @@
  *   - tray.ts           — system tray icon + menu
  *   - auto-updater.ts   — pre-launch splash + electron-updater
  *   - audio-capture.ts  — process-exclusive WASAPI loopback
- *   - push-to-talk.ts   — global keyboard PTT via uIOhook
+ *   - hotkey-router.ts  — pure PTT/mute keycode-to-signal routing
+ *   - push-to-talk.ts   — global keyboard PTT + mute hotkey via uIOhook
  *   - screen-picker.ts  — getDisplayMedia interception + custom picker
  *   - credentials.ts    — DPAPI/Keychain "Remember Me" storage
  *   - ipc-handlers.ts   — every renderer↔main IPC channel
@@ -31,7 +32,7 @@ import { installScreenPicker } from "./screen-picker";
 import { promoteLeftoverBreadcrumb } from "./picker-safe-mode";
 import { initDiagnosticLog, setVerbose } from "./diagnostic-log";
 import { getSettings } from "./settings";
-import { shutdownPTT } from "./push-to-talk";
+import { shutdownGlobalHotkeys } from "./push-to-talk";
 import { createTray } from "./tray";
 import { createMainWindow, getMainWindow, setQuitting } from "./window";
 
@@ -340,7 +341,7 @@ app.on("activate", () => {
 let shutdownStarted = false;
 app.on("before-quit", (e) => {
   setQuitting(true);
-  shutdownPTT();
+  shutdownGlobalHotkeys();
 
   // Force the cookie store to disk before we die.
   //

@@ -196,6 +196,40 @@ export type VoiceSettings = {
    * useMicSync, not a room reconnect.
    */
   micProfile: MicProfile;
+  /**
+   * Whether the standalone mute-toggle hotkey (see `muteHotkey`) is active.
+   * Default false (opt-in) — unlike PTT, this shortcut can fire while the
+   * app window is merely focused (or, when `muteHotkeyGlobal` is on,
+   * whenever the OS delivers the key at all), so it stays off until a user
+   * deliberately enables it in Voice Settings.
+   */
+  muteHotkeyEnabled: boolean;
+  /**
+   * KeyboardEvent.code bound to the mute-toggle hotkey. Default "KeyL". If
+   * it collides with the active PTT key, PTT wins (see useKeyboardShortcuts
+   * guard). Scope (focused-only vs. global) is controlled by
+   * `muteHotkeyGlobal`.
+   */
+  muteHotkey: string;
+  /**
+   * Electron-only: when true, the mute hotkey is registered as a global
+   * uIOhook shortcut (electron/push-to-talk.ts registerMuteHotkey) and
+   * fires even while the HiChat window is unfocused. When false (default),
+   * the hotkey only fires while the app window is focused, via the
+   * document-level listener in useKeyboardShortcuts — the original
+   * behavior before this field existed. Has no effect on web; the settings
+   * row for it is hidden there.
+   *
+   * Device-local by design: persisted to localStorage and included in the
+   * OUTBOUND preferences sync payload (currentSettings(), for other devices
+   * to display read-only), but `applyFromServer()` deliberately ignores it
+   * on the way IN (see that function). A synced value would let one device
+   * silently arm a system-wide keyboard hook on another — the hook itself
+   * only ever compares one keycode (see hotkey-router.ts's privacy note),
+   * but "which device is watching every keystroke" must never be decided
+   * remotely.
+   */
+  muteHotkeyGlobal: boolean;
 };
 
 /** Display profile that shapes encoder degradation + content hint. */
@@ -257,6 +291,9 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   cameraQuality: "720p",
   cameraFps: 30,
   micProfile: "konusma",
+  muteHotkeyEnabled: false,
+  muteHotkey: "KeyL",
+  muteHotkeyGlobal: false,
 };
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -387,6 +424,9 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     cameraQuality: s.cameraQuality,
     cameraFps: s.cameraFps,
     micProfile: s.micProfile,
+    muteHotkeyEnabled: s.muteHotkeyEnabled,
+    muteHotkey: s.muteHotkey,
+    muteHotkeyGlobal: s.muteHotkeyGlobal,
   };
 }
 
@@ -413,6 +453,9 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setCameraQuality: (quality: CameraQuality) => void;
   setCameraFps: (fps: CameraFps) => void;
   setMicProfile: (profile: MicProfile) => void;
+  setMuteHotkeyEnabled: (enabled: boolean) => void;
+  setMuteHotkey: (key: string) => void;
+  setMuteHotkeyGlobal: (enabled: boolean) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
@@ -454,6 +497,9 @@ export const createVoiceSettingsSlice: StateCreator<
     cameraQuality: initial.cameraQuality,
     cameraFps: initial.cameraFps,
     micProfile: initial.micProfile,
+    muteHotkeyEnabled: initial.muteHotkeyEnabled,
+    muteHotkey: initial.muteHotkey,
+    muteHotkeyGlobal: initial.muteHotkeyGlobal,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -551,6 +597,21 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
+    setMuteHotkeyEnabled: (enabled) => {
+      set({ muteHotkeyEnabled: enabled });
+      saveSettings(currentSettings(get()));
+    },
+
+    setMuteHotkey: (key) => {
+      set({ muteHotkey: key });
+      saveSettings(currentSettings(get()));
+    },
+
+    setMuteHotkeyGlobal: (enabled) => {
+      set({ muteHotkeyGlobal: enabled });
+      saveSettings(currentSettings(get()));
+    },
+
     setNoiseReduction: (enabled) => {
       set({ noiseReduction: enabled });
       saveSettings(currentSettings(get()));
@@ -615,6 +676,12 @@ export const createVoiceSettingsSlice: StateCreator<
       const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...loadSettings() };
       const keys = Object.keys(settings) as (keyof VoiceSettings)[];
       for (const key of keys) {
+        // muteHotkeyGlobal is device-local (see its doc comment on
+        // VoiceSettings) — skip it here so an inbound sync can neither
+        // overwrite the persisted localStorage snapshot below nor the
+        // in-memory state further down. currentSettings() still writes it
+        // OUTBOUND; only the inbound direction is blocked.
+        if (key === "muteHotkeyGlobal") continue;
         if (key in merged) {
           (merged as Record<string, unknown>)[key] = settings[key];
         }
@@ -647,6 +714,10 @@ export const createVoiceSettingsSlice: StateCreator<
         cameraQuality: merged.cameraQuality,
         cameraFps: merged.cameraFps,
         micProfile: merged.micProfile,
+        muteHotkeyEnabled: merged.muteHotkeyEnabled,
+        muteHotkey: merged.muteHotkey,
+        // muteHotkeyGlobal intentionally omitted — device-local, see the
+        // field's doc comment and the `continue` above.
       });
     },
   };

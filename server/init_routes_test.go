@@ -29,7 +29,7 @@ func (r *recordingRegistrar) HandleFunc(pattern string, _ func(http.ResponseWrit
 // to enumerate the route table.
 func captureRoutes() []string {
 	rec := &recordingRegistrar{}
-	initRoutes(rec, &Handlers{}, nil, nil, nil, nil, nil, nil)
+	initRoutes(rec, &Handlers{}, nil, nil, nil, nil, nil, nil, nil)
 	return rec.patterns
 }
 

@@ -383,6 +383,39 @@ func TestRefresh_BodyFallbackStaysUngated(t *testing.T) {
 	}
 }
 
+// TestRefresh_RejectsOversizedBody proves the security scan 2026-07-31
+// finding N-14 fix: POST /api/auth/refresh has no auth middleware (it hands
+// out the auth in the first place) and previously decoded its JSON body with
+// no size cap at all. A refresh_token value straddling the 64 KiB
+// (maxRefreshBody) cap must not be silently accepted by the JSON decoder --
+// it must fail to decode, so the request falls through as if no body token
+// were sent at all.
+func TestRefresh_RejectsOversizedBody(t *testing.T) {
+	called := false
+	svc := &stubAuthService{
+		refreshTokenFn: func(_ context.Context, _ string) (*services.AuthTokens, error) {
+			called = true
+			return stubTokens(), nil
+		},
+	}
+	h := newCookieTestHandler(svc)
+
+	oversized := strings.Repeat("a", maxRefreshBody+1)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh",
+		strings.NewReader(`{"refresh_token":"`+oversized+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rec := httptest.NewRecorder()
+	h.Refresh(rec, req)
+
+	if called {
+		t.Error("service must not be reached — the oversized token never fully decoded")
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 (oversized body must not smuggle a token through)", rec.Code)
+	}
+}
+
 // ─── Logout ───
 
 // TestLogout_ClearsBothCookieVariants: the clearing Set-Cookie must be

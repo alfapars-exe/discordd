@@ -21,10 +21,10 @@ import ReportModal from "../shared/ReportModal";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuthStore } from "../../stores/authStore";
-import type { DMChannelWithUser, User } from "../../types";
+import type { DMChannelWithUser, PublicUser } from "../../types";
 
 type DMSectionProps = {
-  onShowUserCard: (user: User, top: number, left: number) => void;
+  onShowUserCard: (user: PublicUser, top: number, left: number) => void;
 };
 
 function DMSection({ onShowUserCard }: DMSectionProps) {

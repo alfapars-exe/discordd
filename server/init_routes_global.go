@@ -10,7 +10,10 @@ import "net/http"
 func (d *routeDeps) registerAuthRoutes() {
 	d.mux.HandleFunc("POST /api/auth/register", d.h.Auth.Register)
 	d.mux.HandleFunc("POST /api/auth/login", d.h.Auth.Login)
-	d.mux.HandleFunc("POST /api/auth/refresh", d.h.Auth.Refresh)
+	// Per-IP rate limit (security scan 2026-07-31, finding N-14): refresh has
+	// no auth middleware (it hands out the auth) and previously had no
+	// limiter of any kind, unlike every other unauthenticated auth route.
+	d.mux.Handle("POST /api/auth/refresh", d.refresh(d.h.Auth.Refresh))
 	d.mux.Handle("POST /api/auth/logout", d.auth(d.h.Auth.Logout))
 	d.mux.Handle("POST /api/auth/logout-all", d.auth(d.h.Auth.LogoutAll))
 	d.mux.HandleFunc("POST /api/auth/forgot-password", d.h.Auth.ForgotPassword)

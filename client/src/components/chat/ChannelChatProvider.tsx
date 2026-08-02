@@ -4,7 +4,7 @@ import { useMemo, useCallback, useRef, type ReactNode } from "react";
 import { ChatContext, type ChatContextValue, type ChatMessage } from "../../hooks/useChatContext";
 import { useMessageStore } from "../../stores/messageStore";
 import { usePinStore } from "../../stores/pinStore";
-import { useMemberStore } from "../../stores/memberStore";
+import { useMemberStore, useMemberTimeout } from "../../stores/memberStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useChannelPermissions } from "../../hooks/useChannelPermissions";
@@ -64,6 +64,7 @@ function ChannelChatProvider({
   const members = targetServerId ? (membersByServer[targetServerId] ?? EMPTY_MEMBERS) : EMPTY_MEMBERS;
   const currentUser = useAuthStore((s) => s.user);
   const { hasChannelPerm, permsResolved } = useChannelPermissions(channelId);
+  const selfTimeout = useMemberTimeout(targetServerId, currentUser?.id);
 
   // ─── File drop ref — forwards drag-drop files from ChatArea to MessageInput ───
   const addFilesRef = useRef<((files: File[]) => void) | null>(null);
@@ -78,7 +79,12 @@ function ChannelChatProvider({
   // answers 403, and the existing failure path toasts and preserves the
   // draft. Worst case the user sees an error; best case (the common one)
   // the message just sends.
-  const canSend = !permsResolved || hasChannelPerm(Permissions.SendMessages);
+  //
+  // The timeout gate below doesn't share that "optimistic while unknown"
+  // concern — a moderator timeout is a live, store-known fact (populated
+  // by the initial member fetch and kept current via WS events), not
+  // something still in flight.
+  const canSend = (!permsResolved || hasChannelPerm(Permissions.SendMessages)) && !selfTimeout;
   const currentMember = members.find((m) => m.id === currentUser?.id);
   const canManageMessages = currentMember
     ? hasPermission(currentMember.effective_permissions, Permissions.ManageMessages)
@@ -190,6 +196,7 @@ function ChannelChatProvider({
       showRoleColors: true,
       members,
       addFilesRef,
+      selfTimeoutExpiresAt: selfTimeout?.expires_at,
     }),
     [
       channelId, channelName, explicitServerId, messages, isLoading, isLoadingMore, hasMore,
@@ -197,7 +204,7 @@ function ChannelChatProvider({
       sendMessage, editMessage, deleteMessage, fetchMessages, fetchOlderMessages,
       toggleReaction, setReplyingTo, setScrollToMessageId, sendTyping,
       pinMessage, unpinMessage, isMessagePinned,
-      canSend, canManageMessages, members, addFilesRef,
+      canSend, canManageMessages, members, addFilesRef, selfTimeout,
     ]
   );
 

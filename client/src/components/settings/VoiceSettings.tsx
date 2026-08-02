@@ -8,6 +8,7 @@ import { useAudioDevices } from "../../hooks/useAudioDevices";
 import { useMicTest } from "../../hooks/useMicTest";
 import VolumeSlider from "./VolumeSlider";
 import PTTKeySection from "./voice/PTTKeySection";
+import MuteHotkeySection from "./voice/MuteHotkeySection";
 import NoiseReductionSection from "./voice/NoiseReductionSection";
 import MicProfileSection from "./voice/MicProfileSection";
 import CameraSection from "./voice/CameraSection";
@@ -78,6 +79,9 @@ function VoiceSettings() {
 
       {/* ─── PTT Key (only in PTT mode) ─── */}
       {inputMode === "push_to_talk" && <PTTKeySection />}
+
+      {/* ─── Mute Hotkey (opt-in, always shown) ─── */}
+      <MuteHotkeySection />
 
       {/* ─── Mic Sensitivity (voice activity mode only) ─── */}
       {inputMode === "voice_activity" && (

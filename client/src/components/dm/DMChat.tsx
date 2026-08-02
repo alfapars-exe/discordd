@@ -24,7 +24,7 @@ import FileDropOverlay from "../shared/FileDropOverlay";
 import Avatar from "../shared/Avatar";
 import * as e2eeApi from "../../api/e2ee";
 import { useAuthStore } from "../../stores/authStore";
-import type { User } from "../../types";
+import type { PublicUser } from "../../types";
 
 type DMChatProps = {
   channelId: string;
@@ -70,7 +70,7 @@ function DMChatContent({
 }: {
   channelId: string;
   channelName: string;
-  otherUser: User | null;
+  otherUser: PublicUser | null;
 }) {
   const { t } = useTranslation("chat");
   const { t: tDM } = useTranslation("dm");

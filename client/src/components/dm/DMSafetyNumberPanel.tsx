@@ -11,10 +11,10 @@ import { useToastStore } from "../../stores/toastStore";
 import * as keyStorage from "../../crypto/keyStorage";
 import { computeSafetyNumber } from "../../crypto/safetyNumber";
 import type { TrustedIdentity } from "../../crypto/types";
-import type { User } from "../../types";
+import type { PublicUser } from "../../types";
 
 type DMSafetyNumberPanelProps = {
-  otherUser: User;
+  otherUser: PublicUser;
   onClose: () => void;
 };
 

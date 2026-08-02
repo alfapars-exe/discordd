@@ -8,7 +8,7 @@
  */
 
 import { createContext, useContext, type RefObject } from "react";
-import type { User, ReactionGroup, MessageReference, MemberWithRoles } from "../types";
+import type { PublicUser, ReactionGroup, MessageReference, MemberWithRoles } from "../types";
 import type { EncryptedFileMeta } from "../crypto/fileEncryption";
 
 // ─── ChatMessage — Common message type ───
@@ -30,7 +30,7 @@ export type ChatMessage = {
   created_at: string;
   reply_to_id: string | null;
   is_pinned: boolean;
-  author: User;
+  author: PublicUser;
   attachments: ChatAttachment[];
   reactions: ReactionGroup[];
   referenced_message: MessageReference | null;
@@ -93,6 +93,10 @@ export type ChatContextValue = {
   canManageMessages: boolean;
   showRoleColors: boolean;
   members: MemberWithRoles[];
+  /** ISO timestamp of the viewer's own active moderator timeout on this
+   *  server, if any. Optional — DMs never set it (no server, no timeouts),
+   *  so DMChatProvider's ChatContextValue compiles unchanged. */
+  selfTimeoutExpiresAt?: string;
 };
 
 // ─── Context ───

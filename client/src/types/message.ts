@@ -4,7 +4,7 @@
  * but separate tables on the backend).
  */
 
-import type { User } from "./user";
+import type { PublicUser } from "./user";
 import type { ReactionGroup } from "./common";
 import type { EncryptionVersion } from "./e2ee";
 
@@ -14,7 +14,7 @@ import type { EncryptionVersion } from "./e2ee";
  */
 export type MessageReference = {
   id: string;
-  author: User | null;
+  author: PublicUser | null;
   content: string | null;
 };
 
@@ -29,7 +29,7 @@ export type Message = {
   created_at: string;
   reply_to_id: string | null;
   referenced_message: MessageReference | null;
-  author: User;
+  author: PublicUser;
   attachments: Attachment[];
   mentions: string[];
   role_mentions: string[];
@@ -65,7 +65,7 @@ export type PinnedMessage = {
   pinned_by: string;
   created_at: string;
   message: Message;
-  pinned_by_user: User | null;
+  pinned_by_user: PublicUser | null;
 };
 
 /** URL Open Graph metadata (server-side fetch with SSRF protection). */

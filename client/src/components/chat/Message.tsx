@@ -31,7 +31,7 @@ import {
   getRoleType,
   renderMessageContent,
 } from "../../utils/messageParsers";
-import type { MemberWithRoles, User } from "../../types";
+import type { MemberWithRoles, PublicUser } from "../../types";
 import Avatar from "../shared/Avatar";
 import BadgePill from "../shared/BadgePill";
 import ContextMenu from "../shared/ContextMenu";
@@ -130,7 +130,7 @@ function Message({
 
   const [pickerSource, setPickerSource] = useState<"bar" | "hover" | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
-  const [profileTarget, setProfileTarget] = useState<{ user: User; top: number; left: number } | null>(null);
+  const [profileTarget, setProfileTarget] = useState<{ user: PublicUser; top: number; left: number } | null>(null);
 
   const isOwner = currentUser?.id === message.user_id;
 

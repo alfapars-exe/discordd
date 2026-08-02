@@ -170,6 +170,9 @@ var BotReadableOps = map[string]bool{
 	OpChannelCreate:  true,
 	OpChannelUpdate:  true,
 	OpChannelDelete:  true,
+	// OpMemberTimeout / OpMemberTimeoutRemove are deliberately excluded: the
+	// timeout payload carries the moderator's free-text `reason`, which is
+	// not meant to be readable by bot integrations.
 }
 
 // ReadyData is the payload sent to a client on initial connection.
