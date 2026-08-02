@@ -54,7 +54,21 @@ jobs:
         working-directory: server
 
       - name: go test (race + cover)
-        run: go test -race -cover -timeout=5m ./...
+        # -timeout is per test binary, i.e. per package. The repository
+        # package alone measured 246s locally under -race -cover and hit the
+        # old 5m ceiling on CI hardware, failing with "test timed out" and no
+        # test listed as running -- the signature of a package that is simply
+        # long, not one that hangs.
+        #
+        # No single test dominates: the slowest is ~11s and the rest cluster
+        # around 3s, because each one builds a fresh SQLite database and runs
+        # the migrations. Cost therefore grows linearly with test count, and
+        # the suite crossed the line as tests were added rather than because
+        # anything got slower.
+        #
+        # 15m is headroom, not a mute button: a genuinely hung test still
+        # fails the job, just not one that is merely long.
+        run: go test -race -cover -timeout=15m ./...
         working-directory: server
 
       - name: go build
