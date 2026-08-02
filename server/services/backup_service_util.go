@@ -107,9 +107,13 @@ func (b *BackupService) hfEnv() []string {
 	env := os.Environ()
 	env = append(env,
 		"HF_TOKEN="+b.cfg.HFToken,
-		// Enable hf_transfer (Rust-based parallel uploader) when present
-		// — falls back to pure-Python silently if hf_transfer isn't installed.
-		"HF_HUB_ENABLE_HF_TRANSFER=1",
+		// Enable the hf_xet high-performance transfer path. huggingface_hub
+		// 1.0 dropped the `[hf_transfer]` extra, so the old
+		// HF_HUB_ENABLE_HF_TRANSFER=1 var is a silent no-op today (pip just
+		// ignores the unknown extra and the CLI falls back to the slow path).
+		// hf_xet ships as a transitive dependency in the image (amd64+arm64)
+		// since hf_xet 1.26.0, so this flag actually takes effect.
+		"HF_XET_HIGH_PERFORMANCE=1",
 	)
 	return env
 }

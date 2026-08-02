@@ -13,6 +13,7 @@
   "edited": "(edited)",
   "uploadFile": "Upload File",
   "fileTooLarge": "File is too large (max {{max}}MB)",
+  "tooManyFiles": "You can attach up to {{max}} files at a time — extra files were dropped",
   "noChannel": "Select a channel",
   "editCancel": "cancel",
   "editSave": "save",

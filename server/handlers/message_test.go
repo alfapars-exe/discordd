@@ -106,6 +106,7 @@ func (s *stubMessageService) Delete(_ context.Context, _, _, _ string, _ models.
 	return nil
 }
 func (s *stubMessageService) SetAuditLogger(_ services.AuditWriter) {}
+func (s *stubMessageService) SetUploadDir(_ string)                 {}
 
 // stubUploadService succeeds or fails per filename, so a single multipart
 // request can carry one good file and one bad one.

@@ -20,6 +20,7 @@ type MessageService interface {
 	Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
 	Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error
 	SetAuditLogger(logger AuditWriter)
+	SetUploadDir(dir string)
 }
 
 type messageService struct {
@@ -37,10 +38,19 @@ type messageService struct {
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
 	auditLogger     AuditWriter
+	// uploadDir enables best-effort disk cleanup on message delete (see
+	// upload_cleanup.go). Blank (the zero value, and every existing test's
+	// default) disables cleanup — set via SetUploadDir, wired in
+	// init_services.go so the constructor signature above stays unchanged.
+	uploadDir string
 }
 
 func (s *messageService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
+}
+
+func (s *messageService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -533,8 +543,26 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 		channelName = channel.Name
 	}
 
+	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
+	// A fetch failure here is logged and non-fatal — the delete still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	attachments, attErr := s.attachmentRepo.GetByMessageID(ctx, id)
+	if attErr != nil {
+		messageLogger.Error("failed to fetch attachments before message delete", "message_id", id, "err", pkg.ErrText(attErr))
+	}
+
 	if err := s.messageRepo.Delete(ctx, id); err != nil {
 		return err
+	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	if len(attachments) > 0 {
+		fileURLs := make([]string, len(attachments))
+		for i, a := range attachments {
+			fileURLs[i] = a.FileURL
+		}
+		removeUploadFilesByURL(s.uploadDir, fileURLs)
 	}
 
 	// Decrement unread_count for every user who had this message as unread.

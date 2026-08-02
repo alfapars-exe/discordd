@@ -77,6 +77,35 @@ func (r *sqliteDMRepo) GetAttachmentsByMessageIDs(ctx context.Context, messageID
 	return result, nil
 }
 
+// GetAttachmentFileURLsByChannelID returns every attachment file_url for
+// messages in the given DM channel. Used by DeclineRequest to clean up
+// on-disk files before the channel row (and, explicitly, its messages and
+// attachments — see DeleteChannel) is deleted.
+func (r *sqliteDMRepo) GetAttachmentFileURLsByChannelID(ctx context.Context, channelID string) ([]string, error) {
+	query := `SELECT file_url FROM dm_attachments WHERE dm_message_id IN (
+		SELECT id FROM dm_messages WHERE dm_channel_id = ?)`
+
+	rows, err := r.db.QueryContext(ctx, query, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("get DM attachment file urls by channel id: %w", err)
+	}
+	defer rows.Close()
+
+	var urls []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, fmt.Errorf("scan DM attachment file url: %w", err)
+		}
+		urls = append(urls, url)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate DM attachment file url rows: %w", err)
+	}
+
+	return urls, nil
+}
+
 // GetAttachmentByFileURL resolves a /api/uploads/{name} download URL back
 // to its DM attachment row. The auth-gated download handler uses the
 // returned dm_message_id to look up the parent DM channel and verify

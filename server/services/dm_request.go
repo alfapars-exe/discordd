@@ -64,9 +64,21 @@ func (s *dmService) DeclineRequest(ctx context.Context, userID, channelID string
 		},
 	})
 
+	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
+	// A fetch failure here is logged and non-fatal — the decline still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	fileURLs, urlErr := s.dmRepo.GetAttachmentFileURLsByChannelID(ctx, channelID)
+	if urlErr != nil {
+		dmLogger.Error("failed to fetch DM attachment file urls before channel delete", "channel_id", channelID, "err", pkg.ErrText(urlErr))
+	}
+
 	if err := s.dmRepo.DeleteChannel(ctx, channelID); err != nil {
 		return fmt.Errorf("failed to decline DM request: %w", err)
 	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	removeUploadFilesByURL(s.uploadDir, fileURLs)
 
 	return nil
 }

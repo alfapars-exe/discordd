@@ -88,7 +88,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Diagnostics:       handlers.NewDiagnosticsHandler(svcs.Email, cfg.DiagSMTP.To, svcs.AppLog, cfg.Upload.MaxSize),
 		AuditLog:          handlers.NewAuditLogHandler(svcs.AuditLog),
 		Soundboard:        handlers.NewSoundboardHandler(svcs.Soundboard, cfg.Upload.MaxSize),
-		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission),
+		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog, svcs.Voice),
 		ClientLog:         handlers.NewClientLogHandler(svcs.AppLog),
 		UploadDownload: handlers.NewUploadDownloadHandler(cfg.Upload.Dir, services.NewMediaAccessService(

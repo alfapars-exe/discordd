@@ -12,7 +12,9 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
@@ -901,6 +903,70 @@ func TestDMRepo_DeleteChannelRemovesMessages(t *testing.T) {
 	}
 	if n := countRows(t, db, `SELECT COUNT(*) FROM dm_messages WHERE dm_channel_id = ?`, keep.ID); n != 1 {
 		t.Errorf("other channel's messages = %d, want 1 (collateral damage)", n)
+	}
+}
+
+// TestDMRepo_DeleteChannel_NoOrphanAttachmentsWithFKsOff pins the
+// DeleteChannel fix: dm_attachments belonging to the channel's messages must
+// be gone even when the underlying connection has foreign_keys OFF — the
+// exact condition prod's remote libSQL/Turso branch runs under
+// (database/integrity.go never enables that PRAGMA there). Before the fix,
+// DeleteChannel deleted dm_messages and dm_channels explicitly but left
+// dm_attachments to the (here, disabled) FK cascade, so every attachment of
+// a declined DM request leaked on disk forever (services/upload_cleanup.go
+// can only clean up what GetAttachmentFileURLsByChannelID can still find —
+// an orphan left behind by DeleteChannel itself is invisible to it).
+func TestDMRepo_DeleteChannel_NoOrphanAttachmentsWithFKsOff(t *testing.T) {
+	db, path := newTestDBWithPath(t)
+	seedDMUsers(t, db)
+	repo := NewSQLiteDMRepo(db.Conn)
+	ctx := context.Background()
+
+	ch := newDMChannel(t, ctx, repo, dmAlice, dmBob, models.DMStatusAccepted)
+	keep := newDMChannel(t, ctx, repo, dmAlice, dmCarol, models.DMStatusAccepted)
+	msg1 := newDMMessage(t, ctx, repo, ch.ID, dmAlice, "gidecek")
+	msg2 := newDMMessage(t, ctx, repo, ch.ID, dmBob, "bu da")
+	keptMsg := newDMMessage(t, ctx, repo, keep.ID, dmAlice, "kalacak")
+
+	for i, m := range []*models.DMMessage{msg1, msg2} {
+		if err := repo.CreateAttachment(ctx, &models.DMAttachment{
+			DMMessageID: m.ID, Filename: "f.png", FileURL: fmt.Sprintf("/api/uploads/gone-%d.png", i),
+		}); err != nil {
+			t.Fatalf("CreateAttachment: %v", err)
+		}
+	}
+	if err := repo.CreateAttachment(ctx, &models.DMAttachment{
+		DMMessageID: keptMsg.ID, Filename: "keep.png", FileURL: "/api/uploads/keep.png",
+	}); err != nil {
+		t.Fatalf("CreateAttachment (keeper): %v", err)
+	}
+
+	// Guard the fixture: two attachments exist for the channel about to be
+	// deleted, before DeleteChannel ever runs.
+	if n := countRows(t, db, `SELECT COUNT(*) FROM dm_attachments WHERE dm_message_id IN (?, ?)`, msg1.ID, msg2.ID); n != 2 {
+		t.Fatalf("setup: expected 2 attachments before delete, got %d", n)
+	}
+
+	// Open a second connection with foreign_keys OFF — the exact condition
+	// prod's libSQL/Turso branch runs under (see execWithoutFKs above) — and
+	// run DeleteChannel THROUGH IT, so this test cannot pass merely because
+	// SQLite's own FK cascade covered for a missing explicit delete.
+	fkOffConn, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("open fk-off conn: %v", err)
+	}
+	defer func() { _ = fkOffConn.Close() }()
+	fkOffRepo := NewSQLiteDMRepo(fkOffConn)
+
+	if err := fkOffRepo.DeleteChannel(ctx, ch.ID); err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+
+	if n := countRows(t, db, `SELECT COUNT(*) FROM dm_attachments WHERE dm_message_id IN (?, ?)`, msg1.ID, msg2.ID); n != 0 {
+		t.Errorf("orphan dm_attachments rows after DeleteChannel with FKs off = %d, want 0", n)
+	}
+	if n := countRows(t, db, `SELECT COUNT(*) FROM dm_attachments WHERE dm_message_id = ?`, keptMsg.ID); n != 1 {
+		t.Errorf("unrelated channel's attachment = %d, want 1 (collateral damage)", n)
 	}
 }
 

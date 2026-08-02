@@ -267,8 +267,16 @@ func (r *sqliteMessageRepo) Update(ctx context.Context, message *models.Message)
 }
 
 func (r *sqliteMessageRepo) Delete(ctx context.Context, id string) error {
-	// Attachments CASCADE-deleted. Reply references preserved (no FK):
-	// reply_to_id stays, LEFT JOIN returns NULL -> frontend shows "deleted message".
+	// Attachment rows are deleted explicitly: prod's remote libSQL/Turso
+	// branch never enables the foreign_keys PRAGMA, so ON DELETE CASCADE
+	// does not fire there and the rows would orphan forever (same rule as
+	// DeleteChannel in sqlite_dm_channels.go). Must run BEFORE the parent
+	// delete — the WHERE references the message row. Reply references
+	// preserved (no FK): reply_to_id stays, LEFT JOIN returns NULL ->
+	// frontend shows "deleted message".
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM attachments WHERE message_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete message attachments: %w", err)
+	}
 	result, err := r.db.ExecContext(ctx, `DELETE FROM messages WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete message: %w", err)

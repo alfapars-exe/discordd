@@ -17,9 +17,12 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+var dmLogger = logx.Component("service.dm")
 
 type DMService interface {
 	GetOrCreateChannel(ctx context.Context, userID, otherUserID string) (*models.DMChannelWithUser, error)
@@ -41,6 +44,7 @@ type DMService interface {
 	GetPinnedMessages(ctx context.Context, userID, channelID string) ([]models.DMMessage, error)
 	SearchMessages(ctx context.Context, userID, channelID, query string, limit, offset int) (*models.DMSearchResult, error)
 	ToggleE2EE(ctx context.Context, userID, channelID string, enabled bool) (*models.DMChannel, error)
+	SetUploadDir(dir string)
 }
 
 // FriendshipChecker is a minimal ISP interface for friend checks (used by dmService).
@@ -55,6 +59,11 @@ type dmService struct {
 	blockChecker  BlockChecker
 	friendChecker FriendshipChecker
 	unhider       DMSettingsUnhider
+	// uploadDir enables best-effort disk cleanup on message/channel delete
+	// (see upload_cleanup.go). Blank disables cleanup — set via
+	// SetUploadDir, wired in init_services.go so the constructor signature
+	// above stays unchanged.
+	uploadDir string
 }
 
 func NewDMService(
@@ -73,6 +82,10 @@ func NewDMService(
 		friendChecker: friendshipChecker,
 		unhider:       unhider,
 	}
+}
+
+func (s *dmService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 // ─── Shared Helpers ───

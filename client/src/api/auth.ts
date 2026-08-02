@@ -41,10 +41,11 @@ export async function getMe() {
   return apiClient<User>("/users/me");
 }
 
-export async function changePassword(newPassword: string) {
+/** Change password — requires current password (server: POST /api/users/me/password 400s without it). */
+export async function changePassword(currentPassword: string, newPassword: string) {
   return apiClient<{ message: string }>("/users/me/password", {
     method: "POST",
-    body: { new_password: newPassword },
+    body: { current_password: currentPassword, new_password: newPassword },
   });
 }
 

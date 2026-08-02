@@ -747,6 +747,54 @@ func TestServe_AuthGating(t *testing.T) {
 	}
 }
 
+// TestServe_BadgeIconSVGIsHardenedPublicDownload pins the Part C invariant:
+// badge icons ARE served through this real, hardened handler at
+// /api/uploads/badges/{name} — plain "/uploads/badges/…" was never mounted
+// anywhere (main.go only routes "/api/", "/static/", "/ws"; everything else
+// falls through to the SPA's index.html), so that used to be a silently
+// broken <img src>. The badges/ prefix is a public path (no credential
+// required, same as avatars/icons), but "public" only means "no auth gate" —
+// serveFile's re-sniff still applies, so even a real SVG (accepted only
+// historically; the upload allowlist no longer admits new ones, see
+// handlers/badge.go) never renders inline: SVG can't be sniffed to
+// "image/svg+xml" by Go's detector, so it always lands in the
+// octet-stream + attachment + sandbox branch.
+func TestServe_BadgeIconSVGIsHardenedPublicDownload(t *testing.T) {
+	h, uploadDir, _ := newServeWorld(t)
+
+	badgesDir := filepath.Join(uploadDir, "badges")
+	if err := os.MkdirAll(badgesDir, 0o750); err != nil {
+		t.Fatalf("mkdir badges dir: %v", err)
+	}
+	const badgeFile = "badge_aabbccdd11223344.svg"
+	svgBytes := []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)
+	if err := os.WriteFile(filepath.Join(badgesDir, badgeFile), svgBytes, 0o600); err != nil {
+		t.Fatalf("write badge fixture: %v", err)
+	}
+
+	rec := serveAs(t, h, "/api/uploads/badges/"+badgeFile, "" /* anonymous */)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != string(svgBytes) {
+		t.Errorf("body = %q, want the raw SVG bytes", rec.Body.String())
+	}
+	if got, want := rec.Header().Get("Content-Type"), "application/octet-stream"; got != want {
+		t.Errorf("Content-Type = %q, want %q (SVG must never sniff as image/svg+xml)", got, want)
+	}
+	disp := rec.Header().Get("Content-Disposition")
+	if !strings.HasPrefix(disp, "attachment") {
+		t.Errorf("Content-Disposition = %q, want attachment prefix", disp)
+	}
+	if got, want := rec.Header().Get("Content-Security-Policy"), "sandbox"; got != want {
+		t.Errorf("Content-Security-Policy = %q, want %q", got, want)
+	}
+	if got, want := rec.Header().Get("X-Content-Type-Options"), "nosniff"; got != want {
+		t.Errorf("X-Content-Type-Options = %q, want %q", got, want)
+	}
+}
+
 // TestServe_ReportAndFeedbackAttachments pins the A-22 fix: report/feedback
 // evidence files, which used to fall through to MediaPublic (any URL holder
 // could download moderation evidence with no credential at all), are now
@@ -833,13 +881,16 @@ func TestServe_ReportAndFeedbackAttachments(t *testing.T) {
 }
 
 // TestServe_UnclaimedDiskFileFailsClosed is the A-21 pin. A file can end up
-// on disk with NO table claiming its fileURL: message/report/ticket deletion
-// never removes the file from disk, and on prod's remote libSQL/Turso branch
-// `foreign_keys` is never enabled, so `ON DELETE CASCADE` doesn't even clean
-// up the attachment ROW either. Before the fail-closed rewrite, "nothing
-// claims this path" fell through to MediaPublic — the file became MORE
-// exposed the moment its owning row disappeared. It must now 404 for every
-// caller, authenticated or not.
+// on disk with NO table claiming its fileURL: message/DM/channel/server/
+// ticket deletion now does BEST-EFFORT cleanup via services/upload_cleanup.go
+// (report deletion has no delete path at all), so orphans still happen —
+// blank uploadDir, a failed URL enumeration, or an os.Remove error all leave
+// the file behind; and on prod's remote libSQL/Turso branch `foreign_keys`
+// is never enabled, so `ON DELETE CASCADE` doesn't clean up the attachment
+// ROW either. Before the fail-closed rewrite, "nothing claims this path"
+// fell through to MediaPublic — the file became MORE exposed the moment its
+// owning row disappeared. It must now 404 for every caller, authenticated
+// or not; precisely because cleanup is best-effort, this pin must hold.
 func TestServe_UnclaimedDiskFileFailsClosed(t *testing.T) {
 	h, _, _ := newServeWorld(t)
 

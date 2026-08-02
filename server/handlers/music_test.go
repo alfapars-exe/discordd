@@ -9,9 +9,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -98,7 +100,7 @@ func TestPlay_RejectsNonHTTPScheme(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			music := &stubMusicService{}
-			h := NewMusicHandler(music, stubPermResolver{})
+			h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 			rec := httptest.NewRecorder()
 			req := newPlayRequest(t, `{"url":`+jsonString(tc.url)+`}`)
@@ -126,7 +128,7 @@ func TestPlay_AcceptsHTTPSchemes(t *testing.T) {
 	for _, url := range cases {
 		t.Run(url, func(t *testing.T) {
 			music := &stubMusicService{}
-			h := NewMusicHandler(music, stubPermResolver{})
+			h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 			rec := httptest.NewRecorder()
 			req := newPlayRequest(t, `{"url":`+jsonString(url)+`}`)
@@ -149,7 +151,7 @@ func TestPlay_AcceptsHTTPSchemes(t *testing.T) {
 // behavior, just covered by a test now.
 func TestPlay_RejectsEmptyURL(t *testing.T) {
 	music := &stubMusicService{}
-	h := NewMusicHandler(music, stubPermResolver{})
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 	rec := httptest.NewRecorder()
 	req := newPlayRequest(t, `{"url":""}`)
@@ -170,7 +172,7 @@ func TestPlay_RejectsEmptyURL(t *testing.T) {
 // ErrorWithMessage branch produced.
 func TestPlay_BadRequestFromServiceMaps400(t *testing.T) {
 	music := &stubMusicService{enqueueErr: fmt.Errorf("yt-dlp extraction failed: %w", pkg.ErrBadRequest)}
-	h := NewMusicHandler(music, stubPermResolver{})
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 	rec := httptest.NewRecorder()
 	req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
@@ -193,7 +195,7 @@ func TestPlay_BadRequestFromServiceMaps400(t *testing.T) {
 // internal detail (the Turso hostname) that ErrText alone would not redact.
 func TestPlay_InternalErrorDoesNotLeakDSN(t *testing.T) {
 	music := &stubMusicService{enqueueErr: errors.New("dial libsql://db.turso.io?authToken=SUPERSECRET: refused")}
-	h := NewMusicHandler(music, stubPermResolver{})
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 	rec := httptest.NewRecorder()
 	req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
@@ -207,6 +209,47 @@ func TestPlay_InternalErrorDoesNotLeakDSN(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "db.turso.io") {
 		t.Fatalf("response body leaked internal hostname (ErrText alone would not have caught this): %s", rec.Body.String())
+	}
+}
+
+// TestPlay_RateLimit — POST .../music/play must be rate-limited per user
+// (resource scan 2026-08-02): each call can spawn a ~30s yt-dlp subprocess,
+// so an unthrottled caller could pin CPU/bandwidth with a fast loop.
+// Requests within budget succeed; once the budget is exhausted, further
+// requests get 429 with a Retry-After header and the music service is never
+// reached for the rejected request.
+func TestPlay_RateLimit(t *testing.T) {
+	music := &stubMusicService{}
+	limiter := ratelimit.NewMessageRateLimiter(2, time.Minute, 30*time.Second)
+	h := NewMusicHandler(music, stubPermResolver{}, limiter)
+
+	// First two requests are within the 2/min budget.
+	for i := 0; i < 2; i++ {
+		rec := httptest.NewRecorder()
+		req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
+		h.Play(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d: expected 200, got %d (body: %s)", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	if !music.enqueueCalled {
+		t.Fatal("Enqueue should have been called for in-budget requests")
+	}
+
+	// Third request exceeds the budget.
+	music.enqueueCalled = false
+	rec := httptest.NewRecorder()
+	req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
+	h.Play(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header on 429 response")
+	}
+	if music.enqueueCalled {
+		t.Fatal("Enqueue must NOT be called once the rate limit is exceeded")
 	}
 }
 

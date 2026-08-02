@@ -232,6 +232,14 @@ export const MAX_MESSAGE_LENGTH = 999;
  */
 export const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
+/**
+ * Max attachments per message — server: LimitedParseMultipartFormN n=10
+ * (handlers/message.go, handlers/dm.go). Exceeding this on the server
+ * 400s the whole send, so the client truncates to the first 10 up front
+ * instead of surfacing an opaque "bad request" for a file-count reason.
+ */
+export const MAX_FILES = 10;
+
 /** Idle detection — timeout in ms. User becomes "idle" after 5 minutes of inactivity. */
 export const IDLE_TIMEOUT = 5 * 60 * 1000;
 

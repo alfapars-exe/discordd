@@ -126,17 +126,14 @@ RUN set -eux; \
     # torch/typing. Removing it changes nothing that was installed; it only
     # stops this line claiming to install something it does not.
     #
-    # Consequence, NOT fixed here: services/backup_service_util.go still sets
-    # HF_HUB_ENABLE_HF_TRANSFER=1, which 1.x only answers with a FutureWarning
-    # ("hf_transfer is not used anymore, use HF_XET_HIGH_PERFORMANCE"). The hf
-    # CLI still exits 0, so backups work — they just upload without the
-    # accelerated path anyone reading that env var would assume is active.
-    # Restoring it is only an env-var swap, NOT a new dependency: hf_xet
-    # already ships as a transitive dependency of huggingface_hub 1.26.0
-    # (verified importable in the built image on both amd64 and arm64), and
-    # HF_XET_HIGH_PERFORMANCE=1 is accepted without any warning. It is left
-    # out of this commit because it changes production upload behaviour, not
-    # because it is expensive.
+    # services/backup_service_util.go now sets HF_XET_HIGH_PERFORMANCE=1
+    # (the dead HF_HUB_ENABLE_HF_TRANSFER=1 was swapped out — 1.x only
+    # answered it with a FutureWarning and never accelerated anything).
+    # This is an env-var swap, NOT a new dependency: hf_xet already ships
+    # as a transitive dependency of huggingface_hub 1.26.0 (verified
+    # importable in the built image on both amd64 and arm64), and
+    # HF_XET_HIGH_PERFORMANCE=1 is accepted without any warning. Backup
+    # uploads now take the accelerated hf_xet path.
     #
     # --only-binary :all: refuses source distributions, so no dependency can
     # run a setup.py at install time (Sonar docker:S8541). Wheels only.

@@ -3,11 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -20,10 +22,15 @@ import (
 type MusicHandler struct {
 	music services.MusicBotService
 	perms services.ChannelPermResolver
+	// playLimiter throttles Play (resource scan 2026-08-02): each call can
+	// spawn a ~30s yt-dlp subprocess, so it gets its own per-user budget
+	// rather than sharing one with the cheap skip/pause/resume/stop/state
+	// commands. See RateLimiters.MusicPlay for the sizing rationale.
+	playLimiter *ratelimit.MessageRateLimiter
 }
 
-func NewMusicHandler(music services.MusicBotService, perms services.ChannelPermResolver) *MusicHandler {
-	return &MusicHandler{music: music, perms: perms}
+func NewMusicHandler(music services.MusicBotService, perms services.ChannelPermResolver, playLimiter *ratelimit.MessageRateLimiter) *MusicHandler {
+	return &MusicHandler{music: music, perms: perms, playLimiter: playLimiter}
 }
 
 type playRequest struct {
@@ -43,6 +50,16 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
+
+	if h.playLimiter != nil && !h.playLimiter.Allow(user.ID) {
+		retryAfter := h.playLimiter.CooldownSeconds(user.ID)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many play requests, please wait %s",
+				ratelimit.FormatRetryMessage(retryAfter)))
+		return
+	}
+
 	channelID := r.PathValue("channelId")
 	if channelID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel_id is required")
