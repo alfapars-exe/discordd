@@ -7,8 +7,9 @@ import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
 import { useAttachmentRejectionToast } from "../../hooks/useAttachmentRejectionToast";
 import { useIsTouch } from "../../hooks/useMediaQuery";
 import { useNowTick } from "../../hooks/useNowTick";
+import { useToastStore } from "../../stores/toastStore";
 import { validateFiles } from "../../utils/fileValidation";
-import { MAX_MESSAGE_LENGTH } from "../../utils/constants";
+import { MAX_MESSAGE_LENGTH, MAX_FILES } from "../../utils/constants";
 import { convertMentionTokens } from "../../utils/mention";
 import { formatRelativeFuture } from "../../utils/dateFormat";
 import EmojiPicker from "../shared/EmojiPicker";
@@ -20,6 +21,7 @@ import ReplyBar from "./ReplyBar";
 function MessageInput() {
   const { t, i18n } = useTranslation("chat");
   const reportRejections = useAttachmentRejectionToast();
+  const addToast = useToastStore((s) => s.addToast);
   // On a touch device, calling textarea.focus() summons the soft keyboard
   // uninvited (channel switch, reply, post-send restore). Gate every
   // programmatic focus below on !isTouch so mobile users decide when the
@@ -82,15 +84,38 @@ function MessageInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Appends newly-selected files while enforcing MAX_FILES (server:
+   * LimitedParseMultipartFormN n=10 — see the constant's comment). Shared
+   * by every add path (file dialog, drag-drop, paste) so the cap can't be
+   * bypassed by mixing them. Overflow is silently truncated to the first
+   * N slots plus a warning toast, matching the FeedbackCreateForm pattern.
+   */
+  const addFilesCapped = useCallback(
+    (newFiles: File[]) => {
+      if (newFiles.length === 0) return;
+      setFiles((prev) => {
+        const remaining = MAX_FILES - prev.length;
+        if (remaining <= 0) {
+          addToast("warning", t("tooManyFiles", { max: MAX_FILES }));
+          return prev;
+        }
+        if (newFiles.length > remaining) {
+          addToast("warning", t("tooManyFiles", { max: MAX_FILES }));
+        }
+        return [...prev, ...newFiles.slice(0, remaining)];
+      });
+    },
+    [addToast, t]
+  );
+
   // Register callback for drag-drop file forwarding from ChatArea/DMChat
   useEffect(() => {
-    addFilesRef.current = (newFiles: File[]) => {
-      setFiles((prev) => [...prev, ...newFiles]);
-    };
+    addFilesRef.current = addFilesCapped;
     return () => {
       addFilesRef.current = null;
     };
-  }, [addFilesRef]);
+  }, [addFilesRef, addFilesCapped]);
 
   /** Auto-focus textarea when channel changes or reply is selected */
   useEffect(() => {
@@ -347,9 +372,7 @@ function MessageInput() {
     if (pastedFiles.length > 0) {
       e.preventDefault();
       const { valid, rejected } = validateFiles(pastedFiles);
-      if (valid.length > 0) {
-        setFiles((prev) => [...prev, ...valid]);
-      }
+      addFilesCapped(valid);
       reportRejections(rejected);
     }
   }
@@ -359,9 +382,7 @@ function MessageInput() {
     if (!e.target.files) return;
 
     const { valid, rejected } = validateFiles(e.target.files);
-    if (valid.length > 0) {
-      setFiles((prev) => [...prev, ...valid]);
-    }
+    addFilesCapped(valid);
     reportRejections(rejected);
     e.target.value = "";
   }

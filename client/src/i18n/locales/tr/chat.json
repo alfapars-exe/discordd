@@ -13,6 +13,7 @@
   "edited": "(düzenlendi)",
   "uploadFile": "Dosya Yükle",
   "fileTooLarge": "Dosya çok büyük (maks. {{max}}MB)",
+  "tooManyFiles": "Bir seferde en fazla {{max}} dosya ekleyebilirsiniz — fazla dosyalar eklenmedi",
   "noChannel": "Bir kanal seçin",
   "editCancel": "iptal",
   "editSave": "kaydet",
