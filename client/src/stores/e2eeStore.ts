@@ -200,7 +200,27 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       get().loadPeerTrustAlerts();
 
       if (hasKeys) {
-        const deviceId = await deviceManager.getLocalDeviceId();
+        let deviceId = await deviceManager.getLocalDeviceId();
+
+        // Recover a lost device id from the registration record.
+        //
+        // hasLocalKeys() only checks identity+registration, while
+        // getLocalDeviceId() reads ONLY metadata["deviceId"]. Those can
+        // disagree — an aborted backup restore used to wipe metadata without
+        // restoring it (security scan 2026-07-31, finding N-22) — and the
+        // disagreement is silent and terminal: init reports "ready" with a
+        // null device id, every DM decrypt bails on it, outgoing envelopes
+        // carry sender_device_id null, and no code path re-registers because
+        // they all guard on the same null. registration.deviceId is the same
+        // value written next to it at registration time, so prefer repairing
+        // over stranding the device.
+        if (!deviceId) {
+          const registration = await keyStorage.getRegistrationData();
+          if (registration?.deviceId) {
+            await keyStorage.setMetadata("deviceId", registration.deviceId);
+            deviceId = registration.deviceId;
+          }
+        }
 
         // Re-register if server lost this device (DB reset, manual deletion).
         // Without this: prekey upload FK error + other devices can't create envelopes.
