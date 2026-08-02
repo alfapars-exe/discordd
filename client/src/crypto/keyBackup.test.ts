@@ -347,6 +347,91 @@ describe("keyBackup — the sender-key replay window survives a backup round-tri
     expect(await restoreFromBackup(backup, "pw")).toBe(true);
     expect(restoredSenderKeys()[0].seenIterations).toEqual([4, 6, 11]);
   });
+
+  // -- initialChainKey: absence must survive the round trip --------------
+  //
+  // Restore used to substitute the CURRENT chainKey when a backup carried no
+  // iteration-0 anchor. For any key past iteration 0 that anchor is wrong, so
+  // rewinding from it derives the wrong message keys and history renders as
+  // content: null. The lasting damage is worse: channelEncryption gates its
+  // repair on !existingKey.initialChainKey, and a fabricated anchor is
+  // truthy, so the door that could have recovered the history closes for
+  // good. Genuine absence makes the rewind throw instead -- loud, and still
+  // repairable.
+
+  it("round-trips a real initialChainKey unchanged", async () => {
+    const withAnchor = senderKeyWithWindow();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([withAnchor]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([withAnchor]);
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    const restored = restoredSenderKeys()[0];
+    expect(restored.initialChainKey).toEqual(new Uint8Array(32).fill(8));
+    // Distinct from chainKey, so a fabricating restore cannot pass this by
+    // accident.
+    expect(restored.initialChainKey).not.toEqual(restored.chainKey);
+  });
+
+  it("keeps initialChainKey ABSENT when the backup carries no anchor", async () => {
+    const noAnchor = senderKeyWithWindow();
+    delete noAnchor.initialChainKey;
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([noAnchor]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([noAnchor]);
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    const restored = restoredSenderKeys()[0];
+    expect(restored.initialChainKey).toBeUndefined();
+    // The specific pre-fix symptom was the current chain key wearing the
+    // anchor's hat. Asserted separately so a future change that swaps in some
+    // OTHER wrong value still fails the assertion above.
+    expect(restored.initialChainKey).not.toEqual(restored.chainKey);
+  });
+
+  it("leaves the repair gate open after an anchorless restore", async () => {
+    const noAnchor = senderKeyWithWindow();
+    delete noAnchor.initialChainKey;
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([noAnchor]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([noAnchor]);
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    // This is the exact predicate channelEncryption uses to decide whether
+    // the sealed-distribution repair may run. Asserted rather than trusted,
+    // because a truthy-but-empty value reads as "already repaired" and locks
+    // the user out of their history permanently.
+    const restored = restoredSenderKeys()[0];
+    expect(!restored.initialChainKey).toBe(true);
+  });
+
+  it("BACKWARD COMPAT: an older backup encoding absence as an empty string restores as absent", async () => {
+    // Backups written before the field became optional encoded "no anchor"
+    // as "". Reproduced through the real serializer rather than a hand-built
+    // blob: a zero-length Uint8Array is truthy, so it survives the collect-
+    // side check and comes out as "".
+    const emptyAnchor = senderKeyWithWindow();
+    emptyAnchor.initialChainKey = new Uint8Array(0);
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([emptyAnchor]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([emptyAnchor]);
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    // fromBase64("") yields a zero-length Uint8Array, and every object is
+    // truthy in JS -- decoding the old encoding literally would hand the
+    // repair gate something it reads as a real anchor.
+    const restored = restoredSenderKeys()[0];
+    expect(restored.initialChainKey).toBeUndefined();
+    expect(!restored.initialChainKey).toBe(true);
+  });
 });
 
 // ──────────────────────────────────

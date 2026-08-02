@@ -109,7 +109,16 @@ type BackupContents = {
     senderDeviceId: string;
     distributionId: string;
     chainKey: string;
-    initialChainKey: string;
+    /**
+     * Iteration-0 anchor, OPTIONAL because a key genuinely may not have one:
+     * sender keys stored before this field existed carry no anchor, and the
+     * repair in channelEncryption is gated on that absence.
+     *
+     * Backups written before this was optional encode absence as "" rather
+     * than omitting the key, so readers must treat the empty string as absent
+     * too (security scan 2026-07-31 follow-up).
+     */
+    initialChainKey?: string;
     publicSigningKey: string;
     iteration: number;
     createdAt: number;
@@ -153,6 +162,27 @@ type BackupContents = {
     timestamp: number;
   }>;
 };
+
+/**
+ * Decodes a sender key's iteration-0 anchor from a backup, preserving absence.
+ *
+ * Two encodings mean "this key has no anchor": the field missing (what the
+ * serializer writes now) and the empty string (what backups written before it
+ * became optional carry). The falsy check covers both, and it has to happen
+ * BEFORE decoding: `fromBase64("")` returns a zero-length Uint8Array, every
+ * object is truthy in JS, and `!existingKey.initialChainKey` would therefore
+ * be false for it — indistinguishable from a real anchor to the repair gate in
+ * channelEncryption, which is the exact failure this change removes.
+ *
+ * No length check on the decoded bytes: the only writer of this field is the
+ * serializer above, and the backup is AEAD-authenticated as a whole, so a
+ * value that decodes to nothing cannot reach here from a tampered file either.
+ * A guard for that case was written first and removed — a mutation showed no
+ * test could tell whether it was there, because nothing can reach it.
+ */
+function decodeAnchor(encoded: string | undefined): Uint8Array | undefined {
+  return encoded ? fromBase64(encoded) : undefined;
+}
 
 // ──────────────────────────────────
 // Backup Creation
@@ -337,7 +367,9 @@ async function collectBackupContents(): Promise<BackupContents> {
       senderDeviceId: sk.senderDeviceId,
       distributionId: sk.distributionId,
       chainKey: toBase64(sk.chainKey),
-      initialChainKey: sk.initialChainKey ? toBase64(sk.initialChainKey) : "",
+      // Omitted, not "", when the key has no anchor. The old "" encoding was
+      // indistinguishable from a present-but-empty value on the way back in.
+      ...(sk.initialChainKey ? { initialChainKey: toBase64(sk.initialChainKey) } : {}),
       publicSigningKey: toBase64(sk.publicSigningKey),
       iteration: sk.iteration,
       createdAt: sk.createdAt,
@@ -489,7 +521,22 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
         senderDeviceId: sk.senderDeviceId,
         distributionId: sk.distributionId,
         chainKey: fromBase64(sk.chainKey),
-        initialChainKey: sk.initialChainKey ? fromBase64(sk.initialChainKey) : fromBase64(sk.chainKey),
+        // Carry a real absence through instead of substituting chainKey.
+        //
+        // chainKey is the CURRENT ratcheted key; for anything past iteration 0
+        // it is not the anchor. Rewinding from it derives the wrong message
+        // keys, so restored history decrypts to garbage and renders as
+        // content: null. The lasting damage is worse than the lost messages:
+        // channelEncryption's repair is gated on !existingKey.initialChainKey,
+        // so a fabricated anchor is truthy and shuts that door permanently.
+        // Absence makes the rewind throw instead — a loud, recoverable failure
+        // that the repair can still fix later.
+        //
+        // decodeAnchor also maps "" to undefined, which is how backups written
+        // before the field became optional encoded absence: fromBase64("")
+        // returns a zero-length Uint8Array, an object, therefore TRUTHY — so
+        // decoding the old encoding literally would reproduce the same bug.
+        initialChainKey: decodeAnchor(sk.initialChainKey),
         publicSigningKey: fromBase64(sk.publicSigningKey),
         iteration: sk.iteration,
         createdAt: sk.createdAt,
