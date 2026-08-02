@@ -680,10 +680,15 @@ async function ensureSenderKeyForDecryption(
     senderDeviceId
   );
 
-  // ⛔ needsRotationCheck is age/count only. It must never consider the
-  // protocol version: a v1 inbound key can no longer be re-fetched, so
-  // declaring it stale would erase this sender's history for us.
-  const needsKey = !existingKey || senderKeyProtocol.needsRotationCheck(existingKey);
+  // ⛔ Install only what we do not already have. Rotation is the SENDER's
+  // decision and reaches us as a NEW distributionId; there is no such thing as
+  // an inbound key going stale on its own. This used to also reinstall when
+  // needsRotationCheck reported age/count staleness, which reinstalled the
+  // SAME distribution over itself — and since a sender key row is written
+  // whole, that silently discarded the replay window proving which iterations
+  // we had already accepted (security scan 2026-07-31, finding N-11). Waiting
+  // out the 7-day age cap was enough to re-open every captured ciphertext.
+  const needsKey = !existingKey || existingKey.distributionId !== distributionId;
 
   // Repair is needed if initialChainKey is missing — recovered from the
   // sealed distribution below.

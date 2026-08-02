@@ -22,8 +22,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type {
   StoredSenderKey,
   SenderKeyMessage,
+  SenderKeyDistributionData,
 } from "./types";
-import { SENDER_KEY_ROTATION_MESSAGES, MAX_SKIP } from "./types";
+import {
+  SENDER_KEY_ROTATION_MESSAGES,
+  MAX_SKIP,
+  SENDER_KEY_REPLAY_WINDOW,
+} from "./types";
 
 // Two isolated in-memory stores plus an "active" pointer. vi.hoisted so the
 // state exists before the hoisted vi.mock factory runs.
@@ -73,6 +78,7 @@ import {
   decryptGroupMessage,
   needsSenderKeyRotation,
   needsRotationCheck,
+  normalizeReplayWindow,
   clearChannelSenderKeys,
 } from "./senderKeyProtocol";
 import * as keyStorage from "./keyStorage";
@@ -258,9 +264,9 @@ describe("senderKeyProtocol — group encryption round-trip and guards", () => {
 
     // Deliver 0, then 2, then 1. Delivering 1 last (when the receiver's live
     // iteration has already advanced past it) forces the rewind-from-
-    // initialChainKey path. Note the replay window's low watermark is
-    // seen[0]: because we deliver the lowest iteration (0) first, iteration 1
-    // stays >= the watermark and is provably not a replay.
+    // initialChainKey path. Delivery ORDER is irrelevant to the replay window
+    // here: nothing has been evicted, so replayFloor is 0 and iteration 1 is
+    // judged purely on whether it is already in seenIterations.
     expect(await decryptGroupMessage(CH, USER, DEV, messages[0])).toBe("m0");
     expect(await decryptGroupMessage(CH, USER, DEV, messages[2])).toBe("m2");
     expect(await decryptGroupMessage(CH, USER, DEV, messages[1])).toBe("m1");
@@ -617,5 +623,262 @@ describe("senderKeyProtocol — group encryption round-trip and guards", () => {
     const failure = await decryptFailureMessage(forged);
     expect(failure).toMatch(/Invalid sender key iteration/i);
     expect(keyStorage.saveSenderKey).not.toHaveBeenCalled();
+  });
+});
+
+// ──────────────────────────────────
+// Replay window integrity — security scan 2026-07-31, N-11 + N-21
+// ──────────────────────────────────
+
+/** The inbound key the receiver currently holds, straight out of its store. */
+function inboundKey(): StoredSenderKey {
+  const key = h.receiver.keys.get(senderKeyId(CH, USER, DEV));
+  if (!key) throw new Error("receiver holds no sender key");
+  return key;
+}
+
+/** Mints a distribution and returns it together with `count` ciphertexts. */
+async function senderEmits(
+  count: number
+): Promise<{ dist: SenderKeyDistributionData; messages: SenderKeyMessage[] }> {
+  h.active = h.sender;
+  const dist = await createDistribution(CH, USER, DEV);
+  const messages: SenderKeyMessage[] = [];
+  for (let i = 0; i < count; i++) {
+    messages.push(await encryptGroupMessage(CH, USER, DEV, `m${i}`));
+  }
+  h.active = h.receiver;
+  return { dist, messages };
+}
+
+function resetStores(): void {
+  vi.clearAllMocks();
+  h.sender.keys.clear();
+  h.sender.meta.clear();
+  h.receiver.keys.clear();
+  h.receiver.meta.clear();
+  h.active = h.sender;
+}
+
+describe("senderKeyProtocol — the replay window survives re-installation (N-11)", () => {
+  beforeEach(resetStores);
+
+  it("keeps seenIterations when the SAME distribution is processed again", async () => {
+    const { dist, messages } = await senderEmits(2);
+
+    await processDistribution(CH, USER, DEV, dist);
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[0])).toBe("m0");
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[1])).toBe("m1");
+    expect(inboundKey().seenIterations).toEqual([0, 1]);
+    const iterationBefore = inboundKey().iteration;
+    const createdAtBefore = inboundKey().createdAt;
+
+    // A distribution we already hold, delivered again — a re-publish by the
+    // server, or (before the trigger was narrowed) the receive path deciding
+    // the key had aged out. A sender key row is written WHOLE, so the pre-fix
+    // literal reset iteration to 0, re-stamped createdAt, and above all threw
+    // the accumulated replay evidence away.
+    await processDistribution(CH, USER, DEV, dist);
+
+    expect(inboundKey().seenIterations).toEqual([0, 1]);
+    expect(inboundKey().iteration).toBe(iterationBefore);
+    expect(inboundKey().createdAt).toBe(createdAtBefore);
+  });
+
+  it("starts a clean window when a DIFFERENT distribution arrives", async () => {
+    const first = await senderEmits(2);
+    await processDistribution(CH, USER, DEV, first.dist);
+    expect(await decryptGroupMessage(CH, USER, DEV, first.messages[0])).toBe(
+      "m0"
+    );
+    expect(inboundKey().seenIterations).toEqual([0]);
+
+    // The sender rotated. A new distributionId is a new chain: iterations
+    // recorded under the old one say nothing about it, so carrying the window
+    // over would reject the new chain's own iteration 0 as "already seen".
+    const second = await senderEmits(1);
+    expect(second.dist.distributionId).not.toBe(first.dist.distributionId);
+    await processDistribution(CH, USER, DEV, second.dist);
+
+    expect(inboundKey().distributionId).toBe(second.dist.distributionId);
+    expect(inboundKey().seenIterations ?? []).toEqual([]);
+    expect(inboundKey().replayFloor ?? 0).toBe(0);
+    expect(inboundKey().iteration).toBe(0);
+    expect(await decryptGroupMessage(CH, USER, DEV, second.messages[0])).toBe(
+      "m0"
+    );
+  });
+
+  it("END TO END: re-processing the distribution does not re-open a replay", async () => {
+    const { dist, messages } = await senderEmits(1);
+    await processDistribution(CH, USER, DEV, dist);
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[0])).toBe("m0");
+
+    // THE finding, end to end. Before the merge this sequence accepted the
+    // captured ciphertext a second time and the client re-rendered it as a
+    // fresh message — the exact capability a delivery-controlling operator
+    // needs, and the one E2EE exists to deny.
+    await processDistribution(CH, USER, DEV, dist);
+
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, messages[0])
+    ).rejects.toThrow(/Replay detected/i);
+  });
+});
+
+describe("senderKeyProtocol — the replay floor tracks real eviction (N-21)", () => {
+  beforeEach(resetStores);
+
+  it("accepts legitimate history below everything recorded so far", async () => {
+    const { dist, messages } = await senderEmits(51);
+    await processDistribution(CH, USER, DEV, dist);
+
+    // Joined the live stream at iteration 50 …
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[50])).toBe("m50");
+    expect(inboundKey().seenIterations).toEqual([50]);
+    // … and nothing was evicted to get there, so the window has lost no reach.
+    expect(inboundKey().replayFloor ?? 0).toBe(0);
+
+    // … then scrolled up. Iteration 10 is below every recorded entry but was
+    // never delivered to us, and the rewind path can serve it from
+    // initialChainKey. Treating seenIterations[0] as a floor rejected this as
+    // "Replay detected" and rendered the whole backlog as content: null.
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[10])).toBe("m10");
+    expect(inboundKey().seenIterations).toEqual([10, 50]);
+  });
+
+  it("still rejects an iteration that really was recorded", async () => {
+    const { dist, messages } = await senderEmits(51);
+    await processDistribution(CH, USER, DEV, dist);
+
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[50])).toBe("m50");
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[10])).toBe("m10");
+
+    // Negative control for the test above: loosening the floor must not have
+    // loosened the window itself. Both of these are in seenIterations.
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, messages[10])
+    ).rejects.toThrow(/Replay detected/i);
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, messages[50])
+    ).rejects.toThrow(/Replay detected/i);
+  });
+
+  it("rejects below the floor once eviction ACTUALLY happens", async () => {
+    const { dist, messages } = await senderEmits(1);
+    await processDistribution(CH, USER, DEV, dist);
+
+    // Fill the window to exactly capacity with entries that all sit ABOVE the
+    // iteration we are about to deliver. Reaching this state through the
+    // public API is impossible — a sender refuses to emit past
+    // SENDER_KEY_ROTATION_MESSAGES — so the stored row is seeded directly.
+    const seeded = inboundKey();
+    seeded.seenIterations = Array.from(
+      { length: SENDER_KEY_REPLAY_WINDOW },
+      (_, i) => i + 1
+    );
+    expect(seeded.replayFloor).toBeUndefined();
+
+    // Accepted: the window is full but has never overflowed, so iteration 0 is
+    // still provably fresh.
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[0])).toBe("m0");
+
+    // Recording it overflowed the window and evicted iteration 0 itself. The
+    // floor moves one past the highest entry we forgot — and only now.
+    expect(inboundKey().seenIterations).toHaveLength(SENDER_KEY_REPLAY_WINDOW);
+    expect(inboundKey().seenIterations?.[0]).toBe(1);
+    expect(inboundKey().replayFloor).toBe(1);
+
+    // We can no longer tell "never delivered" from "already accepted" for
+    // iteration 0, so it fails closed.
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, messages[0])
+    ).rejects.toThrow(/Replay detected/i);
+  });
+
+  it("BACKWARD COMPAT: a stored key with no replayFloor field reads as floor 0", async () => {
+    const { dist, messages } = await senderEmits(4);
+    await processDistribution(CH, USER, DEV, dist);
+
+    // Exactly how a row written before replayFloor existed sits in a user's
+    // IndexedDB: a populated window, the field absent entirely.
+    const legacy = inboundKey();
+    legacy.seenIterations = [2, 3];
+    expect("replayFloor" in legacy).toBe(false);
+
+    // `iteration < undefined` is false, so an unguarded read would disable the
+    // floor rather than default it — this asserts the DEFAULT, not the accident.
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[0])).toBe("m0");
+    // …while the entries the legacy row does carry still reject.
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, messages[2])
+    ).rejects.toThrow(/Replay detected/i);
+  });
+});
+
+describe("senderKeyProtocol — replay window normalization (backup restore path)", () => {
+  beforeEach(resetStores);
+
+  it("a window carried through a backup still rejects the replay it recorded", async () => {
+    const { dist, messages } = await senderEmits(2);
+    await processDistribution(CH, USER, DEV, dist);
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[0])).toBe("m0");
+
+    // Reproduce what keyBackup does to this field: JSON out, JSON back in,
+    // then normalize the untrusted result before it is stored again.
+    const live = inboundKey();
+    const wire: { seenIterations?: number[]; replayFloor?: number } = JSON.parse(
+      JSON.stringify({
+        seenIterations: live.seenIterations,
+        replayFloor: live.replayFloor,
+      })
+    );
+    const restored = normalizeReplayWindow(wire.seenIterations, wire.replayFloor);
+    live.seenIterations = restored.seenIterations;
+    live.replayFloor = restored.replayFloor;
+
+    // Restoring a backup must not hand the attacker back the messages the
+    // window had already burned.
+    await expect(
+      decryptGroupMessage(CH, USER, DEV, messages[0])
+    ).rejects.toThrow(/Replay detected/i);
+    // …and it must not have become a blanket "reject everything" either.
+    expect(await decryptGroupMessage(CH, USER, DEV, messages[1])).toBe("m1");
+  });
+
+  it("sorts, de-duplicates and drops values that could never be an iteration", () => {
+    // isReplay binary-searches, so an unsorted array silently MISSES hits:
+    // a corrupted window would look like a working one while accepting
+    // replays. Infinity is reachable because JSON.parse turns 1e999 into it.
+    const normalized = normalizeReplayWindow(
+      [7, 2, 2, -1, 1.5, Number.POSITIVE_INFINITY, Number.NaN, "3", null, 0],
+      undefined
+    );
+    expect(normalized.seenIterations).toEqual([0, 2, 7]);
+    expect(normalized.replayFloor).toBe(0);
+  });
+
+  it("defaults a missing or nonsensical floor to 0 instead of trusting it", () => {
+    expect(normalizeReplayWindow([1], undefined).replayFloor).toBe(0);
+    expect(normalizeReplayWindow([1], -5).replayFloor).toBe(0);
+    expect(
+      normalizeReplayWindow([1], Number.POSITIVE_INFINITY).replayFloor
+    ).toBe(0);
+    // A real floor is kept as-is.
+    expect(normalizeReplayWindow([9], 4).replayFloor).toBe(4);
+  });
+
+  it("clips an over-long window and raises the floor to match what it dropped", () => {
+    const oversized = Array.from(
+      { length: SENDER_KEY_REPLAY_WINDOW + 3 },
+      (_, i) => i
+    );
+    const normalized = normalizeReplayWindow(oversized, 0);
+
+    // Clipping is an eviction: the result must not claim reach it no longer
+    // has, or entries 0..2 would read as "never seen" instead of "forgotten".
+    expect(normalized.seenIterations).toHaveLength(SENDER_KEY_REPLAY_WINDOW);
+    expect(normalized.seenIterations[0]).toBe(3);
+    expect(normalized.replayFloor).toBe(3);
   });
 });

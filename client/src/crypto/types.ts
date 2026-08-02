@@ -157,14 +157,37 @@ export type StoredSenderKey = {
    * Sliding-window of iterations already decrypted under this distribution.
    * Replay protection: an attacker who captures an encrypted message can't
    * have it accepted twice. Bounded at SENDER_KEY_REPLAY_WINDOW entries —
-   * the oldest is evicted when full. Anything older than the window's low
-   * watermark is rejected outright (cannot prove non-replay).
+   * the lowest are evicted when full, which is what `replayFloor` records.
    *
    * Maintained as a sorted ascending array for O(log n) binary-search check
    * and constant-time append in the common (monotonic) path. May be absent
    * on legacy stored keys created before this protection was added.
+   *
+   * INVARIANT — this window is EVIDENCE, not cache. It may only ever be
+   * cleared together with the distribution it belongs to. Re-installing the
+   * SAME distributionId must preserve it (see processDistribution): dropping
+   * it re-opens every ciphertext ever accepted under this chain for replay
+   * (security scan 2026-07-31, finding N-11).
    */
   seenIterations?: number[];
+  /**
+   * Lowest iteration the window can still speak for, inclusive.
+   *
+   * An iteration BELOW this is rejected as un-provable: its entry was actually
+   * evicted from seenIterations, so we can no longer tell "never delivered"
+   * from "already accepted" and must fail closed.
+   *
+   * INVARIANT — this only moves when eviction REALLY happens, and only
+   * upward. It is deliberately NOT seenIterations[0]: the lowest RECORDED
+   * iteration is not a floor, because a member who joins mid-stream records a
+   * high iteration first and would otherwise have the entire legitimate
+   * history below it rejected (security scan 2026-07-31, finding N-21).
+   *
+   * Absent on keys stored before this field existed, and on keys whose window
+   * has never overflowed. Every reader MUST treat absent as 0 — never compare
+   * against it directly, since `undefined < n` is silently false.
+   */
+  replayFloor?: number;
 };
 
 /** Sliding-window size for sender-key replay protection. Tuned to MAX_SKIP. */
