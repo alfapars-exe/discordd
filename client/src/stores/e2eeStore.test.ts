@@ -492,6 +492,70 @@ describe("e2eeStore", () => {
     });
   });
 
+  // ─── Lost device id recovery (security scan 2026-07-31, N-22) ───
+  //
+  // hasLocalKeys() looks at identity+registration; getLocalDeviceId() looks
+  // ONLY at metadata["deviceId"]. An aborted backup restore could clear the
+  // second without the first, and the resulting state is silent and terminal:
+  // initStatus "ready" with localDeviceId null, every DM decrypt bailing on
+  // that null, handlePrekeyLow returning early, no path back. registration
+  // still holds the same device id, so init repairs it instead.
+
+  describe("initialize (keys present, metadata deviceId missing)", () => {
+    beforeEach(() => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(true);
+      vi.mocked(keyStorage.getRegistrationData).mockResolvedValue({
+        registrationId: 1,
+        deviceId: "dev-recovered",
+        userId: "userA",
+        createdAt: 0,
+      });
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({ success: false });
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+    });
+
+    it("should rewrite deviceId from registration and keep the device usable", async () => {
+      vi.mocked(deviceManager.getLocalDeviceId).mockResolvedValue(null);
+
+      await useE2EEStore.getState().initialize("userA");
+
+      // Repaired in IndexedDB, not just in memory — otherwise the next reload
+      // (and every direct keyStorage consumer) is back in the broken state.
+      expect(keyStorage.setMetadata).toHaveBeenCalledWith(
+        "deviceId",
+        "dev-recovered"
+      );
+      expect(useE2EEStore.getState().localDeviceId).toBe("dev-recovered");
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+    });
+
+    it("should run the existing re-register path for the recovered id", async () => {
+      // listMyDevices returns an empty list: the recovered device is unknown
+      // to the server, which is precisely the state an interrupted restore
+      // leaves behind. Recovery is worthless if the id never reaches the
+      // server, so the repaired id must flow into the existing branch.
+      vi.mocked(deviceManager.getLocalDeviceId).mockResolvedValue(null);
+
+      await useE2EEStore.getState().initialize("userA");
+
+      expect(deviceManager.reRegisterDevice).toHaveBeenCalledWith("dev-recovered");
+    });
+
+    it("REGRESSION: should not touch metadata when the deviceId is present", async () => {
+      vi.mocked(deviceManager.getLocalDeviceId).mockResolvedValue("dev-normal");
+
+      await useE2EEStore.getState().initialize("userA");
+
+      expect(useE2EEStore.getState().localDeviceId).toBe("dev-normal");
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+      expect(keyStorage.setMetadata).not.toHaveBeenCalledWith(
+        "deviceId",
+        expect.anything()
+      );
+      expect(deviceManager.reRegisterDevice).toHaveBeenCalledWith("dev-normal");
+    });
+  });
+
   // ─── Reset ───
 
   describe("reset", () => {

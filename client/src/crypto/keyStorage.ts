@@ -699,6 +699,39 @@ export async function getMetadata<T>(key: string): Promise<T | null> {
   return (result as T) ?? null;
 }
 
+/**
+ * Lists every metadata entry as [key, value] pairs.
+ *
+ * Unlike the other stores, metadata is out-of-line keyed AND its key space is
+ * open-ended (deviceId, nextPrekeyId, legacyDeviceIds, sk_signing:*,
+ * prekey_info:*, peer_trust_alerts, …), so a caller that must reproduce the
+ * store — the backup rollback in keyBackup.ts — cannot enumerate the keys it
+ * needs from a fixed list and cannot recover them from getAll() alone.
+ * A cursor is used rather than getAll()+getAllKeys() so key/value pairing is
+ * an invariant of the read, not an assumption about two arrays' ordering.
+ *
+ * Values are `unknown`: this store is heterogeneous by design and callers are
+ * expected to hand the value straight back to setMetadata, not interpret it.
+ */
+export async function getAllMetadata(): Promise<Array<[string, unknown]>> {
+  const db = await getDB();
+  const tx = db.transaction("metadata", "readonly");
+  const entries: Array<[string, unknown]> = [];
+
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    // setMetadata is the only writer and its key parameter is `string`, so a
+    // non-string key cannot exist here — and could not be written back either.
+    if (typeof cursor.key === "string") {
+      entries.push([cursor.key, cursor.value]);
+    }
+    cursor = await cursor.continue();
+  }
+
+  await tx.done;
+  return entries;
+}
+
 // ──────────────────────────────────
 // Lifecycle Operations
 // ──────────────────────────────────

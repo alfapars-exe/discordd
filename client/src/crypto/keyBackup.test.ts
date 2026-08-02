@@ -12,6 +12,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { StoredSenderKey } from "./types";
 
+/**
+ * Stand-in for the `metadata` object store.
+ *
+ * Rollback correctness is a STATE claim ("deviceId still reads back its
+ * pre-restore value"), not a call claim: a setMetadata spy would be equally
+ * happy with a rollback that wrote the WRONG value, or that wrote the right
+ * key after clearAllE2EEData had already been replayed on top of it. So this
+ * half of the double is a real key-value map wired through the same
+ * set/get/clear calls production uses. vi.hoisted because the vi.mock factory
+ * closes over it.
+ */
+const metadataStore = vi.hoisted(() => new Map<string, unknown>());
+
 // Mock keyStorage so we can exercise create/restore without needing IndexedDB.
 // Function names mirror the actual keyStorage exports used by
 // collectBackupContents / importBackupContents.
@@ -37,10 +50,14 @@ vi.mock("./keyStorage", () => {
     getAllSenderKeys: vi.fn(async () => []),
     getAllTrustedIdentities: vi.fn(async () => []),
     getAllCachedMessages: vi.fn(async () => []),
-    getMetadata: vi.fn(async () => undefined),
+    getMetadata: vi.fn(async (key: string) => metadataStore.get(key) ?? null),
+    getAllMetadata: vi.fn(async () => [...metadataStore.entries()]),
 
     // ── write-side (importBackupContents) ──
-    clearAllE2EEData: vi.fn(async () => {}),
+    // clearAllE2EEData wipes metadata as well — the whole point of N-22.
+    clearAllE2EEData: vi.fn(async () => {
+      metadataStore.clear();
+    }),
     saveIdentityKeyPair: vi.fn(async () => {}),
     saveSigningKeyPair: vi.fn(async () => {}),
     saveRegistrationData: vi.fn(async () => {}),
@@ -50,7 +67,13 @@ vi.mock("./keyStorage", () => {
     saveSenderKey: vi.fn(async () => {}),
     saveTrustedIdentity: vi.fn(async () => {}),
     saveCachedMessage: vi.fn(async () => {}),
-    setMetadata: vi.fn(async () => {}),
+    // The bulk cache write importBackupContents actually calls. Absent from
+    // this factory it was `undefined` and only stayed invisible because every
+    // test happened to produce an empty merged cache.
+    cacheDecryptedMessages: vi.fn(async () => {}),
+    setMetadata: vi.fn(async (key: string, value: unknown) => {
+      metadataStore.set(key, value);
+    }),
   };
 });
 
@@ -62,6 +85,12 @@ vi.mock("./dmEncryption", () => ({
 import { createBackup, restoreFromBackup } from "./keyBackup";
 import * as keyStorageMock from "./keyStorage";
 import * as dmEncryptionMock from "./dmEncryption";
+
+// The metadata double is module state, so it outlives a single test the way a
+// real IndexedDB store would. Reset it before every test in the file.
+beforeEach(() => {
+  metadataStore.clear();
+});
 
 describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
   beforeEach(() => {
@@ -402,5 +431,146 @@ describe("keyBackup — the sender-key replay window survives a backup round-tri
     const restored = restoredSenderKeys()[0];
     expect(restored.initialChainKey).toBeUndefined();
     expect(!restored.initialChainKey).toBe(true);
+  });
+});
+
+// ──────────────────────────────────
+// Rollback restores the metadata store — security scan 2026-07-31, N-22
+// ──────────────────────────────────
+//
+// The failure this pins down is not "the restore failed" (that is expected and
+// reported), it is what the FAILED restore leaves behind. clearAllE2EEData
+// wipes `metadata`; the rollback used to replay every other store and skip it,
+// so the device came back with keys but no deviceId — and nothing self-heals
+// from that: hasLocalKeys() ignores metadata, getLocalDeviceId() reads nothing
+// else, so init goes "ready" with localDeviceId null and every DM decrypt
+// returns null forever.
+//
+// Trigger is mundane, not adversarial: any IndexedDB error mid-restore. Quota
+// exhaustion on the bulk message-cache write is the likeliest one, so that is
+// the write these tests fail.
+
+describe("keyBackup — a failed restore rolls the metadata store back", () => {
+  /** One cached message, so importBackupContents reaches the bulk cache write. */
+  const cachedMessage = () => ({
+    messageId: "m1",
+    channelId: "ch1",
+    dmChannelId: null,
+    content: "already decrypted",
+    timestamp: 1_700_000_000_000,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Quiet defaults — these mocks carry mockResolvedValue state across tests.
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([]);
+    vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValue([]);
+    vi.mocked(keyStorageMock.cacheDecryptedMessages).mockResolvedValue(undefined);
+  });
+
+  /**
+   * Put the device into a realistic pre-restore state and make the restore
+   * fail on its last write. The backup is built BEFORE seeding, so the
+   * pre-restore metadata cannot leak into the backup blob and get re-written
+   * by the restore itself — every surviving value has to come from rollback.
+   */
+  async function seedDeviceThenFailRestore(): Promise<{
+    encryptedData: string;
+    nonce: string;
+    salt: string;
+    algorithm: string;
+  }> {
+    const backup = await createBackup("pw");
+
+    metadataStore.set("deviceId", "device-before-restore");
+    metadataStore.set("sk_signing:ch1:u1:d1", "signing-key-placeholder");
+    metadataStore.set("nextPrekeyId", 501);
+    metadataStore.set("legacyDeviceIds", ["older-device"]);
+
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValue([
+      cachedMessage(),
+    ]);
+    // Fails on the restore write AND on the rollback's own cache write, which
+    // is the point: a rollback whose writes are not isolated would give up
+    // there and, in the old store order, take metadata down with it.
+    vi.mocked(keyStorageMock.cacheDecryptedMessages).mockRejectedValue(
+      new Error("QuotaExceededError")
+    );
+
+    return backup;
+  }
+
+  it("restores deviceId to its PRE-restore value after a mid-write failure", async () => {
+    const backup = await seedDeviceThenFailRestore();
+
+    expect(await restoreFromBackup(backup, "pw")).toBe(false);
+
+    // Three outcomes are distinguishable here and only one is correct:
+    //   null              → the bug: metadata wiped, device permanently mute
+    //   "test-device"     → the backup's id kept despite a failed restore
+    //   "device-before-restore" → rolled back, as promised
+    expect(await keyStorageMock.getMetadata<string>("deviceId")).toBe(
+      "device-before-restore"
+    );
+  });
+
+  it("restores the rest of the metadata key space too, not just deviceId", async () => {
+    const backup = await seedDeviceThenFailRestore();
+
+    expect(await restoreFromBackup(backup, "pw")).toBe(false);
+
+    // sk_signing:* — without it the next outbound channel message is either
+    // unsigned or rotates the sender key; nextPrekeyId — without it fresh
+    // prekeys collide with restored ids and X3DH breaks; legacyDeviceIds —
+    // without it every envelope addressed to the old id stops matching.
+    expect(
+      await keyStorageMock.getMetadata<string>("sk_signing:ch1:u1:d1")
+    ).toBe("signing-key-placeholder");
+    expect(await keyStorageMock.getMetadata<number>("nextPrekeyId")).toBe(501);
+    expect(await keyStorageMock.getMetadata<string[]>("legacyDeviceIds")).toEqual([
+      "older-device",
+    ]);
+  });
+
+  it("keeps rolling back the remaining stores when one rollback write fails", async () => {
+    const backup = await seedDeviceThenFailRestore();
+
+    await restoreFromBackup(backup, "pw");
+
+    // Twice each = once on the doomed restore, once on the rollback. The
+    // rollback's own messageCache write rejects (see the helper) yet the
+    // identity replay before it and the metadata replay before that both
+    // landed: no single failure short-circuits the rest.
+    expect(keyStorageMock.saveIdentityKeyPair).toHaveBeenCalledTimes(2);
+    expect(keyStorageMock.cacheDecryptedMessages).toHaveBeenCalledTimes(2);
+    expect(await keyStorageMock.getMetadata<string>("deviceId")).toBe(
+      "device-before-restore"
+    );
+  });
+
+  it("POSITIVE: a successful restore installs the BACKUP's deviceId and does not roll back", async () => {
+    const backup = await createBackup("pw");
+
+    metadataStore.set("deviceId", "device-before-restore");
+    metadataStore.set("legacyDeviceIds", ["older-device"]);
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValue([
+      cachedMessage(),
+    ]);
+    vi.mocked(keyStorageMock.cacheDecryptedMessages).mockResolvedValue(undefined);
+
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    // The snapshot must stay inert on the success path: the restored device id
+    // wins, and pre-restore metadata the backup does not carry stays gone —
+    // registerRestoredDevice is what re-establishes legacyDeviceIds afterwards.
+    expect(await keyStorageMock.getMetadata<string>("deviceId")).toBe(
+      "test-device"
+    );
+    expect(
+      await keyStorageMock.getMetadata<string[]>("legacyDeviceIds")
+    ).toBeNull();
+    expect(keyStorageMock.cacheDecryptedMessages).toHaveBeenCalledTimes(1);
   });
 });
