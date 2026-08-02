@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { decryptFile } from "../../crypto/fileEncryption";
+import { decryptFile, isRenderableImageMime } from "../../crypto/fileEncryption";
 import { resolveAssetUrl } from "../../utils/constants";
 import { useLightboxStore, isPlainLeftClick } from "../../stores/lightboxStore";
 import type { EncryptedFileMeta } from "../../crypto/fileEncryption";
@@ -31,7 +31,14 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
   const fileRef = useRef<File | null>(null);
   const openLightbox = useLightboxStore((s) => s.open);
 
-  const isImage = fileMeta.mimeType.startsWith("image/");
+  // Allowlist check, NOT a `startsWith("image/")` prefix test: the inline
+  // branch below ends in an anchor with target="_blank", and modifier/middle
+  // clicks intentionally keep that native navigation (see isPlainLeftClick).
+  // Navigating to a blob: URL runs it as a document in OUR origin, so a
+  // sender-claimed image/svg+xml reaching this branch is stored XSS
+  // (pentest 2026-07-26, finding M-10). Everything off the allowlist falls
+  // through to the file branch, which only ever triggers a download.
+  const isImage = isRenderableImageMime(fileMeta.mimeType);
 
   // Object URL cleanup on unmount
   useEffect(() => {
