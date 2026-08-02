@@ -99,6 +99,15 @@ type RateLimiters struct {
 	// on reconnect/near-expiry, not per keystroke, so 30/min/IP is generous
 	// for legitimate traffic while bounding brute-force refresh-token guessing.
 	Refresh *ratelimit.LoginRateLimiter
+	// MusicPlay added 2026-08-02 (resource scan): POST .../music/play had no
+	// rate limit at all -- each call can spawn a ~30s yt-dlp subprocess, so an
+	// unthrottled caller could pin CPU/bandwidth with a fast loop. 5/min with
+	// a 30s cooldown once exceeded (same shape as Upload/GroupSession above):
+	// queueing a track is a deliberate per-channel action, not a per-keystroke
+	// one, so this is generous for legitimate use while capping subprocess
+	// spawn rate. Only Play is limited -- skip/pause/resume/stop/state are
+	// cheap in-memory operations on the already-running bot.
+	MusicPlay *ratelimit.MessageRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -135,12 +144,17 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// exists at this point (constructed above), so no ordering hazard.
 	authService.SetVoiceDisconnecter(voiceService)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService)
+	// Enables best-effort on-disk cleanup of attachment files on delete
+	// (see services/upload_cleanup.go) without widening the constructor
+	// signature — mirrors the SetAuditLogger wiring pattern below.
+	channelService.SetUploadDir(cfg.Upload.Dir)
 	categoryService := services.NewCategoryService(repos.Category, hub)
 	messageService := services.NewMessageService(
 		repos.Message, repos.Attachment, repos.Channel, repos.User,
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
 		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService,
 	)
+	messageService.SetUploadDir(cfg.Upload.Dir)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService)
 	roleService := services.NewRoleService(repos.Role, repos.User, hub)
@@ -152,6 +166,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
 		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey,
 	)
+	serverService.SetUploadDir(cfg.Upload.Dir)
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
 		voiceService, encryptionKey, cfg.HetznerAPIToken,
@@ -173,6 +188,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, hub)
 	dmService := services.NewDMService(repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService)
+	dmService.SetUploadDir(cfg.Upload.Dir)
 	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
@@ -189,6 +205,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
 	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, repos.LiveKit, hub, emailSender)
+	adminServerService.SetUploadDir(cfg.Upload.Dir)
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
@@ -198,6 +215,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	metricsHistoryService := services.NewMetricsHistoryService(repos.MetricsHistory, repos.LiveKit)
 	feedbackService := services.NewFeedbackService(repos.Feedback)
+	feedbackService.SetUploadDir(cfg.Upload.Dir)
 	feedbackUploadService := services.NewFeedbackUploadService(repos.Feedback, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	soundboardService := services.NewSoundboardService(
 		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
@@ -256,6 +274,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// same shape and rationale as wsTicketLimiter above -- refresh is called
 	// on reconnect/near-expiry, not per keystroke.
 	refreshLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
+
+	// MusicPlay (resource scan 2026-08-02): 5 per minute per user, 30s
+	// cooldown once exceeded -- see the RateLimiters.MusicPlay doc comment
+	// above for the subprocess-cost rationale.
+	musicPlayLimiter := ratelimit.NewMessageRateLimiter(5, 1*time.Minute, 30*time.Second)
 
 	svcs := &Services{
 		Auth:              authService,
@@ -316,6 +339,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Upload:       uploadLimiter,
 		GroupSession: groupSessionLimiter,
 		Refresh:      refreshLimiter,
+		MusicPlay:    musicPlayLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

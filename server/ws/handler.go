@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/gorilla/websocket"
 
@@ -73,7 +74,11 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		handlerLogger.Debug("check origin called", "origin", origin, "host", r.Host)
+		// origin and r.Host are both raw, unauthenticated request headers —
+		// this runs before any auth check. strconv.Quote stops a header
+		// crafted with control characters from forging/splitting log lines
+		// (G706).
+		handlerLogger.Debug("check origin called", "origin", strconv.Quote(origin), "host", strconv.Quote(r.Host))
 		// No Origin header = same-origin request (non-browser or same host)
 		if origin == "" {
 			return true
@@ -97,7 +102,8 @@ var upgrader = websocket.Upgrader{
 				return true
 			}
 		}
-		handlerLogger.Warn("rejected connection: origin not allowed", "origin", origin)
+		// origin is client-controlled — see the quoting rationale above (G706).
+		handlerLogger.Warn("rejected connection: origin not allowed", "origin", strconv.Quote(origin))
 		return false
 	},
 }
