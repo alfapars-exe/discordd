@@ -16,6 +16,7 @@
  */
 
 import * as keyStorage from "./keyStorage";
+import { normalizeReplayWindow } from "./senderKeyProtocol";
 import { toBase64, fromBase64 } from "./signalProtocol";
 
 // ──────────────────────────────────
@@ -112,6 +113,20 @@ type BackupContents = {
     publicSigningKey: string;
     iteration: number;
     createdAt: number;
+    /**
+     * Replay-protection window for this distribution. Both fields are OPTIONAL
+     * on purpose: backups written before they were carried simply lack them,
+     * and normalizeReplayWindow turns absence into the safe "nothing evicted,
+     * nothing seen" state. Additive-only, so BACKUP_VERSION stays 1 — an older
+     * client restoring a newer backup ignores the extra JSON members.
+     *
+     * They must be carried at all because a restore that dropped them handed
+     * the user back a key with an EMPTY window and a live iteration counter,
+     * re-opening every ciphertext already accepted under this chain (security
+     * scan 2026-07-31, finding N-11 on the backup path).
+     */
+    seenIterations?: number[];
+    replayFloor?: number;
   }>;
   /** One-time prekeys — critical for X3DH. Without them, PreKey messages
    *  can't be decrypted after restore (3-DH vs 4-DH mismatch). */
@@ -326,6 +341,8 @@ async function collectBackupContents(): Promise<BackupContents> {
       publicSigningKey: toBase64(sk.publicSigningKey),
       iteration: sk.iteration,
       createdAt: sk.createdAt,
+      seenIterations: sk.seenIterations,
+      replayFloor: sk.replayFloor,
     })),
     trustedIdentities: trustedIdentities.map((ti) => ({
       userId: ti.userId,
@@ -451,6 +468,11 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
 
     // Sender keys
     for (const sk of contents.senderKeys) {
+      // The window comes off a JSON.parse, so it is normalized rather than
+      // trusted: isReplay binary-searches and would silently miss hits on an
+      // unsorted or poisoned array. Absent (older backup) normalizes to the
+      // safe empty window with floor 0.
+      const window = normalizeReplayWindow(sk.seenIterations, sk.replayFloor);
       await keyStorage.saveSenderKey({
         channelId: sk.channelId,
         senderUserId: sk.senderUserId,
@@ -461,6 +483,8 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
         publicSigningKey: fromBase64(sk.publicSigningKey),
         iteration: sk.iteration,
         createdAt: sk.createdAt,
+        seenIterations: window.seenIterations,
+        replayFloor: window.replayFloor,
       });
     }
 

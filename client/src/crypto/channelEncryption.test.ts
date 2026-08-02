@@ -1070,6 +1070,47 @@ describe("channelEncryption — receive path", () => {
     );
   });
 
+  it("N-11: an AGED inbound key is not reinstalled, so its replay window holds", async () => {
+    const m0 = await aliceSends("first");
+    const m1 = await aliceSends("second");
+
+    expect(await receiverReads(BOB, m0)).toBe("first");
+
+    switchTo(BOB);
+    const inbound = h.bob.senderKeys.get(
+      senderKeyId(CH, ALICE.userId, ALICE.deviceId)
+    );
+    expect(inbound).toBeDefined();
+    expect(inbound!.seenIterations).toEqual([0]);
+
+    // Age the key past SENDER_KEY_ROTATION_DAYS. This is the attack the
+    // receive path used to hand over for free: an inbound key going "stale" is
+    // meaningless (rotation is the SENDER's call and arrives as a new
+    // distributionId), but it used to trigger a reinstall of the SAME
+    // distribution — and a sender key row is written whole, so the replay
+    // evidence went with it. A party that controls delivery only had to wait
+    // seven days and re-serve captured ciphertexts.
+    inbound!.createdAt = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    const fetchesBefore = vi.mocked(e2eeApi.fetchGroupSessions).mock.calls
+      .length;
+
+    // Live traffic still flows on the aged key…
+    expect(await receiverReads(BOB, m1)).toBe("second");
+    // …with no re-fetch, and the same row still in place.
+    expect(vi.mocked(e2eeApi.fetchGroupSessions).mock.calls).toHaveLength(
+      fetchesBefore
+    );
+    expect(
+      h.bob.senderKeys.get(senderKeyId(CH, ALICE.userId, ALICE.deviceId))
+    ).toBe(inbound);
+    expect(inbound!.seenIterations).toEqual([0, 1]);
+
+    // And the captured ciphertext is still refused. The single-message path
+    // lets the rejection propagate rather than mapping it to null; the bulk
+    // path is what turns a failure into content: null for the UI.
+    await expect(receiverReads(BOB, m0)).rejects.toThrow(/Replay detected/i);
+  });
+
   it("returns null on a ciphertext that is not valid JSON", async () => {
     switchTo(BOB);
     const result = await decryptChannelMessage(

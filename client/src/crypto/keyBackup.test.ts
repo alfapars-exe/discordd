@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { StoredSenderKey } from "./types";
 
 // Mock keyStorage so we can exercise create/restore without needing IndexedDB.
 // Function names mirror the actual keyStorage exports used by
@@ -221,5 +222,100 @@ describe("keyBackup — self-fanout reset on restore (audit P0-FE-03)", () => {
     expect(flagOrder).toBeDefined();
     expect(importOrder).toBeDefined();
     expect(flagOrder).toBeLessThan(importOrder);
+  });
+});
+
+// ──────────────────────────────────
+// Replay window on the backup path — security scan 2026-07-31, N-11
+// ──────────────────────────────────
+
+describe("keyBackup — the sender-key replay window survives a backup round-trip", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** A sender key carrying an already-populated, already-evicted window. */
+  const senderKeyWithWindow = (): StoredSenderKey => ({
+    channelId: "channel-1",
+    senderUserId: "user-alice",
+    senderDeviceId: "device-1",
+    distributionId: "d".repeat(32),
+    chainKey: new Uint8Array(32).fill(7),
+    initialChainKey: new Uint8Array(32).fill(8),
+    publicSigningKey: new Uint8Array(32).fill(9),
+    iteration: 12,
+    createdAt: 1_700_000_000_000,
+    seenIterations: [4, 6, 11],
+    replayFloor: 3,
+  });
+
+  /** The StoredSenderKey the restore path wrote, in call order. */
+  const restoredSenderKeys = (): StoredSenderKey[] =>
+    vi
+      .mocked(keyStorageMock.saveSenderKey)
+      .mock.calls.map((call) => call[0] as StoredSenderKey);
+
+  it("carries seenIterations and replayFloor through create → restore", async () => {
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([
+      senderKeyWithWindow(),
+    ]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    // The snapshot the restore takes for rollback reads this too.
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([
+      senderKeyWithWindow(),
+    ]);
+
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    const restored = restoredSenderKeys();
+    expect(restored).toHaveLength(1);
+    // Dropping these on the way out (the pre-fix serializer did) handed the
+    // user back a key with an EMPTY window and a live iteration counter,
+    // re-opening every ciphertext already accepted under this chain.
+    expect(restored[0].seenIterations).toEqual([4, 6, 11]);
+    expect(restored[0].replayFloor).toBe(3);
+    // The rest of the row must be intact for the window to mean anything.
+    expect(restored[0].iteration).toBe(12);
+    expect(restored[0].distributionId).toBe("d".repeat(32));
+  });
+
+  it("BACKWARD COMPAT: an older backup with no window restores to safe defaults", async () => {
+    const legacyKey = senderKeyWithWindow();
+    delete legacyKey.seenIterations;
+    delete legacyKey.replayFloor;
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([legacyKey]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([legacyKey]);
+
+    // Backups predating these fields must keep restoring. Absent means
+    // "nothing evicted, nothing seen" — never a floor that would reject the
+    // user's own history.
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+
+    const restored = restoredSenderKeys();
+    expect(restored).toHaveLength(1);
+    expect(restored[0].seenIterations).toEqual([]);
+    expect(restored[0].replayFloor).toBe(0);
+  });
+
+  it("repairs a window that arrives out of order or duplicated", async () => {
+    const mangled = senderKeyWithWindow();
+    // The collect side copies the window verbatim, so whatever shape it had in
+    // IndexedDB is what the blob carries. isReplay binary-searches: an
+    // unsorted window silently MISSES hits and would masquerade as a working
+    // one while accepting replays. Restore is where that gets straightened out.
+    mangled.seenIterations = [11, 4, 6, 4];
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([mangled]);
+
+    const backup = await createBackup("pw");
+    vi.clearAllMocks();
+    vi.mocked(keyStorageMock.getAllSenderKeys).mockResolvedValue([mangled]);
+
+    expect(await restoreFromBackup(backup, "pw")).toBe(true);
+    expect(restoredSenderKeys()[0].seenIterations).toEqual([4, 6, 11]);
   });
 });

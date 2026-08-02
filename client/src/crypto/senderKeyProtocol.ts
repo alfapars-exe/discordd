@@ -67,20 +67,53 @@ const MIN_SENDER_KEY_FRAME_BYTES = 64 + 12 + 16;
 // ──────────────────────────────────
 
 /**
+ * True for a value that can legitimately appear in the replay window.
+ *
+ * Window state survives IndexedDB and, since the backup carries it, a
+ * JSON.parse — so `1e999` on the way in arrives here as Infinity and a
+ * fractional or negative entry is equally possible. Number.isSafeInteger
+ * rejects Infinity and NaN, and is applied BEFORE any ordering comparison so a
+ * poisoned value can never silently win one.
+ */
+function isWindowIteration(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
+ * The window's floor, normalized.
+ *
+ * Absent on legacy rows and on any window that never overflowed; both mean
+ * "nothing was evicted, so nothing is un-provable" — i.e. 0. Read through this
+ * helper rather than touching senderKey.replayFloor directly: comparing
+ * `iteration < undefined` yields false and would disable the check silently.
+ */
+function replayFloorOf(senderKey: StoredSenderKey): number {
+  return isWindowIteration(senderKey.replayFloor) ? senderKey.replayFloor : 0;
+}
+
+/**
  * Returns true if `iteration` was already decrypted under this sender key.
  *
- * Uses binary search on the sorted seenIterations array. If the array is
- * absent (legacy key), no entry has been recorded yet — return false.
+ * Two rejection grounds, in order:
+ *  1. Below replayFloor — the entry that would have answered this question was
+ *     genuinely evicted, so we fail closed.
+ *  2. Present in seenIterations (binary search on the sorted array).
+ *
+ * Everything at or above the floor and absent from the window is FRESH, even
+ * when it is far older than anything recorded so far. That case is ordinary:
+ * a member who joins at iteration 50 and then scrolls up legitimately receives
+ * 0..49, and decryptGroupMessage can serve them by rewinding from
+ * initialChainKey. Rejecting them (the pre-N-21 behaviour, which used
+ * seenIterations[0] as if it were a floor) rendered that history as
+ * content: null while proving nothing about replay.
  */
 function isReplay(senderKey: StoredSenderKey, iteration: number): boolean {
-  const seen = senderKey.seenIterations;
-  if (!seen || seen.length === 0) return false;
-
-  // Anything older than the window's low watermark is rejected as
-  // un-provable (we may have evicted that iteration's entry).
-  if (iteration < seen[0]) {
+  if (iteration < replayFloorOf(senderKey)) {
     return true;
   }
+
+  const seen = senderKey.seenIterations;
+  if (!seen || seen.length === 0) return false;
 
   // Binary search
   let lo = 0;
@@ -124,9 +157,65 @@ function recordIteration(senderKey: StoredSenderKey, iteration: number): void {
 
   // Evict oldest entries when window overflows. Slice keeps the array
   // densely packed and predictable in memory.
+  //
+  // This is the ONLY place replayFloor may move, because eviction is the only
+  // event that actually costs us knowledge. `highestEvicted` is the largest
+  // iteration we are about to forget; the array is sorted, so nothing strictly
+  // between it and the surviving minimum was ever recorded. Everything at or
+  // below it is therefore exactly the set we can no longer answer for, and the
+  // floor lands one past it. Math.max keeps it monotonic — reach may only be
+  // lost, never regained.
   if (seen.length > SENDER_KEY_REPLAY_WINDOW) {
-    senderKey.seenIterations = seen.slice(seen.length - SENDER_KEY_REPLAY_WINDOW);
+    const dropCount = seen.length - SENDER_KEY_REPLAY_WINDOW;
+    const highestEvicted = seen[dropCount - 1];
+    senderKey.seenIterations = seen.slice(dropCount);
+    senderKey.replayFloor = Math.max(
+      replayFloorOf(senderKey),
+      highestEvicted + 1
+    );
   }
+}
+
+/**
+ * Coerces window state that came from outside IndexedDB into the shape
+ * isReplay depends on.
+ *
+ * The backup blob is the one path where a sender key is reconstructed from
+ * JSON rather than read back from structured clone, so its window arrives
+ * unvalidated: entries may be non-numeric, unsorted, duplicated, over-long or
+ * Infinity. isReplay binary-searches, which silently MISSES hits on an
+ * unsorted array — a corrupted window would look like a working one while
+ * accepting replays. Normalizing on the way in keeps that failure impossible.
+ *
+ * Over-length input is clipped like a real eviction, floor included, so the
+ * result never claims more reach than it has.
+ */
+export function normalizeReplayWindow(
+  seenIterations: unknown,
+  replayFloor: unknown
+): { seenIterations: number[]; replayFloor: number } {
+  let floor = isWindowIteration(replayFloor) ? replayFloor : 0;
+
+  const raw: readonly unknown[] = Array.isArray(seenIterations)
+    ? (seenIterations as readonly unknown[])
+    : [];
+
+  const sorted = raw.filter(isWindowIteration).sort((a, b) => a - b);
+
+  const deduped: number[] = [];
+  for (const value of sorted) {
+    if (deduped.length === 0 || deduped[deduped.length - 1] !== value) {
+      deduped.push(value);
+    }
+  }
+
+  if (deduped.length > SENDER_KEY_REPLAY_WINDOW) {
+    const dropCount = deduped.length - SENDER_KEY_REPLAY_WINDOW;
+    floor = Math.max(floor, deduped[dropCount - 1] + 1);
+    return { seenIterations: deduped.slice(dropCount), replayFloor: floor };
+  }
+
+  return { seenIterations: deduped, replayFloor: floor };
 }
 
 // ──────────────────────────────────
@@ -187,7 +276,26 @@ export async function createDistribution(
   };
 }
 
-/** Process an inbound Sender Key distribution. Saves the key for decrypting future messages from this sender. */
+/**
+ * Process an inbound Sender Key distribution. Saves the key for decrypting
+ * future messages from this sender.
+ *
+ * ⛔ Re-processing a distribution we ALREADY hold must never clobber it.
+ * keyStorage.saveSenderKey is a whole-row put on the
+ * (channelId, senderUserId, senderDeviceId) composite key — there is no merge
+ * underneath — so writing a fresh literal here rewound `iteration` to 0,
+ * re-stamped `createdAt`, and above all DISCARDED seenIterations/replayFloor.
+ * A party that controls delivery could then re-publish the distribution (or
+ * simply wait out the 7-day age cap, which used to make the receive path
+ * reinstall on its own) and every ciphertext it had captured under this chain
+ * became acceptable again, re-rendering as fresh messages. Security scan
+ * 2026-07-31, finding N-11.
+ *
+ * Same distributionId means the same chain key, signing key and rewind anchor
+ * are already installed: there is nothing new to write, so the live ratchet
+ * position and the replay evidence are kept. A DIFFERENT distributionId is a
+ * new chain, where the old window says nothing and starting clean is correct.
+ */
 export async function processDistribution(
   channelId: string,
   senderUserId: string,
@@ -195,6 +303,26 @@ export async function processDistribution(
   distribution: SenderKeyDistributionData
 ): Promise<void> {
   const chainKey = fromBase64(distribution.chainKey);
+
+  const existing = await keyStorage.getSenderKey(
+    channelId,
+    senderUserId,
+    senderDeviceId
+  );
+
+  if (existing && existing.distributionId === distribution.distributionId) {
+    // The only state worth healing on a re-install: a key stored before
+    // initialChainKey existed cannot rewind, and this distribution carries
+    // exactly that anchor. Everything else stays untouched — in particular
+    // chainKey and iteration, which must stay consistent with each other or
+    // the forward derivation in decryptGroupMessage lands on the wrong key.
+    if (!existing.initialChainKey) {
+      existing.initialChainKey = new Uint8Array(chainKey);
+      await keyStorage.saveSenderKey(existing);
+    }
+    return;
+  }
+
   const senderKey: StoredSenderKey = {
     channelId,
     senderUserId,
@@ -542,14 +670,23 @@ export async function decryptGroupMessage(
 // ──────────────────────────────────
 
 /**
- * Public wrapper for rotation check, used by channelEncryption.
+ * Public wrapper for the age/count rotation check.
  *
- * ⛔ Called on the RECEIVE path (ensureSenderKeyForDecryption) with INBOUND
- * keys. It therefore deliberately checks age/count only and MUST NOT grow a
- * protocol-version clause: a v1 inbound key cannot be re-fetched (its v1
- * distribution row no longer exists server-side), so declaring it stale would
- * make that sender's entire message history permanently undecryptable.
- * Version-forced rotation lives in needsSenderKeyRotation — outbound only.
+ * ⛔ RECEIVE-SAFE BY CONTRACT. It has no production call site right now:
+ * ensureSenderKeyForDecryption used to gate its reinstall on this, which meant
+ * an aged INBOUND key was reinstalled from its own distribution and lost its
+ * replay window (security scan 2026-07-31, finding N-11). That call is gone —
+ * an inbound key is now reinstalled only when the distributionId actually
+ * changes, which is the sender announcing its own rotation.
+ *
+ * Kept exported, and locked by test, because the contract is what matters: any
+ * future receive-path caller must find a predicate that is age/count only.
+ * It MUST NOT grow a protocol-version or signing-key clause — a v1 inbound key
+ * cannot be re-fetched (its v1 distribution row no longer exists server-side)
+ * and inbound keys never hold a signing key, so either clause would declare
+ * every inbound key stale and make that sender's entire message history
+ * permanently undecryptable. Those clauses live in needsSenderKeyRotation —
+ * outbound only.
  */
 export function needsRotationCheck(senderKey: StoredSenderKey): boolean {
   return needsRotation(senderKey);
