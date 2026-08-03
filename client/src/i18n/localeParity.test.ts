@@ -20,6 +20,9 @@ import enSettings from "./locales/en/settings.json";
 import trSettings from "./locales/tr/settings.json";
 import enAudit from "./locales/en/audit.json";
 import trAudit from "./locales/tr/audit.json";
+import enE2EE from "./locales/en/e2ee.json";
+import trE2EE from "./locales/tr/e2ee.json";
+import { RECOVERY_PASSPHRASE_I18N_KEYS } from "../crypto/recoveryPassphrase";
 
 /** Recursively flattens a JSON translation tree into dot-separated key paths. */
 function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[] {
@@ -59,4 +62,24 @@ describe("EN/TR locale key parity", () => {
   it("voice.json", () => assertKeyParity("voice", enVoice, trVoice));
   it("settings.json", () => assertKeyParity("settings", enSettings, trSettings));
   it("audit.json", () => assertKeyParity("audit", enAudit, trAudit));
+  it("e2ee.json", () => assertKeyParity("e2ee", enE2EE, trE2EE));
+});
+
+/**
+ * The recovery passphrase policy (pentest 2026-07-26, finding H-10) returns
+ * an i18n key with each rejection instead of a message. Parity alone would
+ * not catch the failure mode that matters here: a key the policy emits but
+ * that exists in NEITHER locale renders as the raw key string ("tooShort") to
+ * the user, in both languages, and every parity test still passes.
+ */
+describe("recovery passphrase rejection keys resolve", () => {
+  const enKeys = new Set(flattenKeys(enE2EE));
+  const trKeys = new Set(flattenKeys(trE2EE));
+
+  for (const [reason, key] of Object.entries(RECOVERY_PASSPHRASE_I18N_KEYS)) {
+    it(`${reason} -> ${key}`, () => {
+      expect(enKeys.has(key), `e2ee/en is missing "${key}"`).toBe(true);
+      expect(trKeys.has(key), `e2ee/tr is missing "${key}"`).toBe(true);
+    });
+  }
 });

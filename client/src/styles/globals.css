@@ -3983,6 +3983,17 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* ─── EncryptionSettings — setup warning ─── */
 .e2ee-setup-warning { font-size:13px;color:var(--yellow);background:rgba(250,176,5,0.08);padding:8px 12px;border-radius:6px;margin:8px 0;line-height:1.4; }
 
+/* ─── Recovery passphrase strength meter (pentest 2026-07-26, H-10) ─── */
+.e2ee-pwd-strength { margin:8px 0 4px; }
+.e2ee-pwd-strength-bar { height:4px;background:var(--bg-4);border-radius:2px;overflow:hidden; }
+.e2ee-pwd-strength-fill { height:100%;border-radius:2px;transition:width .2s,background .2s; }
+.e2ee-pwd-strength-fill.weak { width:25%;background:var(--red); }
+.e2ee-pwd-strength-fill.fair { width:50%;background:var(--yellow); }
+.e2ee-pwd-strength-fill.good { width:75%;background:var(--primary); }
+.e2ee-pwd-strength-fill.strong { width:100%;background:var(--green); }
+.e2ee-pwd-strength-label { display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--t2);margin-top:4px;line-height:1.4; }
+.e2ee-pwd-strength-reason { color:var(--yellow);text-align:right; }
+
 /* ─── EncryptionSettings — key fingerprint ─── */
 .e2ee-fingerprint-wrap { margin:10px 0; }
 .e2ee-fingerprint { display:inline-block;font-family:var(--f-mono);font-size:14px;color:var(--t0);background:var(--bg-0);padding:10px 16px;border-radius:8px;letter-spacing:.08em;cursor:pointer;transition:background .15s;user-select:all; }
