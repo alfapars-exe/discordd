@@ -5,6 +5,13 @@ import { useTranslation } from "react-i18next";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
 import * as keyStorage from "../../crypto/keyStorage";
+import {
+  checkRecoveryPassphrase,
+  WeakRecoveryPassphraseError,
+  RECOVERY_PASSPHRASE_MIN_LENGTH,
+  RECOVERY_PASSPHRASE_MAX_LENGTH,
+} from "../../crypto/recoveryPassphrase";
+import RecoveryPassphraseStrength from "../shared/RecoveryPassphraseStrength";
 import { formatDateTime } from "../../utils/dateFormat";
 
 function EncryptionSettings() {
@@ -60,8 +67,19 @@ function EncryptionSettings() {
     }
   }, [initStatus]);
 
-  /** Save recovery password */
+  /**
+   * Save recovery password.
+   *
+   * The policy check here is for a specific, immediate error message — the
+   * binding gate is in e2eeStore.setRecoveryPassword, which is why the catch
+   * below still has to handle WeakRecoveryPassphraseError.
+   */
   const handleSaveRecoveryPassword = useCallback(async () => {
+    const limits = {
+      min: RECOVERY_PASSPHRASE_MIN_LENGTH,
+      max: RECOVERY_PASSPHRASE_MAX_LENGTH,
+    };
+
     if (!password.trim()) {
       addToast("error", t("recoveryPasswordRequired"));
       return;
@@ -71,14 +89,25 @@ function EncryptionSettings() {
       return;
     }
 
+    const policy = checkRecoveryPassphrase(password.trim());
+    if (!policy.ok) {
+      addToast("error", t(policy.i18nKey, limits));
+      return;
+    }
+
     setIsSavingPassword(true);
     try {
       await setRecoveryPassword(password.trim());
       addToast("success", t("recoveryPasswordSet"));
       setPassword("");
       setConfirmPassword("");
-    } catch {
-      addToast("error", t("recoveryPasswordSaveError"));
+    } catch (err) {
+      addToast(
+        "error",
+        err instanceof WeakRecoveryPassphraseError
+          ? t(err.i18nKey, limits)
+          : t("recoveryPasswordSaveError"),
+      );
     }
     setIsSavingPassword(false);
   }, [password, confirmPassword, setRecoveryPassword, addToast, t]);
@@ -188,6 +217,7 @@ function EncryptionSettings() {
               className="settings-input"
               autoComplete="new-password"
             />
+            <RecoveryPassphraseStrength passphrase={password} />
           </div>
 
           <div className="settings-field">

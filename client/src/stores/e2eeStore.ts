@@ -6,6 +6,10 @@ import { create } from "zustand";
 import * as deviceManager from "../crypto/deviceManager";
 import * as keyBackup from "../crypto/keyBackup";
 import * as keyStorage from "../crypto/keyStorage";
+import {
+  checkRecoveryPassphrase,
+  WeakRecoveryPassphraseError,
+} from "../crypto/recoveryPassphrase";
 import * as signalProtocol from "../crypto/signalProtocol";
 import * as e2eeApi from "../api/e2ee";
 import type { DeviceInfo } from "../types";
@@ -382,6 +386,28 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   setRecoveryPassword: async (password: string) => {
+    /**
+     * Strength policy chokepoint (pentest 2026-07-26, finding H-10).
+     *
+     * Both entry points reach the backup through here — settings and
+     * completeRecoverySetup (the recovery prompt) — so this is the only
+     * place where enforcement covers every caller. Validating in the
+     * components instead would leave whichever path forgot to call it wide
+     * open, which is exactly how H-10 shipped.
+     *
+     * Thrown BEFORE the try block on purpose: a rejected passphrase is a
+     * failed precondition, not a failed backup, so it must not create a
+     * backup, must not touch the network, and must not be swallowed by the
+     * catch below. The test "should reject a one-character passphrase without
+     * creating a backup" pins that ordering.
+     *
+     * Set-time only — restoreFromRecovery deliberately does not call this.
+     */
+    const policy = checkRecoveryPassphrase(password);
+    if (!policy.ok) {
+      throw new WeakRecoveryPassphraseError(policy.reason);
+    }
+
     try {
       const backup = await keyBackup.createBackup(password);
 

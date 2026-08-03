@@ -53,8 +53,10 @@ vi.mock("./channelStore", () => ({
 }));
 
 import * as keyStorage from "../crypto/keyStorage";
+import * as keyBackup from "../crypto/keyBackup";
 import * as deviceManager from "../crypto/deviceManager";
 import * as e2eeApi from "../api/e2ee";
+import { WeakRecoveryPassphraseError } from "../crypto/recoveryPassphrase";
 import { useE2EEStore } from "./e2eeStore";
 import type { DecryptionError, PeerTrustAlert } from "./e2eeStore";
 
@@ -585,6 +587,160 @@ describe("e2eeStore", () => {
       expect(state.decryptionErrors).toHaveLength(0);
       expect(state.isGeneratingKeys).toBe(false);
       expect(state.initError).toBeNull();
+    });
+  });
+
+  // ─── Recovery passphrase policy (pentest 2026-07-26, finding H-10) ───
+  //
+  // The backup blob holds private keys AND the plaintext message cache, and
+  // the server can attack it offline. Before H-10 a one-character passphrase
+  // was accepted. Enforcement lives in setRecoveryPassword because BOTH entry
+  // points funnel through it; a component-level check would have left
+  // completeRecoverySetup open.
+
+  const STRONG_PASSPHRASE = "Correct-Horse-Battery9";
+
+  /** Mock a successful backup + upload. Returns the fake backup payload. */
+  function stageSuccessfulBackup() {
+    const backup = {
+      version: 1,
+      algorithm: "aes-256-gcm+pbkdf2-2000000",
+      encryptedData: "ZW5j",
+      nonce: "bm9u",
+      salt: "c2Fs",
+    };
+    vi.mocked(keyBackup.createBackup).mockResolvedValue(backup);
+    vi.mocked(e2eeApi.uploadKeyBackup).mockResolvedValue({ success: true, data: null });
+    return backup;
+  }
+
+  describe("setRecoveryPassword", () => {
+    it("should reject a one-character passphrase without creating a backup", async () => {
+      stageSuccessfulBackup();
+
+      await expect(
+        useE2EEStore.getState().setRecoveryPassword("a"),
+      ).rejects.toBeInstanceOf(WeakRecoveryPassphraseError);
+
+      // Sequence proof: the rejection must happen BEFORE any key material is
+      // collected and BEFORE anything is handed to the server. Asserting only
+      // on the throw would pass even if the weak-passphrase blob had already
+      // been uploaded.
+      expect(keyBackup.createBackup).not.toHaveBeenCalled();
+      expect(e2eeApi.uploadKeyBackup).not.toHaveBeenCalled();
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(false);
+    });
+
+    it("should reject the other weak shapes the policy names", async () => {
+      stageSuccessfulBackup();
+
+      for (const weak of ["short", "aaaaaaaaaaaa", "918273645500", "abcdefghijkl", "password1234"]) {
+        await expect(
+          useE2EEStore.getState().setRecoveryPassword(weak),
+        ).rejects.toBeInstanceOf(WeakRecoveryPassphraseError);
+      }
+
+      expect(keyBackup.createBackup).not.toHaveBeenCalled();
+      expect(e2eeApi.uploadKeyBackup).not.toHaveBeenCalled();
+    });
+
+    it("should carry a translatable reason on the thrown error", async () => {
+      stageSuccessfulBackup();
+
+      await expect(
+        useE2EEStore.getState().setRecoveryPassword("a"),
+      ).rejects.toMatchObject({
+        reason: "tooShort",
+        i18nKey: "recoveryPasswordTooShort",
+      });
+    });
+
+    it("should still create and upload a backup for a strong passphrase", async () => {
+      // The positive case: a policy that rejected everything would satisfy all
+      // of the tests above while breaking the feature outright.
+      const backup = stageSuccessfulBackup();
+
+      await useE2EEStore.getState().setRecoveryPassword(STRONG_PASSPHRASE);
+
+      expect(keyBackup.createBackup).toHaveBeenCalledWith(STRONG_PASSPHRASE);
+      expect(e2eeApi.uploadKeyBackup).toHaveBeenCalledWith({
+        version: backup.version,
+        algorithm: backup.algorithm,
+        encrypted_data: backup.encryptedData,
+        nonce: backup.nonce,
+        salt: backup.salt,
+      });
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(true);
+    });
+  });
+
+  describe("completeRecoverySetup", () => {
+    it("should apply the same policy as the settings path", async () => {
+      // Second entry point (RecoveryPasswordPrompt). It delegates to
+      // setRecoveryPassword, so it must inherit the gate rather than needing
+      // its own copy of the rules.
+      stageSuccessfulBackup();
+      useE2EEStore.setState({ showRecoveryPrompt: true });
+
+      await expect(
+        useE2EEStore.getState().completeRecoverySetup("a"),
+      ).rejects.toBeInstanceOf(WeakRecoveryPassphraseError);
+
+      expect(keyBackup.createBackup).not.toHaveBeenCalled();
+      expect(e2eeApi.uploadKeyBackup).not.toHaveBeenCalled();
+      // The prompt stays open — dismissing it here would look like success.
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(true);
+    });
+
+    it("should complete and close the prompt for a strong passphrase", async () => {
+      stageSuccessfulBackup();
+      useE2EEStore.setState({ showRecoveryPrompt: true });
+
+      await useE2EEStore.getState().completeRecoverySetup(STRONG_PASSPHRASE);
+
+      expect(keyBackup.createBackup).toHaveBeenCalledWith(STRONG_PASSPHRASE);
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(false);
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(true);
+    });
+  });
+
+  describe("restoreFromRecovery (backward compatibility)", () => {
+    it("should restore a backup made under a weak legacy passphrase", async () => {
+      // The policy is SET-TIME ONLY. Backups created before H-10 was fixed
+      // are protected by whatever the user typed then, often a single
+      // character. Gating the restore path on the new rules would lock those
+      // users out of their own identity keys and message history — the policy
+      // would then cause exactly the loss it exists to prevent.
+      const legacyWeakPassphrase = "a";
+
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({
+        success: true,
+        data: {
+          id: "b1",
+          user_id: "u1",
+          version: 1,
+          algorithm: "aes-256-gcm",
+          encrypted_data: "ZW5j",
+          nonce: "bm9u",
+          salt: "c2Fs",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      });
+      vi.mocked(keyBackup.restoreFromBackup).mockResolvedValue(true);
+      vi.mocked(deviceManager.registerRestoredDevice).mockResolvedValue("devRestored");
+      vi.mocked(deviceManager.refreshPreKeys).mockResolvedValue(undefined);
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+
+      const restored = await useE2EEStore.getState().restoreFromRecovery(legacyWeakPassphrase);
+
+      expect(restored).toBe(true);
+      expect(keyBackup.restoreFromBackup).toHaveBeenCalledWith(
+        expect.objectContaining({ algorithm: "aes-256-gcm" }),
+        legacyWeakPassphrase,
+      );
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+      expect(useE2EEStore.getState().localDeviceId).toBe("devRestored");
     });
   });
 
