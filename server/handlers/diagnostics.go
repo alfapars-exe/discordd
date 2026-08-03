@@ -89,7 +89,7 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 
 	// The attachment name is fixed, not derived from header.Filename
 	// (security scan 2026-07-31, finding N-27). Every other upload path in the
-	// codebase runs the client's name through sanitizeFilename; this one used
+	// codebase runs the client's name through pkg.SanitizeFilename; this one used
 	// it raw, so a registered user could choose the filename that lands in the
 	// platform admin's inbox -- "report.pdf.exe", a name carrying an
 	// RTL-override, path separators, control characters.

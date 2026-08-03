@@ -60,7 +60,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random filename: %w", err)
 	}
-	safeFilename := sanitizeFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
 	destPath, err := pkg.SafeJoin(s.uploadDir, diskFilename)
@@ -76,7 +76,7 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		ID:       uuid.New().String(),
 		TicketID: ticketID,
 		ReplyID:  replyID,
-		Filename: header.Filename,
+		Filename: safeFilename,
 		FileURL:  "/api/uploads/" + diskFilename,
 		FileSize: &fileSize,
 		MimeType: &sniffed,

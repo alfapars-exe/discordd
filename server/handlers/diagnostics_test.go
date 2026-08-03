@@ -182,7 +182,7 @@ func TestDiagnostics_EmailConcurrencyBounded(t *testing.T) {
 // The handler used to pass the multipart filename straight to the Resend
 // attachment, so any registered user picked the filename that arrived in the
 // platform admin's inbox. Every other upload path in this codebase runs the
-// client's name through sanitizeFilename; this one was the exception.
+// client's name through pkg.SanitizeFilename; this one was the exception.
 //
 // The fix pins the name rather than sanitizing it -- the endpoint accepts only
 // the client's gzip bundle, so the supplied name carries nothing worth keeping.

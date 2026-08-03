@@ -223,23 +223,5 @@ func TestUploadService_cleansUpDiskOnRepoFailure(t *testing.T) {
 	}
 }
 
-func TestSanitizeFilename_defenseInDepth(t *testing.T) {
-	// Path traversal — server MUST NOT let a caller escape uploadDir via
-	// the filename. sanitizeFilename strips components; SafeJoin also
-	// guards, but this test locks the first layer.
-	if got := sanitizeFilename("../../etc/passwd"); got == ".." || strings.Contains(got, "/") || strings.Contains(got, "\\") {
-		t.Errorf("sanitizeFilename left traversal chars: %q", got)
-	}
-	// Null byte in name → stripped.
-	if got := sanitizeFilename("evil\x00.png"); strings.Contains(got, "\x00") {
-		t.Errorf("null byte survived: %q", got)
-	}
-	// Empty / dot names must be substituted so io.Copy doesn't dump into
-	// a hidden directory entry.
-	if got := sanitizeFilename(".."); got != "unnamed" {
-		t.Errorf("dotdot filename = %q, want unnamed", got)
-	}
-}
-
 // silence unused-import warnings when only some tests reference a symbol.
 var _ = io.Discard
