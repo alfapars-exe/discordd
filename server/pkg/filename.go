@@ -1,7 +1,6 @@
 package pkg
 
 import (
-	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -37,14 +36,18 @@ import (
 //
 // Returns "unnamed" when nothing usable is left.
 func SanitizeFilename(name string) string {
-	// Base first: on Windows this also splits on '\', on Linux it does not,
-	// which is why the separator cases below are not redundant.
-	name = filepath.Base(name)
+	// Cut at the last separator of EITHER platform, before anything else.
+	// filepath.Base is platform-dependent: on Linux it does not treat a
+	// backslash as a separator, so a Windows client posting
+	// "C:\Users\me\a.png" would land as "CUsersmea.png" in the Linux
+	// container and as "a.png" on a developer's Windows machine. One input
+	// must not have two answers, so the decision is made here instead.
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
 
 	name = strings.Map(func(r rune) rune {
 		switch {
-		case r == '/' || r == '\\':
-			return -1
 		case unicode.IsControl(r):
 			// Cc: C0 (includes NUL, CR, LF, ESC), DEL, and C1.
 			return -1

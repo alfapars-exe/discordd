@@ -14,6 +14,15 @@ func TestSanitizeFilename(t *testing.T) {
 		// ── containment ──────────────────────────────────────────────
 		{"posix traversal", "../../etc/passwd", "passwd"},
 		{"windows traversal", `..\..\evil.png`, "evil.png"},
+		// filepath.Base would answer these differently on Windows and on
+		// Linux (POSIX does not treat a backslash as a separator), which is
+		// exactly the divergence that turned CI red while the same test
+		// passed locally. SanitizeFilename cuts at either separator itself,
+		// so these expectations hold on every platform.
+		{"windows absolute path", `C:\Users\me\photo.png`, "photo.png"},
+		{"unc path", `\\server\share\x.png`, "x.png"},
+		{"mixed separators", `a/b\c/d.png`, "d.png"},
+		{"trailing separator", "a/b/", "unnamed"},
 		{"bare dotdot", "..", "unnamed"},
 		{"bare dot", ".", "unnamed"},
 		{"empty", "", "unnamed"},
