@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -122,6 +124,9 @@ func (r *CreateUserRequest) Validate() error {
 	r.DisplayName = strings.TrimSpace(r.DisplayName)
 	if utf8.RuneCountInString(r.DisplayName) > 32 {
 		return fmt.Errorf("display name must be at most 32 characters")
+	}
+	if pkg.ContainsSteeringChars(r.DisplayName) {
+		return fmt.Errorf("display name contains disallowed control or formatting characters")
 	}
 
 	r.Email = strings.TrimSpace(r.Email)
