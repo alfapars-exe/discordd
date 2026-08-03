@@ -12,7 +12,7 @@ import { useE2EEStore } from "./e2eeStore";
 import { usePreferencesStore } from "./preferencesStore";
 import { useVoiceStore } from "./voiceStore";
 import { useSettingsStore } from "./settingsStore";
-import type { User, UserStatus } from "../types";
+import type { APIResponse, AuthTokens, User, UserStatus } from "../types";
 import { oneOf } from "../utils/validation";
 
 const MANUAL_STATUS_KEY = "mqvi_manual_status";
@@ -56,6 +56,13 @@ type AuthState = {
   // ─── Actions ───
   register: (username: string, password: string, displayName?: string, email?: string) => Promise<boolean>;
   login: (username: string, password: string) => Promise<boolean>;
+  /**
+   * Applies an already-fetched login response. Exists so the Electron
+   * "remember me" path can reuse this exact success/failure handling: that
+   * login happens in the main process, because the renderer must never see
+   * the stored password (pentest 2026-07-26, H-09).
+   */
+  applyLoginResponse: (res: APIResponse<AuthTokens>) => boolean;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
   clearError: () => void;
@@ -71,7 +78,7 @@ type AuthState = {
   setManualStatus: (status: UserStatus) => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: false,
   error: null,
@@ -111,9 +118,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (username, password) => {
     set({ isLoading: true, error: null });
+    return get().applyLoginResponse(await authApi.login({ username, password }));
+  },
 
-    const res = await authApi.login({ username, password });
-
+  applyLoginResponse: (res) => {
     if (res.success && res.data) {
       setTokens(res.data.access_token, res.data.refresh_token);
       syncLanguageFromUser(res.data.user);

@@ -81,6 +81,23 @@ export function loadCredentials(): Credentials | null {
   }
 }
 
+/**
+ * Reduces stored credentials to what the renderer is allowed to see.
+ *
+ * The password stays in the main process (pentest 2026-07-26, H-09): the
+ * renderer holds only short-lived access tokens by design, so handing it a
+ * long-lived account password on every launch made any XSS in app://hichat
+ * worth an account instead of a session.
+ *
+ * Pure and exported so the stripping is testable without a running Electron
+ * app — loadCredentials itself needs safeStorage.
+ */
+export function toPublicCredentials(
+  creds: Credentials | null,
+): { username: string } | null {
+  return creds ? { username: creds.username } : null;
+}
+
 export function clearCredentials(): void {
   try {
     const p = credPath();

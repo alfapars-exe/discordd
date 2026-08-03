@@ -180,7 +180,18 @@ interface ElectronAPI {
 
   /** Save credentials encrypted with safeStorage */
   saveCredentials: (username: string, password: string) => Promise<void>;
-  loadCredentials: () => Promise<{ username: string; password: string } | null>;
+  /**
+   * Username only — the stored password never crosses the bridge
+   * (pentest 2026-07-26, H-09). Use loginWithSavedCredentials to sign in.
+   */
+  loadCredentials: () => Promise<{ username: string } | null>;
+  /**
+   * Signs in with the stored password inside the main process and resolves to
+   * the upstream login envelope. Rejects when nothing is stored.
+   */
+  loginWithSavedCredentials: (
+    upstreamOrigin: string,
+  ) => Promise<{ status: number; body: unknown }>;
   clearCredentials: () => Promise<void>;
 
   /** Read all app settings */
