@@ -190,8 +190,12 @@ func (s *soundboardService) Create(
 		return nil, fmt.Errorf("%w: duration must be between 1 and %d ms", pkg.ErrBadRequest, maxSoundDurationMs)
 	}
 
-	if strings.TrimSpace(req.Name) == "" {
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
 		return nil, fmt.Errorf("%w: name is required", pkg.ErrBadRequest)
+	}
+	if pkg.ContainsSteeringChars(req.Name) {
+		return nil, fmt.Errorf("%w: name contains disallowed control or formatting characters", pkg.ErrBadRequest)
 	}
 
 	if header.Size > s.maxSize {
@@ -279,6 +283,9 @@ func (s *soundboardService) Update(ctx context.Context, serverID, id string, req
 		name := strings.TrimSpace(*req.Name)
 		if name == "" {
 			return nil, fmt.Errorf("%w: name cannot be empty", pkg.ErrBadRequest)
+		}
+		if pkg.ContainsSteeringChars(name) {
+			return nil, fmt.Errorf("%w: name contains disallowed control or formatting characters", pkg.ErrBadRequest)
 		}
 		sound.Name = name
 	}

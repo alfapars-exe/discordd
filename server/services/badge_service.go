@@ -65,6 +65,9 @@ func (s *badgeService) CreateBadge(ctx context.Context, adminID string, req *mod
 	if utf8.RuneCountInString(req.Name) > maxBadgeNameLength {
 		return nil, fmt.Errorf("%w: badge name too long (max %d)", pkg.ErrBadRequest, maxBadgeNameLength)
 	}
+	if pkg.ContainsSteeringChars(req.Name) {
+		return nil, fmt.Errorf("%w: badge name contains disallowed control or formatting characters", pkg.ErrBadRequest)
+	}
 	if req.IconType != "builtin" && req.IconType != "custom" {
 		return nil, fmt.Errorf("%w: icon_type must be 'builtin' or 'custom'", pkg.ErrBadRequest)
 	}
@@ -112,6 +115,9 @@ func (s *badgeService) UpdateBadge(ctx context.Context, adminID string, badgeID 
 	}
 	if utf8.RuneCountInString(req.Name) > maxBadgeNameLength {
 		return nil, fmt.Errorf("%w: badge name too long (max %d)", pkg.ErrBadRequest, maxBadgeNameLength)
+	}
+	if pkg.ContainsSteeringChars(req.Name) {
+		return nil, fmt.Errorf("%w: badge name contains disallowed control or formatting characters", pkg.ErrBadRequest)
 	}
 
 	existing.Name = req.Name
