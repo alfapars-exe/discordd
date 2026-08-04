@@ -82,4 +82,40 @@ func TestValidate_RejectsSteeringChars(t *testing.T) {
 			t.Fatal("spoofed server name should be rejected")
 		}
 	})
+
+	t.Run("NicknameRequest nickname", func(t *testing.T) {
+		r := &NicknameRequest{Nickname: strPtr(spoofed)}
+		if err := r.Validate(); err == nil {
+			t.Fatal("spoofed nickname should be rejected")
+		}
+		clean := &NicknameRequest{Nickname: strPtr("Zeynep")}
+		if err := clean.Validate(); err != nil {
+			t.Fatalf("ordinary nickname must be accepted, got: %v", err)
+		}
+	})
+
+	t.Run("RegisterDeviceRequest display_name", func(t *testing.T) {
+		base := func() *RegisterDeviceRequest {
+			return &RegisterDeviceRequest{
+				DeviceID:        "dev-1",
+				IdentityKey:     "ik",
+				SignedPrekey:    "spk",
+				SignedPrekeySig: "sig",
+			}
+		}
+		r := base()
+		r.DisplayName = spoofed
+		if err := r.Validate(); err == nil {
+			t.Fatal("spoofed display_name should be rejected")
+		}
+		clean := base()
+		clean.DisplayName = "Ayşe'nin Telefonu"
+		if err := clean.Validate(); err != nil {
+			t.Fatalf("ordinary display_name must be accepted, got: %v", err)
+		}
+		empty := base()
+		if err := empty.Validate(); err != nil {
+			t.Fatalf("empty display_name (no client-provided name) must be accepted, got: %v", err)
+		}
+	})
 }

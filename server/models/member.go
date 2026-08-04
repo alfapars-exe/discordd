@@ -99,6 +99,9 @@ func (r *NicknameRequest) Validate() error {
 	if utf8.RuneCountInString(trimmed) > 32 {
 		return fmt.Errorf("nickname must be at most 32 characters")
 	}
+	if pkg.ContainsSteeringChars(trimmed) {
+		return fmt.Errorf("nickname contains disallowed control or formatting characters")
+	}
 	return nil
 }
 
