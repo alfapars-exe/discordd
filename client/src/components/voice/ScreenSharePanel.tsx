@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { resolveUserId } from "../../utils/constants";
+import { requestFullscreenCompat, exitFullscreenCompat, getFullscreenElement } from "../../utils/fullscreenCompat";
 import { logToServer } from "../../api/clientLog";
 import ScreenShareContextMenu from "./ScreenShareContextMenu";
 import ScreenShareViewerChip from "./ScreenShareViewerChip";
@@ -134,12 +135,12 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
   const handleFullscreenToggle = useCallback(() => {
     if (!containerRef.current) return;
 
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch((err: unknown) => {
+    if (getFullscreenElement()) {
+      exitFullscreenCompat().catch((err: unknown) => {
         console.error("[ScreenSharePanel] Failed to exit fullscreen:", err);
       });
     } else {
-      containerRef.current.requestFullscreen().catch((err: unknown) => {
+      requestFullscreenCompat(containerRef.current).catch((err: unknown) => {
         console.error("[ScreenSharePanel] Failed to enter fullscreen:", err);
       });
     }
