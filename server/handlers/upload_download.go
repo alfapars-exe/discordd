@@ -157,8 +157,8 @@ func (h *UploadDownloadHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	// default (defense-in-depth; pentest 2026-07-26 finding C-02).
 	//
 	// Rejecting is safe because every server-generated name is already canonical:
-	// a single segment {16 hex}_{sanitizeFilename} (services.UploadService), or
-	// the two-segment "soundboard/{16 hex}_…", and sanitizeFilename strips
+	// a single segment {16 hex}_{pkg.SanitizeFilename} (services.UploadService), or
+	// the two-segment "soundboard/{16 hex}_…", and pkg.SanitizeFilename strips
 	// separators. So a non-canonical request is never legitimate.
 	//
 	// Badge icons DO reach this handler: they're uploaded to

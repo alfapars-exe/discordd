@@ -2,7 +2,7 @@
 //
 // gosec G304 flagged every os.Create(destPath) where destPath includes a
 // user-influenced filename, even though our upload services already run
-// the original name through sanitizeFilename + prepend a random hex
+// the original name through SanitizeFilename + prepend a random hex
 // prefix. The flag is reasonable defense-in-depth: a future refactor
 // could change the input shape and the implicit containment guarantee
 // would silently break.

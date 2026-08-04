@@ -222,7 +222,7 @@ func (s *soundboardService) Create(
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("generate random filename: %w", err)
 	}
-	safeFilename := sanitizeFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 	dir := filepath.Join(s.uploadDir, soundboardSubdir)
 	destPath, err := pkg.SafeJoin(dir, diskFilename)

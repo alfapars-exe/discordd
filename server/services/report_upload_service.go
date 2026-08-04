@@ -79,12 +79,13 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 		return nil, err
 	}
 
-	// Generate unique filename — sanitizeFilename defined in upload_service.go (same package)
+	// Generate unique filename — see pkg.SanitizeFilename for what the
+	// client-supplied name loses before it reaches disk or a client.
 	randomBytes := make([]byte, 8)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random filename: %w", err)
 	}
-	safeFilename := sanitizeFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
 	destPath, err := pkg.SafeJoin(s.uploadDir, diskFilename)
@@ -98,7 +99,7 @@ func (s *reportUploadService) Upload(ctx context.Context, reportID string, file 
 	fileSize := header.Size
 	att := &models.ReportAttachment{
 		ReportID: reportID,
-		Filename: header.Filename,
+		Filename: safeFilename,
 		FileURL:  "/api/uploads/" + diskFilename,
 		FileSize: &fileSize,
 		MimeType: &sniffed,

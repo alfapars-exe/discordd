@@ -68,7 +68,7 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random filename: %w", err)
 	}
-	safeFilename := sanitizeFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
 	destPath, err := pkg.SafeJoin(s.uploadDir, diskFilename)
@@ -96,7 +96,7 @@ func (s *dmUploadService) Upload(ctx context.Context, dmMessageID string, file m
 	fileSize := header.Size
 	attachment := &models.DMAttachment{
 		DMMessageID: dmMessageID,
-		Filename:    header.Filename,
+		Filename:    safeFilename,
 		FileURL:     "/api/uploads/" + diskFilename,
 		FileSize:    &fileSize,
 		MimeType:    &mimeForRecord,

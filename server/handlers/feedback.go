@@ -74,14 +74,14 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 			f, openErr := fh.Open()
 			if openErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
-					fmt.Sprintf("failed to open uploaded file %s: %v", fh.Filename, openErr), nil)
+					fmt.Sprintf("failed to open uploaded file %s: %v", pkg.SanitizeFilename(fh.Filename), openErr), nil)
 				continue
 			}
 			att, uploadErr := h.uploadService.Upload(r.Context(), ticket.ID, nil, f, fh)
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
-					fmt.Sprintf("failed to upload file %s for ticket %s: %v", fh.Filename, ticket.ID, uploadErr), nil)
+					fmt.Sprintf("failed to upload file %s for ticket %s: %v", pkg.SanitizeFilename(fh.Filename), ticket.ID, uploadErr), nil)
 				continue
 			}
 			ticket.Attachments = append(ticket.Attachments, *att)
@@ -281,14 +281,14 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 			f, openErr := fh.Open()
 			if openErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
-					fmt.Sprintf("failed to open reply attachment %s: %v", fh.Filename, openErr), nil)
+					fmt.Sprintf("failed to open reply attachment %s: %v", pkg.SanitizeFilename(fh.Filename), openErr), nil)
 				continue
 			}
 			att, uploadErr := h.uploadService.Upload(r.Context(), ticketID, &reply.ID, f, fh)
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
-					fmt.Sprintf("failed to upload reply attachment %s: %v", fh.Filename, uploadErr), nil)
+					fmt.Sprintf("failed to upload reply attachment %s: %v", pkg.SanitizeFilename(fh.Filename), uploadErr), nil)
 				continue
 			}
 			reply.Attachments = append(reply.Attachments, *att)

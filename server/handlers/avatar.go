@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -251,7 +250,7 @@ func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request) (s
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", fmt.Errorf("failed to generate random filename: %w", err)
 	}
-	safeFilename := sanitizeAvatarFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	// Replace the original extension with the one chosen by the resizer —
 	// a .png upload re-encoded as JPEG must land on disk as .jpg so the
 	// MIME sniff at serve time matches the actual bytes.
@@ -283,23 +282,4 @@ func (h *AvatarHandler) deleteOldFile(fileURL *string) {
 
 	oldPath := filepath.Join(h.uploadDir, filename)
 	os.Remove(oldPath)
-}
-
-// sanitizeAvatarFilename strips path traversal characters.
-// Same logic as upload_service.go's sanitizeFilename (package-private, defined separately).
-func sanitizeAvatarFilename(name string) string {
-	name = filepath.Base(name)
-
-	name = strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' || r == '\x00' {
-			return -1
-		}
-		return r
-	}, name)
-
-	if name == "" || name == "." || name == ".." {
-		name = "unnamed"
-	}
-
-	return name
 }
