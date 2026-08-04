@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // Device represents a user's registered E2EE device.
@@ -93,6 +96,25 @@ func (r *RegisterDeviceRequest) Validate() error {
 	r.SignedPrekeySig = strings.TrimSpace(r.SignedPrekeySig)
 	if r.SignedPrekeySig == "" {
 		return fmt.Errorf("signed_prekey_signature is required")
+	}
+
+	// DisplayName is optional (empty means "no client-provided name" -- the
+	// UI falls back to a truncated device_id, see EncryptionSettings.tsx)
+	// and had no validation at all before this: not length, not character
+	// class. It is rendered verbatim in the device list at
+	// EncryptionSettings.tsx:278, which is exactly where the fileEncryption/
+	// filename hardening (see pkg.SanitizeFilename) and identity-field
+	// hardening (pkg.ContainsSteeringChars) came from -- a bidi override
+	// here reorders what the device owner reads before they revoke or trust
+	// a session. 64 runes is a new cap, not an extension of an existing
+	// one: generous relative to the generated defaults ("HiChat! Desktop -
+	// Windows" is 26) while still bounded.
+	r.DisplayName = strings.TrimSpace(r.DisplayName)
+	if utf8.RuneCountInString(r.DisplayName) > 64 {
+		return fmt.Errorf("display_name must be at most 64 characters")
+	}
+	if pkg.ContainsSteeringChars(r.DisplayName) {
+		return fmt.Errorf("display_name contains disallowed control or formatting characters")
 	}
 	return nil
 }
