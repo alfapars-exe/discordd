@@ -82,7 +82,20 @@ FROM debian:bookworm-slim
 # to take a newer version; the official SHA2-256SUMS file from the same
 # release is fetched and verified, so the build fails loudly on any
 # tampering instead of silently shipping an unknown binary.
-ARG YT_DLP_VERSION=2024.11.04
+#
+# Bumped 2024.11.04 -> 2026.07.04 (security scan 2026-07-31, finding N-28:
+# the old pin was ~21 months stale). Verified before bumping, not just
+# assumed safe: downloaded both release binaries with the same checksum
+# check this file performs, diffed `--list-extractors` output filtered to
+# ^youtube -- 21 extractors on the old pin, 20 on the new one, the only
+# removal being youtube:search:date (search-by-date; music_bot_pipeline.go
+# only ever passes a direct URL, never invokes yt-dlp's search syntax, so
+# this extractor was unreachable either way). No new Youtube-prefixed
+# extractor name appeared, so the class-name pattern below still matches
+# only the intended family, and `generic` -- the extractor --use-extractors
+# is here specifically to exclude -- is still present and still excluded
+# by omission. See music_url_guard.go and music_bot_pipeline.go:342.
+ARG YT_DLP_VERSION=2026.07.04
 
 # huggingface_hub pinned for the same reason as yt-dlp above (security scan
 # 2026-07-31, finding N-16). The constraint used to be `>=0.20` with no upper
