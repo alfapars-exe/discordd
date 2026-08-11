@@ -11,6 +11,16 @@ rtc:
   use_external_ip: true
 
 # API key / secret — must match LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env
+#
+# ⚠️  BUNU DEĞİŞTİRİN — `devkey: secret` LiveKit'in kendi genel bilinen
+# quickstart varsayılanıdır (resmi dokümantasyonda örnek olarak geçer),
+# tesadüfi bir sızıntı değildir. Şablonu olduğu gibi bırakıp bu portu
+# (7880) internete açan bir kurulumda, bu çifti bilen HERKES geçerli bir
+# LiveKit AccessToken üretip istediği ses/görüntü odasına katılabilir,
+# dinleyebilir, yayın yapabilir — HiChat'in kendi yetki katmanı tamamen
+# atlanır. Üretmek için: `openssl rand -hex 16` (anahtar) ve
+# `openssl rand -hex 32` (secret). Değeri hem burada hem .env'deki
+# LIVEKIT_API_KEY / LIVEKIT_API_SECRET'te aynı şekilde güncelleyin.
 keys:
   devkey: secret
 

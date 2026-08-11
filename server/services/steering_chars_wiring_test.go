@@ -12,7 +12,7 @@ import (
 // Same shape as models/steering_chars_wiring_test.go, one package over:
 // badge and soundboard names are validated inline in the service layer
 // rather than in a models.Validate() method, so their wiring lives here.
-const spoofedName = "admin\u202E"
+const spoofedIdentityName = "admin\u202E"
 
 type stubBadgeRepo struct{}
 
@@ -37,14 +37,14 @@ func TestBadgeService_RejectsSteeringCharsInName(t *testing.T) {
 	svc := NewBadgeService(stubBadgeRepo{}, &testutil.MockEventPublisher{})
 
 	t.Run("create", func(t *testing.T) {
-		req := &models.CreateBadgeRequest{Name: spoofedName, IconType: "builtin", Color1: "#fff"}
+		req := &models.CreateBadgeRequest{Name: spoofedIdentityName, IconType: "builtin", Color1: "#fff"}
 		if _, err := svc.CreateBadge(context.Background(), BadgeAdminUserID, req); err == nil {
 			t.Fatal("spoofed badge name should be rejected")
 		}
 	})
 
 	t.Run("update", func(t *testing.T) {
-		req := &models.CreateBadgeRequest{Name: spoofedName, IconType: "builtin", Color1: "#fff"}
+		req := &models.CreateBadgeRequest{Name: spoofedIdentityName, IconType: "builtin", Color1: "#fff"}
 		if _, err := svc.UpdateBadge(context.Background(), BadgeAdminUserID, "b1", req); err == nil {
 			t.Fatal("spoofed badge name should be rejected")
 		}
@@ -67,7 +67,7 @@ func TestSoundboardService_RejectsSteeringCharsInName(t *testing.T) {
 		defer func() { _ = file.Close() }()
 
 		emoji := "🔊"
-		req := &models.CreateSoundboardSoundRequest{Name: spoofedName, Emoji: &emoji}
+		req := &models.CreateSoundboardSoundRequest{Name: spoofedIdentityName, Emoji: &emoji}
 		_, err := svc.Create(context.Background(), "srv1", "user1", req, file, fh, 1000)
 		if err == nil {
 			t.Fatal("spoofed soundboard name should be rejected")
@@ -85,7 +85,7 @@ func TestSoundboardService_RejectsSteeringCharsInName(t *testing.T) {
 		}
 		svc := newTestSoundboardService(repo, t.TempDir())
 
-		name := spoofedName
+		name := spoofedIdentityName
 		_, err := svc.Update(context.Background(), "srv1", "s1", &models.UpdateSoundboardSoundRequest{Name: &name})
 		if err == nil {
 			t.Fatal("spoofed soundboard name should be rejected")

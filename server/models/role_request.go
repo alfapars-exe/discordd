@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 var hexColorRegex = regexp.MustCompile(`^#?[0-9a-fA-F]{6}$`)
@@ -21,6 +23,9 @@ func (r *CreateRoleRequest) Validate() error {
 	nameLen := utf8.RuneCountInString(r.Name)
 	if nameLen < 1 || nameLen > 50 {
 		return fmt.Errorf("role name must be between 1 and 50 characters")
+	}
+	if pkg.ContainsSteeringChars(r.Name) {
+		return fmt.Errorf("role name contains disallowed control or formatting characters")
 	}
 
 	r.Color = strings.TrimSpace(r.Color)
@@ -52,6 +57,9 @@ func (r *UpdateRoleRequest) Validate() error {
 		nameLen := utf8.RuneCountInString(*r.Name)
 		if nameLen < 1 || nameLen > 32 {
 			return fmt.Errorf("role name must be between 1 and 32 characters")
+		}
+		if pkg.ContainsSteeringChars(*r.Name) {
+			return fmt.Errorf("role name contains disallowed control or formatting characters")
 		}
 	}
 

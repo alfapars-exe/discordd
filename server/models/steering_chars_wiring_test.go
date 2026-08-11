@@ -118,4 +118,22 @@ func TestValidate_RejectsSteeringChars(t *testing.T) {
 			t.Fatalf("empty display_name (no client-provided name) must be accepted, got: %v", err)
 		}
 	})
+
+	t.Run("CreateRoleRequest name", func(t *testing.T) {
+		r := &CreateRoleRequest{Name: spoofed, Color: "#FF5733"}
+		if err := r.Validate(); err == nil {
+			t.Fatal("spoofed role name should be rejected")
+		}
+		clean := &CreateRoleRequest{Name: "Moderatör", Color: "#FF5733"}
+		if err := clean.Validate(); err != nil {
+			t.Fatalf("ordinary role name must be accepted, got: %v", err)
+		}
+	})
+
+	t.Run("UpdateRoleRequest name", func(t *testing.T) {
+		r := &UpdateRoleRequest{Name: strPtr(spoofed)}
+		if err := r.Validate(); err == nil {
+			t.Fatal("spoofed role name should be rejected")
+		}
+	})
 }
