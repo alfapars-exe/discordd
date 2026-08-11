@@ -24,7 +24,7 @@ const SORT_COLS = [
 type SortKey = "n" | "m" | "id";
 
 function cmp(a: Row, b: Row, key: SortKey, dir: SortDir): number {
-  let r = 0;
+  let r: number;
   if (key === "n") r = a.n - b.n;
   else if (key === "m") r = a.m - b.m;
   else r = a.id.localeCompare(b.id);
