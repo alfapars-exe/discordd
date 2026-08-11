@@ -16,6 +16,7 @@ import { Track } from "livekit-client";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import ScreenShareResizeHandle from "./ScreenShareResizeHandle";
+import { requestFullscreenCompat, exitFullscreenCompat, getFullscreenElement } from "../../utils/fullscreenCompat";
 
 type LayoutMode = "vertical" | "horizontal";
 
@@ -38,12 +39,12 @@ function CameraPanel({ trackRef }: Readonly<{ trackRef: TrackReferenceOrPlacehol
 
   const handleFullscreenToggle = useCallback(() => {
     if (!containerRef.current) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch((err: unknown) => {
+    if (getFullscreenElement()) {
+      exitFullscreenCompat().catch((err: unknown) => {
         console.error("[CameraPanel] exit fullscreen failed:", err);
       });
     } else {
-      containerRef.current.requestFullscreen().catch((err: unknown) => {
+      requestFullscreenCompat(containerRef.current).catch((err: unknown) => {
         console.error("[CameraPanel] enter fullscreen failed:", err);
       });
     }
