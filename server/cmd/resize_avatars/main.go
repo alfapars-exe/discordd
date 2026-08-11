@@ -133,7 +133,7 @@ func main() {
 				return nil
 			}
 			resized, ext, err := handlers.ResizeAvatarBytes(in)
-			in.Close()
+			_ = in.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if err != nil {
 				log.Printf("[resize] resize %s: %v", name, err)
 				stats.errors++

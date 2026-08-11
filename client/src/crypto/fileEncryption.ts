@@ -48,6 +48,66 @@ export type EncryptedThumbnailResult = {
 };
 
 // ──────────────────────────────────
+// Render-safe MIME sanitization
+// ──────────────────────────────────
+
+/**
+ * MIME types a decrypted attachment is allowed to keep once it becomes a blob.
+ *
+ * Protocol invariant: `EncryptedFileMeta.mimeType` is SENDER-controlled. It is
+ * copied from `File.type` in the sender's browser and travels inside the
+ * encrypted payload, so the server — which by design cannot read the
+ * ciphertext — never sniffs or validates it. Whatever type reaches
+ * `new File(...)` becomes the type of the `blob:` URL the UI mints, and
+ * `blob:` URLs inherit the ORIGIN of the document that created them. A
+ * sender claiming `image/svg+xml` or `text/html` would therefore get
+ * attacker-authored markup executed under our own origin, with reach into the
+ * session token and the IndexedDB E2EE key material
+ * (pentest 2026-07-26, finding M-10).
+ *
+ * Only inert raster formats are listed. `image/svg+xml` is deliberately
+ * ABSENT: SVG is a scriptable document format, not a picture — re-adding it
+ * re-opens the stored-XSS hole. This mirrors the same deliberate omission in
+ * `utils/fileValidation.ts`'s EXTENSION_TO_MIME map.
+ */
+const RENDER_SAFE_MIME_TYPES: ReadonlySet<string> = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/avif",
+]);
+
+/** Type assigned to every attachment whose claimed MIME is not render-safe. */
+const NON_RENDERABLE_MIME_TYPE = "application/octet-stream";
+
+/**
+ * Map a sender-claimed MIME type onto the render-safe allowlist.
+ *
+ * Matching is done on the bare `type/subtype` (any `; charset=…` parameters
+ * are dropped) and the value returned is the normalized ALLOWLIST entry — the
+ * sender's own string is never echoed back into a blob type. Anything off the
+ * list collapses to `application/octet-stream`, which browsers download
+ * rather than render.
+ */
+export function sanitizeAttachmentMimeType(claimedMimeType: string): string {
+  const bare = claimedMimeType.split(";", 1)[0].trim().toLowerCase();
+  return RENDER_SAFE_MIME_TYPES.has(bare) ? bare : NON_RENDERABLE_MIME_TYPE;
+}
+
+/**
+ * Whether an attachment may be rendered inline as an image.
+ *
+ * Call sites MUST use this instead of `meta.mimeType.startsWith("image/")`:
+ * that prefix test accepts `image/svg+xml`, which is precisely the bypass
+ * M-10 exploited to reach the inline/open-in-tab branch.
+ */
+export function isRenderableImageMime(claimedMimeType: string): boolean {
+  return RENDER_SAFE_MIME_TYPES.has(sanitizeAttachmentMimeType(claimedMimeType));
+}
+
+// ──────────────────────────────────
 // File Encryption
 // ──────────────────────────────────
 
@@ -169,9 +229,12 @@ export async function decryptFile(
     );
   }
 
-  // Create File object
+  // Create File object. The sender's claimed type must NOT survive into the
+  // blob — see sanitizeAttachmentMimeType (pentest 2026-07-26, finding M-10).
+  // `meta.mimeType` itself is left untouched: it stays in the payload for
+  // callers that merely display it, it just never becomes a blob type.
   return new File([decrypted], meta.filename, {
-    type: meta.mimeType,
+    type: sanitizeAttachmentMimeType(meta.mimeType),
   });
 }
 

@@ -367,6 +367,87 @@ describe("keyStorage — deleteAllSessionsForUser prefix scoping", () => {
   });
 });
 
+describe("keyStorage — getTrustedDeviceIdsForUser prefix scoping", () => {
+  it("returns every pinned device of the user and nothing from other users", async () => {
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dA"));
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dB"));
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u2", "dC"));
+
+    const ids = await keyStorage.getTrustedDeviceIdsForUser("u1");
+    expect([...ids].sort()).toEqual(["dA", "dB"]);
+    // A foreign user's device leaking in here would be read as "the peer
+    // silently added a device" by the DM path — a false MITM warning.
+    expect(ids.has("dC")).toBe(false);
+  });
+
+  it("prefix collision: u1 must not pick up u10's devices (u1: != u10:)", async () => {
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dev"));
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u10", "dev"));
+
+    expect([...(await keyStorage.getTrustedDeviceIdsForUser("u1"))]).toEqual([
+      "dev",
+    ]);
+    expect([...(await keyStorage.getTrustedDeviceIdsForUser("u10"))]).toEqual([
+      "dev",
+    ]);
+  });
+
+  it("returns an empty set for a user with no pins (first contact / TOFU)", async () => {
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dA"));
+
+    const ids = await keyStorage.getTrustedDeviceIdsForUser("stranger");
+    expect(ids.size).toBe(0);
+  });
+
+  it("deviceId is everything after the FIRST ':' — colons inside it survive", async () => {
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dev:with:colons"));
+
+    expect([...(await keyStorage.getTrustedDeviceIdsForUser("u1"))]).toEqual([
+      "dev:with:colons",
+    ]);
+  });
+});
+
+describe("keyStorage — setTrustedIdentityVerified", () => {
+  it("flips the flag on an existing pin, preserving identityKey and firstSeen", async () => {
+    const ti = makeTrustedIdentity("u1", "d1");
+    await keyStorage.saveTrustedIdentity(ti);
+
+    expect(await keyStorage.setTrustedIdentityVerified("u1", "d1", true)).toBe(true);
+    const verified = await keyStorage.getTrustedIdentity("u1", "d1");
+    expect(verified?.verified).toBe(true);
+    // Only the flag moves — the pinned key itself is untouched.
+    expect(toLocal(verified?.identityKey)).toEqual(ti.identityKey);
+    expect(verified?.firstSeen).toBe(ti.firstSeen);
+
+    expect(await keyStorage.setTrustedIdentityVerified("u1", "d1", false)).toBe(true);
+    expect((await keyStorage.getTrustedIdentity("u1", "d1"))?.verified).toBe(false);
+  });
+
+  it("returns false and creates NO record when the pin does not exist", async () => {
+    expect(await keyStorage.setTrustedIdentityVerified("ghost", "d1", true)).toBe(
+      false
+    );
+
+    // A fabricated record would have no identity key, and signalProtocol's TOFU
+    // comparison would then treat that empty pin as the peer's baseline.
+    expect(await keyStorage.getTrustedIdentity("ghost", "d1")).toBeNull();
+    expect(await keyStorage.getAllTrustedIdentities()).toEqual([]);
+    expect((await keyStorage.getTrustedDeviceIdsForUser("ghost")).size).toBe(0);
+  });
+
+  it("touches only the addressed device, not the user's other pins", async () => {
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dA"));
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "dB"));
+
+    await keyStorage.setTrustedIdentityVerified("u1", "dA", true);
+
+    expect((await keyStorage.getTrustedIdentity("u1", "dA"))?.verified).toBe(true);
+    expect((await keyStorage.getTrustedIdentity("u1", "dB"))?.verified).toBe(false);
+    expect(await keyStorage.getAllTrustedIdentities()).toHaveLength(2);
+  });
+});
+
 describe("keyStorage — deleteAllSenderKeysForChannel prefix scoping", () => {
   it("removes only the target channel's sender keys", async () => {
     await keyStorage.saveSenderKey(makeSenderKey("c1", "u1", "d1"));
@@ -466,6 +547,47 @@ describe("keyStorage — metadata typed round-trip", () => {
     expect(await keyStorage.getMetadata<string>("s")).toBe("deviceId-abc");
     expect(await keyStorage.getMetadata<number>("n")).toBe(101);
     expect(await keyStorage.getMetadata<string[]>("arr")).toEqual(["a", "b", "c"]);
+  });
+
+  // getAllMetadata exists so the backup rollback can reproduce a store whose
+  // key space is open-ended. Both halves of every pair matter: the keys are
+  // not derivable from the values, and a value handed back to setMetadata
+  // under the wrong key is as bad as losing it.
+  it("getAllMetadata returns every entry with its key, values intact", async () => {
+    await keyStorage.setMetadata("deviceId", "dev-1");
+    await keyStorage.setMetadata("nextPrekeyId", 501);
+    await keyStorage.setMetadata("legacyDeviceIds", ["old-1", "old-2"]);
+    await keyStorage.setMetadata("sk_signing:ch:u:d", { iteration: 3 });
+
+    const entries = await keyStorage.getAllMetadata();
+
+    expect(entries).toHaveLength(4);
+    expect(Object.fromEntries(entries)).toEqual({
+      deviceId: "dev-1",
+      nextPrekeyId: 501,
+      legacyDeviceIds: ["old-1", "old-2"],
+      "sk_signing:ch:u:d": { iteration: 3 },
+    });
+  });
+
+  it("getAllMetadata returns an empty list on an untouched store", async () => {
+    expect(await keyStorage.getAllMetadata()).toEqual([]);
+  });
+
+  it("getAllMetadata output can be replayed through setMetadata verbatim", async () => {
+    await keyStorage.setMetadata("deviceId", "dev-1");
+    await keyStorage.setMetadata("nextPrekeyId", 501);
+
+    const snapshot = await keyStorage.getAllMetadata();
+    await keyStorage.clearAllE2EEData();
+    expect(await keyStorage.getMetadata<string>("deviceId")).toBeNull();
+
+    for (const [key, value] of snapshot) {
+      await keyStorage.setMetadata(key, value);
+    }
+
+    expect(await keyStorage.getMetadata<string>("deviceId")).toBe("dev-1");
+    expect(await keyStorage.getMetadata<number>("nextPrekeyId")).toBe(501);
   });
 });
 

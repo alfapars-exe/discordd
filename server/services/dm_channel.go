@@ -30,10 +30,9 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 	}
 
 	if existing != nil {
-		otherUser.PasswordHash = ""
 		return &models.DMChannelWithUser{
 			ID:            existing.ID,
-			OtherUser:     otherUser,
+			OtherUser:     models.ToPublicUser(otherUser),
 			Status:        existing.Status,
 			InitiatedBy:   existing.InitiatedBy,
 			CreatedAt:     existing.CreatedAt,
@@ -68,7 +67,7 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 
 	result := &models.DMChannelWithUser{
 		ID:            channel.ID,
-		OtherUser:     otherUser,
+		OtherUser:     models.ToPublicUser(otherUser),
 		Status:        channel.Status,
 		InitiatedBy:   channel.InitiatedBy,
 		CreatedAt:     channel.CreatedAt,
@@ -78,12 +77,11 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 	// Notify both users (each sees the other as the "other user")
 	currentUser, err := s.userRepo.GetByID(ctx, userID)
 	if err == nil {
-		currentUser.PasswordHash = ""
 		s.hub.BroadcastToUser(otherUserID, ws.Event{
 			Op: ws.OpDMChannelCreate,
 			Data: models.DMChannelWithUser{
 				ID:            channel.ID,
-				OtherUser:     currentUser,
+				OtherUser:     models.ToPublicUser(currentUser),
 				CreatedAt:     channel.CreatedAt,
 				LastMessageAt: channel.LastMessageAt,
 			},

@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -54,12 +55,20 @@ var _ services.AppLogService = (*stubAppLog)(nil)
 
 func newDiagnosticsRequest(t *testing.T) *http.Request {
 	t.Helper()
+	return newDiagnosticsRequestNamed(t, "diag.json.gz")
+}
+
+// newDiagnosticsRequestNamed lets a test choose the multipart filename, which
+// is what finding N-27 was about: the handler used to pass it straight through
+// to the outgoing mail attachment.
+func newDiagnosticsRequestNamed(t *testing.T, uploadName string) *http.Request {
+	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	if err := mw.WriteField("description", "test report"); err != nil {
 		t.Fatalf("WriteField: %v", err)
 	}
-	fw, err := mw.CreateFormFile("file", "diag.json.gz")
+	fw, err := mw.CreateFormFile("file", uploadName)
 	if err != nil {
 		t.Fatalf("CreateFormFile: %v", err)
 	}
@@ -164,5 +173,102 @@ func TestDiagnostics_EmailConcurrencyBounded(t *testing.T) {
 	}
 	if got := maxSeen.Load(); got > maxConcurrentDiagnosticsEmails {
 		t.Errorf("max concurrent email sends = %d, want <= %d", got, maxConcurrentDiagnosticsEmails)
+	}
+}
+
+// TestDiagnostics_AttachmentNameIsFixed — REGRESSION GUARD, security scan
+// 2026-07-31 finding N-27.
+//
+// The handler used to pass the multipart filename straight to the Resend
+// attachment, so any registered user picked the filename that arrived in the
+// platform admin's inbox. Every other upload path in this codebase runs the
+// client's name through pkg.SanitizeFilename; this one was the exception.
+//
+// The fix pins the name rather than sanitizing it -- the endpoint accepts only
+// the client's gzip bundle, so the supplied name carries nothing worth keeping.
+// These cases therefore assert equality with the constant, not merely that the
+// nasty parts were stripped: a sanitizer that only removed slashes would still
+// let "report.pdf.exe" through.
+func TestDiagnostics_AttachmentNameIsFixed(t *testing.T) {
+	const want = "hichat-diagnostics.json.gz"
+
+	// Only names that actually reach the handler belong here. A NUL byte and an
+	// empty name are both refused by mime/multipart before r.FormFile returns,
+	// so the request 400s and the attachment path is never entered -- asserting
+	// 204 for those would be asserting something untrue about the stack.
+	// TestDiagnostics_MalformedFilenameIsRejected below pins that instead.
+	for _, uploadName := range []string{
+		"report.pdf.exe",
+		"../../../etc/passwd",
+		`..\..\windows\system32\evil.bat`,
+		// U+202E RIGHT-TO-LEFT OVERRIDE, written escaped rather than literal so
+		// it stays visible in this file (staticcheck ST1018). A mail client
+		// that honours it renders the name as "invoiceexe.jpg".
+		"invoice\u202egpj.exe",
+		"crlf\r\nInjected: yes", // header-shaped
+	} {
+		t.Run(strconv.Quote(uploadName), func(t *testing.T) {
+			got := make(chan string, 1)
+			email := &testutil.MockEmailSender{
+				SendDiagnosticsReportFn: func(_ context.Context, _, _, _, filename string, _ []byte) error {
+					got <- filename
+					return nil
+				},
+			}
+			h := NewDiagnosticsHandler(email, "admin@example.com", &stubAppLog{}, 1<<20)
+
+			rec := httptest.NewRecorder()
+			h.Report(rec, newDiagnosticsRequestNamed(t, uploadName))
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, want 204", rec.Code)
+			}
+
+			select {
+			case name := <-got:
+				if name != want {
+					t.Errorf("attachment filename = %q, want %q", name, want)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("email was never sent; the assertion never ran")
+			}
+		})
+	}
+}
+
+// TestDiagnostics_MalformedFilenameIsRejected records where the boundary
+// actually sits. A NUL byte or an empty multipart filename never reaches the
+// handler: mime/multipart refuses them and r.FormFile returns an error, so the
+// request is answered 400 and no mail is sent at all.
+//
+// Kept as a test rather than a comment because it is load-bearing for the
+// finding above — it is the reason those two inputs are absent from the
+// fixed-name table, and if a future Go release started accepting them the
+// attachment path would silently gain two new inputs.
+func TestDiagnostics_MalformedFilenameIsRejected(t *testing.T) {
+	for _, uploadName := range []string{
+		"bad\x00name.gz", // NUL
+		"",               // no filename at all
+	} {
+		t.Run(strconv.Quote(uploadName), func(t *testing.T) {
+			sent := make(chan struct{}, 1)
+			email := &testutil.MockEmailSender{
+				SendDiagnosticsReportFn: func(_ context.Context, _, _, _, _ string, _ []byte) error {
+					sent <- struct{}{}
+					return nil
+				},
+			}
+			h := NewDiagnosticsHandler(email, "admin@example.com", &stubAppLog{}, 1<<20)
+
+			rec := httptest.NewRecorder()
+			h.Report(rec, newDiagnosticsRequestNamed(t, uploadName))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", rec.Code)
+			}
+			select {
+			case <-sent:
+				t.Error("an email was sent for a request the handler rejected")
+			case <-time.After(200 * time.Millisecond):
+			}
+		})
 	}
 }

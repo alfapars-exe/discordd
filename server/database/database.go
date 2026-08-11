@@ -190,7 +190,7 @@ func (db *DB) runMigrations(migrationsFS fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("failed to query schema_migrations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {

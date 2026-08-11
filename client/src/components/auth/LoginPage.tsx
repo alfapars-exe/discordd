@@ -4,16 +4,18 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
-import { isElectron, isNativeApp } from "../../utils/constants";
+import { isElectron, isNativeApp, SERVER_URL } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
 import { sanitizeReturnUrl } from "../../utils/returnUrl";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
+import type { APIResponse, AuthTokens } from "../../types";
 
 function LoginPage() {
   // ─── Hooks ───
   const { t } = useTranslation("auth");
   const login = useAuthStore((s) => s.login);
+  const applyLoginResponse = useAuthStore((s) => s.applyLoginResponse);
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const clearError = useAuthStore((s) => s.clearError);
@@ -42,16 +44,41 @@ function LoginPage() {
     },
   });
 
-  // Load saved credentials from Electron safeStorage on mount
+  // Load the saved username from Electron safeStorage on mount and, if there
+  // is one, let the MAIN process perform the login with the stored password.
+  //
+  // The password is never sent here (pentest 2026-07-26, H-09): this renderer
+  // holds only short-lived access tokens by design, and handing it a
+  // long-lived account password on every launch made any XSS in app://hichat
+  // worth an account rather than a session. The password field stays empty;
+  // the user sees a filled username and an immediate sign-in, same as before.
   useEffect(() => {
     if (!isElectron()) return;
-    window.electronAPI?.loadCredentials().then((cred) => {
-      if (cred) {
-        setUsername(cred.username);
-        setPassword(cred.password);
-        setRememberMe(true);
+    let cancelled = false;
+    void (async () => {
+      const saved = await window.electronAPI?.loadCredentials();
+      if (cancelled || !saved) return;
+      setUsername(saved.username);
+      setRememberMe(true);
+      try {
+        const { body } = await window.electronAPI!.loginWithSavedCredentials(SERVER_URL);
+        if (cancelled) return;
+        // The main process returns the upstream envelope untouched, so this
+        // is the same shape authApi.login resolves to and goes through the
+        // same success/failure handling.
+        if (applyLoginResponse(body as APIResponse<AuthTokens>)) {
+          wakeUp.reset();
+          navigate(sanitizeReturnUrl(searchParams.get("returnUrl")));
+        }
+      } catch {
+        // Nothing stored, or the main process could not reach the server.
+        // Leave the form as-is so the user can sign in by hand.
       }
-    });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Handlers ───

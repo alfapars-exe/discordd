@@ -20,4 +20,7 @@ type FeedbackRepository interface {
 
 	CreateAttachment(ctx context.Context, att *models.FeedbackAttachment) error
 	GetAttachmentsByTicketID(ctx context.Context, ticketID string) ([]models.FeedbackAttachment, error)
+	// GetAttachmentByFileURL resolves a /api/uploads/{name} download URL back
+	// to its feedback attachment row, mirroring AttachmentRepository.GetByFileURL.
+	GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.FeedbackAttachment, error)
 }

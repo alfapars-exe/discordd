@@ -36,8 +36,18 @@ func (r *sqliteBanRepo) Create(ctx context.Context, ban *models.Ban) error {
 		INSERT OR REPLACE INTO bans (server_id, user_id, username, reason, banned_by, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?)`
 
+	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
+	// the raw *time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
+	// which sorts lexically AFTER sqlite's datetime('now') output because 'T' >
+	// ' ', so every expiry-comparison read below would never see the row as
+	// expired. nil stays nil (SQL NULL) so permanent bans are unaffected.
+	var expiresAt any
+	if ban.ExpiresAt != nil {
+		expiresAt = ban.ExpiresAt.UTC().Format("2006-01-02 15:04:05")
+	}
+
 	if _, err := r.db.ExecContext(ctx, query,
-		ban.ServerID, ban.UserID, ban.Username, ban.Reason, ban.BannedBy, ban.ExpiresAt,
+		ban.ServerID, ban.UserID, ban.Username, ban.Reason, ban.BannedBy, expiresAt,
 	); err != nil {
 		return fmt.Errorf("failed to create ban: %w", err)
 	}

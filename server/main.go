@@ -29,10 +29,12 @@ import (
 func init() {
 	// Windows registry can return wrong MIME types for some extensions.
 	// Force correct values so http.FileServer serves them properly.
-	mime.AddExtensionType(".svg", "image/svg+xml")
-	mime.AddExtensionType(".wasm", "application/wasm")
-	mime.AddExtensionType(".js", "text/javascript")
-	mime.AddExtensionType(".css", "text/css")
+	// Errors are ignored — the extension/type pairs are fixed literals
+	// known valid at compile time, nothing runtime input could break.
+	_ = mime.AddExtensionType(".svg", "image/svg+xml")
+	_ = mime.AddExtensionType(".wasm", "application/wasm")
+	_ = mime.AddExtensionType(".js", "text/javascript")
+	_ = mime.AddExtensionType(".css", "text/css")
 }
 
 func main() {
@@ -184,11 +186,9 @@ func main() {
 	// late binding — same pattern as svcs.AdminUser.SetUserCacheInvalidator(authMw)
 	// below.
 
-	// 9d. Wire the member-timeout checker into voice. messageService
-	// gets the timeout repo via its constructor; voiceService uses a
-	// setter so existing voice tests don't need to pass the repo to
-	// every voice fixture.
-	svcs.Voice.SetMemberTimeoutChecker(repos.MemberTimeout)
+	// 9d. voiceService's member-timeout checker (repos.MemberTimeout) is now
+	// wired through NewVoiceService's constructor (initServices), same as
+	// messageService/reactionService — no setter call needed here anymore.
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
@@ -251,13 +251,19 @@ func main() {
 
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
-	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, botService)
+	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService)
 
 	// Wire the auth user-cache invalidator into the admin user service so a
 	// platform ban / hard-delete / admin-status change drops the cached user
 	// row immediately, instead of letting a just-banned account keep making
 	// authenticated REST calls until the ~30s cache TTL expires (F-7).
 	svcs.AdminUser.SetUserCacheInvalidator(authMw)
+
+	// Same wiring for the auth service itself: ChangePassword, ResetPassword,
+	// and LogoutAllDevices all call revokeAllSessions, which drops the
+	// cached user row so a bumped token_version is enforced on the next
+	// HTTP request instead of up to ~30s later.
+	svcs.Auth.SetUserCacheInvalidator(authMw)
 
 	// Wire the server-level permission cache (middleware/permission.go) into
 	// the same PermissionInvalidator fan-out as channelPermService's
@@ -344,18 +350,27 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Write(indexHTMLWeb)
+		_, _ = w.Write(indexHTMLWeb) // error means the peer is gone; nothing left to do
 	})
 
 	// 17. Security headers
 	securedHandler := securityHeaders(finalHandler)
 
-	// 17b. Observability middleware wrapping every route (API, static, SPA).
-	// RequestLogger (outermost) assigns a request_id and writes one access-log
-	// line per request; Recover catches handler panics, logs them with a stack
-	// trace (forwarded to Sentry), and returns 500 instead of dropping the conn.
+	// 17b. Observability + resource-limit middleware wrapping every route
+	// (API, static, SPA). RequestLogger stays the true outermost layer (see
+	// its doc comment: it must observe the final status set by anything
+	// beneath it, including a body-too-large rejection). BodyLimit sits just
+	// inside it -- close to outermost, ahead of Recover/securityHeaders and
+	// every handler -- so no handler ever sees an unbounded, non-multipart
+	// body (security scan 2026-07-31, finding N-14), while an oversized
+	// attempt still gets one access-log line via RequestLogger. Recover
+	// catches handler panics (including anything below BodyLimit), logs them
+	// with a stack trace (forwarded to Sentry), and returns 500 instead of
+	// dropping the conn.
 	rootHandler := middleware.RequestLogger(slog.Default())(
-		middleware.Recover(slog.Default())(securedHandler),
+		middleware.BodyLimit(middleware.MaxRequestBodyBytes)(
+			middleware.Recover(slog.Default())(securedHandler),
+		),
 	)
 
 	// 18. HTTP Server

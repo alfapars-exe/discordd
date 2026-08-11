@@ -128,17 +128,66 @@ export type StoredSenderKey = {
   iteration: number;
   createdAt: number;
   /**
+   * Distribution wire-protocol version this key was minted/installed under.
+   *
+   * Absent (undefined) means v1: the distribution travelled to the server as
+   * plain JSON, so the chain key was readable by the operator.
+   *
+   * INVARIANT — version enforcement is OUTBOUND-ONLY. A missing/stale version
+   * forces a rotation on the SEND path only (needsSenderKeyRotation). It must
+   * never gate the RECEIVE path: inbound v1 keys are the only way to read
+   * messages that were sent under v1, and a v1 distribution can no longer be
+   * re-fetched from the server. Treating them as "needs rotation" would make
+   * a user's entire channel history permanently unreadable.
+   */
+  protocolVersion?: number;
+  /**
+   * SHA-256 (hex) over the sorted recipient roster this OUTBOUND key was
+   * sealed for — see senderKeyProtocol.computeRecipientFingerprint.
+   *
+   * A v2 distribution is only readable by the devices that got an envelope,
+   * so a roster change (member/device added) means the current key can no
+   * longer reach everyone. Comparing fingerprints lets us rotate only when
+   * the roster actually moved instead of on every membership signal.
+   *
+   * Never set on inbound keys — a receiver has no roster to seal for.
+   */
+  recipientFingerprint?: string;
+  /**
    * Sliding-window of iterations already decrypted under this distribution.
    * Replay protection: an attacker who captures an encrypted message can't
    * have it accepted twice. Bounded at SENDER_KEY_REPLAY_WINDOW entries —
-   * the oldest is evicted when full. Anything older than the window's low
-   * watermark is rejected outright (cannot prove non-replay).
+   * the lowest are evicted when full, which is what `replayFloor` records.
    *
    * Maintained as a sorted ascending array for O(log n) binary-search check
    * and constant-time append in the common (monotonic) path. May be absent
    * on legacy stored keys created before this protection was added.
+   *
+   * INVARIANT — this window is EVIDENCE, not cache. It may only ever be
+   * cleared together with the distribution it belongs to. Re-installing the
+   * SAME distributionId must preserve it (see processDistribution): dropping
+   * it re-opens every ciphertext ever accepted under this chain for replay
+   * (security scan 2026-07-31, finding N-11).
    */
   seenIterations?: number[];
+  /**
+   * Lowest iteration the window can still speak for, inclusive.
+   *
+   * An iteration BELOW this is rejected as un-provable: its entry was actually
+   * evicted from seenIterations, so we can no longer tell "never delivered"
+   * from "already accepted" and must fail closed.
+   *
+   * INVARIANT — this only moves when eviction REALLY happens, and only
+   * upward. It is deliberately NOT seenIterations[0]: the lowest RECORDED
+   * iteration is not a floor, because a member who joins mid-stream records a
+   * high iteration first and would otherwise have the entire legitimate
+   * history below it rejected (security scan 2026-07-31, finding N-21).
+   *
+   * Absent on keys stored before this field existed, and on keys whose window
+   * has never overflowed. Every reader MUST treat absent as 0 — never compare
+   * against it directly, since `undefined < n` is silently false.
+   */
+  replayFloor?: number;
 };
 
 /** Sliding-window size for sender-key replay protection. Tuned to MAX_SKIP. */
@@ -250,7 +299,14 @@ export type PreKeyMessageInfo = {
 // Sender Key Wire Format
 // ──────────────────────────────────
 
-/** Sender Key distribution message, distributed via 1:1 Signal sessions. */
+/**
+ * Sender Key distribution message.
+ *
+ * This object is NEVER handed to the server as-is: `chainKey` is the 32-byte
+ * symmetric group key. It is JSON-serialized and then sealed inside each
+ * recipient DEVICE's Signal session (one envelope per device), exactly the way
+ * dmEncryption fans a DM out. The server only ever stores the envelopes.
+ */
 export type SenderKeyDistributionData = {
   distributionId: string;
   /** 32-byte chain key (base64) */
@@ -259,6 +315,44 @@ export type SenderKeyDistributionData = {
   publicSigningKey: string;
   /** Starting iteration */
   iteration: number;
+  /** Distribution wire-protocol version — SENDER_KEY_PROTOCOL_VERSION. */
+  version: number;
+};
+
+/**
+ * One sealed sender-key distribution, addressed to a single recipient device.
+ *
+ * `ciphertext` is a JSON-serialized SignalWireMessage produced by
+ * signalProtocol.encryptMessage — i.e. the group key is protected by the same
+ * Double Ratchet that protects DMs. The server can route these but not read
+ * them.
+ */
+export type SenderKeyEnvelopeUpload = {
+  recipient_user_id: string;
+  recipient_device_id: string;
+  /** SignalMessageTypeValue — 2=Whisper, 3=PreKey */
+  message_type: number;
+  ciphertext: string;
+};
+
+/**
+ * A sealed distribution as served back to THIS device.
+ *
+ * The server filters by the requesting device_id, so every row returned is
+ * already addressed to us and carries no recipient fields.
+ *
+ * Structurally identical to types/e2ee.ts ChannelGroupSessionResponse; kept
+ * separate so the crypto layer does not depend on the API type layer.
+ */
+export type SenderKeyEnvelopeRow = {
+  sender_user_id: string;
+  sender_device_id: string;
+  /** Equals the distributionId of the sealed distribution. */
+  session_id: string;
+  version: number;
+  message_type: number;
+  ciphertext: string;
+  created_at: string;
 };
 
 /** Message encrypted with Sender Key. */
@@ -283,6 +377,19 @@ export const PREKEY_BATCH_SIZE = 100;
 
 /** New batch uploaded when prekey pool drops below this */
 export const PREKEY_LOW_THRESHOLD = 10;
+
+/**
+ * Sender Key distribution wire-protocol version.
+ *
+ * v1 (implicit / absent): distribution uploaded as plain JSON — server could
+ *     read the group chain key. Pentest finding C-03.
+ * v2: distribution sealed per recipient device inside its Signal session.
+ *
+ * Rollout is a HARD CUT: the server rejects anything that is not v2, and the
+ * client never writes the v1 shape again. Old inbound v1 keys already in
+ * IndexedDB stay usable for reading history — see StoredSenderKey.protocolVersion.
+ */
+export const SENDER_KEY_PROTOCOL_VERSION = 2;
 
 /** Sender Key rotation interval (message count) */
 export const SENDER_KEY_ROTATION_MESSAGES = 100;

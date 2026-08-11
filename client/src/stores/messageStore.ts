@@ -11,7 +11,11 @@ import { useE2EEStore } from "./e2eeStore";
 import { useAuthStore } from "./authStore";
 import { useReadStateStore } from "./readStateStore";
 import { useToastStore } from "./toastStore";
-import { encryptChannelMessage, decryptChannelMessages } from "../crypto/channelEncryption";
+import {
+  encryptChannelMessage,
+  decryptChannelMessages,
+  SuppressedRosterError,
+} from "../crypto/channelEncryption";
 import { encodePayload } from "../crypto/e2eePayload";
 import * as keyStorage from "../crypto/keyStorage";
 import type { Message, ReactionGroup } from "../types";
@@ -353,7 +357,21 @@ export const useMessageStore = create<MessageState>((set, get) => ({
           return res.success;
         } catch (err) {
           console.error("[messageStore] E2EE encryption failed:", err);
-          useToastStore.getState().addToast("error", i18n.t("e2ee:encryptionFailed"));
+          // A suppressed roster is a security event, not a transient failure:
+          // the server claimed this channel has no readable recipients while
+          // the member list says otherwise, which is what a targeted-censorship
+          // attempt looks like from the client. The user must be able to tell
+          // it apart from "try again in a second".
+          useToastStore
+            .getState()
+            .addToast(
+              "error",
+              i18n.t(
+                err instanceof SuppressedRosterError
+                  ? "e2ee:rosterSuppressed"
+                  : "e2ee:encryptionFailed"
+              )
+            );
           return false;
         }
       }
@@ -416,7 +434,17 @@ export const useMessageStore = create<MessageState>((set, get) => ({
           return res.success;
         } catch (err) {
           console.error("[messageStore] E2EE edit encryption failed:", err);
-          useToastStore.getState().addToast("error", i18n.t("e2ee:encryptionFailed"));
+          // Same classification as the send path — see the note there.
+          useToastStore
+            .getState()
+            .addToast(
+              "error",
+              i18n.t(
+                err instanceof SuppressedRosterError
+                  ? "e2ee:rosterSuppressed"
+                  : "e2ee:encryptionFailed"
+              )
+            );
           return false;
         }
       }

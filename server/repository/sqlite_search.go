@@ -22,17 +22,18 @@ func NewSQLiteSearchRepo(db database.TxQuerier) SearchRepository {
 // the author (nullable via LEFT JOIN) and an empty attachments slice.
 func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 	var msg models.Message
-	var author models.User
+	var author models.PublicUser
 	// Every joined author column must be nullable, not just the id: a dangling
 	// user_id makes the LEFT JOIN yield NULL for ALL of them, and a NULL landing
 	// in a plain string fails the row scan — which here would drop the whole
 	// page of search results, not just the one message. Same defect and same
 	// fix as sqlite_message.go's scanMessage.
 	var authorID, authorUsername, authorStatus sql.NullString
+	var authorCreatedAt sql.NullTime
 
 	if err := rows.Scan(
 		&msg.ID, &msg.ChannelID, &msg.UserID, &msg.Content, &msg.EditedAt, &msg.CreatedAt,
-		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus,
+		&authorID, &authorUsername, &author.DisplayName, &author.AvatarURL, &authorStatus, &author.CustomStatus, &authorCreatedAt,
 	); err != nil {
 		return msg, err
 	}
@@ -41,7 +42,9 @@ func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 		author.ID = authorID.String
 		author.Username = authorUsername.String
 		author.Status = models.UserStatus(authorStatus.String)
-		author.PasswordHash = ""
+		if authorCreatedAt.Valid {
+			author.CreatedAt = authorCreatedAt.Time
+		}
 		msg.Author = &author
 	}
 	msg.Attachments = []models.Attachment{}
@@ -50,7 +53,16 @@ func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 }
 
 // Search performs FTS5 full-text search with BM25 ranking.
-func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID string, channelID *string, limit, offset int) (*SearchResult, error) {
+//
+// allowedChannelIDs (H-05) is an RBAC scoping filter built by SearchService
+// from the caller's channel-read permission: nil applies no extra filter
+// (admin), a non-nil slice restricts to exactly those channel IDs. It is
+// folded into the same WHERE clause used by both the count and the data
+// query below (via buildSearchFilter) so the two can never disagree about
+// which rows are in scope — a page filtered correctly but a total count
+// that wasn't would itself leak how many messages exist in a channel the
+// caller cannot read.
+func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID string, channelID *string, allowedChannelIDs []string, limit, offset int) (*SearchResult, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
@@ -62,30 +74,24 @@ func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID st
 	if safeQuery == "" {
 		return &SearchResult{Messages: []models.Message{}, TotalCount: 0}, nil
 	}
-
-	var countQuery string
-	var countArgs []any
-
-	if channelID != nil {
-		countQuery = `
-			SELECT COUNT(*)
-			FROM messages_fts fts
-			JOIN messages m ON m.rowid = fts.rowid
-			JOIN channels ch ON ch.id = m.channel_id
-			WHERE messages_fts MATCH ? AND ch.server_id = ? AND m.channel_id = ?`
-		countArgs = []any{safeQuery, serverID, *channelID}
-	} else {
-		countQuery = `
-			SELECT COUNT(*)
-			FROM messages_fts fts
-			JOIN messages m ON m.rowid = fts.rowid
-			JOIN channels ch ON ch.id = m.channel_id
-			WHERE messages_fts MATCH ? AND ch.server_id = ?`
-		countArgs = []any{safeQuery, serverID}
+	// A non-nil-but-empty allow-list means the caller may read zero
+	// channels — defensive mirror of SearchService's own empty-list short
+	// circuit, in case a future caller reaches the repository directly.
+	if allowedChannelIDs != nil && len(allowedChannelIDs) == 0 {
+		return &SearchResult{Messages: []models.Message{}, TotalCount: 0}, nil
 	}
 
+	where, args := buildSearchFilter(safeQuery, serverID, channelID, allowedChannelIDs)
+
+	countQuery := `
+		SELECT COUNT(*)
+		FROM messages_fts fts
+		JOIN messages m ON m.rowid = fts.rowid
+		JOIN channels ch ON ch.id = m.channel_id
+		WHERE ` + where
+
 	var totalCount int
-	if err := r.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&totalCount); err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount); err != nil {
 		return nil, fmt.Errorf("failed to count search results: %w", err)
 	}
 
@@ -93,34 +99,17 @@ func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID st
 		return &SearchResult{Messages: []models.Message{}, TotalCount: 0}, nil
 	}
 
-	var dataQuery string
-	var dataArgs []any
-
-	if channelID != nil {
-		dataQuery = `
-			SELECT m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
-			       u.id, u.username, u.display_name, u.avatar_url, u.status
-			FROM messages_fts fts
-			JOIN messages m ON m.rowid = fts.rowid
-			JOIN channels ch ON ch.id = m.channel_id
-			LEFT JOIN users u ON m.user_id = u.id
-			WHERE messages_fts MATCH ? AND ch.server_id = ? AND m.channel_id = ?
-			ORDER BY fts.rank
-			LIMIT ? OFFSET ?`
-		dataArgs = []any{safeQuery, serverID, *channelID, limit, offset}
-	} else {
-		dataQuery = `
-			SELECT m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
-			       u.id, u.username, u.display_name, u.avatar_url, u.status
-			FROM messages_fts fts
-			JOIN messages m ON m.rowid = fts.rowid
-			JOIN channels ch ON ch.id = m.channel_id
-			LEFT JOIN users u ON m.user_id = u.id
-			WHERE messages_fts MATCH ? AND ch.server_id = ?
-			ORDER BY fts.rank
-			LIMIT ? OFFSET ?`
-		dataArgs = []any{safeQuery, serverID, limit, offset}
-	}
+	dataQuery := `
+		SELECT m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at,
+		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at
+		FROM messages_fts fts
+		JOIN messages m ON m.rowid = fts.rowid
+		JOIN channels ch ON ch.id = m.channel_id
+		LEFT JOIN users u ON m.user_id = u.id
+		WHERE ` + where + `
+		ORDER BY fts.rank
+		LIMIT ? OFFSET ?`
+	dataArgs := append(append([]any{}, args...), limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, dataQuery, dataArgs...)
 	if err != nil {
@@ -140,6 +129,30 @@ func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID st
 		Messages:   messages,
 		TotalCount: totalCount,
 	}, nil
+}
+
+// buildSearchFilter builds the WHERE clause (and matching bind args, in
+// order) shared by Search's count and data queries. Kept as a single
+// function so the two queries can never drift apart on which rows are in
+// scope.
+func buildSearchFilter(safeQuery, serverID string, channelID *string, allowedChannelIDs []string) (string, []any) {
+	conditions := []string{"messages_fts MATCH ?", "ch.server_id = ?"}
+	args := []any{safeQuery, serverID}
+
+	if channelID != nil {
+		conditions = append(conditions, "m.channel_id = ?")
+		args = append(args, *channelID)
+	}
+
+	if allowedChannelIDs != nil {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(allowedChannelIDs)), ",")
+		conditions = append(conditions, fmt.Sprintf("m.channel_id IN (%s)", placeholders))
+		for _, id := range allowedChannelIDs {
+			args = append(args, id)
+		}
+	}
+
+	return strings.Join(conditions, " AND "), args
 }
 
 // sanitizeFTSQuery wraps each word in quotes for FTS5 MATCH. With the trigram

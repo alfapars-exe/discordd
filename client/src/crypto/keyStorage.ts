@@ -501,6 +501,72 @@ export async function getAllTrustedIdentities(): Promise<TrustedIdentity[]> {
   return (await db.getAll("trustedIdentities")) as TrustedIdentity[];
 }
 
+/**
+ * Device IDs of every trusted identity currently pinned for a user.
+ *
+ * Prefix scan over the `${userId}:${deviceId}` out-of-line key — same shape as
+ * deleteAllSessionsForUser. The trailing ':' in the prefix is load-bearing:
+ * without it, user "u1" would also match "u10:dev". The deviceId is everything
+ * AFTER that first ':', so device IDs that themselves contain ':' survive.
+ *
+ * Semantics callers must respect: an EMPTY set means "no baseline for this
+ * user" (first contact / TOFU), not "this user has no devices". Treating an
+ * empty set as a baseline would flag every device of a brand-new conversation
+ * as newly added.
+ *
+ * Reads keys only (no values), so it never materializes key material.
+ */
+export async function getTrustedDeviceIdsForUser(
+  userId: string
+): Promise<Set<string>> {
+  const db = await getDB();
+  const prefix = `${userId}:`;
+  const keys = await db.getAllKeys("trustedIdentities");
+
+  const deviceIds = new Set<string>();
+  for (const key of keys) {
+    if (typeof key === "string" && key.startsWith(prefix)) {
+      deviceIds.add(key.slice(prefix.length));
+    }
+  }
+
+  return deviceIds;
+}
+
+/**
+ * Flips the manual-verification flag on an EXISTING pinned identity.
+ *
+ * Read-modify-write inside one readwrite transaction so the flag update cannot
+ * be built on a copy that another writer has already superseded.
+ *
+ * Returns false and writes NOTHING when no pin exists. `verified` is a claim
+ * about a key this device has actually seen; fabricating a record here would
+ * insert a trusted identity with no identity key, which the TOFU comparison in
+ * signalProtocol would then treat as the baseline for that peer.
+ *
+ * Note the flag is reset to false by signalProtocol whenever the pinned
+ * identity key changes — verification is a statement about one specific key.
+ */
+export async function setTrustedIdentityVerified(
+  userId: string,
+  deviceId: string,
+  verified: boolean
+): Promise<boolean> {
+  const db = await getDB();
+  const key = trustedIdentityKey(userId, deviceId);
+  const tx = db.transaction("trustedIdentities", "readwrite");
+
+  const existing = (await tx.store.get(key)) as TrustedIdentity | undefined;
+  if (!existing) {
+    await tx.done;
+    return false;
+  }
+
+  await tx.store.put({ ...existing, verified }, key);
+  await tx.done;
+  return true;
+}
+
 // ──────────────────────────────────
 // Message Cache Operations
 // ──────────────────────────────────
@@ -631,6 +697,39 @@ export async function getMetadata<T>(key: string): Promise<T | null> {
   const db = await getDB();
   const result = await db.get("metadata", key);
   return (result as T) ?? null;
+}
+
+/**
+ * Lists every metadata entry as [key, value] pairs.
+ *
+ * Unlike the other stores, metadata is out-of-line keyed AND its key space is
+ * open-ended (deviceId, nextPrekeyId, legacyDeviceIds, sk_signing:*,
+ * prekey_info:*, peer_trust_alerts, …), so a caller that must reproduce the
+ * store — the backup rollback in keyBackup.ts — cannot enumerate the keys it
+ * needs from a fixed list and cannot recover them from getAll() alone.
+ * A cursor is used rather than getAll()+getAllKeys() so key/value pairing is
+ * an invariant of the read, not an assumption about two arrays' ordering.
+ *
+ * Values are `unknown`: this store is heterogeneous by design and callers are
+ * expected to hand the value straight back to setMetadata, not interpret it.
+ */
+export async function getAllMetadata(): Promise<Array<[string, unknown]>> {
+  const db = await getDB();
+  const tx = db.transaction("metadata", "readonly");
+  const entries: Array<[string, unknown]> = [];
+
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    // setMetadata is the only writer and its key parameter is `string`, so a
+    // non-string key cannot exist here — and could not be written back either.
+    if (typeof cursor.key === "string") {
+      entries.push([cursor.key, cursor.value]);
+    }
+    cursor = await cursor.continue();
+  }
+
+  await tx.done;
+  return entries;
 }
 
 // ──────────────────────────────────

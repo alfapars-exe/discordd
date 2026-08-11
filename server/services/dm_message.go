@@ -187,8 +187,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message author: %w", err)
 	}
-	author.PasswordHash = ""
-	msg.Author = author
+	msg.Author = models.ToPublicUser(author)
 
 	// Load reply reference
 	if msg.ReplyToID != nil && *msg.ReplyToID != "" {
@@ -199,7 +198,6 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 				Content: refMsg.Content,
 			}
 			if refMsg.Author != nil {
-				refMsg.Author.PasswordHash = ""
 				ref.Author = refMsg.Author
 			}
 			msg.ReferencedMessage = ref
@@ -290,8 +288,26 @@ func (s *dmService) DeleteMessage(ctx context.Context, userID, messageID string)
 		return fmt.Errorf("%w: you can only delete your own messages", pkg.ErrForbidden)
 	}
 
+	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
+	// A fetch failure here is logged and non-fatal — the delete still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	attMap, attErr := s.dmRepo.GetAttachmentsByMessageIDs(ctx, []string{messageID})
+	if attErr != nil {
+		dmLogger.Error("failed to fetch DM attachments before message delete", "message_id", messageID, "err", pkg.ErrText(attErr))
+	}
+
 	if err := s.dmRepo.DeleteMessage(ctx, messageID); err != nil {
 		return err
+	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	if atts := attMap[messageID]; len(atts) > 0 {
+		fileURLs := make([]string, len(atts))
+		for i, a := range atts {
+			fileURLs[i] = a.FileURL
+		}
+		removeUploadFilesByURL(s.uploadDir, fileURLs)
 	}
 
 	s.broadcastToBothUsers(channel, ws.Event{

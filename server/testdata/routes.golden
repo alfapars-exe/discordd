@@ -2,6 +2,7 @@ POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/refresh
 POST /api/auth/logout
+POST /api/auth/logout-all
 POST /api/auth/forgot-password
 POST /api/auth/reset-password
 POST /api/auth/ws-ticket
@@ -170,6 +171,7 @@ POST /api/servers/{serverId}/invites
 DELETE /api/servers/{serverId}/invites/{code}
 POST /api/servers/{serverId}/channels/{channelId}/group-sessions
 GET /api/servers/{serverId}/channels/{channelId}/group-sessions
+GET /api/servers/{serverId}/channels/{channelId}/sender-key-recipients
 GET /api/servers/{serverId}/search
 POST /api/servers/{serverId}/voice/token
 POST /api/servers/{serverId}/voice/screen-token

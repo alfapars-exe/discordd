@@ -77,7 +77,7 @@ func TestUploadService_acceptsPNG(t *testing.T) {
 	repo := &testutil.MockAttachmentRepo{}
 	svc, dir := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "photo.png", "image/png", pngMagic)
-	defer file.Close()
+	defer func() { _ = file.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestUploadService_recoversOggByExtension(t *testing.T) {
 	repo := &testutil.MockAttachmentRepo{}
 	svc, _ := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "clip.ogg", "audio/ogg", oggMagic)
-	defer file.Close()
+	defer func() { _ = file.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
 	if err != nil {
@@ -123,7 +123,7 @@ func TestUploadService_acceptsUnknownTypeAsOctetStream(t *testing.T) {
 	svc, dir := newTestUploadService(t, repo)
 	file, fh := buildUpload(t, "shell.exe", "application/octet-stream",
 		[]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05})
-	defer file.Close()
+	defer func() { _ = file.Close() }() // test cleanup — nothing to act on if teardown fails
 
 	att, err := svc.Upload(context.Background(), "msg-1", file, fh, false)
 	if err != nil {
@@ -220,24 +220,6 @@ func TestUploadService_cleansUpDiskOnRepoFailure(t *testing.T) {
 			names = append(names, filepath.Join(dir, e.Name()))
 		}
 		t.Errorf("orphan files left on disk after repo failure: %v", names)
-	}
-}
-
-func TestSanitizeFilename_defenseInDepth(t *testing.T) {
-	// Path traversal — server MUST NOT let a caller escape uploadDir via
-	// the filename. sanitizeFilename strips components; SafeJoin also
-	// guards, but this test locks the first layer.
-	if got := sanitizeFilename("../../etc/passwd"); got == ".." || strings.Contains(got, "/") || strings.Contains(got, "\\") {
-		t.Errorf("sanitizeFilename left traversal chars: %q", got)
-	}
-	// Null byte in name → stripped.
-	if got := sanitizeFilename("evil\x00.png"); strings.Contains(got, "\x00") {
-		t.Errorf("null byte survived: %q", got)
-	}
-	// Empty / dot names must be substituted so io.Copy doesn't dump into
-	// a hidden directory entry.
-	if got := sanitizeFilename(".."); got != "unnamed" {
-		t.Errorf("dotdot filename = %q, want unnamed", got)
 	}
 }
 

@@ -355,6 +355,14 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		Data: map[string]string{"id": serverID},
 	})
 
+	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
+	// A fetch failure here is logged and non-fatal — the delete still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	fileURLs, urlErr := s.serverRepo.GetFileURLsByServerID(ctx, serverID)
+	if urlErr != nil {
+		serverLogger.Error("failed to fetch file urls before server delete", "server_id", serverID, "err", pkg.ErrText(urlErr))
+	}
+
 	// Transactional so the cascade (channels, roles, messages, ...) and the
 	// server row either all go or none do — Delete alone, called on the
 	// pool-bound repo, would run each table's delete as its own
@@ -365,6 +373,10 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
 	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	removeUploadFilesByURL(s.uploadDir, fileURLs)
 
 	serverLogger.Info("deleted server", "server_id", serverID, "user_id", userID)
 	return nil

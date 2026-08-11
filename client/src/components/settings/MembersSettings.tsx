@@ -1,8 +1,9 @@
 /** MembersSettings — Member management with role assignment, kick/ban, and ban list. */
 
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { useMemberStore, useActiveMembers } from "../../stores/memberStore";
+import { useMemberStore, useActiveMembers, useMemberTimeout } from "../../stores/memberStore";
 import { useRoleStore, useActiveRoles } from "../../stores/roleStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useToastStore } from "../../stores/toastStore";
@@ -13,6 +14,8 @@ import * as memberApi from "../../api/members";
 import { useServerStore } from "../../stores/serverStore";
 import { resolveAssetUrl } from "../../utils/constants";
 import { formatDate, formatFullDateTime, formatRelativeFuture } from "../../utils/dateFormat";
+import ModDurationPicker from "../members/ModDurationPicker";
+import { TIMEOUT_PRESETS } from "../members/modDurationPresets";
 import type { Ban } from "../../types";
 
 type Tab = "members" | "bans";
@@ -36,6 +39,7 @@ function MembersSettings() {
   const [bans, setBans] = useState<Ban[]>([]);
   const [isBansLoading, setIsBansLoading] = useState(false);
   const [selectedBanUserId, setSelectedBanUserId] = useState<string | null>(null);
+  const [showTimeoutPicker, setShowTimeoutPicker] = useState(false);
 
   useEffect(() => {
     fetchMembers();
@@ -67,6 +71,15 @@ function MembersSettings() {
   const canManageRoles = hasPermission(myPerms, Permissions.ManageRoles);
   const canKick = hasPermission(myPerms, Permissions.KickMembers);
   const canBan = hasPermission(myPerms, Permissions.BanMembers);
+  const canTimeout = hasPermission(myPerms, Permissions.TimeoutMembers);
+
+  // Active moderator timeout for the selected member (if any) — falls back
+  // to the inline field on the member object so the status row shows even
+  // before the first WS event arrives, same pattern as MemberCard.
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const storeTimeout = useMemberTimeout(activeServerId, selectedMemberId);
+  const selectedTimeoutExpiresAt =
+    storeTimeout?.expires_at ?? selectedMember?.timeout_expires_at ?? undefined;
 
   const targetMaxPos = useMemo(() => {
     if (!selectedMember || selectedMember.roles.length === 0) return 0;
@@ -198,6 +211,31 @@ function MembersSettings() {
       setSelectedMemberId(null);
     } else {
       showApiError(res, { fallbackKey: "settings:memberBanError" });
+    }
+  }
+
+  async function handleRemoveTimeout() {
+    if (!selectedMember) return;
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const res = await memberApi.removeTimeout(serverId, selectedMember.id);
+    if (res.success) {
+      addToast("success", t("memberTimeoutRemoved"));
+    } else {
+      showApiError(res, { fallbackKey: "common:removeTimeoutError" });
+    }
+  }
+
+  async function handleTimeoutPick(seconds: number) {
+    setShowTimeoutPicker(false);
+    if (!selectedMember) return;
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId) return;
+    const res = await memberApi.timeoutMember(serverId, selectedMember.id, seconds, "");
+    if (res.success) {
+      addToast("success", t("memberTimeoutApplied"));
+    } else {
+      showApiError(res, { fallbackKey: "common:timeoutError" });
     }
   }
 
@@ -448,10 +486,18 @@ function MembersSettings() {
                   </div>
                 )}
 
-                {/* Kick / Ban — only on others, with permission + hierarchy */}
-                {!isSelf && canActOnTarget && (canKick || canBan) && (
+                {/* Kick / Ban / Timeout — only on others, with permission + hierarchy */}
+                {!isSelf && canActOnTarget && (canKick || canBan || canTimeout) && (
                   <div className="settings-field">
                     <label className="settings-label">{t("dangerZone")}</label>
+                    {canTimeout && selectedTimeoutExpiresAt && (
+                      <p className="ban-detail-expiry">
+                        {t("timeoutActiveUntil", {
+                          ns: "common",
+                          date: formatFullDateTime(selectedTimeoutExpiresAt, i18n.language),
+                        })}
+                      </p>
+                    )}
                     <div className="member-settings-actions">
                       {canKick && (
                         <button
@@ -467,6 +513,22 @@ function MembersSettings() {
                           className="settings-btn settings-btn-danger"
                         >
                           {t("banMember")}
+                        </button>
+                      )}
+                      {canTimeout && !selectedTimeoutExpiresAt && (
+                        <button
+                          onClick={() => setShowTimeoutPicker(true)}
+                          className="settings-btn settings-btn-danger"
+                        >
+                          {t("timeout", { ns: "common" })}
+                        </button>
+                      )}
+                      {canTimeout && selectedTimeoutExpiresAt && (
+                        <button
+                          onClick={handleRemoveTimeout}
+                          className="settings-btn settings-btn-danger"
+                        >
+                          {t("removeTimeout", { ns: "common" })}
                         </button>
                       )}
                     </div>
@@ -551,6 +613,23 @@ function MembersSettings() {
           </>
         )}
       </div>
+
+      {showTimeoutPicker && selectedMember &&
+        createPortal(
+          <ModDurationPicker
+            title={t("timeoutTitle", { ns: "common" })}
+            subtitle={t("timeoutForUser", {
+              ns: "common",
+              username: selectedMember.display_name || selectedMember.username,
+            })}
+            variant="timeout"
+            hint={t("timeoutPickerHint", { ns: "common" })}
+            presets={TIMEOUT_PRESETS}
+            onPick={handleTimeoutPick}
+            onCancel={() => setShowTimeoutPicker(false)}
+          />,
+          document.body
+        )}
     </div>
   );
 }

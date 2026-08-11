@@ -63,8 +63,14 @@ type ChannelPermResolver interface {
 type ChannelPermissionService interface {
 	GetOverrides(ctx context.Context, serverID, channelID string) ([]models.ChannelPermissionOverride, error)
 	// SetOverride creates or updates an override. If allow=0 and deny=0, deletes it (revert to inherit).
-	SetOverride(ctx context.Context, serverID, channelID, roleID string, req *models.SetOverrideRequest) error
-	DeleteOverride(ctx context.Context, serverID, channelID, roleID string) error
+	// actorID is the caller's own user id — N-03: SetOverride checks it can
+	// never grant/deny a bit the actor doesn't itself hold on this channel,
+	// and can never touch a role at or above the actor's own hierarchy
+	// position.
+	SetOverride(ctx context.Context, serverID, channelID, roleID, actorID string, req *models.SetOverrideRequest) error
+	// DeleteOverride removes an override; actorID is checked against the
+	// same role-hierarchy rule as SetOverride (N-03).
+	DeleteOverride(ctx context.Context, serverID, channelID, roleID, actorID string) error
 	// ResolveChannelPermissions computes effective permissions for a user in a channel.
 	ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error)
 	// ResolveChannelPermissionsBulk computes effective permissions for many
@@ -72,6 +78,15 @@ type ChannelPermissionService interface {
 	ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error)
 	// BuildVisibilityFilter builds a per-user channel visibility filter for ViewChannel checks.
 	BuildVisibilityFilter(ctx context.Context, userID, serverID string) (*ChannelVisibilityFilter, error)
+	// ResolveUserChannelPermissions computes, for one user across an entire
+	// server, the effective Permission bitmask for every channel that has a
+	// role override (bounded by override count, not total channel count),
+	// plus the user's server-wide base permission for channels without one.
+	// Same two-query shape as BuildVisibilityFilter (roleRepo.GetByUserIDAndServer
+	// + permRepo.GetByRoles), generalised to the full bitmask instead of a
+	// single PermViewChannel bit — SearchService uses it to apply
+	// PermCanReadChannel (H-05).
+	ResolveUserChannelPermissions(ctx context.Context, userID, serverID string) (*UserChannelPermissions, error)
 
 	// InvalidateUser drops every cached permission entry for one user.
 	// Wire into member kick/ban/role-add/role-remove so a permission
@@ -120,7 +135,7 @@ func NewChannelPermissionService(
 }
 
 func (s *channelPermService) GetOverrides(ctx context.Context, serverID, channelID string) ([]models.ChannelPermissionOverride, error) {
-	if _, err := s.validateOverrideScope(ctx, serverID, channelID, ""); err != nil {
+	if _, _, err := s.validateOverrideScope(ctx, serverID, channelID, ""); err != nil {
 		return nil, err
 	}
 
@@ -136,11 +151,26 @@ func (s *channelPermService) GetOverrides(ctx context.Context, serverID, channel
 	return overrides, nil
 }
 
-func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelID, roleID string, req *models.SetOverrideRequest) error {
+func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelID, roleID, actorID string, req *models.SetOverrideRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("invalid override request: %w", err)
 	}
-	if _, err := s.validateOverrideScope(ctx, serverID, channelID, roleID); err != nil {
+	_, role, err := s.validateOverrideScope(ctx, serverID, channelID, roleID)
+	if err != nil {
+		return err
+	}
+	if role == nil {
+		return fmt.Errorf("%w: role id is required", pkg.ErrBadRequest)
+	}
+
+	if err := s.checkChannelOverrideHierarchy(ctx, actorID, serverID, role); err != nil {
+		return err
+	}
+	// N-03: check both Allow and Deny against the actor's own channel-scoped
+	// permission (KULLANICI KARARI — a Deny the actor doesn't hold can lock a
+	// higher-privileged role out of the channel just as effectively as an
+	// Allow grants privilege it shouldn't).
+	if err := s.checkOverrideEscalation(ctx, actorID, channelID, req.Allow|req.Deny); err != nil {
 		return err
 	}
 
@@ -184,10 +214,23 @@ func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelI
 	return nil
 }
 
-func (s *channelPermService) DeleteOverride(ctx context.Context, serverID, channelID, roleID string) error {
-	if _, err := s.validateOverrideScope(ctx, serverID, channelID, roleID); err != nil {
+func (s *channelPermService) DeleteOverride(ctx context.Context, serverID, channelID, roleID, actorID string) error {
+	_, role, err := s.validateOverrideScope(ctx, serverID, channelID, roleID)
+	if err != nil {
 		return err
 	}
+	if role == nil {
+		return fmt.Errorf("%w: role id is required", pkg.ErrBadRequest)
+	}
+	// N-03: deleting an override can restore a higher effective permission
+	// on the target role (e.g. removing a Deny), so it is gated by the same
+	// hierarchy rule as SetOverride. No escalation (Allow/Deny bit) check
+	// applies here — there is no requested bit, only a reversion to the
+	// role's existing base permission, same as RoleService.Delete.
+	if err := s.checkChannelOverrideHierarchy(ctx, actorID, serverID, role); err != nil {
+		return err
+	}
+
 	if err := s.permRepo.Delete(ctx, channelID, roleID); err != nil {
 		return fmt.Errorf("failed to delete channel override: %w", err)
 	}
@@ -205,26 +248,82 @@ func (s *channelPermService) DeleteOverride(ctx context.Context, serverID, chann
 	return nil
 }
 
-func (s *channelPermService) validateOverrideScope(ctx context.Context, serverID, channelID, roleID string) (*models.Channel, error) {
+// validateOverrideScope confirms channelID belongs to serverID and, when
+// roleID is non-empty, that roleID also belongs to serverID — returning the
+// loaded role so callers (SetOverride, DeleteOverride) don't need a second
+// roleRepo.GetByID just to read its Position for the hierarchy check.
+// role is nil when roleID == "" (GetOverrides' use case).
+func (s *channelPermService) validateOverrideScope(ctx context.Context, serverID, channelID, roleID string) (*models.Channel, *models.Role, error) {
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get channel: %w", err)
+		return nil, nil, fmt.Errorf("failed to get channel: %w", err)
 	}
 	if channel.ServerID != serverID {
-		return nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
+		return nil, nil, fmt.Errorf("%w: channel not found", pkg.ErrNotFound)
 	}
 
+	var role *models.Role
 	if roleID != "" {
-		role, err := s.roleRepo.GetByID(ctx, roleID)
+		r, err := s.roleRepo.GetByID(ctx, roleID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get role: %w", err)
+			return nil, nil, fmt.Errorf("failed to get role: %w", err)
 		}
-		if role.ServerID != serverID {
-			return nil, fmt.Errorf("%w: role not found", pkg.ErrNotFound)
+		if r.ServerID != serverID {
+			return nil, nil, fmt.Errorf("%w: role not found", pkg.ErrNotFound)
 		}
+		role = r
 	}
 
-	return channel, nil
+	return channel, role, nil
+}
+
+// getActorMaxPosition returns the actor's highest role position in the
+// server — mirrors RoleService.getActorMaxPosition (role_service.go); kept
+// as a separate copy because the two services are independent types and
+// this one is only ever called against *channelPermService's own roleRepo.
+func (s *channelPermService) getActorMaxPosition(ctx context.Context, actorID, serverID string) (int, error) {
+	actorRoles, err := s.roleRepo.GetByUserIDAndServer(ctx, actorID, serverID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get actor roles: %w", err)
+	}
+	return models.HighestPosition(actorRoles), nil
+}
+
+// checkChannelOverrideHierarchy enforces the same role-hierarchy rule
+// RoleService applies to role edits (role_service.go Update/Delete): an
+// actor may only touch overrides for a role strictly below their own
+// highest role position. This applies unconditionally, including to actors
+// who hold PermAdmin — only the owner role (HighestPosition == MaxInt32,
+// see models.HighestPosition) outranks every other role.
+func (s *channelPermService) checkChannelOverrideHierarchy(ctx context.Context, actorID, serverID string, role *models.Role) error {
+	actorMaxPos, err := s.getActorMaxPosition(ctx, actorID, serverID)
+	if err != nil {
+		return err
+	}
+	if role.Position >= actorMaxPos {
+		return fmt.Errorf("%w: cannot modify a role with equal or higher position", pkg.ErrForbidden)
+	}
+	return nil
+}
+
+// checkOverrideEscalation enforces N-03: an actor may not place an override
+// bit (Allow or Deny) on a channel that is not part of their own
+// CHANNEL-scoped effective permission there. Channel-scoped, not the
+// server-wide role OR the route's authServerPerm(PermManageChannels) gate
+// already checked — an actor's own effective permission on this specific
+// channel can itself already be reduced by an existing override.
+func (s *channelPermService) checkOverrideEscalation(ctx context.Context, actorID, channelID string, requestedBits models.Permission) error {
+	actorPerms, err := s.ResolveChannelPermissions(ctx, actorID, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve actor channel permissions: %w", err)
+	}
+	if actorPerms.Has(models.PermAdmin) {
+		return nil
+	}
+	if escalated := requestedBits &^ actorPerms; escalated != 0 {
+		return fmt.Errorf("%w: cannot grant permissions you do not have", pkg.ErrForbidden)
+	}
+	return nil
 }
 
 // BuildVisibilityFilter builds a per-user channel visibility filter.
@@ -296,6 +395,77 @@ func (s *channelPermService) BuildVisibilityFilter(ctx context.Context, userID, 
 		HiddenChannels:  hidden,
 		GrantedChannels: granted,
 	}, nil
+}
+
+// ResolveUserChannelPermissions computes, for one user across an entire
+// server, the effective Permission bitmask for every channel that has a
+// role override for that user's roles, plus the user's base (non-overridden)
+// permission for every other channel. Same two-query shape as
+// BuildVisibilityFilter (roleRepo.GetByUserIDAndServer + permRepo.GetByRoles)
+// — reused here for the full bitmask instead of BuildVisibilityFilter's
+// single PermViewChannel bit, so a caller checking a different bit pair
+// (e.g. search's PermCanReadChannel — View AND Read) doesn't need a third,
+// hand-rolled resolver. Unlike BuildVisibilityFilter, this calls the shared
+// effectiveChannelPermission helper (see its doc comment) instead of
+// inlining the formula, so it cannot silently disagree with
+// ResolveChannelPermissions/ResolveChannelPermissionsBulk about the same
+// channel.
+func (s *channelPermService) ResolveUserChannelPermissions(ctx context.Context, userID, serverID string) (*UserChannelPermissions, error) {
+	roles, err := s.roleRepo.GetByUserIDAndServer(ctx, userID, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user roles for channel permission map: %w", err)
+	}
+
+	var base models.Permission
+	roleIDs := make([]string, len(roles))
+	for i, r := range roles {
+		base |= r.Permissions
+		roleIDs[i] = r.ID
+	}
+
+	if base.Has(models.PermAdmin) {
+		return &UserChannelPermissions{IsAdmin: true, Base: models.PermAll}, nil
+	}
+
+	overrides, err := s.permRepo.GetByRoles(ctx, roleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get role overrides for channel permission map: %w", err)
+	}
+
+	if len(overrides) == 0 {
+		return &UserChannelPermissions{Base: base}, nil
+	}
+
+	// Group overrides by channel, OR allow/deny across all user roles — same
+	// grouping BuildVisibilityFilter does, kept as its own small copy rather
+	// than extracted into a shared helper: BuildVisibilityFilter is
+	// exhaustively tested as-is and this task's scope is the two RBAC
+	// findings, not a drive-by refactor of already-correct, already-tested
+	// code.
+	type channelOverride struct {
+		allow models.Permission
+		deny  models.Permission
+	}
+	byChannel := make(map[string]*channelOverride)
+	for _, o := range overrides {
+		co, ok := byChannel[o.ChannelID]
+		if !ok {
+			co = &channelOverride{}
+			byChannel[o.ChannelID] = co
+		}
+		co.allow |= o.Allow
+		co.deny |= o.Deny
+	}
+
+	result := &UserChannelPermissions{
+		Base:      base,
+		Overrides: make(map[string]models.Permission, len(byChannel)),
+	}
+	for channelID, co := range byChannel {
+		result.Overrides[channelID] = effectiveChannelPermission(base, co.allow, co.deny)
+	}
+
+	return result, nil
 }
 
 // permCacheKey is the single source of truth for the permission cache key

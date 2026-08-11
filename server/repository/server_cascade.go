@@ -96,6 +96,18 @@ var deleteServerCascadeStmts = []struct {
 		args: func(id string) []any { return []any{id} },
 	},
 	{
+		// channel_sender_key_envelopes (migration 075, pentest C-03) declares
+		// ON DELETE CASCADE to channels, but that constraint is only ever
+		// enforced on the local SQLite DSN -- the remote libSQL/Turso branch
+		// never turns foreign_keys on (see database/integrity.go), so this
+		// explicit delete is load-bearing there, same as every other
+		// statement in this list. Must run before the "channels" delete
+		// below, whose scoping subquery this one still relies on.
+		query: `DELETE FROM channel_sender_key_envelopes WHERE channel_id IN (
+			SELECT id FROM channels WHERE server_id = ?)`,
+		args: func(id string) []any { return []any{id} },
+	},
+	{
 		// Parents, deleted last — after every statement above that
 		// identifies its rows by joining through channels or roles.
 		query: `DELETE FROM channels WHERE server_id = ?`,

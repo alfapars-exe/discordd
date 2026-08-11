@@ -164,9 +164,34 @@ interface ElectronAPI {
   /** Remove global PTT listeners to prevent accumulation */
   removePTTListeners: () => void;
 
+  /**
+   * Register a key for the global mute-toggle hotkey (works even when app
+   * is unfocused). Mirrors registerPTTShortcut but latches instead of
+   * firing down/up pairs. Optional — undefined in Electron builds that
+   * predate this feature.
+   */
+  registerMuteHotkeyShortcut?: (keyCode: string) => Promise<boolean>;
+  /** Unregister the global mute-toggle hotkey */
+  unregisterMuteHotkeyShortcut?: () => Promise<void>;
+  /** Mute hotkey toggled globally */
+  onMuteHotkeyGlobal?: (cb: () => void) => void;
+  /** Remove global mute hotkey listeners to prevent accumulation */
+  removeMuteHotkeyListeners?: () => void;
+
   /** Save credentials encrypted with safeStorage */
   saveCredentials: (username: string, password: string) => Promise<void>;
-  loadCredentials: () => Promise<{ username: string; password: string } | null>;
+  /**
+   * Username only — the stored password never crosses the bridge
+   * (pentest 2026-07-26, H-09). Use loginWithSavedCredentials to sign in.
+   */
+  loadCredentials: () => Promise<{ username: string } | null>;
+  /**
+   * Signs in with the stored password inside the main process and resolves to
+   * the upstream login envelope. Rejects when nothing is stored.
+   */
+  loginWithSavedCredentials: (
+    upstreamOrigin: string,
+  ) => Promise<{ status: number; body: unknown }>;
   clearCredentials: () => Promise<void>;
 
   /** Read all app settings */

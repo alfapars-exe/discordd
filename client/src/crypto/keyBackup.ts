@@ -16,6 +16,7 @@
  */
 
 import * as keyStorage from "./keyStorage";
+import { normalizeReplayWindow } from "./senderKeyProtocol";
 import { toBase64, fromBase64 } from "./signalProtocol";
 
 // ──────────────────────────────────
@@ -108,10 +109,33 @@ type BackupContents = {
     senderDeviceId: string;
     distributionId: string;
     chainKey: string;
-    initialChainKey: string;
+    /**
+     * Iteration-0 anchor, OPTIONAL because a key genuinely may not have one:
+     * sender keys stored before this field existed carry no anchor, and the
+     * repair in channelEncryption is gated on that absence.
+     *
+     * Backups written before this was optional encode absence as "" rather
+     * than omitting the key, so readers must treat the empty string as absent
+     * too (security scan 2026-07-31 follow-up).
+     */
+    initialChainKey?: string;
     publicSigningKey: string;
     iteration: number;
     createdAt: number;
+    /**
+     * Replay-protection window for this distribution. Both fields are OPTIONAL
+     * on purpose: backups written before they were carried simply lack them,
+     * and normalizeReplayWindow turns absence into the safe "nothing evicted,
+     * nothing seen" state. Additive-only, so BACKUP_VERSION stays 1 — an older
+     * client restoring a newer backup ignores the extra JSON members.
+     *
+     * They must be carried at all because a restore that dropped them handed
+     * the user back a key with an EMPTY window and a live iteration counter,
+     * re-opening every ciphertext already accepted under this chain (security
+     * scan 2026-07-31, finding N-11 on the backup path).
+     */
+    seenIterations?: number[];
+    replayFloor?: number;
   }>;
   /** One-time prekeys — critical for X3DH. Without them, PreKey messages
    *  can't be decrypted after restore (3-DH vs 4-DH mismatch). */
@@ -138,6 +162,27 @@ type BackupContents = {
     timestamp: number;
   }>;
 };
+
+/**
+ * Decodes a sender key's iteration-0 anchor from a backup, preserving absence.
+ *
+ * Two encodings mean "this key has no anchor": the field missing (what the
+ * serializer writes now) and the empty string (what backups written before it
+ * became optional carry). The falsy check covers both, and it has to happen
+ * BEFORE decoding: `fromBase64("")` returns a zero-length Uint8Array, every
+ * object is truthy in JS, and `!existingKey.initialChainKey` would therefore
+ * be false for it — indistinguishable from a real anchor to the repair gate in
+ * channelEncryption, which is the exact failure this change removes.
+ *
+ * No length check on the decoded bytes: the only writer of this field is the
+ * serializer above, and the backup is AEAD-authenticated as a whole, so a
+ * value that decodes to nothing cannot reach here from a tampered file either.
+ * A guard for that case was written first and removed — a mutation showed no
+ * test could tell whether it was there, because nothing can reach it.
+ */
+function decodeAnchor(encoded: string | undefined): Uint8Array | undefined {
+  return encoded ? fromBase64(encoded) : undefined;
+}
 
 // ──────────────────────────────────
 // Backup Creation
@@ -322,10 +367,14 @@ async function collectBackupContents(): Promise<BackupContents> {
       senderDeviceId: sk.senderDeviceId,
       distributionId: sk.distributionId,
       chainKey: toBase64(sk.chainKey),
-      initialChainKey: sk.initialChainKey ? toBase64(sk.initialChainKey) : "",
+      // Omitted, not "", when the key has no anchor. The old "" encoding was
+      // indistinguishable from a present-but-empty value on the way back in.
+      ...(sk.initialChainKey ? { initialChainKey: toBase64(sk.initialChainKey) } : {}),
       publicSigningKey: toBase64(sk.publicSigningKey),
       iteration: sk.iteration,
       createdAt: sk.createdAt,
+      seenIterations: sk.seenIterations,
+      replayFloor: sk.replayFloor,
     })),
     trustedIdentities: trustedIdentities.map((ti) => ({
       userId: ti.userId,
@@ -354,11 +403,13 @@ async function collectBackupContents(): Promise<BackupContents> {
  * the clear and a later write left the user with partial (or zero) E2EE
  * data, requiring another full restore from backup. The fix:
  *
- *   1. Snapshot current data + restore plan into memory first.
+ *   1. Snapshot current data (ALL stores clearAllE2EEData touches, metadata
+ *      included) into memory first.
  *   2. Validate the entire backup decodes cleanly (catches bad b64 etc.)
  *      before mutating any store.
- *   3. Wipe + write in the existing order (still not atomic across stores,
- *      but if anything fails we roll back to the snapshot).
+ *   3. Wipe + write in the existing order (still not atomic across stores;
+ *      if anything fails we replay the snapshot on a best-effort basis —
+ *      see the catch block for exactly how far that guarantee reaches).
  *
  * The snapshot is held in memory for the duration of the import — for a
  * typical backup (<1MB serialized) this is fine; if backups grow to many
@@ -380,6 +431,14 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
     sessions: await keyStorage.getAllSessions(),
     senderKeys: await keyStorage.getAllSenderKeys(),
     trustedIdentities: await keyStorage.getAllTrustedIdentities(),
+    // clearAllE2EEData() wipes the metadata store too, and a rollback that
+    // skipped it left the device with keys but no "deviceId": getLocalDeviceId
+    // reads ONLY that entry, hasLocalKeys never looks at it, so E2EE reported
+    // itself ready while every DM decrypt bailed on a null local device id and
+    // nothing ever re-registered. Snapshotting the whole store rather than a
+    // list of known keys also covers sk_signing:*/prekey_info:*/legacyDeviceIds,
+    // whose key space is open-ended (security scan 2026-07-31, finding N-22).
+    metadata: await keyStorage.getAllMetadata(),
   };
 
   try {
@@ -451,16 +510,38 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
 
     // Sender keys
     for (const sk of contents.senderKeys) {
+      // The window comes off a JSON.parse, so it is normalized rather than
+      // trusted: isReplay binary-searches and would silently miss hits on an
+      // unsorted or poisoned array. Absent (older backup) normalizes to the
+      // safe empty window with floor 0.
+      const window = normalizeReplayWindow(sk.seenIterations, sk.replayFloor);
       await keyStorage.saveSenderKey({
         channelId: sk.channelId,
         senderUserId: sk.senderUserId,
         senderDeviceId: sk.senderDeviceId,
         distributionId: sk.distributionId,
         chainKey: fromBase64(sk.chainKey),
-        initialChainKey: sk.initialChainKey ? fromBase64(sk.initialChainKey) : fromBase64(sk.chainKey),
+        // Carry a real absence through instead of substituting chainKey.
+        //
+        // chainKey is the CURRENT ratcheted key; for anything past iteration 0
+        // it is not the anchor. Rewinding from it derives the wrong message
+        // keys, so restored history decrypts to garbage and renders as
+        // content: null. The lasting damage is worse than the lost messages:
+        // channelEncryption's repair is gated on !existingKey.initialChainKey,
+        // so a fabricated anchor is truthy and shuts that door permanently.
+        // Absence makes the rewind throw instead — a loud, recoverable failure
+        // that the repair can still fix later.
+        //
+        // decodeAnchor also maps "" to undefined, which is how backups written
+        // before the field became optional encoded absence: fromBase64("")
+        // returns a zero-length Uint8Array, an object, therefore TRUTHY — so
+        // decoding the old encoding literally would reproduce the same bug.
+        initialChainKey: decodeAnchor(sk.initialChainKey),
         publicSigningKey: fromBase64(sk.publicSigningKey),
         iteration: sk.iteration,
         createdAt: sk.createdAt,
+        seenIterations: window.seenIterations,
+        replayFloor: window.replayFloor,
       });
     }
 
@@ -497,26 +578,112 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
       await keyStorage.cacheDecryptedMessages(mergedCache);
     }
   } catch (err) {
-    // Restore failed mid-write. Roll back from the snapshot so the device
-    // is at least in its pre-restore state (the legitimate keys we just
-    // wiped). The rollback itself is best-effort; if it fails the user
-    // can still re-enter their recovery password to retry.
+    // Restore failed mid-write. Roll back from the snapshot toward the
+    // pre-restore state.
+    //
+    // "Toward", not "to": IndexedDB gives us no transaction spanning these
+    // stores, so the rollback is best-effort and can itself fail partway. Each
+    // write is therefore isolated (see rollbackWrite) — one rejected write no
+    // longer abandons every write after it, which is how a single failure used
+    // to cost the user their whole key set — and the stores are replayed in
+    // blast-radius order, metadata first: losing "deviceId" alone silently
+    // kills every DM decrypt with no self-healing path
+    // (security scan 2026-07-31, finding N-22).
+    //
+    // Whatever the rollback could not write is reported below rather than
+    // swallowed; the user can still re-enter their recovery password to retry.
     console.error("[keyBackup] restore failed, rolling back to snapshot:", err);
-    try {
-      await keyStorage.clearAllE2EEData();
-      if (snapshot.identity) await keyStorage.saveIdentityKeyPair(snapshot.identity);
-      if (snapshot.signing) await keyStorage.saveSigningKeyPair(snapshot.signing);
-      if (snapshot.registration) await keyStorage.saveRegistrationData(snapshot.registration);
-      for (const spk of snapshot.signedPreKeys) await keyStorage.saveSignedPreKey(spk);
-      if (snapshot.preKeys.length > 0) await keyStorage.savePreKeys(snapshot.preKeys);
-      for (const ses of snapshot.sessions) await keyStorage.saveSession(ses);
-      for (const sk of snapshot.senderKeys) await keyStorage.saveSenderKey(sk);
-      for (const ti of snapshot.trustedIdentities) await keyStorage.saveTrustedIdentity(ti);
-      if (existingCache.length > 0) await keyStorage.cacheDecryptedMessages(existingCache);
-    } catch (rollbackErr) {
-      console.error("[keyBackup] rollback also failed:", rollbackErr);
+    const failedStores: string[] = [];
+
+    await rollbackWrite(failedStores, "clear", () => keyStorage.clearAllE2EEData());
+    for (const [key, value] of snapshot.metadata) {
+      await rollbackWrite(failedStores, "metadata", () =>
+        keyStorage.setMetadata(key, value)
+      );
+    }
+    if (snapshot.identity) {
+      const identity = snapshot.identity;
+      await rollbackWrite(failedStores, "identity", () =>
+        keyStorage.saveIdentityKeyPair(identity)
+      );
+    }
+    if (snapshot.signing) {
+      const signing = snapshot.signing;
+      await rollbackWrite(failedStores, "signing", () =>
+        keyStorage.saveSigningKeyPair(signing)
+      );
+    }
+    if (snapshot.registration) {
+      const registration = snapshot.registration;
+      await rollbackWrite(failedStores, "registration", () =>
+        keyStorage.saveRegistrationData(registration)
+      );
+    }
+    for (const spk of snapshot.signedPreKeys) {
+      await rollbackWrite(failedStores, "signedPreKeys", () =>
+        keyStorage.saveSignedPreKey(spk)
+      );
+    }
+    if (snapshot.preKeys.length > 0) {
+      await rollbackWrite(failedStores, "preKeys", () =>
+        keyStorage.savePreKeys(snapshot.preKeys)
+      );
+    }
+    for (const ses of snapshot.sessions) {
+      await rollbackWrite(failedStores, "sessions", () =>
+        keyStorage.saveSession(ses)
+      );
+    }
+    for (const sk of snapshot.senderKeys) {
+      await rollbackWrite(failedStores, "senderKeys", () =>
+        keyStorage.saveSenderKey(sk)
+      );
+    }
+    for (const ti of snapshot.trustedIdentities) {
+      await rollbackWrite(failedStores, "trustedIdentities", () =>
+        keyStorage.saveTrustedIdentity(ti)
+      );
+    }
+    if (existingCache.length > 0) {
+      await rollbackWrite(failedStores, "messageCache", () =>
+        keyStorage.cacheDecryptedMessages(existingCache)
+      );
+    }
+
+    if (failedStores.length > 0) {
+      // Store names only. Metadata VALUES include the sender-key signing
+      // private keys and metadata KEYS name channels/users, so neither may
+      // reach the console.
+      const stores = [...new Set(failedStores)].join(", ");
+      console.error(
+        `[keyBackup] rollback incomplete: ${failedStores.length} write(s) failed in ${stores}`
+      );
     }
     throw err;
+  }
+}
+
+/**
+ * Perform one rollback write, recording the store name if it fails.
+ *
+ * Error-collection strategy: swallow-and-continue, aggregate-and-report. The
+ * alternative (let the first failure propagate) is what shipped before, and it
+ * means an error while writing, say, a single sender key throws away the
+ * identity key, the metadata and everything else still queued — turning a
+ * partial failure into a total one. Nothing here can be retried usefully in
+ * the moment (the same quota/IDB fault would hit the retry), so the writes are
+ * pushed as far as they go and the shortfall is logged once.
+ */
+async function rollbackWrite(
+  failedStores: string[],
+  storeName: string,
+  write: () => Promise<void>
+): Promise<void> {
+  try {
+    await write();
+  } catch (err) {
+    failedStores.push(storeName);
+    console.error(`[keyBackup] rollback write failed for ${storeName}:`, err);
   }
 }
 

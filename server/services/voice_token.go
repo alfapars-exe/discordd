@@ -147,7 +147,20 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		}
 	}
 
-	canPublish := effectivePerms.Has(models.PermSpeak)
+	// Server-mute (AdminUpdateState, voice_admin.go) is folded into the
+	// LiveKit publish grant itself, not just PermSpeak — previously a
+	// server-muted user still got canPublish=true here as long as they had
+	// PermSpeak, so the sanction was purely a client-side advisory
+	// (useMicSync); a modified client could ignore it and keep publishing
+	// audio. currentServerMute reads the live in-memory voice state
+	// (voice_state.go — see its own doc comment for why "no state" safely
+	// defaults to "not muted"), scoped to this channel's SERVER since the
+	// sanction is server-wide, not channel-specific. Deafen deliberately
+	// does NOT affect canSubscribe here: deafen is a local listening
+	// preference the user themselves controls, not something a moderator
+	// enforces — blocking subscription would silently break the user's own
+	// ability to un-deafen and hear again.
+	canPublish := effectivePerms.Has(models.PermSpeak) && !s.currentServerMute(userID, channel.ServerID)
 	canSubscribe := true
 	canPublishData := true
 
@@ -208,6 +221,18 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 	}
 	if channel.Type != models.ChannelTypeVoice {
 		return nil, fmt.Errorf("%w: not a voice channel", pkg.ErrBadRequest)
+	}
+
+	// Timeout gate — same rationale as GenerateToken above: a timed-out user
+	// must not be able to pick up a screen share sub-participant token either.
+	if s.timeoutChecker != nil && channel.ServerID != "" {
+		active, tErr := s.timeoutChecker.IsActive(ctx, channel.ServerID, userID)
+		if tErr != nil {
+			return nil, fmt.Errorf("check timeout: %w", tErr)
+		}
+		if active {
+			return nil, fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
 	}
 
 	// User must already be in this voice channel to screen share

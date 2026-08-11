@@ -13,6 +13,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useToastStore } from "../../stores/toastStore";
+import {
+  checkRecoveryPassphrase,
+  WeakRecoveryPassphraseError,
+  RECOVERY_PASSPHRASE_MIN_LENGTH,
+  RECOVERY_PASSPHRASE_MAX_LENGTH,
+} from "../../crypto/recoveryPassphrase";
+import RecoveryPassphraseStrength from "./RecoveryPassphraseStrength";
 
 type PromptView = "main" | "restore" | "setPassword";
 
@@ -44,10 +51,30 @@ function RecoveryPasswordPrompt() {
     }
   }
 
+  /**
+   * The second way a recovery passphrase gets set (the first is Settings >
+   * Encryption). completeRecoverySetup delegates to setRecoveryPassword, so
+   * the real gate applies either way; the check here only buys a specific
+   * error message instead of the generic save failure.
+   *
+   * Note handleRestore above is deliberately NOT policy-checked: passphrases
+   * set before this policy existed must stay usable for restore.
+   */
   async function handleSetPassword() {
+    const limits = {
+      min: RECOVERY_PASSPHRASE_MIN_LENGTH,
+      max: RECOVERY_PASSPHRASE_MAX_LENGTH,
+    };
+
     if (!password.trim() || !confirmPassword.trim() || isLoading) return;
     if (password !== confirmPassword) {
       addToast("error", t("recoveryPasswordMismatch"));
+      return;
+    }
+
+    const policy = checkRecoveryPassphrase(password.trim());
+    if (!policy.ok) {
+      addToast("error", t(policy.i18nKey, limits));
       return;
     }
 
@@ -55,8 +82,13 @@ function RecoveryPasswordPrompt() {
     try {
       await completeRecoverySetup(password.trim());
       addToast("success", t("recoveryPasswordSet"));
-    } catch {
-      addToast("error", t("recoveryPasswordSaveError"));
+    } catch (err) {
+      addToast(
+        "error",
+        err instanceof WeakRecoveryPassphraseError
+          ? t(err.i18nKey, limits)
+          : t("recoveryPasswordSaveError"),
+      );
     }
     setIsLoading(false);
   }
@@ -195,6 +227,7 @@ function RecoveryPasswordPrompt() {
                   autoFocus
                   autoComplete="new-password"
                 />
+                <RecoveryPassphraseStrength passphrase={password} />
               </div>
 
               <div className="e2ee-setup-field">

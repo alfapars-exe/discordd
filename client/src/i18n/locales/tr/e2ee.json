@@ -21,6 +21,18 @@
   "recoveryPasswordSaved": "Kurtarma parolası yedeği kaydedildi",
   "recoveryPasswordSaveError": "Kurtarma parolası kaydedilemedi",
   "recoveryPasswordNotSet": "Ayarlanmadı",
+  "recoveryPasswordTooShort": "Kurtarma parolası en az {{min}} karakter olmalı.",
+  "recoveryPasswordTooLong": "Kurtarma parolası en fazla {{max}} karakter olabilir.",
+  "recoveryPasswordTooFewDistinct": "Kurtarma parolasında çok az sayıda farklı karakter var.",
+  "recoveryPasswordDigitsOnly": "Kurtarma parolası yalnızca rakamlardan oluşamaz.",
+  "recoveryPasswordSequential": "Kurtarma parolası \"123456\" ya da \"abcdef\" gibi basit bir dizi içeriyor.",
+  "recoveryPasswordCommon": "Kurtarma parolası yaygın kullanılan bir kelimeye dayanıyor. Daha zor tahmin edilecek bir şey seçin.",
+  "recoveryPasswordPolicyHint": "En az {{min}} karakter. Birbiriyle ilgisiz birkaç kelime, sonuna rakam eklenmiş tek bir kelimeden hem daha kolay hatırlanır hem daha zor tahmin edilir.",
+  "recoveryPasswordStrengthLabel": "Güç",
+  "recoveryPasswordStrengthWeak": "Zayıf",
+  "recoveryPasswordStrengthFair": "Orta",
+  "recoveryPasswordStrengthGood": "İyi",
+  "recoveryPasswordStrengthStrong": "Güçlü",
   "e2eeKeyMissing": "Şifreleme anahtarı eksik — çözülemez",
 
   "setRecoveryPassword": "Kurtarma Parolası Belirle",
@@ -49,6 +61,7 @@
 
   "decryptionError": "Bu mesaj çözülemedi",
   "encryptionFailed": "Mesaj şifrelenemedi",
+  "rosterSuppressed": "Mesaj gönderilmedi: bu kanalı okuyabilen başka üyeler olmasına rağmen sunucu hiç alıcı bildirmedi. Mesajınız kimse tarafından okunamayacaktı.",
   "encryptedMessage": "Şifreli mesaj",
   "e2eeIndicator": "Uçtan uca şifreli",
 
@@ -95,5 +108,20 @@
   "recoveryPromptHint": "Bunu istediğiniz zaman Ayarlar > Şifreleme bölümünden yönetebilirsiniz.",
   "recoveryPromptSetPassword": "Kurtarma Parolası Belirle",
   "recoveryPromptContinueNewKeys": "Yeni Anahtarlarla Devam Et",
-  "recoveryPromptDismiss": "Daha Sonra"
+  "recoveryPromptDismiss": "Daha Sonra",
+
+  "trustAlertIdentityChanged": "Karşı tarafın şifreleme anahtarı değişti. Uygulamayı yeniden kurmuş ya da cihaz değiştirmiş olabilir — yine de emin olmak için güvenlik numarasını doğrulamakta fayda var.",
+  "trustAlertNewDevice": "Karşı taraf daha önce görmediğimiz bir cihazdan mesaj gönderiyor. Güvenlik numarasını doğrulamak, beklenmedik bir cihazı ayırt etmenize yardımcı olabilir.",
+  "trustPanelTitle": "Güvenlik Numarasını Doğrula",
+  "trustPanelDescription": "Konuştuğunuz kişinin gerçekten o olduğundan emin olmak için bu güvenlik numarasını başka bir kanaldan (yüz yüze, telefonla) karşı tarafla karşılaştırın.",
+  "trustPanelHint": "Burada yalnızca bu sohbette gerçekten anahtar alışverişi yapılmış cihazlar listelenir.",
+  "trustPanelEmpty": "Henüz doğrulanacak bir cihaz yok — bu kişiyle bir oturum kurulduğunda güvenlik numarası burada görünür.",
+  "markVerified": "Doğrulanmış Olarak İşaretle",
+  "markVerifiedDone": "Cihaz doğrulanmış olarak işaretlendi",
+  "verifyAction": "Doğrula",
+
+  "trustAlertOwnNewDevice": "Kendi hesabınıza tanımadığımız bir cihaz eklendi. Bu cihazı kaldırana ya da sizin olduğunu onaylayana kadar, gönderdiğiniz her mesajın bir kopyasını — tüm sohbetlerde — alır.",
+  "ownDeviceAlertBadge": "Tanınmıyor",
+  "ownDeviceAlertHint": "Bu cihazı siz eklemediyseniz hemen kaldırın. Sizseniz aşağıdan onaylayın.",
+  "ownDeviceAcknowledge": "Bu bendim"
 }

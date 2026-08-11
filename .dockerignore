@@ -1,0 +1,73 @@
+# Docker build context hygiene — security scan 2026-07-31, finding N-29.
+#
+# The repo had no .dockerignore at all, so every root entry was sent to the
+# daemon as build context. Two concrete consequences, not just size:
+#
+#   1. Dockerfile:15 runs `npm ci`, and Dockerfile:16 is `COPY client ./`.
+#      With client/node_modules in the context that COPY lands ON TOP of the
+#      tree npm just installed — so a developer's local, host-platform
+#      node_modules silently replaced the image's own. Identical commits could
+#      produce different images depending on whose machine ran the build.
+#   2. `COPY client ./` and `COPY server ./server` also carried .env files,
+#      local *.db files and the entire .git history into the image layers,
+#      where they survive in the final image even though nothing reads them.
+#
+# Deny-list rather than allow-list on purpose: the Dockerfile copies client/
+# and server/ wholesale, so an allow-list would silently drop every new source
+# directory someone adds. Everything listed here must be something the three
+# build stages genuinely do not read.
+#
+# The build reads exactly: client/** (minus the entries below), server/**
+# (minus the entries below), and the root package.json — vite.config.ts:23
+# resolves ../package.json for __APP_VERSION__, which Dockerfile:23 copies
+# explicitly.
+
+# ─── VCS and CI ───
+.git
+.gitignore
+.gitattributes
+.github
+
+# ─── Dependency trees — reinstalled in-image by `npm ci` / `go mod download` ───
+node_modules
+**/node_modules
+
+# ─── Build outputs — regenerated in-image ───
+client/dist
+server/static/dist
+build
+**/*.tsbuildinfo
+
+# ─── Secrets and local environment ───
+# .env.example is checked-in documentation, so it is explicitly kept. A
+# later negation wins over an earlier exclusion, so its position matters.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+
+# ─── Local run artifacts a dev server leaves behind ───
+**/*.db
+**/*.db-wal
+**/*.db-shm
+server/uploads
+server/data
+**/*.log
+
+# ─── Shells and harnesses none of the three stages build ───
+electron
+native
+icons
+bots
+loadtest
+e2e
+deploy
+build.ps1
+docker-compose.yml
+livekit.yaml
+entitlements.mac.plist
+.ebignore
+
+# ─── Repo documentation ───
+*.md

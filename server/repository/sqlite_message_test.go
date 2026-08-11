@@ -11,7 +11,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/argeinfina/hichat/database"
@@ -32,8 +34,15 @@ const (
 func seedMessageWorld(t testing.TB, db *database.DB) {
 	t.Helper()
 	execSeed(t, db, []seedStmt{
-		{`INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, 'x')`,
-			[]any{msgAuthor, "author", "Yazar"}},
+		// status and custom_status are set here (not left NULL, and status is
+		// set away from the schema's DEFAULT 'offline') so the PublicUser
+		// round-trip assertions in "get by id joins the author" and
+		// TestMessageRepo_ReplyReference are value-checked, not vacuously true
+		// on a zero/default value. See finding N-09 follow-up: the author LEFT
+		// JOIN's SELECT list used to omit custom_status and created_at
+		// entirely, and the reply-author (ru) join omitted status too.
+		{`INSERT INTO users (id, username, display_name, custom_status, status, password_hash) VALUES (?, ?, ?, ?, ?, 'x')`,
+			[]any{msgAuthor, "author", "Yazar", "brb", "online"}},
 		{`INSERT INTO users (id, username, password_hash) VALUES (?, ?, 'x')`,
 			[]any{msgSecondUser, "second"}},
 		{`INSERT INTO channels (id, name, type, server_id) VALUES (?, ?, 'text', 'srv-1')`,
@@ -92,10 +101,28 @@ func TestMessageRepo_CreateGetDelete(t *testing.T) {
 		if got.Author.DisplayName == nil || *got.Author.DisplayName != "Yazar" {
 			t.Errorf("author.display_name = %v, want Yazar", got.Author.DisplayName)
 		}
-		// The query explicitly blanks this — a leak here would ship a bcrypt
-		// hash to every client rendering the channel.
-		if got.Author.PasswordHash != "" {
-			t.Errorf("password_hash leaked into the message author: %q", got.Author.PasswordHash)
+		// REGRESSION GUARD (security scan 2026-07-31, finding N-09 follow-up):
+		// the author LEFT JOIN's SELECT list carried u.status but not
+		// u.custom_status or u.created_at, so every embedded author silently
+		// serialized custom_status:null and created_at as the zero time
+		// ("0001-01-01T00:00:00Z") regardless of what the row actually held.
+		if got.Author.CustomStatus == nil || *got.Author.CustomStatus != "brb" {
+			t.Errorf("author.custom_status = %v, want %q", got.Author.CustomStatus, "brb")
+		}
+		if got.Author.CreatedAt.IsZero() {
+			t.Error("author.created_at is zero — u.created_at was not selected")
+		}
+		// Author is a models.PublicUser (not models.User), so there is no
+		// PasswordHash field to leak by construction. Confirm the JSON the
+		// client actually receives has no password or email key either —
+		// a leak here would ship a bcrypt hash or email to every client
+		// rendering the channel.
+		authorJSON, err := json.Marshal(got.Author)
+		if err != nil {
+			t.Fatalf("marshal author: %v", err)
+		}
+		if strings.Contains(string(authorJSON), `"password`) || strings.Contains(string(authorJSON), `"email`) {
+			t.Errorf("author JSON leaks PII: %s", authorJSON)
 		}
 		if got.ReferencedMessage != nil {
 			t.Errorf("referenced_message = %+v on a non-reply, want nil", got.ReferencedMessage)
@@ -109,11 +136,11 @@ func TestMessageRepo_CreateGetDelete(t *testing.T) {
 	})
 
 	t.Run("a message whose author is missing stays readable with a nil author", func(t *testing.T) {
-		// KNOWN BUG — see the note on TestMessageRepo_NilAuthorScan_KnownBug
+		// REGRESSION GUARD — see the note on TestMessageRepo_NilAuthorScan_KnownBug
 		// at the bottom of this file. sqlite_message.go documents this LEFT
-		// JOIN as "message stays visible even if author is deleted", but the
-		// scan targets for the joined user columns are plain strings, so a
-		// NULL author makes the whole query error instead.
+		// JOIN as "message stays visible even if author is deleted", and the
+		// scan targets for the joined user columns are nullable now, so a
+		// NULL author no longer fails the whole query.
 		// database.New enforces foreign keys, so the dangling reference has to
 		// be planted through a second connection with enforcement off — which
 		// is also the realistic provenance of such a row.
@@ -486,6 +513,19 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 		if ref.Author == nil || ref.Author.ID != msgAuthor {
 			t.Errorf("ref.author = %+v, want %s", ref.Author, msgAuthor)
 		}
+		// REGRESSION GUARD: ru.status was missing from the reply-reference
+		// SELECT list entirely, so the reply-author's status always
+		// deserialized as the UserStatus zero value "" — a value outside the
+		// enum openapi.yaml and the client declare for this field.
+		if ref.Author != nil && ref.Author.Status != models.UserStatusOnline {
+			t.Errorf("ref.author.status = %q, want %q", ref.Author.Status, models.UserStatusOnline)
+		}
+		if ref.Author != nil && (ref.Author.CustomStatus == nil || *ref.Author.CustomStatus != "brb") {
+			t.Errorf("ref.author.custom_status = %v, want %q", ref.Author.CustomStatus, "brb")
+		}
+		if ref.Author != nil && ref.Author.CreatedAt.IsZero() {
+			t.Error("ref.author.created_at is zero — ru.created_at was not selected")
+		}
 	})
 
 	t.Run("the same reference appears in the channel listing", func(t *testing.T) {
@@ -509,6 +549,19 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 		}
 		if *found.ReferencedMessage.Content != "orijinal" {
 			t.Errorf("listing ref.content = %q, want orijinal", *found.ReferencedMessage.Content)
+		}
+		// scanMessage (GetByChannelID's path) shares buildMessageReference
+		// with GetByID but has its own SELECT list and Scan call — verify it
+		// carries ru.status/ru.custom_status/ru.created_at too.
+		refAuthor := found.ReferencedMessage.Author
+		if refAuthor == nil || refAuthor.Status != models.UserStatusOnline {
+			t.Errorf("listing ref.author.status = %+v, want %q", refAuthor, models.UserStatusOnline)
+		}
+		if refAuthor != nil && (refAuthor.CustomStatus == nil || *refAuthor.CustomStatus != "brb") {
+			t.Errorf("listing ref.author.custom_status = %v, want %q", refAuthor.CustomStatus, "brb")
+		}
+		if refAuthor != nil && refAuthor.CreatedAt.IsZero() {
+			t.Error("listing ref.author.created_at is zero — ru.created_at was not selected")
 		}
 	})
 
@@ -597,7 +650,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 		newMessage(t, ctx, repo, msgChannel, msgAuthor, "alakasiz dolgu mesaji")
 		msg := newMessage(t, ctx, repo, msgChannel, msgAuthor, "parolam hunter2 olarak ayarlandi")
 
-		before, err := search.Search(ctx, "hunter2", "srv-1", nil, 25, 0)
+		before, err := search.Search(ctx, "hunter2", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search: %v", err)
 		}
@@ -611,7 +664,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 			t.Fatalf("Update: %v", err)
 		}
 
-		after, err := search.Search(ctx, "hunter2", "srv-1", nil, 25, 0)
+		after, err := search.Search(ctx, "hunter2", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search after edit: %v", err)
 		}
@@ -622,7 +675,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 
 		// The new text must be findable, i.e. a fix must not simply stop
 		// indexing edits.
-		fresh, err := search.Search(ctx, "degistirdim", "srv-1", nil, 25, 0)
+		fresh, err := search.Search(ctx, "degistirdim", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search new term: %v", err)
 		}
@@ -681,7 +734,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 		// next message inserted lands on the freed rowid and inherits the
 		// deleted message's tokens.
 		fresh := newMessage(t, ctx, repo, msgChannel, msgAuthor, "tamamen alakasiz")
-		res, err := search.Search(ctx, "gizli", "srv-1", nil, 25, 0)
+		res, err := search.Search(ctx, "gizli", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search after delete: %v", err)
 		}
@@ -691,7 +744,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 		}
 
 		// The replacement message must still be findable by its OWN text.
-		own, err := search.Search(ctx, "alakasiz", "srv-1", nil, 25, 0)
+		own, err := search.Search(ctx, "alakasiz", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search for the new message: %v", err)
 		}
@@ -729,7 +782,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 			t.Errorf("FTS integrity-check after deleting an unindexed message: %v", err)
 		}
 
-		res, err := search.Search(ctx, "kalici", "srv-1", nil, 25, 0)
+		res, err := search.Search(ctx, "kalici", "srv-1", nil, nil, 25, 0)
 		if err != nil {
 			t.Fatalf("search: %v", err)
 		}

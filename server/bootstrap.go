@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/argeinfina/hichat/config"
@@ -29,13 +30,18 @@ func logMusicBotDeps() {
 	if out, err := exec.Command("yt-dlp", "--version").Output(); err != nil {
 		bootLogger.Warn("yt-dlp not available — music bot will fail", "err", pkg.ErrText(err))
 	} else {
-		bootLogger.Info("yt-dlp version detected", "version", strings.TrimSpace(string(out)))
+		// yt-dlp's stdout is external process output (not our own string
+		// literal); strconv.Quote prevents an unusual build from splitting
+		// or forging log lines via embedded control characters (G706).
+		bootLogger.Info("yt-dlp version detected", "version", strconv.Quote(strings.TrimSpace(string(out))))
 	}
 	if out, err := exec.Command("ffmpeg", "-version").Output(); err != nil {
 		bootLogger.Warn("ffmpeg not available — music bot will fail", "err", pkg.ErrText(err))
 	} else {
 		first := strings.SplitN(string(out), "\n", 2)[0]
-		bootLogger.Info("ffmpeg version detected", "version", strings.TrimSpace(first))
+		// Same reasoning as yt-dlp above: ffmpeg's stdout is external
+		// process output (G706).
+		bootLogger.Info("ffmpeg version detected", "version", strconv.Quote(strings.TrimSpace(first)))
 	}
 }
 

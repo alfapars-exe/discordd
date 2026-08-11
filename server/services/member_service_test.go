@@ -144,6 +144,7 @@ func TestTimeout_RefusesEqualOrHigherRole(t *testing.T) {
 func TestRemoveTimeout_DeletesAndBroadcasts(t *testing.T) {
 	h := newMemberHarness()
 	const srv, actor, target = "srv1", "mod1", "victim1"
+	h.stubHierarchy(actor, target, srv)
 
 	var deletedFor string
 	h.timeoutRepo.DeleteFn = func(_ context.Context, _, userID string) error {
@@ -168,6 +169,95 @@ func TestRemoveTimeout_DeletesAndBroadcasts(t *testing.T) {
 	}
 	if data["user_id"] != target {
 		t.Errorf("broadcast user_id = %q, want %q", data["user_id"], target)
+	}
+}
+
+// TestTimeout_DisconnectsVoice pins A4: applying a timeout must immediately
+// drop any live voice session (Discord-parity) — otherwise a just-timed-out
+// user could keep talking in an existing call until they leave on their own.
+func TestTimeout_DisconnectsVoice(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "srv1", "mod1", "victim1"
+	h.stubHierarchy(actor, target, srv)
+
+	err := h.svc.Timeout(context.Background(), srv, actor, target, time.Now().Add(5*time.Minute), "spam")
+	if err != nil {
+		t.Fatalf("Timeout returned error: %v", err)
+	}
+	if len(h.voiceKick.DisconnectedIDs) != 1 || h.voiceKick.DisconnectedIDs[0] != target {
+		t.Errorf("DisconnectedIDs = %v, want [%q]", h.voiceKick.DisconnectedIDs, target)
+	}
+}
+
+// TestRemoveTimeout_DoesNotDisconnectVoice pins that lifting a timeout is a
+// pure permission change — it must not touch the user's voice session (they
+// were never force-disconnected by RemoveTimeout, only by Timeout itself).
+// The hierarchy stub is required since N-20 gave RemoveTimeout the same
+// self/hierarchy gates as Timeout; without it the call is rejected before it
+// can reach the behavior under test.
+func TestRemoveTimeout_DoesNotDisconnectVoice(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "srv1", "mod1", "victim1"
+	h.stubHierarchy(actor, target, srv)
+
+	err := h.svc.RemoveTimeout(context.Background(), srv, actor, target)
+	if err != nil {
+		t.Fatalf("RemoveTimeout returned error: %v", err)
+	}
+	if len(h.voiceKick.DisconnectedIDs) != 0 {
+		t.Errorf("RemoveTimeout must not disconnect voice, got %v", h.voiceKick.DisconnectedIDs)
+	}
+}
+
+// security scan 2026-07-31, finding N-20 — RemoveTimeout had neither the
+// self-application check nor the hierarchy check that Timeout already
+// applies. These two tests are the mirror of TestTimeout_RefusesSelf and
+// TestTimeout_RefusesEqualOrHigherRole below.
+
+func TestRemoveTimeout_RefusesSelf(t *testing.T) {
+	h := newMemberHarness()
+
+	var deleteCalled bool
+	h.timeoutRepo.DeleteFn = func(_ context.Context, _, _ string) error {
+		deleteCalled = true
+		return nil
+	}
+
+	err := h.svc.RemoveTimeout(context.Background(), "srv1", "u1", "u1")
+	if !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("expected ErrBadRequest, got %v", err)
+	}
+	if deleteCalled {
+		t.Error("expected timeoutRepo.Delete not to be called for self-removal")
+	}
+	if len(h.broadcasts) != 0 {
+		t.Errorf("self-removal should not broadcast, got %v", h.broadcasts)
+	}
+}
+
+func TestRemoveTimeout_RefusesEqualOrHigherRole(t *testing.T) {
+	h := newMemberHarness()
+	const srv, actor, target = "srv1", "mod1", "peer1"
+	// Both roles at position 5 → checkHierarchy fails (actorMaxPos <= targetMaxPos).
+	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, _, _ string) ([]models.Role, error) {
+		return []models.Role{{ID: "mod", Position: 5, Permissions: models.PermTimeoutMembers}}, nil
+	}
+
+	var deleteCalled bool
+	h.timeoutRepo.DeleteFn = func(_ context.Context, _, _ string) error {
+		deleteCalled = true
+		return nil
+	}
+
+	err := h.svc.RemoveTimeout(context.Background(), srv, actor, target)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+	if deleteCalled {
+		t.Error("expected timeoutRepo.Delete not to be called for insufficient hierarchy")
+	}
+	if len(h.broadcasts) != 0 {
+		t.Errorf("rejected removal should not broadcast, got %v", h.broadcasts)
 	}
 }
 

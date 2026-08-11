@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 type ChannelType string
@@ -59,6 +61,9 @@ func (r *CreateChannelRequest) Validate() error {
 	if nameLen < 1 || nameLen > 50 {
 		return fmt.Errorf("channel name must be between 1 and 50 characters")
 	}
+	if pkg.ContainsSteeringChars(r.Name) {
+		return fmt.Errorf("channel name contains disallowed control or formatting characters")
+	}
 
 	// 'audit' is accepted here but is constrained at the service layer to
 	// "exactly one per server" — channel_service.Create returns an error if
@@ -103,6 +108,9 @@ func (r *UpdateChannelRequest) Validate() error {
 		if nameLen < 1 || nameLen > 50 {
 			return fmt.Errorf("channel name must be between 1 and 50 characters")
 		}
+		if pkg.ContainsSteeringChars(*r.Name) {
+			return fmt.Errorf("channel name contains disallowed control or formatting characters")
+		}
 	}
 
 	if r.Topic != nil {
@@ -137,6 +145,9 @@ func (r *CreateCategoryRequest) Validate() error {
 	if nameLen < 1 || nameLen > 50 {
 		return fmt.Errorf("category name must be between 1 and 50 characters")
 	}
+	if pkg.ContainsSteeringChars(r.Name) {
+		return fmt.Errorf("category name contains disallowed control or formatting characters")
+	}
 	return nil
 }
 
@@ -150,6 +161,9 @@ func (r *UpdateCategoryRequest) Validate() error {
 		nameLen := utf8.RuneCountInString(*r.Name)
 		if nameLen < 1 || nameLen > 50 {
 			return fmt.Errorf("category name must be between 1 and 50 characters")
+		}
+		if pkg.ContainsSteeringChars(*r.Name) {
+			return fmt.Errorf("category name contains disallowed control or formatting characters")
 		}
 	}
 	return nil

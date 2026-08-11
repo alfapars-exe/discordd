@@ -20,6 +20,7 @@ type MessageService interface {
 	Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
 	Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error
 	SetAuditLogger(logger AuditWriter)
+	SetUploadDir(dir string)
 }
 
 type messageService struct {
@@ -37,10 +38,19 @@ type messageService struct {
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
 	auditLogger     AuditWriter
+	// uploadDir enables best-effort disk cleanup on message delete (see
+	// upload_cleanup.go). Blank (the zero value, and every existing test's
+	// default) disables cleanup — set via SetUploadDir, wired in
+	// init_services.go so the constructor signature above stays unchanged.
+	uploadDir string
 }
 
 func (s *messageService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
+}
+
+func (s *messageService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -296,8 +306,7 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message author: %w", err)
 	}
-	author.PasswordHash = ""
-	message.Author = author
+	message.Author = models.ToPublicUser(author)
 	message.Attachments = []models.Attachment{}
 	message.Reactions = []models.ReactionGroup{}
 
@@ -404,9 +413,28 @@ func (s *messageService) Update(ctx context.Context, serverID, id, userID string
 	if message.UserID != userID {
 		return nil, fmt.Errorf("%w: you can only edit your own messages", pkg.ErrForbidden)
 	}
-	if _, err := s.validateChannelScope(ctx, serverID, message.ChannelID); err != nil {
+	channel, err := s.validateChannelScope(ctx, serverID, message.ChannelID)
+	if err != nil {
 		return nil, err
 	}
+
+	// Timeout gate — mirrors Create's gate (~:206): a timed-out user can
+	// still own messages posted before the timeout, but can't edit them
+	// while it's active. channel.ServerID != "" is structural
+	// defense-in-depth — DM channels never reach here in practice (DM
+	// edits go through dm_message.go), but the guard costs nothing. Checked
+	// before the perm resolver for the same reason as Create: a specific
+	// "you are timed out" error beats a generic 403.
+	if channel.ServerID != "" && s.timeoutRepo != nil {
+		active, tErr := s.timeoutRepo.IsActive(ctx, channel.ServerID, userID)
+		if tErr != nil {
+			return nil, fmt.Errorf("check timeout: %w", tErr)
+		}
+		if active {
+			return nil, fmt.Errorf("%w: you are timed out on this server", pkg.ErrForbidden)
+		}
+	}
+
 	channelPerms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, message.ChannelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve channel permissions: %w", err)
@@ -515,8 +543,26 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 		channelName = channel.Name
 	}
 
+	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
+	// A fetch failure here is logged and non-fatal — the delete still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	attachments, attErr := s.attachmentRepo.GetByMessageID(ctx, id)
+	if attErr != nil {
+		messageLogger.Error("failed to fetch attachments before message delete", "message_id", id, "err", pkg.ErrText(attErr))
+	}
+
 	if err := s.messageRepo.Delete(ctx, id); err != nil {
 		return err
+	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	if len(attachments) > 0 {
+		fileURLs := make([]string, len(attachments))
+		for i, a := range attachments {
+			fileURLs[i] = a.FileURL
+		}
+		removeUploadFilesByURL(s.uploadDir, fileURLs)
 	}
 
 	// Decrement unread_count for every user who had this message as unread.

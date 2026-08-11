@@ -87,7 +87,7 @@ type Client struct {
 func (c *Client) ReadPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close() // connection is already tearing down; nothing to act on
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -182,7 +182,7 @@ func (c *Client) sendEvent(event Event) {
 // WritePump writes messages from Hub to the WebSocket connection.
 // Runs as a goroutine until the Hub closes this client's done channel.
 func (c *Client) WritePump() {
-	defer c.conn.Close()
+	defer func() { _ = c.conn.Close() }() // connection is already tearing down; nothing to act on
 
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()

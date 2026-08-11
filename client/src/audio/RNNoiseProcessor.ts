@@ -56,6 +56,7 @@ function getWasmBinary(): Promise<ArrayBuffer> {
 const registeredContexts = new WeakMap<AudioContext, Map<string, Promise<void>>>();
 
 function ensureWorkletRegistered(ctx: AudioContext, name: string, url: string): Promise<void> {
+  if (!ctx || ctx.state === "closed") return Promise.resolve();
   let map = registeredContexts.get(ctx);
   if (!map) {
     map = new Map();
@@ -110,6 +111,8 @@ class RNNoiseProcessor
    */
   async init(opts: AudioProcessorOptions): Promise<void> {
     const { audioContext, track } = opts;
+
+    if (!audioContext || audioContext.state === "closed") return;
 
     const wasmBinary = await getWasmBinary();
 

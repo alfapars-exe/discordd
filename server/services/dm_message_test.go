@@ -2,9 +2,13 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -380,6 +384,159 @@ func TestSendMessage_secondMessageToMessageRequestUserBlocked(t *testing.T) {
 		&models.CreateDMMessageRequest{Content: "please respond"})
 	if err == nil || !strings.Contains(err.Error(), "dm_request_pending") {
 		t.Fatalf("expected dm_request_pending, got %v", err)
+	}
+}
+
+// TestSendMessage_AuthorPayloadHasNoPII is the regression guard for the leak
+// fixed by models.PublicUser (security scan 2026-07-31, finding N-09):
+// dm_message.go used to embed the full author *models.User (only blanking
+// PasswordHash) into the DM message response and WS broadcast payload,
+// shipping email, admin/ban flags and other PII to the other DM participant.
+func TestSendMessage_AuthorPayloadHasNoPII(t *testing.T) {
+	f := newDMFixture()
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{
+			ID: id, User1ID: "alice", User2ID: "bob",
+			Status: models.DMStatusAccepted,
+		}, nil
+	}
+
+	email := "alice@example.com"
+	lastSeen := time.Now()
+	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{
+			ID:               id,
+			Username:         "alice",
+			DMPrivacy:        "accepted",
+			Email:            &email,
+			IsPlatformAdmin:  true,
+			IsPlatformBanned: true,
+			Language:         "tr",
+			PrefStatus:       models.UserStatusOnline,
+			LastSeenAt:       &lastSeen,
+			PasswordHash:     "bcrypt-hash-should-never-appear",
+		}, nil
+	}
+
+	msg, err := f.svc.SendMessage(context.Background(), "alice", "ch-1",
+		&models.CreateDMMessageRequest{Content: "hi bob"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	body, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal DM message: %v", err)
+	}
+	leaked := []string{`"email"`, `"is_platform_admin"`, `"is_platform_banned"`, `"dm_privacy"`, `"language"`, `"last_seen_at"`, `"password`}
+	for _, key := range leaked {
+		if strings.Contains(string(body), key) {
+			t.Errorf("DM message payload leaks PII field %s: %s", key, body)
+		}
+	}
+}
+
+// TestDeleteMessage_RemovesAttachmentFileFromDisk pins the Part A cleanup
+// wiring: once the DB delete succeeds, any attachment file the deleted DM
+// message owned is removed from disk via SetUploadDir/removeUploadFilesByURL.
+func TestDeleteMessage_RemovesAttachmentFileFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "att1.png")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	f := newDMFixture()
+	f.repo.GetMessageByIDFn = func(_ context.Context, id string) (*models.DMMessage, error) {
+		return &models.DMMessage{ID: id, DMChannelID: "ch-1", UserID: "alice"}, nil
+	}
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob"}, nil
+	}
+	f.repo.GetAttachmentsByMessageIDsFn = func(_ context.Context, _ []string) (map[string][]models.DMAttachment, error) {
+		return map[string][]models.DMAttachment{
+			"m1": {{ID: "a1", DMMessageID: "m1", FileURL: "/api/uploads/att1.png"}},
+		}, nil
+	}
+	deleteCalled := false
+	f.repo.DeleteMessageFn = func(_ context.Context, _ string) error { deleteCalled = true; return nil }
+	f.svc.SetUploadDir(dir)
+
+	if err := f.svc.DeleteMessage(context.Background(), "alice", "m1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !deleteCalled {
+		t.Fatal("DeleteMessage should have called dmRepo.DeleteMessage")
+	}
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Errorf("attachment file still exists on disk after delete: stat err = %v", err)
+	}
+}
+
+// TestDeleteMessage_AttachmentFetchFailureStillDeletesMessage: a failed
+// pre-fetch must not block the message delete — it just means no files can
+// be cleaned up this time.
+func TestDeleteMessage_AttachmentFetchFailureStillDeletesMessage(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "att1.png")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	f := newDMFixture()
+	f.repo.GetMessageByIDFn = func(_ context.Context, id string) (*models.DMMessage, error) {
+		return &models.DMMessage{ID: id, DMChannelID: "ch-1", UserID: "alice"}, nil
+	}
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob"}, nil
+	}
+	f.repo.GetAttachmentsByMessageIDsFn = func(_ context.Context, _ []string) (map[string][]models.DMAttachment, error) {
+		return nil, errors.New("attachment lookup boom")
+	}
+	deleteCalled := false
+	f.repo.DeleteMessageFn = func(_ context.Context, _ string) error { deleteCalled = true; return nil }
+	f.svc.SetUploadDir(dir)
+
+	if err := f.svc.DeleteMessage(context.Background(), "alice", "m1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !deleteCalled {
+		t.Fatal("message delete must still run despite the attachment pre-fetch failure")
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Errorf("file must remain on disk when it couldn't be enumerated: stat err = %v", err)
+	}
+}
+
+// TestDeleteMessage_DBFailureLeavesFileOnDisk: the file is only ever removed
+// AFTER the DB delete commits.
+func TestDeleteMessage_DBFailureLeavesFileOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "att1.png")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	f := newDMFixture()
+	f.repo.GetMessageByIDFn = func(_ context.Context, id string) (*models.DMMessage, error) {
+		return &models.DMMessage{ID: id, DMChannelID: "ch-1", UserID: "alice"}, nil
+	}
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{ID: id, User1ID: "alice", User2ID: "bob"}, nil
+	}
+	f.repo.GetAttachmentsByMessageIDsFn = func(_ context.Context, _ []string) (map[string][]models.DMAttachment, error) {
+		return map[string][]models.DMAttachment{
+			"m1": {{ID: "a1", DMMessageID: "m1", FileURL: "/api/uploads/att1.png"}},
+		}, nil
+	}
+	f.repo.DeleteMessageFn = func(_ context.Context, _ string) error { return errors.New("db is down") }
+	f.svc.SetUploadDir(dir)
+
+	if err := f.svc.DeleteMessage(context.Background(), "alice", "m1"); err == nil {
+		t.Fatal("expected the failed DB delete to propagate")
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Errorf("file must remain on disk when the DB delete failed: stat err = %v", err)
 	}
 }
 

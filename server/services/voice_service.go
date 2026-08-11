@@ -53,9 +53,20 @@ type OnlineUserChecker interface {
 	GetOnlineUserIDs() []string
 }
 
-// AFKTimeoutGetter retrieves a server's AFK timeout. Satisfied by repository.ServerRepository.
+// AFKTimeoutGetter retrieves a server's AFK timeout and checks server
+// membership. Satisfied by repository.ServerRepository. IsMember backs
+// JoinChannel's N-01 authorization gate — a WS client can't inject voice
+// state for a server it was never added to.
 type AFKTimeoutGetter interface {
 	GetByID(ctx context.Context, serverID string) (*models.Server, error)
+	IsMember(ctx context.Context, serverID, userID string) (bool, error)
+}
+
+// BanChecker — narrow ISP interface so voiceService doesn't depend on the
+// full repository contract. repository.BanRepository already implements
+// this method. Used by EnforceModerationOnJoin (voice_lifecycle.go).
+type BanChecker interface {
+	Exists(ctx context.Context, serverID, userID string) (bool, error)
 }
 
 // ─── VoiceService Interface ───
@@ -90,7 +101,12 @@ type VoiceService interface {
 	SetAppLogger(logger VoiceAppLogger)
 	SetAuditLogger(logger AuditWriter)
 	SetMusicBotHook(hook MusicBotChannelHook)
-	SetMemberTimeoutChecker(checker MemberTimeoutChecker)
+	// EnforceModerationOnJoin evicts userID from the LiveKit room for
+	// (serverID, channelID) if they are currently timed out or banned on
+	// serverID. See voice_lifecycle.go for the implementation and the
+	// handlers.LiveKitWebhookHandler participant_joined callback (A-29a)
+	// that is its only caller.
+	EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string)
 }
 
 // AuditWriter — narrow ISP interface for audit log writes from services.
@@ -142,11 +158,20 @@ type voiceService struct {
 	appLogger        VoiceAppLogger
 	auditLogger      AuditWriter
 	musicBotHook     MusicBotChannelHook
-	// Optional. When wired (via SetMemberTimeoutChecker in main.go),
-	// GenerateToken rejects voice joins from currently timed-out users
-	// — matches Discord's "muted means muted everywhere" UX. Nil-safe
-	// so existing voice tests/code keep working without wiring it.
+	// Wired through NewVoiceService (mirrors reaction_service.go's
+	// constructor-injected timeoutChecker) so production wiring cannot
+	// silently omit it the way the old SetMemberTimeoutChecker setter
+	// could (a call site that forgot the setter compiled fine and left
+	// voice joins fail-open). GenerateToken/authorizeJoin reject voice
+	// joins from currently timed-out users — matches Discord's "muted
+	// means muted everywhere" UX. The nil check at each call site is
+	// kept only for test harnesses that intentionally omit a checker
+	// (see TestVoiceJoinChannel_NilTimeoutChecker_Allows); production
+	// (main.go) always passes repos.MemberTimeout, never nil.
 	timeoutChecker MemberTimeoutChecker
+	// banChecker backs EnforceModerationOnJoin's ban half (the timeout half
+	// reuses timeoutChecker above). Same wiring/nil-guard rationale.
+	banChecker BanChecker
 }
 
 // MemberTimeoutChecker — narrow ISP interface so voiceService doesn't
@@ -164,6 +189,8 @@ func NewVoiceService(
 	onlineChecker OnlineUserChecker,
 	afkTimeoutGetter AFKTimeoutGetter,
 	encryptionKey []byte,
+	timeoutChecker MemberTimeoutChecker,
+	banChecker BanChecker,
 ) VoiceService {
 	return &voiceService{
 		states:             make(map[string]*models.VoiceState),
@@ -178,18 +205,13 @@ func NewVoiceService(
 		onlineChecker:      onlineChecker,
 		afkTimeoutGetter:   afkTimeoutGetter,
 		encryptionKey:      encryptionKey,
+		timeoutChecker:     timeoutChecker,
+		banChecker:         banChecker,
 	}
 }
 
 func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
 	s.musicBotHook = hook
-}
-
-// SetMemberTimeoutChecker — optional. When wired, GenerateToken rejects
-// voice joins from currently timed-out users. Nil-safe (existing tests
-// keep working without wiring it).
-func (s *voiceService) SetMemberTimeoutChecker(checker MemberTimeoutChecker) {
-	s.timeoutChecker = checker
 }
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {

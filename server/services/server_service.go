@@ -26,6 +26,7 @@ type ServerService interface {
 	// ReorderServers updates the user's personal server list order. No WS broadcast.
 	ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error)
 	SetAuditLogger(logger AuditWriter)
+	SetUploadDir(dir string)
 }
 
 type serverService struct {
@@ -36,14 +37,24 @@ type serverService struct {
 	channelRepo   repository.ChannelRepository
 	categoryRepo  repository.CategoryRepository
 	userRepo      repository.UserRepository
+	banRepo       repository.BanRepository // N-02: JoinServer's ban gate
 	inviteService InviteService
 	hub           ws.BroadcastAndManage
 	encryptionKey []byte // AES-256-GCM for LiveKit credentials
 	auditLogger   AuditWriter
+	// uploadDir enables best-effort disk cleanup on server delete (see
+	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
+	// wired in init_services.go so the constructor signature below stays
+	// unchanged.
+	uploadDir string
 }
 
 func (s *serverService) SetAuditLogger(logger AuditWriter) {
 	s.auditLogger = logger
+}
+
+func (s *serverService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -67,6 +78,7 @@ func NewServerService(
 	channelRepo repository.ChannelRepository,
 	categoryRepo repository.CategoryRepository,
 	userRepo repository.UserRepository,
+	banRepo repository.BanRepository,
 	inviteService InviteService,
 	hub ws.BroadcastAndManage,
 	encryptionKey []byte,
@@ -79,6 +91,7 @@ func NewServerService(
 		channelRepo:   channelRepo,
 		categoryRepo:  categoryRepo,
 		userRepo:      userRepo,
+		banRepo:       banRepo,
 		inviteService: inviteService,
 		hub:           hub,
 		encryptionKey: encryptionKey,

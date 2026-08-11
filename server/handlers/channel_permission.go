@@ -10,7 +10,11 @@ import (
 )
 
 // ChannelPermissionHandler handles per-channel permission override endpoints.
-// All endpoints require ManageChannels permission (enforced by middleware).
+// All endpoints require ManageChannels permission, checked server-wide by
+// authServerPerm middleware. SetOverride/DeleteOverride additionally enforce
+// per-request, channel-scoped checks in the service (N-03): the actor cannot
+// grant/deny a bit it doesn't itself hold there, and cannot touch a role at
+// or above its own hierarchy position.
 type ChannelPermissionHandler struct {
 	service services.ChannelPermissionService
 }
@@ -49,6 +53,11 @@ func (h *ChannelPermissionHandler) SetOverride(w http.ResponseWriter, r *http.Re
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
 		return
 	}
+	actor, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	var req models.SetOverrideRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -56,7 +65,7 @@ func (h *ChannelPermissionHandler) SetOverride(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.service.SetOverride(r.Context(), serverID, channelID, roleID, &req); err != nil {
+	if err := h.service.SetOverride(r.Context(), serverID, channelID, roleID, actor.ID, &req); err != nil {
 		pkg.Error(w, err)
 		return
 	}
@@ -74,8 +83,13 @@ func (h *ChannelPermissionHandler) DeleteOverride(w http.ResponseWriter, r *http
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context missing")
 		return
 	}
+	actor, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
-	if err := h.service.DeleteOverride(r.Context(), serverID, channelID, roleID); err != nil {
+	if err := h.service.DeleteOverride(r.Context(), serverID, channelID, roleID, actor.ID); err != nil {
 		pkg.Error(w, err)
 		return
 	}

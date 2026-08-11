@@ -11,15 +11,18 @@ import (
 // by dm_message tests are populated by tests; the zero-value stub
 // returns a safe default so unrelated code paths don't panic.
 type MockDMRepo struct {
-	GetChannelByIDFn         func(ctx context.Context, id string) (*models.DMChannel, error)
-	GetChannelByUsersFn      func(ctx context.Context, u1, u2 string) (*models.DMChannel, error)
-	CountMessagesBySenderFn  func(ctx context.Context, channelID, userID string) (int, error)
-	UpdateChannelStatusFn    func(ctx context.Context, channelID, status string) error
-	SetInitiatedByFn         func(ctx context.Context, channelID, userID string) error
-	CreateMessageFn          func(ctx context.Context, msg *models.DMMessage) error
-	GetMessageByIDFn         func(ctx context.Context, id string) (*models.DMMessage, error)
-	UpdateMessageFn          func(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error
-	DeleteMessageFn          func(ctx context.Context, id string) error
+	GetChannelByIDFn                   func(ctx context.Context, id string) (*models.DMChannel, error)
+	GetChannelByUsersFn                func(ctx context.Context, u1, u2 string) (*models.DMChannel, error)
+	CountMessagesBySenderFn            func(ctx context.Context, channelID, userID string) (int, error)
+	UpdateChannelStatusFn              func(ctx context.Context, channelID, status string) error
+	SetInitiatedByFn                   func(ctx context.Context, channelID, userID string) error
+	CreateMessageFn                    func(ctx context.Context, msg *models.DMMessage) error
+	GetMessageByIDFn                   func(ctx context.Context, id string) (*models.DMMessage, error)
+	UpdateMessageFn                    func(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error
+	DeleteMessageFn                    func(ctx context.Context, id string) error
+	GetAttachmentsByMessageIDsFn       func(ctx context.Context, messageIDs []string) (map[string][]models.DMAttachment, error)
+	GetAttachmentFileURLsByChannelIDFn func(ctx context.Context, channelID string) ([]string, error)
+	DeleteChannelFn                    func(ctx context.Context, channelID string) error
 }
 
 func (m *MockDMRepo) GetChannelByUsers(ctx context.Context, u1, u2 string) (*models.DMChannel, error) {
@@ -56,7 +59,12 @@ func (m *MockDMRepo) CountMessagesBySender(ctx context.Context, channelID, userI
 	}
 	return 0, nil
 }
-func (m *MockDMRepo) DeleteChannel(_ context.Context, _ string) error       { return nil }
+func (m *MockDMRepo) DeleteChannel(ctx context.Context, channelID string) error {
+	if m.DeleteChannelFn != nil {
+		return m.DeleteChannelFn(ctx, channelID)
+	}
+	return nil
+}
 func (m *MockDMRepo) SetE2EEEnabled(_ context.Context, _ string, _ bool) error { return nil }
 
 func (m *MockDMRepo) GetMessages(_ context.Context, _ string, _ string, _ int) ([]models.DMMessage, error) {
@@ -104,10 +112,19 @@ func (m *MockDMRepo) GetPinnedMessages(_ context.Context, _ string) ([]models.DM
 }
 
 func (m *MockDMRepo) CreateAttachment(_ context.Context, _ *models.DMAttachment) error { return nil }
-func (m *MockDMRepo) GetAttachmentsByMessageIDs(_ context.Context, _ []string) (map[string][]models.DMAttachment, error) {
+func (m *MockDMRepo) GetAttachmentsByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]models.DMAttachment, error) {
+	if m.GetAttachmentsByMessageIDsFn != nil {
+		return m.GetAttachmentsByMessageIDsFn(ctx, messageIDs)
+	}
 	return nil, nil
 }
 func (m *MockDMRepo) GetAttachmentByFileURL(_ context.Context, _ string) (*models.DMAttachment, error) {
+	return nil, nil
+}
+func (m *MockDMRepo) GetAttachmentFileURLsByChannelID(ctx context.Context, channelID string) ([]string, error) {
+	if m.GetAttachmentFileURLsByChannelIDFn != nil {
+		return m.GetAttachmentFileURLsByChannelIDFn(ctx, channelID)
+	}
 	return nil, nil
 }
 

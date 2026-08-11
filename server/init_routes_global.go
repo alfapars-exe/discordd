@@ -10,8 +10,12 @@ import "net/http"
 func (d *routeDeps) registerAuthRoutes() {
 	d.mux.HandleFunc("POST /api/auth/register", d.h.Auth.Register)
 	d.mux.HandleFunc("POST /api/auth/login", d.h.Auth.Login)
-	d.mux.HandleFunc("POST /api/auth/refresh", d.h.Auth.Refresh)
+	// Per-IP rate limit (security scan 2026-07-31, finding N-14): refresh has
+	// no auth middleware (it hands out the auth) and previously had no
+	// limiter of any kind, unlike every other unauthenticated auth route.
+	d.mux.Handle("POST /api/auth/refresh", d.refresh(d.h.Auth.Refresh))
 	d.mux.Handle("POST /api/auth/logout", d.auth(d.h.Auth.Logout))
+	d.mux.Handle("POST /api/auth/logout-all", d.auth(d.h.Auth.LogoutAll))
 	d.mux.HandleFunc("POST /api/auth/forgot-password", d.h.Auth.ForgotPassword)
 	d.mux.HandleFunc("POST /api/auth/reset-password", d.h.Auth.ResetPassword)
 	d.mux.Handle("POST /api/auth/ws-ticket", d.auth(d.h.Auth.WSTicket))
@@ -51,7 +55,13 @@ func (d *routeDeps) registerUploadRoutes() {
 	// or DM), where the transaction binds the file to a message the caller
 	// just authored, and no client ever invoked the standalone form.
 
-	// Upload download — attachments are access-controlled, the rest is public.
+	// Upload download — access is decided per category, in this order: channel
+	// attachment -> DM attachment -> report attachment (reporter or platform
+	// admin) -> feedback attachment (ticket owner or platform admin) ->
+	// positive public-asset match (users.avatar_url|wallpaper_url,
+	// servers.icon_url|banner_url) -> soundboard/badges path prefix -> 404 for
+	// anything matching none of the above. See services/media_access_service.go
+	// for the full decision order and why it fails closed rather than public.
 	//
 	// F-1 (audit 2026-05-29): the earlier A4 auth boundary had been reverted to
 	// a fully-public serve because a native `<img>` can't carry a Bearer header.

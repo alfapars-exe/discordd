@@ -145,6 +145,34 @@ func (r *sqliteChannelRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// GetFileURLsByChannelID returns every attachment file_url for messages in
+// the given channel. See the interface doc comment for why callers need
+// this before deleting the channel.
+func (r *sqliteChannelRepo) GetFileURLsByChannelID(ctx context.Context, channelID string) ([]string, error) {
+	query := `SELECT file_url FROM attachments WHERE message_id IN (
+		SELECT id FROM messages WHERE channel_id = ?)`
+
+	rows, err := r.db.QueryContext(ctx, query, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file urls by channel id: %w", err)
+	}
+	defer rows.Close()
+
+	var urls []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, fmt.Errorf("failed to scan file url: %w", err)
+		}
+		urls = append(urls, url)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate file url rows: %w", err)
+	}
+
+	return urls, nil
+}
+
 // UpdatePositions atomically updates positions for multiple channels.
 // If CategoryID is set, the channel's category is also updated (cross-category drag-and-drop).
 func (r *sqliteChannelRepo) UpdatePositions(ctx context.Context, items []models.PositionUpdate) error {
@@ -156,19 +184,19 @@ func (r *sqliteChannelRepo) UpdatePositions(ctx context.Context, items []models.
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op once Commit succeeds (ErrTxDone), expected on the happy path
 
 	stmtPos, err := tx.PrepareContext(ctx, `UPDATE channels SET position = ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare position statement: %w", err)
 	}
-	defer stmtPos.Close()
+	defer func() { _ = stmtPos.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	stmtPosCat, err := tx.PrepareContext(ctx, `UPDATE channels SET position = ?, category_id = ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare position+category statement: %w", err)
 	}
-	defer stmtPosCat.Close()
+	defer func() { _ = stmtPosCat.Close() }() // transaction-scoped; commit/rollback above already decided the outcome
 
 	for _, item := range items {
 		var result sql.Result

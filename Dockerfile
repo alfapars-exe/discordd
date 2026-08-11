@@ -82,7 +82,34 @@ FROM debian:bookworm-slim
 # to take a newer version; the official SHA2-256SUMS file from the same
 # release is fetched and verified, so the build fails loudly on any
 # tampering instead of silently shipping an unknown binary.
-ARG YT_DLP_VERSION=2024.11.04
+#
+# Bumped 2024.11.04 -> 2026.07.04 (security scan 2026-07-31, finding N-28:
+# the old pin was ~21 months stale). Verified before bumping, not just
+# assumed safe: downloaded both release binaries with the same checksum
+# check this file performs, diffed `--list-extractors` output filtered to
+# ^youtube -- 21 extractors on the old pin, 20 on the new one, the only
+# removal being youtube:search:date (search-by-date; music_bot_pipeline.go
+# only ever passes a direct URL, never invokes yt-dlp's search syntax, so
+# this extractor was unreachable either way). No new Youtube-prefixed
+# extractor name appeared, so the class-name pattern below still matches
+# only the intended family, and `generic` -- the extractor --use-extractors
+# is here specifically to exclude -- is still present and still excluded
+# by omission. See music_url_guard.go and music_bot_pipeline.go:342.
+ARG YT_DLP_VERSION=2026.07.04
+
+# huggingface_hub pinned for the same reason as yt-dlp above (security scan
+# 2026-07-31, finding N-16). The constraint used to be `>=0.20` with no upper
+# bound, so every rebuild silently took whatever PyPI served that day —
+# including the 0.x -> 1.x major bump. 1.26.0 is what an unpinned build
+# resolves to today, so this pin freezes current behaviour rather than
+# changing it. Override with --build-arg HF_HUB_VERSION=... to move.
+#
+# Note this pins the version, not the artifact: unlike the yt-dlp download
+# below there is no checksum check, because `pip --require-hashes` demands
+# hashes for the full transitive closure and that needs a lockfile this image
+# does not have. Version pinning removes the day-to-day drift; artifact
+# pinning would need a requirements.txt with hashes.
+ARG HF_HUB_VERSION=1.26.0
 
 # ffmpeg + tzdata + ca-certificates from apt are still pulled "latest
 # in distro" — Debian's bookworm-slim apt snapshot is reproducible
@@ -103,9 +130,30 @@ RUN set -eux; \
     # hf CLI for backup snapshots to the configured HF Storage Bucket.
     # `--break-system-packages` is required on Debian Bookworm (PEP 668);
     # the image is dedicated to this app so the venv ceremony would add
-    # disk for no isolation gain. hf_transfer is a Rust-based parallel
-    # uploader that the backup service auto-enables via env var.
-    pip3 install --no-cache-dir --break-system-packages 'huggingface_hub[hf_transfer]>=0.20'; \
+    # disk for no isolation gain.
+    #
+    # The `[hf_transfer]` extra this line used to carry was dropped: it has
+    # not existed since huggingface_hub 1.0, so pip was silently ignoring it
+    # and the package was never in the image. Verified against 1.26.0, whose
+    # extras are all/dev/fastai/gradio/hf-xet/mcp/oauth/quality/testing/
+    # torch/typing. Removing it changes nothing that was installed; it only
+    # stops this line claiming to install something it does not.
+    #
+    # services/backup_service_util.go now sets HF_XET_HIGH_PERFORMANCE=1
+    # (the dead HF_HUB_ENABLE_HF_TRANSFER=1 was swapped out — 1.x only
+    # answered it with a FutureWarning and never accelerated anything).
+    # This is an env-var swap, NOT a new dependency: hf_xet already ships
+    # as a transitive dependency of huggingface_hub 1.26.0 (verified
+    # importable in the built image on both amd64 and arm64), and
+    # HF_XET_HIGH_PERFORMANCE=1 is accepted without any warning. Backup
+    # uploads now take the accelerated hf_xet path.
+    #
+    # --only-binary :all: refuses source distributions, so no dependency can
+    # run a setup.py at install time (Sonar docker:S8541). Wheels only.
+    # Verified on linux/arm64 under qemu as well, because the multi-arch
+    # build only runs on release tags (build-desktop.yml) and never on a PR:
+    # all 15 packages resolve to wheels there too, hf imports and runs.
+    pip3 install --no-cache-dir --break-system-packages --only-binary :all: "huggingface_hub==${HF_HUB_VERSION}"; \
     BASE="https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}"; \
     curl -fsSL "${BASE}/yt-dlp" -o /usr/local/bin/yt-dlp; \
     curl -fsSL "${BASE}/SHA2-256SUMS" -o /tmp/yt-dlp-sums; \

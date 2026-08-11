@@ -7,8 +7,8 @@
   "unknownTarget": "bilinmeyen kullanıcı",
 
   "events": {
-    "server_mute": "{{actor}} {{target}}'ı sustu",
-    "server_unmute": "{{actor}} {{target}}'ın susturmasını kaldırdı",
+    "server_mute": "{{actor}} {{target}}'ın mikrofonunu kapattı",
+    "server_unmute": "{{actor}} {{target}}'ın mikrofonunu açtı",
     "server_deafen": "{{actor}} {{target}}'ı sağırlaştırdı",
     "server_undeafen": "{{actor}} {{target}}'ın sağırlaştırmasını kaldırdı",
     "voice_kick": "{{actor}} {{target}}'ı ses kanalından attı",
@@ -18,7 +18,7 @@
     "member_kick": "{{actor}} {{target}}'ı sunucudan attı",
     "member_ban": "{{actor}} {{target}}'ı yasakladı",
     "member_unban": "{{actor}} {{target}}'ın yasağını kaldırdı",
-    "member_timeout": "{{actor}} {{target}}'ı sustudu",
+    "member_timeout": "{{actor}} {{target}}'ı susturdu",
     "member_timeout_remove": "{{actor}} {{target}}'ın susturmasını kaldırdı",
     "member_nickname_change": "{{actor}} {{target}}'ın takma adını değiştirdi",
     "role_create": "{{actor}} \"{{roleName}}\" rolünü oluşturdu",

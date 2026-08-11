@@ -126,3 +126,100 @@ func TestRepairOrphanedServerData_DoesNotTouchHealthyData(t *testing.T) {
 		t.Errorf("real role was removed by repairOrphanedServerData (got %d, want 1)", n)
 	}
 }
+
+// TestBootstrapPlatformAdmin_PromotesWhenNoAdminExists proves the operator
+// workflow this bootstrap exists for still works: a fresh install with
+// PLATFORM_ADMIN_USERNAME set and the user already registered gets promoted
+// on the next boot (the H-07 fix must not break the intended path).
+func TestBootstrapPlatformAdmin_PromotesWhenNoAdminExists(t *testing.T) {
+	db, _ := newCensusDB(t)
+	if _, err := db.Conn.ExecContext(context.Background(),
+		`INSERT INTO users (id, username, password_hash) VALUES ('u-alice', 'alice', 'x')`); err != nil {
+		t.Fatalf("seed alice: %v", err)
+	}
+
+	bootstrapPlatformAdmin(db, "alice")
+
+	var isAdmin int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT is_platform_admin FROM users WHERE username = 'alice'`).Scan(&isAdmin); err != nil {
+		t.Fatalf("query alice: %v", err)
+	}
+	if isAdmin != 1 {
+		t.Errorf("alice.is_platform_admin = %d, want 1 (bootstrap must still promote when there is no existing admin)", isAdmin)
+	}
+}
+
+// TestBootstrapPlatformAdmin_DoesNotPromoteWhenAdminAlreadyExists is the H-07
+// regression test: once any admin exists on the platform, the configured
+// username must never be promoted again — this closes the "first person to
+// claim the configured username becomes admin" land-grab. If the
+// `AND NOT EXISTS (SELECT 1 FROM users WHERE is_platform_admin = 1)` guard is
+// removed from the UPDATE in bootstrapPlatformAdmin, this test goes red.
+func TestBootstrapPlatformAdmin_DoesNotPromoteWhenAdminAlreadyExists(t *testing.T) {
+	db, _ := newCensusDB(t)
+	ctx := context.Background()
+	if _, err := db.Conn.ExecContext(ctx,
+		`INSERT INTO users (id, username, password_hash, is_platform_admin) VALUES ('u-root', 'root-admin', 'x', 1)`); err != nil {
+		t.Fatalf("seed existing admin: %v", err)
+	}
+	if _, err := db.Conn.ExecContext(ctx,
+		`INSERT INTO users (id, username, password_hash) VALUES ('u-alice', 'alice', 'x')`); err != nil {
+		t.Fatalf("seed alice: %v", err)
+	}
+
+	bootstrapPlatformAdmin(db, "alice")
+
+	var isAdmin int
+	if err := db.Conn.QueryRowContext(ctx,
+		`SELECT is_platform_admin FROM users WHERE username = 'alice'`).Scan(&isAdmin); err != nil {
+		t.Fatalf("query alice: %v", err)
+	}
+	if isAdmin != 0 {
+		t.Errorf("alice.is_platform_admin = %d, want 0 (an admin already exists; bootstrap must not grant a second one via username land-grab)", isAdmin)
+	}
+}
+
+// TestBootstrapPlatformAdmin_UnknownUsernameIsNoop proves the configured
+// username not existing yet (e.g. before the operator has registered) is
+// handled without error or panic — the pre-existing "ignores users who don't
+// exist yet" contract survives the H-07 predicate changes.
+func TestBootstrapPlatformAdmin_UnknownUsernameIsNoop(t *testing.T) {
+	db, _ := newCensusDB(t)
+
+	bootstrapPlatformAdmin(db, "ghost-user-does-not-exist")
+
+	var count int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM users WHERE is_platform_admin = 1`).Scan(&count); err != nil {
+		t.Fatalf("count admins: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("admin count = %d, want 0 (unknown username must not create or promote any row)", count)
+	}
+}
+
+// TestBootstrapPlatformAdmin_EmptyUsernameIsNoop proves the `username == ""`
+// early return still short-circuits before the UPDATE runs at all. This is
+// checked by seeding a real user row with an empty username: because no
+// admin exists yet, the UPDATE predicate alone (is_platform_admin=0,
+// is_bot=0, NOT EXISTS admin) would otherwise match and wrongly promote that
+// row — only the early return keeps it untouched.
+func TestBootstrapPlatformAdmin_EmptyUsernameIsNoop(t *testing.T) {
+	db, _ := newCensusDB(t)
+	if _, err := db.Conn.ExecContext(context.Background(),
+		`INSERT INTO users (id, username, password_hash) VALUES ('u-empty', '', 'x')`); err != nil {
+		t.Fatalf("seed empty-username user: %v", err)
+	}
+
+	bootstrapPlatformAdmin(db, "")
+
+	var isAdmin int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT is_platform_admin FROM users WHERE id = 'u-empty'`).Scan(&isAdmin); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if isAdmin != 0 {
+		t.Errorf(`empty-username row was promoted (is_platform_admin=%d); the username=="" early return must run before any query`, isAdmin)
+	}
+}

@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
@@ -84,13 +83,13 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random filename: %w", err)
 	}
-	safeFilename := sanitizeFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
 	// SafeJoin verifies the destination stays inside uploadDir even
 	// though diskFilename is already built from a random prefix and a
 	// sanitized name — defense in depth against a future refactor that
-	// might inadvertently relax sanitizeFilename.
+	// might inadvertently relax pkg.SanitizeFilename.
 	destPath, err := pkg.SafeJoin(s.uploadDir, diskFilename)
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
@@ -120,7 +119,7 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	fileSize := header.Size
 	attachment := &models.Attachment{
 		MessageID: messageID,
-		Filename:  header.Filename,
+		Filename:  safeFilename,
 		FileURL:   "/api/uploads/" + diskFilename,
 		FileSize:  &fileSize,
 		MimeType:  &mimeForRecord,
@@ -132,22 +131,4 @@ func (s *uploadService) Upload(ctx context.Context, messageID string, file multi
 	}
 
 	return attachment, nil
-}
-
-// sanitizeFilename strips path components and dangerous characters to prevent path traversal.
-func sanitizeFilename(name string) string {
-	name = filepath.Base(name)
-
-	name = strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' || r == '\x00' {
-			return -1
-		}
-		return r
-	}, name)
-
-	if name == "" || name == "." || name == ".." {
-		name = "unnamed"
-	}
-
-	return name
 }

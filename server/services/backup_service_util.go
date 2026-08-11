@@ -69,17 +69,33 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
+
 	// 0o600: snapshot copies carry the full DB — owner-only.
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
-		return err
+
+	// Explicit close before any error path — a snapshot copy that silently
+	// drops its trailing buffered write would report success while leaving
+	// a truncated backup on disk.
+	_, copyErr := io.Copy(out, in)
+	syncErr := out.Sync()
+	closeErr := out.Close()
+	if copyErr != nil {
+		_ = os.Remove(dst)
+		return copyErr
 	}
-	return out.Sync()
+	if syncErr != nil {
+		_ = os.Remove(dst)
+		return syncErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(dst)
+		return fmt.Errorf("failed to finalize copy of %s: %w", dst, closeErr)
+	}
+	return nil
 }
 
 // hfEnv returns the env slice for the hf CLI subprocess with HF_TOKEN
@@ -91,9 +107,13 @@ func (b *BackupService) hfEnv() []string {
 	env := os.Environ()
 	env = append(env,
 		"HF_TOKEN="+b.cfg.HFToken,
-		// Enable hf_transfer (Rust-based parallel uploader) when present
-		// — falls back to pure-Python silently if hf_transfer isn't installed.
-		"HF_HUB_ENABLE_HF_TRANSFER=1",
+		// Enable the hf_xet high-performance transfer path. huggingface_hub
+		// 1.0 dropped the `[hf_transfer]` extra, so the old
+		// HF_HUB_ENABLE_HF_TRANSFER=1 var is a silent no-op today (pip just
+		// ignores the unknown extra and the CLI falls back to the slow path).
+		// hf_xet ships as a transitive dependency in the image (amd64+arm64)
+		// since hf_xet 1.26.0, so this flag actually takes effect.
+		"HF_XET_HIGH_PERFORMANCE=1",
 	)
 	return env
 }

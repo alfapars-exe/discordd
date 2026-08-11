@@ -21,10 +21,16 @@ type toggleRequest struct {
 	Emoji string `json:"emoji"`
 }
 
-// Toggle handles POST /api/messages/{messageId}/reactions
+// Toggle handles POST /api/servers/{serverId}/messages/{messageId}/reactions
 // Adds or removes a reaction (toggle). Emoji sent in body to avoid URL encoding issues.
 func (h *ReactionHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 	messageID := r.PathValue("messageId")
+
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
 
 	var body toggleRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -38,7 +44,7 @@ func (h *ReactionHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.reactionService.ToggleReaction(r.Context(), messageID, user.ID, body.Emoji); err != nil {
+	if err := h.reactionService.ToggleReaction(r.Context(), serverID, messageID, user.ID, body.Emoji); err != nil {
 		pkg.Error(w, err)
 		return
 	}

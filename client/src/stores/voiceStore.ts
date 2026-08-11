@@ -26,6 +26,9 @@ import { ensureMicPermission } from "../utils/devicePermissions";
 import { ensureFreshToken } from "../api/client";
 import { useServerStore } from "./serverStore";
 import { useAuthStore } from "./authStore";
+import { useToastStore } from "./toastStore";
+import { showApiError } from "../utils/apiError";
+import i18n from "../i18n";
 import { closeAudioContext } from "../utils/sounds";
 import { markVoiceActive, clearVoiceRecoveryMark } from "./shared/voiceRecovery";
 import {
@@ -287,6 +290,14 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
           finalHasAccessToken: !!localStorage.getItem("access_token"),
           finalHasRefreshToken: !!localStorage.getItem("refresh_token"),
         });
+        // A moderator timeout blocks voice joins server-side; surface that
+        // distinctly from a generic connection failure so the user knows
+        // *why* rather than assuming the server is down.
+        if (response.error && /timed out/i.test(response.error)) {
+          useToastStore.getState().addToast("error", i18n.t("voice:voiceJoinTimedOut"));
+        } else {
+          showApiError(response, { fallbackKey: "voice:voiceJoinFailed" });
+        }
         return null;
       }
 
@@ -321,6 +332,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       return response.data;
     } catch (err) {
       console.error("[voiceStore] Voice join error:", err);
+      useToastStore.getState().addToast("error", i18n.t("voice:voiceJoinFailed"));
       return null;
     }
   },

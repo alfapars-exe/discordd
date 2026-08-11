@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -33,17 +34,28 @@ type WebhookKeyLoader interface {
 	ListAllInstances(ctx context.Context) ([]models.LiveKitInstance, error)
 }
 
+// VoiceModerationEnforcer is the narrow slice of services.VoiceService the
+// webhook needs: given a participant_joined event's resolved (serverID,
+// channelID, userID), evict the participant if they're currently timed out
+// or banned on serverID. See services.voiceService.EnforceModerationOnJoin
+// (voice_lifecycle.go) for the implementation and the A-29a rationale.
+type VoiceModerationEnforcer interface {
+	EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string)
+}
+
 type LiveKitWebhookHandler struct {
 	keyLoader     WebhookKeyLoader
 	encryptionKey []byte // AES-256-GCM key for credential decryption
 	appLogger     services.AppLogService
+	voiceEnforcer VoiceModerationEnforcer
 }
 
-func NewLiveKitWebhookHandler(keyLoader WebhookKeyLoader, encryptionKey []byte, appLogger services.AppLogService) *LiveKitWebhookHandler {
+func NewLiveKitWebhookHandler(keyLoader WebhookKeyLoader, encryptionKey []byte, appLogger services.AppLogService, voiceEnforcer VoiceModerationEnforcer) *LiveKitWebhookHandler {
 	return &LiveKitWebhookHandler{
 		keyLoader:     keyLoader,
 		encryptionKey: encryptionKey,
 		appLogger:     appLogger,
+		voiceEnforcer: voiceEnforcer,
 	}
 }
 
@@ -70,7 +82,7 @@ func (h *LiveKitWebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	h.logEvent(event)
+	h.logEvent(r.Context(), event)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -105,9 +117,11 @@ func (h *LiveKitWebhookHandler) buildKeyProvider(ctx context.Context) (auth.KeyP
 	return auth.NewFileBasedKeyProviderFromMap(keys), nil
 }
 
-// logEvent writes relevant webhook events to app_logs.
-// Only participant events are logged — room/track/egress events are noisy and less useful.
-func (h *LiveKitWebhookHandler) logEvent(event *livekit.WebhookEvent) {
+// logEvent writes relevant webhook events to app_logs, and on
+// participant_joined also runs the A-29a moderation backstop (see
+// enforceModerationOnJoin). Only participant events are logged — room/track/
+// egress events are noisy and less useful.
+func (h *LiveKitWebhookHandler) logEvent(ctx context.Context, event *livekit.WebhookEvent) {
 	eventType := event.GetEvent()
 
 	switch eventType {
@@ -144,6 +158,7 @@ func (h *LiveKitWebhookHandler) logEvent(event *livekit.WebhookEvent) {
 	switch eventType {
 	case "participant_joined":
 		message = fmt.Sprintf("participant joined room %s", roomName)
+		h.enforceModerationOnJoin(ctx, roomName, identity)
 
 	case "participant_left":
 		reason := participant.GetDisconnectReason().String()
@@ -157,4 +172,35 @@ func (h *LiveKitWebhookHandler) logEvent(event *livekit.WebhookEvent) {
 
 	userID := identity
 	h.appLogger.Log(level, models.LogCategoryLiveKit, &userID, nil, message, metadata)
+}
+
+// enforceModerationOnJoin parses roomName (always "{serverID}:{channelID}",
+// see voice_token.go GenerateToken) and forwards the resolved IDs to
+// voiceEnforcer so an already timed-out or banned user gets evicted the
+// moment LiveKit reports them as connected — closing the residual
+// voiceTokenTTL (15min) reconnect window a ban/timeout applied just after
+// token issuance would otherwise leave open. A screen-share sub-participant
+// identity carries a "_ss" suffix (voice_token.go GenerateScreenShareToken)
+// that isn't part of the real user id the timeout/ban repos key on, so it
+// is stripped before the check and before the eviction call — voiceEnforcer
+// (services.voiceService.EnforceModerationOnJoin) evicts BOTH the stripped
+// userID's main voice connection and its "_ss" screen-share sub-participant
+// (if any), so a moderated user's screen share doesn't keep streaming to
+// the room after their voice connection is gone.
+//
+// Best-effort: an unrecognized room name (should never happen — every room
+// this server issues a token for uses this format) or a nil voiceEnforcer
+// (not wired) just skips silently. This whole path is a backstop, not the
+// primary authorization gate.
+func (h *LiveKitWebhookHandler) enforceModerationOnJoin(ctx context.Context, roomName, identity string) {
+	if h.voiceEnforcer == nil {
+		return
+	}
+	serverID, channelID, ok := strings.Cut(roomName, ":")
+	if !ok || serverID == "" || channelID == "" {
+		webhookLogger.Error("enforceModerationOnJoin: unparseable room name", "room", roomName)
+		return
+	}
+	userID := strings.TrimSuffix(identity, "_ss")
+	h.voiceEnforcer.EnforceModerationOnJoin(ctx, serverID, channelID, userID)
 }

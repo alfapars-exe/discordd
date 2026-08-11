@@ -60,13 +60,19 @@ function assertFiniteNumber(
   }
 }
 
-import { app, clipboard, dialog, ipcMain, nativeImage, screen, shell } from "electron";
+import { app, clipboard, dialog, ipcMain, nativeImage, net, screen, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { startCapture, stopCapture } from "./audio-capture";
 import { consumeLastCrash } from "./crash-reporter";
 import { appendDiagnostic } from "./diagnostic-log";
-import { clearCredentials, loadCredentials, saveCredentials } from "./credentials";
-import { registerPTT, unregisterPTT } from "./push-to-talk";
+import {
+  clearCredentials,
+  loadCredentials,
+  saveCredentials,
+  toPublicCredentials,
+} from "./credentials";
+import { loginWithSavedCredentials } from "./credential-login";
+import { registerMuteHotkey, registerPTT, unregisterMuteHotkey, unregisterPTT } from "./push-to-talk";
 import { getSerializedSources } from "./screen-picker";
 import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
@@ -322,7 +328,16 @@ export function registerIpcHandlers(): void {
       return saveCredentials(username, password);
     },
   );
-  ipcMain.handle("load-credentials", () => loadCredentials());
+  // Username only. The password stays in the main process (pentest
+  // 2026-07-26, H-09): handing it to the renderer meant any XSS in
+  // app://hichat could read a long-lived account password, which is the one
+  // secret the short-lived-token design is there to avoid holding.
+  ipcMain.handle("load-credentials", () => toPublicCredentials(loadCredentials()));
+  // Logs in using the stored password without ever exposing it. Returns
+  // exactly what a renderer-issued login returns: status + parsed body.
+  ipcMain.handle("login-with-saved-credentials", (_e, upstreamOrigin: unknown) =>
+    loginWithSavedCredentials(upstreamOrigin, (input, init) => net.fetch(input, init)),
+  );
   ipcMain.handle("clear-credentials", () => clearCredentials());
 
   // ─── Push-to-Talk shortcuts (uIOhook global keyboard) ────────────
@@ -334,4 +349,12 @@ export function registerIpcHandlers(): void {
     return registerPTT(keyCode);
   });
   ipcMain.handle("unregister-ptt-shortcut", () => unregisterPTT());
+
+  // ─── Global mute-toggle hotkey (uIOhook, shares the PTT hook) ────
+  ipcMain.handle("register-mute-hotkey-shortcut", (_e, keyCode: unknown) => {
+    // Same validation policy as register-ptt-shortcut above.
+    assertString(keyCode, "mute hotkey keyCode", MAX_PTT_KEYCODE_LEN);
+    return registerMuteHotkey(keyCode);
+  });
+  ipcMain.handle("unregister-mute-hotkey-shortcut", () => unregisterMuteHotkey());
 }

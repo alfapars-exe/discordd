@@ -52,7 +52,38 @@ type AuthService interface {
 	// ResetPassword validates token, updates password, and deletes token (one-time use).
 	ResetPassword(ctx context.Context, token, newPassword string) error
 
+	// LogoutAllDevices revokes every refresh session and disconnects any live
+	// WebSocket/voice connection for userID (see revokeAllSessions), then
+	// marks the user offline. Backs POST /api/auth/logout-all.
+	//
+	// Two credentials are NOT covered, both bounded and narrower-scoped than
+	// a full session: the scope=media cookie token (GenerateMediaToken, up
+	// to MediaTokenTTL) and, transitively, a LiveKit voice/screen-share JWT
+	// minted before the call (voiceTokenTTL, 15min) if the disconnect below
+	// doesn't reach the SFU in time — see revokeAllSessions.
+	LogoutAllDevices(ctx context.Context, userID string) error
+
 	SetAppLogger(logger AuthAppLogger)
+
+	// SetUserCacheInvalidator wires AuthMiddleware's user-cache invalidator
+	// so a credential-lifecycle event (password change/reset, logout-all)
+	// drops the cached user row immediately instead of waiting out
+	// userCacheTTL. Mirrors AdminUserService.SetUserCacheInvalidator; see
+	// its doc comment for why this is a post-construction setter rather
+	// than a constructor argument.
+	SetUserCacheInvalidator(inv UserCacheInvalidator)
+
+	// SetVoiceDisconnecter wires the voice/screen-share kick used by
+	// revokeAllSessions — the same VoiceDisconnecter dependency
+	// AdminUserService takes as a constructor argument for its own ban/
+	// delete paths (services/admin_user_service.go). VoiceService already
+	// exists by the time AuthService is constructed in init_services.go, so
+	// nothing forces this to be a setter; it is one anyway, mirroring
+	// SetUserCacheInvalidator immediately above, so every optional
+	// post-construction AuthService dependency is wired the same way and a
+	// caller/test can opt in to only the one(s) it needs. Nil-safe: absent
+	// wiring, revokeAllSessions simply skips the voice disconnect.
+	SetVoiceDisconnecter(vd VoiceDisconnecter)
 }
 
 type AuthTokens struct {
@@ -83,6 +114,19 @@ type authService struct {
 	accessExp   time.Duration
 	refreshExp  time.Duration
 
+	// userInvalidator drops the HTTP auth user-cache on a credential-
+	// lifecycle event. Optional (nil-safe): absent wiring, the change
+	// still lands within userCacheTTL — this just makes it immediate.
+	// Wired post-construction by main.go (see SetUserCacheInvalidator),
+	// same pattern as adminUserService.userInvalidator.
+	userInvalidator UserCacheInvalidator
+
+	// voiceKit disconnects a user's live voice/screen-share session as part
+	// of revokeAllSessions. Optional (nil-safe), wired post-construction —
+	// see SetVoiceDisconnecter. Same VoiceDisconnecter ISP interface
+	// adminUserService.voiceKit uses (member_service.go).
+	voiceKit VoiceDisconnecter
+
 	// usedRefreshTokens remembers refresh tokens we've already consumed
 	// (rotated out of the sessions table) for refreshExp + small buffer.
 	// If a second refresh request arrives with the same token, that's a
@@ -102,6 +146,108 @@ type usedRefreshEntry struct {
 
 func (s *authService) SetAppLogger(logger AuthAppLogger) {
 	s.appLogger = logger
+}
+
+// SetUserCacheInvalidator wires the auth middleware's user-cache
+// invalidator. Called post-construction in main.go because the middleware
+// is built after the service layer (it depends on AuthService itself) —
+// identical reasoning to adminUserService.SetUserCacheInvalidator.
+func (s *authService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
+	s.userInvalidator = inv
+}
+
+// invalidateUserCache is nil-safe — a no-op until SetUserCacheInvalidator
+// has been called.
+func (s *authService) invalidateUserCache(userID string) {
+	if s.userInvalidator != nil {
+		s.userInvalidator.InvalidateUser(userID)
+	}
+}
+
+// SetVoiceDisconnecter wires the voice/screen-share kick used by
+// revokeAllSessions. See the AuthService interface doc for why this is a
+// post-construction setter rather than a constructor argument.
+func (s *authService) SetVoiceDisconnecter(vd VoiceDisconnecter) {
+	s.voiceKit = vd
+}
+
+// disconnectVoice is nil-safe — a no-op until SetVoiceDisconnecter has been
+// called (main.go wires it once VoiceService exists).
+func (s *authService) disconnectVoice(userID string) {
+	if s.voiceKit != nil {
+		s.voiceKit.DisconnectUser(userID)
+	}
+}
+
+// revokeAllSessions is the shared "kill every credential we can reach for
+// userID" step behind ChangePassword, ResetPassword, and LogoutAllDevices.
+// It: deletes all refresh-session rows (kills the ability to mint new
+// access tokens), bumps token_version (kills every unscoped access token
+// and WS ticket already in the wild once their gate runs — see
+// wsTokenRevoked in ws/handler.go, which the ticket path now shares
+// unconditionally with the legacy ?token= path), re-sweeps refresh-session
+// rows a second time (see the refresh-race comment below), drops the cached user
+// row so the bump is enforced on the very next HTTP request rather than up
+// to userCacheTTL later, and disconnects any open WebSocket AND voice/
+// screen-share session.
+//
+// Two credentials deliberately survive this call, both already documented
+// at their own mint site and neither broad enough to be a full session:
+//   - The scope=media cookie token (GenerateMediaToken) — read-only access
+//     to /api/uploads/*, bounded by MediaTokenTTL (7 days). See the "Note on
+//     revocation" on GenerateMediaToken.
+//   - A LiveKit voice/screen-share JWT (services/voice_token.go) already
+//     handed to the client — bounded by voiceTokenTTL (15min). The
+//     DisconnectUser call below kicks the live SFU connection immediately
+//     (same as admin_user_service.go's ban/delete path), but the JWT itself
+//     stays cryptographically valid until its TTL if presented directly to
+//     LiveKit without going through this server again.
+//
+// The WS disconnect step is not redundant with the token_version bump: an
+// already-open WebSocket never re-validates its token after the initial
+// handshake. Without an explicit disconnect, a revoked session's live
+// socket would keep receiving events indefinitely.
+//
+// Every sub-step is best-effort: a failure is logged but does not stop the
+// caller, because by the time this runs the caller's primary intent
+// (changing/resetting the password, or an explicit "log out everywhere")
+// has already succeeded or is independent of these side effects.
+func (s *authService) revokeAllSessions(ctx context.Context, userID string) {
+	if err := s.sessionRepo.DeleteByUserID(ctx, userID); err != nil {
+		authLogger.Warn("revokeAllSessions: failed to delete sessions", "user_id", userID, "err", pkg.ErrText(err))
+	}
+	if err := s.userRepo.IncrementTokenVersion(ctx, userID); err != nil {
+		authLogger.Warn("revokeAllSessions: failed to bump token_version", "user_id", userID, "err", pkg.ErrText(err))
+	}
+	// Refresh-race mitigation (security review 2026-08-01, session-lifecycle
+	// finding 2): a refresh request can
+	// race the two calls above. If RefreshToken's GetByRefreshToken +
+	// DeleteByID (consuming an old, still-valid refresh token) lands AFTER
+	// the DeleteByUserID sweep above but its sessionRepo.Create (in
+	// generateTokens, minting the replacement session row) lands BEFORE the
+	// IncrementTokenVersion bump, the freshly-created session row survives
+	// this function and its access token still carries the OLD
+	// token_version — reordering the two calls above does not close this,
+	// the bad window exists no matter which runs first. Re-sweeping here,
+	// AFTER the bump, narrows the window instead of closing it: any session
+	// row created between the two DeleteByUserID calls is now caught, and
+	// any access token it minted was signed with a token_version that is
+	// already stale by the time it's used, so it still dies at the
+	// token_version gate. A session row created in the (much smaller) gap
+	// between THIS second delete and function return remains a real gap.
+	//
+	// The durable fix — stamping token_version onto the sessions row itself
+	// and rejecting stale stamps in RefreshToken — needs a schema migration
+	// and is intentionally left open here (see PROJECT_MEMORY escalation
+	// note for the 2026-08-01 session-lifecycle review).
+	if err := s.sessionRepo.DeleteByUserID(ctx, userID); err != nil {
+		authLogger.Warn("revokeAllSessions: failed to re-sweep sessions after token_version bump", "user_id", userID, "err", pkg.ErrText(err))
+	}
+	s.invalidateUserCache(userID)
+	if s.hub != nil {
+		s.hub.DisconnectUser(userID)
+	}
+	s.disconnectVoice(userID)
 }
 
 func (s *authService) logWarn(userID *string, message string, metadata map[string]string) {
@@ -426,6 +572,21 @@ func (s *authService) Logout(ctx context.Context, refreshToken string) error {
 	}
 
 	return s.sessionRepo.DeleteByID(ctx, session.ID)
+}
+
+// LogoutAllDevices revokes every session and outstanding access token for
+// userID (see revokeAllSessions) and marks the user offline, mirroring
+// Logout's status update. Backs POST /api/auth/logout-all — unlike Logout,
+// which invalidates a single refresh token, this ends every session the
+// user has anywhere, including the one that called it.
+func (s *authService) LogoutAllDevices(ctx context.Context, userID string) error {
+	s.revokeAllSessions(ctx, userID)
+
+	if err := s.userRepo.UpdateStatus(ctx, userID, models.UserStatusOffline); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
+
+	return nil
 }
 
 // ValidateAccessToken — JWT-only validation. NO DB read.

@@ -5,10 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"os"
-	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -50,36 +48,27 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		return nil, fmt.Errorf("%w: file too large (max %dMB)", pkg.ErrBadRequest, s.maxSize/(1024*1024))
 	}
 
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	mimeBase := strings.TrimSpace(strings.Split(contentType, ";")[0])
-
-	if !allowedFeedbackMimeTypes[mimeBase] {
-		return nil, fmt.Errorf("%w: only images are allowed (got: %s)", pkg.ErrBadRequest, mimeBase)
+	// sniffImageUpload (report_upload_service.go, same package) never trusts
+	// the client-declared Content-Type header; replay is the reader that
+	// MUST be written to disk instead of file, see its doc comment.
+	sniffed, replay, err := sniffImageUpload(file, allowedFeedbackMimeTypes, "only images are allowed")
+	if err != nil {
+		return nil, err
 	}
 
 	randomBytes := make([]byte, 8)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random filename: %w", err)
 	}
-	safeFilename := sanitizeFilename(header.Filename)
+	safeFilename := pkg.SanitizeFilename(header.Filename)
 	diskFilename := hex.EncodeToString(randomBytes) + "_" + safeFilename
 
 	destPath, err := pkg.SafeJoin(s.uploadDir, diskFilename)
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid upload destination", pkg.ErrBadRequest)
 	}
-	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
-	}
-	defer destFile.Close()
-
-	if _, err := io.Copy(destFile, file); err != nil {
-		_ = os.Remove(destPath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
+	if err := writeUploadFile(destPath, replay, "failed to create file", "failed to save file", "failed to finalize file"); err != nil {
+		return nil, err
 	}
 
 	fileSize := header.Size
@@ -87,14 +76,14 @@ func (s *feedbackUploadService) Upload(ctx context.Context, ticketID string, rep
 		ID:       uuid.New().String(),
 		TicketID: ticketID,
 		ReplyID:  replyID,
-		Filename: header.Filename,
+		Filename: safeFilename,
 		FileURL:  "/api/uploads/" + diskFilename,
 		FileSize: &fileSize,
-		MimeType: &mimeBase,
+		MimeType: &sniffed,
 	}
 
 	if err := s.feedbackRepo.CreateAttachment(ctx, att); err != nil {
-		os.Remove(destPath)
+		_ = os.Remove(destPath) // best-effort cleanup; we're already returning the DB error
 		return nil, fmt.Errorf("failed to create feedback attachment record: %w", err)
 	}
 

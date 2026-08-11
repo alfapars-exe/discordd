@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // MemberWithRoles is the API-facing view of a server member.
@@ -97,6 +99,9 @@ func (r *NicknameRequest) Validate() error {
 	if utf8.RuneCountInString(trimmed) > 32 {
 		return fmt.Errorf("nickname must be at most 32 characters")
 	}
+	if pkg.ContainsSteeringChars(trimmed) {
+		return fmt.Errorf("nickname contains disallowed control or formatting characters")
+	}
 	return nil
 }
 
@@ -135,11 +140,21 @@ func (r *UpdateProfileRequest) Validate() error {
 			}
 		}
 	}
-	if r.DisplayName != nil && utf8.RuneCountInString(*r.DisplayName) > 32 {
-		return fmt.Errorf("display name must be at most 32 characters")
+	if r.DisplayName != nil {
+		if utf8.RuneCountInString(*r.DisplayName) > 32 {
+			return fmt.Errorf("display name must be at most 32 characters")
+		}
+		if pkg.ContainsSteeringChars(*r.DisplayName) {
+			return fmt.Errorf("display name contains disallowed control or formatting characters")
+		}
 	}
-	if r.CustomStatus != nil && utf8.RuneCountInString(*r.CustomStatus) > 128 {
-		return fmt.Errorf("custom status must be at most 128 characters")
+	if r.CustomStatus != nil {
+		if utf8.RuneCountInString(*r.CustomStatus) > 128 {
+			return fmt.Errorf("custom status must be at most 128 characters")
+		}
+		if pkg.ContainsSteeringChars(*r.CustomStatus) {
+			return fmt.Errorf("custom status contains disallowed control or formatting characters")
+		}
 	}
 	if r.Language != nil && !allowedLanguages[*r.Language] {
 		return fmt.Errorf("unsupported language: %s", *r.Language)

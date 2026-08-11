@@ -86,6 +86,28 @@ type RateLimiters struct {
 	// public E2EE key material (GET /api/users/{id}/devices and
 	// .../prekey-bundles), which expose identity keys for arbitrary users.
 	DeviceEnum *ratelimit.LoginRateLimiter
+	// GroupSession added 2026-07-31 (pentest C-03 follow-up finding 3): caps
+	// per-user POST .../group-sessions uploads. Sized like Upload — a
+	// distribution is re-sealed per stale channel, not per message, so a
+	// legitimate multi-channel re-seal burst stays well under 20/min.
+	GroupSession *ratelimit.MessageRateLimiter
+	// Refresh added 2026-07-31 (resource scan, finding N-14): POST
+	// /api/auth/refresh has no auth middleware (it hands out the auth in the
+	// first place) and, before this, no rate limit at all — the only
+	// unauthenticated + unthrottled endpoint left after the scan narrowed
+	// the original finding. Sized like WSTicket/DeviceEnum: refresh is called
+	// on reconnect/near-expiry, not per keystroke, so 30/min/IP is generous
+	// for legitimate traffic while bounding brute-force refresh-token guessing.
+	Refresh *ratelimit.LoginRateLimiter
+	// MusicPlay added 2026-08-02 (resource scan): POST .../music/play had no
+	// rate limit at all -- each call can spawn a ~30s yt-dlp subprocess, so an
+	// unthrottled caller could pin CPU/bandwidth with a fast loop. 5/min with
+	// a 30s cooldown once exceeded (same shape as Upload/GroupSession above):
+	// queueing a track is a deliberate per-channel action, not a per-keystroke
+	// one, so this is generous for legitimate use while capping subprocess
+	// spawn rate. Only Play is limited -- skip/pause/resume/stop/state are
+	// cheap in-memory operations on the already-running bot.
+	MusicPlay *ratelimit.MessageRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -97,7 +119,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
 	)
 	voiceService := services.NewVoiceService(
-		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey,
+		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban,
 	)
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub)
 
@@ -116,13 +138,23 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
 		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry,
 	)
+	// "Log out from all devices" / password change must also kick any live
+	// voice or screen-share session, mirroring adminUserService's ban/delete
+	// path (security review 2026-08-01, finding 3). voiceService already
+	// exists at this point (constructed above), so no ordering hazard.
+	authService.SetVoiceDisconnecter(voiceService)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService)
+	// Enables best-effort on-disk cleanup of attachment files on delete
+	// (see services/upload_cleanup.go) without widening the constructor
+	// signature — mirrors the SetAuditLogger wiring pattern below.
+	channelService.SetUploadDir(cfg.Upload.Dir)
 	categoryService := services.NewCategoryService(repos.Category, hub)
 	messageService := services.NewMessageService(
 		repos.Message, repos.Attachment, repos.Channel, repos.User,
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
 		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService,
 	)
+	messageService.SetUploadDir(cfg.Upload.Dir)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService)
 	roleService := services.NewRoleService(repos.Role, repos.User, hub)
@@ -132,14 +164,20 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// near initRoutes for the full rationale.
 	serverService := services.NewServerService(
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
-		repos.Category, repos.User, inviteService, hub, encryptionKey,
+		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey,
 	)
+	serverService.SetUploadDir(cfg.Upload.Dir)
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
 		voiceService, encryptionKey, cfg.HetznerAPIToken,
 	)
 	pinService := services.NewPinService(repos.Pin, repos.Message, repos.Channel, hub, channelPermService)
-	searchService := services.NewSearchService(repos.Search)
+	// H-05: search results are scoped to the channels the caller may
+	// actually read, so it needs both the server's channel list
+	// (repos.Channel) and the per-channel permission resolver
+	// (channelPermService) — same combination ChannelService.GetAllGrouped
+	// already uses for sidebar visibility.
+	searchService := services.NewSearchService(repos.Search, repos.Channel, channelPermService)
 	readStateService := services.NewReadStateService(repos.ReadState, channelPermService)
 
 	// BlockService before DMService (DMService uses it as BlockChecker)
@@ -150,22 +188,24 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, hub)
 	dmService := services.NewDMService(repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService)
+	dmService.SetUploadDir(cfg.Upload.Dir)
 	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
-	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService)
+	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
 	channelMuteService := services.NewChannelMuteService(repos.ChannelMute)
 	reportService := services.NewReportService(repos.Report, repos.User)
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
-	deviceService := services.NewDeviceService(repos.Device, hub)
+	deviceService := services.NewDeviceService(repos.Device, hub, repos.Server)
 	// E2EE key-backup integrity MAC key (P0-BD-01): an HKDF subkey of the
 	// server master key, so a DB-only tamper of a stored backup is detectable.
 	backupHMACKey := crypto.DeriveBackupHMACKey(encryptionKey)
-	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, hub, repos.Channel, channelPermService, backupHMACKey)
+	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, repos.Device, repos.Server, hub, repos.Channel, channelPermService, backupHMACKey)
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
 	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, repos.LiveKit, hub, emailSender)
+	adminServerService.SetUploadDir(cfg.Upload.Dir)
 
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
@@ -175,6 +215,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	metricsHistoryService := services.NewMetricsHistoryService(repos.MetricsHistory, repos.LiveKit)
 	feedbackService := services.NewFeedbackService(repos.Feedback)
+	feedbackService.SetUploadDir(cfg.Upload.Dir)
 	feedbackUploadService := services.NewFeedbackUploadService(repos.Feedback, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	soundboardService := services.NewSoundboardService(
 		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
@@ -225,6 +266,20 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// database impractical from a single source.
 	deviceEnumLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
 
+	// GroupSession (pentest C-03 follow-up finding 3): 20 per minute per
+	// user, 30s cooldown once exceeded -- same shape as uploadLimiter above.
+	groupSessionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
+
+	// Refresh (security scan 2026-07-31, finding N-14): 30 per minute per IP,
+	// same shape and rationale as wsTicketLimiter above -- refresh is called
+	// on reconnect/near-expiry, not per keystroke.
+	refreshLimiter := ratelimit.NewLoginRateLimiter(30, 1*time.Minute)
+
+	// MusicPlay (resource scan 2026-08-02): 5 per minute per user, 30s
+	// cooldown once exceeded -- see the RateLimiters.MusicPlay doc comment
+	// above for the subprocess-cost rationale.
+	musicPlayLimiter := ratelimit.NewMessageRateLimiter(5, 1*time.Minute, 30*time.Second)
+
 	svcs := &Services{
 		Auth:              authService,
 		Server:            serverService,
@@ -272,16 +327,19 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}
 
 	limiters := &RateLimiters{
-		Login:      loginLimiter,
-		Message:    messageLimiter,
-		DMMessage:  dmMessageLimiter,
-		Register:   registerLimiter,
-		ForgotPwd:  forgotPwdLimiter,
-		ResetPwd:   resetPwdLimiter,
-		Feedback:   feedbackLimiter,
-		WSTicket:   wsTicketLimiter,
-		DeviceEnum: deviceEnumLimiter,
-		Upload:     uploadLimiter,
+		Login:        loginLimiter,
+		Message:      messageLimiter,
+		DMMessage:    dmMessageLimiter,
+		Register:     registerLimiter,
+		ForgotPwd:    forgotPwdLimiter,
+		ResetPwd:     resetPwdLimiter,
+		Feedback:     feedbackLimiter,
+		WSTicket:     wsTicketLimiter,
+		DeviceEnum:   deviceEnumLimiter,
+		Upload:       uploadLimiter,
+		GroupSession: groupSessionLimiter,
+		Refresh:      refreshLimiter,
+		MusicPlay:    musicPlayLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

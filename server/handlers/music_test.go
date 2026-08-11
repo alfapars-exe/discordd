@@ -3,11 +3,17 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -20,11 +26,15 @@ import (
 type stubMusicService struct {
 	enqueueCalled bool
 	lastURL       string
+	enqueueErr    error
 }
 
 func (s *stubMusicService) Enqueue(_ context.Context, _, _, url string) ([]models.MusicTrack, error) {
 	s.enqueueCalled = true
 	s.lastURL = url
+	if s.enqueueErr != nil {
+		return nil, s.enqueueErr
+	}
 	return []models.MusicTrack{}, nil
 }
 func (s *stubMusicService) Skip(string) error                            { return nil }
@@ -90,7 +100,7 @@ func TestPlay_RejectsNonHTTPScheme(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			music := &stubMusicService{}
-			h := NewMusicHandler(music, stubPermResolver{})
+			h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 			rec := httptest.NewRecorder()
 			req := newPlayRequest(t, `{"url":`+jsonString(tc.url)+`}`)
@@ -118,7 +128,7 @@ func TestPlay_AcceptsHTTPSchemes(t *testing.T) {
 	for _, url := range cases {
 		t.Run(url, func(t *testing.T) {
 			music := &stubMusicService{}
-			h := NewMusicHandler(music, stubPermResolver{})
+			h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 			rec := httptest.NewRecorder()
 			req := newPlayRequest(t, `{"url":`+jsonString(url)+`}`)
@@ -141,7 +151,7 @@ func TestPlay_AcceptsHTTPSchemes(t *testing.T) {
 // behavior, just covered by a test now.
 func TestPlay_RejectsEmptyURL(t *testing.T) {
 	music := &stubMusicService{}
-	h := NewMusicHandler(music, stubPermResolver{})
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
 
 	rec := httptest.NewRecorder()
 	req := newPlayRequest(t, `{"url":""}`)
@@ -152,6 +162,94 @@ func TestPlay_RejectsEmptyURL(t *testing.T) {
 	}
 	if music.enqueueCalled {
 		t.Fatal("Enqueue must NOT be called for empty URL")
+	}
+}
+
+// TestPlay_BadRequestFromServiceMaps400 — when Enqueue's error chain wraps
+// pkg.ErrBadRequest (the shape a music_url_guard.go rejection takes, e.g.
+// "yt-dlp extraction failed: bad request: host not allowed"), the handler
+// must map it to 400, not the generic 500 the old unconditional
+// ErrorWithMessage branch produced.
+func TestPlay_BadRequestFromServiceMaps400(t *testing.T) {
+	music := &stubMusicService{enqueueErr: fmt.Errorf("yt-dlp extraction failed: %w", pkg.ErrBadRequest)}
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
+
+	rec := httptest.NewRecorder()
+	req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
+	h.Play(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestPlay_InternalErrorDoesNotLeakDSN — a non-sentinel Enqueue error (e.g.
+// a repository failure wrapping a raw libSQL/Turso driver error) must never
+// reach the client's response body at all. pkg.ErrText is a LOG renderer,
+// not an HTTP sanitizer — it only strips a fixed list of known credential
+// query-params (see pkg/redact.go) and would still let a Turso hostname or
+// other internal detail through. The handler must instead route 5xx errors
+// through pkg.ErrorCtx, which replaces the body with a generic message and
+// logs the real err server-side (CWE-209 policy, pkg/response.go). This test
+// checks both the obvious secret (authToken value) and a non-credential
+// internal detail (the Turso hostname) that ErrText alone would not redact.
+func TestPlay_InternalErrorDoesNotLeakDSN(t *testing.T) {
+	music := &stubMusicService{enqueueErr: errors.New("dial libsql://db.turso.io?authToken=SUPERSECRET: refused")}
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
+
+	rec := httptest.NewRecorder()
+	req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
+	h.Play(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "SUPERSECRET") {
+		t.Fatalf("response body leaked DSN credential: %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "db.turso.io") {
+		t.Fatalf("response body leaked internal hostname (ErrText alone would not have caught this): %s", rec.Body.String())
+	}
+}
+
+// TestPlay_RateLimit — POST .../music/play must be rate-limited per user
+// (resource scan 2026-08-02): each call can spawn a ~30s yt-dlp subprocess,
+// so an unthrottled caller could pin CPU/bandwidth with a fast loop.
+// Requests within budget succeed; once the budget is exhausted, further
+// requests get 429 with a Retry-After header and the music service is never
+// reached for the rejected request.
+func TestPlay_RateLimit(t *testing.T) {
+	music := &stubMusicService{}
+	limiter := ratelimit.NewMessageRateLimiter(2, time.Minute, 30*time.Second)
+	h := NewMusicHandler(music, stubPermResolver{}, limiter)
+
+	// First two requests are within the 2/min budget.
+	for i := 0; i < 2; i++ {
+		rec := httptest.NewRecorder()
+		req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
+		h.Play(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d: expected 200, got %d (body: %s)", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	if !music.enqueueCalled {
+		t.Fatal("Enqueue should have been called for in-budget requests")
+	}
+
+	// Third request exceeds the budget.
+	music.enqueueCalled = false
+	rec := httptest.NewRecorder()
+	req := newPlayRequest(t, `{"url":"https://www.youtube.com/watch?v=x"}`)
+	h.Play(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header on 429 response")
+	}
+	if music.enqueueCalled {
+		t.Fatal("Enqueue must NOT be called once the rate limit is exceeded")
 	}
 }
 

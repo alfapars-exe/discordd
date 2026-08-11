@@ -6,9 +6,12 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/google/uuid"
 )
+
+var feedbackLogger = logx.Component("service.feedback")
 
 type FeedbackService interface {
 	CreateTicket(ctx context.Context, userID string, req *models.CreateFeedbackRequest) (*models.FeedbackTicket, error)
@@ -18,14 +21,24 @@ type FeedbackService interface {
 	AddReply(ctx context.Context, ticketID, userID string, isAdmin bool, req *models.CreateFeedbackReplyRequest) (*models.FeedbackReply, error)
 	UpdateStatus(ctx context.Context, ticketID string, req *models.UpdateFeedbackStatusRequest) error
 	DeleteTicket(ctx context.Context, id, userID string) error
+	SetUploadDir(dir string)
 }
 
 type feedbackService struct {
 	feedbackRepo repository.FeedbackRepository
+	// uploadDir enables best-effort disk cleanup on ticket delete (see
+	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
+	// wired in init_services.go so the constructor signature below stays
+	// unchanged.
+	uploadDir string
 }
 
 func NewFeedbackService(feedbackRepo repository.FeedbackRepository) FeedbackService {
 	return &feedbackService{feedbackRepo: feedbackRepo}
+}
+
+func (s *feedbackService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 func (s *feedbackService) CreateTicket(ctx context.Context, userID string, req *models.CreateFeedbackRequest) (*models.FeedbackTicket, error) {
@@ -143,7 +156,31 @@ func (s *feedbackService) DeleteTicket(ctx context.Context, id, userID string) e
 	if ticket.UserID != userID {
 		return fmt.Errorf("%w: you can only delete your own feedback", pkg.ErrForbidden)
 	}
-	return s.feedbackRepo.DeleteTicket(ctx, id)
+
+	// Pre-fetch attachment file_urls (ticket-level and reply-level, both
+	// returned by this query) for the post-delete disk cleanup below. A
+	// fetch failure here is logged and non-fatal — the delete still
+	// proceeds, it just can't clean up files it couldn't enumerate.
+	attachments, attErr := s.feedbackRepo.GetAttachmentsByTicketID(ctx, id)
+	if attErr != nil {
+		feedbackLogger.Error("failed to fetch attachments before ticket delete", "ticket_id", id, "err", pkg.ErrText(attErr))
+	}
+
+	if err := s.feedbackRepo.DeleteTicket(ctx, id); err != nil {
+		return err
+	}
+
+	// Only remove files once the DB delete has actually committed — see
+	// upload_cleanup.go for why the ordering matters.
+	if len(attachments) > 0 {
+		fileURLs := make([]string, len(attachments))
+		for i, a := range attachments {
+			fileURLs[i] = a.FileURL
+		}
+		removeUploadFilesByURL(s.uploadDir, fileURLs)
+	}
+
+	return nil
 }
 
 func (s *feedbackService) UpdateStatus(ctx context.Context, ticketID string, req *models.UpdateFeedbackStatusRequest) error {

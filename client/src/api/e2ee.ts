@@ -9,6 +9,7 @@ import type {
   PreKeyBundleResponse,
   KeyBackupResponse,
   ChannelGroupSessionResponse,
+  SenderKeyRecipient,
 } from "../types";
 
 // ──────────────────────────────────
@@ -126,18 +127,35 @@ export function deleteKeyBackup() {
 // Group Sessions (Server-scoped)
 // ──────────────────────────────────
 
-/** Save Sender Key group session. POST /api/servers/{serverId}/channels/{channelId}/group-sessions */
+/**
+ * Upload one Sender Key distribution, sealed once per recipient device.
+ * POST /api/servers/{serverId}/channels/{channelId}/group-sessions
+ *
+ * The whole envelope set goes in a SINGLE request so the server either has a
+ * complete distribution or none of it — a half-delivered distribution would
+ * leave some members unable to read the channel.
+ *
+ * `version` is mandatory and hard-cut: the server rejects anything but 2. The
+ * pre-C-03 body ({ session_id, session_data }) shipped the group chain key as
+ * readable JSON and is no longer produced by this client.
+ */
 export function uploadGroupSession(
   serverId: string,
   channelId: string,
   deviceId: string,
   req: {
     session_id: string;
-    session_data: string;
+    version: number;
+    envelopes: Array<{
+      recipient_user_id: string;
+      recipient_device_id: string;
+      message_type: number;
+      ciphertext: string;
+    }>;
   }
 ) {
   return apiClient<null>(
-    `/servers/${serverId}/channels/${channelId}/group-sessions?device_id=${deviceId}`,
+    `/servers/${serverId}/channels/${channelId}/group-sessions?device_id=${encodeURIComponent(deviceId)}`,
     {
       method: "POST",
       body: req,
@@ -145,9 +163,41 @@ export function uploadGroupSession(
   );
 }
 
-/** Fetch all active group sessions for a channel. GET /api/servers/{serverId}/channels/{channelId}/group-sessions */
-export function fetchGroupSessions(serverId: string, channelId: string) {
+/**
+ * Fetch the sealed distributions addressed to THIS device.
+ * GET /api/servers/{serverId}/channels/{channelId}/group-sessions?device_id=...
+ *
+ * Filtering is server-side: every returned row is already ours, so the caller
+ * matches on (sender_user_id, sender_device_id, session_id) alone.
+ */
+export function fetchGroupSessions(
+  serverId: string,
+  channelId: string,
+  deviceId: string
+) {
   return apiClient<ChannelGroupSessionResponse[]>(
-    `/servers/${serverId}/channels/${channelId}/group-sessions`
+    `/servers/${serverId}/channels/${channelId}/group-sessions?device_id=${encodeURIComponent(deviceId)}`
+  );
+}
+
+/**
+ * Fetch every device that must receive this channel's Sender Key distribution,
+ * with its prekey bundle. GET .../channels/{channelId}/sender-key-recipients
+ *
+ * Returns the caller's OTHER devices too (so all of a user's devices can read
+ * what one of them sent) but not the calling device itself.
+ */
+export function fetchSenderKeyRecipients(
+  serverId: string,
+  channelId: string,
+  deviceId: string
+) {
+  // device_id is REQUIRED — the server 400s without it. Over stateless HTTP it
+  // is the only way to identify which of the caller's devices is asking, and
+  // the roster excludes exactly that device (the caller's OTHER devices are
+  // still included: they each need their own envelope). Same convention as the
+  // sibling GET .../group-sessions?device_id=.
+  return apiClient<SenderKeyRecipient[]>(
+    `/servers/${serverId}/channels/${channelId}/sender-key-recipients?device_id=${encodeURIComponent(deviceId)}`
   );
 }

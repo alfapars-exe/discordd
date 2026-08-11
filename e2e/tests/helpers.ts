@@ -82,13 +82,24 @@ export function writePngFixture(filename = "pixel.png"): string {
 }
 
 /**
- * Writes a file whose extension is NOT in fileValidation.ts's allow-list
- * (jpg/jpeg/png/gif/webp/mp4/webm/mp3/ogg/pdf/txt). Chromium reports an empty
- * File.type for .bin, so effectiveMime() falls through to the extension map,
- * misses, and the file lands in the `rejected` partition.
+ * Writes a file larger than MAX_FILE_SIZE (client/src/utils/constants.ts,
+ * 25 MB), so validateFiles() puts it in the `rejected` partition with reason
+ * "too_large".
+ *
+ * Size is the ONLY rejection reason. The type allow-list this helper used to
+ * trip was deliberately removed in cdb6601f ("accept all file types; harden
+ * serving against stored XSS") — the boundary moved to serve time, where
+ * /api/uploads re-sniffs the bytes and forces anything non-displayable to
+ * octet-stream + attachment + CSP sandbox. A `.bin` file is now a perfectly
+ * valid upload, so an over-size file is the only way left to exercise the
+ * rejection path.
+ *
+ * Buffer.alloc gives zeroed pages; the content is irrelevant because the
+ * partition happens on File.size before a byte is read.
  */
-export function writeDisallowedFixture(filename = "payload.bin"): string {
-  return writeFixture(filename, Buffer.from("not an allowed attachment type"));
+export function writeOversizeFixture(filename = "too-big.bin"): string {
+  const MAX_FILE_SIZE = 25 * 1024 * 1024;
+  return writeFixture(filename, Buffer.alloc(MAX_FILE_SIZE + 1024));
 }
 
 /**

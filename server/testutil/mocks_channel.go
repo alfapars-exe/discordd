@@ -9,14 +9,15 @@ import (
 // ─── ChannelRepository mock (ChannelGetter) ───
 
 type MockChannelRepo struct {
-	GetByIDFn         func(ctx context.Context, id string) (*models.Channel, error)
-	GetAllByServerFn  func(ctx context.Context, serverID string) ([]models.Channel, error)
-	GetByCategoryIDFn func(ctx context.Context, categoryID string) ([]models.Channel, error)
-	CreateFn          func(ctx context.Context, channel *models.Channel) error
-	UpdateFn          func(ctx context.Context, channel *models.Channel) error
-	DeleteFn          func(ctx context.Context, id string) error
-	GetMaxPositionFn  func(ctx context.Context, categoryID string) (int, error)
-	UpdatePositionsFn func(ctx context.Context, items []models.PositionUpdate) error
+	GetByIDFn                func(ctx context.Context, id string) (*models.Channel, error)
+	GetAllByServerFn         func(ctx context.Context, serverID string) ([]models.Channel, error)
+	GetByCategoryIDFn        func(ctx context.Context, categoryID string) ([]models.Channel, error)
+	CreateFn                 func(ctx context.Context, channel *models.Channel) error
+	UpdateFn                 func(ctx context.Context, channel *models.Channel) error
+	DeleteFn                 func(ctx context.Context, id string) error
+	GetMaxPositionFn         func(ctx context.Context, categoryID string) (int, error)
+	UpdatePositionsFn        func(ctx context.Context, items []models.PositionUpdate) error
+	GetFileURLsByChannelIDFn func(ctx context.Context, channelID string) ([]string, error)
 }
 
 func (m *MockChannelRepo) GetByID(ctx context.Context, id string) (*models.Channel, error) {
@@ -66,4 +67,10 @@ func (m *MockChannelRepo) UpdatePositions(ctx context.Context, items []models.Po
 		return m.UpdatePositionsFn(ctx, items)
 	}
 	return nil
+}
+func (m *MockChannelRepo) GetFileURLsByChannelID(ctx context.Context, channelID string) ([]string, error) {
+	if m.GetFileURLsByChannelIDFn != nil {
+		return m.GetFileURLsByChannelIDFn(ctx, channelID)
+	}
+	return nil, nil
 }

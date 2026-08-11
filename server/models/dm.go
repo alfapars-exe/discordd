@@ -27,15 +27,15 @@ const (
 
 // DMChannelWithUser includes the other participant's info for sidebar rendering.
 type DMChannelWithUser struct {
-	ID            string     `json:"id"`
-	OtherUser     *User      `json:"other_user"`
-	E2EEEnabled   bool       `json:"e2ee_enabled"`
-	Status        string     `json:"status"`
-	InitiatedBy   *string    `json:"initiated_by"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LastMessageAt *time.Time `json:"last_message_at"`
-	IsPinned      bool       `json:"is_pinned"`
-	IsMuted       bool       `json:"is_muted"`
+	ID            string      `json:"id"`
+	OtherUser     *PublicUser `json:"other_user"`
+	E2EEEnabled   bool        `json:"e2ee_enabled"`
+	Status        string      `json:"status"`
+	InitiatedBy   *string     `json:"initiated_by"`
+	CreatedAt     time.Time   `json:"created_at"`
+	LastMessageAt *time.Time  `json:"last_message_at"`
+	IsPinned      bool        `json:"is_pinned"`
+	IsMuted       bool        `json:"is_muted"`
 }
 
 type DMMessage struct {
@@ -55,7 +55,7 @@ type DMMessage struct {
 	E2EEMetadata      *string `json:"e2ee_metadata,omitempty"`
 
 	// Populated via JOINs
-	Author            *User             `json:"author,omitempty"`
+	Author            *PublicUser       `json:"author,omitempty"`
 	Attachments       []DMAttachment    `json:"attachments"`
 	Reactions         []ReactionGroup   `json:"reactions"`
 	ReferencedMessage *MessageReference `json:"referenced_message,omitempty"`

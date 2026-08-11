@@ -87,6 +87,12 @@ func (h *SoundboardHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update modifies a sound's name or emoji.
 func (h *SoundboardHandler) Update(w http.ResponseWriter, r *http.Request) {
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+
 	id := r.PathValue("soundId")
 	if id == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "sound id required")
@@ -99,7 +105,7 @@ func (h *SoundboardHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sound, err := h.service.Update(r.Context(), id, &req)
+	sound, err := h.service.Update(r.Context(), serverID, id, &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
@@ -109,13 +115,19 @@ func (h *SoundboardHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete removes a sound.
 func (h *SoundboardHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
+	if !ok || serverID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "server context required")
+		return
+	}
+
 	id := r.PathValue("soundId")
 	if id == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "sound id required")
 		return
 	}
 
-	if err := h.service.Delete(r.Context(), id); err != nil {
+	if err := h.service.Delete(r.Context(), serverID, id); err != nil {
 		pkg.Error(w, err)
 		return
 	}

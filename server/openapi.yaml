@@ -241,9 +241,29 @@ paths:
         optional; a missing token still returns 200), invalidates it
         server-side if present, and always clears both the hichat_refresh
         and hichat_media cookies. Response message is literally
-        "logged out".
+        "logged out". Only the ONE session identified by the presented
+        refresh token is revoked — see POST /api/auth/logout-all to end
+        every session at once.
       tags: [Auth]
       requestBody: { $ref: '#/components/requestBodies/RefreshTokenRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MessageOnlyOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/auth/logout-all:
+    post:
+      operationId: authLogoutAll
+      summary: Invalidate every session the caller has, on every device.
+      description: >-
+        Deletes every refresh-session row for the caller, bumps
+        token_version (invalidating every outstanding access token, not
+        just the one on this request), and disconnects any open
+        WebSocket. Also clears the caller's own hichat_refresh and
+        hichat_media cookies, since the session behind this very request
+        is revoked too — there is no way for the server to distinguish
+        "this" session from any other, so the caller ends up logged out
+        here as well and must sign in again. Response message is
+        literally "logged out from all devices".
+      tags: [Auth]
       responses:
         '200': { $ref: '#/components/responses/MessageOnlyOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
@@ -270,8 +290,12 @@ paths:
       summary: Complete a password reset using the emailed token.
       description: >-
         IP rate limited. Validates the token (SHA-256 hash lookup), updates
-        the password, and deletes the token (one-time use). Response
-        message is literally "password has been reset successfully".
+        the password, deletes the token (one-time use), and invalidates
+        every existing session for the account — deletes all
+        refresh-session rows, bumps token_version, and disconnects any
+        open WebSocket. Every client (including a possible attacker's)
+        must sign in again with the new password. Response message is
+        literally "password has been reset successfully".
       tags: [Auth]
       security: []
       requestBody: { $ref: '#/components/requestBodies/ResetPasswordRequestBody' }
@@ -290,6 +314,14 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/WsTicketOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403':
+          description: >-
+            Caller is a bot account. Bots authenticate with `hb_` tokens and are accepted by the
+            shared auth middleware, but they must not hold a human socket — they use the read-only
+            `GET /api/bot/gateway` instead.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '404':
           description: WS ticket service not enabled on this server (falls back to the legacy ?token= WS path).
           content:
@@ -328,10 +360,15 @@ paths:
       summary: Change the caller's password.
       description: >-
         Requires current_password even though the caller is already
-        authenticated — defense-in-depth against a stolen/XSS'd JWT.
-        Bumps token_version on success, invalidating every other
-        outstanding access token for this user. Response message is
-        literally "password changed".
+        authenticated — defense-in-depth against a stolen/XSS'd JWT. On
+        success, invalidates every session for this user: deletes all
+        refresh-session rows, bumps token_version (so every outstanding
+        access token dies, not just future ones), and disconnects any
+        open WebSocket. This includes the CALLER's own session — the
+        server has no way to identify "this" session as distinct from any
+        other (the refresh cookie is scoped Path=/api/auth and isn't sent
+        on this endpoint) — so the caller must sign in again too.
+        Response message is literally "password changed".
       tags: [Users]
       requestBody: { $ref: '#/components/requestBodies/ChangePasswordRequestBody' }
       responses:
@@ -474,12 +511,19 @@ paths:
       description: >-
         Registered as the catch-all prefix `GET /api/uploads/` (Go 1.22 ServeMux
         prefix match), not a literal single-segment route. Access control is
-        per-category and enforced inside the handler, not by routing middleware:
-        channel/DM attachments require either a Bearer session token or the
-        `hichat_media` cookie and are checked against the caller's channel/DM
-        access; avatars, server icons, badges, and soundboard clips are served
-        with no auth check at all so they keep rendering in unauthenticated
-        `<img>` contexts. Path traversal is rejected (path.Clean + SafeJoin).
+        per-category and enforced inside the handler, not by routing middleware,
+        in this order: channel attachment (channel-read permission) -> DM
+        attachment (participant only) -> report attachment (reporter or
+        platform admin) -> feedback attachment (ticket owner or platform admin)
+        -> positive public-asset match (users.avatar_url|wallpaper_url,
+        servers.icon_url|banner_url) -> soundboard/badges path prefix -> 404
+        for anything matching none of the above (fail closed, not served
+        public). Channel/DM/report/feedback attachments require either a
+        Bearer session token or the `hichat_media` cookie; the public-asset
+        and path-prefix categories are served with no auth check so they keep
+        rendering in unauthenticated `<img>` contexts. Path traversal is
+        rejected (path.Clean + SafeJoin), and the ACL lookup independently
+        rejects non-canonical paths (see services/media_access_service.go).
       tags: [Uploads]
       security:
         - {}
@@ -490,7 +534,11 @@ paths:
           in: path
           required: true
           schema: { type: string }
-          description: Category-prefixed relative file path, e.g. `attachments/<id>/<file>`, `avatars/<file>`.
+          description: >-
+            Category-prefixed relative file path as stored at upload time,
+            e.g. `<16-hex>_<name>.png` (channel/DM/report/feedback
+            attachment or avatar/icon), `soundboard/<16-hex>_<name>.mp3`,
+            `badges/<16-hex>_<name>.png`.
       responses:
         '200':
           description: File bytes, Content-Type inferred from extension.
@@ -2619,11 +2667,19 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
 
-  # ── E2EE Group Sessions ──
+  # ── E2EE Group Sessions (pentest C-03: per-recipient sealed envelopes) ──
   /api/servers/{serverId}/channels/{channelId}/group-sessions:
     post:
       operationId: e2eeCreateGroupSession
-      summary: Distribute/rotate a sender-key group session for an E2EE channel.
+      summary: >-
+        Upload a v2 Sender Key distribution: N opaque envelopes, one per
+        recipient device, each individually sealed (Signal PreKey/Whisper
+        message). Body is models.CreateSenderKeyDistributionRequest
+        { session_id, version, envelopes: [{ recipient_user_id,
+        recipient_device_id, message_type, ciphertext }] }. There is no
+        compatibility path for the pre-v2 single shared-blob format: version
+        != 2, an empty envelopes list, or a body carrying the legacy
+        "session_data" field are all rejected with 400.
       tags: [E2EE-GroupSessions]
       parameters:
         - $ref: '#/components/parameters/ServerId'
@@ -2642,13 +2698,53 @@ paths:
         '404': { $ref: '#/components/responses/NotFoundError' }
     get:
       operationId: e2eeGetGroupSessions
-      summary: Fetch group sessions for an E2EE channel.
+      summary: >-
+        Fetch Sender Key envelopes sealed for exactly the caller's own
+        (user_id, device_id) — never another recipient's ciphertext.
+        Response items are models.SenderKeyEnvelopeResponse { sender_user_id,
+        sender_device_id, session_id, version, message_type, ciphertext,
+        created_at }.
       tags: [E2EE-GroupSessions]
       parameters:
         - $ref: '#/components/parameters/ServerId'
         - $ref: '#/components/parameters/ChannelId'
+        - name: device_id
+          in: query
+          required: true
+          schema: { type: string }
+          description: Caller's own device ID. Must belong to the authenticated caller (403 otherwise).
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /api/servers/{serverId}/channels/{channelId}/sender-key-recipients:
+    get:
+      operationId: e2eeGetSenderKeyRecipients
+      summary: >-
+        Prekey bundle roster a sender needs to seal one Sender Key envelope
+        per recipient device: every device of every channel member with
+        read access (PermViewChannel + PermReadMessages), excluding the
+        caller's own calling device (its other devices ARE included).
+        Response items are models.SenderKeyRecipient { user_id, device_id,
+        registration_id, identity_key, signing_key, signed_prekey_id,
+        signed_prekey, signed_prekey_signature, one_time_prekey_id,
+        one_time_prekey }. Requires send permission on the channel (the
+        caller is about to distribute a new session).
+      tags: [E2EE-GroupSessions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - name: device_id
+          in: query
+          required: true
+          schema: { type: string }
+          description: Caller's own device ID, excluded from the returned roster.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
@@ -3227,12 +3323,14 @@ components:
           type: [string, "null"]
           format: date-time
           description: >-
-            Offline-transition timestamp. Always null while pref_status is
-            NOT "offline" and the user is online; ALSO forced null (even
-            though the DB column is populated) when pref_status="offline" —
-            invisible mode never leaks a "last seen" timestamp (see
-            models.ToMemberWithRoles and the client-facing suppression rule
-            it implements).
+            Offline-transition timestamp, as stored on the row. Unlike
+            MemberWithRoles (which suppresses this field when
+            pref_status="offline" — see models.ToMemberWithRoles), this
+            User schema does NOT apply the invisible-mode suppression; it
+            is only ever returned to the user themselves (GET /api/users/me
+            and the login/register response), never embedded in another
+            user's payload. Message/DM/pin author fields use PublicUser
+            instead, which omits this field entirely.
         is_bot: { type: boolean }
         owner_user_id:
           type: string
@@ -3257,6 +3355,34 @@ components:
         has_seen_welcome: true
         last_seen_at: null
         is_bot: false
+        created_at: "2026-01-15T10:20:30Z"
+    PublicUser:
+      description: >-
+        models.PublicUser — the narrow public view of another user embedded
+        in message, DM and pin payloads. Deliberately excludes email,
+        is_platform_admin, is_platform_banned, dm_privacy, wallpaper_url,
+        language, pref_status, has_seen_download_prompt, has_seen_welcome,
+        last_seen_at and is_bot, all of which the full User schema carries
+        (security scan 2026-07-31, finding N-09: those fields were being
+        broadcast to every reader of a channel via the embedded author).
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        display_name: { type: [string, "null"] }
+        avatar_url: { type: [string, "null"] }
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        custom_status: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+      required: [id, username, status, created_at]
+      example:
+        id: "a1b2c3d4e5f6a7b8"
+        username: hb_wanderer
+        display_name: Wanderer
+        avatar_url: null
+        status: online
+        custom_status: null
         created_at: "2026-01-15T10:20:30Z"
     UserStatus:
       type: string
@@ -3588,7 +3714,7 @@ components:
         id: { type: string }
         author:
           anyOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: "null"
           description: Omitted/null if the original message (or its author) was deleted.
         content: { type: [string, "null"] }
@@ -3616,7 +3742,7 @@ components:
         created_at: { type: string, format: date-time }
         reply_to_id: { type: [string, "null"] }
         author:
-          allOf: [{ $ref: '#/components/schemas/User' }]
+          allOf: [{ $ref: '#/components/schemas/PublicUser' }]
           description: Populated via JOIN on reads; omitted on some write-path responses.
         attachments:
           type: array
@@ -3778,7 +3904,7 @@ components:
         message:
           $ref: '#/components/schemas/Message'
         pinned_by_user:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
       required: [id, message_id, channel_id, pinned_by, created_at, message]
 
     # ── Channels ──

@@ -18,8 +18,10 @@ function SecuritySettings() {
   const [isEmailSaving, setIsEmailSaving] = useState(false);
 
   // ─── Password State ───
-  // Current password is intentionally not asked: the session JWT is the
-  // proof-of-identity here and re-asking was friction users disliked.
+  // Current password IS required — the server (POST /api/users/me/password)
+  // 400s without it. It defends against a stolen JWT (XSS exfil, unattended
+  // session) the same way the email-change flow already does above.
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -67,7 +69,10 @@ function SecuritySettings() {
 
   // ─── Password Handlers ───
   const canSubmitPassword =
-    newPassword.length > 0 && confirmPassword.length > 0 && !isSaving;
+    currentPassword.length > 0 &&
+    newPassword.length > 0 &&
+    confirmPassword.length > 0 &&
+    !isSaving;
 
   async function handlePasswordSubmit() {
     if (!canSubmitPassword) return;
@@ -84,14 +89,17 @@ function SecuritySettings() {
 
     setIsSaving(true);
     try {
-      const res = await authApi.changePassword(newPassword);
+      const res = await authApi.changePassword(currentPassword, newPassword);
       if (res.success) {
         addToast("success", t("passwordChanged"));
+        setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
         const errMsg = res.error ?? "";
-        if (errMsg.includes("at least 6")) {
+        if (errMsg.includes("incorrect") || errMsg.includes("unauthorized")) {
+          addToast("error", t("wrongCurrentPassword"));
+        } else if (errMsg.includes("at least 6")) {
           addToast("error", t("passwordTooShort"));
         } else {
           addToast("error", t("passwordChangeError"));
@@ -182,6 +190,25 @@ function SecuritySettings() {
 
       {/* ═══ Password Section ═══ */}
       <h3 className="settings-section-subtitle">{t("changePassword")}</h3>
+
+      {/* Current Password — required by the server to defend against a
+          stolen JWT (see the comment on the state above). */}
+      <div className="settings-field">
+        <label htmlFor="currentPasswordForChange" className="settings-label">
+          {t("currentPassword")}
+        </label>
+        <input
+          id="currentPasswordForChange"
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          placeholder={t("currentPasswordPlaceholder")}
+          className="settings-input"
+          autoComplete="current-password"
+          data-1p-ignore
+          data-lpignore="true"
+        />
+      </div>
 
       {/* New Password */}
       <div className="settings-field">

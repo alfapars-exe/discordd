@@ -23,9 +23,9 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
 			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
-			       u.id, u.username, u.display_name, u.avatar_url, u.status,
+			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
-			       ru.id, ru.username, ru.display_name, ru.avatar_url
+			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM dm_messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
@@ -50,9 +50,9 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 			       m.reply_to_id, m.is_pinned,
 			       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
-			       u.id, u.username, u.display_name, u.avatar_url, u.status,
+			       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			       rm.id, rm.content,
-			       ru.id, ru.username, ru.display_name, ru.avatar_url
+			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM dm_messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
@@ -96,9 +96,9 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
 		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
-		       u.id, u.username, u.display_name, u.avatar_url, u.status,
+		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
-		       ru.id, ru.username, ru.display_name, ru.avatar_url
+		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		LEFT JOIN users u ON m.user_id = u.id
 		LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
@@ -106,25 +106,27 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		WHERE m.id = ?`
 
 	var msg models.DMMessage
-	var author models.User
+	var author models.PublicUser
 	// Nullable across every joined author column, not just the id — see
 	// scanDMMessageRow.
 	var authorID, authorUsername, authorStatus sql.NullString
+	var authorCreatedAt sql.NullTime
 	var content sql.NullString
 	var editedAt sql.NullTime
-	var displayName, avatarURL sql.NullString
+	var displayName, avatarURL, customStatus sql.NullString
 	var isPinned int
 
 	var refMsgID, refMsgContent sql.NullString
-	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL sql.NullString
+	var refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus sql.NullString
+	var refAuthorCreatedAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&msg.ID, &msg.DMChannelID, &msg.UserID, &content, &editedAt, &msg.CreatedAt,
 		&msg.ReplyToID, &isPinned,
 		&msg.EncryptionVersion, &msg.Ciphertext, &msg.SenderDeviceID, &msg.E2EEMetadata,
-		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus,
+		&authorID, &authorUsername, &displayName, &avatarURL, &authorStatus, &customStatus, &authorCreatedAt,
 		&refMsgID, &refMsgContent,
-		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL,
+		&refAuthorID, &refAuthorUsername, &refAuthorDisplayName, &refAuthorAvatarURL, &refAuthorStatus, &refAuthorCustomStatus, &refAuthorCreatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -151,12 +153,18 @@ func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.D
 		if avatarURL.Valid {
 			author.AvatarURL = &avatarURL.String
 		}
+		if customStatus.Valid {
+			author.CustomStatus = &customStatus.String
+		}
+		if authorCreatedAt.Valid {
+			author.CreatedAt = authorCreatedAt.Time
+		}
 		msg.Author = &author
 	}
 
 	msg.ReferencedMessage = buildMessageReference(
 		msg.ReplyToID, refMsgID, refMsgContent,
-		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL,
+		refAuthorID, refAuthorUsername, refAuthorDisplayName, refAuthorAvatarURL, refAuthorStatus, refAuthorCustomStatus, refAuthorCreatedAt,
 	)
 
 	return &msg, nil
@@ -227,6 +235,13 @@ func (r *sqliteDMRepo) UpdateMessage(ctx context.Context, id string, req *models
 }
 
 func (r *sqliteDMRepo) DeleteMessage(ctx context.Context, id string) error {
+	// Explicit child delete before the parent: prod's remote libSQL/Turso
+	// branch never enables the foreign_keys PRAGMA, so ON DELETE CASCADE
+	// does not fire there (same rule as DeleteChannel in
+	// sqlite_dm_channels.go).
+	if _, err := r.db.ExecContext(ctx, "DELETE FROM dm_attachments WHERE dm_message_id = ?", id); err != nil {
+		return fmt.Errorf("failed to delete DM message attachments: %w", err)
+	}
 	result, err := r.db.ExecContext(ctx, "DELETE FROM dm_messages WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete DM message: %w", err)
@@ -278,9 +293,9 @@ func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, sea
 		SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
 		       m.reply_to_id, m.is_pinned,
 		       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
-		       u.id, u.username, u.display_name, u.avatar_url, u.status,
+		       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 		       rm.id, rm.content,
-		       ru.id, ru.username, ru.display_name, ru.avatar_url
+		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM dm_messages m
 		JOIN dm_messages_fts fts ON fts.rowid = m.rowid
 		LEFT JOIN users u ON m.user_id = u.id

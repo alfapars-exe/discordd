@@ -114,9 +114,19 @@ func (d *routeDeps) registerServerMiscRoutes() {
 	d.mux.Handle("POST /api/servers/{serverId}/invites", d.authServerPerm(models.PermManageInvites, d.h.Invite.Create))
 	d.mux.Handle("DELETE /api/servers/{serverId}/invites/{code}", d.authServerPerm(models.PermManageInvites, d.h.Invite.Delete))
 
-	// E2EE Group Sessions
+	// E2EE Group Sessions — per-recipient sealed Sender Key envelopes (C-03).
+	// No deviceEnum throttle on create/read: the membership + channel-read-
+	// permission gate inside authServer/the service is the real access
+	// control there.
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/group-sessions", d.authServer(d.h.E2EE.CreateGroupSession))
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/group-sessions", d.authServer(d.h.E2EE.GetGroupSessions))
+	// sender-key-recipients DOES get the deviceEnum throttle (pentest C-03
+	// follow-up finding 1): unlike the two routes above, this one hands back
+	// prekey/identity-key material for every readable member's every device
+	// in one response — exactly the "bulk harvesting of the device-key
+	// database" deviceEnum exists to cap, same as the public
+	// /api/users/{userId}/devices and /prekey-bundles endpoints.
+	d.mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/sender-key-recipients", d.deviceEnum(d.authServer(d.h.E2EE.GetSenderKeyRecipients)))
 
 	// Search
 	d.mux.Handle("GET /api/servers/{serverId}/search", d.authServer(d.h.Search.Search))

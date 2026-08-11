@@ -32,6 +32,7 @@ type joinServerHarness struct {
 	serverRepo *testutil.MockServerRepo
 	roleRepo   *testutil.MockRoleRepo
 	userRepo   *testutil.MockUserRepo
+	banRepo    *testutil.MockBanRepo
 	inviteSvc  *testutil.MockInviteService
 	hub        *testutil.MockEventPublisher
 }
@@ -44,6 +45,7 @@ func newJoinServerHarness() *joinServerHarness {
 		serverRepo: &testutil.MockServerRepo{},
 		roleRepo:   &testutil.MockRoleRepo{},
 		userRepo:   &testutil.MockUserRepo{},
+		banRepo:    &testutil.MockBanRepo{},
 		inviteSvc:  &testutil.MockInviteService{},
 		hub:        &testutil.MockEventPublisher{},
 	}
@@ -63,8 +65,13 @@ func newJoinServerHarness() *joinServerHarness {
 	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
 		return &models.User{ID: id, Username: "joiner"}, nil
 	}
+	// N-02 default: no active ban. Individual test cases override ExistsFn
+	// to pin the ban-gate behavior.
+	h.banRepo.ExistsFn = func(_ context.Context, _, _ string) (bool, error) {
+		return false, nil
+	}
 
-	h.svc = NewServerService(nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.inviteSvc, h.hub, nil)
+	h.svc = NewServerService(nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil)
 	return h
 }
 
@@ -220,5 +227,82 @@ func TestJoinServer_AddMemberFails(t *testing.T) {
 	}
 	if markUsedCalled {
 		t.Error("MarkUsed must not be called when AddMember fails (B3 regression)")
+	}
+}
+
+// ─── N-02: ban gate on JoinServer ───
+
+// TestJoinServer_ActiveBan_Rejected pins the core N-02 fix: a valid invite
+// no longer lets a banned user back in. AddMember must never fire — a
+// returned error alone wouldn't rule out membership having already landed
+// before the check failed.
+func TestJoinServer_ActiveBan_Rejected(t *testing.T) {
+	h := newJoinServerHarness()
+	h.banRepo.ExistsFn = func(_ context.Context, serverID, userID string) (bool, error) {
+		if serverID != joinTestServerID || userID != joinTestUserID {
+			t.Errorf("Exists called with serverID=%s userID=%s", serverID, userID)
+		}
+		return true, nil
+	}
+
+	var addMemberCalled bool
+	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
+		addMemberCalled = true
+		return nil
+	}
+
+	_, err := h.svc.JoinServer(context.Background(), joinTestUserID, joinTestCode)
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected pkg.ErrForbidden, got %v", err)
+	}
+	if addMemberCalled {
+		t.Error("AddMember must not be called for a banned user")
+	}
+}
+
+// TestJoinServer_ExpiredBan_Allowed proves the gate isn't a blanket deny:
+// BanRepository.Exists already excludes lapsed temp bans at the SQL layer
+// (see repository/sqlite_ban.go), so a mock simulating that filtered result
+// (false) must let the join through exactly like the no-ban case.
+func TestJoinServer_ExpiredBan_Allowed(t *testing.T) {
+	h := newJoinServerHarness()
+	h.banRepo.ExistsFn = func(_ context.Context, _, _ string) (bool, error) {
+		// Simulates BanRepository.Exists's own expires_at filter already
+		// having excluded this row — an expired ban is invisible here.
+		return false, nil
+	}
+
+	var addMemberCalled bool
+	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
+		addMemberCalled = true
+		return nil
+	}
+
+	_, err := h.svc.JoinServer(context.Background(), joinTestUserID, joinTestCode)
+	if err != nil {
+		t.Fatalf("unexpected error for a user with only an expired ban: %v", err)
+	}
+	if !addMemberCalled {
+		t.Error("expected AddMember to be called when no active ban exists")
+	}
+}
+
+// TestJoinServer_NoBan_Allowed is the plain regression pin: a user with no
+// ban record at all joins exactly as before N-02.
+func TestJoinServer_NoBan_Allowed(t *testing.T) {
+	h := newJoinServerHarness()
+
+	var addMemberCalled bool
+	h.serverRepo.AddMemberFn = func(_ context.Context, _, _ string) error {
+		addMemberCalled = true
+		return nil
+	}
+
+	_, err := h.svc.JoinServer(context.Background(), joinTestUserID, joinTestCode)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !addMemberCalled {
+		t.Error("expected AddMember to be called when the user has no ban")
 	}
 }

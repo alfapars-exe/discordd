@@ -6,6 +6,11 @@ import { create } from "zustand";
 import * as deviceManager from "../crypto/deviceManager";
 import * as keyBackup from "../crypto/keyBackup";
 import * as keyStorage from "../crypto/keyStorage";
+import {
+  checkRecoveryPassphrase,
+  WeakRecoveryPassphraseError,
+} from "../crypto/recoveryPassphrase";
+import * as signalProtocol from "../crypto/signalProtocol";
 import * as e2eeApi from "../api/e2ee";
 import type { DeviceInfo } from "../types";
 import { useMessageStore } from "./messageStore";
@@ -30,6 +35,31 @@ export type DecryptionError = {
   timestamp: number;
 };
 
+/**
+ * - identity_changed: a pinned peer identity key was replaced (possible MITM).
+ * - new_device: a peer's device set gained a device we never pinned.
+ * - own_new_device: the server listed a device under OUR OWN account that we
+ *   never pinned. Distinct from new_device because the blast radius differs:
+ *   the self-fanout loop encrypts a copy of every outgoing DM for it, so an
+ *   injected row here reads everything we send, in every conversation.
+ */
+export type PeerTrustAlertKind =
+  | "identity_changed"
+  | "new_device"
+  | "own_new_device";
+
+export type PeerTrustAlert = {
+  userId: string;
+  deviceId: string;
+  /** For own_new_device, userId is the local user's own id. */
+  kind: PeerTrustAlertKind;
+  /** base64 X25519 public — only set for identity_changed */
+  previousKey?: string;
+  /** base64 X25519 public — only set for identity_changed */
+  newKey?: string;
+  detectedAt: number;
+};
+
 type E2EEState = {
   initStatus: E2EEInitStatus;
   /** null = not yet registered */
@@ -50,6 +80,12 @@ type E2EEState = {
    * for the affected conversation. Keyed by "userId:deviceId".
    */
   incompatibleDevices: Set<string>;
+  /**
+   * Peer devices whose identity key changed (possible MITM) or that were
+   * newly seen for the first time. Fed by signalProtocol's identity-key
+   * change queue. Keyed by "userId:deviceId".
+   */
+  peerTrustAlerts: Record<string, PeerTrustAlert>;
 
   // ─── Actions ───
 
@@ -71,9 +107,54 @@ type E2EEState = {
   markIncompatibleDevice: (userId: string, deviceId: string) => void;
   /** Clear the incompatible mark — call after the peer re-registers. */
   clearIncompatibleDevice: (userId: string, deviceId: string) => void;
+  /** Record a peer trust alert (identity change or new device). */
+  markPeerTrustAlert: (alert: PeerTrustAlert) => void;
+  /** Clear a peer trust alert — call after the user acknowledges it. */
+  clearPeerTrustAlert: (userId: string, deviceId: string) => void;
+  /** Load persisted peer trust alerts from IndexedDB. */
+  loadPeerTrustAlerts: () => Promise<void>;
   /** Reset Zustand state on logout. IndexedDB keys are preserved. */
   reset: () => Promise<void>;
 };
+
+/**
+ * Upper bound on retained peer trust alerts.
+ *
+ * The receive path writes this map from server-delivered envelopes, so its
+ * growth is attacker-influenced: without a cap it is unbounded IndexedDB state
+ * plus alarm fatigue burying the one warning that matters. Mirrors the
+ * 500-entry cap on decryptionErrors.
+ */
+const PEER_TRUST_ALERT_LIMIT = 200;
+
+/**
+ * Overwrite order for two alerts sharing one "userId:deviceId" key.
+ *
+ * Typed as a total Record over the union on purpose: adding a kind without
+ * deciding where it ranks is a compile error, not a silent 0.
+ */
+const ALERT_KIND_SEVERITY: Record<PeerTrustAlertKind, number> = {
+  new_device: 0,
+  own_new_device: 1,
+  identity_changed: 2,
+};
+
+/**
+ * Kinds that survive the PEER_TRUST_ALERT_LIMIT trim while cheaper alerts
+ * remain droppable.
+ *
+ * new_device is the only attacker-cheap kind: a hostile server mints it by
+ * listing devices for any peer. The two protected kinds each name a concrete
+ * compromise of THIS user — a replaced identity key, or a device added to
+ * their own account that receives a copy of every DM they send — so neither
+ * may be pushed out of the map by peer-device noise. Distinct from
+ * ALERT_KIND_SEVERITY: that ranks overwrites of one key, this ranks eviction
+ * across keys, and own_new_device sits at the top of this one.
+ */
+const EVICTION_PROTECTED_KINDS: ReadonlySet<PeerTrustAlertKind> = new Set([
+  "identity_changed",
+  "own_new_device",
+]);
 
 // ──────────────────────────────────
 // Store
@@ -90,6 +171,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   showRecoveryPrompt: false,
   recoveryPromptDismissed: false,
   incompatibleDevices: new Set(),
+  peerTrustAlerts: {},
 
   initialize: async (userId: string) => {
     const current = get().initStatus;
@@ -106,11 +188,43 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         if (registration && registration.userId !== userId) {
           await keyStorage.clearAllE2EEData();
           hasKeys = false;
+          // Trust alerts belong to the account that was just wiped: they carry
+          // that account's contacts' userIds and identity keys. The in-memory
+          // copy has to go too, otherwise the next markPeerTrustAlert writes
+          // user A's alerts back into user B's freshly cleared metadata store.
+          set({ peerTrustAlerts: {} });
         }
       }
 
+      // Background: restore peer trust alerts persisted by an earlier session.
+      //
+      // Deliberately started AFTER the account check above. Kicked off earlier
+      // (it is intentionally not awaited) the read races clearAllE2EEData and,
+      // when it wins, resurrects user A's alerts inside user B's session.
+      get().loadPeerTrustAlerts();
+
       if (hasKeys) {
-        const deviceId = await deviceManager.getLocalDeviceId();
+        let deviceId = await deviceManager.getLocalDeviceId();
+
+        // Recover a lost device id from the registration record.
+        //
+        // hasLocalKeys() only checks identity+registration, while
+        // getLocalDeviceId() reads ONLY metadata["deviceId"]. Those can
+        // disagree — an aborted backup restore used to wipe metadata without
+        // restoring it (security scan 2026-07-31, finding N-22) — and the
+        // disagreement is silent and terminal: init reports "ready" with a
+        // null device id, every DM decrypt bails on it, outgoing envelopes
+        // carry sender_device_id null, and no code path re-registers because
+        // they all guard on the same null. registration.deviceId is the same
+        // value written next to it at registration time, so prefer repairing
+        // over stranding the device.
+        if (!deviceId) {
+          const registration = await keyStorage.getRegistrationData();
+          if (registration?.deviceId) {
+            await keyStorage.setMetadata("deviceId", registration.deviceId);
+            deviceId = registration.deviceId;
+          }
+        }
 
         // Re-register if server lost this device (DB reset, manual deletion).
         // Without this: prekey upload FK error + other devices can't create envelopes.
@@ -272,6 +386,28 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   setRecoveryPassword: async (password: string) => {
+    /**
+     * Strength policy chokepoint (pentest 2026-07-26, finding H-10).
+     *
+     * Both entry points reach the backup through here — settings and
+     * completeRecoverySetup (the recovery prompt) — so this is the only
+     * place where enforcement covers every caller. Validating in the
+     * components instead would leave whichever path forgot to call it wide
+     * open, which is exactly how H-10 shipped.
+     *
+     * Thrown BEFORE the try block on purpose: a rejected passphrase is a
+     * failed precondition, not a failed backup, so it must not create a
+     * backup, must not touch the network, and must not be swallowed by the
+     * catch below. The test "should reject a one-character passphrase without
+     * creating a backup" pins that ordering.
+     *
+     * Set-time only — restoreFromRecovery deliberately does not call this.
+     */
+    const policy = checkRecoveryPassphrase(password);
+    if (!policy.ok) {
+      throw new WeakRecoveryPassphraseError(policy.reason);
+    }
+
     try {
       const backup = await keyBackup.createBackup(password);
 
@@ -401,6 +537,57 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     });
   },
 
+  markPeerTrustAlert: (alert: PeerTrustAlert) => {
+    const key = `${alert.userId}:${alert.deviceId}`;
+    const current = get().peerTrustAlerts;
+    const existing = current[key];
+    if (existing?.kind === alert.kind) {
+      // Already flagged with the same kind — avoid re-rendering subscribers.
+      return;
+    }
+    // A more severe kind may overwrite a less severe one, never the reverse:
+    // a plain new_device sighting must not erase an outstanding
+    // identity_changed (possible MITM) or own_new_device (device injected into
+    // our own account) warning the user has not acknowledged yet.
+    if (
+      existing &&
+      ALERT_KIND_SEVERITY[alert.kind] < ALERT_KIND_SEVERITY[existing.kind]
+    ) {
+      return;
+    }
+    const next = capPeerTrustAlerts({ ...current, [key]: alert });
+    set({ peerTrustAlerts: next });
+    // Persist AFTER the commit, from the action body — never from inside a
+    // set() updater. Zustand does not re-run updaters today, but a persist
+    // launched from inside one makes two marks in the same tick start two
+    // independent full-map writes whose completion order is unspecified, and
+    // a lost write silently drops an alert the user never acknowledged.
+    void persistPeerTrustAlerts(next);
+  },
+
+  clearPeerTrustAlert: (userId: string, deviceId: string) => {
+    const key = `${userId}:${deviceId}`;
+    const current = get().peerTrustAlerts;
+    if (!(key in current)) return;
+    const next = { ...current };
+    delete next[key];
+    set({ peerTrustAlerts: next });
+    void persistPeerTrustAlerts(next);
+  },
+
+  loadPeerTrustAlerts: async () => {
+    try {
+      const stored = await keyStorage.getMetadata<Record<string, PeerTrustAlert>>(
+        "peer_trust_alerts"
+      );
+      if (stored) {
+        set({ peerTrustAlerts: stored });
+      }
+    } catch (err) {
+      console.error("[e2eeStore] loadPeerTrustAlerts error:", err);
+    }
+  },
+
   reset: async () => {
     // Only reset Zustand state on logout.
     // IndexedDB keys and server device registration are PRESERVED
@@ -417,6 +604,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       showRecoveryPrompt: false,
       recoveryPromptDismissed: false,
       incompatibleDevices: new Set(),
+      peerTrustAlerts: {},
     });
   },
 }));
@@ -451,3 +639,84 @@ function scheduleDeferredRecoveryCheck(
     get().checkAndPromptRecovery();
   }, 5000);
 }
+
+/**
+ * True when `candidate` should be evicted before `incumbent`.
+ *
+ * Severity first, age second: a protected alert (see EVICTION_PROTECTED_KINDS)
+ * is only ever dropped when there is no unprotected alert left to drop, so a
+ * flood of cheap new-device noise cannot push a safety-number change — or a
+ * device injected into the user's own account — out of the map.
+ */
+function isPreferredEviction(
+  candidate: PeerTrustAlert,
+  incumbent: PeerTrustAlert
+): boolean {
+  const candidateIsNoise = !EVICTION_PROTECTED_KINDS.has(candidate.kind);
+  const incumbentIsNoise = !EVICTION_PROTECTED_KINDS.has(incumbent.kind);
+  if (candidateIsNoise !== incumbentIsNoise) return candidateIsNoise;
+  return candidate.detectedAt < incumbent.detectedAt;
+}
+
+/**
+ * Trim the alert map back to PEER_TRUST_ALERT_LIMIT entries, oldest-first
+ * within the severity order defined by isPreferredEviction.
+ *
+ * Returns the input untouched when it already fits, so the common path costs
+ * one key count and allocates nothing.
+ */
+function capPeerTrustAlerts(
+  alerts: Record<string, PeerTrustAlert>
+): Record<string, PeerTrustAlert> {
+  let remaining = Object.keys(alerts).length;
+  if (remaining <= PEER_TRUST_ALERT_LIMIT) return alerts;
+
+  const next = { ...alerts };
+  while (remaining > PEER_TRUST_ALERT_LIMIT) {
+    let victim: string | null = null;
+    for (const key of Object.keys(next)) {
+      if (victim === null || isPreferredEviction(next[key], next[victim])) {
+        victim = key;
+      }
+    }
+    if (victim === null) break;
+    delete next[victim];
+    remaining -= 1;
+  }
+  return next;
+}
+
+/** Persist peer trust alerts to IndexedDB. Fire-and-forget; errors are logged. */
+async function persistPeerTrustAlerts(
+  alerts: Record<string, PeerTrustAlert>
+): Promise<void> {
+  try {
+    await keyStorage.setMetadata("peer_trust_alerts", alerts);
+  } catch (err) {
+    console.error("[e2eeStore] persistPeerTrustAlerts error:", err);
+  }
+}
+
+// ──────────────────────────────────
+// Identity Key Change Ingestion
+// ──────────────────────────────────
+
+/**
+ * Drain signalProtocol's pending identity-key-change queue and surface each
+ * entry as a peer trust alert. Called on module load (to flush anything that
+ * accumulated before this store existed) and on every subsequent change.
+ */
+function ingestIdentityKeyChanges(): void {
+  for (const change of signalProtocol.drainIdentityKeyChanges()) {
+    useE2EEStore.getState().markPeerTrustAlert({
+      userId: change.userId,
+      deviceId: change.deviceId,
+      kind: "identity_changed",
+      previousKey: change.previousKey,
+      newKey: change.newKey,
+      detectedAt: change.detectedAt,
+    });
+  }
+}
+signalProtocol.onIdentityKeyChange(ingestIdentityKeyChanges);
+ingestIdentityKeyChanges();

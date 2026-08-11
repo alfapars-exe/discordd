@@ -170,6 +170,16 @@ export async function encryptDMMessage(
     throw new Error("RECIPIENT_NO_KEYS");
   }
 
+  // Snapshot of the peer's pinned device set, taken BEFORE the loop below.
+  //
+  // This ordering is required, not stylistic: encryptForDevice →
+  // processPreKeyBundle pins the identity of every bundle it handshakes with.
+  // Re-reading the set per iteration would see devices this very send just
+  // pinned, so on first contact every device after the first would look
+  // "newly added" — a guaranteed false positive.
+  const knownDeviceIds =
+    await keyStorage.getTrustedDeviceIdsForUser(recipientUserId);
+
   // Encrypt for each recipient device. Legacy devices (no signing_key)
   // are flagged in the e2eeStore so the UI can render an "incompatible
   // device" banner against this DM. We still produce envelopes for the
@@ -178,6 +188,23 @@ export async function encryptDMMessage(
   // banner explains why.
   let sawLegacyDevice = false;
   for (const bundle of recipientBundles.data) {
+    // Silent device addition: a device the peer's key bundle now advertises
+    // but which we have never pinned. A hostile server adding a device it
+    // controls to the fan-out set is exactly the attack this surfaces.
+    //
+    // An empty pin set means first contact with this user (TOFU) — there is
+    // no baseline to compare against, so every device is "new" and alerting
+    // would be noise. Advisory only: the alert is recorded and the send
+    // continues (Signal's behaviour — never strand the user's message).
+    if (knownDeviceIds.size > 0 && !knownDeviceIds.has(bundle.device_id)) {
+      useE2EEStore.getState().markPeerTrustAlert({
+        userId: recipientUserId,
+        deviceId: bundle.device_id,
+        kind: "new_device",
+        detectedAt: Date.now(),
+      });
+    }
+
     try {
       const envelope = await encryptForDevice(
         recipientUserId,
@@ -228,19 +255,29 @@ export async function encryptDMMessage(
       (await keyStorage.getMetadata<boolean>("self_fanout_reset")) === true;
     const selfBundles = await e2eeApi.fetchPreKeyBundles(currentUserId);
     if (selfBundles.success && selfBundles.data) {
+      // Snapshot of OUR OWN pinned device set, taken once BEFORE the loop.
+      //
+      // Same ordering invariant as the recipient snapshot above, and it bites
+      // harder here: encryptForDevice → processPreKeyBundle pins each self
+      // device as the loop walks it, so a per-iteration read would observe
+      // this very send's writes and, on first contact, report every device
+      // after the first as injected.
+      const knownSelfDeviceIds =
+        await keyStorage.getTrustedDeviceIdsForUser(currentUserId);
+
       for (const bundle of selfBundles.data) {
-        // Skip own device
+        // Skip own device. Must come BEFORE the call below: the local device
+        // is never pinned (there is no session to self), so checking it first
+        // would flag us as an injected device on every single send.
         if (bundle.device_id === localDeviceId) continue;
 
-        if (needsReset) {
-          await keyStorage.deleteSession(currentUserId, bundle.device_id);
-        }
-
-        const envelope = await encryptForDevice(
+        const envelope = await encryptForOwnDevice(
           currentUserId,
           bundle,
           localDeviceId,
-          plaintext
+          plaintext,
+          knownSelfDeviceIds,
+          needsReset
         );
         produced.push(envelope);
       }
@@ -292,6 +329,67 @@ export class LegacyDeviceError extends Error {
     this.userId = userId;
     this.deviceId = deviceId;
   }
+}
+
+/**
+ * Self-fanout body for ONE sibling device: own-account alert, optional session
+ * reset, then the encryption itself. Extracted verbatim from the loop in
+ * encryptDMMessage; the local-device skip stays at the call site because it
+ * must run before any of this.
+ *
+ * knownSelfDeviceIds is a PARAMETER, never re-read here — it is the snapshot
+ * the caller takes once before the loop. encryptForDevice →
+ * processPreKeyBundle pins each device as the loop walks it, so reading the
+ * set from inside this function would observe this very send's own writes and,
+ * on first contact, report every device after the first as injected. Taking it
+ * as an argument makes that ordering mistake structurally impossible.
+ *
+ * Runs under selfFanoutLock via its only caller; needsReset is likewise read
+ * once by the caller so the read-check-act sequence stays atomic.
+ */
+async function encryptForOwnDevice(
+  currentUserId: string,
+  bundle: PreKeyBundleResponse,
+  localDeviceId: string,
+  plaintext: string,
+  knownSelfDeviceIds: ReadonlySet<string>,
+  needsReset: boolean
+): Promise<EncryptedEnvelope> {
+  // A device the server lists under OUR OWN account that this device has
+  // never pinned. Linking a second device is a user action — but the
+  // server owns this list, and every id in it gets a copy of the message
+  // encrypted to it right below. An injected row therefore reads every
+  // DM we send, in every conversation, which is why it is surfaced as
+  // its own kind instead of the peer-facing new_device.
+  //
+  // An empty pin set means the first self-fanout on this install (fresh
+  // setup or post-recovery restore) — no baseline exists, so it stays
+  // silent, the same accepted TOFU limit as the recipient path.
+  // Advisory only: the envelope is still produced and the message still
+  // goes out (Signal's behaviour — never strand the user's message).
+  if (
+    knownSelfDeviceIds.size > 0 &&
+    !knownSelfDeviceIds.has(bundle.device_id)
+  ) {
+    useE2EEStore.getState().markPeerTrustAlert({
+      userId: currentUserId,
+      deviceId: bundle.device_id,
+      kind: "own_new_device",
+      detectedAt: Date.now(),
+    });
+  }
+
+  if (needsReset) {
+    await keyStorage.deleteSession(currentUserId, bundle.device_id);
+  }
+
+  const envelope = await encryptForDevice(
+    currentUserId,
+    bundle,
+    localDeviceId,
+    plaintext
+  );
+  return envelope;
 }
 
 /** Encrypt for a single device. Establishes X3DH session if none exists. */
@@ -348,6 +446,36 @@ async function encryptForDevice(
 // ──────────────────────────────────
 
 /**
+ * Picks the envelope addressed to this device, current id first.
+ *
+ * A recovery restore changes the local device id, so envelopes minted before
+ * the restore are addressed to a previous one. The legacy lookup costs an
+ * IndexedDB read and is therefore kept behind the miss — the common case
+ * matches on the first pass and never pays for it.
+ */
+async function findEnvelopeForThisDevice(
+  envelopes: EncryptedEnvelope[],
+  localDeviceId: string
+): Promise<EncryptedEnvelope | undefined> {
+  let myEnvelope = envelopes.find(
+    (env) => env.recipient_device_id === localDeviceId
+  );
+
+  if (!myEnvelope) {
+    // Check legacy device IDs (from before recovery restore)
+    const legacyIds = await deviceManager.getLegacyDeviceIds();
+    for (const legacyId of legacyIds) {
+      myEnvelope = envelopes.find(
+        (env) => env.recipient_device_id === legacyId
+      );
+      if (myEnvelope) break;
+    }
+  }
+
+  return myEnvelope;
+}
+
+/**
  * Decrypt a received E2EE DM message.
  * Finds the envelope for this device, decrypts via Signal Protocol,
  * and parses the structured payload (content + file_keys).
@@ -371,20 +499,7 @@ export async function decryptDMMessage(
 
   // Find envelope for this device — try current ID first, then legacy IDs
   // (after recovery restore, old envelopes are encrypted to the old device ID)
-  let myEnvelope = envelopes.find(
-    (env) => env.recipient_device_id === localDeviceId
-  );
-
-  if (!myEnvelope) {
-    // Check legacy device IDs (from before recovery restore)
-    const legacyIds = await deviceManager.getLegacyDeviceIds();
-    for (const legacyId of legacyIds) {
-      myEnvelope = envelopes.find(
-        (env) => env.recipient_device_id === legacyId
-      );
-      if (myEnvelope) break;
-    }
-  }
+  const myEnvelope = await findEnvelopeForThisDevice(envelopes, localDeviceId);
 
   if (!myEnvelope) {
     // No envelope addressed to this device — a common "can't read the other
@@ -403,6 +518,47 @@ export async function decryptDMMessage(
     return null;
   }
 
+  // Receive-side counterpart of the send-side new-device detection.
+  //
+  // Split in two on purpose: the VERDICT is computed here, the alert is only
+  // RAISED after decryptMessage succeeds (see below). The comparison has to
+  // happen first because decryptMessage pins the sender's identity while
+  // handling a PreKey message — reading the pin set afterwards would always
+  // find the sender already pinned and the alert could never fire.
+  //
+  // Cost shape: the single-key `get` is the hot path and short-circuits for
+  // every already-known device; the full prefix scan runs only for a device we
+  // have never pinned. As on the send side, an empty pin set means first
+  // contact (TOFU) and must stay silent, and the alert never blocks decryption.
+  //
+  // Trust caveat: senderUserId is server-asserted, so the pin key inherits a
+  // server-declared userId — the pin binds a key to a claimed identity.
+  let senderDeviceIsUnpinned = false;
+  if (!(await keyStorage.getTrustedIdentity(senderUserId, senderDeviceId))) {
+    const knownDeviceIds =
+      await keyStorage.getTrustedDeviceIdsForUser(senderUserId);
+    if (knownDeviceIds.size > 0) {
+      // Another device of OUR OWN account. Suppressed here on purpose, and
+      // not because it is harmless: own-account device injection is detected
+      // on the SEND path instead (kind own_new_device), which sees the
+      // server's fresh self-device list on every send and sits where the real
+      // damage happens — a readable copy of our outgoing message. Raising a
+      // second, peer-shaped alert on the echo would only double-count the same
+      // event. This path has no currentUserId in its signature, so the local
+      // registration supplies the distinction. Kept inside the already-cold
+      // branch — the hot path (known device) has returned above without
+      // paying for this read.
+      //
+      // Direction matters: when the registration cannot be read, `reg?.userId`
+      // is undefined, which never equals senderUserId, so the alert IS raised.
+      // Failing loud on unknown local state is the safe direction; inverting
+      // this condition would silence a genuine warning whenever registration
+      // is unavailable.
+      const reg = await keyStorage.getRegistrationData();
+      senderDeviceIsUnpinned = reg?.userId !== senderUserId;
+    }
+  }
+
   // Decrypt via Signal Protocol
   try {
     const plaintext = await signalProtocol.decryptMessage(
@@ -412,6 +568,24 @@ export async function decryptDMMessage(
     );
 
     if (plaintext === null) return null;
+
+    // Alert only for a device that has just proved it holds a working session.
+    //
+    // Raising it before decryption would let a hostile server mint unlimited
+    // permanent warnings: envelopes addressed to us carrying junk ciphertext
+    // and an arbitrary sender_device_id never decrypt, so they never pin, so
+    // the safety-number panel — which lists pinned identities — renders no row
+    // to dismiss them with. A replayed PreKey message is harmless here: the
+    // pin already exists by then, so the branch above never armed the flag a
+    // second time.
+    if (senderDeviceIsUnpinned) {
+      useE2EEStore.getState().markPeerTrustAlert({
+        userId: senderUserId,
+        deviceId: senderDeviceId,
+        kind: "new_device",
+        detectedAt: Date.now(),
+      });
+    }
 
     // Parse structured payload (content + file_keys)
     return decodePayload(plaintext);

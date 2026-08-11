@@ -86,7 +86,7 @@ function makeMessage(id: string, channelId = "ch-1"): Message {
     reactions: [],
     reply_to_id: null,
     referenced_message: null,
-    author: { id: "u-1", username: "alice", display_name: null, avatar_url: null, status: "online" as const, custom_status: null, email: null, language: "en", is_platform_admin: false, has_seen_download_prompt: false, has_seen_welcome: false, dm_privacy: "message_request" as const, created_at: "" },
+    author: { id: "u-1", username: "alice", display_name: null, avatar_url: null, status: "online" as const, custom_status: null, created_at: "" },
     encryption_version: 0,
   };
 }

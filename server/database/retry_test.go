@@ -132,7 +132,7 @@ func TestRetryingQuerier_queryRowPassesThroughAgainstARealDatabase(t *testing.T)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }() // test cleanup — nothing to act on if teardown fails
 	if _, err := db.Exec(`CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)`); err != nil {
 		t.Fatalf("create: %v", err)
 	}

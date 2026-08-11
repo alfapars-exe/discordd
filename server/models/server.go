@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 type Server struct {
@@ -41,6 +43,9 @@ func (r *CreateServerRequest) Validate() error {
 	nameLen := utf8.RuneCountInString(r.Name)
 	if nameLen < 1 || nameLen > 100 {
 		return fmt.Errorf("server name must be between 1 and 100 characters")
+	}
+	if pkg.ContainsSteeringChars(r.Name) {
+		return fmt.Errorf("server name contains disallowed control or formatting characters")
 	}
 
 	if r.HostType != "mqvi_hosted" && r.HostType != "self_hosted" {
@@ -86,6 +91,9 @@ func (r *UpdateServerRequest) Validate() error {
 		nameLen := utf8.RuneCountInString(*r.Name)
 		if nameLen < 1 || nameLen > 100 {
 			return fmt.Errorf("server name must be between 1 and 100 characters")
+		}
+		if pkg.ContainsSteeringChars(*r.Name) {
+			return fmt.Errorf("server name contains disallowed control or formatting characters")
 		}
 	}
 	if r.AFKTimeoutMinutes != nil {

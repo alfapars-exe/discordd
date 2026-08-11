@@ -15,6 +15,10 @@ type ServerRepository interface {
 	Update(ctx context.Context, server *models.Server) error
 	// Delete removes a server. CASCADE handles all related data.
 	Delete(ctx context.Context, serverID string) error
+	// GetFileURLsByServerID returns every attachment file_url belonging to
+	// messages in any channel of the given server. Callers must fetch this
+	// BEFORE Delete — see services.removeUploadFilesByURL.
+	GetFileURLsByServerID(ctx context.Context, serverID string) ([]string, error)
 
 	// ─── Membership ───
 
@@ -25,6 +29,10 @@ type ServerRepository interface {
 	GetMemberCount(ctx context.Context, serverID string) (int, error)
 	// GetMemberServerIDs returns all server IDs a user belongs to (for WS hub client.ServerIDs).
 	GetMemberServerIDs(ctx context.Context, userID string) ([]string, error)
+	// ListMemberIDs returns all member user IDs of a server (all members,
+	// not just online ones — used to build recipient rosters that must
+	// reach offline members too).
+	ListMemberIDs(ctx context.Context, serverID string) ([]string, error)
 
 	// ─── Server-scoped nickname (migration 065) ───
 

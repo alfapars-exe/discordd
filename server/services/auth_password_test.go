@@ -9,7 +9,6 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Characterization for the credential-management flows (ChangeEmail,
@@ -20,15 +19,6 @@ import (
 
 func strptr(s string) *string { return &s }
 
-func bcryptHash(t *testing.T, password string) string {
-	t.Helper()
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
-	if err != nil {
-		t.Fatalf("bcrypt: %v", err)
-	}
-	return string(h)
-}
-
 // newAuthServiceForReset builds the full service with caller-controlled reset
 // repo + email sender so the reset flow's collaborators are observable.
 func newAuthServiceForReset(userRepo *testutil.MockUserRepo, resetRepo *testutil.MockResetRepo, email *testutil.MockEmailSender) AuthService {
@@ -37,7 +27,7 @@ func newAuthServiceForReset(userRepo *testutil.MockUserRepo, resetRepo *testutil
 
 func TestChangeEmail(t *testing.T) {
 	const pw = "correct-horse"
-	hash := bcryptHash(t, pw)
+	hash := preHashPassword(t, pw)
 	ctx := context.Background()
 
 	t.Run("wrong password is rejected", func(t *testing.T) {
@@ -270,5 +260,52 @@ func TestResetPassword(t *testing.T) {
 		if clearedUser != "u1" {
 			t.Errorf("all tokens for the user must be cleared, DeleteByUserID got %q", clearedUser)
 		}
+	})
+}
+
+// TestResetPassword_RevokesAllSessions pins the ResetPassword half of H-06:
+// account recovery must invalidate every existing session for the token's
+// owner (session rows, token_version, the HTTP auth cache, and any live
+// WebSocket/voice connection), not leave them alive as before. Unlike
+// ChangePassword, there is no "caller's own session" to spare — see the
+// design note in auth_password.go. An expired/invalid token must touch none
+// of the revocation collaborators.
+//
+// DeleteByUserID is asserted at TWO calls — see the BULGU 2 comment on
+// revokeAllSessions in auth_service.go and the matching note on
+// TestChangePassword_RevokesAllSessions.
+func TestResetPassword_RevokesAllSessions(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success revokes every session for the token's owner", func(t *testing.T) {
+		userRepo := &testutil.MockUserRepo{}
+		resetRepo := &testutil.MockResetRepo{
+			GetByTokenHashFn: func(context.Context, string) (*models.PasswordResetToken, error) {
+				return &models.PasswordResetToken{ID: "t1", UserID: "u1", ExpiresAt: time.Now().Add(time.Minute)}, nil
+			},
+		}
+		svc, spy := newRevokeHarness(userRepo, &testutil.MockSessionRepo{}, resetRepo)
+
+		if err := svc.ResetPassword(ctx, "valid", "long-enough-password"); err != nil {
+			t.Fatalf("ResetPassword: %v", err)
+		}
+
+		assertRevocationFired(t, spy, "u1")
+	})
+
+	t.Run("expired token touches none of the revocation collaborators", func(t *testing.T) {
+		userRepo := &testutil.MockUserRepo{}
+		resetRepo := &testutil.MockResetRepo{
+			GetByTokenHashFn: func(context.Context, string) (*models.PasswordResetToken, error) {
+				return &models.PasswordResetToken{ID: "t1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Minute)}, nil
+			},
+		}
+		svc, spy := newRevokeHarness(userRepo, &testutil.MockSessionRepo{}, resetRepo)
+
+		err := svc.ResetPassword(ctx, "expired", "long-enough-password")
+		if !errors.Is(err, pkg.ErrBadRequest) {
+			t.Fatalf("err = %v, want ErrBadRequest", err)
+		}
+		assertRevocationUntouched(t, spy, "on an expired reset token")
 	})
 }

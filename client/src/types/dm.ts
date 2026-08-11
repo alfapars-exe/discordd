@@ -5,7 +5,7 @@
  * structurally identical (e.g. is_pinned at row level for DMs).
  */
 
-import type { User } from "./user";
+import type { PublicUser } from "./user";
 import type { ReactionGroup } from "./common";
 import type { MessageReference } from "./message";
 import type { EncryptionVersion } from "./e2ee";
@@ -13,7 +13,7 @@ import type { EncryptionVersion } from "./e2ee";
 /** DM channel with the other participant's user info. */
 export type DMChannelWithUser = {
   id: string;
-  other_user: User;
+  other_user: PublicUser;
   e2ee_enabled: boolean;
   status: "accepted" | "pending";
   initiated_by: string | null;
@@ -32,7 +32,7 @@ export type DMMessage = {
   created_at: string;
   reply_to_id: string | null;
   is_pinned: boolean;
-  author: User;
+  author: PublicUser;
   attachments: DMAttachment[];
   reactions: ReactionGroup[];
   referenced_message: MessageReference | null;

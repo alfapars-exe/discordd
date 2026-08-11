@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/argeinfina/hichat/pkg"
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -59,6 +61,41 @@ type User struct {
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
+// PublicUser is the API-facing view of another user as embedded in message,
+// DM and pin payloads. Mirrors the public subset of MemberWithRoles and
+// intentionally does NOT embed User: models.User carries email,
+// is_platform_admin, is_platform_banned, dm_privacy, wallpaper_url,
+// language, pref_status, has_seen_* and last_seen_at, all of which were
+// being broadcast to every reader of a channel (security scan 2026-07-31,
+// finding N-09).
+type PublicUser struct {
+	ID           string     `json:"id"`
+	Username     string     `json:"username"`
+	DisplayName  *string    `json:"display_name"`
+	AvatarURL    *string    `json:"avatar_url"`
+	Status       UserStatus `json:"status"`
+	CustomStatus *string    `json:"custom_status"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
+// ToPublicUser narrows a full user row to the embeddable public view.
+// Returns nil for a nil input so callers can pass a repo result straight
+// through.
+func ToPublicUser(u *User) *PublicUser {
+	if u == nil {
+		return nil
+	}
+	return &PublicUser{
+		ID:           u.ID,
+		Username:     u.Username,
+		DisplayName:  u.DisplayName,
+		AvatarURL:    u.AvatarURL,
+		Status:       u.Status,
+		CustomStatus: u.CustomStatus,
+		CreatedAt:    u.CreatedAt,
+	}
+}
+
 type CreateUserRequest struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
@@ -87,6 +124,9 @@ func (r *CreateUserRequest) Validate() error {
 	r.DisplayName = strings.TrimSpace(r.DisplayName)
 	if utf8.RuneCountInString(r.DisplayName) > 32 {
 		return fmt.Errorf("display name must be at most 32 characters")
+	}
+	if pkg.ContainsSteeringChars(r.DisplayName) {
+		return fmt.Errorf("display name contains disallowed control or formatting characters")
 	}
 
 	r.Email = strings.TrimSpace(r.Email)

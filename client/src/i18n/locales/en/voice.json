@@ -40,6 +40,8 @@
   "minimize": "Minimize",
   "livekitConnectionError": "Could not connect to the voice server. Please check that the server is running and try again.",
   "voiceDisconnectedHint": "Voice disconnected — the voice server may be unavailable",
+  "voiceJoinFailed": "Couldn't join the voice channel.",
+  "voiceJoinTimedOut": "You can't join voice channels while timed out.",
   "ping": "Ping",
   "userVolume": "User Volume",
   "localMute": "Mute For Me",

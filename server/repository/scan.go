@@ -16,7 +16,7 @@ import (
 // ("failed to scan <entity> row" / "error iterating <entity> rows"). Like the
 // originals, no rows yields a nil slice (not an error).
 func scanRows[T any](rows *sql.Rows, entity string, scan func(*sql.Rows) (T, error)) ([]T, error) {
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // read-side handle — nothing buffered to flush, safe to ignore
 	var out []T
 	for rows.Next() {
 		v, err := scan(rows)
