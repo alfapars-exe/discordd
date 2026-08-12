@@ -140,10 +140,13 @@ body.display-name-plain .msg-author { color:var(--t0) !important; font-family:va
 body.no-animated-emoji img.emoji-animated,
 body.no-animated-emoji .emoji-animated { animation-play-state:paused; }
 
-/* Blur on: translucent gradient + backdrop-filter */
+/* Blur on: translucent gradient + backdrop-filter. --blur-radius is the
+   user-tunable strength (Settings → Appearance, 8-40px); the 20px fallback
+   matches the store's default so first paint (before App.tsx's effect
+   writes the variable) already looks right. */
 body.blur-enabled {
   --panel-bg:linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.035) 100%);
-  --panel-backdrop:blur(28px) saturate(170%);
+  --panel-backdrop:blur(var(--blur-radius, 20px)) saturate(170%);
 }
 
 /* Blur off: solid fallback for low-end / reduced-transparency */
@@ -652,6 +655,7 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 .ub-nr-label { display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t2); }
 /* Switch toggle */
 .ub-switch { position:relative;width:36px;height:20px;border:none;border-radius:999px;cursor:pointer;background:var(--bg-5);transition:background .2s;flex-shrink:0;padding:0; }
+.ub-switch:disabled { opacity:.5;cursor:not-allowed; }
 .ub-switch:hover { background:var(--t3); }
 .ub-switch.active { background:var(--green); }
 .ub-switch.active:hover { background:var(--green-h,var(--green)); }

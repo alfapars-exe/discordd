@@ -62,6 +62,14 @@ const RECONNECT_BASE_DELAY = 1_500;
 const RECONNECT_MAX_DELAY = 20_000;
 
 /**
+ * How long a connection must stay open before the reconnect backoff counter
+ * resets. Resetting at onopen let a connect-then-drop loop stay pinned at
+ * the 1.5s base forever (2026-08-13 presence-flap incident); ten seconds
+ * comfortably exceeds the server's 8s presence grace + one heartbeat.
+ */
+const BACKOFF_RESET_STABLE_MS = 10_000;
+
+/**
  * Max reconnect attempts before showing "disconnected".
  * Exported so ConnectionBanner renders the same N in its retry counter —
  * the two drifted once (5 vs 7) when this was duplicated there.
@@ -79,6 +87,9 @@ export function useWebSocket() {
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptRef = useRef<number>(0);
+  // Pending "connection proved stable → reset backoff" timer; cancelled on
+  // close so a short-lived connection can never wipe the attempt counter.
+  const backoffResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Monotonically increasing connection ID — StrictMode guard.
@@ -116,6 +127,10 @@ export function useWebSocket() {
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
+    }
+    if (backoffResetTimerRef.current) {
+      clearTimeout(backoffResetTimerRef.current);
+      backoffResetTimerRef.current = null;
     }
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -395,8 +410,19 @@ export function useWebSocket() {
       socket.onopen = () => {
         if (activeConnectionIdRef.current !== myId) return;
 
-        reconnectAttemptRef.current = 0;
-        setReconnectAttempt(0);
+        // Backoff resets only after the connection PROVES stable (stays open
+        // for a stretch), not at onopen. Resetting here pinned a
+        // connect-then-immediately-drop loop to the 1.5s base forever:
+        // attempt never climbed, exponential backoff never engaged, and the
+        // MAX_RECONNECT_ATTEMPTS "disconnected" banner never showed — the
+        // 2026-08-13 presence-flap incident's client half.
+        if (backoffResetTimerRef.current) clearTimeout(backoffResetTimerRef.current);
+        backoffResetTimerRef.current = setTimeout(() => {
+          if (activeConnectionIdRef.current !== myId) return;
+          reconnectAttemptRef.current = 0;
+          setReconnectAttempt(0);
+        }, BACKOFF_RESET_STABLE_MS);
+        setReconnectAttempt(0); // UI: hide any reconnect notice immediately
         missedHeartbeatsRef.current = 0;
 
         // Start heartbeat interval

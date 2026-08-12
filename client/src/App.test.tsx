@@ -60,6 +60,7 @@ vi.mock("./stores/settingsStore", async () => {
   return {
     useSettingsStore: create(() => ({
       blurEnabled: false,
+      blurStrength: 20,
       transparentBackground: false,
       closeSettings: vi.fn(),
     })),

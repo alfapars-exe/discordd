@@ -12,6 +12,9 @@ import { usePreferencesStore } from "./preferencesStore";
 
 const THEME_STORAGE_KEY = "mqvi_theme";
 const BLUR_STORAGE_KEY = "mqvi_blur_enabled";
+/** One-time default-flip marker — see loadPersistedBlur() below. */
+const BLUR_MIGRATION_KEY = "mqvi_blur_default_migrated_v1";
+const BLUR_STRENGTH_KEY = "mqvi_blur_strength";
 const WALLPAPER_ENABLED_KEY = "mqvi_wallpaper_enabled";
 const TRANSPARENT_KEY = "mqvi_transparent_bg";
 const LIGHTNING_ENABLED_KEY = "mqvi_lightning_enabled";
@@ -29,6 +32,11 @@ const LIGHTNING_BLUR_MAX = 20;
 const NEON_INTENSITY_DEFAULT = 60;
 const NEON_INTENSITY_MIN = 0;
 const NEON_INTENSITY_MAX = 100;
+
+/** Blur strength (px) — how strong the frosted-panel backdrop blur is when enabled. */
+const BLUR_STRENGTH_DEFAULT = 20;
+const BLUR_STRENGTH_MIN = 8;
+const BLUR_STRENGTH_MAX = 40;
 
 /** Whole-app UI scale (%). 100 = native size; whole interface zooms uniformly. */
 const UI_SCALE_DEFAULT = 100;
@@ -69,22 +77,41 @@ function loadPersistedTheme(): ThemeId {
   return DEFAULT_THEME;
 }
 
+/**
+ * One-time migration (2026-08-13): blur used to default ON (via a
+ * hardware-concurrency / prefers-reduced-transparency heuristic). Product
+ * decision: flip the default to OFF for everyone, including clients that
+ * already have "1" persisted — we cannot distinguish an explicit opt-in
+ * from the old auto-on default, so this is a deliberate one-time reset.
+ * The migration marker makes this run exactly once per client; after that,
+ * the stored value (or a fresh choice from Settings) wins normally.
+ */
 function loadPersistedBlur(): boolean {
   try {
+    if (!localStorage.getItem(BLUR_MIGRATION_KEY)) {
+      localStorage.setItem(BLUR_STORAGE_KEY, "0");
+      localStorage.setItem(BLUR_MIGRATION_KEY, "1");
+      return false;
+    }
     const stored = localStorage.getItem(BLUR_STORAGE_KEY);
     if (stored === "1") return true;
-    if (stored === "0") return false;
   } catch {
     /* localStorage access error */
   }
-  // Heuristic default: disable blur on low-end hardware or when user requests reduced transparency
-  if (typeof navigator !== "undefined" && typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency < 4) {
-    return false;
+  return false;
+}
+
+function loadPersistedBlurStrength(): number {
+  try {
+    const stored = localStorage.getItem(BLUR_STRENGTH_KEY);
+    if (stored !== null) {
+      const px = parseInt(stored, 10);
+      if (Number.isFinite(px) && px >= BLUR_STRENGTH_MIN && px <= BLUR_STRENGTH_MAX) return px;
+    }
+  } catch {
+    /* localStorage access error */
   }
-  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-transparency: reduce)").matches) {
-    return false;
-  }
-  return true;
+  return BLUR_STRENGTH_DEFAULT;
 }
 
 function loadPersistedWallpaperEnabled(): boolean {
@@ -245,6 +272,8 @@ type SettingsState = {
   activeTab: SettingsTab;
   themeId: ThemeId;
   blurEnabled: boolean;
+  /** Backdrop blur strength in px (8–40) when blurEnabled is true. */
+  blurStrength: number;
   wallpaperEnabled: boolean;
   /** Transparent window background — desktop shows through */
   transparentBackground: boolean;
@@ -266,6 +295,7 @@ type SettingsState = {
   setActiveTab: (tab: SettingsTab) => void;
   setTheme: (id: ThemeId) => void;
   setBlurEnabled: (enabled: boolean) => void;
+  setBlurStrength: (px: number) => void;
   setWallpaperEnabled: (enabled: boolean) => void;
   setTransparentBackground: (enabled: boolean) => void;
   setLightningEnabled: (enabled: boolean) => void;
@@ -282,6 +312,7 @@ export type { SettingsTab };
 
 const initialTheme = loadPersistedTheme();
 const initialBlur = loadPersistedBlur();
+const initialBlurStrength = loadPersistedBlurStrength();
 const initialWallpaperEnabled = loadPersistedWallpaperEnabled();
 const initialTransparent = loadPersistedTransparent();
 const initialLightningEnabled = loadPersistedLightningEnabled();
@@ -307,6 +338,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: "profile",
   themeId: initialTheme,
   blurEnabled: initialBlur,
+  blurStrength: initialBlurStrength,
   wallpaperEnabled: initialWallpaperEnabled,
   transparentBackground: initialTransparent,
   lightningEnabled: initialLightningEnabled,
@@ -339,6 +371,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ blurEnabled: enabled });
+  },
+
+  setBlurStrength: (px) => {
+    const clamped = Math.max(BLUR_STRENGTH_MIN, Math.min(BLUR_STRENGTH_MAX, Math.round(px)));
+    try {
+      localStorage.setItem(BLUR_STRENGTH_KEY, String(clamped));
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    set({ blurStrength: clamped });
   },
 
   setWallpaperEnabled: (enabled) => {

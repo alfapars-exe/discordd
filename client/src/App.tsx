@@ -36,6 +36,7 @@ function App() {
   const initPhase = useAuthStore((s) => s.initPhase);
   const user = useAuthStore((s) => s.user);
   const blurEnabled = useSettingsStore((s) => s.blurEnabled);
+  const blurStrength = useSettingsStore((s) => s.blurStrength);
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
 
   useEffect(() => {
@@ -82,11 +83,15 @@ function App() {
   }, [user]);
 
   // Apply blur + transparent classes at root level so they also affect
-  // pre-auth pages (login, register, landing).
+  // pre-auth pages (login, register, landing). --blur-radius drives the
+  // backdrop-filter blur() argument in globals.css (body.blur-enabled);
+  // it's written here (not blur-disabled) since it's a no-op while blur
+  // is off, and the CSS fallback (20px) already matches the store default.
   useEffect(() => {
     document.body.classList.toggle("blur-enabled", blurEnabled);
     document.body.classList.toggle("blur-disabled", !blurEnabled);
-  }, [blurEnabled]);
+    document.documentElement.style.setProperty("--blur-radius", `${blurStrength}px`);
+  }, [blurEnabled, blurStrength]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("transparent-bg", transparentBackground);

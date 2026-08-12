@@ -46,52 +46,20 @@ func registerHubCallbacks(
 	channelRepo repository.ChannelRepository,
 	serverRepo repository.ServerRepository,
 	channelPermResolver services.ChannelPermResolver,
-) {
+) (stopPresenceDebounce func()) {
+	// presenceDebouncer delays the OFFLINE presence transition (DB write +
+	// broadcast) by presenceOfflineGrace so a brief reconnect never flaps
+	// every client's presence list. See presence_debounce.go's doc comment
+	// for the root cause and grace-period rationale. One instance shared
+	// between the disconnect callback (schedules) and the first-connect
+	// callback (cancels on reconnect).
+	presenceDebouncer := newPresenceOfflineDebouncer(presenceOfflineGrace)
+
 	// ─── Presence Callbacks ───
 
-	hub.OnUserFirstConnect(userFirstConnectCallback(hub, userRepo))
+	hub.OnUserFirstConnect(userFirstConnectCallback(hub, userRepo, presenceDebouncer))
 
-	hub.OnUserFullyDisconnected(func(userID, _ string) {
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		if updateErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOffline); updateErr != nil {
-			hubLogger.Error("failed to set offline status", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
-		}
-
-		hub.SetInvisible(userID, false)
-
-		hub.BroadcastToAll(ws.Event{
-			Op: ws.OpPresence,
-			Data: ws.PresenceData{
-				UserID: userID,
-				Status: string(models.UserStatusOffline),
-			},
-		})
-		hubLogger.Info("user disconnected, DB set to offline", "area", "presence", "user_id", userID)
-
-		// Voice state is NOT cleaned here — WS disconnect != voice leave.
-		// LiveKit connection is separate; WS may reconnect shortly.
-		// Cleaned by explicit voice_leave or orphan cleanup sweep.
-
-		// is_streaming, however, IS cleared on full disconnect: the screen
-		// share publisher and the WS share the same browser tab, so when
-		// the WS dies the publishing track is gone too. Leaving the flag
-		// stale for the 35 s orphan grace gave viewers a "Ramses is
-		// streaming" indicator with no track to back it — UI would flip
-		// to compact strip mode showing only a blank video area. If the
-		// user reconnects within grace and is still publishing locally,
-		// the client re-asserts via voice_state_update_request on the new
-		// WS.
-		if vState := voiceService.GetUserVoiceState(userID); vState != nil && vState.IsStreaming {
-			falseVal := false
-			if updErr := voiceService.UpdateState(userID, nil, nil, &falseVal); updErr != nil {
-				hubLogger.Error("failed to clear streaming on disconnect", "area", "voice", "user_id", userID, "err", pkg.ErrText(updErr))
-			}
-		}
-
-		p2pCallService.HandleDisconnect(userID)
-	})
+	hub.OnUserFullyDisconnected(userFullyDisconnectedCallback(hub, userRepo, voiceService, p2pCallService, presenceDebouncer))
 
 	hub.OnPresenceManualUpdate(presenceUpdateCallback(hub, userRepo))
 
@@ -206,6 +174,8 @@ func registerHubCallbacks(
 	// ─── DM Typing Callback ───
 
 	hub.OnDMTyping(dmTypingCallback(hub, dmRepo))
+
+	return presenceDebouncer.stopAll
 }
 
 // userFirstConnectCallback resolves a newly-connected user's persisted
@@ -214,8 +184,23 @@ func registerHubCallbacks(
 // Both DB calls share one bounded context: they are a single logical unit
 // (read the preference, write the derived status), and the point of the bound
 // is to cap the goroutine's total lifetime, not each statement's.
-func userFirstConnectCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.UserConnectionCallback {
+//
+// hub is typed as the ws.EventPublisher interface (rather than the concrete
+// *ws.Hub, matching channelTypingCallback's rationale) so tests can
+// substitute testutil.MockEventPublisher and observe the presence broadcast
+// directly — needed for the presence-offline debounce tests in
+// presence_debounce_test.go, which assert on both this callback and
+// userFullyDisconnectedCallback sharing one debouncer instance.
+func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer) ws.UserConnectionCallback {
 	return func(userID, _ string) {
+		// A fresh first-connection this soon after the user's last
+		// connection fully closed means they reconnected within
+		// presenceOfflineGrace (see presence_debounce.go) rather than
+		// actually leaving — cancel the pending OFFLINE transition before
+		// it fires. No-op (returns false) when nothing is pending, which is
+		// the common case (a genuinely new session, not a reconnect).
+		debouncer.cancel(userID)
+
 		ctx, cancel := services.BroadcastContext()
 		defer cancel()
 
@@ -257,6 +242,101 @@ func userFirstConnectCallback(hub *ws.Hub, userRepo repository.UserRepository) w
 		})
 		hubLogger.Info("user connected with status from pref_status", "area", "presence", "user_id", userID, "status", targetStatus)
 	}
+}
+
+// userFullyDisconnectedCallback builds the OnUserFullyDisconnected handler.
+//
+// The OFFLINE presence transition (DB write + broadcast) is NOT run
+// synchronously here — it is handed to presenceDebouncer, which delays it by
+// presenceOfflineGrace so a reconnect within that window (handled by
+// userFirstConnectCallback's debouncer.cancel call) suppresses it entirely.
+// See presence_debounce.go's doc comment for the root cause this fixes.
+//
+// The voice/P2P cleanup below stays synchronous and un-debounced — deliberately
+// unchanged from the pre-fix behavior. Both are tied to the WS connection
+// itself (the publishing browser tab, the live P2P signaling channel), not to
+// presence, and a reconnect re-asserts voice state explicitly
+// (voice_state_update_request) rather than relying on stale server-side state
+// surviving the grace window.
+func userFullyDisconnectedCallback(
+	hub ws.EventPublisher,
+	userRepo repository.UserRepository,
+	voiceService services.VoiceService,
+	p2pCallService services.P2PCallService,
+	debouncer *presenceOfflineDebouncer,
+) ws.UserConnectionCallback {
+	return func(userID, _ string) {
+		scheduleOfflinePresenceTransition(debouncer, hub, userRepo, userID)
+
+		// Voice state is NOT cleaned here — WS disconnect != voice leave.
+		// LiveKit connection is separate; WS may reconnect shortly.
+		// Cleaned by explicit voice_leave or orphan cleanup sweep.
+
+		// is_streaming, however, IS cleared on full disconnect: the screen
+		// share publisher and the WS share the same browser tab, so when
+		// the WS dies the publishing track is gone too. Leaving the flag
+		// stale for the 35 s orphan grace gave viewers a "Ramses is
+		// streaming" indicator with no track to back it — UI would flip
+		// to compact strip mode showing only a blank video area. If the
+		// user reconnects within grace and is still publishing locally,
+		// the client re-asserts via voice_state_update_request on the new
+		// WS.
+		if vState := voiceService.GetUserVoiceState(userID); vState != nil && vState.IsStreaming {
+			falseVal := false
+			if updErr := voiceService.UpdateState(userID, nil, nil, &falseVal); updErr != nil {
+				hubLogger.Error("failed to clear streaming on disconnect", "area", "voice", "user_id", userID, "err", pkg.ErrText(updErr))
+			}
+		}
+
+		p2pCallService.HandleDisconnect(userID)
+	}
+}
+
+// scheduleOfflinePresenceTransition hands the OFFLINE DB write + broadcast
+// for userID to debouncer, to run after presenceOfflineGrace has elapsed
+// with no reconnect. Split out from userFullyDisconnectedCallback so the
+// debounce interaction (schedule → cancel-on-reconnect → fire-time recheck)
+// is testable without constructing the voice/P2P service dependencies that
+// function ALSO drives synchronously (see presence_debounce_test.go).
+func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string) {
+	debouncer.schedule(userID, func() {
+		offlinePresenceTransition(hub, userRepo, userID)
+	})
+}
+
+// offlinePresenceTransition performs the actual OFFLINE DB write + broadcast
+// once presenceOfflineDebouncer's grace period has elapsed with no reconnect.
+//
+// Re-checks hub.GetOnlineUserIDs() first as a belt-and-braces guard against
+// this fire racing a reconnect that, for whatever reason, didn't reach
+// debouncer.cancel() first — schedule() and cancel() serialize on the
+// debouncer's own mutex, so in the normal path cancel() always wins if the
+// reconnect happened before the timer fired; this is defense-in-depth, not
+// the primary mechanism.
+func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, userID string) {
+	for _, connectedID := range hub.GetOnlineUserIDs() {
+		if connectedID == userID {
+			return
+		}
+	}
+
+	ctx, cancel := services.BroadcastContext()
+	defer cancel()
+
+	if updateErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOffline); updateErr != nil {
+		hubLogger.Error("failed to set offline status", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
+	}
+
+	hub.SetInvisible(userID, false)
+
+	hub.BroadcastToAll(ws.Event{
+		Op: ws.OpPresence,
+		Data: ws.PresenceData{
+			UserID: userID,
+			Status: string(models.UserStatusOffline),
+		},
+	})
+	hubLogger.Info("user disconnected, DB set to offline", "area", "presence", "user_id", userID, "grace", presenceOfflineGrace.String())
 }
 
 // presenceUpdateCallback persists a presence change and fans it out.
