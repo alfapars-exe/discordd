@@ -147,6 +147,23 @@ func TestErrText_RedactsWithMultiByteUTF8Context(t *testing.T) {
 	}
 }
 
+func TestRedactSecrets_ExportedDirectly(t *testing.T) {
+	// RedactSecrets is called directly by callers outside pkg (e.g. the
+	// client-log handler) that redact free text before persisting it, not
+	// just error strings routed through ErrText.
+	got := RedactSecrets("upstream call failed: token=abc123 retrying")
+
+	if contains(got, "abc123") {
+		t.Errorf("RedactSecrets() leaked the token: %q", got)
+	}
+	if !contains(got, "token=***") {
+		t.Errorf("RedactSecrets() = %q, want it to contain %q", got, "token=***")
+	}
+	if !contains(got, "retrying") {
+		t.Errorf("RedactSecrets() dropped surrounding context: %q", got)
+	}
+}
+
 func contains(haystack, needle string) bool {
 	return len(haystack) >= len(needle) && (haystack == needle || indexOf(haystack, needle) >= 0)
 }

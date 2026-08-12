@@ -276,7 +276,9 @@ func TestHardDeleteUser_CascadesOwnedServers(t *testing.T) {
 	}
 	userID := server.OwnerID
 
-	if err := userRepo.HardDeleteUser(context.Background(), userID); err != nil {
+	// No badges/reports/feedback exist for this fixture, so the reassign
+	// target is never actually written — any non-empty ID is fine here.
+	if err := userRepo.HardDeleteUser(context.Background(), userID, "admin-reassign"); err != nil {
 		t.Fatalf("HardDeleteUser: %v", err)
 	}
 

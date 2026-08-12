@@ -1093,8 +1093,11 @@ func TestAdminDisconnectUser_DoesNotStopMusicBotWhenChannelStillOccupied(t *test
 // instanceID == "") don't swallow the call before it reaches
 // IncrementMonthlyUsage — needed to observe F4's fix.
 type mockConfigurableLiveKitGetter struct {
-	GetByServerIDFn         func(ctx context.Context, serverID string) (*models.LiveKitInstance, error)
-	IncrementMonthlyUsageFn func(ctx context.Context, instanceID string, year, month, seconds int) error
+	GetByServerIDFn             func(ctx context.Context, serverID string) (*models.LiveKitInstance, error)
+	IncrementMonthlyUsageFn     func(ctx context.Context, instanceID string, year, month, seconds int) error
+	GetMonthlyUsageFn           func(ctx context.Context, instanceID string, year, month int) (int64, error)
+	GetNextAutoSwitchInstanceFn func(ctx context.Context, currentInstanceID string, year, month int) (*models.LiveKitInstance, error)
+	MigrateOneServerFn          func(ctx context.Context, serverID, newInstanceID string) error
 }
 
 func (m *mockConfigurableLiveKitGetter) GetByServerID(ctx context.Context, serverID string) (*models.LiveKitInstance, error) {
@@ -1103,7 +1106,10 @@ func (m *mockConfigurableLiveKitGetter) GetByServerID(ctx context.Context, serve
 	}
 	return nil, fmt.Errorf("no livekit instance in test")
 }
-func (m *mockConfigurableLiveKitGetter) GetMonthlyUsage(_ context.Context, _ string, _, _ int) (int64, error) {
+func (m *mockConfigurableLiveKitGetter) GetMonthlyUsage(ctx context.Context, instanceID string, year, month int) (int64, error) {
+	if m.GetMonthlyUsageFn != nil {
+		return m.GetMonthlyUsageFn(ctx, instanceID, year, month)
+	}
 	return 0, nil
 }
 func (m *mockConfigurableLiveKitGetter) IncrementMonthlyUsage(ctx context.Context, instanceID string, year, month, seconds int) error {
@@ -1112,10 +1118,16 @@ func (m *mockConfigurableLiveKitGetter) IncrementMonthlyUsage(ctx context.Contex
 	}
 	return nil
 }
-func (m *mockConfigurableLiveKitGetter) GetNextAutoSwitchInstance(_ context.Context, _ string, _, _ int) (*models.LiveKitInstance, error) {
+func (m *mockConfigurableLiveKitGetter) GetNextAutoSwitchInstance(ctx context.Context, currentInstanceID string, year, month int) (*models.LiveKitInstance, error) {
+	if m.GetNextAutoSwitchInstanceFn != nil {
+		return m.GetNextAutoSwitchInstanceFn(ctx, currentInstanceID, year, month)
+	}
 	return nil, nil
 }
-func (m *mockConfigurableLiveKitGetter) MigrateOneServer(_ context.Context, _, _ string) error {
+func (m *mockConfigurableLiveKitGetter) MigrateOneServer(ctx context.Context, serverID, newInstanceID string) error {
+	if m.MigrateOneServerFn != nil {
+		return m.MigrateOneServerFn(ctx, serverID, newInstanceID)
+	}
 	return nil
 }
 
@@ -1150,6 +1162,146 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 		nil, // auditLogger — not under test here
 	)
 	return svc, hub
+}
+
+// ─── ensureLiveKitInstance (LiveKit auto-switch) — P3.4 ───
+//
+// GenerateToken's auto-switch side effect was extracted into
+// ensureLiveKitInstance (voice_token.go) so it has exactly one call site.
+// These tests call it directly (white-box, same *voiceService cast pattern
+// as TestAdminDisconnectUser_CreditsUsage below) rather than going through
+// GenerateToken, since GenerateToken's happy path needs a real
+// crypto.Decrypt round trip that this harness's nil encryptionKey can't
+// provide — the auto-switch decision happens entirely before that point.
+
+func TestEnsureLiveKitInstance_BelowThreshold_NoMigration(t *testing.T) {
+	nextCalled, migrateCalled := false, false
+	lkGetter := &mockConfigurableLiveKitGetter{
+		GetByServerIDFn: func(_ context.Context, _ string) (*models.LiveKitInstance, error) {
+			return &models.LiveKitInstance{
+				ID: "lk1", IsPlatformManaged: true, AutoSwitchEnabled: true,
+				MonthlyQuotaMinutes: 100, SwitchThresholdMinutes: 20,
+			}, nil
+		},
+		GetMonthlyUsageFn: func(_ context.Context, _ string, _, _ int) (int64, error) {
+			return 0, nil // (100-20)*60 = 4800s threshold; 0 is nowhere near it
+		},
+		GetNextAutoSwitchInstanceFn: func(_ context.Context, _ string, _, _ int) (*models.LiveKitInstance, error) {
+			nextCalled = true
+			return nil, nil
+		},
+		MigrateOneServerFn: func(_ context.Context, _, _ string) error {
+			migrateCalled = true
+			return nil
+		},
+	}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(lkGetter)
+	vs := svc.(*voiceService)
+
+	got, err := vs.ensureLiveKitInstance(context.Background(), "victim", "srv1")
+	if err != nil {
+		t.Fatalf("ensureLiveKitInstance: %v", err)
+	}
+	if got.ID != "lk1" {
+		t.Errorf("instance = %q, want unchanged lk1", got.ID)
+	}
+	if nextCalled || migrateCalled {
+		t.Errorf("expected no auto-switch lookup below threshold, nextCalled=%v migrateCalled=%v", nextCalled, migrateCalled)
+	}
+}
+
+func TestEnsureLiveKitInstance_AboveThreshold_MigratesToNextInstance(t *testing.T) {
+	var migratedServerID, migratedInstanceID string
+	lkGetter := &mockConfigurableLiveKitGetter{
+		GetByServerIDFn: func(_ context.Context, _ string) (*models.LiveKitInstance, error) {
+			return &models.LiveKitInstance{
+				ID: "lk1", IsPlatformManaged: true, AutoSwitchEnabled: true,
+				MonthlyQuotaMinutes: 100, SwitchThresholdMinutes: 20,
+			}, nil
+		},
+		GetMonthlyUsageFn: func(_ context.Context, _ string, _, _ int) (int64, error) {
+			return int64(85 * 60), nil // 85min >= (100-20)min threshold
+		},
+		GetNextAutoSwitchInstanceFn: func(_ context.Context, _ string, _, _ int) (*models.LiveKitInstance, error) {
+			return &models.LiveKitInstance{ID: "lk2", IsPlatformManaged: true}, nil
+		},
+		MigrateOneServerFn: func(_ context.Context, serverID, newInstanceID string) error {
+			migratedServerID, migratedInstanceID = serverID, newInstanceID
+			return nil
+		},
+	}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(lkGetter)
+	vs := svc.(*voiceService)
+
+	got, err := vs.ensureLiveKitInstance(context.Background(), "victim", "srv1")
+	if err != nil {
+		t.Fatalf("ensureLiveKitInstance: %v", err)
+	}
+	if got.ID != "lk2" {
+		t.Errorf("instance = %q, want migrated lk2", got.ID)
+	}
+	if migratedServerID != "srv1" || migratedInstanceID != "lk2" {
+		t.Errorf("MigrateOneServer called with (%q, %q), want (srv1, lk2)", migratedServerID, migratedInstanceID)
+	}
+}
+
+func TestEnsureLiveKitInstance_MigrateError_StaysOnCurrentInstance(t *testing.T) {
+	lkGetter := &mockConfigurableLiveKitGetter{
+		GetByServerIDFn: func(_ context.Context, _ string) (*models.LiveKitInstance, error) {
+			return &models.LiveKitInstance{
+				ID: "lk1", IsPlatformManaged: true, AutoSwitchEnabled: true,
+				MonthlyQuotaMinutes: 100, SwitchThresholdMinutes: 20,
+			}, nil
+		},
+		GetMonthlyUsageFn: func(_ context.Context, _ string, _, _ int) (int64, error) {
+			return int64(85 * 60), nil
+		},
+		GetNextAutoSwitchInstanceFn: func(_ context.Context, _ string, _, _ int) (*models.LiveKitInstance, error) {
+			return &models.LiveKitInstance{ID: "lk2", IsPlatformManaged: true}, nil
+		},
+		MigrateOneServerFn: func(_ context.Context, _, _ string) error {
+			return fmt.Errorf("migrate failed")
+		},
+	}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(lkGetter)
+	vs := svc.(*voiceService)
+
+	got, err := vs.ensureLiveKitInstance(context.Background(), "victim", "srv1")
+	if err != nil {
+		t.Fatalf("ensureLiveKitInstance: %v", err)
+	}
+	if got.ID != "lk1" {
+		t.Errorf("instance = %q, want fail-open to the original lk1 after a migrate error", got.ID)
+	}
+}
+
+func TestEnsureLiveKitInstance_SelfHosted_SkipsAutoSwitchCheck(t *testing.T) {
+	usageChecked := false
+	lkGetter := &mockConfigurableLiveKitGetter{
+		GetByServerIDFn: func(_ context.Context, _ string) (*models.LiveKitInstance, error) {
+			return &models.LiveKitInstance{
+				ID: "lk-self-hosted", IsPlatformManaged: false, AutoSwitchEnabled: true,
+				MonthlyQuotaMinutes: 100, SwitchThresholdMinutes: 20,
+			}, nil
+		},
+		GetMonthlyUsageFn: func(_ context.Context, _ string, _, _ int) (int64, error) {
+			usageChecked = true
+			return int64(999 * 60), nil // would clear any threshold if it were checked
+		},
+	}
+	svc, _ := newTestVoiceServiceWithLiveKitGetter(lkGetter)
+	vs := svc.(*voiceService)
+
+	got, err := vs.ensureLiveKitInstance(context.Background(), "victim", "srv1")
+	if err != nil {
+		t.Fatalf("ensureLiveKitInstance: %v", err)
+	}
+	if got.ID != "lk-self-hosted" {
+		t.Errorf("instance = %q, want unchanged lk-self-hosted", got.ID)
+	}
+	if usageChecked {
+		t.Error("expected GetMonthlyUsage never called for a self-hosted (IsPlatformManaged=false) instance")
+	}
 }
 
 // TestAdminDisconnectUser_CreditsUsage pins F4 (MEDIUM): AdminDisconnectUser

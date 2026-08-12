@@ -11,6 +11,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// HTTPStatsSink receives one observation per completed HTTP request (status
+// code + total handling duration), for the durable runtime-telemetry
+// per-minute rollup (P3.11, see health.go's startRuntimeStatsLogger). Kept
+// deliberately minimal — RequestLogger is the single call site, not a new
+// middleware — so this doesn't grow into a general metrics-package
+// dependency here.
+type HTTPStatsSink interface {
+	Observe(status int, d time.Duration)
+}
+
 type ctxKey string
 
 const requestIDKey ctxKey = "request_id"
@@ -86,10 +96,16 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // (surfaced via the X-Request-Id response header and the request context) and
 // emits one structured access-log line per request at Info level.
 //
+// sink, if non-nil, additionally receives an Observe(status, duration) call
+// per request — the durable runtime-telemetry rollup's HTTP counters (P3.11)
+// feed off this instead of a separate middleware, since statusRecorder
+// already computes exactly these two values. nil is fine (e.g. existing
+// tests / callers that don't need the aggregation).
+//
 // The /ws WebSocket upgrade is skipped: those connections are long-lived and
 // the ws layer already logs per-message. This is intended as the OUTERMOST
 // middleware so it observes the final status set by anything beneath it.
-func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -133,6 +149,11 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			if rec.status == 0 {
 				rec.status = http.StatusOK
 			}
+			duration := time.Since(start)
+
+			if sink != nil {
+				sink.Observe(rec.status, duration)
+			}
 
 			logger.LogAttrs(ctx, slog.LevelInfo, "http request",
 				slog.String("request_id", reqID),
@@ -140,7 +161,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rec.status),
 				slog.Int("bytes", rec.bytes),
-				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+				slog.Int64("duration_ms", duration.Milliseconds()),
 				slog.String("ip", ratelimit.ExtractIP(r)),
 			)
 		})

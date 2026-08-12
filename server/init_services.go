@@ -113,7 +113,12 @@ type RateLimiters struct {
 // initServices creates all services. Order matters:
 // channelPermService -> voiceService/messageService (dependency)
 // voiceService/p2pCallService -> before Hub callbacks (closure scoping)
-func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte) (*Services, *RateLimiters, services.MetricsCollector) {
+//
+// reachabilityReporter is the readiness cache (constructed in main.go BEFORE
+// this call, specifically so it can be threaded through to
+// services.NewMetricsCollector below) — nil-safe, so tests/callers that
+// don't care about readiness integration can pass nil.
+func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
@@ -126,7 +131,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// nothing calls compiles fine and silently drops every audit event (see
 	// wiring_test.go); a constructor parameter can't be forgotten without a
 	// compile error.
-	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
+	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub, cfg.AuditLogRetentionDays)
 	voiceService := services.NewVoiceService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
@@ -246,6 +251,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		30,
 		cfg.HetznerAPIToken,
 		voiceService,
+		reachabilityReporter,
 	)
 
 	// Rate limiters

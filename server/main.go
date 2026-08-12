@@ -159,8 +159,25 @@ func main() {
 	// 8. WebSocket Hub
 	hub := ws.NewHub()
 
+	// 8b. Readiness cache — constructed here (before initServices) so it can
+	// be threaded into services.NewMetricsCollector as a
+	// services.LiveKitReachabilityReporter (see health.go's
+	// ReportLiveKitReachable). The background poller that actually populates
+	// snap/polled (startReadinessChecker) still starts later, at step 10h,
+	// once the DB handle it probes is in scope — only the struct itself
+	// needs to exist this early.
+	readiness := &readinessCache{}
+
+	// 8c. HTTP stats aggregator — feeds the durable runtime-telemetry rollup
+	// (P3.11). Constructed here so it can be handed to both
+	// startRuntimeStatsLogger (step 10f, reads+resets it once per tick) and
+	// middleware.RequestLogger (step 17b, writes to it on every request);
+	// those two wiring points are far apart in this function, so the
+	// aggregator itself needs to exist before either.
+	httpStats := &httpStatsAggregator{}
+
 	// 9. Service layer (order matters: channelPerm -> voice -> p2pCall -> rest)
-	svcs, limiters, metricsCollector := initServices(db.Conn, repos, hub, cfg, encryptionKey)
+	svcs, limiters, metricsCollector := initServices(db.Conn, repos, hub, cfg, encryptionKey, readiness)
 
 	// 9b. Wire structured app logger into Hub and services
 	hub.SetAppLogger(svcs.AppLog)
@@ -223,8 +240,9 @@ func main() {
 	svcs.Backup.Start()
 
 	// 10f. Runtime stats logger — periodic process metrics into the structured
-	// log stream (no external scraper on a single-instance HF Space).
-	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute)
+	// log stream (no external scraper on a single-instance HF Space) AND into
+	// the durable runtime_telemetry rollup (P3.11, repos.RuntimeTelemetry).
+	stopRuntimeStats := startRuntimeStatsLogger(hub, db, time.Minute, repos.RuntimeTelemetry, httpStats, cfg.TelemetryRetentionDays)
 
 	// 10g. Maintenance sweeper — hourly purge of expired sessions and stale
 	// link-preview cache rows (audit P1-BD-04: DeleteExpired had no caller,
@@ -236,8 +254,9 @@ func main() {
 	// caches the verdict. /api/health reads that cache so monitors can see
 	// "degraded" in the body while the endpoint keeps returning 200 (audit
 	// P2-IN-12). Started before the routes below because healthHandler needs
-	// the cache.
-	readiness := &readinessCache{}
+	// the cache. readiness itself was constructed earlier (step 8b) so it
+	// could also be threaded into initServices; only the background poller
+	// starts here.
 	stopReadiness := startReadinessChecker(db.Conn, cfg, readiness, readinessCheckInterval, logx.Component("readiness"))
 
 	// Bot service: powers the auth middleware (accept hb_-prefixed bot tokens
@@ -254,6 +273,13 @@ func main() {
 	// 12. HTTP router + routes
 	mux := http.NewServeMux()
 	authMw, permMw := initRoutes(mux, h, svcs.Auth, repos.User, repos.Role, repos.Server, limiters.DeviceEnum, limiters.Refresh, botService)
+
+	// 12b. pprof debug endpoints (P3.12) — env-gated (HICHAT_PPROF=1) and,
+	// when enabled, double-gated behind auth + platform-admin. Registered
+	// directly on mux rather than inside initRoutes so the golden route-set
+	// test (init_routes_test.go) stays stable for every deployment that
+	// doesn't set the env var. See pprof_debug.go for the full rationale.
+	registerPprofRoutes(mux, authMw)
 
 	// Wire the auth user-cache invalidator into the admin user service so a
 	// platform ban / hard-delete / admin-status change drops the cached user
@@ -368,8 +394,9 @@ func main() {
 	// attempt still gets one access-log line via RequestLogger. Recover
 	// catches handler panics (including anything below BodyLimit), logs them
 	// with a stack trace (forwarded to Sentry), and returns 500 instead of
-	// dropping the conn.
-	rootHandler := middleware.RequestLogger(slog.Default())(
+	// dropping the conn. httpStats (step 8c) receives the same status+duration
+	// RequestLogger already computes, feeding the runtime_telemetry rollup.
+	rootHandler := middleware.RequestLogger(slog.Default(), httpStats)(
 		middleware.BodyLimit(middleware.MaxRequestBodyBytes)(
 			middleware.Recover(slog.Default())(securedHandler),
 		),

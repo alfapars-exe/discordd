@@ -52,7 +52,9 @@ type UserRepository interface {
 	DeleteAllMessagesByUser(ctx context.Context, userID string) error
 	// HardDeleteUser permanently deletes a user and all cascaded data.
 	// Owned servers must be cleaned up beforehand (no CASCADE on servers.owner_id).
-	HardDeleteUser(ctx context.Context, userID string) error
+	// reassignToUserID receives ownership of records that must survive the
+	// deleted account (badges created_by, user_badges assigned_by).
+	HardDeleteUser(ctx context.Context, userID, reassignToUserID string) error
 
 	// ─── Download Prompt ───
 

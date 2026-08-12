@@ -171,7 +171,7 @@ func (h *LiveKitWebhookHandler) logEvent(ctx context.Context, event *livekit.Web
 	}
 
 	userID := identity
-	h.appLogger.Log(level, models.LogCategoryLiveKit, &userID, nil, message, metadata)
+	h.appLogger.Log(ctx, level, models.LogCategoryLiveKit, &userID, nil, message, metadata)
 }
 
 // enforceModerationOnJoin parses roomName (always "{serverID}:{channelID}",

@@ -115,14 +115,20 @@ func (h *ClientLogHandler) Log(w http.ResponseWriter, r *http.Request) {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "message is required")
 		return
 	}
+	// Redact before trimming: trimming first could cut a credential-shaped
+	// value (e.g. `token=abc`) in half and let the truncated half slip past
+	// the pattern match.
+	message = pkg.RedactSecrets(message)
 	if len(message) > maxClientLogMessageLen {
 		message = message[:maxClientLogMessageLen]
 	}
 
-	// Trim metadata values defensively. A misbehaving client could otherwise
-	// pump megabyte stack traces into a single row.
+	// Redact then trim metadata values defensively, same ordering rationale
+	// as message above. A misbehaving client could otherwise pump megabyte
+	// stack traces (or leaked credentials) into a single row.
 	metadata := make(map[string]string, len(req.Metadata)+1)
 	for k, v := range req.Metadata {
+		v = pkg.RedactSecrets(v)
 		if len(v) > maxMetadataValueLen {
 			v = v[:maxMetadataValueLen]
 		}
@@ -130,7 +136,7 @@ func (h *ClientLogHandler) Log(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := user.ID
-	h.appLogger.Log(level, categoryForMessage(message), &uid, nil, message, metadata)
+	h.appLogger.Log(r.Context(), level, categoryForMessage(message), &uid, nil, message, metadata)
 
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -110,10 +110,12 @@ func (c *Client) handleEvent(event Event) {
 		// event.Op is client-controlled — passed as a structured attr, not
 		// interpolated into the message, so it can't forge or split log lines (G706).
 		dispatchLogger.Warn("rate limit exceeded, event dropped", "user_id", c.userID, "op", event.Op)
+		c.hub.rateLimitDrops.Add(1)
 		return
 	}
 
 	if handler, ok := eventHandlers[event.Op]; ok {
+		c.hub.dispatchCount.Add(1)
 		handler(c, event)
 		return
 	}

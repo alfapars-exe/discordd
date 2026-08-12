@@ -72,7 +72,7 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		for _, fh := range r.MultipartForm.File["files"] {
 			f, openErr := fh.Open()
 			if openErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
 					fmt.Sprintf("failed to open uploaded file %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(openErr)), nil)
 				continue
 			}
@@ -83,7 +83,7 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 			// one as its own upload finishes.
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
 					fmt.Sprintf("failed to upload file %s for ticket %s: %s", pkg.SanitizeFilename(fh.Filename), ticket.ID, pkg.ErrText(uploadErr)), nil)
 				continue
 			}
@@ -283,7 +283,7 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 		for _, fh := range r.MultipartForm.File["files"] {
 			f, openErr := fh.Open()
 			if openErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
 					fmt.Sprintf("failed to open reply attachment %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(openErr)), nil)
 				continue
 			}
@@ -293,7 +293,7 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 			// open until the whole handler returns.
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
 					fmt.Sprintf("failed to upload reply attachment %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(uploadErr)), nil)
 				continue
 			}

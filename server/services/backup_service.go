@@ -71,7 +71,7 @@ type cmdRunner func(ctx context.Context, env []string, name string, args ...stri
 // uses. Defined locally so the package doesn't need to import the
 // concrete app_log_service implementation.
 type BackupAppLogger interface {
-	Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
+	Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
 }
 
 // BackupService runs periodic disaster-recovery snapshots to an HF Bucket.
@@ -252,15 +252,21 @@ func (b *BackupService) Shutdown(ctx context.Context) {
 	}
 }
 
+// context.Background(): logInfo/logError are called from the backup
+// service's own background goroutine (ticker-driven or shutdown path), not
+// from an HTTP request, so there is no request-scoped context to thread
+// through without widening these helpers' signatures across every one of
+// their call sites (out of scope for P3.8 — see AppLogService.Log's doc
+// comment).
 func (b *BackupService) logInfo(msg string, meta map[string]string) {
 	if b.appLogger != nil {
-		b.appLogger.Log(models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, msg, meta)
+		b.appLogger.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, msg, meta)
 	}
 }
 
 func (b *BackupService) logError(msg string, meta map[string]string) {
 	if b.appLogger != nil {
-		b.appLogger.Log(models.LogLevelError, models.LogCategoryGeneral, nil, nil, msg, meta)
+		b.appLogger.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, msg, meta)
 	}
 }
 

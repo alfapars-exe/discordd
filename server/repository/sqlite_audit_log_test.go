@@ -267,3 +267,41 @@ func idsOf(entries []models.AuditLog) []string {
 	}
 	return out
 }
+
+// TestDeleteBefore_RemovesOnlyOlderRows — P3.3 retention purge. Backdates one
+// row's created_at directly (repo.Insert always writes the DB-side "now"
+// default, so the only way to get an "old" row here is to update it after
+// the fact) and asserts DeleteBefore removes exactly that row, leaving a
+// same-instant row untouched — a >= vs > cutoff mistake would delete both or
+// neither.
+func TestDeleteBefore_RemovesOnlyOlderRows(t *testing.T) {
+	db := newTestDB(t)
+	seedAuditWorld(t, db)
+	repo := NewSQLiteAuditLogRepo(wrapForRepo(db))
+	ctx := context.Background()
+
+	oldEntry := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberKick)
+	freshEntry := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberBan)
+
+	// Backdate oldEntry beyond the cutoff; leave freshEntry at "now".
+	cutoff := time.Now().UTC().Format("2006-01-02 15:04:05")
+	backdated := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02 15:04:05")
+	if _, err := db.Conn.ExecContext(ctx, `UPDATE audit_logs SET created_at = ? WHERE id = ?`, backdated, oldEntry.ID); err != nil {
+		t.Fatalf("backdate old entry: %v", err)
+	}
+
+	deleted, err := repo.DeleteBefore(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("DeleteBefore: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("deleted = %d, want 1", deleted)
+	}
+
+	if got := countRows(t, db, `SELECT COUNT(*) FROM audit_logs WHERE id = ?`, oldEntry.ID); got != 0 {
+		t.Error("row older than the cutoff survived DeleteBefore")
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM audit_logs WHERE id = ?`, freshEntry.ID); got != 1 {
+		t.Error("row at/after the cutoff was incorrectly deleted")
+	}
+}

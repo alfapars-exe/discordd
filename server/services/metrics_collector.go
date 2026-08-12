@@ -46,6 +46,15 @@ type ScreenShareCounter interface {
 	GetScreenShareStats() (streamers int, viewers int)
 }
 
+// LiveKitReachabilityReporter is the narrow slice of the readiness cache
+// metricsCollector needs: report whether the LiveKit /metrics endpoint it
+// just polled responded, so /api/health can surface actual reachability
+// (not just "credentials are configured" — see health.go's
+// checks["livekit_configured"] vs checks["livekit_reachable"]).
+type LiveKitReachabilityReporter interface {
+	ReportLiveKitReachable(ok bool)
+}
+
 type metricsCollector struct {
 	livekitRepo repository.LiveKitRepository
 	historyRepo repository.MetricsHistoryRepository
@@ -57,6 +66,11 @@ type metricsCollector struct {
 	hetznerClient    *hcloud.Client     // optional, nil = disabled
 	vcpuCache        map[int64]int      // cached vCPU counts per Hetzner server ID
 	screenShareStats ScreenShareCounter // optional, nil = no screen share tracking
+
+	// reachabilityReporter forwards each instance's LiveKit /metrics poll
+	// result to the readiness cache. Optional (nil-safe) so a caller that
+	// doesn't need readiness integration (or a test) can omit it.
+	reachabilityReporter LiveKitReachabilityReporter
 
 	// Delta computation state. Goroutine-safe: only accessed by collector goroutine.
 	prevSamples map[string]*previousSample
@@ -72,16 +86,18 @@ func NewMetricsCollector(
 	retentionDays int,
 	hetznerToken string,
 	screenShareStats ScreenShareCounter,
+	reachabilityReporter LiveKitReachabilityReporter,
 ) MetricsCollector {
 	mc := &metricsCollector{
-		livekitRepo:      livekitRepo,
-		historyRepo:      historyRepo,
-		interval:         interval,
-		retentionDays:    retentionDays,
-		screenShareStats: screenShareStats,
-		prevSamples:      make(map[string]*previousSample),
-		vcpuCache:        make(map[int64]int),
-		stopCh:           make(chan struct{}),
+		livekitRepo:          livekitRepo,
+		historyRepo:          historyRepo,
+		interval:             interval,
+		retentionDays:        retentionDays,
+		screenShareStats:     screenShareStats,
+		reachabilityReporter: reachabilityReporter,
+		prevSamples:          make(map[string]*previousSample),
+		vcpuCache:            make(map[int64]int),
+		stopCh:               make(chan struct{}),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 			// TLS verification is ON by default. Self-hosters whose LiveKit
@@ -195,6 +211,10 @@ func (c *metricsCollector) collectOne(ctx context.Context, inst *models.LiveKitI
 				}
 			}
 		}
+	}
+
+	if c.reachabilityReporter != nil {
+		c.reachabilityReporter.ReportLiveKitReachable(livekitOK)
 	}
 
 	// 2. CPU & bandwidth — Hetzner API if available, otherwise LiveKit delta fallback

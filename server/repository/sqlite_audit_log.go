@@ -140,6 +140,17 @@ func (r *sqliteAuditLogRepo) ListByServer(
 	return entries, rows.Err()
 }
 
+// DeleteBefore removes audit_logs rows older than before, mirroring
+// sqliteAppLogRepo.DeleteBefore (same "2006-01-02 15:04:05" cutoff format,
+// since audit_logs.created_at uses the same DATETIME DEFAULT (datetime('now'))).
+func (r *sqliteAuditLogRepo) DeleteBefore(ctx context.Context, before string) (int64, error) {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM audit_logs WHERE created_at < ?", before)
+	if err != nil {
+		return 0, fmt.Errorf("delete old audit logs: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // marshalSnapshot serialises a UserSnapshot to JSON, returning NULL sentinel
 // when the snapshot is nil so the DB column stays NULL.
 func marshalSnapshot(s *models.UserSnapshot) (sql.NullString, error) {

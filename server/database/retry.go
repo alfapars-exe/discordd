@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"log"
 	"strings"
 	"time"
 
@@ -98,8 +97,7 @@ func (r *retryingQuerier) Unwrap() TxQuerier {
 func retry(ctx context.Context, label string, attempt func() error) error {
 	err := attempt()
 	for i := 0; err != nil && IsRetriablePrepareFailure(err) && i < maxPrepareRetries; i++ {
-		log.Printf("[database] stale stream on %s (attempt %d/%d), retrying: %s",
-			label, i+1, maxPrepareRetries, pkg.ErrText(err))
+		logger.Warn("stale stream, retrying", "label", label, "attempt", i+1, "max_attempts", maxPrepareRetries, "err", pkg.ErrText(err))
 		select {
 		case <-ctx.Done():
 			return err // surface the original DB error, not the context error
@@ -141,8 +139,7 @@ func (r *retryingQuerier) QueryContext(ctx context.Context, query string, args .
 func (r *retryingQuerier) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	row := r.db.QueryRowContext(ctx, query, args...)
 	for i := 0; IsRetriablePrepareFailure(row.Err()) && i < maxPrepareRetries; i++ {
-		log.Printf("[database] stale stream on QueryRow (attempt %d/%d), retrying: %s",
-			i+1, maxPrepareRetries, pkg.ErrText(row.Err()))
+		logger.Warn("stale stream, retrying", "label", "QueryRow", "attempt", i+1, "max_attempts", maxPrepareRetries, "err", pkg.ErrText(row.Err()))
 		select {
 		case <-ctx.Done():
 			return row

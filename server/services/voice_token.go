@@ -52,46 +52,11 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		}
 	}
 
-	// channel -> server -> livekit_instance lookup
-	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
+	// channel -> server -> livekit_instance lookup, migrating to a fresh
+	// instance first if this one is nearing its monthly quota.
+	lkInstance, err := s.ensureLiveKitInstance(ctx, userID, channel.ServerID)
 	if err != nil {
-		s.logError(models.LogCategoryVoice, &userID, "LiveKit instance lookup failed", map[string]string{
-			"server_id": channel.ServerID, "error": pkg.ErrText(err),
-		})
-		return nil, fmt.Errorf("failed to get livekit instance for server %s: %w", channel.ServerID, err)
-	}
-
-	// ─── Auto-switch when this cloud instance is running out of monthly quota.
-	// Self-hosted instances (IsPlatformManaged=false) skip this entirely; they
-	// have no quota and aren't part of the rotation.
-	//
-	// Rule: if (used + threshold*60) >= quota*60, look for the next eligible
-	// cloud instance (lower priority wins, same threshold check applied), and
-	// migrate the server's livekit_instance_id atomically. Fail-open: any
-	// error stays on the current instance — voice still works, we just keep
-	// burning the original budget.
-	if lkInstance.IsPlatformManaged && lkInstance.AutoSwitchEnabled {
-		now := time.Now()
-		year, month, _ := now.Date()
-		used, usageErr := s.livekitGetter.GetMonthlyUsage(ctx, lkInstance.ID, year, int(month))
-		if usageErr == nil {
-			thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
-			quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
-			if used+thresholdSec >= quotaSec {
-				next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
-				if nextErr == nil && next != nil {
-					if migErr := s.livekitGetter.MigrateOneServer(ctx, channel.ServerID, next.ID); migErr == nil {
-						voiceLogger.Info("auto-switch LiveKit instance",
-							"server_id", channel.ServerID, "from_instance", lkInstance.ID, "to_instance", next.ID,
-							"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
-						lkInstance = next
-					} else {
-						voiceLogger.Error("auto-switch migrate failed", "server_id", channel.ServerID, "err", pkg.ErrText(migErr))
-					}
-				}
-				// nextErr or next==nil: no eligible target — stay put.
-			}
-		}
+		return nil, err
 	}
 
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
@@ -209,6 +174,57 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		ChannelID:      channelID,
 		E2EEPassphrase: passphrase,
 	}, nil
+}
+
+// ensureLiveKitInstance resolves the LiveKit instance for serverID and, if it
+// is a platform-managed cloud instance nearing its monthly quota, migrates
+// the server to the next eligible instance before returning it. Extracted
+// from GenerateToken so the auto-switch side effect has exactly one call
+// site instead of being inlined into token generation.
+//
+// Self-hosted instances (IsPlatformManaged=false) skip the auto-switch
+// check entirely; they have no quota and aren't part of the rotation.
+//
+// Auto-switch rule: if (used + threshold*60) >= quota*60, look for the next
+// eligible cloud instance (lower priority wins, same threshold check
+// applied) and migrate the server's livekit_instance_id atomically.
+// Fail-open: any error in the check or migration leaves the server on its
+// current instance — voice still works, it just keeps burning the original
+// budget.
+func (s *voiceService) ensureLiveKitInstance(ctx context.Context, userID, serverID string) (*models.LiveKitInstance, error) {
+	lkInstance, err := s.livekitGetter.GetByServerID(ctx, serverID)
+	if err != nil {
+		s.logError(models.LogCategoryVoice, &userID, "LiveKit instance lookup failed", map[string]string{
+			"server_id": serverID, "error": pkg.ErrText(err),
+		})
+		return nil, fmt.Errorf("failed to get livekit instance for server %s: %w", serverID, err)
+	}
+
+	if lkInstance.IsPlatformManaged && lkInstance.AutoSwitchEnabled {
+		now := time.Now()
+		year, month, _ := now.Date()
+		used, usageErr := s.livekitGetter.GetMonthlyUsage(ctx, lkInstance.ID, year, int(month))
+		if usageErr == nil {
+			thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
+			quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
+			if used+thresholdSec >= quotaSec {
+				next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
+				if nextErr == nil && next != nil {
+					if migErr := s.livekitGetter.MigrateOneServer(ctx, serverID, next.ID); migErr == nil {
+						voiceLogger.Info("auto-switch LiveKit instance",
+							"server_id", serverID, "from_instance", lkInstance.ID, "to_instance", next.ID,
+							"used_seconds", used, "quota_seconds", quotaSec, "threshold_seconds", thresholdSec)
+						lkInstance = next
+					} else {
+						voiceLogger.Error("auto-switch migrate failed", "server_id", serverID, "err", pkg.ErrText(migErr))
+					}
+				}
+				// nextErr or next==nil: no eligible target — stay put.
+			}
+		}
+	}
+
+	return lkInstance, nil
 }
 
 // GenerateScreenShareToken generates a LiveKit token for the iOS native screen share connection.

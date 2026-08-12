@@ -27,7 +27,7 @@ type stubAppLog struct {
 	messages []string
 }
 
-func (s *stubAppLog) Log(_ models.LogLevel, _ models.LogCategory, _, _ *string, message string, _ map[string]string) {
+func (s *stubAppLog) Log(_ context.Context, _ models.LogLevel, _ models.LogCategory, _, _ *string, message string, _ map[string]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages = append(s.messages, message)

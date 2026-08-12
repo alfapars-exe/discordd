@@ -39,7 +39,7 @@ func (m *ServerMembershipMiddleware) Require(next http.Handler) http.Handler {
 
 		isMember, err := m.serverRepo.IsMember(r.Context(), serverID, user.ID)
 		if err != nil {
-			pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to check server membership")
+			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to check server membership", err)
 			return
 		}
 

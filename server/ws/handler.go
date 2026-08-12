@@ -61,7 +61,7 @@ type ChannelMuteChecker interface {
 
 // AppLogger writes structured app logs asynchronously. ISP interface to avoid circular dependency.
 type AppLogger interface {
-	Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
+	Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
 }
 
 // AllowedOrigins is set by main.go at startup to share the same origin

@@ -5,14 +5,28 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/google/uuid"
 )
 
+// stubHTTPStatsSink records every Observe call for assertions.
+type stubHTTPStatsSink struct {
+	status   int
+	duration time.Duration
+	calls    int
+}
+
+func (s *stubHTTPStatsSink) Observe(status int, d time.Duration) {
+	s.status = status
+	s.duration = d
+	s.calls++
+}
+
 func TestRequestLogger_SetsRequestIDAndCapturesStatus(t *testing.T) {
 	var gotReqID string
-	h := RequestLogger(discardLogger())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotReqID = RequestID(r.Context())
 		w.WriteHeader(http.StatusCreated)
 	}))
@@ -33,7 +47,7 @@ func TestRequestLogger_SetsRequestIDAndCapturesStatus(t *testing.T) {
 
 func TestRequestLogger_SkipsWebSocketPath(t *testing.T) {
 	called := false
-	h := RequestLogger(discardLogger())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		if RequestID(r.Context()) != "" {
 			t.Error("request id should not be assigned on /ws")
@@ -56,7 +70,7 @@ func TestRequestLogger_HonorsInboundXRequestId(t *testing.T) {
 	// proxies and retry loops rely on this so their trace correlates
 	// with ours; regenerating one here would break that story.
 	var gotReqID string
-	h := RequestLogger(discardLogger())(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		gotReqID = RequestID(r.Context())
 	}))
 
@@ -94,7 +108,7 @@ func TestRequestLogger_RejectsUnsafeInboundXRequestId(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var gotReqID string
-			h := RequestLogger(discardLogger())(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 				gotReqID = RequestID(r.Context())
 			}))
 
@@ -137,13 +151,69 @@ func TestIsSafeRequestID_AcceptsRealWorldIDs(t *testing.T) {
 	}
 }
 
+// TestRequestLogger_ReportsToSink — P3.11: a non-nil HTTPStatsSink must
+// receive exactly one Observe call per request, carrying the final status
+// (after the handler runs) and a non-negative duration.
+func TestRequestLogger_ReportsToSink(t *testing.T) {
+	sink := &stubHTTPStatsSink{}
+	h := RequestLogger(discardLogger(), sink)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Millisecond)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/x", nil))
+
+	if sink.calls != 1 {
+		t.Fatalf("Observe called %d times, want 1", sink.calls)
+	}
+	if sink.status != http.StatusTeapot {
+		t.Errorf("Observe status = %d, want %d", sink.status, http.StatusTeapot)
+	}
+	if sink.duration <= 0 {
+		t.Errorf("Observe duration = %v, want > 0", sink.duration)
+	}
+}
+
+// TestRequestLogger_NilSinkIsSafe — a nil sink (the default at every
+// existing call site) must not panic.
+func TestRequestLogger_NilSinkIsSafe(t *testing.T) {
+	h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/x", nil)) // must not panic
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+// TestRequestLogger_SkipsWebSocketPath_DoesNotReportToSink — /ws bypasses
+// RequestLogger's whole body (see its doc comment), so the sink must not
+// see an Observe call for it either.
+func TestRequestLogger_SkipsWebSocketPath_DoesNotReportToSink(t *testing.T) {
+	sink := &stubHTTPStatsSink{}
+	h := RequestLogger(discardLogger(), sink)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ws", nil))
+
+	if sink.calls != 0 {
+		t.Errorf("Observe called %d times for /ws, want 0", sink.calls)
+	}
+}
+
 func TestRequestLogger_AlsoWritesIntoPkgRequestIDKey(t *testing.T) {
 	// pkg.ErrorCtx reads request_id via pkg.RequestIDFrom (its own key,
 	// no import of middleware). Middleware must publish into that key
 	// too so ErrorCtx sees the same id middleware sees. Losing this
 	// would silently drop request correlation from every 500 log line.
 	var pkgSideID string
-	h := RequestLogger(discardLogger())(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		pkgSideID = pkg.RequestIDFrom(r.Context())
 	}))
 	rec := httptest.NewRecorder()

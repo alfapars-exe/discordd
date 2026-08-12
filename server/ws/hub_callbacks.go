@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"context"
+
 	"github.com/argeinfina/hichat/models"
 )
 
@@ -118,9 +120,15 @@ func (h *Hub) SetAppLogger(logger AppLogger) {
 }
 
 // logEvent is a helper that safely logs via appLogger if set.
+//
+// context.Background(): logEvent's callers are WS hub event handlers, not
+// HTTP requests, so there is no request-scoped context to thread through
+// without widening this helper's signature across every one of its call
+// sites (out of scope for P3.8's request_id addition — see AppLogService.Log's
+// doc comment).
 func (h *Hub) logEvent(level models.LogLevel, category models.LogCategory, userID *string, message string, metadata map[string]string) {
 	if h.appLogger != nil {
-		h.appLogger.Log(level, category, userID, nil, message, metadata)
+		h.appLogger.Log(context.Background(), level, category, userID, nil, message, metadata)
 	}
 }
 

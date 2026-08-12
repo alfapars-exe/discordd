@@ -27,7 +27,7 @@ type MockUserRepo struct {
 	PlatformUnbanFn           func(ctx context.Context, userID string) error
 	IsEmailPlatformBannedFn   func(ctx context.Context, email string) (bool, error)
 	DeleteAllMessagesByUserFn func(ctx context.Context, userID string) error
-	HardDeleteUserFn          func(ctx context.Context, userID string) error
+	HardDeleteUserFn          func(ctx context.Context, userID, reassignToUserID string) error
 	SetPlatformAdminFn        func(ctx context.Context, userID string, isAdmin bool) error
 	IncrementTokenVersionFn   func(ctx context.Context, userID string) error
 }
@@ -137,9 +137,9 @@ func (m *MockUserRepo) DeleteAllMessagesByUser(ctx context.Context, userID strin
 	}
 	return nil
 }
-func (m *MockUserRepo) HardDeleteUser(ctx context.Context, userID string) error {
+func (m *MockUserRepo) HardDeleteUser(ctx context.Context, userID, reassignToUserID string) error {
 	if m.HardDeleteUserFn != nil {
-		return m.HardDeleteUserFn(ctx, userID)
+		return m.HardDeleteUserFn(ctx, userID, reassignToUserID)
 	}
 	return nil
 }

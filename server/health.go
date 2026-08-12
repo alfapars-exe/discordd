@@ -13,7 +13,10 @@ import (
 
 	"github.com/argeinfina/hichat/config"
 	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -48,12 +51,21 @@ func healthHandler(cache *readinessCache) http.HandlerFunc {
 		checks := map[string]any{"readiness_polled": polled}
 		if polled {
 			checks["database"] = snap.DBOK
+			// Name kept exactly as "livekit_configured" — an external monitor
+			// may already alert on this exact key, and renaming it to make
+			// room for the "reachable" distinction below would silently break
+			// that alert with no error surfaced here.
 			checks["livekit_configured"] = snap.LiveKitOK
 			checks["last_checked_seconds_ago"] = int(time.Since(snap.CheckedAt).Seconds())
 			if !snap.Ready {
 				status = "degraded"
 			}
 		}
+		// livekit_reachable is populated out of band by metricsCollector (its
+		// own interval, not startReadinessChecker's probe tick — see
+		// readinessCache.ReportLiveKitReachable), so it's read unconditionally
+		// here rather than gated behind `polled`.
+		checks["livekit_reachable"] = cache.liveKitReachableStatus()
 		writeHealthJSON(w, http.StatusOK, map[string]any{
 			"status":         status,
 			"service":        "hichat",
@@ -83,6 +95,15 @@ type readinessCache struct {
 	mu     sync.RWMutex
 	snap   readinessSnapshot
 	polled bool
+
+	// liveKitReachable tracks whether any platform-managed LiveKit instance
+	// has ever been confirmed reachable by metricsCollector's periodic
+	// /metrics poll (see ReportLiveKitReachable). Deliberately NOT part of
+	// readinessSnapshot: it's written asynchronously on metricsCollector's
+	// own interval, not on startReadinessChecker's probe tick, so folding it
+	// into the snapshot would let an unrelated probe's store() silently wipe
+	// it back to the zero value.
+	liveKitReachable bool
 }
 
 func (c *readinessCache) store(snap readinessSnapshot) {
@@ -101,6 +122,42 @@ func (c *readinessCache) load() (readinessSnapshot, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.snap, c.polled
+}
+
+// ReportLiveKitReachable records that a platform-managed LiveKit instance
+// was (or wasn't) reachable on metricsCollector's most recent poll of it —
+// satisfies services.LiveKitReachabilityReporter.
+//
+// Only positive reports are recorded. metricsCollector calls this once per
+// platform-managed instance every collection interval (see collectOne), and
+// a deployment can have more than one such instance (auto-switch rotation):
+// a single unreachable instance must not flip the whole signal false while a
+// sibling instance is healthy — "at least one instance OK". There is
+// deliberately no path back to false, so an operator reading
+// livekit_reachable=false in /api/health can trust it means "never
+// confirmed reachable in this process's lifetime," not "was reachable a
+// minute ago, then flapped."
+//
+// Nil-safe (mirrors load()) so main.go can pass this cache into
+// initServices before it's fully wired without a nil-pointer risk if a
+// future call site races construction.
+func (c *readinessCache) ReportLiveKitReachable(ok bool) {
+	if c == nil || !ok {
+		return
+	}
+	c.mu.Lock()
+	c.liveKitReachable = true
+	c.mu.Unlock()
+}
+
+// liveKitReachableStatus reads the current flag. Nil-safe like load().
+func (c *readinessCache) liveKitReachableStatus() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.liveKitReachable
 }
 
 const (
@@ -225,25 +282,51 @@ func readyHandler(db dbPinger, cfg *config.Config) http.HandlerFunc {
 	}
 }
 
+// runtimeTelemetryPurgeEveryNTicks controls how often startRuntimeStatsLogger
+// purges old runtime_telemetry rows, expressed as a tick count rather than a
+// duration so it stays correct regardless of the caller's interval. At the
+// production interval (1 minute, see main.go) this is a purge every 24
+// minutes — cheap (a single indexed DELETE) and frequent enough that the
+// table never accumulates more than about a day's worth of rows past the
+// retention window.
+const runtimeTelemetryPurgeEveryNTicks = 24
+
 // startRuntimeStatsLogger logs a periodic snapshot of process runtime metrics
-// (goroutines, heap, DB pool, online users) through slog. On a single-instance
-// HF Space there is no metrics scraper, so the structured log stream is the
-// telemetry sink — these lines can be queried/aggregated by a log backend.
-// Returns a stop func to halt the ticker during graceful shutdown.
-func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duration) func() {
+// (goroutines, heap, DB pool, online users, WS op counters, HTTP request
+// stats) through slog, AND persists the same snapshot as one
+// runtime_telemetry row (P3.11) so the history survives past the log
+// stream's own retention. On a single-instance HF Space there is no metrics
+// scraper, so the structured log stream + this table are the telemetry
+// sinks. Returns a stop func to halt the ticker during graceful shutdown.
+//
+// telemetryRepo/httpStats/retentionDays are all used only for the DB side;
+// nil telemetryRepo or httpStats degrades gracefully (skips the insert /
+// reports zero HTTP stats respectively) rather than panicking, so a test or
+// a future stripped-down boot path isn't forced to wire them.
+func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duration, telemetryRepo repository.RuntimeTelemetryRepository, httpStats *httpStatsAggregator, retentionDays int) func() {
 	stop := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		logger := logx.Component("metrics")
+		tick := 0
 		for {
 			select {
 			case <-stop:
 				return
-			case <-ticker.C:
+			case now := <-ticker.C:
+				tick++
+
 				var mem runtime.MemStats
 				runtime.ReadMemStats(&mem)
 				s := db.Conn.Stats()
+				wsStats := hub.Stats()
+				var httpRequests, http5xx, httpMaxLatencyMs int64
+				var httpAvgLatencyMs float64
+				if httpStats != nil {
+					httpRequests, http5xx, httpMaxLatencyMs, httpAvgLatencyMs = httpStats.snapshotAndReset()
+				}
+
 				logger.Info("runtime stats",
 					"goroutines", runtime.NumGoroutine(),
 					"heap_alloc_bytes", mem.HeapAlloc,
@@ -252,8 +335,54 @@ func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duratio
 					"db_in_use", s.InUse,
 					"db_idle", s.Idle,
 					"db_wait_count", s.WaitCount,
+					"ws_dispatch_total", wsStats.DispatchCount,
+					"ws_rate_limit_drops_total", wsStats.RateLimitDrops,
+					"ws_unregister_queue_drops_total", wsStats.QueueUnregisterDrops,
+					"ws_unregister_queue_len", wsStats.QueueUnregisterLen,
+					"http_requests", httpRequests,
+					"http_5xx", http5xx,
+					"http_max_latency_ms", httpMaxLatencyMs,
+					"http_avg_latency_ms", httpAvgLatencyMs,
 					"uptime_seconds", int(time.Since(processStart).Seconds()),
 				)
+
+				// Persisted AFTER the slog line above (see doc comment): the log
+				// line is the primary, always-available signal; a DB write
+				// failure here must not block or skip it.
+				if telemetryRepo != nil {
+					row := &models.RuntimeTelemetry{
+						BucketAt:              now.UTC().Truncate(time.Minute).Format("2006-01-02 15:04:05"),
+						Goroutines:            runtime.NumGoroutine(),
+						HeapAllocBytes:        mem.HeapAlloc,
+						OnlineUsers:           len(hub.GetOnlineUserIDs()),
+						DBOpenConns:           s.OpenConnections,
+						DBInUse:               s.InUse,
+						DBIdle:                s.Idle,
+						DBWaitCount:           s.WaitCount,
+						WSDispatchTotal:       wsStats.DispatchCount,
+						WSRateLimitDropsTotal: wsStats.RateLimitDrops,
+						HTTPRequests:          httpRequests,
+						HTTP5xx:               http5xx,
+						HTTPMaxLatencyMs:      httpMaxLatencyMs,
+						HTTPAvgLatencyMs:      httpAvgLatencyMs,
+					}
+					insertCtx, cancel := context.WithTimeout(context.Background(), readinessProbeTimeout)
+					if err := telemetryRepo.Insert(insertCtx, row); err != nil {
+						logger.Warn("runtime telemetry insert failed", "err", pkg.ErrText(err))
+					}
+					cancel()
+
+					if tick%runtimeTelemetryPurgeEveryNTicks == 0 && retentionDays > 0 {
+						cutoff := now.Add(-time.Duration(retentionDays) * 24 * time.Hour)
+						purgeCtx, purgeCancel := context.WithTimeout(context.Background(), readinessProbeTimeout)
+						if deleted, err := telemetryRepo.PurgeOlderThan(purgeCtx, cutoff); err != nil {
+							logger.Warn("runtime telemetry purge failed", "err", pkg.ErrText(err))
+						} else if deleted > 0 {
+							logger.Info("runtime telemetry purged", "count", deleted, "retention_days", retentionDays)
+						}
+						purgeCancel()
+					}
+				}
 			}
 		}
 	}()
