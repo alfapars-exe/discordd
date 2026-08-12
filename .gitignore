@@ -139,9 +139,23 @@ deploy.md
 CLAUDE.md
 DECISIONS.md
 
+# SECURE-CODING §0.12.3 guardrail dosyaları COMMIT EDİLİR.
+# Sıra önemlidir: `*.claude` yukarıda DİZİNİN kendisini dışlıyor ve git dışlanan
+# bir dizine hiç inmediğinden, tek başına `!.claude/<dosya>` ÇALIŞMAZ. Önce dizin
+# geri alınır, sonra içeriği yeniden dışlanır, sonra üç dosya geri alınır.
+!.claude/
+.claude/*
+!.claude/security-patterns.yaml
+!.claude/claude-security-guidance.md
+!.claude/settings.json
+
 server/mqvi-server
 server/server.exe
 
 # Local binary backups (HF Space pre-receive rejects raw binaries; keep
 # them on disk but out of git).
 *.bak
+
+# §0.10 self-scan review output. The run inside artifacts/ IS committed as the
+# B4 report's attachment; a stray run at the repo root is not.
+/self-scan-inceleme.txt

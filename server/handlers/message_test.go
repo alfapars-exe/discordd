@@ -216,7 +216,11 @@ func TestMessageCreate_PartialUploadFailureReturns207(t *testing.T) {
 
 	msgSvc := &stubMessageService{}
 	upSvc := &stubUploadService{
-		failFor: map[string]error{badFile: fmt.Errorf("%s", uploadErrMsg)},
+		// Wrapped in ErrBadRequest to mirror the real UploadService, whose
+		// client-facing validation errors all use the "%w: …" convention
+		// (upload_service.go). Unwrapped errors are infrastructure failures
+		// and collapse to the generic "upload failed" (CWE-209).
+		failFor: map[string]error{badFile: fmt.Errorf("%w: %s", pkg.ErrBadRequest, uploadErrMsg)},
 	}
 	h := NewMessageHandler(msgSvc, upSvc, 1<<20, nil, nil)
 
@@ -277,8 +281,9 @@ func TestMessageCreate_PartialUploadFailureReturns207(t *testing.T) {
 	if f.Filename != badFile {
 		t.Errorf("upload_failures[0].filename = %q, want %q", f.Filename, badFile)
 	}
-	if f.Error != uploadErrMsg {
-		t.Errorf("upload_failures[0].error = %q, want %q", f.Error, uploadErrMsg)
+	wantErr := pkg.ErrBadRequest.Error() + ": " + uploadErrMsg
+	if f.Error != wantErr {
+		t.Errorf("upload_failures[0].error = %q, want %q", f.Error, wantErr)
 	}
 
 	// Both files were attempted — a failure must not abort the remaining ones.

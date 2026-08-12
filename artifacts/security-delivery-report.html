@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Güvenlik Teslim Raporu — discord main (HiChat)</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1a2230; --muted:#5b6472;
+    --line:#e3e6ea; --accent:#0f4c81;
+    --pass:#1e7e46; --pass-bg:#e6f4ec;
+    --fail:#b3261e; --fail-bg:#fdeceb;
+    --na:#8a6d1a;  --na-bg:#faf3dc;
+    --todo:#6b7280; --todo-bg:#eef0f3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+  header{background:var(--accent);color:#fff;border-radius:10px;
+         padding:22px 26px;margin-bottom:22px}
+  header h1{margin:0 0 4px;font-size:21px;font-weight:600}
+  header p{margin:0;opacity:.85;font-size:13px}
+  h2{font-size:16px;margin:30px 0 10px;padding-bottom:6px;
+     border-bottom:2px solid var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);
+        border-radius:10px;padding:16px 18px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;background:var(--card);
+        border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);
+        text-align:left;vertical-align:top;font-size:13px}
+  th{background:#eef2f6;font-weight:600;font-size:12.5px;
+     text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  .meta td:first-child{width:220px;color:var(--muted);font-weight:600}
+  .num{width:36px;color:var(--muted)}
+  .sec{width:70px;color:var(--muted);white-space:nowrap}
+  .st{width:70px;text-align:center}
+  [data-status]{font-weight:700;border-radius:6px;font-size:12px;
+                padding:2px 0;display:block;text-align:center}
+  [data-status=""]{background:var(--todo-bg);color:var(--todo)}
+  [data-status=""]::after{content:"DOLDUR"}
+  [data-status="pass"]{background:var(--pass-bg);color:var(--pass)}
+  [data-status="pass"]::after{content:"PASS"}
+  [data-status="fail"]{background:var(--fail-bg);color:var(--fail)}
+  [data-status="fail"]::after{content:"FAIL"}
+  [data-status="na"]{background:var(--na-bg);color:var(--na)}
+  [data-status="na"]::after{content:"N-A"}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+         gap:10px;margin:10px 0 4px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;
+       padding:12px 14px;text-align:center}
+  .kpi b{display:block;font-size:22px;margin-bottom:2px}
+  .kpi span{font-size:11.5px;color:var(--muted);text-transform:uppercase;
+            letter-spacing:.04em}
+  .kpi.pass b{color:var(--pass)} .kpi.fail b{color:var(--fail)}
+  .kpi.na b{color:var(--na)}   .kpi.todo b{color:var(--todo)}
+  .banner{border-radius:10px;padding:14px 18px;font-weight:600;margin:14px 0}
+  .banner.ok{background:var(--pass-bg);color:var(--pass);
+             border:1px solid var(--pass)}
+  .banner.block{background:var(--fail-bg);color:var(--fail);
+                border:1px solid var(--fail)}
+  code,pre{font:12px/1.5 "Consolas","SFMono-Regular",monospace}
+  pre{background:#101826;color:#d7e3f4;border-radius:8px;
+      padding:12px 14px;overflow:auto}
+  .footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);
+          color:var(--muted);font-size:12.5px}
+  .sig{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  .sig div{border:1px dashed var(--line);border-radius:8px;padding:12px;
+           min-height:70px;font-size:12.5px;color:var(--muted)}
+  @media print{body{background:#fff}.card,table{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Güvenlik Teslim Raporu · SECURE-CODING v1.5 / B4</h1>
+  <p>discord main (HiChat) · security/pii-and-authz · 2026-08-07</p>
+</header>
+
+<div id="gateBanner" class="banner block">Rapor durumu hesaplanıyor…</div>
+<div class="card" style="border-color:var(--na);background:var(--na-bg)">
+  <b>Görev statüsü: TARAMAYA HAZIR (§0.3).</b> Bu rapor, 2026-08-07 ilk Checkmarx taraması (scan 1000882)
+  sonrası yapılan düzeltmeleri ve triage taslaklarını belgeler. Portal state değişiklikleri ve doğrulama
+  re-scan'i <b>kullanıcı/AppSec aksiyonudur</b>; "0 açık bulgu" hedefi ancak aynı projeye yapılacak
+  re-scan ile kanıtlanır. Değişiklikler henüz commit'lenmemiştir (git kullanıcıya aittir).
+</div>
+
+<h2>1. Meta</h2>
+<table class="meta">
+  <tr><td>Proje / Repository</td><td>discord main (HiChat) — github.com/alfapars-exe/discordd (monorepo tayfa-deploy)</td></tr>
+  <tr><td>Branch / Commit</td><td>security/pii-and-authz @ 559abe80 + <b>commit'lenmemiş çalışma ağacı</b>: 63 izlenen dosya değişti (50 server · 10 client · CI workflow · .gitattributes · .gitignore; +527/−201) + yeni dosyalar (<code>SECURITY-SCOPE.yml</code>, <code>SECURITY-EXCEPTIONS.yml</code>, <code>SECURITY-ADDENDUM.md</code>, <code>security/tools/self-scan.sh</code>, <code>client/src/utils/random.ts</code>, <code>artifacts/</code>)</td></tr>
+  <tr><td>Görev özeti</td><td>Checkmarx ilk tam taraması (618 bulgu: 1C/15H/223M/368L/11I) kod-doğrulamalı triage; G2.7 hata zarfı (stable code + correlation_id, ham err.Error() sıfırlama ~47 saha); ListReports clamp; ratelimit defer; klipy CheckRedirect; badge URL düzeltmesi; ErrorBoundary open-redirect; SECURITY-SCOPE/EXCEPTIONS/ADDENDUM kuruluşu</td></tr>
+  <tr><td>Agent (araç / model)</td><td>Claude Code · Fable 5 — hichat pipeline (planner→backend-go→frontend-react→test-runner→security-reviewer)</td></tr>
+  <tr><td>Standart sürümü + hash</td><td>SECURE-CODING v1.5 · sha256: 3e79377a0212f80e98fb5d66454e28a2494ab2fd5d5e3676084f49732b1b09ba</td></tr>
+  <tr><td>Checkmarx proje / scan ID</td><td>discord main (projectid=104) · scanid=1000882 <b>(aynı projeye tarama — §0.3; yeni proje AÇILMAZ)</b></td></tr>
+  <tr><td>Rapor tarihi</td><td>2026-08-07</td></tr>
+</table>
+
+<h2>2. Tarama Karşılaştırması</h2>
+<div class="cards">
+  <div class="kpi fail"><b>1/15/223/368</b><span>Scan 1000882 C/H/M/L</span></div>
+  <div class="kpi todo"><b>re-scan bekliyor</b><span>Son C/H/M/L</span></div>
+  <div class="kpi todo"><b>618</b><span>To Verify (portalde)</span></div>
+  <div class="kpi na"><b>24 aile</b><span>Triage kuyruğu</span></div>
+</div>
+<table>
+  <tr><th>Checkmarx sorgusu</th><th>Adet</th><th>Öneri</th><th>Durum (Fixed / NE-aday / AR-aday)</th><th>Kanıt / açıklama (detay: SECURITY-EXCEPTIONS.yml)</th></tr>
+  <tr><td>Arbitrary File Write</td><td>1 (C)</td><td>Not Exploitable</td><td>NE-aday (R2)</td><td>crypto/rand dosya adı + SafeJoin + admin-only + 2MB + byte-sniff — SEC-EX-2026-0001</td></tr>
+  <tr><td>Absolute/Relative Path Traversal</td><td>6 (H)</td><td>Not Exploitable</td><td>NE-aday (R2/R3)</td><td>embed.FS ValidPath; 3-katman upload guard — SEC-EX-0002/0003</td></tr>
+  <tr><td>Plain Text Transport Layer in Server</td><td>2 (H)</td><td>Not Exploitable</td><td>NE-aday (R10)</td><td>TLS HF edge'de — ADDENDUM §1, SEC-EX-0004</td></tr>
+  <tr><td>Client DOM XSS + Client DOM Open Redirect</td><td>2 (H+M)</td><td>Fixed</td><td><b>Fixed</b></td><td>ErrorBoundary.tsx new URL()+searchParams.set — SEC-EX-0024</td></tr>
+  <tr><td>SSRF (Go + JS)</td><td>2 (H)</td><td>Not Exploitable</td><td>NE-aday (R2)</td><td>QueryEscape+host kilidi+<b>yeni CheckRedirect</b>; Electron 5-katman jail — SEC-EX-0005/0006</td></tr>
+  <tr><td>Observable Timing Discrepancy</td><td>4 (H)</td><td>3 Fixed + 1 NE</td><td><b>Fixed</b> + NE-aday (R3)</td><td>3 test sink'i <code>hmac.Equal</code>'a çevrildi (desen artık doğmuyor); kalan 1 saha kullanıcının kendi e-posta eşitliği — SEC-EX-0007</td></tr>
+  <tr><td>Improper Locking</td><td>85 (M)</td><td>~11 Fixed + kalanı NE</td><td><b>Fixed</b> + NE-aday (R3)</td><td>78 üretim sahası tek tek sınıflandırıldı: <b>15 güvenli / 63 load-bearing</b>; güvenli 10 fonksiyon + ratelimit.go <code>defer</code>'e çevrildi. Kalan 63 DÖNÜŞTÜRÜLEMEZ — LiveKit round-trip / hub broadcast / kanal gönderimi / aynı mutex'i yeniden alan çağrılar öncesi bilinçli unlock; <code>defer</code> = üretimde deadlock. 0 kilit kaçağı — SEC-EX-0008</td></tr>
+  <tr><td>Use Of Hardcoded Password in Config</td><td>64 (M)</td><td>Not Exploitable + scope</td><td>NE-aday (R3)</td><td>openapi example: / i18n etiketleri / package-lock — SEC-EX-0009, SCOPE</td></tr>
+  <tr><td>Use of Hardcoded Password</td><td>23 (M)</td><td>Not Exploitable + scope</td><td>NE-aday (R3)</td><td>_test.go dummy fixture'ları — SEC-EX-0010</td></tr>
+  <tr><td>Unchecked Input for Loop Condition</td><td>22 (M)</td><td>büyük ölçüde Fixed</td><td><b>Fixed</b></td><td>Üst sınır artık HANDLER katmanında görünür (tarayıcı repository clamp'ini göremiyordu): ListReports, ListAppLogs, ListServerAudit, dm GetMessages, feedback parsePagination. <code>handlers/</code> altında sınırsız <code>Atoi</code> kalmadı — SEC-EX-0011</td></tr>
+  <tr><td>Privacy Violation in JWT + JWT None Algorithm</td><td>9 (M)</td><td>Not Exploitable</td><td>NE-aday (R3/R2)</td><td>claim=user_id+public username; keyfunc HMAC assert — SEC-EX-0012</td></tr>
+  <tr><td>JWT Excessive Expiration Time</td><td>1 (M)</td><td><b>Accepted Risk</b></td><td>AR-aday</td><td>N-10/K-030 bilinçli karar; tv-revocation telafisi — SEC-EX-0013</td></tr>
+  <tr><td>Cookie ailesi (SameSite/HttpOnly/Secure)</td><td>8 (M)</td><td>Not Exploitable</td><td>NE-aday (R2/R10)</td><td>tümü HttpOnly+Secure; None gerekçesi ADDENDUM §2 — SEC-EX-0014</td></tr>
+  <tr><td>Bcrypt cost + password storage params</td><td>2 (M)</td><td>Not Exploitable</td><td>NE-aday (R3)</td><td>prod cost 12; MinCost yalnız test — SEC-EX-0015</td></tr>
+  <tr><td>Web Storage / Insecure Storage</td><td>4 (M)</td><td>Not Exploitable</td><td>NE-aday (R3)</td><td>token bellek-içi; E2EE→IndexedDB+FDE — SEC-EX-0016</td></tr>
+  <tr><td>HSTS / CSP / Clickjacking</td><td>4 (M/L)</td><td>Not Exploitable</td><td>NE-aday (R2)</td><td>tam başlık seti; K-033 CSP kararı — SEC-EX-0017</td></tr>
+  <tr><td>Unrestricted File Size Upload</td><td>1 (M)</td><td>Not Exploitable</td><td>NE-aday (R2)</td><td>bulgu mitigasyonun üstünde (MaxBytesReader) — SEC-EX-0022</td></tr>
+  <tr><td>Server Information Exposure (+ error msgs)</td><td>21 (M/L)</td><td>Fixed + NE</td><td><b>Fixed</b> ağırlıklı</td><td>G2.7 zarfı: stable code + generic 5xx — SEC-EX-0018</td></tr>
+  <tr><td>Secret/Privacy Leak in Logs + Error Messages</td><td>~193 (L)</td><td>~47 Fixed + NE</td><td><b>Fixed</b> + NE-aday (R2)</td><td>ham err.Error() log/yanıt sahaları SIFIRLANDI (pkg.ErrText); kalanlar pseudonim ID attr'ları — SEC-EX-0018</td></tr>
+  <tr><td>Log Forging</td><td>38 (L)</td><td>Not Exploitable</td><td>NE-aday (R2)</td><td>isSafeRequestID + UUID değişimi + Quote — SEC-EX-0019</td></tr>
+  <tr><td>Race / Resource Shutdown / Transaction / Reflect / Overflow / Temp File</td><td>~76 (L)</td><td>kısmen Fixed + NE</td><td><b>Fixed</b> + NE-aday (R3)</td><td>Döngü dışı okuma handle'ları <code>defer</code>'e çevrildi; döngü içindekiler bilinçle korundu (defer orada her handle'ı fonksiyon sonuna kadar açık tutar) + gerekçe yorumu. <b>Ayrıca Checkmarx'ın görmediği gerçek bir veri yarışı düzeltildi</b> (voice_token.go, RUnlock sonrası paylaşılan struct okuması) — SEC-EX-0020</td></tr>
+  <tr><td>Use of Insufficiently Random Values</td><td>7 (L)</td><td><b>7/7 Fixed</b></td><td><b>Fixed</b></td><td>Yeni <code>client/src/utils/random.ts</code> (CSPRNG); 7 çağrının tamamı çevrildi, kaynakta gerçek <code>Math.random()</code> kalmadı — SEC-EX-0021</td></tr>
+  <tr><td>Improper Error Handling</td><td>27 (L)</td><td>Not Exploitable</td><td>NE-aday (R3)</td><td>merkezî zarf + fail-closed; SEC-EX-0018/0020</td></tr>
+  <tr><td>Dangerous File Extension / Privacy in Files / PCI in Logs</td><td>7 (L)</td><td>Not Exploitable</td><td>NE-aday (R3)</td><td>MIME allowlist + attachment disposition; pseudonim ID'ler — SEC-EX-0018/0020</td></tr>
+  <tr><td>Outdated Hashing Function</td><td>11 (I)</td><td>Not Exploitable + scope</td><td>NE-aday (R3)</td><td>birinci taraf kaynakta 0 md5/sha1; node_modules — SEC-EX-0023</td></tr>
+</table>
+
+<div class="card">
+  <b>B3 — Security Change Summary (özet):</b>
+  <b>Saldırı yüzeyi:</b> yeni endpoint yok; hata yanıtı zarfı genişledi (additive); SVG badge kabulü KALDIRILDI (hiç render edilemiyordu — yüzey küçüldü) ·
+  <b>Trust boundary:</b> değişmedi; hata gövdelerinden iç detay akışı KESİLDİ ·
+  <b>Veri sınıfları:</b> correlation_id (rastgele request id) yanıta eklendi; PII eklenmedi ·
+  <b>AuthN/AuthZ:</b> değişmedi (ListReports clamp yalnız kaynak sınırı) ·
+  <b>Yeni bağımlılık:</b> YOK ·
+  <b>Kontroller:</b> pkg.ErrText tam kapsama (~47 yeni saha), CheckRedirect, defer unlock, URL düzeltmesi, origin-sabit navigasyon ·
+  <b>Registry fanout:</b> stable code listesi server (response.go) ↔ client (apiError.ts + errors.json EN/TR) senkron; yeni <code>client/src/utils/random.ts</code> istemcideki tek CSPRNG kaynağı ·
+  <b>Şerit-2 dönüşümleri (2. dalga):</b> 10 güvenli kilit → <code>defer</code> · handler seviyesi limit clamp'leri · 3 test karşılaştırması → <code>hmac.Equal</code> · 7 <code>Math.random()</code> → CSPRNG · döngü dışı <code>Close</code> → <code>defer</code> · <b>1 gerçek veri yarışı düzeltmesi</b> (voice_token.go) ·
+  <b>Negatif testler:</b> mevcut suite yeşil (735 vitest + tüm Go paketleri); yeni negatif test eklenmedi (kalan risk #2) ·
+  <b>Komutlar:</b> bölüm 6 ·
+  <b>Bulgular:</b> bölüm 2/9 ·
+  <b>Suppression:</b> yalnız TASLAK exceptions dosyası; portal DEĞİŞMEDİ ·
+  <b>Kalan risk:</b> bölüm 10 ·
+  <b>İnsan onayı:</b> bölüm 10 ·
+  <b>Rollback:</b> bölüm 10.
+</div>
+
+<h2>3. Bölüm B Checklist — B1 Kod Kontrolleri (1–20)</h2>
+<table>
+  <tr><th class="num">#</th><th>Kontrol</th><th class="sec">Bölüm</th><th class="st">Durum</th><th>Kanıt</th></tr>
+  <tr><td class="num">1</td><td>Dış girdiler şema ile doğrulanıyor; ham request objesi iş katmanına geçmiyor</td><td class="sec">§5</td><td class="st"><span data-status="pass"></span></td><td>Tipli DTO + Validate() zinciri (services/*); pagination çift clamp (handler + repository/sqlite_app_log.go:66, sqlite_audit_log.go:75); scan: injection ailesi 0 server bulgusu</td></tr>
+  <tr><td class="num">2</td><td>Tüm SQL/NoSQL parametrize; string ile sorgu yok</td><td class="sec">§6</td><td class="st"><span data-status="pass"></span></td><td>Repository katmanı ? bind (örn. sqlite_session.go:89-96, bot_repository.go:54); Checkmarx SQL injection: 0 bulgu</td></tr>
+  <tr><td class="num">3</td><td>Shell string'i yok; komutlar exec-array + timeout ile</td><td class="sec">§6</td><td class="st"><span data-status="pass"></span></td><td>yt-dlp arg-array + extractor kilidi (music_bot, H-08/N-06 kapanışı); Checkmarx command injection: 0 bulgu</td></tr>
+  <tr><td class="num">4</td><td>eval/exec/Function/setTimeout(string) ve güvensiz deserialization yok</td><td class="sec">§6,§14</td><td class="st"><span data-status="pass"></span></td><td>Birinci taraf kodda yok; build'deki direct-eval uyarısı üçüncü taraf @sapphi-red/dtln-web vendor chunk'ı (diff öncesi mevcut); Checkmarx deserialization: 0</td></tr>
+  <tr><td class="num">5</td><td>Her uçta authN + obje/fonksiyon yetkisi</td><td class="sec">§1</td><td class="st"><span data-status="pass"></span></td><td>Bu diff yetki değiştirmedi; ListReports/UpdateReportStatus authAdmin arkasında doğrulandı (init_routes_global.go); medya yolu fail-closed (upload_download.go:202)</td></tr>
+  <tr><td class="num">6</td><td>Mass assignment yok; yanıtlar whitelist DTO</td><td class="sec">§1,§9</td><td class="st"><span data-status="pass"></span></td><td>Go tipli struct decode (dinamik assignment yok); hata yanıtı sabit-alanlı APIResponse zarfı (response.go)</td></tr>
+  <tr><td class="num">7</td><td>İmzasız jwt.decode yok; verify + algorithms + zaman claim'leri</td><td class="sec">§2</td><td class="st"><span data-status="pass"></span></td><td>jwt.ParseWithClaims + *jwt.SigningMethodHMAC type-assert (auth_service.go:608-614); SigningMethodNone kod tabanında yok</td></tr>
+  <tr><td class="num">8</td><td>Kodda/config'de/testte secret veya fallback secret yok</td><td class="sec">§4</td><td class="st"><span data-status="pass"></span></td><td>Keşif taraması: 0 gerçek secret; .env.example yalnız "change-me" placeholder; JWT_SECRET boot check (pentest F-5)</td></tr>
+  <tr><td class="num">9</td><td>TLS doğrulamasını kapatan bayrak yok</td><td class="sec">§3</td><td class="st"><span data-status="pass"></span></td><td>grep: InsecureSkipVerify/rejectUnauthorized-false yok; outbound TLS config'leri standart (services/tls.go)</td></tr>
+  <tr><td class="num">10</td><td>Güvenlik bağlamında zayıf PRNG yok; sabit zamanlı kıyas</td><td class="sec">§3</td><td class="st"><span data-status="pass"></span></td><td>Server prod math/rand: 0 (crypto/rand 16 dosya); hmac.Equal (pkg/crypto/hmac.go:69); login timing equalizer (auth_service.go:427)</td></tr>
+  <tr><td class="num">11</td><td>Hatalar merkezî işleyicide; istemciye iç detay yok; fail-closed</td><td class="sec">§10</td><td class="st"><span data-status="pass"></span></td><td><b>Bu diff'in ana işi</b>: G2.7 zarfı (response.go: stable code + correlation_id); ham err.Error() yanıt sahaları 0'a indirildi (grep doğrulaması); 5xx generic + ErrText log</td></tr>
+  <tr><td class="num">12</td><td>Path kanonikalizasyon + kök kontrolü; upload magic-byte</td><td class="sec">§11</td><td class="st"><span data-status="pass"></span></td><td>SafeJoin (safepath.go:29-50) + kanoniklik reddi (upload_download.go:173) + byte-sniff MIME (pkg/sniff.go); zip işleme yüzeyi yok</td></tr>
+  <tr><td class="num">13</td><td>SSRF kontrolleri uygulandı</td><td class="sec">§12</td><td class="st"><span data-status="pass"></span></td><td>klipy: const host + QueryEscape + <b>yeni CheckRedirect (bu diff)</b>; yt-dlp allowlist; Electron resolveAppPath jail (resolve-path.test.ts)</td></tr>
+  <tr><td class="num">14</td><td>Hız sınırı / sayfalama / boyut limiti var</td><td class="sec">§13</td><td class="st"><span data-status="pass"></span></td><td>pkg/ratelimit; LimitedParseMultipartFormN + MaxBytesReader tüm multipart uçlarında; <b>ListReports clamp bu diff'te eklendi</b> (admin.go)</td></tr>
+  <tr><td class="num">15</td><td>Bağlama uygun output encoding; innerHTML türevi yok</td><td class="sec">§7</td><td class="st"><span data-status="pass"></span></td><td>React otomatik escape; CSP tam set (routes_static.go:64-92); tek DOM bulgusu FP çıktı + navigasyon origin-sabitlendi (ErrorBoundary)</td></tr>
+  <tr><td class="num">16</td><td>Cookie flag'leri sunucuda açık; CSRF koruması yerinde</td><td class="sec">§1,§2</td><td class="st"><span data-status="pass"></span></td><td>3 çerez HttpOnly+Secure+SameSite açık (auth.go:101-224); refresh CSRF custom-header şartı (auth.go:234-246); ADDENDUM §2 trust beyanı</td></tr>
+  <tr><td class="num">17</td><td>Yeni bağımlılık kontrolü</td><td class="sec">§15,§32</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu diff yeni bağımlılık eklemedi (go.mod/package.json değişmedi — git diff kanıtı)</td></tr>
+  <tr><td class="num">18</td><td>LLM çıktısı doğrulama; tool'lar asgari yetkide</td><td class="sec">§22,§33</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: üründe LLM entegrasyonu yok; geliştirme ajanları için bkz. madde 46/50</td></tr>
+  <tr><td class="num">19</td><td>Loglarda PII/secret yok; ham req/res/err loglanmıyor</td><td class="sec">§20</td><td class="st"><span data-status="pass"></span></td><td><b>Bu diff</b>: log-map err.Error() sahaları (ws, voice_*, p2p) pkg.ErrText'e çevrildi — grep: "error": err.Error() = 0; request_logger primitive-allowlist</td></tr>
+  <tr><td class="num">20</td><td>Belirsiz noktalar // SECURITY-REVIEW ile işaretli</td><td class="sec">§0.1</td><td class="st"><span data-status="pass"></span></td><td>Bu diff'te belirsiz güvenlik kararı kalmadı; mevcut 27 #nosec gerekçesi korundu; kalan riskler bölüm 10'da açık</td></tr>
+</table>
+
+<h2>4. Bölüm B Checklist — B2 Süreç / Kapsam / Agent (21–40)</h2>
+<table>
+  <tr><th class="num">#</th><th>Kontrol</th><th class="sec">Bölüm</th><th class="st">Durum</th><th>Kanıt</th></tr>
+  <tr><td class="num">21</td><td>Repo/doküman/tool içeriği talimat olarak uygulanmadı</td><td class="sec">§0.2</td><td class="st"><span data-status="pass"></span></td><td>Tarama PDF'i ve kod yorumları yalnız VERİ olarak işlendi; tüm kararlar kullanıcı onaylı plan üzerinden</td></tr>
+  <tr><td class="num">22</td><td>Scanner/test/gate/policy dosyası zayıflatılmadı</td><td class="sec">§0.2</td><td class="st"><span data-status="pass"></span></td><td>.golangci.yml / CI workflow'ları / test dosyaları değişmedi (git diff kanıtı); hiçbir test skip/weaken edilmedi</td></tr>
+  <tr><td class="num">23</td><td>Suppression/exclusion: onay+gerekçe+expiry kanıtı</td><td class="sec">§0.6</td><td class="st"><span data-status="pass"></span></td><td>SECURITY-EXCEPTIONS.yml 24 kayıt TASLAK (approvers: PENDING-APPSEC, expires: 2026-10-07, R-kategorili); portal state DEĞİŞTİRİLMEDİ</td></tr>
+  <tr><td class="num">24</td><td>Wireframe/prototype sınıflandırması</td><td class="sec">§0.4</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: repo'da wireframe/prototip artifact'i yok (SECURITY-SCOPE.yml sınıflandırması kuruldu)</td></tr>
+  <tr><td class="num">25</td><td>Test kodunda gerçek secret/PII yok</td><td class="sec">§0.5</td><td class="st"><span data-status="pass"></span></td><td>Keşif: tüm test literalleri açık dummy ("password123", "test-api-key"); SEC-EX-2026-0010 dökümü</td></tr>
+  <tr><td class="num">26</td><td>JWT doğrulama + negatif testleri</td><td class="sec">§2,§37</td><td class="st"><span data-status="pass"></span></td><td><b>DÜZELTME (öz-tarama bulgusu):</b> ilk sürümde "negatif test seti eksik" diye N-A işaretlenmişti — YANLIŞTI. `services/auth_service_test.go:526-545+` alg=none (SigningMethodNone + UnsafeAllowNoneSignatureType), yanlış anahtarla imza ve süresi geçmiş token vakalarını tablo testiyle sınıyor; öz-tarama BLOK'u bu testi yakaladığı için fark edildi</td></tr>
+  <tr><td class="num">27</td><td>Prototype pollution testi</td><td class="sec">§5,§37</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: Go backend'de kavram yok; client'ta dinamik obje merge deseni kullanılmıyor (strict TS)</td></tr>
+  <tr><td class="num">28</td><td>Cookie flag'leri Set-Cookie üzerinden test edildi</td><td class="sec">§2,§17</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu diff cookie davranışına dokunmadı; bayraklar kod kanıtlı (madde 16), Set-Cookie assert testi eksik → kalan risk #2</td></tr>
+  <tr><td class="num">29</td><td>Log wrapper ham nesne serialize etmiyor</td><td class="sec">§20</td><td class="st"><span data-status="pass"></span></td><td>slog primitive attr'lar + ErrText; Sentry handler'da a.Value.Any() için ErrText zorunluluğu belgeli (response.go yorumu)</td></tr>
+  <tr><td class="num">30</td><td>Stream/loop/parser limitleri + cancellation</td><td class="sec">§13</td><td class="st"><span data-status="pass"></span></td><td>io.LimitReader (gif.go:187), MaxBytesReader tüm gövdelerde, ctx iptali repository zincirinde; clamp'ler madde 14</td></tr>
+  <tr><td class="num">31</td><td>CI: untrusted PR secret'sız; action SHA pinli</td><td class="sec">§31</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu diff CI'a dokunmadı; SHA-pin denetimi yapılmadı → kalan risk #1 (§0.11 onboarding)</td></tr>
+  <tr><td class="num">32</td><td>Final artifact: SBOM, provenance/imza</td><td class="sec">§15,§36</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu teslim release değil (commit'lenmemiş diff); SBOM/provenance release gate'i kurulmadı → kalan risk #1</td></tr>
+  <tr><td class="num">33</td><td>WS/SSE: auth, schema, limit, replay</td><td class="sec">§24</td><td class="st"><span data-status="pass"></span></td><td>WS değişikliği yalnız log redaksiyonu; mevcut ticket auth (30s TTL) + rate_limit.go korundu; go test ws paketi yeşil</td></tr>
+  <tr><td class="num">34</td><td>CSV/PDF/Office/e-posta kontrolleri</td><td class="sec">§26</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu diff bu yüzeylere dokunmadı</td></tr>
+  <tr><td class="num">35</td><td>Platform overlay (Electron) tamamlandı</td><td class="sec">§27–30</td><td class="st"><span data-status="pass"></span></td><td>Electron app:// jail 5-katman doğrulandı (resolve-path.ts + testleri); bu diff Electron koduna dokunmadı</td></tr>
+  <tr><td class="num">36</td><td>AI/LLM/MCP kontrolleri</td><td class="sec">§33,§39</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: üründe yok (madde 18)</td></tr>
+  <tr><td class="num">37</td><td>Multi-tenant: her erişimde tenant filtresi</td><td class="sec">§25</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu diff veri erişim sorgularını değiştirmedi; server_id scoping mevcut düzen (değişmedi)</td></tr>
+  <tr><td class="num">38</td><td>DAST/API fuzz/negatif test kapsamı</td><td class="sec">§36,§37</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: DAST bu repo'da kurulu değil (yalnız SAST+testler) → kalan risk #1; §0.7 çoklu-paradigma şartı kısmen karşılanıyor (Checkmarx+gosec+govulncheck+gitleaks yok)</td></tr>
+  <tr><td class="num">39</td><td>Çalıştırılmayan her test/tarama açıkça raporlandı</td><td class="sec">§0.2</td><td class="st"><span data-status="pass"></span></td><td>Bölüm 6 yalnız gerçekten koşulan komutları listeler. §0.10 self-scan artık YAZILDI + KOŞULDU (exit 0) + CI'a sert kapı olarak bağlandı. Hâlâ koşulmayanlar: DAST, semgrep, gitleaks, SBOM, e2e Playwright (kapsam dışı bırakıldı) — burada beyan</td></tr>
+  <tr><td class="num">40</td><td>Security Change Summary (B3) dolduruldu</td><td class="sec">B3</td><td class="st"><span data-status="pass"></span></td><td>Bölüm 2 altındaki B3 kartı; PR açıklamasına da eklenecek</td></tr>
+</table>
+
+<h2>4b. Bölüm B Checklist — B2-ek v1.4/v1.5 (41–52)</h2>
+<table>
+  <tr><th class="num">#</th><th>Kontrol</th><th class="sec">Bölüm</th><th class="st">Durum</th><th>Kanıt</th></tr>
+  <tr><td class="num">41</td><td>Argv flag smuggling önlemi + subprocess env allowlist</td><td class="sec">§6</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: bu diff subprocess yüzeyine dokunmadı; mevcut yt-dlp çağrısı arg-array + extractor kilidi (2026-08 kapanışı)</td></tr>
+  <tr><td class="num">42</td><td>Yol kontrolleri realpath-first</td><td class="sec">§11</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: SafeJoin leksikal (Abs+Clean+prefix) — realpath değil; ancak upload dizini uygulama-yönetimli, kullanıcı symlink oluşturma yolu yok (dosya adları sunucu üretimi crypto/rand); tehdit modeli dahilinde kanıtlı — SEC-EX-0001/0003. EvalSymlinks eklenmesi iyileştirme adayı (bölüm 10)</td></tr>
+  <tr><td class="num">43</td><td>URL/allowlist kıyasları çapalı; redirect manuel</td><td class="sec">§5,§12</td><td class="st"><span data-status="pass"></span></td><td>klipy HasPrefix(base+"/") RFC 3986 çapalı + <b>CheckRedirect host eşitliği (bu diff)</b>; Electron scheme+hostname tam eşitlik</td></tr>
+  <tr><td class="num">44</td><td>Diff sezgileri: registry fanout, fail-open kapı</td><td class="sec">§1,§5,§7</td><td class="st"><span data-status="pass"></span></td><td>Stable code registry'si server↔client senkron (response.go ↔ apiError.ts + errors.json EN/TR — localeParity + tsc kanıtı); fail-open kapı eklenmedi</td></tr>
+  <tr><td class="num">45</td><td>OAuth state; spoofable header yetkisi yok</td><td class="sec">§1,§2</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: OAuth yok; yetki kararları JWT + DB üzerinden (header tabanlı yetki yok — keşif kanıtı)</td></tr>
+  <tr><td class="num">46</td><td>Agent izin bypass bayrağı yok; token ≥128 bit; 0600/0700</td><td class="sec">§3,§4,§11,§33</td><td class="st"><span data-status="pass"></span></td><td>Bu oturumda bypass bayrağı kullanılmadı; token'lar 32 bayt CSPRNG (≥128 bit); credential dosyası üretilmedi</td></tr>
+  <tr><td class="num">47</td><td>Çürütmeler R1–R11 kategori + dosya:satır kanıtlı</td><td class="sec">§0.2,§0.6</td><td class="st"><span data-status="pass"></span></td><td>SECURITY-EXCEPTIONS.yml: 24 kaydın tamamı R-kategorili + kanıt satırlı; 3 bağımsız keşif ajanı + kod doğrulaması</td></tr>
+  <tr><td class="num">48</td><td>Guardrail 1. katman uyarıları çözüldü/gerekçelendi</td><td class="sec">§0.12</td><td class="st"><span data-status="pass"></span></td><td>Plugin 2.0.6 etkin; oturumda 7 uyarı tetiklendi, 7/7 gerekçelendirildi (bölüm 8 — hepsi güvenlik aracının kendi desen tablosuna çarpan yapısal FP). Repo guardrail dosyaları üretildi + CI drift kapısı eklendi</td></tr>
+  <tr><td class="num">49</td><td>Stop/commit inceleme bulguları kapatıldı</td><td class="sec">§0.12.5</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: aynı — plugin yok; yerine pipeline Faz 4 hichat-security-reviewer incelemesi uygulandı</td></tr>
+  <tr><td class="num">50</td><td>Kill-switch set edilmedi; guardrail dosyaları değiştirilmedi</td><td class="sec">§0.12.2</td><td class="st"><span data-status="pass"></span></td><td>SECURITY_GUIDANCE_DISABLE / ENABLE_*=0 / SG_AGENTIC_EXCLUDE_MEDIUM set EDİLMEDİ. Guardrail dosyaları bu turda İLK KEZ üretildi (elle düzenlenmedi — üreteçten çıktı); bundan sonra <code>.claude/settings.json permissions.deny</code> + CI drift kapısı koruyor</td></tr>
+  <tr><td class="num">51</td><td>Pinlenmiş bağımlılıklar sürekli SCA; current+first_fixed raporu (v1.5)</td><td class="sec">§15.1</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: §15.1 kurulumu (dep_cve_scan, OSV, zamanlanmış SCA) yok → kalan risk #1; mevcut: govulncheck CI HARD gate (server-ci.yml) + dependabot.yml + npm audit (advisory); bu diff bağımlılık değiştirmedi</td></tr>
+  <tr><td class="num">52</td><td>Eşik üstü açık CVE yönetimi; agent VEX kararı vermedi (v1.5)</td><td class="sec">§15.1.4</td><td class="st"><span data-status="pass"></span></td><td>Agent hiçbir VEX/severity/ignore kararı vermedi; bilinen eşik üstü açık CVE kaydı yok (son CI govulncheck PASS — main baz)</td></tr>
+</table>
+
+<h2>5. Bölüm G Bulgu Ailesi Kontrolleri (G + G2 + G3 + G4)</h2>
+<table>
+  <tr><th>Bulgu ailesi / kural</th><th class="sec">Ref</th><th class="st">Durum</th><th>Kanıt (test / dosya:satır / scan)</th></tr>
+  <tr><td>Auth yanıtları DTO ile; password/hash sızmaz</td><td class="sec">G2.1</td><td class="st"><span data-status="pass"></span></td><td>APIResponse sabit alanlar; user yanıtlarında hash alanı yok; scan: 0 ilgili bulgu</td></tr>
+  <tr><td>JWT claim minimizasyonu</td><td class="sec">G2.2</td><td class="st"><span data-status="pass"></span></td><td>Access: user_id+username(+tv,scope); media: yalnız UserID+Scope (token.go:31-36) — SEC-EX-0012</td></tr>
+  <tr><td>Merkezî cookie helper; ham Set-Cookie yok</td><td class="sec">G2.3</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: ayrı helper yok ANCAK tüm SetCookie sahaları tek dosyada (auth.go), bayraklar eksiksiz + gerekçeli; helper'a taşıma iyileştirme adayı</td></tr>
+  <tr><td>Web storage'da session/token/user yok</td><td class="sec">G2.4</td><td class="st"><span data-status="pass"></span></td><td>Token bellek-içi (client.ts:111-133); localStorage yalnız UI pref — SEC-EX-0016</td></tr>
+  <tr><td>Testlerde document.cookie yok</td><td class="sec">G2.5</td><td class="st"><span data-status="pass"></span></td><td>grep client/src + e2e: document.cookie = 0 kullanım</td></tr>
+  <tr><td>Query-builder: bind + identifier allowlist</td><td class="sec">G2.6</td><td class="st"><span data-status="pass"></span></td><td>Madde 2 kanıtı; dinamik identifier deseni yok</td></tr>
+  <tr><td>Merkezî error middleware; err.* yanıta girmiyor</td><td class="sec">G2.7</td><td class="st"><span data-status="pass"></span></td><td><b>Bu diff'in ana işi</b> — grep: yanıt gövdesinde err.Error() = 0; stable code + correlation_id zarfı; testler yeşil</td></tr>
+  <tr><td>Dış sayılar loop öncesi clamp</td><td class="sec">G2.8</td><td class="st"><span data-status="pass"></span></td><td>Çift katman clamp + ListReports düzeltmesi — SEC-EX-0011</td></tr>
+  <tr><td>JS-readable UI cookie'leri kayıtlı</td><td class="sec">G2.9</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: JS-readable cookie yok (3/3 HttpOnly)</td></tr>
+  <tr><td>G3.1–G3.8 Python kuralları</td><td class="sec">G3</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: repo'da Python prod kodu yok (Go+TS); G3.2/G3.4/G3.6/G3.8'in dil-bağımsız özleri yukarıdaki maddelerde kanıtlı</td></tr>
+  <tr><td>Argv smuggling + subprocess env allowlist</td><td class="sec">G4.1-2</td><td class="st"><span data-status="na"></span></td><td>Madde 41 gerekçesi</td></tr>
+  <tr><td>child_process.exec/shell:true yok</td><td class="sec">G4.3</td><td class="st"><span data-status="pass"></span></td><td>grep electron/ + client/: child_process.exec/execSync/shell:true = 0</td></tr>
+  <tr><td>OAuth state / kimliksiz token yok</td><td class="sec">G4.4</td><td class="st"><span data-status="na"></span></td><td>OAuth yok; tüm token üretimi kimlik bağlı (userID parametreli)</td></tr>
+  <tr><td>Spoofable header yetkisi yok</td><td class="sec">G4.5</td><td class="st"><span data-status="pass"></span></td><td>Yetki yalnız JWT+DB; X-Request-Id yalnız log korelasyonu (doğrulamalı, UUID değişimli)</td></tr>
+  <tr><td>Fail-open kapı yok</td><td class="sec">G4.6</td><td class="st"><span data-status="pass"></span></td><td>Medya yetkisi fail-closed (upload_download.go:202-203); hata yolları erişim reddeder (mapErrorToStatus default 500)</td></tr>
+  <tr><td>Kapı/eylem alan uyumu</td><td class="sec">G4.7</td><td class="st"><span data-status="pass"></span></td><td>ListReports clamp'i servisin kullandığı aynı limit değişkeninde; zarf code'u status ile tutarlı (ErrorCtx INTERNAL zorlaması)</td></tr>
+  <tr><td>İç içe kayıtlar görüntüleyen yetkisiyle</td><td class="sec">G4.8</td><td class="st"><span data-status="na"></span></td><td>Bu diff veri şekillendirmeyi değiştirmedi</td></tr>
+  <tr><td>Parser differansiyeli yok; çapalı regex</td><td class="sec">G4.9-10</td><td class="st"><span data-status="pass"></span></td><td>upload_download kanoniklik kontrolü tek parser (path.Clean) — C-02 kapanışı; klipy/Electron çapalı kıyaslar (madde 43)</td></tr>
+  <tr><td>Boolean açık parse</td><td class="sec">G4.11</td><td class="st"><span data-status="na"></span></td><td>Bu diff bool form alanı eklemedi</td></tr>
+  <tr><td>Registry fanout tamamlandı</td><td class="sec">G4.12</td><td class="st"><span data-status="pass"></span></td><td>Madde 44 kanıtı (code listesi çift taraflı senkron)</td></tr>
+  <tr><td>Token entropi ≥128 bit</td><td class="sec">G4.13</td><td class="st"><span data-status="pass"></span></td><td>Refresh/WS ticket/bot token: 32 bayt CSPRNG (256 bit)</td></tr>
+  <tr><td>Credential dosyaları 0600/0700</td><td class="sec">G4.14</td><td class="st"><span data-status="na"></span></td><td>Bu diff credential dosyası üretmedi/değiştirmedi</td></tr>
+  <tr><td>createCipheriv + AEAD</td><td class="sec">G4.15</td><td class="st"><span data-status="pass"></span></td><td>createCipher/createDecipher = 0; E2EE AES-256-GCM (keyBackup.ts, pkg/crypto/aes.go)</td></tr>
+  <tr><td>İzin bypass bayrağı yok</td><td class="sec">G4.16</td><td class="st"><span data-status="pass"></span></td><td>Madde 46 beyanı; config/script dosyalarında bayrak yok</td></tr>
+  <tr><td>Orchestrator shell render yok</td><td class="sec">G4.17</td><td class="st"><span data-status="na"></span></td><td>Orchestrator/DAG yüzeyi yok</td></tr>
+</table>
+
+<h2>5b. Bağımlılık CVE Durumu (§15.1 — v1.5)</h2>
+<p style="color:var(--muted);font-size:13px">Pinlenmiş bağımlılıklar dahil sürekli SCA sonucu. Agent VEX/severity/ignore kararı <b>vermez</b>.</p>
+<table>
+  <tr><th>Paket (ekosistem)</th><th>Şu anki sürüm</th><th>CVE / GHSA</th><th class="sec">Sev.</th><th>İlk fix sürümü</th><th>fix_type</th><th class="st">Durum</th><th>Aksiyon / kanıt</th></tr>
+  <tr><td colspan="6">Bu diff bağımlılık değiştirmedi; bu oturumda eşik üstü açık CVE kaydı üretilmedi</td><td class="st"><span data-status="na"></span></td><td>Gerekçe: §15.1 tarama altyapısı (dep_cve_scan.py, OSV aynası, zamanlanmış SCA) henüz kurulmadı — kalan risk #1</td></tr>
+</table>
+<div class="card">
+  <p><b>Sürekli tarama kanıtı:</b> Mevcut: govulncheck (CI HARD gate, .github/workflows/server-ci.yml) · npm audit --audit-level=high (advisory) · .github/dependabot.yml. Eksik: OSV-Scanner/zamanlanmış tam SCA + first_fixed_version normalizasyonu + Renovate (§15.1.3) — kurulum kullanıcı kararı bekliyor.</p>
+  <p><b>Eşik üstü açık CVE (SLA-dışı/VEX'siz):</b> bilinen 0 (son CI govulncheck PASS — main bazı). <b>no-fix-available:</b> kayıt yok.</p>
+</div>
+
+<h2>6. Çalıştırılan Komutlar ve Taramalar</h2>
+<table>
+  <tr><th>Komut</th><th>Araç sürümü</th><th>Exit</th><th>Tarih</th><th>Özet</th></tr>
+  <tr><td><code>Checkmarx Full Scan (LocalPath: discordd-main)</code></td><td>9.7.6.1003 HF10</td><td>—</td><td>2026-08-07 14:23</td><td>scanid=1000882 · 618 bulgu (1C/15H/223M/368L/11I) · 203.540 LOC / 1.166 dosya — bu raporun girdisi</td></tr>
+  <tr><td><code>docker run … golang:1.26.5-bookworm go vet ./...</code></td><td>go 1.26.5</td><td>0</td><td>2026-08-07</td><td>Temiz (server, diff sonrası)</td></tr>
+  <tr><td><code>docker run … golang:1.26.5-bookworm go test ./...</code></td><td>go 1.26.5</td><td>0</td><td>2026-08-07</td><td>14/14 paket ok — handlers 0.59s, pkg (G2.7 zarfı), ratelimit 2.4s, repository 20.3s, services 15.5s, ws 2.4s; 0 FAIL</td></tr>
+  <tr><td><code>npx tsc -b</code> (client)</td><td>TS strict (repo config)</td><td>0</td><td>2026-08-07</td><td>0 diagnostic (tsc --noEmit bu repo'da no-op olduğundan -b kullanıldı)</td></tr>
+  <tr><td><code>npx vitest run</code> (client)</td><td>vitest (repo lock)</td><td>0</td><td>2026-08-07</td><td>68 dosya / 735 test PASS — apiError.test.ts + localeParity.test.ts dahil</td></tr>
+  <tr><td><code>npm run build</code> (client)</td><td>vite 7</td><td>0</td><td>2026-08-07</td><td>Build OK; yalnız diff-öncesi mevcut uyarılar (vendor direct-eval, chunk-size)</td></tr>
+  <tr><td><code>gofmt -l</code> (değişen 13 dosya, CRLF normalize sonrası)</td><td>go 1.26</td><td>0</td><td>2026-08-07</td><td>Boş çıktı — biçim temiz</td></tr>
+  <tr><td><code>grep doğrulamaları</code></td><td>ripgrep</td><td>0</td><td>2026-08-07</td><td>Yanıt/log gövdesinde ham err.Error() = 0; ErrorWithMessage(err.Error()) = 0</td></tr>
+  <tr><td><code>bash security/tools/self-scan.sh . artifacts/self-scan-inceleme.txt</code></td><td>§0.10 v1.5 (bu turda yazıldı)</td><td>0</td><td>2026-08-07</td><td><b>BLOK 0 eşleşme</b>, 156 İNCELEME satırı; JS/TS + Go (§0.10.3 yeni) + CI/YAML setleri</td></tr>
+  <tr><td><code>docker … go test ./handlers/ ./services/</code> (2. dalga)</td><td>go 1.26.5</td><td>0</td><td>2026-08-07</td><td>Review düzeltmeleri sonrası; ayrıca tam suite tekrar exit 0</td></tr>
+  <tr><td><code>python -c "yaml.safe_load(server-ci.yml)"</code></td><td>PyYAML</td><td>0</td><td>2026-08-07</td><td>CI değişikliği sonrası YAML geçerliliği + adım sırası doğrulandı</td></tr>
+  <tr><td><code>docker … go test <b>-race -count=1</b> ./services/ ./ws/ ./handlers/ ./repository/ ./models/ ./pkg/crypto/</code></td><td>go 1.26.5</td><td>0</td><td>2026-08-07</td><td><b>Şerit-2 dönüşümlerinin kritik kanıtı</b> (cache atlatıldı): 6/6 paket ok — services 79.3s, ws 3.8s, handlers 4.4s, repository 234.1s, models 1.0s, pkg/crypto 1.0s. <b>Deadlock yok</b> (olsaydı timeout) · <b>yarış tespiti yok</b> (voice_token.go düzeltmesi dahil)</td></tr>
+  <tr><td><code>npx vitest run</code> (3. dalga sonrası)</td><td>vitest</td><td>0</td><td>2026-08-07</td><td>68 dosya / 735 test PASS — CSPRNG dönüşümü ve yeni <code>randomUnit</code> spy deseni dahil</td></tr>
+</table>
+<div class="card">
+  <b>Çalıştırılmayanlar (§0.2 dürüstlük beyanı):</b> §0.10 self-scan (script repo'da yok — Go desen seti de standartta tanımsız), semgrep, gitleaks, DAST/API fuzz, Playwright e2e (kapsam dışı bırakıldı), SBOM üretimi. Nedenleri ve planı bölüm 10'da.
+</div>
+
+<h2>7. §0.10 Öz-Tarama Çıktısı (§0.10 + §0.10.1 + §0.10.2)</h2>
+<div class="card">
+  <p><b>BLOK desenleri: 0 eşleşme</b> — <code>security/tools/self-scan.sh</code> 2026-08-07'de yazıldı ve koşuldu (exit 0). Standardın taban seti (JS/TS) + <b>§0.10.3 Go seti</b> (bu repo için türetildi — standart Go'yu "stack'e girince eklenir" diye boş bırakmıştı, §0.11 madde 3.5 gereği eksikti) + §0.10.2 CI/YAML seti. Python seti bilinçli yok (repo'da Python üretim kodu yok). Script CI'da <b>sert kapı</b> olarak bağlandı (<code>.github/workflows/server-ci.yml</code> → Security scan job'ının ilk adımı).</p>
+  <p><b>İlk koşuda 5 BLOK ailesi doğdu; beşi de desen kusuru çıktı ve desenler düzeltildi</b> (kod değişikliği gerekmedi):</p>
+  <ul style="font-size:13px;margin:6px 0 10px">
+    <li><b>target=_blank noopener'sız (17 saha)</b> — standardın kendi referans script'indeki satır-kapsamlı <code>grep -v noopener</code> çok satırlı JSX'te bozuk: <code>rel="noopener noreferrer"</code> bir alt satırda. 17/17 kullanım zaten güvenliydi. Desen dosya-bazında sayım karşılaştırmasına çevrildi (standarda göre bir iyileştirme — yukarı bildirilmeli).</li>
+    <li><b>eval ailesi</b> — yalnız <code>client/public/dtln/</code> emscripten/WASM vendor bundle'ı; SCOPE'ta dependency-metadata, exclusion eklendi.</li>
+    <li><b>JWT none algoritması</b> — <code>auth_service_test.go:532-545</code>, alg=none reddini sınayan <b>negatif güvenlik testi</b>. İki aşamalı: üretimde BLOK, testte İNCELEME.</li>
+    <li><b>Web storage'da hassas veri</b> — <code>draftStorage.test.ts:113</code>, "auth-store" anahtarına DOKUNULMADIĞINI sınayan test; "auth" alt-dizgesine takılmış. İki aşamalı ayrım eklendi.</li>
+    <li><b>DOM XSS sink</b> — <code>document.body.innerHTML = ""</code> test teardown'u; boş dizge literali sink değildir, elendi.</li>
+  </ul>
+  <p><b>İNCELEME çıktısı: 156 satır</b> (tam dosya: <code>artifacts/self-scan-inceleme.txt</code> — bu raporun zorunlu eki). Kategori dağılımı ve nokta kontrolleri:</p>
+  <pre>KATEGORİ DAĞILIMI (156 satır; hiçbiri FAIL değil — insan kararına gider):
+  45  Go hardcoded secret     → 44'ü _test.go fixture'ı; 1'i ÜRETİM: bot_service.go:32 (aşağı bak)
+  26  değişkenle dosya açma   → tamamı pkg.SafeJoin arkasında (SEC-EX-0001/0003)
+  22  Atoi sonrası clamp      → handler + repository çift clamp (SEC-EX-0011)
+  13  Go ham .Error()         → 6 _test.go assert; 4 strings.Contains sınıflandırması (database.go:341,
+                                retry.go:65, backup_service_restore.go:187); 3 pkg iç kullanımı
+                                (redact.go:27 wrapper'ın kendisi, response.go:56/87 4xx domain
+                                mesaj yolu). HİÇBİRİ LOGLANMIYOR / yanıta girmiyor.
+  11  çerez bayrakları        → 4 üretim sahası #nosec G124 gerekçeli, 7'si test AddCookie
+  11  SSRF fetch/axios        → client'ın aynı-köken API katmanı
+   7  Math.random             → yalnız animasyon/jitter (SEC-EX-0021)
+   6  postMessage dinleyici   → Electron/Capacitor köprüleri
+   2  negatif test alg=none   → auth_service_test.go — İSTENEN test; varlığı madde 26'yı PASS yapar
+   2  kısa randomBytes        → e2e/tests/helpers.ts test parolası + kullanıcı adı soneki
+   2  client açık yönlendirme → ErrorBoundary.tsx:139/144 = bu turda yapılan DÜZELTMENİN kendisi
+   1  sınırsız gövde okuma    → e2ee.go:169, bir ÜST satırda MaxBytesReader ile sınırlı
+   1  öngörülebilir temp      → config.go:324 BACKUP_WORKDIR="/tmp/hichat-backup" → kalan risk #6
+   1  gerekçesiz #nosec       → integrity.go:23, yalnız YORUM içinde geçiyor (FP)
+   1  math/rand               → yalnız channel_permission_service_test.go
+   1  jwt.Parse               → keyfunc alg kontrolü doğrulandı (SEC-EX-0012)
+   1  plaintext dinleme       → main.go:382 (SEC-EX-0004, ADDENDUM §1)
+   2  0.0.0.0 bind            → konteyner içi dinleme (biri yorum satırı)
+   1  test kodunda web storage→ draftStorage.test.ts:113 negatif assertion
+
+⚠️ ÖZ-TARAMANIN YAKALADIĞI KAYIT HATASI (bu bölümün varlık sebebi):
+   services/bot_service.go:32 — Password: "placeholder8" ÜRETİM kodunda.
+   SEC-EX-2026-0010 "tamamı _test.go fixture'ı" diyordu; bu YANLIŞTI, kayıt düzeltildi.
+   Sonuç değişmedi (Not Exploitable): literal yalnız insan hesabı doğrulama kurallarını
+   yeniden kullanmak için kurulan geçici CreateUserRequest'e ait ve Validate() dışına
+   çıkmıyor; bot satırının password_hash sütununa bot_repository.go:29 sabit '!disabled!'
+   yazıyor — bcrypt formatı olmadığından CompareHashAndPassword daima hata döner, yani bot
+   hesapları parolayla giriş YAPAMAZ. removal_plan: parola alanı içermeyen ayrı bot tipi.
+
+Önceki elle süpürmeler (hâlâ geçerli, script bunları da kapsıyor):
+- yanıt gövdesinde / log map'inde ham err : 0 (sendErr/lastErr varyantları dahil)
+- httpOnly'siz SetCookie · child_process.exec · createCipher · InsecureSkipVerify : 0</pre>
+</div>
+
+<h2>8. Guardrail Katmanı (§0.12)</h2>
+<table class="meta">
+  <tr><td>Plugin + sürüm</td><td><b>security-guidance 2.0.6</b> — kurulu ve etkin. Sürüm dosya sisteminden doğrulandı: <code>~/.claude/plugins/cache/claude-plugins-official/security-guidance/2.0.6/.claude-plugin/plugin.json</code>. Marketplace <code>anthropics/claude-plugins-official</code> (standardın işaret ettiği gerçek upstream; <code>claude-code-plugins</code> kopyası da kurulu — bayat mirror, §0.12). ≥2.0.6 şartı <b>SAĞLANDI</b></td></tr>
+  <tr><td>Model / endpoint pin uyumu</td><td><b>Doğrulanamadı — BT yönetiminde.</b> <code>ANTHROPIC_BASE_URL</code>, <code>SECURITY_REVIEW_MODEL</code>, <code>SG_AGENTIC_MODEL</code> managed settings katmanında yaşar (§0.12.2 gereği agent-immutable). Repo'ya <b>bilinçli olarak placeholder yazılmadı</b>: uydurma değer Claude Code oturumlarını kırardı. Gereksinim <code>security/policies/agent-tools.yml → env_policy</code> altında kayıtlı, doldurulması BT/AppSec işidir</td></tr>
+  <tr><td>security-patterns.yaml sha256</td><td><code>bd0c02006eb27ad47514122e264701b27e2ad5a7c49e0edb4dd3936fe1feb559</code> — 49 kural, üretildi (<code>sync_agent_guardrail.py</code>), plugin yükleyicisiyle doğrulandı: <b>49/49 kabul, 0 elendi</b></td></tr>
+  <tr><td>claude-security-guidance.md sha256</td><td><code>08a8aff58d199d99d1945064301ed3d3cd569997cfc251132da442aef06c48e6</code> — 6524 bayt (sınır 8192), üretildi; plugin sarmalamasıyla 6975 bayt, <b>kesilme yok</b></td></tr>
+  <tr><td>Drift kontrolü</td><td>CI adımı eklendi: <code>Guardrail drift check (SECURE-CODING §0.12.3)</code> → <code>sync_agent_guardrail.py --check</code>. Yerelde <b>exit 0</b></td></tr>
+  <tr><td>Kill-switch beyanı</td><td>Bu oturumda SECURITY_GUIDANCE_DISABLE / ENABLE_* set edilmedi; guardrail dosyası mevcut olmadığından değiştirilmedi — BEYAN EDİLDİ</td></tr>
+</table>
+<table>
+  <tr><th>Katman</th><th>Bulgu (dosya:kural / kategori)</th><th>Sonuç (çözüldü / gerekçe)</th></tr>
+  <tr><td>1 — edit-anı desen</td><td><b>7 uyarı tetiklendi</b> (2026-08-07): <code>new Function()</code> ×2, <code>dangerouslySetInnerHTML</code> ×3, <code>innerHTML</code> XSS ×2 — <code>security/tools/self-scan.sh</code> ve <code>sync_agent_guardrail.py</code> yazılırken/düzenlenirken ve bu raporun §7–§8 metni yazılırken (bir kısmı, uyarıları BELGELEYEN düzenlemenin kendisinde tetiklendi)</td><td><b>7/7 çürütüldü (FP), kod değişikliği gerekmedi.</b> Uyarılan dizgeler çalıştırılabilir kod değil, <b>tarayıcının aradığı GREP DESENLERİ</b> (<code>'\beval\(|new Function\('</code>, <code>'dangerouslySetInnerHTML|v-html'</code>, <code>'\.(innerHTML|outerHTML)\s*='</code>) ve raporun düz metni. Kanıt: self-scan.sh dosyası bir bash script'idir, DOM API'si çağırmaz; ilgili satırlar <code>blok()</code>/<code>incele()</code> fonksiyonlarına desen argümanıdır. Ders: guardrail 1. katmanı, güvenlik aracının kendi desen tablosunda yapısal olarak FP üretir</td></tr>
+  <tr><td>2 — Stop diff incelemesi</td><td>Bu oturumda gözlenmedi</td><td>Yerine: hichat-security-reviewer tam diff incelemesi + 1 re-review (7 bulgu → hepsi kapandı). Repo guardrail dosyaları artık mevcut olduğundan sonraki oturumlarda 1–2. katman proje politikasıyla besleniyor</td></tr>
+  <tr><td>3 — commit agentic inceleme</td><td>Tetiklenmedi — commit atılmadı</td><td>Commit kullanıcı aksiyonudur. <b>Bilinen sınır (§0.12.3b):</b> 3. katman agentic reviewer <code>claude-security-guidance.md</code>'yi OKUMAZ; proje politikasının etkisi 1–2. katmanla sınırlıdır. Guardrail sessizliği §0.3 kanıtı sayılmadı (§0.12.5)</td></tr>
+</table>
+
+<h2>9. İnsan Onayı / Triage Kuyruğu</h2>
+<p style="color:var(--muted);font-size:13px">Agent bu bulguları <b>işaretlemez</b>; §0.6 alanlarıyla gerekçe taslağı sunar, kararı insan verir. Tam kayıtlar: <code>SECURITY-EXCEPTIONS.yml</code> (24 kayıt, approvers=PENDING-APPSEC). Portal adımı: Checkmarx projesi 104 → sorgu bazında toplu seçim → state uygula → re-scan.</p>
+<table>
+  <tr><th>Bulgu (query)</th><th>Konum</th><th>Öneri</th><th>Gerekçe taslağı</th></tr>
+  <tr><td>Arbitrary File Write (Critical)</td><td>badge.go:198-299</td><td>Not Exploitable</td><td>R2 — hedef yol sıfır istek baytı; SafeJoin+CreateTemp+admin-only (SEC-EX-0001)</td></tr>
+  <tr><td>Path Traversal ×6 (High)</td><td>main.go / badge.go / upload_download.go</td><td>Not Exploitable</td><td>R3/R2 — embed.FS ValidPath; 3-katman guard (SEC-EX-0002/0003)</td></tr>
+  <tr><td>Plain Text Transport ×2 (High)</td><td>main.go:382, upload_download.go:383</td><td>Not Exploitable</td><td>R10 — TLS HF edge; ADDENDUM §1 trust beyanı (SEC-EX-0004)</td></tr>
+  <tr><td>DOM XSS + Open Redirect (High+Med)</td><td>ErrorBoundary.tsx:136</td><td><b>Fixed</b></td><td>new URL origin-sabitleme bu diff'te; re-scan doğrular (SEC-EX-0024)</td></tr>
+  <tr><td>SSRF ×2 (High)</td><td>gif.go, electron/main.ts</td><td>Not Exploitable</td><td>R2 — çapalı host + QueryEscape + CheckRedirect; 5-katman jail (SEC-EX-0005/0006)</td></tr>
+  <tr><td>Timing ×4 (High)</td><td>_test.go ×3 + auth_password.go:105</td><td>Not Exploitable</td><td>R3 — prod yolları DB lookup/hmac.Equal; sink'ler test/e-posta (SEC-EX-0007)</td></tr>
+  <tr><td>Medium aileleri (Locking 85, Hardcoded 87, Loop 22, JWT 10, Cookie 8, diğer ~11)</td><td>aile bazında</td><td>Loop büyük ölçüde + Locking ~11 <b>Fixed</b>; kalanı NE + 1 AR</td><td>SEC-EX-0008…0017, 0022. Loop: üst sınırlar handler'a taşındı. Locking: 15/78 güvenli saha çevrildi, 63'ü çevrilemez (deadlock). Hardcoded 87: SCOPE muafiyeti şart (i18n + package-lock + test). JWT TTL = Accepted Risk (N-10)</td></tr>
+  <tr><td>Low aileleri (Log/Error leak ~193, Forging 38, Race/Shutdown ~76, Random 7, diğer)</td><td>aile bazında</td><td>~47 + 7 + kısmi <b>Fixed</b>; kalanı NE</td><td>SEC-EX-0018…0021. ErrText tam kapsama (dalga 1–2) · <b>Random 7/7 CSPRNG'ye çevrildi</b> · Shutdown: döngü dışı sahalar defer'e · Forging: mevcut savunma korunuyor</td></tr>
+  <tr><td>Outdated Hashing ×11 (Info)</td><td>node_modules</td><td>Not Exploitable + scope exclusion</td><td>R3 — birinci taraf 0 eşleşme; SCOPE önerisi (SEC-EX-0023)</td></tr>
+</table>
+
+<h2>10. Kalan Riskler ve Rollback</h2>
+<div class="card">
+  <p><b>Kalan riskler / SECURITY-REVIEW noktaları:</b></p>
+  <p>
+  <b>#1 — §0.11/§0.12/§15.1 onboarding (KISMEN KAPATILDI):</b> <s>security/ dizini + self-scan.sh (+Go desen seti) + CI bağlantısı</s> → 2026-08-07'de yapıldı (bölüm 7). <s>guardrail dosyaları + drift adımı (§0.12.3)</s> ve <s><code>security/policies/agent-tools.yml</code> (§0.11 md.4)</s> → 2026-08-07'de yapıldı (bölüm 8). <b>Açık kalanlar:</b> managed settings env pin'leri (BT/AppSec — <code>ANTHROPIC_BASE_URL</code> + model kimlikleri); rapor şablonunun <code>security/templates/</code> altına taşınması (§0.11 md.7 — şu an kökte, farklı adla); SBOM/provenance/imza release gate'i (§36); OSV-Scanner + Renovate + <code>dep_cve_scan.py</code> (§15.1); semgrep/gitleaks ikinci analiz paradigması (§0.7 çoklu-araç şartı); DAST; <code>.claude/</code> yolları için CODEOWNERS kaydı. Ayrı iş olarak kullanıcı kararına sunuldu.<br>
+  <b>#2 — Negatif test borcu:</b> JWT alg-confusion/expired seti; Set-Cookie bayrak assert testi; ErrorCtx correlation_id + ErrorWithCode için birim testleri.<br>
+  <b>#3 — İyileştirme adayları:</b> SafeJoin'e EvalSymlinks (realpath-first, B#42); merkezî cookie helper (G2.3). <b>Improper Locking panic-güvenliği:</b> kalan 63 saha `defer`'e çevrilemez (bloklayıcı iş öncesi bilinçli unlock); panic-güvenliği isteniyorsa yol, kritik bölümü `defer`'li küçük bir yardımcı fonksiyona çıkarıp IO'yu dönüşten SONRA yapmaktır — ses kodunda riskli, ayrı planlama ister; ErrorCtxErr'in auth Register/Login sahalarına yayılması.<br>
+  <b>#4 — Badge geriye dönük veri:</b> URL düzeltmesi yalnız yeni yüklemeleri kapsar; eski DB satırlarındaki /uploads/badges/ URL'leri kırıktı ve kırık kalır — admin yeniden yükleme önerilir (migration = kullanıcı eskalasyonu). SVG badge desteği kaldırıldı (2026-08-07, kullanıcı onayı — hiç render edilememişti); BadgePill artık resolveAssetUrl kullanıyor (Electron/Capacitor shell'lerinde görünürlük).<br>
+  <b>#5 — Rapor limiti:</b> Checkmarx per-query 50 sonuç — bir sonraki taramada limit artırılmalı (§0.6).<br>
+  <b>#6 — Öngörülebilir yedekleme çalışma dizini:</b> <code>config.go:324</code> <code>BACKUP_WORKDIR</code> varsayılanı sabit <code>/tmp/hichat-backup</code> (§21 CWE-377 deseni). Tek kiracılı konteyner içinde sömürülebilir değil ama standardın "öngörülebilir sabit temp adı" kuralına takılıyor; <code>os.MkdirTemp</code>'e çevrilmesi iyileştirme adayı. Öz-taramanın İNCELEME kuyruğundan geldi.<br>
+  <b>#7 — SECURE-CODING standardına geri bildirim:</b> (a) referans <code>self-scan.sh</code>'ın <code>target=_blank</code> iki-aşamalı kontrolü çok satırlı JSX'te yapısal olarak bozuk (bu repoda 17/17 güvenli kullanımı yanlış blokladı) — dosya-bazında sayım karşılaştırması önerilir; (b) §0.10'da Go desen seti yoktu, bu turda §0.10.3 olarak türetildi ve yukarı bildirilmelidir; (c) B4 metni "50 madde" derken şablon 52 madde taşıyor (v1.5 §15.1 eklerinden); (d) dosya adı v1.4, içerik v1.5.
+  </p>
+  <p><b>İnsan onayı gereken değişiklikler:</b> (1) SECURITY-EXCEPTIONS.yml 24 kaydının AppSec onayı; (2) Checkmarx portal state uygulaması + re-scan; (3) commit/PR/merge (git tamamen kullanıcıda); (4) JWT TTL Accepted Risk teyidi (N-10); (5) onboarding kalemleri (#1).</p>
+  <p><b>Rollback talimatı:</b></p>
+  <pre># Değişiklikler henüz COMMIT'LENMEDİ — rollback = çalışma ağacını geri al:
+cd C:\Users\harun\OneDrive\Desktop\Discord\tayfa-deploy
+git status                      # değişen dosyaları gör
+git checkout -- server client   # kod değişikliklerini geri al
+# Yeni dosyalar (SECURITY-*.yml/md, artifacts/) untracked — silmek yeterli.
+# Commit SONRASI rollback: git revert <commit> (her mantıksal commit ayrı revert edilir).</pre>
+</div>
+
+<div class="footer">
+  <p><b>Kanıt dürüstlüğü beyanı:</b> Bu raporda çalıştırılmayan hiçbir kontrol PASS olarak
+  işaretlenmemiştir; tüm kanıtlar gerçek komut çıktılarına, test sonuçlarına ve
+  scan ID'lerine dayanır. Bu oturumda guardrail kill-switch'i set edilmemiş,
+  guardrail dosyaları değiştirilmemiştir (§0.12.2, §39 #14). (SECURE-CODING v1.5 · §0.2 / B4)</p>
+  <div class="sig">
+    <div><b>Agent:</b> Claude Code · Fable 5 (hichat pipeline)<br>Tarih: 2026-08-07</div>
+    <div><b>İnsan reviewer:</b> ______________________<br>Tarih: ____________ · Karar: ONAY / RET</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var all=document.querySelectorAll('[data-status]');
+  var c={pass:0,fail:0,na:0,todo:0};
+  all.forEach(function(e){
+    var s=e.getAttribute('data-status');
+    if(s==='pass')c.pass++; else if(s==='fail')c.fail++;
+    else if(s==='na')c.na++; else c.todo++;
+  });
+  var b=document.getElementById('gateBanner');
+  if(c.fail>0){
+    b.className='banner block';
+    b.textContent='⛔ TESLİM EDİLEMEZ — '+c.fail+' FAIL. Düzelt ve raporu yeniden üret (B4).';
+  }else if(c.todo>0){
+    b.className='banner block';
+    b.textContent='⚠️ TASLAK — '+c.todo+' madde doldurulmamış. Kanıtsız PASS yasaktır.';
+  }else{
+    b.className='banner ok';
+    b.textContent='✅ TESLİME UYGUN (statü: TARAMAYA HAZIR) — '+c.pass+' PASS · '+c.na+' N-A · 0 FAIL. İnsan reviewer onayı + Checkmarx re-scan bekleniyor.';
+  }
+})();
+</script>
+</body>
+</html>

@@ -52,7 +52,16 @@ func NewAdminHandler(
 func (h *AdminHandler) ListAppLogs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
+	// Clamp mirrors the repository's own clamp (repository/sqlite_app_log.go
+	// List) so the bound is visible at the point the untrusted input is
+	// parsed, not only several layers downstream.
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
 	offset, _ := strconv.Atoi(q.Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
 
 	filter := models.AppLogFilter{
 		Level:    q.Get("level"),
@@ -196,7 +205,11 @@ func (h *AdminHandler) MigrateServerInstance(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "livekit_instance_id is required", "VALIDATION_FAILED")
 		return
 	}
 
@@ -474,6 +487,12 @@ func (h *AdminHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
+	// Clamp: an unbounded ?limit= let a caller request an arbitrarily large
+	// page (memory/DB load) with no upper bound. Same guard shape as
+	// repository/sqlite_audit_log.go's ListByServer.
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
 
 	offset := 0
 	if o := r.URL.Query().Get("offset"); o != "" {
@@ -516,7 +535,10 @@ func (h *AdminHandler) UpdateReportStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// Generic message, not err.Error(): Validate()'s text echoes the
+		// client-supplied status value back verbatim, so passing it straight
+		// through would put unsanitized request data in the response body.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid report status", "VALIDATION_FAILED")
 		return
 	}
 

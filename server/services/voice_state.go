@@ -263,6 +263,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	var wasServerMuted, wasServerDeafened bool
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Leave current channel if in one
 	if existing, ok := s.states[userID]; ok {
@@ -306,7 +307,6 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 			existing.DisplayName = displayName
 			existing.AvatarURL = avatarURL
 			existing.LastActivity = time.Now()
-			s.mu.Unlock()
 			voiceLogger.Info("same-channel rejoin (no broadcast)", "user_id", userID, "channel_id", channelID)
 			return nil
 		}
@@ -428,10 +428,15 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		},
 	})
 
-	s.mu.Unlock()
+	// Note: unlike LeaveChannel below, this remaining section does NOT run
+	// with the lock actually released — s.mu.Unlock() was replaced by the
+	// deferred call at the top of this function (safe defer-lock
+	// conversion), so the lock stays held a little longer than before,
+	// through the dispatches below. Nothing here blocks or re-enters s.mu
+	// (goroutine dispatch + logging only), so this is not a behavior change.
 
-	// Remove phantom participant from old LiveKit room (best-effort, outside
-	// lock). Dual-identity (A-29d): the fresh models.VoiceState built above
+	// Remove phantom participant from old LiveKit room (best-effort). Dual-
+	// identity (A-29d): the fresh models.VoiceState built above
 	// doesn't carry IsStreaming forward from the old state, so a user who
 	// switches channels while screen sharing is no longer tracked as
 	// streaming at all server-side — but their "_ss" LiveKit sub-participant
@@ -491,10 +496,10 @@ func (s *voiceService) creditUsage(instanceID string, isCloud bool, joinedAt tim
 
 func (s *voiceService) LeaveChannel(userID string) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	state, ok := s.states[userID]
 	if !ok {
-		s.mu.Unlock()
 		return nil
 	}
 
@@ -504,8 +509,8 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	displayName := state.DisplayName
 	avatarURL := state.AvatarURL
 	wasStreaming := state.IsStreaming
-	// Capture quota fields before delete — used after lock release to credit
-	// session duration to the instance it ran on.
+	// Capture quota fields before delete — used below (still under the lock;
+	// see the defer above) to credit session duration to the instance it ran on.
 	leaveJoinedAt := state.JoinedAt
 	leaveInstanceID := state.LiveKitInstanceID
 	leaveIsCloud := state.LiveKitIsCloud
@@ -542,13 +547,13 @@ func (s *voiceService) LeaveChannel(userID string) error {
 		}
 	}
 
-	s.mu.Unlock()
-
-	// Remove from LiveKit (best-effort, outside lock — involves DB calls).
-	// Dual-identity: also evicts the "_ss" screen-share sub-participant, if
-	// any, so a departing user's screen share doesn't keep streaming after
-	// their voice connection is gone (DisconnectUser routes through this
-	// same LeaveChannel, so it's covered too).
+	// Remove from LiveKit (best-effort — involves DB calls, dispatched so it
+	// doesn't block the caller; the lock itself stays held via the defer
+	// above through this dispatch, which is fine since nothing below blocks
+	// or re-enters s.mu). Dual-identity: also evicts the "_ss" screen-share
+	// sub-participant, if any, so a departing user's screen share doesn't
+	// keep streaming after their voice connection is gone (DisconnectUser
+	// routes through this same LeaveChannel, so it's covered too).
 	go s.removeParticipantAndScreenShareFromLiveKit(channelID, userID)
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.

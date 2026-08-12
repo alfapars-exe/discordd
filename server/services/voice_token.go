@@ -56,7 +56,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit instance lookup failed", map[string]string{
-			"server_id": channel.ServerID, "error": err.Error(),
+			"server_id": channel.ServerID, "error": pkg.ErrText(err),
 		})
 		return nil, fmt.Errorf("failed to get livekit instance for server %s: %w", channel.ServerID, err)
 	}
@@ -97,14 +97,14 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit API key decryption failed", map[string]string{
-			"instance_id": lkInstance.ID, "error": err.Error(),
+			"instance_id": lkInstance.ID, "error": pkg.ErrText(err),
 		})
 		return nil, fmt.Errorf("failed to decrypt livekit api key: %w", err)
 	}
 	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit API secret decryption failed", map[string]string{
-			"instance_id": lkInstance.ID, "error": err.Error(),
+			"instance_id": lkInstance.ID, "error": pkg.ErrText(err),
 		})
 		return nil, fmt.Errorf("failed to decrypt livekit api secret: %w", err)
 	}
@@ -192,7 +192,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	token, err := at.ToJWT()
 	if err != nil {
 		s.logError(models.LogCategoryVoice, &userID, "LiveKit JWT generation failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return nil, fmt.Errorf("failed to generate livekit token: %w", err)
 	}
@@ -235,11 +235,16 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 		}
 	}
 
-	// User must already be in this voice channel to screen share
+	// User must already be in this voice channel to screen share.
+	// state.ChannelID is read here, still under the lock — reading it after
+	// RUnlock (as this used to) is a data race: state is a *models.VoiceState
+	// pointer shared with the map, and another goroutine (e.g. JoinChannel)
+	// can concurrently write its fields the instant the lock is released.
 	s.mu.RLock()
 	state, inVoice := s.states[userID]
+	inChannel := inVoice && state.ChannelID == channelID
 	s.mu.RUnlock()
-	if !inVoice || state.ChannelID != channelID {
+	if !inChannel {
 		return nil, fmt.Errorf("%w: must be in the voice channel to screen share", pkg.ErrBadRequest)
 	}
 

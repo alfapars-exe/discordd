@@ -1,0 +1,128 @@
+# agent-tools.yml — AI kodlama agent'ının yetki manifesti
+# SECURE-CODING v1.5 §0.2 (agent güvenlik sözleşmesi) + §0.11 md.4 + §0.12.2.
+#
+# Bu dosya BEYANDIR, çalışma zamanı zorlayıcısı değildir. §0.9 ilkesi gereği
+# gerçek enforcement agent'ın değiştiremeyeceği katmandadır:
+#   - CI gate'leri (.github/workflows/server-ci.yml)
+#   - managed settings (BT yönetimi, workspace dışı)
+#   - .claude/settings.json permissions.deny (repo, commit'li)
+# Buradaki her satırın karşılığı o katmanlardan birinde YAŞAMALIDIR; yaşamıyorsa
+# `enforcement: BEYAN-ONLY` olarak işaretlenir ve açık kalem sayılır.
+
+version: 1
+project: discord main (HiChat)
+updated: "2026-08-07"
+
+# ── §0.12 guardrail katmanı ──────────────────────────────────────────────────
+guardrail:
+  plugin: security-guidance
+  minimum_version: "2.0.6"
+  marketplace: anthropics/claude-plugins-official   # `claude-code` kopyası bayat mirror'dır (§0.12)
+  installed_version_observed: "2.0.6"               # 2026-08-07, oturum düzeyinde doğrulandı
+  files:
+    patterns: .claude/security-patterns.yaml
+    guidance: .claude/claude-security-guidance.md
+    settings: .claude/settings.json
+  generator: security/tools/sync_agent_guardrail.py
+  drift_check: "security/tools/sync_agent_guardrail.py --check"   # CI adımı
+  # ⚠️ Plugin YAML okumak için PyYAML'a ihtiyaç duyar; yoksa security-patterns.yaml
+  # SESSİZCE yok sayılır (extensibility.py `_read_config`). Geliştirici makinelerinde
+  # `python -c "import yaml"` çalışmalıdır.
+  runtime_requirement: PyYAML
+  limits:                       # plugin extensibility.py sabitleri (2.0.6)
+    max_rules: 50
+    reminder_max_bytes: 1024
+    guidance_max_bytes: 8192
+  known_limits:
+    - "3. katman agentic reviewer claude-security-guidance.md'yi OKUMAZ; dosyanın etkisi 1-2. katmanla sınırlıdır (§0.12.3b)."
+    - "Guardrail sessizliği §0.3 kanıtı DEĞİLDİR; Checkmarx birincil kalır (§0.12.5)."
+    - "Satır içi yorumlar hiçbir katmanda suppression değildir; tek yol §0.6 yönetişimidir (§0.12.5)."
+
+# ── Ortam değişkeni politikası (§0.12.2) ─────────────────────────────────────
+# DEĞER YAZILMAZ: kurumsal gateway URL'i ve onaylı model kimliği managed settings'te
+# yaşar (agent-immutable katman). Repo'ya placeholder yazmak Claude Code oturumlarını
+# kırar, o yüzden .claude/settings.json'a env pin'i KONULMADI — bu bilinçli sapmadır
+# ve SECURITY-ADDENDUM.md'de kayıtlıdır.
+env_policy:
+  pinned_by_managed_settings:
+    - name: ANTHROPIC_BASE_URL
+      requirement: kurumsal gateway'e sabit
+      status: BT-YÖNETİMİNDE            # repo doğrulayamaz
+    - name: SECURITY_REVIEW_MODEL
+      requirement: AppSec onaylı model kimliği
+      status: BT-YÖNETİMİNDE
+    - name: SG_AGENTIC_MODEL
+      requirement: AppSec onaylı model kimliği
+      status: BT-YÖNETİMİNDE
+  forbidden:                            # agent bunları set EDEMEZ (§0.2, §0.12.2)
+    - SECURITY_GUIDANCE_DISABLE
+    - ENABLE_PATTERN_RULES=0
+    - ENABLE_STOP_REVIEW=0
+    - ENABLE_COMMIT_REVIEW=0
+    - ENABLE_CODE_SECURITY_REVIEW=0
+    - SG_AGENTIC_EXCLUDE_MEDIUM=1
+  optional_requires_addendum:
+    - SG_DUAL_OR
+    - SG_AGENTIC_MAX_TURNS
+
+# ── Depo yazma yetkileri ─────────────────────────────────────────────────────
+repository:
+  write:
+    deny:
+      # Guardrail dosyaları — agent kendi denetleyicisini düzenleyemez (§0.12.2)
+      - .claude/security-patterns.yaml
+      - .claude/claude-security-guidance.md
+      - .claude/settings.json
+      # Gate ve politika dosyaları (§0.2: kalite kapısı düşürülemez)
+      - .github/workflows/**
+      - .golangci.yml
+      - SECURITY-SCOPE.yml
+      - SECURITY-EXCEPTIONS.yml
+      - security/policies/**
+    deny_enforcement: .claude/settings.json permissions.deny + CODEOWNERS (AppSec)
+    require_user_request:
+      - security/tools/self-scan.sh        # desen gevşetmesi gözden kaçmasın
+
+  # ⛔ Bu repo'da git = prod deploy (origin HuggingFace Space'tir). CLAUDE.md sert kuralı.
+  git:
+    deny:
+      - push            # origin = HF Space = PROD DEPLOY
+      - commit          # yalnız kullanıcı isteğiyle
+      - tag
+      - merge
+      - "reset --hard"
+      - "checkout --"
+    note: >
+      Alt ajanlar git'e HİÇ yazamaz. Analiz/review ajanlarında shell ya yoktur ya da
+      git yazma komutları yasaktır (yaşanmış kaza: analiz ajanı prod'a push etti).
+    enforcement: kullanıcı izin katmanı + CLAUDE.md + ajan tanımlarında shell yokluğu
+
+# ── §0.2 mutlak yasaklar (agent sözleşmesi) ──────────────────────────────────
+forbidden_actions:
+  - id: F1
+    rule: SAST/SCA/secret/DAST/IaC/container taramasını kapatmak, kapsamını sessizce daraltmak veya kalite kapısını düşürmek
+    enforcement: CI (gate dosyaları deny listesinde) + review
+  - id: F2
+    rule: "nosemgrep / nosec / NOSONAR / @SuppressWarnings / eslint-disable / Checkmarx state / Snyk-Trivy ignore ONAYSIZ eklemek"
+    enforcement: review + §0.6 yönetişimi (SECURITY-EXCEPTIONS.yml)
+  - id: F3
+    rule: Testi geçirmek için güvenlik kontrolünü mock'lamak, atlamak, skip etmek veya assertion zayıflatmak
+    enforcement: review + CI test gate
+  - id: F4
+    rule: Secret, token, cookie, .env, SSH anahtarı, CI credential veya kişisel veriyi terminale, loga, prompt'a ya da üçüncü taraf modele aktarmak
+    enforcement: pkg.ErrText redaksiyonu + gitleaks (AÇIK KALEM) + §0.2 durma koşulu
+  - id: F5
+    rule: "curl | sh, wget | bash, bilinmeyen script, unsigned binary, uzaktan indirilen kod veya kullanıcı girdisini shell içinde çalıştırmak"
+    enforcement: kullanıcı izin katmanı (Bash allowlist)
+  - id: F6
+    rule: Sır DEĞERİNİ (token/key/DSN) herhangi bir dosyaya yazmak — PROJECT_MEMORY dahil. Yalnız sır ADI ve nerede yaşadığı yazılır.
+    enforcement: CLAUDE.md + review
+
+# ── Durma koşulları (§0.2: dur ve insan kararı iste) ─────────────────────────
+stop_and_ask:
+  - migration (tek append dışında)
+  - E2EE payload/format kırılması
+  - yeni bağımlılık
+  - release / versiyon / HF Space config / LiveKit VM config
+  - kodda gerçek secret veya PII bulunması
+  - döngü bütçesi aşımı (test-fix 2, review 1 re-review, hedef başına 8 alt ajan)

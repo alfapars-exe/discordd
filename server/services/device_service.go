@@ -54,7 +54,7 @@ func NewDeviceService(deviceRepo repository.DeviceRepository, hub ws.Broadcaster
 
 func (s *deviceService) RegisterDevice(ctx context.Context, userID string, req *models.RegisterDeviceRequest) (*models.Device, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	device := &models.Device{
@@ -140,7 +140,7 @@ func (s *deviceService) DeleteDevice(ctx context.Context, userID, deviceID strin
 
 func (s *deviceService) UpdateSignedPrekey(ctx context.Context, userID, deviceID string, req *models.UpdateSignedPrekeyRequest) error {
 	if err := req.Validate(); err != nil {
-		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	if err := s.deviceRepo.UpdateSignedPrekey(ctx, userID, deviceID, req); err != nil {
@@ -157,7 +157,7 @@ func (s *deviceService) UpdateSignedPrekey(ctx context.Context, userID, deviceID
 
 func (s *deviceService) UploadPrekeys(ctx context.Context, userID, deviceID string, req *models.UploadPrekeysRequest) error {
 	if err := req.Validate(); err != nil {
-		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	if err := s.deviceRepo.UploadPrekeys(ctx, userID, deviceID, req.OneTimePrekeys); err != nil {

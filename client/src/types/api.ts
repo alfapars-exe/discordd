@@ -18,6 +18,13 @@ export type APIResponse<T = unknown> = {
    */
   code?: string;
   /**
+   * Server request id, present on (some) 5xx error envelopes so a user can
+   * quote it in a support report without any internal detail leaking into
+   * the client-visible error text. Optional and additive — older/other
+   * error paths don't set it, read defensively like `code`.
+   */
+  correlation_id?: string;
+  /**
    * True when the failure came from the network layer (fetch threw, DNS,
    * offline). Callers use this to decide "worth retrying" vs "give up" —
    * a 4xx is deterministic and shouldn't retry, a network flake often

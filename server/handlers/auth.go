@@ -587,7 +587,11 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid password or email", "VALIDATION_FAILED")
 		return
 	}
 
@@ -629,7 +633,11 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid email address", "VALIDATION_FAILED")
 		return
 	}
 
@@ -672,7 +680,11 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid reset token or password", "VALIDATION_FAILED")
 		return
 	}
 

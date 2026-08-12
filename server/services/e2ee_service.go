@@ -101,7 +101,7 @@ func NewE2EEService(
 
 func (s *e2eeService) UpsertKeyBackup(ctx context.Context, userID string, req *models.CreateKeyBackupRequest) error {
 	if err := req.Validate(); err != nil {
-		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 	// P0-BD-01: stamp a server-side integrity MAC so at-rest tampering of the
 	// opaque blob is detectable on read.
@@ -144,7 +144,7 @@ func (s *e2eeService) DeleteKeyBackup(ctx context.Context, userID string) error 
 
 func (s *e2eeService) UpsertGroupSession(ctx context.Context, serverID, channelID, userID, deviceID string, req *models.CreateSenderKeyDistributionRequest) error {
 	if err := req.Validate(); err != nil {
-		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 	if err := s.authorizeGroupSession(ctx, serverID, channelID, userID, true); err != nil {
 		return err

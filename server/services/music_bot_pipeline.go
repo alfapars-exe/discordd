@@ -184,7 +184,7 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 		consecutiveFailures++
 		s.logErr(models.LogCategoryVoice, bot.channelID, "music playback failed", map[string]string{
 			"video_id":             next.VideoID,
-			"error":                err.Error(),
+			"error":                pkg.ErrText(err),
 			"consecutive_failures": strconv.Itoa(consecutiveFailures),
 		})
 		if consecutiveFailures >= maxConsecutiveTrackFailures {

@@ -11,6 +11,7 @@
  */
 
 import { getBadgeIcon } from "../../utils/badgeIcons";
+import { resolveAssetUrl } from "../../utils/constants";
 import type { Badge } from "../../types";
 
 type BadgePillProps = {
@@ -31,7 +32,7 @@ function BadgePill({ badge, size = "sm" }: BadgePillProps) {
         {badge.icon_type === "builtin" ? (
           getBadgeIcon(badge.icon)?.svg ?? null
         ) : (
-          <img src={badge.icon} alt="" loading="lazy" decoding="async" className="badge-pill-custom-img" />
+          <img src={resolveAssetUrl(badge.icon)} alt="" loading="lazy" decoding="async" className="badge-pill-custom-img" />
         )}
       </span>
       <span className="badge-pill-text">{badge.name}</span>

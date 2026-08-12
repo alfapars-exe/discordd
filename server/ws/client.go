@@ -85,10 +85,15 @@ type Client struct {
 // ReadPump reads messages from the WebSocket and dispatches events.
 // Runs until the connection closes, then unregisters from Hub.
 func (c *Client) ReadPump() {
-	defer func() {
-		c.hub.unregister <- c
-		_ = c.conn.Close() // connection is already tearing down; nothing to act on
-	}()
+	// Two independent defers rather than one combined func — LIFO order
+	// runs conn.Close first, then the unregister send, which is the
+	// reverse of the original single-defer's internal order. That's not
+	// observable: c.hub.unregister is a buffered async handoff (hub.go)
+	// that removeClient processes later on the Hub's own goroutine and
+	// never reads from c.conn, so which of the two happens first here
+	// doesn't matter.
+	defer func() { c.hub.unregister <- c }()
+	defer c.conn.Close() // connection is already tearing down; nothing to act on
 
 	c.conn.SetReadLimit(maxMessageSize)
 
@@ -146,7 +151,7 @@ func (c *Client) logUnexpectedClose(err error) {
 		dispatchLogger.Info("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
 	}
 	c.hub.logEvent(level, models.LogCategoryWS, &c.userID,
-		"WebSocket unexpected close", map[string]string{"error": err.Error()})
+		"WebSocket unexpected close", map[string]string{"error": pkg.ErrText(err)})
 }
 
 // closeDone signals sender goroutines and WritePump that the Hub has removed

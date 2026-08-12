@@ -54,7 +54,7 @@ func (s *dmService) GetMessages(ctx context.Context, userID, channelID string, b
 // SendMessage creates a DM message. WS broadcast is done via BroadcastCreate after file uploads.
 func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, req *models.CreateDMMessageRequest) (*models.DMMessage, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	channel, err := s.verifyChannelMembership(ctx, userID, channelID)
@@ -244,7 +244,7 @@ func (s *dmService) BroadcastCreate(message *models.DMMessage) {
 
 func (s *dmService) EditMessage(ctx context.Context, userID, messageID string, req *models.UpdateDMMessageRequest) (*models.DMMessage, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	msg, channel, err := s.verifyMessageAccess(ctx, userID, messageID)

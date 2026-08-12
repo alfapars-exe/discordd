@@ -198,6 +198,9 @@ func (h *Hub) Shutdown() {
 	// both run concurrently per client and unblock instantly.
 	for _, client := range clientList {
 		client.closeDone()
+		// Not deferred — this is a loop over up to 10k+ connections; a
+		// defer here would pin every connection's handle open until
+		// Shutdown itself returns instead of closing each one as we go.
 		_ = client.conn.Close() // already-closed is acceptable
 	}
 	hubLogger.Info("hub shut down", "connections_closed", len(clientList))

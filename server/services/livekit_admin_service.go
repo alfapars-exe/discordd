@@ -131,7 +131,7 @@ func (s *livekitAdminService) GetInstance(ctx context.Context, instanceID string
 
 func (s *livekitAdminService) CreateInstance(ctx context.Context, req *models.CreateLiveKitInstanceRequest) (*models.LiveKitInstanceAdminView, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	encKey, err := crypto.Encrypt(req.APIKey, s.encryptionKey)
@@ -171,7 +171,7 @@ func (s *livekitAdminService) CreateInstance(ctx context.Context, req *models.Cr
 
 func (s *livekitAdminService) UpdateInstance(ctx context.Context, instanceID string, req *models.UpdateLiveKitInstanceRequest) (*models.LiveKitInstanceAdminView, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	inst, err := s.livekitRepo.GetByID(ctx, instanceID)
@@ -558,7 +558,7 @@ func (s *livekitAdminService) UpdateQuotaSettings(
 		return nil, fmt.Errorf("%w: request is required", pkg.ErrBadRequest)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 	if err := s.livekitRepo.UpdateQuotaSettings(ctx, instanceID, req); err != nil {
 		return nil, err

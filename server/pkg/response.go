@@ -19,6 +19,13 @@ type APIResponse struct {
 	// has a sentinel to derive a code from — omitempty keeps both backward
 	// compatible with clients that only read Error.
 	Code string `json:"code,omitempty"`
+	// CorrelationID lets a client-reported error be matched back to the
+	// server-side log line that recorded the full (non-client-safe) detail
+	// — the request_id RequestLogger stamped on this request. Only the
+	// ctx-aware paths (ErrorCtx, ErrorCtxErr) can populate it; Error,
+	// ErrorWithMessage and ErrorWithCode have no ctx to pull it from and
+	// leave this empty — omitempty keeps old clients unaffected.
+	CorrelationID string `json:"correlation_id,omitempty"`
 }
 
 func JSON(w http.ResponseWriter, status int, data any) {
@@ -64,7 +71,33 @@ func Error(w http.ResponseWriter, err error) {
 		message = "internal server error"
 	}
 
-	writeError(w, status, message, code)
+	writeError(w, status, message, code, "")
+}
+
+// ErrorCtxErr is Error's context-aware sibling: same sentinel -> status/code
+// mapping and 5xx redaction as Error, but additionally stamps every response
+// with the request's correlation id (RequestIDFrom) and, on 5xx, logs with
+// the same request_id/method/path breadcrumb as ErrorCtx. Prefer this over
+// Error at call sites that already have a context.Context in scope.
+func ErrorCtxErr(ctx context.Context, w http.ResponseWriter, err error) {
+	status := mapErrorToStatus(err)
+	code := errorCode(err)
+	reqID := RequestIDFrom(ctx)
+
+	message := err.Error()
+	if status >= http.StatusInternalServerError {
+		method, path := RequestInfoFrom(ctx)
+		slog.LogAttrs(ctx, slog.LevelError, "server error",
+			slog.Int("status", status),
+			slog.String("request_id", reqID),
+			slog.String("method", method),
+			slog.String("path", path),
+			slog.String("err", ErrText(err)),
+		)
+		message = "internal server error"
+	}
+
+	writeError(w, status, message, code, reqID)
 }
 
 // ErrorCtx is Error's context-aware sibling. Use it when the caller has
@@ -83,14 +116,20 @@ func Error(w http.ResponseWriter, err error) {
 // The err argument is optional. Passing nil is fine — used when the
 // caller detected a bad state without a wrapped error.
 func ErrorCtx(ctx context.Context, w http.ResponseWriter, status int, userMsg string, err error) {
-	code := errorCode(err)
+	// Only derive a code when the caller actually passed an err: errorCode(nil)
+	// falls through to "INTERNAL", which on a 4xx would make the client render
+	// a server-fault message for a client-side condition.
+	code := ""
+	if err != nil {
+		code = errorCode(err)
+	}
+	reqID := RequestIDFrom(ctx)
 	if status >= http.StatusInternalServerError {
 		// The caller chose this 5xx status explicitly and may pass an err that
 		// wraps a 4xx sentinel; deriving the code from that err would emit a
 		// client signal (e.g. "NOT_FOUND") that contradicts the generic 500
 		// body. Force "INTERNAL" so status and code never disagree.
 		code = "INTERNAL"
-		reqID := RequestIDFrom(ctx)
 		method, path := RequestInfoFrom(ctx)
 		slog.LogAttrs(ctx, slog.LevelError, "server error",
 			slog.Int("status", status),
@@ -103,26 +142,38 @@ func ErrorCtx(ctx context.Context, w http.ResponseWriter, status int, userMsg st
 			userMsg = "internal server error"
 		}
 	}
-	writeError(w, status, userMsg, code)
+	writeError(w, status, userMsg, code, reqID)
 }
 
 // ErrorWithMessage sends a message-only error response with no sentinel to
-// derive a Code from — Code stays empty (omitted from the JSON body).
+// derive a Code from — Code stays empty (omitted from the JSON body). No ctx
+// parameter, so CorrelationID is also empty; callers that have a ctx and
+// need a stable Code should use ErrorWithCode instead.
 func ErrorWithMessage(w http.ResponseWriter, status int, message string) {
-	writeError(w, status, message, "")
+	writeError(w, status, message, "", "")
 }
 
-// writeError is the shared response writer behind Error, ErrorCtx, and
-// ErrorWithMessage — the single place that sets headers and encodes the
-// APIResponse envelope so all three stay byte-for-byte consistent.
-func writeError(w http.ResponseWriter, status int, message, code string) {
+// ErrorWithCode is ErrorWithMessage's sibling for call sites that need a
+// stable, machine-readable Code alongside an already client-safe static
+// message — e.g. request validation failures, where the client keys off
+// "VALIDATION_FAILED" rather than matching Error's free-text message.
+func ErrorWithCode(w http.ResponseWriter, status int, message, code string) {
+	writeError(w, status, message, code, "")
+}
+
+// writeError is the shared response writer behind Error, ErrorCtxErr,
+// ErrorCtx, ErrorWithMessage and ErrorWithCode — the single place that sets
+// headers and encodes the APIResponse envelope so all five stay
+// byte-for-byte consistent.
+func writeError(w http.ResponseWriter, status int, message, code, correlationID string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	resp := APIResponse{
-		Success: false,
-		Error:   message,
-		Code:    code,
+		Success:       false,
+		Error:         message,
+		Code:          code,
+		CorrelationID: correlationID,
 	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

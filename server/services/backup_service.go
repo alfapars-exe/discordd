@@ -268,6 +268,6 @@ func (b *BackupService) fail(step string, err error) {
 	backupLogger.Error("backup step failed", "step", step, "err", pkg.ErrText(err))
 	b.logError("backup step failed", map[string]string{
 		"step":  step,
-		"error": truncate(err.Error(), 512),
+		"error": truncate(pkg.ErrText(err), 512),
 	})
 }

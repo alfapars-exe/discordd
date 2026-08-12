@@ -2,15 +2,17 @@
  * useServerWakeUp — retry-loop behaviour tests.
  *
  * The probe module is mocked so the scheduling can be observed in isolation:
- * fake timers drive the setTimeout chain, Math.random is pinned wherever a
- * deterministic delay is needed, and pingServer's call count is the ground
- * truth for "a probe happened".
+ * fake timers drive the setTimeout chain, randomUnit (the CSPRNG-backed
+ * Math.random replacement) is pinned wherever a deterministic delay is
+ * needed, and pingServer's call count is the ground truth for "a probe
+ * happened".
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useServerWakeUp } from "./useServerWakeUp";
 import { pingServer } from "../utils/serverProbe";
+import * as randomModule from "../utils/random";
 
 vi.mock("../utils/serverProbe", () => ({
   pingServer: vi.fn(),
@@ -72,7 +74,7 @@ describe("useServerWakeUp", () => {
   });
 
   it("follows the exponential backoff curve (jitter pinned to its midpoint)", async () => {
-    vi.spyOn(Math, "random").mockReturnValue(0.5); // jitter factor exactly 1.0
+    vi.spyOn(randomModule, "randomUnit").mockReturnValue(0.5); // jitter factor exactly 1.0
     pingServerMock.mockResolvedValue(false);
     const { rerender } = renderWake();
     await act(async () => rerender({ error: SENTINEL }));
@@ -95,7 +97,7 @@ describe("useServerWakeUp", () => {
       [0, 0.8],
       [1, 1.2],
     ] as const) {
-      vi.spyOn(Math, "random").mockReturnValue(random);
+      vi.spyOn(randomModule, "randomUnit").mockReturnValue(random);
       pingServerMock.mockReset();
       pingServerMock.mockResolvedValue(false);
       const { rerender, unmount } = renderWake();
@@ -113,7 +115,7 @@ describe("useServerWakeUp", () => {
   });
 
   it("transitions to failed once maxAttempts is exhausted and stops probing", async () => {
-    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    vi.spyOn(randomModule, "randomUnit").mockReturnValue(0.5);
     pingServerMock.mockResolvedValue(false);
     const { result, rerender } = renderWake();
     await act(async () => rerender({ error: SENTINEL }));

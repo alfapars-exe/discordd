@@ -67,8 +67,8 @@ func SetTrustedProxies(cidrs []string) error {
 		parsed = defaultTrustedProxies()
 	}
 	trustedProxiesMu.Lock()
+	defer trustedProxiesMu.Unlock()
 	trustedProxies = parsed
-	trustedProxiesMu.Unlock()
 	return nil
 }
 

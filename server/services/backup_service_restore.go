@@ -93,7 +93,7 @@ func (b *BackupService) Restore(ctx context.Context) error {
 
 	if err := b.verifyDBIntegrity(ctx, tmpPath); err != nil {
 		backupLogger.Error("restore skipped: integrity check failed", "err", pkg.ErrText(err))
-		b.logError("restore integrity check failed", map[string]string{"error": truncate(err.Error(), 256)})
+		b.logError("restore integrity check failed", map[string]string{"error": truncate(pkg.ErrText(err), 256)})
 		_ = os.Remove(tmpPath)
 		return nil
 	}
@@ -144,7 +144,7 @@ func (b *BackupService) startUploadsRestoreAsync() {
 		defer cancel()
 		if err := b.restoreUploadsFromBucket(ctx); err != nil {
 			backupLogger.Error("uploads restore failed", "err", pkg.ErrText(err))
-			b.logError("uploads restore failed", map[string]string{"error": truncate(err.Error(), 256)})
+			b.logError("uploads restore failed", map[string]string{"error": truncate(pkg.ErrText(err), 256)})
 		}
 	}()
 }

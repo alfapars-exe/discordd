@@ -39,7 +39,12 @@ func (s *categoryService) GetAllByServer(ctx context.Context, serverID string) (
 
 func (s *categoryService) Create(ctx context.Context, serverID string, req *models.CreateCategoryRequest) (*models.Category, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		// pkg.ErrText, not err.Error(): CreateCategoryRequest.Validate() only
+		// ever returns fixed, non-request-derived messages, so this is
+		// defense-in-depth rather than a behavior change — consistent with
+		// never letting a raw err.Error() reach the 4xx body pkg.Error(w, err)
+		// renders this through.
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	maxPos, err := s.categoryRepo.GetMaxPosition(ctx, serverID)
@@ -67,7 +72,7 @@ func (s *categoryService) Create(ctx context.Context, serverID string, req *mode
 
 func (s *categoryService) Update(ctx context.Context, serverID, id string, req *models.UpdateCategoryRequest) (*models.Category, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	category, err := s.categoryRepo.GetByID(ctx, id)

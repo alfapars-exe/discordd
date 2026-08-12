@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Güvenlik Teslim Raporu — {{PROJECT_NAME}}</title>
+<!--
+  security-delivery-report.template.html · SECURE-CODING.md v1.5 · B4
+  ═══════════════════════════════════════════════════════════════════
+  AGENT DOLDURMA TALİMATI:
+  1. {{...}} yer tutucularının TAMAMINI gerçek değerlerle değiştir.
+  2. Her checklist satırında data-status="" alanını pass | fail | na
+     yap ve KANIT hücresini doldur (dosya:satır, test adı, komut,
+     scan path ID). Kanıtsız PASS YASAKTIR (§0.2 kanıt dürüstlüğü).
+  3. na yalnız yazılı gerekçeyle kullanılabilir.
+  4. FAIL kalan rapor teslim edilemez — düzelt, yeniden üret.
+  5. Dosya bağımsız kalmalı: harici CSS/JS/CDN EKLEME.
+  6. Dosyayı artifacts/security-delivery-report.html olarak kaydet
+     ve PR açıklamasına ekle.
+-->
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1a2230; --muted:#5b6472;
+    --line:#e3e6ea; --accent:#0f4c81;
+    --pass:#1e7e46; --pass-bg:#e6f4ec;
+    --fail:#b3261e; --fail-bg:#fdeceb;
+    --na:#8a6d1a;  --na-bg:#faf3dc;
+    --todo:#6b7280; --todo-bg:#eef0f3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+  header{background:var(--accent);color:#fff;border-radius:10px;
+         padding:22px 26px;margin-bottom:22px}
+  header h1{margin:0 0 4px;font-size:21px;font-weight:600}
+  header p{margin:0;opacity:.85;font-size:13px}
+  h2{font-size:16px;margin:30px 0 10px;padding-bottom:6px;
+     border-bottom:2px solid var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);
+        border-radius:10px;padding:16px 18px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;background:var(--card);
+        border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);
+        text-align:left;vertical-align:top;font-size:13px}
+  th{background:#eef2f6;font-weight:600;font-size:12.5px;
+     text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  .meta td:first-child{width:220px;color:var(--muted);font-weight:600}
+  .num{width:36px;color:var(--muted)}
+  .sec{width:70px;color:var(--muted);white-space:nowrap}
+  .st{width:70px;text-align:center}
+  /* durum rozetleri: agent data-status'u pass|fail|na yapar */
+  [data-status]{font-weight:700;border-radius:6px;font-size:12px;
+                padding:2px 0;display:block;text-align:center}
+  [data-status=""]{background:var(--todo-bg);color:var(--todo)}
+  [data-status=""]::after{content:"DOLDUR"}
+  [data-status="pass"]{background:var(--pass-bg);color:var(--pass)}
+  [data-status="pass"]::after{content:"PASS"}
+  [data-status="fail"]{background:var(--fail-bg);color:var(--fail)}
+  [data-status="fail"]::after{content:"FAIL"}
+  [data-status="na"]{background:var(--na-bg);color:var(--na)}
+  [data-status="na"]::after{content:"N-A"}
+  /* özet kartları */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+         gap:10px;margin:10px 0 4px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;
+       padding:12px 14px;text-align:center}
+  .kpi b{display:block;font-size:22px;margin-bottom:2px}
+  .kpi span{font-size:11.5px;color:var(--muted);text-transform:uppercase;
+            letter-spacing:.04em}
+  .kpi.pass b{color:var(--pass)} .kpi.fail b{color:var(--fail)}
+  .kpi.na b{color:var(--na)}   .kpi.todo b{color:var(--todo)}
+  .banner{border-radius:10px;padding:14px 18px;font-weight:600;margin:14px 0}
+  .banner.ok{background:var(--pass-bg);color:var(--pass);
+             border:1px solid var(--pass)}
+  .banner.block{background:var(--fail-bg);color:var(--fail);
+                border:1px solid var(--fail)}
+  code,pre{font:12px/1.5 "Consolas","SFMono-Regular",monospace}
+  pre{background:#101826;color:#d7e3f4;border-radius:8px;
+      padding:12px 14px;overflow:auto}
+  .footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);
+          color:var(--muted);font-size:12.5px}
+  .sig{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  .sig div{border:1px dashed var(--line);border-radius:8px;padding:12px;
+           min-height:70px;font-size:12.5px;color:var(--muted)}
+  @media print{body{background:#fff}.card,table{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Güvenlik Teslim Raporu · SECURE-CODING v1.5 / B4</h1>
+  <p>{{PROJECT_NAME}} · {{BRANCH}} · {{REPORT_DATE}}</p>
+</header>
+
+<div id="gateBanner" class="banner block">Rapor durumu hesaplanıyor…</div>
+
+<h2>1. Meta</h2>
+<table class="meta">
+  <tr><td>Proje / Repository</td><td>{{PROJECT_NAME}} — {{REPO_URL}}</td></tr>
+  <tr><td>Branch / Commit</td><td>{{BRANCH}} @ {{COMMIT_SHA}}</td></tr>
+  <tr><td>Görev özeti</td><td>{{TASK_SUMMARY}}</td></tr>
+  <tr><td>Agent (araç / model)</td><td>{{AGENT_NAME}}</td></tr>
+  <tr><td>Standart sürümü + hash</td><td>SECURE-CODING v1.5 · sha256: {{STANDARD_HASH}}</td></tr>
+  <tr><td>Checkmarx proje / scan ID</td><td>{{CX_PROJECT}} · scanid={{CX_SCAN_ID}} <b>(aynı projeye tarama — §0.3)</b></td></tr>
+  <tr><td>Rapor tarihi</td><td>{{REPORT_DATE}}</td></tr>
+</table>
+
+<h2>2. Tarama Karşılaştırması</h2>
+<div class="cards">
+  <div class="kpi fail"><b>{{PREV_C}}/{{PREV_H}}/{{PREV_M}}/{{PREV_L}}</b><span>Önceki C/H/M/L</span></div>
+  <div class="kpi pass"><b>{{CURR_C}}/{{CURR_H}}/{{CURR_M}}/{{CURR_L}}</b><span>Son C/H/M/L</span></div>
+  <div class="kpi todo"><b>{{TO_VERIFY_COUNT}}</b><span>To Verify kalan</span></div>
+  <div class="kpi na"><b>{{NE_QUEUE_COUNT}}</b><span>Triage kuyruğu</span></div>
+</div>
+<table>
+  <tr><th>Checkmarx sorgusu</th><th>Önceki</th><th>Sonraki</th><th>Durum (Fixed / NE-aday / Kalan)</th><th>Kanıt / açıklama</th></tr>
+  <tr><td>{{QUERY_NAME_1}}</td><td>{{PREV_1}}</td><td>{{CURR_1}}</td><td>{{STATE_1}}</td><td>{{EVIDENCE_1}}</td></tr>
+  <tr><td colspan="5" style="color:var(--muted)">… her sorgu için satır ekle …</td></tr>
+</table>
+
+<h2>3. Bölüm B Checklist — B1 Kod Kontrolleri (1–20)</h2>
+<table>
+  <tr><th class="num">#</th><th>Kontrol</th><th class="sec">Bölüm</th><th class="st">Durum</th><th>Kanıt</th></tr>
+  <tr><td class="num">1</td><td>Dış girdiler şema ile doğrulanıyor; ham request objesi iş katmanına geçmiyor</td><td class="sec">§5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">2</td><td>Tüm SQL/NoSQL parametrize; string ile sorgu yok; dinamik identifier'lar sabit allowlist'te</td><td class="sec">§6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">3</td><td>Shell string'i yok; komutlar exec-array + timeout ile</td><td class="sec">§6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">4</td><td>eval/exec/Function/setTimeout(string) ve güvensiz deserialization yok</td><td class="sec">§6,§14</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">5</td><td>Her uçta authN + obje/fonksiyon yetkisi; sorguda tenant/sahiplik filtresi</td><td class="sec">§1</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">6</td><td>Mass assignment yok; yanıtlar whitelist DTO; parameter tampering mümkün değil</td><td class="sec">§1,§9</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">7</td><td>İmzasız jwt.decode yok; verify + algorithms + iss + aud + zaman claim'leri</td><td class="sec">§2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">8</td><td>Kodda/config'de/testte secret veya fallback secret yok</td><td class="sec">§4</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">9</td><td>TLS doğrulamasını kapatan bayrak yok</td><td class="sec">§3</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">10</td><td>Güvenlik bağlamında zayıf PRNG yok; CSPRNG; sabit zamanlı kıyas</td><td class="sec">§3</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">11</td><td>Hatalar merkezî işleyicide; istemciye iç detay yok; boş catch yok; fail-closed</td><td class="sec">§10</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">12</td><td>Path kanonikalizasyon + kök kontrolü; upload magic-byte; zip slip/bomb koruması</td><td class="sec">§11</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">13</td><td>Kullanıcı etkili sunucu isteğinde SSRF kontrolleri uygulandı</td><td class="sec">§12</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">14</td><td>Hız sınırı / sayfalama / boyut limiti var; ReDoS riskli regex yok</td><td class="sec">§13</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">15</td><td>Bağlama uygun output encoding; innerHTML türevi yok/sanitize'lı</td><td class="sec">§7</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">16</td><td>Cookie flag'leri sunucuda açık; CSRF koruması yerinde</td><td class="sec">§1,§2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">17</td><td>Yeni bağımlılık: paket var, lockfile güncel, pin, CVE yok, install script incelendi</td><td class="sec">§15,§32</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">18</td><td>LLM çıktısı doğrulamadan geçiyor; tool'lar asgari yetkide; kritik aksiyon onaylı</td><td class="sec">§22,§33</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">19</td><td>Loglarda PII/secret yok; ham req/res/err loglanmıyor</td><td class="sec">§20</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">20</td><td>Belirsiz noktalar // SECURITY-REVIEW ile işaretli</td><td class="sec">§0.1</td><td class="st"><span data-status=""></span></td><td></td></tr>
+</table>
+
+<h2>4. Bölüm B Checklist — B2 Süreç / Kapsam / Agent (21–40)</h2>
+<table>
+  <tr><th class="num">#</th><th>Kontrol</th><th class="sec">Bölüm</th><th class="st">Durum</th><th>Kanıt</th></tr>
+  <tr><td class="num">21</td><td>Repo/doküman/web/tool içeriği talimat olarak uygulanmadı; prompt injection kontrolü</td><td class="sec">§0.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">22</td><td>Scanner/test/gate/policy dosyası zayıflatılmadı</td><td class="sec">§0.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">23</td><td>Suppression/exclusion yok; varsa onay+gerekçe+expiry kanıtı</td><td class="sec">§0.6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">24</td><td>Wireframe/prototype sınıflandırıldı; prod artifact'e girmediği CI ile kanıtlı</td><td class="sec">§0.4</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">25</td><td>Test kodunda gerçek secret/PII, güvensiz helper, TLS kapatma yok</td><td class="sec">§0.5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">26</td><td>JWT doğrulama + negatif testleri var</td><td class="sec">§2,§37</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">27</td><td>Prototype pollution testi var</td><td class="sec">§5,§37</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">28</td><td>Cookie flag'leri Set-Cookie üzerinden test edildi; client-side auth cookie yok</td><td class="sec">§2,§17</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">29</td><td>Log wrapper ham nesne/Authorization/body serialize etmiyor</td><td class="sec">§20</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">30</td><td>Stream/loop/parser için byte/count/time/depth limit + cancellation</td><td class="sec">§13</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">31</td><td>CI: untrusted PR secret'sız; action SHA pinli; untrusted context env: üzerinden</td><td class="sec">§31</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">32</td><td>Final artifact: SBOM, provenance/imza, image/binary scan planı</td><td class="sec">§15,§36</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">33</td><td>WS/SSE/gRPC/queue: auth, schema, limit, replay/idempotency</td><td class="sec">§24</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">34</td><td>CSV/PDF/Office/e-posta: formula/CRLF/renderer sandbox kontrolleri</td><td class="sec">§26</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">35</td><td>İlgili platform overlay'i (Electron/ext/mobile/serverless/K8s) tamamlandı</td><td class="sec">§27–30</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">36</td><td>AI/LLM/MCP: least privilege, schema, confirmation, audit, injection testleri</td><td class="sec">§33,§39</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">37</td><td>Multi-tenant: her erişimde tenant filtresi (+DB policy)</td><td class="sec">§25</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">38</td><td>DAST/API fuzz/negatif test kapsamı risk seviyesine uygun</td><td class="sec">§36,§37</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">39</td><td>Çalıştırılmayan her test/tarama açıkça "çalıştırılmadı" olarak raporlandı</td><td class="sec">§0.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">40</td><td>Security Change Summary (B3) dolduruldu</td><td class="sec">B3</td><td class="st"><span data-status=""></span></td><td></td></tr>
+</table>
+
+<h2>4b. Bölüm B Checklist — B2-ek v1.4/v1.5 (41–52)</h2>
+<table>
+  <tr><th class="num">#</th><th>Kontrol</th><th class="sec">Bölüm</th><th class="st">Durum</th><th>Kanıt</th></tr>
+  <tr><td class="num">41</td><td>Argv flag smuggling önlemi (-- ayracı / ^- reddi) ve subprocess env allowlist'i</td><td class="sec">§6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">42</td><td>Yol kontrolleri realpath-first; extractall filtreli; join traversal önlemi sayılmadı</td><td class="sec">§11</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">43</td><td>URL/allowlist kıyasları: hostname-only, normalize, çapalı, aynı parser, redirect manuel</td><td class="sec">§5,§12</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">44</td><td>Diff sezgileri: kardeş asimetri, kapı/eylem uyumu, registry fanout, fail-open kapı</td><td class="sec">§1,§5,§7</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">45</td><td>OAuth state oturum bağlı; token üretimi kimlikli; spoofable header yetkisi yok; bool açık parse</td><td class="sec">§1,§2,§5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">46</td><td>Agent izin bypass bayrağı yok; token ≥128 bit; credential dosyaları 0600/0700</td><td class="sec">§3,§4,§11,§33</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">47</td><td>Yüksek riskte iki geçişli RCI; çürütmeler R1–R11 kategori + dosya:satır kanıtlı</td><td class="sec">§0.2,§0.6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">48</td><td>Guardrail 1. katman uyarılarının her biri çözüldü veya gerekçelendi</td><td class="sec">§0.12</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">49</td><td>Stop/commit inceleme bulguları çöz-veya-gerekçele döngüsüyle kapatıldı</td><td class="sec">§0.12.5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">50</td><td>Kill-switch set edilmedi; guardrail dosyaları değiştirilmedi</td><td class="sec">§0.12.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">51</td><td>Pinlenmiş bağımlılıklar sürekli SCA'dan geçti; her açık CVE için current+first_fixed+fix_type raporlandı (v1.5)</td><td class="sec">§15.1</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td class="num">52</td><td>Eşik üstü açık CVE: fix'li sürüme auto-PR VEYA SLA-içi+owner VEYA kanıtlı+süreli VEX; agent VEX/severity kararı vermedi (v1.5)</td><td class="sec">§15.1.4</td><td class="st"><span data-status=""></span></td><td></td></tr>
+</table>
+
+<h2>5. Bölüm G Bulgu Ailesi Kontrolleri (G + G2 + G3 + G4)</h2>
+<table>
+  <tr><th>Bulgu ailesi / kural</th><th class="sec">Ref</th><th class="st">Durum</th><th>Kanıt (test / dosya:satır / scan)</th></tr>
+  <tr><td>Auth yanıtları toPublic* DTO ile; password/hash tip düzeyinde imkânsız</td><td class="sec">G2.1</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>JWT claim minimizasyonu (access + signed download token)</td><td class="sec">G2.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Merkezî cookie helper; httpOnly varsayılan; ham Set-Cookie yok</td><td class="sec">G2.3</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>localStorage/sessionStorage'da session/token/user yok</td><td class="sec">G2.4</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Testlerde document.cookie yok; Playwright context API kullanımı</td><td class="sec">G2.5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Query-builder: bind + identifier allowlist; IN-chunk MAX cap</td><td class="sec">G2.6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Merkezî error middleware; err.* yanıt gövdesine girmiyor</td><td class="sec">G2.7</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Dış kaynaklı sayılar loop öncesi clamp; sınırlı döngüler kanıtlı</td><td class="sec">G2.8</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>JS-readable UI cookie'leri: Secure+SameSite+allowlist + NE kaydı</td><td class="sec">G2.9</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Yanıt yankısı yok: JSONResponse + merkezî encode helper; render_template_string yok</td><td class="sec">G3.1</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Literal secret ataması yok (script/e2e dâhil); config'de secret default'u yok</td><td class="sec">G3.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>setattr/__dict__.update yok; Pydantic extra="forbid" + kolon allowlist</td><td class="sec">G3.3</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Merkezî sanitize logger; f-string ile ham girdi loglanmıyor</td><td class="sec">G3.4</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Session'a yalnız doğrulanmış DTO yazılıyor</td><td class="sec">G3.5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Cookie değeri yalnız sunucu üretimi token; set_cookie helper üzerinden</td><td class="sec">G3.6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Dış istekler safe_fetch wrapper'ından; doğrudan requests.* yok</td><td class="sec">G3.7</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>HTTPException detail'inde str(e)/f-string yok; merkezî handler</td><td class="sec">G3.8</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Argv flag smuggling önlemi (--, ^- reddi) uygulandı</td><td class="sec">G4.1</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Subprocess env allowlist; **os.environ spread + untrusted map yok</td><td class="sec">G4.2</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>child_process.exec/execSync/shell:true yok; execFile/spawn array</td><td class="sec">G4.3</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>OAuth state oturum bağlı (HMAC/session); kimliksiz token üretimi yok</td><td class="sec">G4.4</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Spoofable header/body alanıyla yetki kararı yok</td><td class="sec">G4.5</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Fail-open güvenlik kapısı yok; kapı koşulsuz icra veya red</td><td class="sec">G4.6</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Kapı/eylem alan uyumu doğrulandı</td><td class="sec">G4.7</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>İç içe kayıtlar görüntüleyen yetkisiyle filtreleniyor</td><td class="sec">G4.8</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Parser/validator differansiyeli yok; aynı parser + çapalı regex</td><td class="sec">G4.9</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Substring/çapasız allowlist ve alias bypass yok</td><td class="sec">G4.10</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Boolean form değerleri açık parse ediliyor (bool("false") tuzağı yok)</td><td class="sec">G4.11</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Yeni alan/enum tüm güvenlik kayıtlarına işlendi (registry fanout)</td><td class="sec">G4.12</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Erişim kapılayan değerler ≥128 bit; ikincil ≥64 bit</td><td class="sec">G4.13</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Credential dosyaları oluşturma anında 0600/0700; 777/umask(0) yok</td><td class="sec">G4.14</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>createCipher/createDecipher yok; createCipheriv + AEAD</td><td class="sec">G4.15</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>dangerously-skip-permissions/bypassPermissions bayrağı yok</td><td class="sec">G4.16</td><td class="st"><span data-status=""></span></td><td></td></tr>
+  <tr><td>Orchestrator parametreleri shell'e render edilmiyor</td><td class="sec">G4.17</td><td class="st"><span data-status=""></span></td><td></td></tr>
+</table>
+
+<h2>5b. Bağımlılık CVE Durumu (§15.1 — v1.5)</h2>
+<p style="color:var(--muted);font-size:13px">Pinlenmiş bağımlılıklar dahil sürekli SCA sonucu. Her açık CVE için <b>şu anki sürüm</b> ve <b>düzeltmenin geldiği ilk sürüm</b> (first_fixed_version) gösterilir. Agent yalnız kayıt + auto-PR (patch/minor) üretir; VEX/severity/ignore kararını <b>vermez</b>.</p>
+<table>
+  <tr><th>Paket (ekosistem)</th><th>Şu anki sürüm</th><th>CVE / GHSA</th><th class="sec">Sev.</th><th>İlk fix sürümü</th><th>fix_type</th><th class="st">Durum</th><th>Aksiyon / kanıt</th></tr>
+  <tr><td>{{DEP_PKG_1}}</td><td>{{DEP_CUR_1}}</td><td>{{DEP_CVE_1}}</td><td class="sec">{{DEP_SEV_1}}</td><td>{{DEP_FIXED_1}}</td><td>{{DEP_FIXTYPE_1}}</td><td class="st"><span data-status=""></span></td><td>{{DEP_ACTION_1}}</td></tr>
+  <tr><td colspan="8" style="color:var(--muted)">… her açık CVE için satır ekle. Durum: pass = auto-PR merge/fix doğrulandı · fail = SLA-dışı/VEX'siz açık · na = SLA-içi+owner veya kanıtlı VEX …</td></tr>
+</table>
+<div class="card">
+  <p><b>Sürekli tarama kanıtı:</b> SCA aracı + sürümü: {{SCA_TOOL}} · son zamanlanmış tarama: {{SCA_LAST_RUN}} · advisory kaynağı: {{ADVISORY_SOURCE}} (OSV/GHSA ayna) · auto-PR aracı: {{AUTOPR_TOOL}} (Renovate self-hosted / Dependabot).</p>
+  <p><b>Eşik üstü açık CVE (SLA-dışı/VEX'siz):</b> {{OPEN_DEP_CVE_COUNT}} (0 olmak zorunda). <b>no-fix-available:</b> {{NO_FIX_COUNT}} — telafi kontrolü + VEX ile yönetiliyor.</p>
+</div>
+
+<h2>6. Çalıştırılan Komutlar ve Taramalar</h2>
+<table>
+  <tr><th>Komut</th><th>Araç sürümü</th><th>Exit</th><th>Tarih</th><th>Özet</th></tr>
+  <tr><td><code>{{CMD_1}}</code></td><td>{{VER_1}}</td><td>{{EXIT_1}}</td><td>{{TS_1}}</td><td>{{NOTE_1}}</td></tr>
+  <tr><td colspan="5" style="color:var(--muted)">… her komut için satır ekle (self-scan, testler, semgrep, gitleaks, Checkmarx scan ID) …</td></tr>
+</table>
+
+<h2>7. §0.10 Öz-Tarama Çıktısı (§0.10 + §0.10.1 + §0.10.2)</h2>
+<div class="card">
+  <p><b>BLOK desenleri:</b> {{BLOCK_MATCH_COUNT}} eşleşme (0 olmak zorunda).</p>
+  <p><b>İNCELEME desenleri</b> ($OUT dosyası — JS/TS + Python + CI/YAML setlerinin tamamı):</p>
+  <pre>{{SELF_SCAN_REVIEW_OUTPUT}}</pre>
+</div>
+
+<h2>8. Guardrail Katmanı (§0.12)</h2>
+<table class="meta">
+  <tr><td>Plugin + sürüm</td><td>security-guidance {{SG_VERSION}} (≥ 2.0.6)</td></tr>
+  <tr><td>Model / endpoint pin uyumu</td><td>{{SG_MODEL}} · {{SG_ENDPOINT}} — policy pin'iyle eşleşiyor: {{SG_PIN_MATCH}}</td></tr>
+  <tr><td>security-patterns.yaml sha256</td><td>{{SG_PATTERNS_HASH}}</td></tr>
+  <tr><td>claude-security-guidance.md sha256</td><td>{{SG_GUIDANCE_HASH}}</td></tr>
+  <tr><td>Kill-switch beyanı</td><td>Bu oturumda SECURITY_GUIDANCE_DISABLE / ENABLE_* set edilmedi; guardrail dosyaları değiştirilmedi: {{SG_TAMPER_DECLARATION}}</td></tr>
+</table>
+<table>
+  <tr><th>Katman</th><th>Bulgu (dosya:kural / kategori)</th><th>Sonuç (çözüldü / gerekçe)</th></tr>
+  <tr><td>1 — edit-anı desen</td><td>{{SG_L1_FINDING_1}}</td><td>{{SG_L1_RESOLUTION_1}}</td></tr>
+  <tr><td>2 — Stop diff incelemesi</td><td>{{SG_L2_FINDING_1}}</td><td>{{SG_L2_RESOLUTION_1}}</td></tr>
+  <tr><td>3 — commit agentic inceleme</td><td>{{SG_L3_FINDING_1}}</td><td>{{SG_L3_RESOLUTION_1}}</td></tr>
+  <tr><td colspan="3" style="color:var(--muted)">… her guardrail bulgusu için satır ekle; temiz katman için "bulgu yok" yaz. Guardrail sessizliği §0.3 kanıtı DEĞİLDİR (§0.12.5) …</td></tr>
+</table>
+
+<h2>9. İnsan Onayı / Triage Kuyruğu</h2>
+<p style="color:var(--muted);font-size:13px">Agent bu bulguları <b>işaretlemez</b>; §0.6 alanlarıyla gerekçe taslağı sunar, kararı insan verir.</p>
+<table>
+  <tr><th>Bulgu (query · path ID)</th><th>Konum</th><th>Öneri</th><th>Gerekçe taslağı (R1–R11 kategorisi + source/sink/guard/kanıt)</th></tr>
+  <tr><td>{{NE_QUERY_1}}</td><td>{{NE_LOC_1}}</td><td>{{NE_PROPOSAL_1}}</td><td>{{NE_RATIONALE_1}}</td></tr>
+  <tr><td colspan="4" style="color:var(--muted)">… her aday için satır ekle …</td></tr>
+</table>
+
+<h2>10. Kalan Riskler ve Rollback</h2>
+<div class="card">
+  <p><b>Kalan riskler / SECURITY-REVIEW noktaları:</b></p>
+  <p>{{REMAINING_RISKS}}</p>
+  <p><b>İnsan onayı gereken değişiklikler:</b> {{HUMAN_APPROVAL_ITEMS}}</p>
+  <p><b>Rollback talimatı:</b></p>
+  <pre>{{ROLLBACK_INSTRUCTIONS}}</pre>
+</div>
+
+<div class="footer">
+  <p><b>Kanıt dürüstlüğü beyanı:</b> Bu raporda çalıştırılmayan hiçbir kontrol PASS olarak
+  işaretlenmemiştir; tüm kanıtlar gerçek komut çıktılarına, test sonuçlarına ve
+  scan ID'lerine dayanır. Bu oturumda guardrail kill-switch'i set edilmemiş,
+  guardrail dosyaları değiştirilmemiştir (§0.12.2, §39 #14). (SECURE-CODING v1.5 · §0.2 / B4)</p>
+  <div class="sig">
+    <div><b>Agent:</b> {{AGENT_NAME}}<br>Tarih: {{REPORT_DATE}}</div>
+    <div><b>İnsan reviewer:</b> ______________________<br>Tarih: ____________ · Karar: ONAY / RET</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+/* Bağımsız özet hesaplayıcı: data-status değerlerini sayar,
+   üst banner'ı ve yazdırma öncesi durumu günceller. Harici bağımlılık yok. */
+(function(){
+  var all=document.querySelectorAll('[data-status]');
+  var c={pass:0,fail:0,na:0,todo:0};
+  all.forEach(function(e){
+    var s=e.getAttribute('data-status');
+    if(s==='pass')c.pass++; else if(s==='fail')c.fail++;
+    else if(s==='na')c.na++; else c.todo++;
+  });
+  var b=document.getElementById('gateBanner');
+  if(c.fail>0){
+    b.className='banner block';
+    b.textContent='⛔ TESLİM EDİLEMEZ — '+c.fail+' FAIL. Düzelt ve raporu yeniden üret (B4).';
+  }else if(c.todo>0){
+    b.className='banner block';
+    b.textContent='⚠️ TASLAK — '+c.todo+' madde doldurulmamış. Kanıtsız PASS yasaktır.';
+  }else{
+    b.className='banner ok';
+    b.textContent='✅ TESLİME UYGUN — '+c.pass+' PASS · '+c.na+' N-A · 0 FAIL. İnsan reviewer onayı bekleniyor.';
+  }
+})();
+</script>
+</body>
+</html>

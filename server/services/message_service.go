@@ -200,7 +200,7 @@ func (s *messageService) GetByChannelID(ctx context.Context, serverID, channelID
 // WS broadcast is NOT done here — handler calls BroadcastCreate after file uploads.
 func (s *messageService) Create(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	channel, err := s.validateChannelScope(ctx, serverID, channelID)
@@ -402,7 +402,7 @@ func (s *messageService) BroadcastCreate(message *models.Message) {
 // Update edits a message. Only the message owner can edit.
 func (s *messageService) Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	message, err := s.messageRepo.GetByID(ctx, id)

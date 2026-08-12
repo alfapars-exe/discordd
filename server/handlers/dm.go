@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -137,7 +139,10 @@ func (h *DMHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	beforeID := r.URL.Query().Get("before")
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+		// Upper bound alongside the existing lower bound so an unbounded
+		// ?limit= can't request an arbitrarily large page (matches the
+		// clamp already applied elsewhere in this file, e.g. SearchMessages).
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
 			limit = parsed
 		}
 	}
@@ -245,19 +250,34 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		for _, fileHeader := range files {
 			file, err := fileHeader.Open()
 			if err != nil {
+				slog.WarnContext(r.Context(), "dm attachment open failed", "err", pkg.ErrText(err))
 				uploadFailures = append(uploadFailures, uploadFailure{
 					Filename: fileHeader.Filename,
-					Error:    fmt.Sprintf("could not open file: %v", err),
+					Error:    "could not open file",
 				})
 				continue
 			}
 
 			attachment, err := h.dmUploadService.Upload(r.Context(), msg.ID, file, fileHeader, isEncrypted)
+			// Read-side handle — nothing buffered to flush, safe to ignore.
+			// Not deferred — this runs per file in the loop above; a defer
+			// here would pin every attachment's handle open until the whole
+			// handler returns instead of closing each one as its own
+			// upload finishes.
 			_ = file.Close()
 			if err != nil {
+				// Client-safe detail only for domain (4xx-shaped) errors —
+				// infrastructure failures carry paths/driver text and stay
+				// server-side (CWE-209).
+				failMsg := "upload failed"
+				if errors.Is(err, pkg.ErrBadRequest) {
+					failMsg = pkg.ErrText(err)
+				} else {
+					slog.WarnContext(r.Context(), "dm attachment upload failed", "err", pkg.ErrText(err))
+				}
 				uploadFailures = append(uploadFailures, uploadFailure{
 					Filename: fileHeader.Filename,
-					Error:    err.Error(),
+					Error:    failMsg,
 				})
 				continue
 			}
@@ -339,7 +359,11 @@ func (h *DMHandler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "emoji is required", "VALIDATION_FAILED")
 		return
 	}
 

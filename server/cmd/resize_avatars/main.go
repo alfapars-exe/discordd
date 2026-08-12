@@ -133,6 +133,10 @@ func main() {
 				return nil
 			}
 			resized, ext, err := handlers.ResizeAvatarBytes(in)
+			// Not deferred — this callback runs once per file under
+			// WalkDir, effectively a loop; a defer here would pin every
+			// file's handle open until the whole walk finishes instead of
+			// closing each one as it's resized.
 			_ = in.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if err != nil {
 				log.Printf("[resize] resize %s: %v", name, err)

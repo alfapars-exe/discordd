@@ -290,11 +290,11 @@ func (s *musicBotService) Skip(channelID string) error {
 		return pkg.ErrNotFound
 	}
 	bot.mu.Lock()
+	defer bot.mu.Unlock()
 	bot.skipFlag = true
 	if bot.cmd != nil && bot.cmd.Process != nil {
 		_ = bot.cmd.Process.Kill()
 	}
-	bot.mu.Unlock()
 	return nil
 }
 

@@ -132,7 +132,7 @@ func (s *p2pCallService) InitiateCall(callerID, receiverID string, callType mode
 	if err != nil {
 		s.cleanupCall(call.ID)
 		s.logError(&callerID, "P2P call initiate: caller lookup failed", map[string]string{
-			"call_id": call.ID, "error": err.Error(),
+			"call_id": call.ID, "error": pkg.ErrText(err),
 		})
 		return err
 	}
@@ -140,7 +140,7 @@ func (s *p2pCallService) InitiateCall(callerID, receiverID string, callType mode
 	if err != nil {
 		s.cleanupCall(call.ID)
 		s.logError(&callerID, "P2P call initiate: receiver lookup failed", map[string]string{
-			"call_id": call.ID, "receiver_id": receiverID, "error": err.Error(),
+			"call_id": call.ID, "receiver_id": receiverID, "error": pkg.ErrText(err),
 		})
 		return err
 	}
@@ -336,13 +336,12 @@ func (s *p2pCallService) HandleDisconnect(userID string) {
 // GetUserCall returns the user's active call, or nil if not in a call.
 func (s *p2pCallService) GetUserCall(userID string) *models.P2PCall {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	callID, exists := s.userCalls[userID]
 	if !exists {
-		s.mu.RUnlock()
 		return nil
 	}
 	call := s.activeCalls[callID]
-	s.mu.RUnlock()
 	return call
 }
 

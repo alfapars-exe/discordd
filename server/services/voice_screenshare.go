@@ -112,8 +112,8 @@ func (s *voiceService) GetScreenShareStats() (streamers int, viewers int) {
 
 func (s *voiceService) CleanupViewersForStreamer(streamerUserID string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.screenShareViewers, streamerUserID)
-	s.mu.Unlock()
 }
 
 // closeOutScreenShareLocked closes out userID's screen-share involvement in

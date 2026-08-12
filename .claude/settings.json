@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(./.claude/**)",
+      "Write(./.claude/**)",
+      "Edit(./security/policies/**)",
+      "Write(./security/policies/**)",
+      "Edit(./SECURITY-SCOPE.yml)",
+      "Write(./SECURITY-SCOPE.yml)",
+      "Edit(./SECURITY-EXCEPTIONS.yml)",
+      "Write(./SECURITY-EXCEPTIONS.yml)",
+      "Edit(./.github/workflows/**)",
+      "Write(./.github/workflows/**)",
+      "Edit(./.golangci.yml)",
+      "Write(./.golangci.yml)"
+    ]
+  }
+}

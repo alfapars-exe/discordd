@@ -72,7 +72,7 @@ func (s *friendshipService) AreFriends(ctx context.Context, userA, userB string)
 
 func (s *friendshipService) SendRequest(ctx context.Context, senderID string, req *models.SendFriendRequestRequest) (*models.FriendshipWithUser, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	target, err := s.userRepo.GetByUsername(ctx, req.Username)

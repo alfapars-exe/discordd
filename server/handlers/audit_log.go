@@ -51,7 +51,10 @@ func (h *AuditLogHandler) ListServerAudit(w http.ResponseWriter, r *http.Request
 		Limit:    50,
 	}
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil {
+		// Clamp mirrors the repository's own clamp (repository/sqlite_audit_log.go
+		// ListByServer) so the bound is visible at the point the untrusted
+		// input is parsed, not only inside the repository.
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 500 {
 			filter.Limit = n
 		}
 	}

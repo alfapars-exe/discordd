@@ -32,10 +32,15 @@ func (c *Client) handlePresenceUpdate(event Event) {
 	}
 
 	c.hub.mu.Lock()
+	defer c.hub.mu.Unlock()
 	c.status = data.Status
 	aggregate := c.hub.computeAggregateStatusLocked(c.userID)
-	c.hub.mu.Unlock()
 
+	// onPresenceManualUpdate is dispatched via logx.Go (separate goroutine),
+	// not called synchronously, so holding c.hub.mu through the dispatch
+	// (deferred Unlock above, rather than the manual Unlock() this used to
+	// have right after computeAggregateStatusLocked) doesn't risk
+	// deadlocking the callback against this lock.
 	if c.hub.onPresenceManualUpdate != nil {
 		logx.Go("ws.presence_manual_update", func() { c.hub.onPresenceManualUpdate(c.userID, aggregate, data.IsAuto) })
 	}

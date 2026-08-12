@@ -32,6 +32,7 @@ func (h *Hub) removeClientFromServerIndex(client *Client, serverID string) {
 // first connection. For subsequent connections, recomputes aggregate status.
 func (h *Hub) addClient(client *Client) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	isFirstConnection := len(h.clients[client.userID]) == 0
 
@@ -65,9 +66,10 @@ func (h *Hub) addClient(client *Client) {
 		"user_id", client.userID, "status", client.status,
 		"total_connections", len(h.clients[client.userID]))
 
-	h.mu.Unlock()
-
-	// Callbacks run outside lock in separate goroutines to prevent deadlock
+	// Callbacks below are dispatched via logx.Go (separate goroutines), not
+	// called synchronously, so holding h.mu through the dispatch (deferred
+	// Unlock above, rather than the manual Unlock() this used to have here)
+	// doesn't risk deadlocking the callback against this lock.
 	if isFirstConnection && h.onUserFirstConnect != nil {
 		userID := client.userID
 		prefStatus := client.prefStatus
@@ -83,6 +85,7 @@ func (h *Hub) addClient(client *Client) {
 // Otherwise recomputes and broadcasts aggregate status.
 func (h *Hub) removeClient(client *Client) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	var fullyDisconnected bool
 	var partialDisconnect bool
@@ -117,11 +120,15 @@ func (h *Hub) removeClient(client *Client) {
 		}
 	}
 
-	h.mu.Unlock()
-
-	// userMu is independent of h.mu (no lock ordering hazard) — evict the
-	// cached profile entry once the last connection is gone so userInfos
-	// doesn't grow unboundedly over the process lifetime.
+	// h.mu is now held here too (deferred Unlock above, not the manual
+	// Unlock() this used to have at this point) — evictUserInfo below is a
+	// nested h.mu -> userMu acquisition rather than the fully independent
+	// one this comment used to describe. Still no ordering hazard: nothing
+	// in the package ever acquires userMu before h.mu (grep userMu — only
+	// hub_state.go touches it, and none of those funcs take h.mu), so
+	// there's no reverse-order path to deadlock against. Evict the cached
+	// profile entry once the last connection is gone so userInfos doesn't
+	// grow unboundedly over the process lifetime.
 	if fullyDisconnected {
 		h.evictUserInfo(userID)
 	}
