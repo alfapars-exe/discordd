@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
@@ -266,6 +268,16 @@ func userFullyDisconnectedCallback(
 	debouncer *presenceOfflineDebouncer,
 ) ws.UserConnectionCallback {
 	return func(userID, _ string) {
+		// Invisibility is cleared SYNCHRONOUSLY, not inside the debounced
+		// transition (review 2026-08-13, MEDIUM): ws/handler.go sets
+		// SetInvisible(true) BEFORE `register <- client`, so a reconnecting
+		// invisible user exists in invisibleUsers while still absent from
+		// h.clients. A debounced fire in that handshake window would pass
+		// the GetOnlineUserIDs recheck and wipe the just-set flag for the
+		// rest of the session. Here, at real disconnect time, the user has
+		// just left h.clients and no reconnect handshake can predate us.
+		hub.SetInvisible(userID, false)
+
 		scheduleOfflinePresenceTransition(debouncer, hub, userRepo, userID)
 
 		// Voice state is NOT cleaned here — WS disconnect != voice leave.
@@ -299,8 +311,8 @@ func userFullyDisconnectedCallback(
 // is testable without constructing the voice/P2P service dependencies that
 // function ALSO drives synchronously (see presence_debounce_test.go).
 func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string) {
-	debouncer.schedule(userID, func() {
-		offlinePresenceTransition(hub, userRepo, userID)
+	debouncer.schedule(userID, func(gen uint64) {
+		offlinePresenceTransition(hub, userRepo, debouncer, userID, gen)
 	})
 }
 
@@ -313,21 +325,44 @@ func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub 
 // debouncer's own mutex, so in the normal path cancel() always wins if the
 // reconnect happened before the timer fired; this is defense-in-depth, not
 // the primary mechanism.
-func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, userID string) {
+func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64) {
 	for _, connectedID := range hub.GetOnlineUserIDs() {
 		if connectedID == userID {
 			return
 		}
 	}
 
+	// Generation gate right before the DB write: a reconnect's cancel()
+	// bumps the generation under the debouncer mutex, so an in-flight fire
+	// that lost the race aborts here instead of writing OFFLINE over the
+	// reconnect's ONLINE (review 2026-08-13, LOW).
+	if !debouncer.current(userID, gen) {
+		return
+	}
+
 	ctx, cancel := services.BroadcastContext()
 	defer cancel()
 
 	if updateErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOffline); updateErr != nil {
-		hubLogger.Error("failed to set offline status", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
+		if errors.Is(updateErr, pkg.ErrNotFound) {
+			// Expected after a hard delete: the row is gone by the time the
+			// grace elapses. Not an operational error.
+			hubLogger.Info("offline transition skipped: user row gone (hard delete)", "area", "presence", "user_id", userID)
+		} else {
+			hubLogger.Error("failed to set offline status", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
+		}
 	}
 
-	hub.SetInvisible(userID, false)
+	// Post-write staleness check: a reconnect that landed DURING the write
+	// may have had its ONLINE write overwritten by ours. Compensate by
+	// re-asserting ONLINE and skip the offline broadcast — the reconnect's
+	// own broadcast carries the correct state.
+	if !debouncer.current(userID, gen) {
+		if compErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOnline); compErr != nil && !errors.Is(compErr, pkg.ErrNotFound) {
+			hubLogger.Error("failed to re-assert online after offline/reconnect race", "area", "presence", "user_id", userID, "err", pkg.ErrText(compErr))
+		}
+		return
+	}
 
 	hub.BroadcastToAll(ws.Event{
 		Op: ws.OpPresence,

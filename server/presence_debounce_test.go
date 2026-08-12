@@ -199,7 +199,65 @@ func TestOfflinePresenceTransition_SkipsWhenHubStillReportsConnected(t *testing.
 		},
 	}
 
-	offlinePresenceTransition(hub, userRepo, "user-1")
+	offlinePresenceTransition(hub, userRepo, newPresenceOfflineDebouncer(time.Second), "user-1", 1)
+}
+
+// A fire whose generation was invalidated (cancel() bumped it after the
+// timer left the map) must abort before the DB write — the pre-write
+// generation gate from the 2026-08-13 review's TOCTOU finding.
+func TestOfflinePresenceTransition_StaleGenerationSkipsWrite(t *testing.T) {
+	hub := &testutil.MockEventPublisher{
+		GetOnlineUserIDsFn: func() []string { return nil },
+	}
+	hub.BroadcastToAllFn = func(event ws.Event) {
+		t.Fatalf("must not broadcast with a stale generation, got %+v", event)
+	}
+	userRepo := &testutil.MockUserRepo{
+		UpdateStatusFn: func(_ context.Context, _ string, _ models.UserStatus) error {
+			t.Fatal("must not write status with a stale generation")
+			return nil
+		},
+	}
+
+	// Fresh debouncer: gens["user-1"] == 0, so generation 99 is stale.
+	offlinePresenceTransition(hub, userRepo, newPresenceOfflineDebouncer(time.Second), "user-1", 99)
+}
+
+// A reconnect landing DURING the OFFLINE DB write must trigger the ONLINE
+// compensation write and suppress the offline broadcast.
+func TestOfflinePresenceTransition_ReconnectDuringWriteCompensates(t *testing.T) {
+	debouncer := newPresenceOfflineDebouncer(time.Hour)
+	// Establish a live generation the transition will consider current.
+	debouncer.schedule("user-1", func(uint64) {})
+	debouncer.mu.Lock()
+	gen := debouncer.gens["user-1"]
+	debouncer.mu.Unlock()
+
+	hub := &testutil.MockEventPublisher{
+		GetOnlineUserIDsFn: func() []string { return nil },
+	}
+	hub.BroadcastToAllFn = func(event ws.Event) {
+		t.Fatalf("offline broadcast must be suppressed after a mid-write reconnect, got %+v", event)
+	}
+
+	var statuses []models.UserStatus
+	userRepo := &testutil.MockUserRepo{
+		UpdateStatusFn: func(_ context.Context, _ string, status models.UserStatus) error {
+			statuses = append(statuses, status)
+			if len(statuses) == 1 {
+				// Simulate the reconnect racing the write: cancel() bumps
+				// the generation while UpdateStatus(offline) is in flight.
+				debouncer.cancel("user-1")
+			}
+			return nil
+		},
+	}
+
+	offlinePresenceTransition(hub, userRepo, debouncer, "user-1", gen)
+
+	if len(statuses) != 2 || statuses[0] != models.UserStatusOffline || statuses[1] != models.UserStatusOnline {
+		t.Fatalf("expected offline write then online compensation, got %v", statuses)
+	}
 }
 
 // cancel on a userID with nothing pending must be a safe no-op — this is the
@@ -216,7 +274,7 @@ func TestPresenceOfflineDebouncer_CancelWithoutPendingIsNoop(t *testing.T) {
 func TestPresenceOfflineDebouncer_StopAllCancelsPendingTimers(t *testing.T) {
 	debouncer := newPresenceOfflineDebouncer(30 * time.Millisecond)
 	fired := make(chan struct{}, 1)
-	debouncer.schedule("user-1", func() { fired <- struct{}{} })
+	debouncer.schedule("user-1", func(uint64) { fired <- struct{}{} })
 
 	debouncer.stopAll()
 

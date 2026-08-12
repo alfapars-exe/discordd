@@ -6,7 +6,8 @@
  * 1. Establish WS connection on login
  * 2. Send heartbeats (30s interval, 3 misses = disconnect)
  * 3. Route incoming events to store handlers (switch/case)
- * 4. Auto-reconnect on disconnect (10s delay, max 5 attempts)
+ * 4. Auto-reconnect on disconnect (1.5s exponential base, max 7 attempts;
+ *    backoff resets only after 10s of proven-stable connection)
  * 5. Expose sendTyping for MessageInput
  *
  * StrictMode protection:

@@ -45,6 +45,14 @@ type presenceOfflineDebouncer struct {
 
 	mu     sync.Mutex
 	timers map[string]*time.Timer
+	// gens is a per-user generation counter, bumped by every schedule() and
+	// cancel(). A fired callback captures the generation it was scheduled
+	// with and re-validates it (current()) before each externally visible
+	// side effect — that is what shrinks the recheck→DB-write→broadcast
+	// TOCTOU window (review 2026-08-13, LOW) to the mutex itself: a
+	// reconnect's cancel() bumps the generation, so an in-flight fire
+	// observes staleness instead of broadcasting a bogus OFFLINE last.
+	gens map[string]uint64
 }
 
 // newPresenceOfflineDebouncer builds a debouncer with the given grace
@@ -56,12 +64,15 @@ func newPresenceOfflineDebouncer(grace time.Duration) *presenceOfflineDebouncer 
 	return &presenceOfflineDebouncer{
 		grace:  grace,
 		timers: make(map[string]*time.Timer),
+		gens:   make(map[string]uint64),
 	}
 }
 
 // schedule plans fire to run after the grace period unless cancel(userID)
-// runs first. Replaces (Stop()s) any timer already pending for userID.
-func (d *presenceOfflineDebouncer) schedule(userID string, fire func()) {
+// runs first. Replaces (Stop()s) any timer already pending for userID. The
+// generation passed to fire identifies THIS scheduling; fire must gate its
+// side effects on current(userID, gen).
+func (d *presenceOfflineDebouncer) schedule(userID string, fire func(gen uint64)) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -69,12 +80,32 @@ func (d *presenceOfflineDebouncer) schedule(userID string, fire func()) {
 		existing.Stop()
 	}
 
+	d.gens[userID]++
+	gen := d.gens[userID]
+
 	d.timers[userID] = time.AfterFunc(d.grace, func() {
 		d.mu.Lock()
+		if d.gens[userID] != gen {
+			// A cancel() or a fresh schedule() superseded this timer after
+			// it had already committed to firing (Timer.Stop's documented
+			// "may have already started" caveat) — do nothing.
+			d.mu.Unlock()
+			return
+		}
 		delete(d.timers, userID)
 		d.mu.Unlock()
-		fire()
+		fire(gen)
 	})
+}
+
+// current reports whether gen is still the live generation for userID —
+// i.e. no cancel() or newer schedule() has superseded the scheduling that
+// produced it. Fired callbacks call this immediately before each side
+// effect.
+func (d *presenceOfflineDebouncer) current(userID string, gen uint64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.gens[userID] == gen
 }
 
 // cancel aborts a pending offline debounce for userID, if any. Called on
@@ -85,6 +116,11 @@ func (d *presenceOfflineDebouncer) schedule(userID string, fire func()) {
 func (d *presenceOfflineDebouncer) cancel(userID string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	// Bumping the generation even when no timer is pending is deliberate:
+	// it also invalidates a fire that has already left the timers map and
+	// is mid-flight in offlinePresenceTransition.
+	d.gens[userID]++
 
 	existing, ok := d.timers[userID]
 	if !ok {
@@ -107,16 +143,18 @@ func (d *presenceOfflineDebouncer) pending(userID string) bool {
 
 // stopAll cancels every pending timer. Called during graceful shutdown
 // (main.go) before the dependencies a fired timer would touch — the DB pool
-// (db.Close) and the Hub (hub.Shutdown) — are torn down. time.AfterFunc
-// only spawns its callback goroutine once the timer actually fires, so
-// Stop()ing it here (which succeeds as long as the timer hasn't already
-// fired) guarantees no such goroutine starts after shutdown begins, rather
-// than merely making one likely.
+// (db.Close) and the Hub (hub.Shutdown) — are torn down. Stop()ing here
+// ensures no NEW timer goroutine starts after shutdown begins; a callback
+// that had already committed to firing microseconds earlier is not joined,
+// but the generation bump below invalidates it (current() turns false), and
+// even its worst-case pre-gen side effects were verified benign against a
+// closed DB / drained hub (error-logged, no panic).
 func (d *presenceOfflineDebouncer) stopAll() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for userID, timer := range d.timers {
 		timer.Stop()
 		delete(d.timers, userID)
+		d.gens[userID]++
 	}
 }
