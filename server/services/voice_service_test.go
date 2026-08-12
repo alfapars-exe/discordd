@@ -72,6 +72,7 @@ func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 		nil, // encryptionKey
 		nil, // timeoutChecker — nil here is intentional; see TestVoiceJoinChannel_NilTimeoutChecker_Allows. Production always passes repos.MemberTimeout.
 		nil, // banChecker — same rationale
+		nil, // auditLogger — same rationale
 	)
 	return svc, hub
 }
@@ -105,6 +106,7 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceS
 		nil, // encryptionKey
 		checker,
 		nil, // banChecker — not under test here
+		nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -134,6 +136,7 @@ func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banC
 		nil, // encryptionKey
 		timeoutChecker,
 		banChecker,
+		nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -240,6 +243,7 @@ func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceService
 		nil, // encryptionKey
 		nil, // timeoutChecker — not under test here
 		nil, // banChecker — not under test here
+		nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -971,6 +975,7 @@ func TestJoinChannel_SameChannelRejoin_TransientAuthError_PreservesLiveSession(t
 		nil, // encryptionKey
 		nil, // timeoutChecker
 		nil, // banChecker
+		nil, // auditLogger
 	)
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
@@ -1142,6 +1147,7 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 		nil, // encryptionKey
 		nil, // timeoutChecker — not under test here
 		nil, // banChecker — not under test here
+		nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -1417,6 +1423,7 @@ func TestOrphanSweep_DoesNotStopMusicBotWhenChannelStillOccupied(t *testing.T) {
 		nil, // encryptionKey
 		nil, // timeoutChecker
 		nil, // banChecker
+		nil, // auditLogger
 	)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
@@ -1601,6 +1608,7 @@ func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, u
 		nil, // encryptionKey
 		nil, // timeoutChecker — not under test here
 		nil, // banChecker — not under test here
+		nil, // auditLogger — not under test here
 	)
 	return svc, hub
 }
@@ -2354,6 +2362,7 @@ func newTokenTestVoiceService(t *testing.T) VoiceService {
 		tokenTestEncryptionKey,
 		nil, // timeoutChecker
 		nil, // banChecker
+		nil, // auditLogger
 	)
 	return svc
 }
@@ -2848,6 +2857,7 @@ func newServerMuteNetworkTestVoiceService(t *testing.T, setupCalls chan string) 
 		tokenTestEncryptionKey,
 		nil, // timeoutChecker
 		nil, // banChecker
+		nil, // auditLogger
 	)
 	return svc, hub
 }

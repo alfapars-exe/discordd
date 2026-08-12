@@ -99,7 +99,6 @@ type VoiceService interface {
 	StartOrphanCleanup()
 	StartAFKChecker()
 	SetAppLogger(logger VoiceAppLogger)
-	SetAuditLogger(logger AuditWriter)
 	SetMusicBotHook(hook MusicBotChannelHook)
 	// EnforceModerationOnJoin evicts userID from the LiveKit room for
 	// (serverID, channelID) if they are currently timed out or banned on
@@ -191,6 +190,7 @@ func NewVoiceService(
 	encryptionKey []byte,
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
+	auditLogger AuditWriter,
 ) VoiceService {
 	return &voiceService{
 		states:             make(map[string]*models.VoiceState),
@@ -207,6 +207,7 @@ func NewVoiceService(
 		encryptionKey:      encryptionKey,
 		timeoutChecker:     timeoutChecker,
 		banChecker:         banChecker,
+		auditLogger:        auditLogger,
 	}
 }
 
@@ -216,10 +217,6 @@ func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {
 	s.appLogger = logger
-}
-
-func (s *voiceService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.

@@ -21,15 +21,17 @@ import (
 	"testing"
 
 	"github.com/argeinfina/hichat/models"
-	"github.com/argeinfina/hichat/services"
 )
 
 var badgePNGMagic = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 
 // newBadgeIconRequest builds a multipart POST as if a browser submitted the
 // badge icon form: one "icon" part carrying the given claimed Content-Type
-// and body, plus the badge admin in the request context (UploadBadgeIcon
-// authorizes on exact user ID).
+// and body, plus an authenticated user in the request context. Admin
+// authorization for this route is enforced by the authAdmin middleware
+// chain (init_routes_global.go), not inside the handler, so the exact user
+// ID here is arbitrary — any non-empty user in context is enough for this
+// handler-level test.
 func newBadgeIconRequest(t *testing.T, claimedType string, body []byte) *http.Request {
 	t.Helper()
 	var buf bytes.Buffer
@@ -53,7 +55,7 @@ func newBadgeIconRequest(t *testing.T, claimedType string, body []byte) *http.Re
 
 	req := httptest.NewRequest(http.MethodPost, "/api/badges/icon", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	user := &models.User{ID: services.BadgeAdminUserID}
+	user := &models.User{ID: "badge-icon-test-user"}
 	return req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
 }
 

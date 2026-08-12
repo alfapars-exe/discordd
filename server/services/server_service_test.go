@@ -15,8 +15,26 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
 )
+
+// passthroughMembershipTxRunner satisfies repository.ServerMembershipTxRunner
+// without a real transaction — runs fn directly against the given mocks,
+// mirroring passthroughTxRunner in message_service_test.go and
+// passthroughDeviceTxRunner in device_service_test.go. JoinServer's
+// atomicity is a repository/DB-level concern (see
+// repository/server_membership_tx_test.go for the real-transaction proof);
+// these service-level tests only need error propagation and call-order
+// behavior.
+type passthroughMembershipTxRunner struct {
+	server repository.ServerRepository
+	role   repository.RoleRepository
+}
+
+func (p passthroughMembershipTxRunner) InTx(_ context.Context, fn func(*repository.ServerMembershipTxRepos) error) error {
+	return fn(&repository.ServerMembershipTxRepos{Server: p.server, Role: p.role})
+}
 
 const (
 	joinTestServerID = "srv-join-1"
@@ -71,7 +89,8 @@ func newJoinServerHarness() *joinServerHarness {
 		return false, nil
 	}
 
-	h.svc = NewServerService(nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil)
+	h.svc = NewServerService(nil, h.serverRepo, nil, h.roleRepo, nil, nil, h.userRepo, h.banRepo, h.inviteSvc, h.hub, nil, nil, // encryptionKey, auditLogger — not under test here
+		passthroughMembershipTxRunner{server: h.serverRepo, role: h.roleRepo})
 	return h
 }
 

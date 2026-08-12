@@ -115,8 +115,6 @@ func (s *stubMemberService) SetNickname(context.Context, string, string, string,
 	return nil, nil
 }
 
-func (s *stubMemberService) SetAuditLogger(services.AuditWriter) {}
-
 func (s *stubMemberService) SetPermInvalidator(services.PermissionInvalidator) {}
 
 var _ services.MemberService = (*stubMemberService)(nil)

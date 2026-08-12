@@ -1107,26 +1107,31 @@ paths:
       operationId: badgesCreate
       summary: Create a new badge.
       tags: [Badges]
+      x-platform-admin: true
       requestBody: { $ref: '#/components/requestBodies/StubJSON' }
       responses:
         '201': { $ref: '#/components/responses/StubCreated' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
   /api/badges/icon:
     post:
       operationId: badgesUploadIcon
       summary: Upload a badge icon image, returning its URL for use in badgesCreate/badgesUpdate.
       tags: [Badges]
+      x-platform-admin: true
       requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
       responses:
         '201': { $ref: '#/components/responses/StubCreated' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
   /api/badges/{id}:
     patch:
       operationId: badgesUpdate
       summary: Update a badge's fields.
       tags: [Badges]
+      x-platform-admin: true
       parameters:
         - name: id
           in: path
@@ -1138,11 +1143,13 @@ paths:
         '200': { $ref: '#/components/responses/StubOK' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
     delete:
       operationId: badgesDelete
       summary: Delete a badge.
       tags: [Badges]
+      x-platform-admin: true
       parameters:
         - name: id
           in: path
@@ -1152,12 +1159,14 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
   /api/badges/{id}/assign:
     post:
       operationId: badgesAssign
       summary: Assign a badge to a user.
       tags: [Badges]
+      x-platform-admin: true
       parameters:
         - name: id
           in: path
@@ -1169,6 +1178,7 @@ paths:
         '200': { $ref: '#/components/responses/StubOK' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '409': { $ref: '#/components/responses/ConflictError' }
   /api/badges/{id}/assign/{userId}:
@@ -1176,6 +1186,7 @@ paths:
       operationId: badgesUnassign
       summary: Remove a badge from a user.
       tags: [Badges]
+      x-platform-admin: true
       parameters:
         - name: id
           in: path
@@ -1186,6 +1197,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
   /api/users/{userId}/badges:
     get:

@@ -49,33 +49,98 @@ type routeDeps struct {
 	botHandler *handlers.BotHandler
 }
 
+// routeGate records which authorization gate a chain helper below built.
+// Captured on the handler value itself (gatedHandler) rather than in a
+// side table, so route_permissions_test.go can recover it straight from
+// what initRoutes actually registers instead of re-deriving it by
+// re-reading source — the two can't drift apart.
+type routeGate struct {
+	// kind is one of "auth", "authServer", "authServerPerm",
+	// "authServerPermLoad", "authAdmin", or "refresh". "refresh" means
+	// deliberately unauthenticated (see the refresh method's doc comment
+	// below) — POST /api/auth/refresh hands out the auth token in the
+	// first place, so it can't require one.
+	kind string
+	// perm is only meaningful when kind == "authServerPerm".
+	perm models.Permission
+}
+
+// gatedHandler pairs a handler with the routeGate that produced it.
+// Transparent to *http.ServeMux: ServeHTTP is promoted from the embedded
+// http.Handler, so production dispatch is byte-for-byte unchanged from
+// before this type existed. A test-time registrar can type-assert a
+// registered handler back to gatedHandler to recover its gate without
+// re-parsing source (see route_permissions_test.go).
+type gatedHandler struct {
+	http.Handler
+	gate routeGate
+}
+
+// gateOf extracts h's routeGate if h is a gatedHandler.
+func gateOf(h http.Handler) (routeGate, bool) {
+	gh, ok := h.(gatedHandler)
+	if !ok {
+		return routeGate{}, false
+	}
+	return gh.gate, true
+}
+
 // Middleware chain helpers.
 func (d *routeDeps) auth(handler http.HandlerFunc) http.Handler {
-	return d.authMw.Require(http.HandlerFunc(handler))
+	return gatedHandler{
+		Handler: d.authMw.Require(http.HandlerFunc(handler)),
+		gate:    routeGate{kind: "auth"},
+	}
 }
 
 func (d *routeDeps) authServer(handler http.HandlerFunc) http.Handler {
-	return d.authMw.Require(d.serverMw.Require(http.HandlerFunc(handler)))
+	return gatedHandler{
+		Handler: d.authMw.Require(d.serverMw.Require(http.HandlerFunc(handler))),
+		gate:    routeGate{kind: "authServer"},
+	}
 }
 
 func (d *routeDeps) authServerPerm(perm models.Permission, handler http.HandlerFunc) http.Handler {
-	return d.authMw.Require(d.serverMw.Require(d.permMw.Require(perm, http.HandlerFunc(handler))))
+	return gatedHandler{
+		Handler: d.authMw.Require(d.serverMw.Require(d.permMw.Require(perm, http.HandlerFunc(handler)))),
+		gate:    routeGate{kind: "authServerPerm", perm: perm},
+	}
 }
 
 func (d *routeDeps) authServerPermLoad(handler http.HandlerFunc) http.Handler {
-	return d.authMw.Require(d.serverMw.Require(d.permMw.Load(http.HandlerFunc(handler))))
+	return gatedHandler{
+		Handler: d.authMw.Require(d.serverMw.Require(d.permMw.Load(http.HandlerFunc(handler)))),
+		gate:    routeGate{kind: "authServerPermLoad"},
+	}
 }
 
 func (d *routeDeps) authAdmin(handler http.HandlerFunc) http.Handler {
-	return d.authMw.Require(d.platformAdminMw.Require(http.HandlerFunc(handler)))
+	return gatedHandler{
+		Handler: d.authMw.Require(d.platformAdminMw.Require(http.HandlerFunc(handler))),
+		gate:    routeGate{kind: "authAdmin"},
+	}
 }
 
+// deviceEnum layers a per-IP rate limiter (P0-BD-02) on top of an
+// already-gated handler (auth or authServer) — it is not itself an
+// authorization gate, so it preserves the wrapped handler's gate rather
+// than replacing it.
 func (d *routeDeps) deviceEnum(handler http.Handler) http.Handler {
-	return d.deviceEnumMw(handler)
+	wrapped := d.deviceEnumMw(handler)
+	if gate, ok := gateOf(handler); ok {
+		return gatedHandler{Handler: wrapped, gate: gate}
+	}
+	return wrapped
 }
 
+// refresh rate-limits POST /api/auth/refresh (resource scan 2026-07-31,
+// finding N-14), which is deliberately unauthenticated — see refreshMw's
+// field doc comment on routeDeps.
 func (d *routeDeps) refresh(handler http.HandlerFunc) http.Handler {
-	return d.refreshMw(handler)
+	return gatedHandler{
+		Handler: d.refreshMw(handler),
+		gate:    routeGate{kind: "refresh"},
+	}
 }
 
 // initRoutes registers all API endpoints.

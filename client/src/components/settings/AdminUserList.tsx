@@ -26,8 +26,6 @@ import { useTableSort } from "../../hooks/useTableSort";
 import { useColumnResize } from "../../hooks/useColumnResize";
 import { parseUTC, formatStorage, formatDateTime, formatRelativeTime as relativeTime } from "../../utils/adminFormat";
 
-const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
-
 // ─── Column Definition ───
 
 type SortKey =
@@ -139,7 +137,7 @@ function AdminUserList() {
   const currentUser = useAuthStore((s) => s.user);
   const { menuState, openMenu, closeMenu } = useContextMenu();
   const confirm = useConfirm();
-  const isBadgeAdmin = currentUser?.id === BADGE_ADMIN_USER_ID;
+  const isBadgeAdmin = currentUser?.is_platform_admin === true;
 
   // ─── Data state ───
   const [users, setUsers] = useState<AdminUserListItem[]>([]);

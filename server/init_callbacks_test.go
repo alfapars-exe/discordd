@@ -127,3 +127,132 @@ func TestUserFirstConnectCallback_BoundsContextOnInvisiblePath(t *testing.T) {
 		t.Fatal("callback never called userRepo.GetByID")
 	}
 }
+
+// ─── channelTypingCallback: sender permission gate (P1.2) ───
+
+const (
+	fullReadPerms = models.PermViewChannel | models.PermReadMessages
+	noReadPerms   = models.PermConnectVoice // any bit that isn't View+Read
+)
+
+func TestChannelTypingCallback_UnauthorizedSenderProducesNoBroadcast(t *testing.T) {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(ctx context.Context, id string) (*models.Channel, error) {
+			return &models.Channel{ID: id, ServerID: "server-1"}, nil
+		},
+	}
+	permResolver := &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsBulkFn: func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+			// Sender is in the online set but lacks read access.
+			return map[string]models.Permission{"sender-1": noReadPerms, "listener-1": fullReadPerms}, nil
+		},
+	}
+	hub := &testutil.MockEventPublisher{
+		GetOnlineUserIDsForServerFn: func(serverID string) []string { return []string{"sender-1", "listener-1"} },
+	}
+	hub.BroadcastToUsersFn = func(userIDs []string, event ws.Event) {
+		t.Fatalf("unauthorized sender must not produce a broadcast, got recipients %v", userIDs)
+	}
+
+	channelTypingCallback(hub, channelRepo, permResolver)("sender-1", "sender", "chan-1")
+}
+
+func TestChannelTypingCallback_AuthorizedSenderBroadcastsToPermittedRecipientsOnly(t *testing.T) {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(ctx context.Context, id string) (*models.Channel, error) {
+			return &models.Channel{ID: id, ServerID: "server-1"}, nil
+		},
+	}
+	permResolver := &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsBulkFn: func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+			return map[string]models.Permission{
+				"sender-1":     fullReadPerms,
+				"listener-ok":  fullReadPerms,
+				"listener-bad": noReadPerms,
+			}, nil
+		},
+	}
+	var gotRecipients []string
+	var broadcastCount int
+	hub := &testutil.MockEventPublisher{
+		GetOnlineUserIDsForServerFn: func(serverID string) []string {
+			return []string{"sender-1", "listener-ok", "listener-bad"}
+		},
+	}
+	hub.BroadcastToUsersFn = func(userIDs []string, event ws.Event) {
+		broadcastCount++
+		gotRecipients = userIDs
+	}
+
+	channelTypingCallback(hub, channelRepo, permResolver)("sender-1", "sender", "chan-1")
+
+	if broadcastCount != 1 {
+		t.Fatalf("expected exactly one broadcast, got %d", broadcastCount)
+	}
+	if len(gotRecipients) != 1 || gotRecipients[0] != "listener-ok" {
+		t.Fatalf("expected recipients [listener-ok], got %v", gotRecipients)
+	}
+}
+
+// Sender absent from the bulk snapshot (e.g. connected between the online-
+// user query and this event) must fall back to an individual resolve rather
+// than being silently trusted.
+func TestChannelTypingCallback_SenderNotInBulk_ResolvesIndividually(t *testing.T) {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(ctx context.Context, id string) (*models.Channel, error) {
+			return &models.Channel{ID: id, ServerID: "server-1"}, nil
+		},
+	}
+	var sawIndividualResolve bool
+	permResolver := &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsBulkFn: func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+			return map[string]models.Permission{"listener-ok": fullReadPerms}, nil // sender-1 absent
+		},
+		ResolveChannelPermissionsFn: func(ctx context.Context, userID, channelID string) (models.Permission, error) {
+			if userID == "sender-1" {
+				sawIndividualResolve = true
+				return fullReadPerms, nil
+			}
+			return 0, nil
+		},
+	}
+	var broadcastCount int
+	hub := &testutil.MockEventPublisher{
+		GetOnlineUserIDsForServerFn: func(serverID string) []string { return []string{"listener-ok"} },
+	}
+	hub.BroadcastToUsersFn = func(userIDs []string, event ws.Event) { broadcastCount++ }
+
+	channelTypingCallback(hub, channelRepo, permResolver)("sender-1", "sender", "chan-1")
+
+	if !sawIndividualResolve {
+		t.Fatal("expected an individual ResolveChannelPermissions call for a sender missing from the bulk snapshot")
+	}
+	if broadcastCount != 1 {
+		t.Fatalf("expected exactly one broadcast once the individual resolve grants read access, got %d", broadcastCount)
+	}
+}
+
+// A sender resolve error must fail closed (no broadcast), not fail open.
+func TestChannelTypingCallback_SenderResolveError_NoBroadcast(t *testing.T) {
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(ctx context.Context, id string) (*models.Channel, error) {
+			return &models.Channel{ID: id, ServerID: "server-1"}, nil
+		},
+	}
+	permResolver := &testutil.MockChannelPermResolver{
+		ResolveChannelPermissionsBulkFn: func(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+			return map[string]models.Permission{"listener-ok": fullReadPerms}, nil // sender-1 absent
+		},
+		ResolveChannelPermissionsFn: func(ctx context.Context, userID, channelID string) (models.Permission, error) {
+			return 0, context.DeadlineExceeded
+		},
+	}
+	hub := &testutil.MockEventPublisher{
+		GetOnlineUserIDsForServerFn: func(serverID string) []string { return []string{"listener-ok"} },
+	}
+	hub.BroadcastToUsersFn = func(userIDs []string, event ws.Event) {
+		t.Fatalf("a sender permission resolve error must fail closed, got broadcast to %v", userIDs)
+	}
+
+	channelTypingCallback(hub, channelRepo, permResolver)("sender-1", "sender", "chan-1")
+}

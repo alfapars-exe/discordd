@@ -19,7 +19,6 @@ type MessageService interface {
 	BroadcastCreate(message *models.Message)
 	Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
 	Delete(ctx context.Context, serverID, id, userID string, userPermissions models.Permission) error
-	SetAuditLogger(logger AuditWriter)
 	SetUploadDir(dir string)
 }
 
@@ -43,10 +42,6 @@ type messageService struct {
 	// default) disables cleanup — set via SetUploadDir, wired in
 	// init_services.go so the constructor signature above stays unchanged.
 	uploadDir string
-}
-
-func (s *messageService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
 }
 
 func (s *messageService) SetUploadDir(dir string) {
@@ -80,6 +75,7 @@ func NewMessageService(
 	txRunner repository.MessageTxRunner,
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
+	auditLogger AuditWriter,
 ) MessageService {
 	return &messageService{
 		messageRepo:     messageRepo,
@@ -95,6 +91,7 @@ func NewMessageService(
 		txRunner:        txRunner,
 		hub:             hub,
 		permResolver:    permResolver,
+		auditLogger:     auditLogger,
 	}
 }
 

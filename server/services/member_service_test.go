@@ -52,7 +52,7 @@ func newMemberHarness() *memberServiceHarness {
 	}
 	h.svc = NewMemberService(
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
-		h.serverRepo, h.hub, h.voiceKick,
+		h.serverRepo, h.hub, h.voiceKick, nil, // auditLogger — not under test here
 	)
 	return h
 }

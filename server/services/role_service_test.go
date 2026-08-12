@@ -43,7 +43,7 @@ func newRoleSvcWithInvalidator(t *testing.T) (
 ) {
 	t.Helper()
 	roleRepo := &testutil.MockRoleRepo{}
-	svc := NewRoleService(roleRepo, &testutil.MockUserRepo{}, &testutil.MockBroadcaster{})
+	svc := NewRoleService(roleRepo, &testutil.MockUserRepo{}, &testutil.MockBroadcaster{}, nil) // auditLogger — not under test here
 	inv := &countingInvalidator{}
 	svc.SetPermInvalidator(inv)
 

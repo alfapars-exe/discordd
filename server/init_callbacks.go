@@ -198,49 +198,10 @@ func registerHubCallbacks(
 	})
 
 	// ─── Channel Typing Callback ───
-	// Validates sender has ReadMessages permission, then broadcasts to server members only.
+	// Validates BOTH the sender and each recipient have ReadMessages
+	// permission, then broadcasts to server members only.
 
-	hub.OnChannelTyping(func(senderUserID, senderUsername, channelID string) {
-		// Typing fires on every keystroke burst; a bounded context keeps a
-		// wedged database from pinning WS reader goroutines.
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		ch, chErr := channelRepo.GetByID(ctx, channelID)
-		if chErr != nil {
-			return
-		}
-
-		// Filter recipients to server members who have ViewChannel + ReadMessages
-		// on this channel (respects per-channel permission overrides). One bulk
-		// resolve — the per-user loop this replaces ran up to 3 queries per
-		// online member per typing event.
-		onlineUsers := hub.GetOnlineUserIDsForServer(ch.ServerID)
-		perms, permErr := channelPermResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
-		if permErr != nil {
-			hubLogger.Error("typing bulk permission resolve failed", "area", "typing", "channel_id", channelID, "err", pkg.ErrText(permErr))
-			return
-		}
-
-		recipients := make([]string, 0, len(onlineUsers))
-		for _, uid := range onlineUsers {
-			if uid == senderUserID {
-				continue
-			}
-			if models.PermCanReadChannel(perms[uid]) {
-				recipients = append(recipients, uid)
-			}
-		}
-
-		hub.BroadcastToUsers(recipients, ws.Event{
-			Op: ws.OpTypingStart,
-			Data: ws.TypingStartData{
-				UserID:    senderUserID,
-				Username:  senderUsername,
-				ChannelID: channelID,
-			},
-		})
-	})
+	hub.OnChannelTyping(channelTypingCallback(hub, channelRepo, channelPermResolver))
 
 	// ─── DM Typing Callback ───
 
@@ -336,6 +297,83 @@ func presenceUpdateCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.
 			source = "auto"
 		}
 		hubLogger.Info("presence updated", "area", "presence", "user_id", userID, "status", status, "source", source)
+	}
+}
+
+// channelTypingCallback validates the SENDER can read the channel before
+// broadcasting, then filters recipients to server members who can also read
+// it (respects per-channel permission overrides). Extracted into a named
+// constructor (see this file's top doc comment) so it can be tested without
+// going through the Hub's unexported callback field.
+//
+// Previously only recipients were filtered — the sender was never checked,
+// so any authenticated WS client could forge a typing_start for a channel it
+// has no read access to (ws/client_presence.go's handleTyping doc comment
+// claimed this was already validated; it wasn't). Fixed here.
+//
+// hub is typed as the narrow ws.BroadcastAndOnline interface (Broadcaster +
+// UserStateProvider — exactly the two capabilities this callback uses)
+// rather than the concrete *ws.Hub, so a test can substitute
+// testutil.MockEventPublisher and observe both the online-user query and
+// the broadcast call directly.
+func channelTypingCallback(hub ws.BroadcastAndOnline, channelRepo repository.ChannelRepository, channelPermResolver services.ChannelPermResolver) ws.ChannelTypingCallback {
+	return func(senderUserID, senderUsername, channelID string) {
+		// Typing fires on every keystroke burst; a bounded context keeps a
+		// wedged database from pinning WS reader goroutines.
+		ctx, cancel := services.BroadcastContext()
+		defer cancel()
+
+		ch, chErr := channelRepo.GetByID(ctx, channelID)
+		if chErr != nil {
+			return
+		}
+
+		// One bulk resolve covers the recipient filter (a per-user loop ran up
+		// to 3 queries per online member per typing event). The sender is
+		// almost always already in this online-user set too — reuse the bulk
+		// answer for them instead of a second, redundant query.
+		onlineUsers := hub.GetOnlineUserIDsForServer(ch.ServerID)
+		perms, permErr := channelPermResolver.ResolveChannelPermissionsBulk(ctx, channelID, onlineUsers)
+		if permErr != nil {
+			hubLogger.Error("typing bulk permission resolve failed", "area", "typing", "channel_id", channelID, "err", pkg.ErrText(permErr))
+			return
+		}
+
+		senderPerms, senderInBulk := perms[senderUserID]
+		if !senderInBulk {
+			// Sender wasn't in the server's online-user set this callback saw
+			// (e.g. a race between the bulk snapshot and this event firing) —
+			// resolve individually rather than silently trusting an unchecked
+			// sender.
+			var senderErr error
+			senderPerms, senderErr = channelPermResolver.ResolveChannelPermissions(ctx, senderUserID, channelID)
+			if senderErr != nil {
+				hubLogger.Error("typing sender permission resolve failed", "area", "typing", "channel_id", channelID, "user_id", senderUserID, "err", pkg.ErrText(senderErr))
+				return
+			}
+		}
+		if !models.PermCanReadChannel(senderPerms) {
+			return
+		}
+
+		recipients := make([]string, 0, len(onlineUsers))
+		for _, uid := range onlineUsers {
+			if uid == senderUserID {
+				continue
+			}
+			if models.PermCanReadChannel(perms[uid]) {
+				recipients = append(recipients, uid)
+			}
+		}
+
+		hub.BroadcastToUsers(recipients, ws.Event{
+			Op: ws.OpTypingStart,
+			Data: ws.TypingStartData{
+				UserID:    senderUserID,
+				Username:  senderUsername,
+				ChannelID: channelID,
+			},
+		})
 	}
 }
 

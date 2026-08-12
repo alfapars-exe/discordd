@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 )
 
@@ -289,5 +291,141 @@ func TestHardDeleteUser_CascadesOwnedServers(t *testing.T) {
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM users WHERE id = ?`, userID); got != 0 {
 		t.Errorf("user row survived its own HardDeleteUser")
+	}
+}
+
+// fkCoveredTables (P1.10) allowlists server_id-columned tables intentionally
+// left OUT of deleteServerCascadeStmts because their row lifecycle is
+// trusted to something else: an enforced `ON DELETE CASCADE` foreign key to
+// servers (confirmed against the migration that created each table), or —
+// for app_logs — a nullable column on rows that are observability data, not
+// server-owned records that must vanish with the server.
+//
+// Do NOT add an entry here to silence TestDeleteServerCascade_
+// CoversEveryServerScopedTable without one of those two justifications: an
+// entry here means "trust something other than deleteServerCascadeStmts to
+// clean this table up", and getting that wrong reproduces exactly the leak
+// class this whole cascade exists to close (see deleteServerCascade's doc
+// comment — six tables leaked silently for years because ADD COLUMN can't
+// carry a REFERENCES clause in SQLite).
+var fkCoveredTables = map[string]string{
+	"server_members":    "ON DELETE CASCADE to servers (018_multi_server.sql)",
+	"server_mutes":      "ON DELETE CASCADE to servers (025_server_mutes.sql)",
+	"channel_mutes":     "ON DELETE CASCADE to servers (032_channel_mutes.sql)",
+	"soundboard_sounds": "ON DELETE CASCADE to servers (051_soundboard.sql)",
+	"audit_logs":        "ON DELETE CASCADE to servers (061_audit_channel.sql)",
+	"member_timeouts":   "ON DELETE CASCADE to servers (064_moderation_timeout.sql)",
+	"app_logs":          "server_id is nullable (043_app_logs.sql) — app logs are observability data, not server-owned rows that must vanish with the server",
+}
+
+// deleteServerCascadeTargetTable extracts the table name from a
+// `DELETE FROM <table> ...` statement.
+var deleteServerCascadeTargetTable = regexp.MustCompile(`(?i)DELETE FROM (\w+)`)
+
+// listTableNames returns every user table in db (sqlite_master, excluding
+// SQLite's own internal sqlite_% tables).
+func listTableNames(t *testing.T, db *database.DB) []string {
+	t.Helper()
+	rows, err := db.Conn.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan table name: %v", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate tables: %v", err)
+	}
+	return names
+}
+
+// tableHasColumn reports whether table has a column named column, via
+// PRAGMA table_info. table comes from sqlite_master (listTableNames above),
+// never from external input, so building the PRAGMA statement with
+// fmt.Sprintf is safe — PRAGMA doesn't accept bound parameters for the
+// table name anyway.
+func tableHasColumn(t *testing.T, db *database.DB, table, column string) bool {
+	t.Helper()
+	rows, err := db.Conn.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		t.Fatalf("table_info(%s): %v", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dfltValue any
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			t.Fatalf("scan table_info(%s): %v", table, err)
+		}
+		if name == column {
+			return true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate table_info(%s): %v", table, err)
+	}
+	return false
+}
+
+// TestDeleteServerCascade_CoversEveryServerScopedTable is the P1.10
+// contract test: every table in the real schema that has a server_id
+// column must be accounted for by either deleteServerCascadeStmts (the
+// explicit DELETEs) or fkCoveredTables (trusted to an enforced FK, or
+// exempted with a reason) — so a new server_id-scoped table added later
+// without wiring it into one of the two fails this test immediately,
+// instead of leaking silently the way roles/categories/channels/invites/
+// user_roles/bans did for years before deleteServerCascade existed.
+func TestDeleteServerCascade_CoversEveryServerScopedTable(t *testing.T) {
+	db := newTestDB(t)
+
+	allTables := listTableNames(t, db)
+	tableExists := make(map[string]bool, len(allTables))
+	for _, table := range allTables {
+		tableExists[table] = true
+	}
+
+	cascadeCovered := make(map[string]bool, len(deleteServerCascadeStmts))
+	for _, stmt := range deleteServerCascadeStmts {
+		m := deleteServerCascadeTargetTable.FindStringSubmatch(stmt.query)
+		if m == nil {
+			t.Fatalf("could not extract target table from cascade statement: %q", stmt.query)
+		}
+		cascadeCovered[m[1]] = true
+	}
+
+	for _, table := range allTables {
+		if table == "servers" {
+			continue // the parent row itself, not a server_id-scoped child
+		}
+		if !tableHasColumn(t, db, table, "server_id") {
+			continue
+		}
+		if cascadeCovered[table] {
+			continue
+		}
+		if _, ok := fkCoveredTables[table]; ok {
+			continue
+		}
+		t.Errorf("table %q has a server_id column but is covered by neither deleteServerCascadeStmts nor fkCoveredTables — "+
+			"deleting a server will leave orphaned rows here unless one of the two accounts for it", table)
+	}
+
+	// Stale-allowlist guard: an fkCoveredTables entry for a table that no
+	// longer exists (renamed/dropped) means nobody re-validated that entry
+	// against the table that replaced it.
+	for table := range fkCoveredTables {
+		if !tableExists[table] {
+			t.Errorf("fkCoveredTables has a stale entry for %q — table no longer exists in the schema", table)
+		}
 	}
 }

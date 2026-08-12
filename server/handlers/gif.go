@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -75,8 +74,8 @@ func (h *GifHandler) Trending(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	perPage := clampInt(r.URL.Query().Get("per_page"), 24, 1, 50)
-	page := clampInt(r.URL.Query().Get("page"), 1, 1, 100)
+	perPage := pkg.ClampInt(r.URL.Query().Get("per_page"), 24, 1, 50)
+	page := pkg.ClampInt(r.URL.Query().Get("page"), 1, 1, 100)
 
 	url := fmt.Sprintf("%s/api/v1/%s/gifs/trending?per_page=%d&page=%d&customer_id=%s",
 		klipyBaseURL, h.klipyAPIKey, perPage, page, user.ID)
@@ -113,8 +112,8 @@ func (h *GifHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	perPage := clampInt(r.URL.Query().Get("per_page"), 24, 8, 50)
-	page := clampInt(r.URL.Query().Get("page"), 1, 1, 100)
+	perPage := pkg.ClampInt(r.URL.Query().Get("per_page"), 24, 8, 50)
+	page := pkg.ClampInt(r.URL.Query().Get("page"), 1, 1, 100)
 
 	// query is free-text user input; it must be percent-encoded before
 	// joining the query string, or a value containing "&"/"#"/"=" could
@@ -252,22 +251,4 @@ func pickMediaURL(options ...*klipyMedia) string {
 		}
 	}
 	return ""
-}
-
-// clampInt parses a string to int and clamps it within [min, max].
-func clampInt(s string, defaultVal, min, max int) int {
-	if s == "" {
-		return defaultVal
-	}
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		return defaultVal
-	}
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
 }

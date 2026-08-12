@@ -240,21 +240,21 @@ func repairOrphanedServerData(db *database.DB) {
 	for _, stmt := range stmts {
 		result, err := db.Conn.ExecContext(ctx, stmt.query)
 		if err != nil {
-			log.Printf("[main] warning: orphaned-server-data repair failed on %s: %v", stmt.table, err)
+			startupLogger.Warn("orphaned-server-data repair failed", "table", stmt.table, "err", pkg.ErrText(err))
 			continue
 		}
 		affected, err := result.RowsAffected()
 		if err != nil {
-			log.Printf("[main] warning: failed to check rows affected repairing %s: %v", stmt.table, err)
+			startupLogger.Warn("failed to check rows affected repairing orphaned server data", "table", stmt.table, "err", pkg.ErrText(err))
 			continue
 		}
 		if affected > 0 {
-			log.Printf("[main] repaired %d orphaned row(s) in %s (deleted server, pre-cascade-fix)", affected, stmt.table)
+			startupLogger.Info("repaired orphaned row(s) (deleted server, pre-cascade-fix)", "table", stmt.table, "rows", affected)
 			totalRows += affected
 		}
 	}
 	if totalRows > 0 {
-		log.Printf("[main] orphaned-server-data repair complete: %d row(s) removed", totalRows)
+		startupLogger.Info("orphaned-server-data repair complete", "rows_removed", totalRows)
 	}
 }
 

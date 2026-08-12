@@ -154,6 +154,7 @@ func NewMusicBotService(
 	hub ws.Broadcaster,
 	users MusicBotUserGetter,
 	encryptionKey []byte,
+	appLogger VoiceAppLogger,
 ) MusicBotService {
 	return &musicBotService{
 		bots:          make(map[string]*botInstance),
@@ -163,14 +164,9 @@ func NewMusicBotService(
 		hub:           hub,
 		encryptionKey: encryptionKey,
 		users:         users,
+		appLogger:     appLogger,
 		extractSem:    make(chan struct{}, maxConcurrentMusicExtractions),
 	}
-}
-
-// SetAppLogger — wire the structured logger after construction (mirror of
-// VoiceService.SetAppLogger so init_services.go can keep its symmetric shape).
-func (s *musicBotService) SetAppLogger(logger VoiceAppLogger) {
-	s.appLogger = logger
 }
 
 // Enqueue — add track(s) to the channel's queue. Returns the resolved tracks

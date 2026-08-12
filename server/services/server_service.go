@@ -25,32 +25,33 @@ type ServerService interface {
 	GetLiveKitSettings(ctx context.Context, serverID string) (*LiveKitSettings, error)
 	// ReorderServers updates the user's personal server list order. No WS broadcast.
 	ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error)
-	SetAuditLogger(logger AuditWriter)
 	SetUploadDir(dir string)
 }
 
 type serverService struct {
-	db            *sql.DB // for WithTx in CreateServer
-	serverRepo    repository.ServerRepository
-	livekitRepo   repository.LiveKitRepository
-	roleRepo      repository.RoleRepository
-	channelRepo   repository.ChannelRepository
-	categoryRepo  repository.CategoryRepository
-	userRepo      repository.UserRepository
-	banRepo       repository.BanRepository // N-02: JoinServer's ban gate
-	inviteService InviteService
-	hub           ws.BroadcastAndManage
-	encryptionKey []byte // AES-256-GCM for LiveKit credentials
-	auditLogger   AuditWriter
+	db                 *sql.DB // for WithTx in CreateServer/DeleteServer
+	serverRepo         repository.ServerRepository
+	livekitRepo        repository.LiveKitRepository
+	roleRepo           repository.RoleRepository
+	channelRepo        repository.ChannelRepository
+	categoryRepo       repository.CategoryRepository
+	userRepo           repository.UserRepository
+	banRepo            repository.BanRepository // N-02: JoinServer's ban gate
+	inviteService      InviteService
+	hub                ws.BroadcastAndManage
+	encryptionKey      []byte // AES-256-GCM for LiveKit credentials
+	auditLogger        AuditWriter
+	// membershipTxRunner backs JoinServer's atomic AddMember+AssignToUser
+	// (server_service_membership.go). A separate mockable seam from the raw
+	// `db` field above (rather than another database.WithTx(s.db, ...) call
+	// like CreateServer/DeleteServer use) so the existing mock-based
+	// JoinServer tests keep working without a real *sql.DB.
+	membershipTxRunner repository.ServerMembershipTxRunner
 	// uploadDir enables best-effort disk cleanup on server delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
 	// wired in init_services.go so the constructor signature below stays
 	// unchanged.
 	uploadDir string
-}
-
-func (s *serverService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
 }
 
 func (s *serverService) SetUploadDir(dir string) {
@@ -82,18 +83,22 @@ func NewServerService(
 	inviteService InviteService,
 	hub ws.BroadcastAndManage,
 	encryptionKey []byte,
+	auditLogger AuditWriter,
+	membershipTxRunner repository.ServerMembershipTxRunner,
 ) ServerService {
 	return &serverService{
-		db:            db,
-		serverRepo:    serverRepo,
-		livekitRepo:   livekitRepo,
-		roleRepo:      roleRepo,
-		channelRepo:   channelRepo,
-		categoryRepo:  categoryRepo,
-		userRepo:      userRepo,
-		banRepo:       banRepo,
-		inviteService: inviteService,
-		hub:           hub,
-		encryptionKey: encryptionKey,
+		db:                 db,
+		serverRepo:         serverRepo,
+		livekitRepo:        livekitRepo,
+		roleRepo:           roleRepo,
+		channelRepo:        channelRepo,
+		categoryRepo:       categoryRepo,
+		userRepo:           userRepo,
+		banRepo:            banRepo,
+		inviteService:      inviteService,
+		hub:                hub,
+		encryptionKey:      encryptionKey,
+		auditLogger:        auditLogger,
+		membershipTxRunner: membershipTxRunner,
 	}
 }

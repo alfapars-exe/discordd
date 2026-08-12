@@ -173,8 +173,34 @@ func (r *sqliteServerRepo) AddMember(ctx context.Context, serverID, userID strin
 	return nil
 }
 
+// RemoveMember deletes the membership row and hard-deletes the user's role
+// assignments for this server. Both statements run inside one transaction
+// (RawDB(r.db) + database.WithTx, matching Delete's cascade above) so a
+// crash between the two DELETEs can never leave the user with orphaned
+// user_roles rows that let them keep passing permission checks after
+// "leaving" the server.
 func (r *sqliteServerRepo) RemoveMember(ctx context.Context, serverID, userID string) error {
-	result, err := r.db.ExecContext(ctx,
+	sqlDB := database.RawDB(r.db)
+	if sqlDB == nil {
+		// r.db is already a *sql.Tx — this repo instance was bound to an
+		// existing transaction by its caller (NewSQLiteServerRepo(tx), same
+		// pattern Delete's doc comment describes). Don't error out: run both
+		// statements directly against r.db instead, and let the caller's own
+		// transaction provide the atomicity. Erroring here would break every
+		// tx-bound call site that constructs this repo from a *sql.Tx.
+		return r.removeMemberStmts(ctx, r.db, serverID, userID)
+	}
+
+	return database.WithTx(ctx, sqlDB, func(tx *sql.Tx) error {
+		return r.removeMemberStmts(ctx, tx, serverID, userID)
+	})
+}
+
+// removeMemberStmts runs RemoveMember's two DELETEs against q, which is
+// either the transaction WithTx opened or the caller-supplied *sql.Tx when
+// RawDB found none of its own to start.
+func (r *sqliteServerRepo) removeMemberStmts(ctx context.Context, q database.TxQuerier, serverID, userID string) error {
+	result, err := q.ExecContext(ctx,
 		`DELETE FROM server_members WHERE server_id = ? AND user_id = ?`,
 		serverID, userID)
 	if err != nil {
@@ -192,7 +218,7 @@ func (r *sqliteServerRepo) RemoveMember(ctx context.Context, serverID, userID st
 	// Hard-delete all role assignments for this user in this server.
 	// Without this, leftover user_roles let the user pass permission checks
 	// (e.g. allowedViewers) and keep receiving broadcasts after leaving.
-	if _, err := r.db.ExecContext(ctx,
+	if _, err := q.ExecContext(ctx,
 		`DELETE FROM user_roles WHERE user_id = ? AND server_id = ?`,
 		userID, serverID); err != nil {
 		return fmt.Errorf("failed to clean up user roles on member removal: %w", err)

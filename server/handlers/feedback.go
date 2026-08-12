@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
@@ -102,7 +101,7 @@ func (h *FeedbackHandler) ListMyTickets(w http.ResponseWriter, r *http.Request) 
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
-	limit, offset := parsePagination(r)
+	limit, offset := pkg.ClampPagination(r, 20, 100)
 
 	tickets, total, err := h.service.ListByUser(r.Context(), user.ID, limit, offset)
 	if err != nil {
@@ -187,7 +186,7 @@ func (h *FeedbackHandler) DeleteTicket(w http.ResponseWriter, r *http.Request) {
 func (h *FeedbackHandler) AdminListTickets(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	ticketType := r.URL.Query().Get("type")
-	limit, offset := parsePagination(r)
+	limit, offset := pkg.ClampPagination(r, 20, 100)
 
 	tickets, total, err := h.service.ListAll(r.Context(), status, ticketType, limit, offset)
 	if err != nil {
@@ -303,23 +302,4 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 	}
 
 	return reply, nil
-}
-
-func parsePagination(r *http.Request) (limit, offset int) {
-	limit = 20
-	offset = 0
-	if v := r.URL.Query().Get("limit"); v != "" {
-		// Upper bound alongside the existing lower bound — matches the
-		// clamp convention used elsewhere for user-supplied page limits
-		// (e.g. handlers/message.go, handlers/search.go).
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
-			limit = n
-		}
-	}
-	if v := r.URL.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			offset = n
-		}
-	}
-	return
 }

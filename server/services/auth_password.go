@@ -34,8 +34,8 @@ import (
 // industry standard (Discord, Slack, GitHub, Google all do this). The minor
 // UX friction is worth the defense-in-depth.
 func (s *authService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
-	if len(newPassword) < 6 {
-		return fmt.Errorf("%w: password must be at least 6 characters", pkg.ErrBadRequest)
+	if len(newPassword) < 8 {
+		return fmt.Errorf("%w: password must be at least 8 characters", pkg.ErrBadRequest)
 	}
 	if currentPassword == "" {
 		return fmt.Errorf("%w: current password is required", pkg.ErrBadRequest)

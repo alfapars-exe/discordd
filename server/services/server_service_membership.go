@@ -7,8 +7,34 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
+
+// joinServerTx runs AddMember and (when defaultRoleID is non-empty)
+// AssignToUser atomically via membershipTxRunner. Before this, the two ran
+// as separate non-transactional calls: a failure in AssignToUser after a
+// successful AddMember left the user a member with zero roles — often zero
+// permissions (no PermViewChannel from the default role), a silently
+// broken half-joined state. Either both land or neither does now.
+//
+// defaultRoleID being empty (default role lookup failed, or the server has
+// no default role) is not an error here — JoinServer resolves and logs
+// that failure itself before calling this; the membership row still gets
+// created, just without a role assignment, matching the pre-fix behavior.
+func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defaultRoleID string) error {
+	return s.membershipTxRunner.InTx(ctx, func(r *repository.ServerMembershipTxRepos) error {
+		if err := r.Server.AddMember(ctx, serverID, userID); err != nil {
+			return fmt.Errorf("failed to add member: %w", err)
+		}
+		if defaultRoleID != "" {
+			if err := r.Role.AssignToUser(ctx, userID, defaultRoleID, serverID); err != nil {
+				return fmt.Errorf("failed to assign default role: %w", err)
+			}
+		}
+		return nil
+	})
+}
 
 // JoinServer joins a server via invite code.
 func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode string) (*models.Server, error) {
@@ -39,25 +65,34 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 		return nil, fmt.Errorf("%w: you are banned from this server", pkg.ErrForbidden)
 	}
 
-	if err := s.serverRepo.AddMember(ctx, serverID, userID); err != nil {
-		return nil, fmt.Errorf("failed to add member: %w", err)
+	// Default role lookup happens BEFORE the membership transaction, and its
+	// error handling is unchanged from before this fix: a missing/errored
+	// default role is a server-config issue, not a reason to block the
+	// join — log it and proceed with an empty defaultRoleID, which
+	// joinServerTx treats as "add the member, skip the role assignment".
+	var defaultRoleID string
+	if defaultRole, err := s.roleRepo.GetDefaultByServer(ctx, serverID); err != nil {
+		serverLogger.Error("failed to get default role for server", "server_id", serverID, "err", pkg.ErrText(err))
+	} else {
+		defaultRoleID = defaultRole.ID
+	}
+
+	// AddMember + AssignToUser now run atomically (server_service_crud.go's
+	// joinServerTx) — see its doc comment for why a partial join (member
+	// row with no role) was worth closing.
+	if err := s.joinServerTx(ctx, serverID, userID, defaultRoleID); err != nil {
+		return nil, err
 	}
 
 	// B3: burn the invite's use slot only once membership actually landed —
 	// incrementing earlier wasted a max_uses slot on joins that later failed
-	// (already-a-member, AddMember error).
+	// (already-a-member, AddMember error). Stays outside the transaction
+	// above and best-effort (logged, not propagated): invites are a
+	// separate resource from membership, and losing a use-count decrement
+	// to a rare failure is far cheaper than losing an otherwise-successful
+	// join over it.
 	if err := s.inviteService.MarkUsed(ctx, inviteCode); err != nil {
 		serverLogger.Error("failed to mark invite used", "invite_code", inviteCode, "err", pkg.ErrText(err))
-	}
-
-	// Assign default role
-	defaultRole, err := s.roleRepo.GetDefaultByServer(ctx, serverID)
-	if err != nil {
-		serverLogger.Error("failed to get default role for server", "server_id", serverID, "err", pkg.ErrText(err))
-	} else {
-		if err := s.roleRepo.AssignToUser(ctx, userID, defaultRole.ID, serverID); err != nil {
-			serverLogger.Error("failed to assign default role", "err", pkg.ErrText(err))
-		}
 	}
 
 	server, err := s.serverRepo.GetByID(ctx, serverID)

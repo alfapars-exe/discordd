@@ -169,15 +169,11 @@ func main() {
 	svcs.Auth.SetAppLogger(svcs.AppLog)
 	svcs.Backup.SetAppLogger(svcs.AppLog)
 
-	// 9c. Wire audit logger into services that emit moderation events.
-	// Each service stores it as a nil-safe optional field; absent wiring
-	// the events just don't get recorded (still no functional regression).
-	svcs.Voice.SetAuditLogger(svcs.AuditLog)
-	svcs.Member.SetAuditLogger(svcs.AuditLog)
-	svcs.Role.SetAuditLogger(svcs.AuditLog)
-	svcs.Channel.SetAuditLogger(svcs.AuditLog)
-	svcs.Server.SetAuditLogger(svcs.AuditLog)
-	svcs.Message.SetAuditLogger(svcs.AuditLog)
+	// 9c. Audit logger is no longer wired here via setter: voice/member/role/
+	// channel/server/message services all take it as a NewXService(...)
+	// constructor parameter now (init_services.go), so a call site that
+	// forgets the wiring fails to compile instead of silently dropping every
+	// audit event. See wiring_test.go for the completeness check this enables.
 
 	// SetPermInvalidator wiring happens after initRoutes below (step 12),
 	// not here: it fans out to both channelPermService (available now) and
@@ -192,6 +188,12 @@ func main() {
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
 	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
+
+	// 10a. WS-layer defense-in-depth authorizer for voice moderation events
+	// (admin mute/deafen, move, disconnect) — see voice_authorizer.go and
+	// ws/hub_callbacks.go's VoiceAdminAuthorizer doc comment. Without this,
+	// authorizeVoiceModeration always returns true (fail-open).
+	hub.SetVoiceAdminAuthorizer(newVoiceAdminAuthorizer(svcs.Voice, svcs.ChannelPermission))
 
 	// hub.Run is the single goroutine processing every WS register/unregister
 	// for the whole server — a panic here would otherwise crash the entire

@@ -40,13 +40,15 @@ type DeviceService interface {
 
 type deviceService struct {
 	deviceRepo   repository.DeviceRepository
+	txRunner     repository.DeviceTxRunner
 	hub          ws.Broadcaster
 	serverLister UserServerLister
 }
 
-func NewDeviceService(deviceRepo repository.DeviceRepository, hub ws.Broadcaster, serverLister UserServerLister) DeviceService {
+func NewDeviceService(deviceRepo repository.DeviceRepository, txRunner repository.DeviceTxRunner, hub ws.Broadcaster, serverLister UserServerLister) DeviceService {
 	return &deviceService{
 		deviceRepo:   deviceRepo,
+		txRunner:     txRunner,
 		hub:          hub,
 		serverLister: serverLister,
 	}
@@ -73,15 +75,26 @@ func (s *deviceService) RegisterDevice(ctx context.Context, userID string, req *
 		device.SigningKey = &req.SigningKey
 	}
 
-	// UPSERT — updates if same device_id exists
-	if err := s.deviceRepo.Register(ctx, device); err != nil {
-		return nil, fmt.Errorf("failed to register device: %w", err)
-	}
-
-	if len(req.OneTimePrekeys) > 0 {
-		if err := s.deviceRepo.UploadPrekeys(ctx, userID, req.DeviceID, req.OneTimePrekeys); err != nil {
-			return nil, fmt.Errorf("failed to upload initial prekeys: %w", err)
+	// UPSERT + initial one-time-prekey upload run in one transaction: before
+	// this, a failure between the two left a registered device with zero
+	// prekeys — invisible to X3DH key-bundle requests until the client
+	// happened to re-upload, and indistinguishable from "attacker registered
+	// a device, deliberately starved on prekeys" from the server's point of
+	// view. Broadcasting the new-device event only after the transaction
+	// commits means no listener is ever told about a device that a
+	// subsequent rollback then makes disappear.
+	if err := s.txRunner.InTx(ctx, func(r *repository.DeviceTxRepos) error {
+		if err := r.Device.Register(ctx, device); err != nil {
+			return fmt.Errorf("failed to register device: %w", err)
 		}
+		if len(req.OneTimePrekeys) > 0 {
+			if err := r.Device.UploadPrekeys(ctx, userID, req.DeviceID, req.OneTimePrekeys); err != nil {
+				return fmt.Errorf("failed to upload initial prekeys: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	// BULGU 4 (pentest C-03 follow-up): a new device is invisible to a

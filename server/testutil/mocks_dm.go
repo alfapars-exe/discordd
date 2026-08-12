@@ -16,6 +16,7 @@ type MockDMRepo struct {
 	CountMessagesBySenderFn            func(ctx context.Context, channelID, userID string) (int, error)
 	UpdateChannelStatusFn              func(ctx context.Context, channelID, status string) error
 	SetInitiatedByFn                   func(ctx context.Context, channelID, userID string) error
+	TransitionToPendingFn              func(ctx context.Context, channelID, userID string) error
 	CreateMessageFn                    func(ctx context.Context, msg *models.DMMessage) error
 	GetMessageByIDFn                   func(ctx context.Context, id string) (*models.DMMessage, error)
 	UpdateMessageFn                    func(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error
@@ -50,6 +51,12 @@ func (m *MockDMRepo) UpdateChannelStatus(ctx context.Context, channelID, status 
 func (m *MockDMRepo) SetInitiatedBy(ctx context.Context, channelID, userID string) error {
 	if m.SetInitiatedByFn != nil {
 		return m.SetInitiatedByFn(ctx, channelID, userID)
+	}
+	return nil
+}
+func (m *MockDMRepo) TransitionToPending(ctx context.Context, channelID, userID string) error {
+	if m.TransitionToPendingFn != nil {
+		return m.TransitionToPendingFn(ctx, channelID, userID)
 	}
 	return nil
 }

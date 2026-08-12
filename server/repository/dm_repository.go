@@ -15,6 +15,13 @@ type DMRepository interface {
 	CreateChannel(ctx context.Context, channel *models.DMChannel) error
 	UpdateChannelStatus(ctx context.Context, channelID, status string) error
 	SetInitiatedBy(ctx context.Context, channelID, userID string) error
+	// TransitionToPending atomically sets status=pending AND initiated_by=
+	// userID in one UPDATE — the "first message from a non-friend on an
+	// accepted channel" transition (dm_message.go SendMessage), which used
+	// to be two separate UPDATE calls with discarded errors. A single
+	// statement on one row needs no explicit transaction: SQLite already
+	// applies one UPDATE atomically.
+	TransitionToPending(ctx context.Context, channelID, userID string) error
 	CountMessagesBySender(ctx context.Context, channelID, userID string) (int, error)
 	DeleteChannel(ctx context.Context, channelID string) error
 	SetE2EEEnabled(ctx context.Context, channelID string, enabled bool) error

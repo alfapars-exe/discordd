@@ -43,7 +43,6 @@ type MemberService interface {
 	// SetNickname applies a per-server nickname. nil or "" clears.
 	// Caller (handler/route) enforces PermManageNicknames for non-self.
 	SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error)
-	SetAuditLogger(logger AuditWriter)
 	// SetPermInvalidator wires the per-channel permission cache so that
 	// role-assignment, kick, and ban operations drop the affected user's
 	// cached permissions immediately rather than after permCacheTTL.
@@ -67,10 +66,6 @@ type memberService struct {
 	permInvalidator PermissionInvalidator
 }
 
-func (s *memberService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
-}
-
 func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
 	s.permInvalidator = inv
 }
@@ -87,9 +82,10 @@ func (s *memberService) invalidateUserPerms(userID string) {
 //
 // Logs both branches so a "I kicked X / banned Y but the audit channel
 // stayed empty" report tells us exactly where the pipeline dropped:
-// nil logger ⇒ main.go SetAuditLogger wiring regressed; otherwise look
-// at [audit_log] downstream logs from audit_log_service.persistAndBroadcast
-// for Insert / broadcast outcomes. Same pattern as voiceService.audit.
+// nil logger ⇒ init_services.go's NewMemberService(..., auditLogService)
+// wiring regressed; otherwise look at [audit_log] downstream logs from
+// audit_log_service.persistAndBroadcast for Insert / broadcast outcomes.
+// Same pattern as voiceService.audit.
 func (s *memberService) audit(entry models.AuditLog) {
 	if s.auditLogger == nil {
 		memberLogger.Warn("audit event dropped, auditLogger not wired", "event_type", entry.EventType, "server_id", entry.ServerID)
@@ -107,6 +103,7 @@ func NewMemberService(
 	serverRepo repository.ServerRepository,
 	hub ws.BroadcastAndManage,
 	voiceKick VoiceDisconnecter,
+	auditLogger AuditWriter,
 ) MemberService {
 	return &memberService{
 		userRepo:    userRepo,
@@ -116,6 +113,7 @@ func NewMemberService(
 		serverRepo:  serverRepo,
 		hub:         hub,
 		voiceKick:   voiceKick,
+		auditLogger: auditLogger,
 	}
 }
 
