@@ -17,6 +17,13 @@ import (
 const maxBadgeNameLength = 20
 
 // BadgeService defines business logic for badge management.
+//
+// AUTHORIZATION CONTRACT: none of the mutation methods perform their own
+// authorization — the route layer's authAdmin (platform-admin) chain is the
+// single gate (init_routes_global.go). The adminID parameters are provenance
+// data (CreatedBy/AssignedBy), NOT an authorization input. Any new caller
+// outside the badge routes MUST sit behind an equivalent platform-admin
+// check.
 type BadgeService interface {
 	CreateBadge(ctx context.Context, adminID string, req *models.CreateBadgeRequest) (*models.Badge, error)
 	ListBadges(ctx context.Context) ([]models.Badge, error)

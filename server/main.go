@@ -335,13 +335,21 @@ func main() {
 	// 16. Final handler
 	apiHandler := corsHandler.Handler(mux)
 
+	// pprof lives under /debug/, which finalHandler below would otherwise
+	// swallow into the SPA fallback on embedded-frontend builds (the prod HF
+	// Space shape) — the same routing constraint handlers/badge.go documents
+	// for /uploads/. The prefix is forwarded only when the env gate is on, so
+	// a disabled deployment keeps serving index.html for /debug/*.
+	pprofEnabled := os.Getenv("HICHAT_PPROF") == "1"
+
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// WebSocket upgrade bypasses CORS middleware — ws.CheckOrigin handles its own origin validation
 		if r.URL.Path == "/ws" {
 			mux.ServeHTTP(w, r)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/static/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/static/") ||
+			(pprofEnabled && strings.HasPrefix(r.URL.Path, "/debug/")) {
 			apiHandler.ServeHTTP(w, r)
 			return
 		}
