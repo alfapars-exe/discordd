@@ -32,8 +32,9 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
   const openLightbox = useLightboxStore((s) => s.open);
 
   // Allowlist check, NOT a `startsWith("image/")` prefix test: the inline
-  // branch below ends in an anchor with target="_blank", and modifier/middle
-  // clicks intentionally keep that native navigation (see isPlainLeftClick).
+  // branch below ends in a new-tab anchor (target=_blank + rel=noopener),
+  // and modifier/middle clicks intentionally keep that native navigation
+  // (see isPlainLeftClick).
   // Navigating to a blob: URL runs it as a document in OUR origin, so a
   // sender-claimed image/svg+xml reaching this branch is stored XSS
   // (pentest 2026-07-26, finding M-10). Everything off the allowlist falls

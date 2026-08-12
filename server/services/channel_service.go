@@ -174,7 +174,7 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 
 func (s *channelService) Create(ctx context.Context, serverID, actorID string, req *models.CreateChannelRequest) (*models.Channel, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	// One audit channel per server. Reject Create attempts when one
@@ -258,7 +258,7 @@ func (s *channelService) Create(ctx context.Context, serverID, actorID string, r
 
 func (s *channelService) Update(ctx context.Context, serverID, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	channel, err := s.channelRepo.GetByID(ctx, id)
@@ -390,7 +390,7 @@ func (s *channelService) Delete(ctx context.Context, serverID, actorID, id strin
 
 func (s *channelService) ReorderChannels(ctx context.Context, serverID string, req *models.ReorderChannelsRequest, userID string) ([]models.CategoryWithChannels, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	for _, item := range req.Items {

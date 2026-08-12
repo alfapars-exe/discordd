@@ -50,10 +50,10 @@ type afkEntry struct {
 // UpdateActivity resets the AFK timer for a user (called on mouse/keyboard/VAD/screen share activity).
 func (s *voiceService) UpdateActivity(userID string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if state, ok := s.states[userID]; ok {
 		state.LastActivity = time.Now()
 	}
-	s.mu.Unlock()
 }
 
 // StartOrphanCleanup periodically removes voice states for users who have been
@@ -255,7 +255,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 	if err != nil {
 		voiceLogger.Error("removeParticipant: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: channel lookup failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -264,7 +264,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 	if err != nil {
 		voiceLogger.Error("removeParticipant: livekit instance lookup failed", "server_id", channel.ServerID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: LiveKit instance lookup failed", map[string]string{
-			"server_id": channel.ServerID, "channel_id": channelID, "error": err.Error(),
+			"server_id": channel.ServerID, "channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -273,7 +273,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 	if err != nil {
 		voiceLogger.Error("removeParticipant: api key decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: API key decrypt failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -281,7 +281,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 	if err != nil {
 		voiceLogger.Error("removeParticipant: api secret decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: API secret decrypt failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -294,7 +294,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 		Identity: identity,
 	})
 	if err != nil {
-		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": err.Error()}
+		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": pkg.ErrText(err)}
 		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "not found") {
 			// Expected when the participant already left LiveKit (e.g. network drop, orphan sweep after LiveKit
 			// timeout), or — for a "_ss" identity — when the user simply never screen-shared. Logged at INFO so the
@@ -460,7 +460,7 @@ func (s *voiceService) applyServerMuteToLiveKit(channelID, userID string) {
 	if err != nil {
 		voiceLogger.Error("applyServerMute: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "applyServerMute: channel lookup failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -469,7 +469,7 @@ func (s *voiceService) applyServerMuteToLiveKit(channelID, userID string) {
 	if err != nil {
 		voiceLogger.Error("applyServerMute: livekit instance lookup failed", "server_id", channel.ServerID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "applyServerMute: LiveKit instance lookup failed", map[string]string{
-			"server_id": channel.ServerID, "channel_id": channelID, "error": err.Error(),
+			"server_id": channel.ServerID, "channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -478,7 +478,7 @@ func (s *voiceService) applyServerMuteToLiveKit(channelID, userID string) {
 	if err != nil {
 		voiceLogger.Error("applyServerMute: api key decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "applyServerMute: API key decrypt failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -486,7 +486,7 @@ func (s *voiceService) applyServerMuteToLiveKit(channelID, userID string) {
 	if err != nil {
 		voiceLogger.Error("applyServerMute: api secret decrypt failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &userID, "applyServerMute: API secret decrypt failed", map[string]string{
-			"channel_id": channelID, "error": err.Error(),
+			"channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -534,7 +534,7 @@ func (s *voiceService) applyServerMuteToLiveKit(channelID, userID string) {
 	voiceLogger.Error("applyServerMute: unmute failed after retries, evicting to force a reconnect",
 		"user_id", userID, "room", roomName, "attempts", len(serverMuteUnmuteRetryBackoffs)+1, "err", pkg.ErrText(lastErr))
 	s.logError(models.LogCategoryVoice, &userID, "applyServerMute: unmute failed after retries — evicted participant to force a fresh token", map[string]string{
-		"room": roomName, "channel_id": channelID, "error": lastErr.Error(),
+		"room": roomName, "channel_id": channelID, "error": pkg.ErrText(lastErr),
 	})
 	s.removeParticipantFromLiveKit(channelID, userID)
 }
@@ -556,7 +556,7 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		Identity: userID,
 	})
 	if err != nil {
-		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": err.Error(), "muted": fmt.Sprintf("%t", muted)}
+		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": pkg.ErrText(err), "muted": fmt.Sprintf("%t", muted)}
 		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "not found") {
 			// Expected whenever the user isn't (yet, or anymore) actually
 			// connected to LiveKit. GenerateToken's own server-mute check
@@ -579,7 +579,7 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		Identity:   userID,
 		Permission: perm,
 	}); err != nil {
-		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": err.Error(), "muted": fmt.Sprintf("%t", muted)}
+		meta := map[string]string{"room": roomName, "channel_id": channelID, "error": pkg.ErrText(err), "muted": fmt.Sprintf("%t", muted)}
 		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "not found") {
 			voiceLogger.Info("applyServerMute: participant already gone (not found)", "user_id", userID, "room", roomName)
 			s.logInfo(models.LogCategoryVoice, &userID, "applyServerMute: participant already left LiveKit", meta)
@@ -613,7 +613,7 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 		}); err != nil {
 			voiceLogger.Error("applyServerMute: MutePublishedTrack failed", "user_id", userID, "room", roomName, "track_sid", track.Sid, "err", pkg.ErrText(err))
 			s.logError(models.LogCategoryVoice, &userID, "applyServerMute: MutePublishedTrack failed", map[string]string{
-				"room": roomName, "channel_id": channelID, "track_sid": track.Sid, "error": err.Error(),
+				"room": roomName, "channel_id": channelID, "track_sid": track.Sid, "error": pkg.ErrText(err),
 			})
 		}
 		break // one microphone track expected per participant

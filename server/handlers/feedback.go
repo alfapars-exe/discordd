@@ -74,14 +74,18 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 			f, openErr := fh.Open()
 			if openErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
-					fmt.Sprintf("failed to open uploaded file %s: %v", pkg.SanitizeFilename(fh.Filename), openErr), nil)
+					fmt.Sprintf("failed to open uploaded file %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(openErr)), nil)
 				continue
 			}
 			att, uploadErr := h.uploadService.Upload(r.Context(), ticket.ID, nil, f, fh)
+			// Not deferred — this is a loop over the request's file
+			// attachments; a defer here would pin every attachment's handle
+			// open until the whole handler returns instead of closing each
+			// one as its own upload finishes.
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
-					fmt.Sprintf("failed to upload file %s for ticket %s: %v", pkg.SanitizeFilename(fh.Filename), ticket.ID, uploadErr), nil)
+					fmt.Sprintf("failed to upload file %s for ticket %s: %s", pkg.SanitizeFilename(fh.Filename), ticket.ID, pkg.ErrText(uploadErr)), nil)
 				continue
 			}
 			ticket.Attachments = append(ticket.Attachments, *att)
@@ -281,14 +285,17 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 			f, openErr := fh.Open()
 			if openErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
-					fmt.Sprintf("failed to open reply attachment %s: %v", pkg.SanitizeFilename(fh.Filename), openErr), nil)
+					fmt.Sprintf("failed to open reply attachment %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(openErr)), nil)
 				continue
 			}
 			att, uploadErr := h.uploadService.Upload(r.Context(), ticketID, &reply.ID, f, fh)
+			// Not deferred — same reason as CreateTicket's file loop above:
+			// this runs per attachment, and a defer would pin every handle
+			// open until the whole handler returns.
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
 				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
-					fmt.Sprintf("failed to upload reply attachment %s: %v", pkg.SanitizeFilename(fh.Filename), uploadErr), nil)
+					fmt.Sprintf("failed to upload reply attachment %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(uploadErr)), nil)
 				continue
 			}
 			reply.Attachments = append(reply.Attachments, *att)
@@ -302,7 +309,10 @@ func parsePagination(r *http.Request) (limit, offset int) {
 	limit = 20
 	offset = 0
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		// Upper bound alongside the existing lower bound — matches the
+		// clamp convention used elsewhere for user-supplied page limits
+		// (e.g. handlers/message.go, handlers/search.go).
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
 			limit = n
 		}
 	}

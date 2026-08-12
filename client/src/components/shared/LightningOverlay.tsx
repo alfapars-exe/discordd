@@ -20,6 +20,7 @@
  */
 
 import { useMemo } from "react";
+import { randomUnit } from "../../utils/random";
 
 const COLORS = ["#3b82f6", "#a855f7", "#22d3ee", "#ec4899"];
 
@@ -66,13 +67,13 @@ function pickBolts(count: number): BoltConfig[] {
     // averages ~one strike every 0.5 s across the overlay — dense
     // "thunderstorm" feel without being a single epileptic strobe
     // (multiple desynced bolts read as a storm, not a flicker).
-    const cycle = 2.5 + Math.random() * 2.5;
+    const cycle = 2.5 + randomUnit() * 2.5;
     bolts.push({
       id: i,
-      path: PATHS[Math.floor(Math.random() * PATHS.length)],
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      xPercent: 8 + Math.random() * 84, // 8–92 %
-      delaySeconds: Math.random() * cycle, // desync starts
+      path: PATHS[Math.floor(randomUnit() * PATHS.length)],
+      color: COLORS[Math.floor(randomUnit() * COLORS.length)],
+      xPercent: 8 + randomUnit() * 84, // 8–92 %
+      delaySeconds: randomUnit() * cycle, // desync starts
       cycleSeconds: cycle,
     });
   }

@@ -1,0 +1,540 @@
+# SECURITY-EXCEPTIONS.yml — Checkmarx bulgu triage kayıtları (SECURE-CODING v1.5 §0.6)
+#
+# ⚠️ STATÜ: TASLAK — tüm kayıtlar `approvers: [PENDING-APPSEC]` ile bekliyor.
+# Agent portal state'i DEĞİŞTİREMEZ (§0.2); bu kayıtlar insan onayı sonrası Checkmarx
+# portalında (proje 104, scan 1000882) KULLANICI tarafından sorgu-ailesi bazında uygulanır.
+# Her kayıt R1-R11 çürütme kategorisi + dosya:satır kanıtı taşır (§0.6).
+# Satır numaraları 2026-08-07 HEAD'ine göredir (rapordakiler ±birkaç satır kaymıştı).
+#
+# Kapsam: "discord main" ilk tam taraması (Checkmarx 9.7.6.1003 HF10, 2026-08-07).
+# 618 bulgu → 1 Accepted Risk + ~20 Fixed (bu diff) + kalanı aşağıdaki Not Exploitable aileleri.
+
+defaults: &defaults
+  scanner: { name: Checkmarx, engine_version: "9.7.6.1003 HF10" }
+  project: "discord main / 104"
+  scan_id: "1000882"
+  owner: arge-infina
+  approvers: [PENDING-APPSEC]
+  created: "2026-08-07"
+  expires: "2026-10-07"
+  revalidate_on: [scanner-query-change, file-content-change]
+
+exceptions:
+  - id: SEC-EX-2026-0001
+    <<: *defaults
+    type: suppression
+    rule: "Arbitrary File Write / Absolute Path Traversal / Relative Path Traversal (badge)"
+    location: { path: "server/handlers/badge.go", lines: "198-299" }
+    artifact_class: production
+    analysis:
+      source: 'r.FormFile("icon") — yalnız dosya İÇERİĞİ; header.Filename hiç okunmuyor'
+      sink: "os.CreateTemp(badgesDir) + os.Rename(tmpPath, destPath)"
+      refutation: R2
+      rationale: >
+        Hedef yol sıfır istek-türevli bayt içerir: dosya adı 8 bayt crypto/rand + mimeToExt
+        sabit uzantısı (badge.go:243,320-335); pkg.SafeJoin containment (pkg/safepath.go:45,
+        abs+Clean+ayraçlı prefix, NUL reddi); admin-only endpoint (badge.go:188);
+        2MB MaxBytesReader; byte-sniff MIME allowlist. Temp dosya adı stdlib üretimi.
+    evidence:
+      - "server/pkg/safepath.go:29-50 SafeJoin"
+      - "server/handlers/badge_icon_sniff_test.go"
+    compensating_controls: [admin-only-authz, size-limit-2mb, mime-byte-sniff]
+
+  - id: SEC-EX-2026-0002
+    <<: *defaults
+    type: suppression
+    rule: "Absolute/Relative Path Traversal (SPA embed)"
+    location: { path: "server/main.go", lines: "334-338" }
+    artifact_class: production
+    analysis:
+      source: "r.URL.Path"
+      sink: "frontendFS.Open(path) — io/fs, disk yolu DEĞİL"
+      refutation: R3
+      rationale: >
+        frontendFS = fs.Sub(embed.FS) (server/bootstrap.go:43-44, static/static.go go:embed).
+        io/fs.ValidPath '..' segmentini, öndeki '/' ve '\' karakterlerini tasarım gereği
+        reddeder; traversal denemesi ErrInvalid ile SPA index.html'e düşer. os.Open yok.
+    evidence: ["server/bootstrap.go:43-44", "server/static/static.go:8-9"]
+    compensating_controls: [read-only-embedded-assets]
+
+  - id: SEC-EX-2026-0003
+    <<: *defaults
+    type: suppression
+    rule: "Absolute/Relative Path Traversal (uploads)"
+    location: { path: "server/handlers/upload_download.go", lines: "135-327" }
+    artifact_class: production
+    analysis:
+      source: "r.URL.Path (/api/uploads/ soneki)"
+      sink: "os.Open(full)"
+      refutation: R2
+      rationale: >
+        Üç ardışık katman: (1) ''..''/backslash reddi :136; (2) path.Clean kanoniklik
+        kontrolü :173 (pentest C-02 kapanışı); (3) pkg.SafeJoin containment :313-323.
+        Tamamı h.mediaAuth.Authorize arkasında, fail-closed default (:202-203).
+    evidence: ["server/pkg/safepath.go:29-50", "server/services/media_access_service_test.go"]
+    compensating_controls: [media-authz-fail-closed, case-sensitive-linux-fs]
+
+  - id: SEC-EX-2026-0004
+    <<: *defaults
+    type: suppression
+    rule: "Plain Text Transport Layer in Server"
+    location: { path: "server/main.go (ListenAndServe) + server/handlers/upload_download.go (ServeContent)", lines: "382; 383" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "http.Server plaintext dinleme (konteyner içi)"
+      refutation: R10
+      rationale: >
+        TLS, HuggingFace Space edge'inde sonlanır (SECURITY-ADDENDUM.md §1; Dockerfile
+        SERVER_PORT=7860). Konteyner dışına plaintext çıkmaz; self-host'ta TLS reverse
+        proxy'ye aittir. Gate değeri istek-başına kullanıcı kontrolünde değildir.
+    evidence: ["Dockerfile:186-192", "SECURITY-ADDENDUM.md#1", "deploy/SELF_HOST.md"]
+    compensating_controls: [hsts-2y, hf-edge-tls]
+
+  - id: SEC-EX-2026-0005
+    <<: *defaults
+    type: suppression
+    rule: "SSRF (Go — gif.go)"
+    location: { path: "server/handlers/gif.go", lines: "85-175" }
+    artifact_class: production
+    analysis:
+      source: 'r.URL.Query().Get("q")'
+      sink: "klipyHTTPClient.Get(url)"
+      refutation: R2
+      rationale: >
+        url.QueryEscape(query) (:103) authority/scheme'e sızmayı engeller; sabit const
+        klipyBaseURL + HasPrefix(url, base+"/") guard'ı RFC 3986 gereği host taşınmasına
+        kapalı; clampInt sayısal paramlar; 1MB LimitReader + 10s timeout; 2026-08-07'de
+        CheckRedirect eklendi (yalnız https://api.klipy.com, maks 3 hop).
+    evidence: ["server/handlers/gif.go:103-104,171-175 + CheckRedirect"]
+    compensating_controls: [response-size-cap, timeout, redirect-lock]
+
+  - id: SEC-EX-2026-0006
+    <<: *defaults
+    type: suppression
+    rule: "SSRF (JavaScript — electron/main.ts)"
+    location: { path: "electron/main.ts", lines: "239-247" }
+    artifact_class: production
+    analysis:
+      source: "app:// protokol isteği URL'i (renderer)"
+      sink: "net.fetch(pathToFileURL(resolved.absolutePath))"
+      refutation: R2
+      rationale: >
+        resolveAppPath (electron/resolve-path.ts:26-103) 5 katman: scheme/host eşitliği,
+        decodeURIComponent çift-encode yakalama, NUL reddi, segment bazlı '..'/'.' reddi
+        (\ dahil), absolute/drive reddi, path.relative son containment. Ret → 404;
+        fetch yalnız doğrulanmış dist-içi yola ulaşır.
+    evidence: ["electron/resolve-path.test.ts:58,65,75,86,101"]
+    compensating_controls: [contextIsolation, dist-root-jail]
+
+  - id: SEC-EX-2026-0007
+    <<: *defaults
+    type: suppression
+    rule: "Observable Timing Discrepancy (4 path)"
+    location: { path: "repository/sqlite_session_test.go:58; pkg/crypto/hmac_test.go:52; models/bot_test.go:35; services/auth_password.go:105", lines: "çeşitli" }
+    artifact_class: "executable-test (3) + production (1)"
+    analysis:
+      source: "SHA-256/bcrypt/HMAC üretimleri"
+      sink: "== / != karşılaştırmaları"
+      refutation: R3
+      rationale: >
+        Prod doğrulama yolları sabit-zamanlı ya da indeksli DB lookup: refresh token
+        WHERE refresh_token_hash=? (sqlite_session.go:89-96); BackupHMAC doğrulaması
+        hmac.Equal (pkg/crypto/hmac.go:69); bot token WHERE token_hash=?
+        (repository/bot_repository.go:54).
+        **3/4 FIXED (2026-08-07, ikinci dalga)**: bayraklanan sink'lerin üçü
+        _test.go assert'iydi ve §0.3 şerit-2 gereği sabit-zamanlı karşılaştırmaya
+        çevrildi — sqlite_session_test.go:58, pkg/crypto/hmac_test.go:52,
+        models/bot_test.go:35 artık `hmac.Equal` kullanıyor, yani desen kodda
+        hiç doğmuyor. **Kalan 1 saha Not Exploitable**: auth_password.go:105
+        kullanıcının KENDİ e-postasının eşitlik kontrolü (secret değil; zaten
+        bcrypt parola kapısının arkasında, auth_password.go:89).
+    evidence:
+      - "server/pkg/crypto/hmac.go:62-70"
+      - "server/repository/sqlite_session.go:89-96"
+      - "3 test sahası hmac.Equal'a çevrildi (2026-08-07)"
+    compensating_controls: [indexed-hash-lookup, login-timing-equalizer]
+
+  - id: SEC-EX-2026-0008
+    <<: *defaults
+    type: suppression
+    rule: "Improper Locking (85)"
+    location: { path: "server/services/voice_*.go, p2p_call_service.go, music_bot_*.go, ws/*", lines: "~79 prod saha" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "mutex Lock() … explicit Unlock() (defer'siz)"
+      refutation: R3
+      rationale: >
+        **Saha saha sınıflandırıldı (2026-08-07, ikinci dalga).** Üretim kodundaki
+        78 defer'siz Unlock sahasının tamamı tek tek incelendi: **15'i güvenli,
+        63'ü "load-bearing"**. Sıfır kilit kaçağı — her erken dönüş yolunun
+        eşleşen Unlock'u var (AdminUpdateState 5/5, MoveUser 11/11,
+        AdminDisconnectUser 4/4, AcceptCall 4/4, DeclineCall 3/3, playLoop 3/3,
+        JoinChannel 2/2, LeaveChannel 2/2 … tamamı doğrulandı).
+        **Güvenli olan 10 fonksiyon `defer`'e çevrildi** (GetUserCall, Skip,
+        JoinChannel, LeaveChannel, CleanupViewersForStreamer, addClient,
+        removeClient, UpdateActivity, ws rate_limit allow, handlePresenceUpdate)
+        + daha önce ratelimit.go SetTrustedProxies → bu sahalar **Fixed**.
+        **Kalan 63 saha DÖNÜŞTÜRÜLEMEZ ve bu bir kusur değildir**: kilit,
+        bloklayıcı işten ÖNCE bilinçli olarak açılıyor — LiveKit round-trip'leri
+        (voice_admin.go:115, voice_lifecycle.go:232 ~20s), hub broadcast'leri,
+        `h.unregister <- client` kanal gönderimi (hub_clients.go:148), ve
+        AYNI mutex'i yeniden alan çağrılar (p2p cleanupCall :351, EndCall :243,
+        music StopAll→Stop, voice_token→voice_state/voice_e2ee). `defer`
+        eklemek bu sahalarda ÜRETİMDE DEADLOCK üretir; ikisi de sonsuz döngü
+        içinde olduğundan (`playLoop`, `usedRefreshSweepLoop`) `defer`
+        semantik olarak zaten yanlıştır. Gerekçe kodda da belgeli:
+        voice_admin.go:79-84 "HIGH-1 fix" yorumu.
+    evidence:
+      - "server/services/voice_admin.go:39-107,190-355 (saha saha iz kaydı)"
+      - "server/ws/hub_clients.go:138-148 (kanal gönderimi — RLock tutulursa 256 istemcide deadlock)"
+      - "server/services/voice_token.go:120-201 (üç ayrı self-deadlock yolu)"
+      - "2026-08-07 sınıflandırma taraması: 78 saha = 15 A (dönüştürülebilir) + 63 B (load-bearing), 0 kaçak"
+    # NOT: middleware.Recover telafi kontrolü DEĞİLDİR — panic'i yutar ama tutulan
+    # mutex'i serbest bırakmaz; gerçek kontrol kritik bölümlerin düz-çizgi olması.
+    compensating_controls: [straight-line-critical-sections, no-panicking-calls-in-critical-sections]
+    removal_plan: "Panic-güvenliği istenirse unlock-before-IO helper'ı ayrı refactor işi (PROJECT_MEMORY §2 aday)"
+
+  - id: SEC-EX-2026-0009
+    <<: *defaults
+    type: suppression
+    rule: "Use Of Hardcoded Password in Config (64)"
+    location: { path: "server/openapi.yaml; client/src/i18n/locales/{en,tr}/auth.json; client/package-lock.json", lines: "-" }
+    artifact_class: "api-doc-examples + ui-strings + dependency-metadata"
+    analysis:
+      source: "-"
+      sink: "-"
+      refutation: R3
+      rationale: >
+        Credential değil: OpenAPI `format: password` alanlarının `example:` değerleri
+        ("correct-horse-battery-staple"), i18n UI etiketleri ("password": "Şifre"),
+        package-lock paket adları/integrity alanları. Sıfır gerçek secret;
+        .env.example yalnız "change-me" placeholder'ları taşır.
+    evidence: ["server/openapi.yaml:3424,3540", "client/src/i18n/locales/en/auth.json:7-64"]
+    compensating_controls: [gitleaks-secret-scan-ci-önerisi]
+
+  - id: SEC-EX-2026-0010
+    <<: *defaults
+    type: suppression
+    rule: "Use of Hardcoded Password (23)"
+    location: { path: "server/services/auth_service_test.go, voice_service_test.go, bot_service.go:32", lines: "-" }
+    artifact_class: "executable-test (22) + production (1)"
+    analysis:
+      source: "-"
+      sink: "-"
+      refutation: R3
+      rationale: >
+        22'si _test.go fixture'ı: "password123"/"wrongpassword"/"short" ve
+        "test-api-key" benzeri açıkça sahte sabitler; hiçbiri çalışan sisteme
+        credential olarak ulaşmaz. G3.2 (secret default yasağı) prod config
+        yükleyicilerinde ihlalsiz (JWT_SECRET boot check mevcut).
+        ⚠️ DÜZELTME (2026-08-07, öz-tarama bulgusu): bu ailenin TAMAMI test kodu
+        DEĞİL — `services/bot_service.go:32` üretim kodunda
+        `Password: "placeholder8"` literali var. Yine de sömürülemez: literal,
+        yalnız insan hesaplarıyla aynı doğrulama kurallarını yeniden kullanmak
+        için kurulan geçici `CreateUserRequest`'e aittir, `Validate()` çağrısı
+        dışında hiçbir yere geçmez ve ASLA saklanmaz — bot satırının
+        `password_hash` sütununa `repository/bot_repository.go:29` sabit
+        `'!disabled!'` yazar; bu bcrypt formatı olmadığından
+        `bcrypt.CompareHashAndPassword` her zaman hata döner, yani bot hesapları
+        parolayla giriş yapamaz. Uzun vadeli iyileştirme: doğrulamayı parola
+        alanı içermeyen ayrı bir bot-request tipine taşımak (removal_plan).
+    evidence:
+      - "server/services/auth_service_test.go:138-781"
+      - "server/services/voice_service_test.go:2303-2309"
+      - "server/services/bot_service.go:26-37 (literal Validate() dışına çıkmaz)"
+      - "server/repository/bot_repository.go:27-30 (password_hash = '!disabled!')"
+    removal_plan: "bot_service.go: CreateBotRequest için parola alanı içermeyen ayrı doğrulama tipi"
+    compensating_controls: [test-sast-profili-önerisi]
+
+  - id: SEC-EX-2026-0011
+    <<: *defaults
+    type: suppression
+    rule: "Unchecked Input for Loop Condition (21/22)"
+    location: { path: "server/handlers/* pagination", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "limit/offset query paramları"
+      sink: "SQL LIMIT / döngü sınırı"
+      refutation: R2
+      rationale: >
+        Değişken sınırlı for-döngüsü prod kodda yok; bulgular
+        "dış girdiden gelen limit" akışları. **Büyük ölçüde FIXED
+        (2026-08-07)**: üst sınır artık HANDLER katmanında görünür — daha önce
+        yalnız repository'de clamp vardı ve tarayıcı bunu göremiyordu.
+        Bu turda kapatılanlar: admin.go ListReports, admin.go ListAppLogs
+        (hiç doğrulama yoktu), audit_log.go ListServerAudit (sınırsızdı),
+        dm.go GetMessages ve feedback.go parsePagination (yalnız alt sınır vardı).
+        Zaten üst sınırlı olanlar: message.go:64, search.go:48, dm.go:446,
+        gif.go clampInt. `handlers/` altındaki tüm `strconv.Atoi` sahaları
+        grep'le tarandı; sınırsız kalan yok. Repository ikinci katmanı korunuyor
+        (sqlite_app_log.go:66-68 ≤100, sqlite_audit_log.go:75-82 ≤500).
+    evidence:
+      - "server/repository/sqlite_app_log.go:66-68 (ikinci katman)"
+      - "server/handlers/{admin,audit_log,dm,feedback}.go clamp'leri (2026-08-07)"
+      - "grep: handlers/ altında sınırsız strconv.Atoi = 0"
+    compensating_controls: [repository-layer-second-clamp]
+
+  - id: SEC-EX-2026-0012
+    <<: *defaults
+    type: suppression
+    rule: "Privacy Violation in JWT (8) + JWT Use of None Algorithm (1)"
+    location: { path: "server/models/token.go:31-36; server/services/auth_service.go:608-614", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "TokenClaims"
+      sink: "JWT payload / jwt.ParseWithClaims"
+      refutation: R3
+      rationale: >
+        Claim seti yalnız user_id + username (üründe kamuya açık @handle) + tv/scope;
+        e-posta/PII yok. Media token yalnız UserID+Scope. LiveKit token'ındaki display
+        name, LiveKit katılımcı listesinin işlevsel gereğidir. 'none' algoritması:
+        keyfunc *jwt.SigningMethodHMAC type-assert'ü ile reddedilir; golang-jwt/v5'te
+        SigningMethodNone kullanım sahası yok.
+    evidence: ["server/models/token.go:31-36", "server/services/auth_service.go:608-614"]
+    compensating_controls: [token-version-revocation, hs256-only]
+
+  - id: SEC-EX-2026-0013
+    <<: *defaults
+    type: risk-acceptance
+    rule: "JWT Excessive Expiration Time (1)"
+    location: { path: "server/config/config.go", lines: "158" }
+    artifact_class: production
+    analysis:
+      source: "JWT_ACCESS_EXPIRY_MINUTES default 1440"
+      sink: "access token ömrü"
+      refutation: "-"
+      rationale: >
+        ACCEPTED RISK (Not Exploitable DEĞİL): 24h access token, N-10 oturum tasarımı
+        kararıyla bilinçli (PROJECT_MEMORY K-030, 2026-08). Telafiler: tv (token_version)
+        revocation claim'i 30s cache ile; refresh rotasyonu + kullanılmış-token izleme;
+        env ile sıkılaştırılabilir. 7g MediaTokenTTL aynı kararın parçası
+        (auth_service.go:661-687 belgeli).
+    business_impact: "Oturum süreklilik UX'i; çalıntı access token penceresi ≤24h"
+    evidence: ["server/config/config.go:157-163", "PROJECT_MEMORY.md §2 N-10 / K-030"]
+    compensating_controls: [token-version-revocation, refresh-rotation]
+    ticket: "N-10"
+
+  - id: SEC-EX-2026-0014
+    <<: *defaults
+    type: suppression
+    rule: "Cookie ailesi: Insecure SameSite (4) + HttpOnly/Secure Not Set In Config (4)"
+    location: { path: "server/handlers/auth.go", lines: "76-246" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "http.SetCookie"
+      refutation: R2
+      rationale: >
+        Üç çerezin tamamı HttpOnly+Secure; SameSite asla Go zero-value değil —
+        refreshCookieSameSite Strict (web) / None (Electron app:// + Capacitor shell
+        zorunluluğu). None gerekçesi + telafiler kodda belgeli (auth.go:164-186) ve
+        SECURITY-ADDENDUM.md §2'de trust beyanı olarak kayıtlı. "In Config" 4 bulgusu
+        openapi.yaml cookie şeması satırlarına denk geliyor (OpenAPI'de bayrak alanı yoktur);
+        client'ta document.cookie kullanımı sıfır.
+    evidence: ["server/handlers/auth.go:101-136,184-224", "SECURITY-ADDENDUM.md#2"]
+    compensating_controls: [path-scoped-cookies, csrf-custom-header, no-acao]
+
+  - id: SEC-EX-2026-0015
+    <<: *defaults
+    type: suppression
+    rule: "Insufficient Bcrypt Cost + Insufficiently Secure Password Storage Algorithm Parameters"
+    location: { path: "server/services/auth_service.go:336; services/auth_service_test.go:21", lines: "-" }
+    artifact_class: "production + executable-test"
+    analysis:
+      source: "-"
+      sink: "bcrypt.GenerateFromPassword"
+      refutation: R3
+      rationale: >
+        Prod cost 12 (> DefaultCost 10) — 4 çağrı sahasının tamamı. MinCost yalnız
+        test hız helper'ında. Bonus: bilinmeyen kullanıcıda dummy-hash timing
+        eşitleyici mevcut (auth_service.go:427,440). Client E2EE key backup
+        PBKDF2 2M iterasyon, aralık-doğrulamalı.
+    evidence: ["server/services/auth_service.go:336,427", "client/src/crypto/keyBackup.ts:39"]
+    compensating_controls: [login-timing-equalizer]
+
+  - id: SEC-EX-2026-0016
+    <<: *defaults
+    type: suppression
+    rule: "Client HTML5 Store Sensitive data In Web Storage (2) + Insecure Storage of Sensitive Data (2)"
+    location: { path: "client/src/api/client.ts:111-158; client/src/crypto/keyStorage.ts", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "localStorage / IndexedDB"
+      refutation: R3
+      rationale: >
+        Access token bellek-içi (localStorage hidrasyonu bilinçle KALDIRILDI;
+        eşleşen satırlar removeItem savunmacı temizliği — setItem değil).
+        localStorage yalnız UI tercihleri/sunucu URL'i. E2EE anahtarları IndexedDB'de,
+        OS-FDE korumasıyla — Signal Desktop/Element modeli, kodda belgeli.
+    evidence: ["client/src/api/client.ts:111-133", "client/src/crypto/keyStorage.ts:20-24", "SECURITY-ADDENDUM.md#4"]
+    compensating_controls: [httponly-refresh-cookie, os-fde]
+
+  - id: SEC-EX-2026-0017
+    <<: *defaults
+    type: suppression
+    rule: "Missing HSTS Header (2) + Permissive CSP (1) + Potential Clickjacking (1)"
+    location: { path: "server/routes_static.go:64-92; client/nginx.conf", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "HTTP yanıt başlıkları"
+      refutation: R2
+      rationale: >
+        HSTS max-age=63072000 (2 yıl) global middleware'de + nginx her location'da;
+        X-Frame-Options DENY + frame-ancestors 'none' (çift clickjacking savunması);
+        CSP tam set (default-src 'self', object-src 'none', base-uri 'self').
+        CSP https: genişliği K-033 ile ölçülüp REDDEDİLDİ — yeniden açılmaz.
+        Ek: upload servisinde CSP sandbox + attachment disposition.
+    evidence: ["server/routes_static.go:64-92", "client/nginx.conf:26-89", "PROJECT_MEMORY K-033"]
+    compensating_controls: [csp-sandbox-on-uploads]
+
+  - id: SEC-EX-2026-0018
+    <<: *defaults
+    type: suppression
+    rule: "Log/Error sızıntı aileleri: Secret Leak in Logs (88), Privacy Violation in Logs (45), Secret/Privacy Leak in Error Messages (56), Server Information Exposure (21), Improper Error Handling (27), PCI Data Exposure in Logs (3)"
+    location: { path: "server/** (dağınık)", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "err değerleri, yapısal log attr'ları"
+      sink: "slog / app_logs / HTTP yanıt gövdesi"
+      refutation: R2
+      rationale: >
+        Merkez redaksiyon pkg.ErrText (DSN/token/password maskeleri) 2026-08-07
+        itibarıyla TÜM err-metin log ve yanıt sahalarında (ham err.Error() log-map +
+        yanıt sahaları bu diff'te sıfırlandı: ~47 saha dönüştürüldü → Fixed).
+        Yanıt gövdesi zarfı stable code + correlation_id; 5xx detayı yalnız log.
+        Log'lardaki user_id/server_id pseudonim denetim izidir (CWE-200 kapsamı dışı
+        gereklilik). Kalan bulgular bu Fixed sahalarının ve pseudonim ID attr'larının
+        tekrarlarıdır.
+    evidence: ["server/pkg/redact.go", "server/pkg/response.go (G2.7 zarfı)", "bu diff: 29 dosya"]
+    compensating_controls: [central-slog, sentry-redaction]
+
+  - id: SEC-EX-2026-0019
+    <<: *defaults
+    type: suppression
+    rule: "Log Forging (38)"
+    location: { path: "server/middleware/request_logger.go", lines: "26-56" }
+    artifact_class: production
+    analysis:
+      source: "X-Request-Id, URL path, kullanıcı-türevli string'ler"
+      sink: "slog satırları"
+      refutation: R2
+      rationale: >
+        isSafeRequestID dar alfabe ([A-Za-z0-9._:-] ≤128) + geçersizse taze UUID
+        DEĞİŞİMİ (truncate değil) — CR/LF enjeksiyonu imkânsız; access-log alanları
+        primitive allowlist; net/http request-line'da CR/LF'i handler öncesi reddeder;
+        kullanıcı string'leri strconv.Quote ile loglanır.
+    evidence: ["server/middleware/request_logger.go:26-56,137-144", "server/startup_repair.go:67-94"]
+    compensating_controls: [json-structured-logging]
+
+  - id: SEC-EX-2026-0020
+    <<: *defaults
+    type: suppression
+    rule: "Race Condition In Cross Functionality (41) + Improper Resource Shutdown or Release (26) + Improper Transaction Handling (2) + Incorrect Reflect Value Comparison (3) + Integer Overflow (2) + Leaving Temporary File (2) + Improper Locking dışı kalan eşzamanlılık"
+    location: { path: "server/** (dağınık)", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "-"
+      refutation: R3
+      rationale: >
+        Close() disiplini bilinçli: okuma tarafı handle'lar _ = Close (flush yok),
+        yazma tarafı closeErr yakalar (upload_service.go:110 deseni). Temp dosyalar
+        os.CreateTemp (CWE-377 uyumlu, mktemp benzeri öngörülebilir ad yok) + rename.
+        Benzersizlik DB unique constraint'lerde; sayaç güncellemeleri atomik SQL.
+        **Kısmen FIXED (2026-08-07)**: döngü İÇİNDE olmayan okuma-tarafı
+        sahalar `defer`'e çevrildi (main.go:339, ws/client.go ReadPump).
+        **Döngü içindekiler bilinçle olduğu gibi bırakıldı** — `defer` orada
+        semantik olarak yanlıştır (her attachment'ın handle'ı fonksiyon sonuna
+        kadar açık kalır): feedback.go ×2, message.go, dm.go, ws/hub.go,
+        cmd/resize_avatars/main.go; her biri gerekçe yorumuyla işaretlendi.
+        **Ayrıca gerçek bir veri yarışı düzeltildi** (Checkmarx bunu görmedi,
+        kilit sınıflandırması sırasında bulundu): voice_token.go
+        GenerateScreenShareToken, `RUnlock` sonrası paylaşılan
+        `*models.VoiceState` üzerinden alan okuyordu; alan artık kilit altında
+        kopyalanıyor.
+    evidence: ["server/services/upload_service.go:110", "server/handlers/badge.go:273-299"]
+    compensating_controls: [db-unique-constraints, atomic-updates]
+
+  - id: SEC-EX-2026-0021
+    <<: *defaults
+    type: suppression
+    rule: "Use of Insufficiently Random Values (7)"
+    location: { path: "client/src/components/shared/LightningOverlay.tsx; client/src/hooks/useServerWakeUp.ts; client/src/hooks/useWebSocket.ts", lines: "-" }
+    artifact_class: production
+    analysis:
+      source: "-"
+      sink: "Math.random()"
+      refutation: "-"
+      rationale: >
+        ⚠️ DURUM DEĞİŞTİ (2026-08-07, ikinci dalga): bu aile artık Not Exploitable
+        DEĞİL, **FIXED**. Başlangıçta 7 sahanın 7'si kozmetik/jitter olduğu için
+        (yıldırım animasyonu ×5, retry backoff jitter, reconnect jitter) R3 ile
+        çürütülmüştü. §0.3 şerit-2 gereği (deseni hiç doğurmayan kod biçimi)
+        tamamı CSPRNG'ye çevrildi: yeni `client/src/utils/random.ts`
+        (`randomUnit`/`randomRange`, `crypto.getRandomValues` tabanlı) ve 7
+        çağrı sahasının tamamı bu yardımcıyı kullanıyor. Kaynakta gerçek
+        `Math.random()` çağrısı KALMADI (yalnız yardımcının kendi JSDoc'unda adı
+        geçiyor). Server Go tarafında prod `math/rand` zaten SIFIRDI.
+        Portalde bu aile **Fixed** olarak işaretlenmeli; re-scan doğrular.
+    evidence:
+      - "client/src/utils/random.ts (yeni CSPRNG yardımcısı)"
+      - "öz-tarama 2026-08-07: Math.random gerçek çağrı = 0 (3 eşleşmenin 3'ü yorum satırı)"
+      - "server prod math/rand = 0; crypto/rand 16 dosyada"
+    compensating_controls: []
+
+  - id: SEC-EX-2026-0022
+    <<: *defaults
+    type: suppression
+    rule: "Unrestricted File Size Upload (1)"
+    location: { path: "server/pkg/multipart.go", lines: "41-83" }
+    artifact_class: production
+    analysis:
+      source: "multipart body"
+      sink: "ParseMultipartForm"
+      refutation: R2
+      rationale: >
+        Bulgu, mitigasyonun kendisinde: LimitedParseMultipartForm(N) çağrıdan hemen
+        önce r.Body'yi MaxBytesReader ile sarar (scanner bu mutasyonu izleyemiyor;
+        inline #nosec G120 açıklaması mevcut). Tüm multipart endpoint'leri kapsanıyor;
+        alan-adı-bağımsız parça sayısı limiti dahil.
+    evidence: ["server/pkg/multipart.go:41-83", "server/handlers/* çağrı sahaları listesi"]
+    compensating_controls: [per-endpoint-size-caps, part-count-limit]
+
+  - id: SEC-EX-2026-0023
+    <<: *defaults
+    type: suppression
+    rule: "Outdated Hashing Function (11, Information)"
+    location: { path: "node_modules/** (transitive)", lines: "-" }
+    artifact_class: dependency-metadata
+    analysis:
+      source: "-"
+      sink: "-"
+      refutation: R3
+      rationale: >
+        Birinci taraf kaynakta (go/ts/js/yaml/sh) md5/sha1 kullanımı SIFIR (hedefli
+        grep). Eşleşmeler node_modules transitive bağımlılık içerikleri.
+        SECURITY-SCOPE.yml exclusion önerisiyle birlikte kapatılır.
+    evidence: ["grep raporu 2026-08-07: 0 birinci-taraf eşleşme"]
+    compensating_controls: [scope-exclusion]
+
+  - id: SEC-EX-2026-0024
+    <<: *defaults
+    type: suppression
+    rule: "Client DOM Open Redirect (1) + Client DOM XSS (1)"
+    location: { path: "client/src/components/shared/ErrorBoundary.tsx", lines: "136" }
+    artifact_class: production
+    analysis:
+      source: "window.location.pathname + search"
+      sink: "window.location.href ataması"
+      refutation: "-"
+      rationale: >
+        FIXED (Not Exploitable değil): XSS iddiası FP idi (pathname prefix'i scheme
+        enjeksiyonunu imkânsız kılar) ama //host pathname'i ile dar open-redirect
+        gerçekti. 2026-08-07: new URL(location.href) + searchParams.set + assign —
+        origin sabitlendi. Portalde her iki bulgu Fixed işaretlenmeli (re-scan doğrular).
+    evidence: ["client/src/components/shared/ErrorBoundary.tsx handleRecover (yeni hâli)"]
+    compensating_controls: []

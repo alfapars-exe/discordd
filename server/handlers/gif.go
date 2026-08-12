@@ -22,7 +22,26 @@ const klipyBaseURL = "https://api.klipy.com"
 // klipyHTTPClient bounds every outbound call to the Klipy API. http.Get's
 // DefaultClient has no timeout, so a stalled/slow-loris response from Klipy
 // would otherwise hang the request-handling goroutine indefinitely.
-var klipyHTTPClient = &http.Client{Timeout: 10 * time.Second}
+//
+// CheckRedirect additionally pins every hop of a redirect chain to the same
+// https://api.klipy.com origin the initial request is guarded to (see
+// errKlipyBadURL below): the request URL embeds h.klipyAPIKey as a path
+// segment, so an unconstrained redirect (open-redirect on Klipy's side, or a
+// compromised/misconfigured response) could leak that key to an attacker
+// host. Capped at 3 hops — Klipy's API has no legitimate reason to redirect
+// more than once or twice.
+var klipyHTTPClient = &http.Client{
+	Timeout: 10 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return fmt.Errorf("stopped after 3 redirects")
+		}
+		if req.URL.Scheme != "https" || req.URL.Host != "api.klipy.com" {
+			return fmt.Errorf("refusing redirect to disallowed host %q", req.URL.Host)
+		}
+		return nil
+	},
+}
 
 // GifResult is the simplified GIF info returned to the client.
 type GifResult struct {
@@ -172,7 +191,7 @@ func fetchKlipyResults(url string) ([]GifResult, bool, error) {
 		return nil, false, errKlipyBadURL
 	}
 
-	resp, err := klipyHTTPClient.Get(url) // #nosec G107,G704 -- host is hard-guarded above (strings.HasPrefix against the klipyBaseURL constant); no request-derived data can reach the scheme or host
+	resp, err := klipyHTTPClient.Get(url) // #nosec G107,G704 -- host is hard-guarded above (strings.HasPrefix against the klipyBaseURL constant) and pinned for every redirect hop by klipyHTTPClient.CheckRedirect; no request-derived data can reach the scheme or host
 	if err != nil {
 		return nil, false, fmt.Errorf("klipy request failed: %w", err)
 	}

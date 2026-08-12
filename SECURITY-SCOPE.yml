@@ -1,0 +1,75 @@
+# SECURITY-SCOPE.yml — artifact sınıflandırması ve scanner kapsam politikası
+# SECURE-CODING v1.5 §0.4 / §0.6 gereği. Bu dosya kuralları yalnız DARALTABİLİR, gevşetemez.
+# İlk kayıt: Checkmarx "discord main" (proje 104) ilk tam taraması, scan 1000882, 2026-08-07.
+#
+# NOT: "exclude" önerileri Checkmarx proje konfigürasyonuna KULLANICI tarafından uygulanır
+# (agent portal/state değişikliği yapamaz — SECURE-CODING §0.2). Buradaki sınıflandırma,
+# SECURITY-EXCEPTIONS.yml kayıtlarının artifact_class alanlarının kanonik kaynağıdır.
+
+version: 1
+project: discord main            # Checkmarx project id 104
+scanner:
+  name: Checkmarx
+  engine_version: "9.7.6.1003 HF10"
+
+artifact_classes:
+  - class: executable-test
+    paths:
+      - "server/**/*_test.go"
+      - "client/src/**/*.test.ts"
+      - "client/src/**/*.test.tsx"
+      - "e2e/**"
+      - "electron/**/*.test.ts"
+    rationale: >
+      Test kodu kanoniktir (§0.5) ve taranmaya devam eder; ancak test fixture'ları
+      (dummy parola, sahte token, MinCost bcrypt) prod secret/credential kuralı ile
+      değerlendirilmez. Not Exploitable kayıtları SECURITY-EXCEPTIONS.yml'de aile
+      bazında tutulur.
+    scanner_recommendation: >
+      Checkmarx tarafında ayrı test-SAST profili; "Use of Hardcoded Password" ailesi
+      için *_test.go hariç tutma (2026-08-07 taramasında 34 FP'nin kaynağı).
+
+  - class: dependency-metadata
+    paths:
+      - "**/node_modules/**"
+      - "**/package-lock.json"
+    rationale: >
+      Üçüncü taraf paket metadata'sı; integrity/resolved alanları ve paket adları
+      "hardcoded password/outdated hashing" sorgularını yanlış tetikliyor
+      (2026-08-07: "Outdated Hashing Function" 11/11 buradan).
+    scanner_recommendation: "Checkmarx exclusion: node_modules/**, **/package-lock.json"
+
+  - class: api-doc-examples
+    paths:
+      - "server/openapi.yaml"
+    rationale: >
+      OpenAPI 3.1 sözleşmesi; `format: password` alanlarının `example:` değerleri
+      ("correct-horse-battery-staple" ailesi) ve /auth/*password* yol adları
+      "Use Of Hardcoded Password in Config" sorgusunu tetikliyor (2026-08-07: ~15 FP).
+      Örnek değerler dokümantasyonun amacıdır; gerçek credential içermez.
+
+  - class: ui-strings
+    paths:
+      - "client/src/i18n/locales/**"
+    rationale: >
+      i18n etiketleri ("password": "Şifre" vb.) credential değildir
+      (2026-08-07: en+tr auth.json 16 FP).
+
+  - class: generated
+    paths:
+      - "client/dist/**"
+      - "server/static/dist/**"
+    rationale: "Build çıktısı; kaynak karşılıkları taranıyor (§0.8 madde 10)."
+
+  - class: template-config
+    paths:
+      - ".env.example"
+    rationale: >
+      Placeholder değerler ("change-me-..."); gerçek secret değeri repo'ya girmez.
+      Secret için default değer tanımlama yasağı (G3.2) prod config yükleyicisinde
+      geçerlidir, şablon dosyasında değil.
+
+notes:
+  - "Rapor limiti: Checkmarx per-query 50 sonuç. §0.6 gereği bir sonraki taramada limit artırılmalı (Improper Locking 85 bulgunun 50'si raporda)."
+  - "Aynı Checkmarx projesine tarama zorunlu (§0.3) — yeni proje açmak baseline'ı sıfırlar."
+  - "gosec inline #nosec gerekçeleri (27 adet) Checkmarx tarafından okunmaz; karşılıkları SECURITY-EXCEPTIONS.yml'e taşındı."

@@ -108,6 +108,34 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # §0.10 deterministic self-scan (SECURE-CODING v1.5). Covers every
+      # language in the stack: JS/TS, Go (§0.10.3, derived from the 2026-08-07
+      # Checkmarx scan), CI/workflow YAML (§0.10.2) and Shell (§0.5,
+      # deploy/*.sh). HARD gate: a BLOK
+      # pattern match exits 1. Runs first — it is the cheapest check and its
+      # whole point is to keep forbidden shapes out before the heavier
+      # scanners run. INCELEME (review-class) hits never fail the build; they
+      # are printed here and attached to the B4 delivery report.
+      - name: Self-scan (SECURE-CODING §0.10)
+        run: |
+          bash security/tools/self-scan.sh . self-scan-inceleme.txt
+          echo "::group::INCELEME (review queue — non-blocking)"
+          cat self-scan-inceleme.txt
+          echo "::endgroup::"
+
+      # §0.12.3 guardrail drift gate. The editor-time pattern file and the org
+      # policy text under .claude/ are GENERATED from security/ sources; if
+      # someone edits either side by hand they stop matching and this fails.
+      # Regenerating locally (`python security/tools/sync_agent_guardrail.py`)
+      # is the fix — never hand-edit the .claude/ copies.
+      # Python is pinned like every other toolchain here — a hard gate must
+      # not depend on whatever `python` alias the runner image ships.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Guardrail drift check (SECURE-CODING §0.12.3)
+        run: python3 security/tools/sync_agent_guardrail.py --check
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)

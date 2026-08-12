@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { pingServer } from "../utils/serverProbe";
+import { randomUnit } from "../utils/random";
 
 const RETRY_POLICY = {
   /** Total probe budget — the 8th failed probe transitions to "failed". */
@@ -40,7 +41,7 @@ const RETRY_POLICY = {
  * re-stampede the container exactly when it's trying to boot.
  */
 function jitter(delayMs: number): number {
-  return delayMs * (0.8 + Math.random() * 0.4);
+  return delayMs * (0.8 + randomUnit() * 0.4);
 }
 
 function shouldRetry(error: string | null): boolean {

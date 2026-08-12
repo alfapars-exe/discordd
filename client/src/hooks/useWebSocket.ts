@@ -19,6 +19,7 @@ import { useEffect, useLayoutEffect, useRef, useCallback, useState } from "react
 import { ensureFreshToken, apiClient } from "../api/client";
 import { logToServer } from "../api/clientLog";
 import { APP_RESUME_EVENT } from "../utils/nativePlugins";
+import { randomUnit } from "../utils/random";
 import { useP2PCallStore } from "../stores/p2pCallStore";
 import { useVoiceStore } from "../stores/voiceStore";
 import {
@@ -134,7 +135,7 @@ export function useWebSocket() {
   function getReconnectDelay(): number {
     const attempt = reconnectAttemptRef.current;
     const base = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, attempt), RECONNECT_MAX_DELAY);
-    const jitter = base * 0.25 * (Math.random() * 2 - 1); // ±25%
+    const jitter = base * 0.25 * (randomUnit() * 2 - 1); // ±25%
     return Math.round(base + jitter);
   }
 

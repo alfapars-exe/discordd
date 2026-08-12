@@ -35,7 +35,7 @@ func NewReportService(
 
 func (s *reportService) CreateReport(ctx context.Context, reporterID, targetID string, req *models.CreateReportRequest) (*models.Report, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	if reporterID == targetID {

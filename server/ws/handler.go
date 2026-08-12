@@ -361,7 +361,7 @@ func (h *Handler) resolveTicketAuth(w http.ResponseWriter, r *http.Request) (use
 	uid, tv, err := h.ticketConsumer.Consume(t)
 	if err != nil {
 		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid ticket", map[string]string{
-			"error": err.Error(),
+			"error": pkg.ErrText(err),
 		})
 		http.Error(w, "invalid ticket", http.StatusUnauthorized)
 		return "", 0, false
@@ -411,7 +411,7 @@ func (h *Handler) resolveLegacyTokenAuth(w http.ResponseWriter, r *http.Request)
 	claims, err = h.tokenValidator.ValidateAccessToken(token)
 	if err != nil {
 		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid token", map[string]string{
-			"error": err.Error(),
+			"error": pkg.ErrText(err),
 		})
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return nil, false
@@ -478,7 +478,7 @@ func (h *Handler) checkUserInfoGates(w http.ResponseWriter, r *http.Request, cla
 	if err != nil {
 		handlerLogger.Error("user info fetch failed", "user_id", claims.UserID, "err", pkg.ErrText(err))
 		h.hub.logEvent(models.LogLevelError, models.LogCategoryWS, &claims.UserID, "WS connect: user lookup failed", map[string]string{
-			"error": err.Error(),
+			"error": pkg.ErrText(err),
 		})
 		http.Error(w, "user not found", http.StatusUnauthorized)
 		return "", "", "", false

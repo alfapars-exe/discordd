@@ -122,7 +122,10 @@ func (h *DMSettingsHandler) MuteDM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// Generic message, not err.Error(): Validate()'s text echoes the
+		// client-supplied duration value back verbatim, so passing it straight
+		// through would put unsanitized request data in the response body.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid duration", "VALIDATION_FAILED")
 		return
 	}
 

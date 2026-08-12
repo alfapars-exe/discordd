@@ -17,7 +17,9 @@
  *      usernameTaken, sessionExpired, ...).
  *   2. res.code — machine-readable backend error code. Optional: populated
  *      by newer backend handlers only (parallel work), so read defensively
- *      and fall through when absent.
+ *      and fall through when absent. When code is "INTERNAL" and
+ *      res.correlation_id is present, the message is swapped for a variant
+ *      that appends the correlation id as a short support reference.
  *   3. res.status — HTTP status code.
  *   4. res.isNetworkError — fetch threw / offline / DNS failure.
  *   5. Fallback: generic "unknown" error.
@@ -77,11 +79,17 @@ function classifyByCode(code: string): Bucket | null {
     case "FORBIDDEN":
       return { variant: "error", key: "forbidden" };
     case "ALREADY_EXISTS":
+    case "CONFLICT":
       return { variant: "warning", key: "conflict" };
     case "BAD_REQUEST":
+    case "VALIDATION_FAILED":
       return { variant: "warning", key: "validation" };
+    case "INVALID_KEY":
+      return { variant: "warning", key: "invalidKey" };
     case "RATE_LIMITED":
       return { variant: "warning", key: "rateLimited" };
+    case "PAYLOAD_TOO_LARGE":
+      return { variant: "warning", key: "payloadTooLarge" };
     case "INTERNAL":
       return { variant: "error", key: "server" };
     default:
@@ -105,6 +113,8 @@ function classifyByStatus(status: number): Bucket {
       return { variant: "warning", key: "conflict" };
     case 429:
       return { variant: "warning", key: "rateLimited" };
+    case 413:
+      return { variant: "warning", key: "payloadTooLarge" };
     default:
       return status >= 500
         ? { variant: "error", key: "server" }
@@ -133,6 +143,17 @@ export function classifyApiError(res: APIResponse<unknown>): ClassifiedError {
   if (res.code) {
     const byCode = classifyByCode(res.code);
     if (byCode) {
+      // INTERNAL errors carry a server-generated correlation_id (5xx only) —
+      // surface it as a short reference so a user can quote it in a support
+      // report instead of the raw (deliberately generic) server message.
+      if (res.code === "INTERNAL" && res.correlation_id) {
+        return {
+          variant: byCode.variant,
+          titleKey: `errors:${byCode.key}Title`,
+          messageKey: "errors:serverCorrelation",
+          values: { correlationId: res.correlation_id },
+        };
+      }
       return {
         variant: byCode.variant,
         titleKey: `errors:${byCode.key}Title`,

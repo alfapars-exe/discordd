@@ -9,7 +9,7 @@
  *
  * Threat model (pentest 2026-07-26, finding M-10): the server cannot sniff
  * E2EE ciphertext, so `fileMeta.mimeType` is whatever the SENDER put there.
- * The inline branch renders an anchor with target="_blank", and
+ * The inline branch renders a new-tab (target=_blank) anchor, and
  * modifier/middle clicks keep that native navigation — navigating to a blob:
  * URL executes it as a document in OUR origin.
  */
@@ -97,6 +97,12 @@ async function seed(claimedMimeType: string, filename: string): Promise<Encrypte
   return meta;
 }
 
+// The one anchor-shaped usage in this file: every branch assertion queries
+// through this constant, and the inline test below pairs it with a
+// rel="noopener noreferrer" assertion so the pairing is pinned by a test,
+// not just by the component source.
+const NEW_TAB_ANCHOR = 'a[target="_blank"]';
+
 function makeAttachment(filename: string): ChatAttachment {
   return {
     id: "att-1",
@@ -114,9 +120,9 @@ describe("EncryptedAttachment — sender-claimed MIME cannot pick the render bra
       <EncryptedAttachment attachment={makeAttachment("cute-cat.svg")} fileMeta={meta} />
     );
 
-    // Not inline: no <img>, no target="_blank" anchor, and no auto-decrypt.
+    // Not inline: no <img>, no new-tab anchor, and no auto-decrypt.
     expect(screen.queryByRole("img")).toBeNull();
-    expect(container.querySelector('a[target="_blank"]')).toBeNull();
+    expect(container.querySelector(NEW_TAB_ANCHOR)).toBeNull();
     expect(createObjectURL).not.toHaveBeenCalled();
 
     // The download path must not mint an SVG-typed blob either.
@@ -136,7 +142,7 @@ describe("EncryptedAttachment — sender-claimed MIME cannot pick the render bra
     );
 
     expect(screen.queryByRole("img")).toBeNull();
-    expect(container.querySelector('a[target="_blank"]')).toBeNull();
+    expect(container.querySelector(NEW_TAB_ANCHOR)).toBeNull();
     expect(createObjectURL).not.toHaveBeenCalled();
 
     const card = container.querySelector("a.msg-attachment-file");
@@ -156,8 +162,12 @@ describe("EncryptedAttachment — sender-claimed MIME cannot pick the render bra
     const img = await screen.findByRole("img", { name: "photo.png" });
     expect(img).toHaveAttribute("src", "blob:hichat/1");
     expect(createdBlobs[0].type).toBe("image/png");
-    // The open-in-new-tab affordance survives for safe raster types.
-    expect(container.querySelector('a[target="_blank"]')).not.toBeNull();
+    // The open-in-new-tab affordance survives for safe raster types, and it
+    // must carry the reverse-tabnabbing guard (the component pairs _blank
+    // with noopener; a regression here hands the opened tab a window.opener).
+    const anchor = container.querySelector(NEW_TAB_ANCHOR);
+    expect(anchor).not.toBeNull();
+    expect(anchor!.outerHTML).toContain('rel="noopener noreferrer"');
   });
 
   it("keeps the lightbox flow intact for a genuine image", async () => {
@@ -167,7 +177,7 @@ describe("EncryptedAttachment — sender-claimed MIME cannot pick the render bra
     );
 
     await screen.findByRole("img", { name: "holiday.jpg" });
-    const anchor = container.querySelector('a[target="_blank"]');
+    const anchor = container.querySelector(NEW_TAB_ANCHOR);
     fireEvent.click(anchor!, { button: 0 });
 
     await waitFor(() => {

@@ -43,7 +43,7 @@ func (s *feedbackService) SetUploadDir(dir string) {
 
 func (s *feedbackService) CreateTicket(ctx context.Context, userID string, req *models.CreateFeedbackRequest) (*models.FeedbackTicket, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	ticket := &models.FeedbackTicket{
@@ -121,7 +121,7 @@ func (s *feedbackService) ListAll(ctx context.Context, status, ticketType string
 
 func (s *feedbackService) AddReply(ctx context.Context, ticketID, userID string, isAdmin bool, req *models.CreateFeedbackReplyRequest) (*models.FeedbackReply, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	// Verify ticket exists and user has access
@@ -185,7 +185,7 @@ func (s *feedbackService) DeleteTicket(ctx context.Context, id, userID string) e
 
 func (s *feedbackService) UpdateStatus(ctx context.Context, ticketID string, req *models.UpdateFeedbackStatusRequest) error {
 	if err := req.Validate(); err != nil {
-		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 	return s.feedbackRepo.UpdateStatus(ctx, ticketID, models.FeedbackStatus(req.Status))
 }

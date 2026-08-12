@@ -1,0 +1,252 @@
+# OTOMATİK ÜRETİLDİ — ELLE DÜZENLEMEYİN (SECURE-CODING v1.5 §0.12.3a).
+# Kaynak: security/tools/self-scan.sh · Üreteç: security/tools/sync_agent_guardrail.py
+# Yeni desen: önce standart tablosu → sonra self-scan.sh → sonra bu üreteç.
+# Drift kontrolü CI'da: sync_agent_guardrail.py --check
+# NOT: reminder'daki 'Güvenli biçim', standardın tablo hücresinin birebir
+# alıntısı değil, bu repo'nun API adlarına çevrilmiş hâlidir (daraltıcı yön).
+patterns:
+  - rule_name: '777 izinler (dosya modu)'
+    reminder: '[İnfina §0.10] BLOK — 777 izinler (dosya modu): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Oluşturma anında 0600/0700. Bkz. G4.14. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '0o777|chmod\s+777|chmod\s+-R\s+777|umask\(\s*0+\s*\)|0o?777|chmod\s+777|chmod\s+-R\s+777|chmod\s+777|chmod\s+-R\s+777|umask\s+0+\b'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.go', '**/*.sh']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'TLS bypass'
+    reminder: '[İnfina §0.10] BLOK — TLS bypass: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Sertifika doğrulaması hiçbir ortamda kapatılamaz. Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'rejectUnauthorized\s*:\s*false|verify\s*=\s*False|InsecureSkipVerify|NODE_TLS_REJECT_UNAUTHORIZED|_create_unverified_context|check_hostname\s*=\s*False|sslmode=disable|insecure_channel|--insecure-skip-tls-verify|curl[^|]*--insecure|curl[^|]*\s-k\b|wget[^|]*--no-check-certificate'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.go', '**/*.sh']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'AES ECB / IV''siz mod'
+    reminder: '[İnfina §0.10] BLOK — AES ECB / IV''siz mod: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: AES-256-GCM. Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'NewECBEncrypter|NewECBDecrypter'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Go — SQL string birleştirme'
+    reminder: '[İnfina §0.10] BLOK — Go — SQL string birleştirme: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: ? bind parametreleri. Bkz. §6. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\.(Query|QueryRow|Exec)(Context)?\([^)]*fmt\.Sprintf|\.(Query|QueryRow|Exec)(Context)?\([^)]*[A-Za-z_]+\s*\+'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Go — ham err.Error() sızıntısı'
+    reminder: '[İnfina §0.10] BLOK — Go — ham err.Error() sızıntısı: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: pkg.ErrText(err); yanıtta statik mesaj + stable code. Bkz. §20/G2.7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '"error":\s*[A-Za-z_]*[Ee]rr\.Error\(\)|truncate\(\s*[A-Za-z_]*[Ee]rr\.Error\(\)|(ErrorWithMessage|ErrorWithCode)\([^)]*[A-Za-z_]*[Ee]rr\.Error\(\)|fmt\.Errorf\([^)]*%w[^)]*[A-Za-z_]*[Ee]rr\.Error\(\)'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'HTTP yanıtında text/template'
+    reminder: '[İnfina §0.10] BLOK — HTTP yanıtında text/template: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: html/template. Bkz. §7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '"text/template"'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'JWT none algoritması'
+    reminder: '[İnfina §0.10] BLOK — JWT none algoritması: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: keyfunc''ta SigningMethod tip kontrolü. Bkz. §2. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'SigningMethodNone|UnsafeAllowNoneSignatureType'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'shell -c ile komut'
+    reminder: '[İnfina §0.10] BLOK — shell -c ile komut: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: exec.Command(bin, args...) — shell yok. Bkz. G4.3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'exec\.Command(Context)?\([^)]*"(sh|bash|cmd|powershell)"'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'zayıf hash (md5/sha1)'
+    reminder: '[İnfina §0.10] BLOK — zayıf hash (md5/sha1): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: SHA-256+; güvenlik dışı kullanım gerekçelendirilir. Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '"crypto/(md5|sha1)"'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'AES ECB modu'
+    reminder: '[İnfina §0.10] BLOK — AES ECB modu: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: AES-GCM veya AES-CBC+HMAC. Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '[''"]aes-[0-9]+-ecb[''"]'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'DOM XSS sink (insert/write)'
+    reminder: '[İnfina §0.10] BLOK — DOM XSS sink (insert/write): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: textContent / güvenli DOM API + sanitizer. Bkz. §7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\.insertAdjacentHTML\(|document\.write(ln)?\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Ham err nesnesi yanıtta'
+    reminder: '[İnfina §0.10] BLOK — Ham err nesnesi yanıtta: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Merkezî hata işleyici + generic mesaj. Bkz. G2.7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'json\([^)]*[:({,]\s*err\b'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Ham err/req/res loglama'
+    reminder: '[İnfina §0.10] BLOK — Ham err/req/res loglama: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Safe-DTO logger; ham nesne serialize edilmez. Bkz. §20. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'logger\.(error|warn|info|debug)\(\s*(err|error|req|res)\b'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'JS — SQL string birleştirme'
+    reminder: '[İnfina §0.10] BLOK — JS — SQL string birleştirme: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Bind/parametre + identifier allowlist. Bkz. §6. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\.query\(\s*`[^`]*\$\{|\.query\([A-Za-z_]+\s*\+'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Secret Leak response (toPublic DTO''suz)'
+    reminder: '[İnfina §0.10] BLOK — Secret Leak response (toPublic DTO''suz): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: toPublic* DTO zorunlu. Bkz. G2.1. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'res\.(status\([0-9]+\)\.)?json\([^)]*\b(user|session|account)\b'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Set-Cookie ham header'
+    reminder: '[İnfina §0.10] BLOK — Set-Cookie ham header: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Merkezî cookie helper (httpOnly/secure/sameSite varsayılan). Bkz. G2.3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'setHeader\(\s*[''\"]Set-Cookie'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Web storage''da hassas veri'
+    reminder: '[İnfina §0.10] BLOK — Web storage''da hassas veri: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Session yalnız HttpOnly cookie''de. Bkz. G2.4. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '(localStorage|sessionStorage)\.setItem\([^)]*(session|token|user|auth|password)'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'child_process exec/shell'
+    reminder: '[İnfina §0.10] BLOK — child_process exec/shell: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: execFile/spawn + argüman dizisi. Bkz. G4.3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'child_process\.exec\(|\bexecSync\(|shell\s*:\s*true'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'createCipher (IV''siz)'
+    reminder: '[İnfina §0.10] BLOK — createCipher (IV''siz): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: createCipheriv + AES-256-GCM. Bkz. G4.15. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'crypto\.create(De)?Cipher\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'document.cookie yazımı'
+    reminder: '[İnfina §0.10] BLOK — document.cookie yazımı: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Testte Playwright context.addCookies/clearCookies. Bkz. G2.5. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'document\.cookie\s*='
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'err response''a sızıyor'
+    reminder: '[İnfina §0.10] BLOK — err response''a sızıyor: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Merkezî hata işleyici: { error: { code, correlationId } }. Bkz. G2.7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'json\([^)]*\berr(or)?\.(message|stack)'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'eval ailesi'
+    reminder: '[İnfina §0.10] BLOK — eval ailesi: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Sabit kod yolu; dinamik değerlendirme yok. Bkz. §7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\beval\(|new Function\(|set(Timeout|Interval)\(\s*[''"`]'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'innerHTML/outerHTML ataması'
+    reminder: '[İnfina §0.10] BLOK — innerHTML/outerHTML ataması: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: textContent veya sanitize edilmiş DOM API. Bkz. §7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\.(innerHTML|outerHTML)\s*='
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'jwt.decode'
+    reminder: '[İnfina §0.10] BLOK — jwt.decode: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: jwt.verify(...) — imza + alg + iss/aud + zaman claim''leri. Bkz. §2. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'jwt\.decode\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'res.cookie httpOnly''siz'
+    reminder: '[İnfina §0.10] BLOK — res.cookie httpOnly''siz: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Merkezî cookie helper; httpOnly varsayılan. Bkz. G2.3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'res\.cookie\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'target=_blank noopener''sız'
+    reminder: '[İnfina §0.10] BLOK — target=_blank noopener''sız: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: rel="noopener noreferrer". Bkz. §17. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'target=[\"'']_blank'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'GHA untrusted context'
+    reminder: '[İnfina §0.10] İNCELEME — GHA untrusted context: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: env: dolaylaması + tırnaklı "$VAR". Bkz. §31. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\$\{\{\s*github\.(event\.(issue|pull_request|comment|review|commits|head_commit|pages|client_payload)|head_ref)'
+    paths: ['**/*.yml', '**/*.yaml']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'OIDC trust kapsamı'
+    reminder: '[İnfina §0.10] İNCELEME — OIDC trust kapsamı: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: sub claim''i tam eşleşme; '':*'' StringLike yasak. Bkz. §19. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'token\.actions\.githubusercontent\.com'
+    paths: ['**/*.yml', '**/*.yaml']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'SHA pinsiz 3. taraf action'
+    reminder: '[İnfina §0.10] İNCELEME — SHA pinsiz 3. taraf action: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: 40 karakter SHA pin. Bkz. §31. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'uses:\s*[A-Za-z0-9_.-]+/'
+    paths: ['**/*.yml', '**/*.yaml']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'orchestrator template'
+    reminder: '[İnfina §0.10] İNCELEME — orchestrator template: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Ayrı argv elemanı veya env geçişi. Bkz. G4.17. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '\{\{\s*(dag_run\.conf|params\.)|\{\{\s*workflow\.parameters|\$\(params\.'
+    paths: ['**/*.yml', '**/*.yaml']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'pwn request trigger'
+    reminder: '[İnfina §0.10] İNCELEME — pwn request trigger: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Branch filtresi, untrusted checkout yok, secret kısıtlı. Bkz. §31. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'pull_request_target|workflow_run'
+    paths: ['**/*.yml', '**/*.yaml']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: '0.0.0.0 bind'
+    reminder: '[İnfina §0.10] İNCELEME — 0.0.0.0 bind: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Yalnız konteyner/orchestrator arkasında; gerekçe B4''te. Bkz. §16. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '"0\.0\.0\.0'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Go hardcoded secret'
+    reminder: '[İnfina §0.10] İNCELEME — Go hardcoded secret: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Env + secret store; config''te secret default''u yok. Bkz. G3.2. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '(Secret|Token|Password|APIKey|ApiKey)[A-Za-z_]*\s*[:=]+\s*"[^"]{8,}"'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'gerekçesiz #nosec'
+    reminder: '[İnfina §0.10] İNCELEME — gerekçesiz #nosec: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: #nosec G### -- <teknik gerekçe>. Bkz. §0.6. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '#nosec'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'jwt.Parse (keyfunc alg kontrolü doğrulanmalı)'
+    reminder: '[İnfina §0.10] İNCELEME — jwt.Parse (keyfunc alg kontrolü doğrulanmalı): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: keyfunc *jwt.SigningMethodHMAC assert eder. Bkz. §2. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'jwt\.Parse(WithClaims)?\('
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'math/rand kullanımı'
+    reminder: '[İnfina §0.10] İNCELEME — math/rand kullanımı: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: crypto/rand. Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '"math/rand"'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'plaintext dinleme'
+    reminder: '[İnfina §0.10] İNCELEME — plaintext dinleme: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: TLS kenar katmanda; ADDENDUM trust beyanı. Bkz. §16. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'ListenAndServe\('
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'sınırsız gövde okuma (LimitReader/MaxBytes şart)'
+    reminder: '[İnfina §0.10] İNCELEME — sınırsız gövde okuma (LimitReader/MaxBytes şart): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: http.MaxBytesReader + io.LimitReader. Bkz. §13. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'io\.ReadAll\(\s*(r|req)\.Body'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'öngörülebilir temp (mktemp deseni)'
+    reminder: '[İnfina §0.10] İNCELEME — öngörülebilir temp (mktemp deseni): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: os.MkdirTemp / os.CreateTemp. Bkz. §21. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'TempDir\(\)\s*\+|"/tmp/'
+    paths: ['**/*.go']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: '0.0.0.0 bind'
+    reminder: '[İnfina §0.10] İNCELEME — 0.0.0.0 bind: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Yalnız konteyner/orchestrator arkasında; gerekçe B4''te. Bkz. §16. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '(host\s*[:=]\s*|listen\(\s*)["'']0\.0\.0\.0'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'JS hardcoded secret'
+    reminder: '[İnfina §0.10] İNCELEME — JS hardcoded secret: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Env + secret store. Bkz. §4. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY)[A-Z_]*\s*[:=]\s*[''"][^''"]{8,}'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'Math.random'
+    reminder: '[İnfina §0.10] İNCELEME — Math.random: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: CSPRNG (crypto.getRandomValues). Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'Math\.random\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: '__proto__ / merge'
+    reminder: '[İnfina §0.10] İNCELEME — __proto__ / merge: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Key allowlist; dinamik merge yok. Bkz. §5. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '__proto__'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'client açık yönlendirme'
+    reminder: '[İnfina §0.10] İNCELEME — client açık yönlendirme: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: new URL(location.href) ile aynı-köken sabitleme. Bkz. §17. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'location\.(href|assign|replace)\s*(=|\()\s*[^"'')]'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'dangerouslySetInnerHTML/v-html'
+    reminder: '[İnfina §0.10] İNCELEME — dangerouslySetInnerHTML/v-html: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Sanitizer kanıtı (DOMPurify) + §0.6 kaydı. Bkz. §7. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'dangerouslySetInnerHTML|v-html'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'destructured exec'
+    reminder: '[İnfina §0.10] İNCELEME — destructured exec: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: regex.exec/db.exec FP''leri gerekçelendirilir. Bkz. §6. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: '(^|[^A-Za-z0-9_.$])exec\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'jwt.sign payload PII'
+    reminder: '[İnfina §0.10] İNCELEME — jwt.sign payload PII: bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: Yalnız sub/exp/iat/jti(/scope) claim''leri. Bkz. G2.2. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'jwt\.sign\('
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'kısa randomBytes (<16B)'
+    reminder: '[İnfina §0.10] İNCELEME — kısa randomBytes (<16B): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: ≥16 bayt = ≥128 bit. Bkz. G4.13. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'randomBytes\(\s*([1-9]|1[0-5])\s*\)'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']
+  - rule_name: 'zayıf hash (md5/sha1)'
+    reminder: '[İnfina §0.10] İNCELEME — zayıf hash (md5/sha1): bu desen SECURE-CODING''de yasak/incelemeliktir. Güvenli biçim: SHA-256+; güvenlik dışı kullanım gerekçelendirilir. Bkz. §3. BLOK desenleri pre-commit self-scan''de build''i kırar.'
+    regex: 'createHash\(\s*[''"](md5|sha1)'
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+    exclude_paths: ['**/node_modules/**', '**/dist/**', '**/dtln/**']

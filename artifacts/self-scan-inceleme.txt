@@ -1,0 +1,153 @@
+🔎 İNCELEME [test kodunda web storage anahtarı]: ./client/src/utils/draftStorage.test.ts:113:    localStorage.setItem("auth-store", "important");
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/api/client.ts:189:    const res = await fetch(apiUrl("/auth/refresh"), {
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/api/client.ts:266:  if (!timeoutMs) return fetch(url, init);
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/api/client.ts:270:    return await fetch(url, { ...init, signal: controller.signal });
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/components/soundboard/WaveformTrimmer.tsx:115:    fetch(fileUrl)
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/crypto/fileEncryption.ts:135:  const response = await fetch(url, { credentials: "include" });
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/crypto/fileEncryption.ts:259:  const response = await fetch(url, { credentials: "include" });
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/utils/serverProbe.ts:29:    const res = await fetch(`${API_BASE_URL}/health`, {
+🔎 İNCELEME [SSRF fetch/axios]: ./client/src/utils/wallpaperCache.ts:78:    const res = await fetch(url, { credentials: "include" });
+🔎 İNCELEME [SSRF fetch/axios]: ./dist-electron/main.js:229:            return (0, api_proxy_1.proxyApiRequest)(request, (input, init) => electron_1.net.fetch(input, init), {
+🔎 İNCELEME [SSRF fetch/axios]: ./electron/main.ts:234:      return proxyApiRequest(request, (input, init) => net.fetch(input, init), {
+🔎 İNCELEME [SSRF fetch/axios]: ./electron/main.ts:247:    return net.fetch(pathToFileURL(resolved.absolutePath).toString());
+🔎 İNCELEME [postMessage/message dinleyici]: ./client/public/pcm-feeder-processor.js:4: * Receives raw PCM float32 data from the main thread via port.postMessage()
+🔎 İNCELEME [postMessage/message dinleyici]: ./client/public/pcm-feeder-processor.js:8: *   native audio-capture.exe → Electron main → IPC → renderer → port.postMessage()
+🔎 İNCELEME [postMessage/message dinleyici]: ./client/public/pcm-feeder-processor.js:52:        this.port.postMessage("processed");
+🔎 İNCELEME [postMessage/message dinleyici]: ./client/src/audio/gateConfig.ts:67:    node.port.postMessage({ disabled: true });
+🔎 İNCELEME [postMessage/message dinleyici]: ./client/src/audio/gateConfig.ts:69:    node.port.postMessage(cfg);
+🔎 İNCELEME [postMessage/message dinleyici]: ./client/src/hooks/useSystemAudioCapture.ts:186:            workletNode.port.postMessage(float32Data, [float32Data.buffer]);
+🔎 İNCELEME [kısa randomBytes (<16B)]: ./e2e/tests/helpers.ts:48:  return `Aa1!${randomBytes(12).toString("hex")}`;
+🔎 İNCELEME [kısa randomBytes (<16B)]: ./e2e/tests/helpers.ts:56:  return `e2e_${Date.now()}_${randomBytes(4).toString("hex")}`;
+🔎 İNCELEME [Math.random]: ./client/src/utils/random.ts:2: * random — CSPRNG-backed drop-in replacements for Math.random().
+🔎 İNCELEME [Math.random]: ./client/src/utils/random.ts:5: * analysis "insufficiently random values" findings, so every Math.random()
+🔎 İNCELEME [Math.random]: ./client/src/utils/random.ts:10:/** Random float in [0, 1) — API-compatible drop-in for Math.random(). */
+🔎 İNCELEME [client açık yönlendirme]: ./client/src/components/shared/ErrorBoundary.tsx:139:    // `window.location.href = pathname + ...` would assign a protocol-
+🔎 İNCELEME [client açık yönlendirme]: ./client/src/components/shared/ErrorBoundary.tsx:144:    window.location.assign(url);
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/database/database.go:341:			errMsg := err.Error()
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/database/retry.go:65:	msg := err.Error()
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/pkg/quota_test.go:56:	msg := err.Error()
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/pkg/redact.go:27:	return redactSecrets(err.Error())
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/pkg/response.go:56:	message := err.Error()
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/pkg/response.go:87:	message := err.Error()
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/backup_service_restore.go:187:		joined := string(out) + " " + err.Error()
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/backup_service_test.go:545:		t.Fatalf("snapshot error leaked the authToken JWT: %q", err.Error())
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/backup_service_test.go:548:		t.Fatalf("expected redacted authToken marker in error, got %q", err.Error())
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/dm_message_test.go:76:		t.Errorf("err message = %q, want dm_request_pending", err.Error())
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/dm_message_test.go:92:		t.Errorf("err message = %q, want dm_request_not_accepted", err.Error())
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/dm_message_test.go:120:				t.Errorf("err message = %q, want dm_request_not_accepted", err.Error())
+🔎 İNCELEME [Go ham .Error() kullanımı]: ./server/services/dm_message_test.go:260:		t.Errorf("err = %q, want message referencing friends policy", err.Error())
+🔎 İNCELEME [negatif test: alg=none reddi]: ./server/services/auth_service_test.go:541:	noneToken := jwt.NewWithClaims(jwt.SigningMethodNone, rsaClaims)
+🔎 İNCELEME [negatif test: alg=none reddi]: ./server/services/auth_service_test.go:542:	noneTokenStr, err := noneToken.SignedString(jwt.UnsafeAllowNoneSignatureType)
+🔎 İNCELEME [math/rand kullanımı]: ./server/services/channel_permission_service_test.go:7:	"math/rand"
+🔎 İNCELEME [jwt.Parse (keyfunc alg kontrolü doğrulanmalı)]: ./server/services/auth_service.go:618:	token, err := jwt.ParseWithClaims(tokenString, &models.TokenClaims{}, func(token *jwt.Token) (any, error) {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/avatar.go:265:	if err := os.WriteFile(destPath, resized, 0o600); err != nil { // #nosec G304,G703 -- verified by SafeJoin (pkg/safepath.go: rejects .., absolute paths, and any resolved path outside baseDir)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/badge_icon_sniff_test.go:130:	got, err := os.ReadFile(filepath.Join(dir, "badges", name))
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/upload_download.go:327:	f, err := os.Open(full) // #nosec G304 — path containment verified by SafeJoin
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/upload_download_test.go:192:	if err := os.WriteFile(filepath.Join(dir, "abc123.png"), []byte("png-bytes"), 0o600); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/upload_download_test.go:264:			if err := os.WriteFile(filepath.Join(dir, tc.diskName), tc.body, 0o600); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/upload_download_test.go:518:		if err := os.WriteFile(filepath.Join(dir, name), []byte("bytes-of-"+name), 0o600); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/upload_download_test.go:875:	if err := os.WriteFile(secretPath, []byte(secret), 0o600); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/handlers/upload_download_test.go:943:		if err := os.WriteFile(filepath.Join(dir, servePublicFile), []byte("bytes-of-"+servePublicFile), 0o600); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/init_routes_test.go:49:		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/init_routes_test.go:56:	want, err := os.ReadFile(golden)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/pkg/safepath.go:3:// gosec G304 flagged every os.Create(destPath) where destPath includes a
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:157:					_ = os.WriteFile(stmt[i+1:j], make([]byte, 8192), 0o640)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:244:	if err := os.WriteFile(dbPath, original, 0o640); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:279:	got, err := os.ReadFile(dbPath)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:326:			if err := os.WriteFile(destPath, payload, 0o640); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:411:			_ = os.WriteFile(destPath, make([]byte, 8192), 0o640)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:452:			_ = os.WriteFile(destPath, []byte("partial"), 0o640) // 7 bytes
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_test.go:941:	if err := os.WriteFile(dbPath, make([]byte, 8192), 0o640); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_util.go:68:	in, err := os.Open(src)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/backup_service_util.go:75:	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/dm_upload_service.go:78:	destFile, err := os.Create(destPath) // #nosec G304 — verified by SafeJoin
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/soundboard_service_test.go:66:	if err := os.WriteFile(diskPath, []byte("fake audio"), 0o640); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/soundboard_service_test.go:138:	if err := os.WriteFile(diskPath, []byte("fake audio"), 0o640); err != nil {
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/upload_file_writer.go:22:	destFile, err := os.Create(destPath) // #nosec G304 — caller verifies destPath via pkg.SafeJoin
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/upload_service.go:98:	destFile, err := os.Create(destPath) // #nosec G304 — path containment verified by SafeJoin
+🔎 İNCELEME [değişkenle dosya açma (SafeJoin şart)]: ./server/services/upload_sniff_gate_test.go:57:	got, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+🔎 İNCELEME [öngörülebilir temp (mktemp deseni)]: ./server/config/config.go:324:			WorkDir:   getEnv("BACKUP_WORKDIR", "/tmp/hichat-backup"),
+🔎 İNCELEME [sınırsız gövde okuma (LimitReader/MaxBytes şart)]: ./server/handlers/e2ee.go:169:	body, err := io.ReadAll(r.Body)
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:145:	port, err := strconv.Atoi(getEnv("SERVER_PORT", "9090"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:158:	accessExpiry, err := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRY_MINUTES", "1440"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:163:	refreshExpiry, err := strconv.Atoi(getEnv("JWT_REFRESH_EXPIRY_DAYS", "7"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:175:	diagPort, err := strconv.Atoi(getEnv("DIAG_SMTP_PORT", "587"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:193:	backupHours, err := strconv.Atoi(getEnv("BACKUP_INTERVAL_HOURS", "1"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:202:		m, mErr := strconv.Atoi(mStr)
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/config/config.go:218:		if k, kErr := strconv.Atoi(kStr); kErr == nil && k > 0 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/admin.go:54:	limit, _ := strconv.Atoi(q.Get("limit"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/admin.go:61:	offset, _ := strconv.Atoi(q.Get("offset"))
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/admin.go:486:		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/admin.go:499:		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/audit_log.go:57:		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 500 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/dm.go:145:		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/dm.go:454:		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 100 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/dm.go:459:		if parsed, err := strconv.Atoi(v); err == nil && parsed >= 0 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/feedback.go:315:		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/feedback.go:320:		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/gif.go:262:	v, err := strconv.Atoi(s)
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/message.go:67:		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/search.go:49:		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/search.go:56:		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+🔎 İNCELEME [Atoi sonrası clamp gerekir]: ./server/handlers/soundboard.go:60:	durationMs, err := strconv.Atoi(durationStr)
+🔎 İNCELEME [Go hardcoded secret]: ./server/handlers/auth_cookie_test.go:45:	stubAccessToken  = "stub-access-token"
+🔎 İNCELEME [Go hardcoded secret]: ./server/handlers/auth_cookie_test.go:46:	stubRefreshToken = "stub-refresh-token"
+🔎 İNCELEME [Go hardcoded secret]: ./server/handlers/bot_test.go:56:		createToken: "hb_secret-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/handlers/upload_download_test.go:26:const testUploadJWTSecret = "test-secret-key-for-upload-download"
+🔎 İNCELEME [Go hardcoded secret]: ./server/middleware/auth_test.go:16:const testJWTSecret = "test-secret-key-for-auth-middleware"
+🔎 İNCELEME [Go hardcoded secret]: ./server/models/public_user_test.go:31:		PasswordHash:          "bcrypt-hash-should-never-appear",
+🔎 İNCELEME [Go hardcoded secret]: ./server/models/user_test.go:9:	r := &CreateUserRequest{Username: "validuser", Password: "longenough123"}
+🔎 İNCELEME [Go hardcoded secret]: ./server/models/user_test.go:18:	r := &CreateUserRequest{Username: "validuser", Password: "longenough123", Email: "not-an-email"}
+🔎 İNCELEME [Go hardcoded secret]: ./server/models/user_test.go:25:	r := &CreateUserRequest{Username: "validuser", Password: "longenough123", Email: "user@example.com"}
+🔎 İNCELEME [Go hardcoded secret]: ./server/repository/sqlite_reset_token_test.go:16:const resetTokenOwner = "u-reset-owner"
+🔎 İNCELEME [Go hardcoded secret]: ./server/repository/sqlite_session_test.go:178:	session := &models.Session{UserID: userID, RefreshToken: "format-guard-token", ExpiresAt: time.Now().Add(time.Hour)}
+🔎 İNCELEME [Go hardcoded secret]: ./server/repository/sqlite_user_test.go:25:		PasswordHash: "hashed-password",
+🔎 İNCELEME [Go hardcoded secret]: ./server/repository/sqlite_user_test.go:123:		RefreshToken: "refresh-token-happy-path",
+🔎 İNCELEME [Go hardcoded secret]: ./server/repository/sqlite_user_test.go:162:	const refreshToken = "refresh-token-collision"
+🔎 İNCELEME [Go hardcoded secret]: ./server/repository/wrapper_harness_test.go:38:	session := &models.Session{RefreshToken: "wrapped-refresh-token"}
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:16:const testJWTSecret = "test-secret-key-for-auth-service"
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:138:				Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:160:				Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:183:				Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:205:				Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:220:				Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:233:				Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:296:			req:  &models.LoginRequest{Username: "testuser", Password: "password123"},
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:311:			req:  &models.LoginRequest{Username: "testuser", Password: "wrongpassword"},
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:326:			req:  &models.LoginRequest{Username: "nonexistent", Password: "password123"},
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:337:			req:  &models.LoginRequest{Username: "banned", Password: "password123"},
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/auth_service_test.go:781:		Password: "password123",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:177:		HFToken:   "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:219:		HFToken:  "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:250:		HFToken:   "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:306:		HFToken:  "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:366:		HFToken:  "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:399:		HFToken:  "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:443:		HFToken:  "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:485:		HFToken:   "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:567:		HFToken:   "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:624:		HFToken:  "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/backup_service_test.go:947:		HFToken:   "fake-token",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/bot_service.go:32:	cu := models.CreateUserRequest{Username: req.Username, Password: "placeholder8", DisplayName: req.DisplayName}
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/dm_channel_test.go:35:			PasswordHash:     "bcrypt-hash-should-never-appear",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/dm_channel_test.go:76:			PasswordHash:    "bcrypt-hash-should-never-appear",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/dm_message_test.go:415:			PasswordHash:     "bcrypt-hash-should-never-appear",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/message_service_test.go:206:					PasswordHash:     "bcrypt-hash-should-never-appear",
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/voice_service_test.go:2303:	tokenTestAPIKey    = "test-api-key"
+🔎 İNCELEME [Go hardcoded secret]: ./server/services/voice_service_test.go:2304:	tokenTestAPISecret = "test-api-secret-needs-length"
+🔎 İNCELEME [plaintext dinleme]: ./server/main.go:382:		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+🔎 İNCELEME [0.0.0.0 bind]: ./server/config/config.go:279:			Host: getEnv("SERVER_HOST", "0.0.0.0"),
+🔎 İNCELEME [0.0.0.0 bind]: ./server/config/config.go:342:// Addr returns the listen address (e.g. "0.0.0.0:8080").
+🔎 İNCELEME [gerekçesiz #nosec]: ./server/database/integrity.go:23:// aborted transaction, not a credential, so renaming beats a #nosec
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth.go:101:	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are always true below; SameSite is refreshCookieSameSite(r), which only ever returns SameSiteNoneMode or SameSiteStrictMode (see its doc comment above), never an insecure/default value
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth.go:127:		http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are always true below; sameSite only ever takes the two safe values in the range literal above
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth.go:184:	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are true below; SameSite=None is deliberate (required for cross-scheme <img> loads from Electron/Capacitor, see doc comment above) and its CSRF exposure is negligible for this specific cookie (Path-scoped to one idempotent GET handler with unenumerable URLs and its own permission recheck — see the doc comment above)
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth.go:215:	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and Secure are true below; SameSite=None mirrors setMediaCookie above (same reasoning: cross-scheme <img> loads, negligible CSRF exposure)
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth_cookie_test.go:296:	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "cookie-carried-token"})
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth_cookie_test.go:343:	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "victim-refresh-token"})
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth_cookie_test.go:409:	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "session-to-kill"})
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth_cookie_test.go:478:	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "victim-refresh-token"})
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/auth_test.go:297:				req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: tc.cookie})
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/upload_download_test.go:124:			req.AddCookie(&http.Cookie{
+🔎 İNCELEME [çerez bayrakları doğrulanmalı]: ./server/handlers/upload_download_test.go:634:		req.AddCookie(&http.Cookie{
+🔎 İNCELEME [pwn request trigger]: ./.claude/security-patterns.yaml:160:    regex: 'pull_request_target|workflow_run'

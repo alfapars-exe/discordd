@@ -49,7 +49,7 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 	if err != nil {
 		s.mu.Unlock()
 		s.logError(models.LogCategoryVoice, &adminUserID, "AdminUpdateState: permission resolve failed", map[string]string{
-			"target_user": targetUserID, "channel_id": state.ChannelID, "error": err.Error(),
+			"target_user": targetUserID, "channel_id": state.ChannelID, "error": pkg.ErrText(err),
 		})
 		return fmt.Errorf("failed to resolve permissions: %w", err)
 	}
@@ -256,7 +256,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		if err != nil {
 			s.mu.Unlock()
 			s.logError(models.LogCategoryVoice, &moverUserID, "MoveUser: source channel permission resolve failed", map[string]string{
-				"target_user": targetUserID, "source_channel": sourceChannelID, "error": err.Error(),
+				"target_user": targetUserID, "source_channel": sourceChannelID, "error": pkg.ErrText(err),
 			})
 			return fmt.Errorf("failed to resolve source channel permissions: %w", err)
 		}
@@ -269,7 +269,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		if err != nil {
 			s.mu.Unlock()
 			s.logError(models.LogCategoryVoice, &moverUserID, "MoveUser: target channel permission resolve failed", map[string]string{
-				"target_user": targetUserID, "target_channel": targetChannelID, "error": err.Error(),
+				"target_user": targetUserID, "target_channel": targetChannelID, "error": pkg.ErrText(err),
 			})
 			return fmt.Errorf("failed to resolve target channel permissions: %w", err)
 		}
@@ -431,7 +431,7 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 	if err != nil {
 		s.mu.Unlock()
 		s.logError(models.LogCategoryVoice, &disconnecterUserID, "AdminDisconnectUser: permission resolve failed", map[string]string{
-			"target_user": targetUserID, "channel_id": state.ChannelID, "error": err.Error(),
+			"target_user": targetUserID, "channel_id": state.ChannelID, "error": pkg.ErrText(err),
 		})
 		return fmt.Errorf("failed to resolve permissions: %w", err)
 	}

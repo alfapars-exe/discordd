@@ -157,7 +157,7 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 // ReorderServers updates the user's personal server list order (per-user, no broadcast).
 func (s *serverService) ReorderServers(ctx context.Context, userID string, req *models.ReorderServersRequest) ([]models.ServerListItem, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	if err := s.serverRepo.UpdateMemberPositions(ctx, userID, req.Items); err != nil {

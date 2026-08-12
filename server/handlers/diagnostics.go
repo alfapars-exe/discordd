@@ -116,7 +116,7 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 				defer cancel()
 				if sendErr := h.email.SendDiagnosticsReport(ctx, h.reportTo, reporter, description, filename, data); sendErr != nil {
 					h.appLogger.Log(models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
-						"diagnostics_email_failed", map[string]string{"error": sendErr.Error()})
+						"diagnostics_email_failed", map[string]string{"error": pkg.ErrText(sendErr)})
 				} else {
 					h.appLogger.Log(models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
 						"diagnostics_email_sent", map[string]string{"to": h.reportTo, "bytes": strconv.Itoa(len(data))})

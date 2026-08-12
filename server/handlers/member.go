@@ -76,7 +76,11 @@ func (h *MemberHandler) ModifyRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "at least one role is required", "VALIDATION_FAILED")
 		return
 	}
 
@@ -136,7 +140,11 @@ func (h *MemberHandler) Ban(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid ban request: check reason length and duration", "VALIDATION_FAILED")
 		return
 	}
 	if err := h.memberService.Ban(r.Context(), serverID, actor.ID, targetID, req.Reason, req.ResolvedExpiresAt()); err != nil {
@@ -173,7 +181,11 @@ func (h *MemberHandler) Timeout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid timeout request: check duration and reason", "VALIDATION_FAILED")
 		return
 	}
 	if err := h.memberService.Timeout(r.Context(), serverID, actor.ID, targetID, req.ExpiresAt(), req.Reason); err != nil {
@@ -212,7 +224,11 @@ func (h *MemberHandler) SetNickname(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := req.Validate(); err != nil {
-		pkg.ErrorWithMessage(w, http.StatusBadRequest, err.Error())
+		// err.Error() never reaches the client here: models.Validate() returns
+		// a fixed, non-request-derived message (CWE-209 hardening), so the
+		// response carries a static literal + the VALIDATION_FAILED code
+		// instead of the raw error text.
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid nickname", "VALIDATION_FAILED")
 		return
 	}
 

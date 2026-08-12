@@ -132,8 +132,16 @@ class ErrorBoundary extends Component<Props, State> {
     }
     // Cache-bust query string forces a fresh index.html fetch from the SW or
     // HTTP cache regardless of Cache-Control headers.
-    const sep = window.location.search ? "&" : "?";
-    window.location.href = window.location.pathname + window.location.search + sep + "_eb=" + Date.now();
+    //
+    // Built via the URL API (not string concatenation of pathname+search)
+    // so the current origin is preserved even when pathname starts with
+    // "//" — e.g. https://host//evil.com/ has pathname "//evil.com/", and
+    // `window.location.href = pathname + ...` would assign a protocol-
+    // relative URL that redirects cross-origin. searchParams.set also
+    // replaces (rather than appends) `_eb` on repeated recovery clicks.
+    const url = new URL(window.location.href);
+    url.searchParams.set("_eb", String(Date.now()));
+    window.location.assign(url);
   };
 
   render() {

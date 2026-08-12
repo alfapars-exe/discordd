@@ -97,6 +97,7 @@ func newClientRateLimiter() *clientRateLimiter {
 // allow consults the bucket for op, creating it lazily.
 func (r *clientRateLimiter) allow(op string) bool {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	b, ok := r.buckets[op]
 	if !ok {
 		limit, exists := defaultEventLimits[op]
@@ -106,6 +107,9 @@ func (r *clientRateLimiter) allow(op string) bool {
 		b = newTokenBucket(limit.burst, limit.refill)
 		r.buckets[op] = b
 	}
-	r.mu.Unlock()
+	// b.allow() below now runs with r.mu still held (nested r.mu -> b.mu,
+	// rather than sequential): b is a per-op *tokenBucket with its own
+	// independent mutex that nothing ever acquires before r.mu, so this
+	// isn't a new ordering hazard, just a slightly longer r.mu hold.
 	return b.allow()
 }

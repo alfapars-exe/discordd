@@ -330,7 +330,12 @@ func hashRefreshToken(token string) string {
 // Users join servers via invite or create their own.
 func (s *authService) Register(ctx context.Context, req *models.CreateUserRequest) (*AuthTokens, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		// pkg.ErrText, not err.Error(): CreateUserRequest.Validate() only ever
+		// returns fixed, non-request-derived messages (field-name/length
+		// text), so this is defense-in-depth rather than a behavior change —
+		// consistent with never letting a raw err.Error() reach the 4xx body
+		// pkg.Error(w, err) renders this through.
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
@@ -429,7 +434,12 @@ var dummyLoginHash, _ = bcrypt.GenerateFromPassword([]byte("hichat-login-timing-
 // Login authenticates a user. Platform-level ban checked here; server bans checked at WS connect.
 func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*AuthTokens, error) {
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, err.Error())
+		// pkg.ErrText, not err.Error(): LoginRequest.Validate() only ever
+		// returns fixed, non-request-derived messages ("username/password is
+		// required"), so this is defense-in-depth rather than a behavior
+		// change — consistent with never letting a raw err.Error() reach the
+		// 4xx body pkg.Error(w, err) renders this through.
+		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}
 
 	user, err := s.userRepo.GetByUsername(ctx, req.Username)
