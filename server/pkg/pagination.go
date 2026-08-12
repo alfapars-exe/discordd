@@ -30,12 +30,22 @@ func ClampInt(s string, def, min, max int) int {
 	return v
 }
 
-// ClampPagination reads the "limit" and "offset" query parameters from r,
-// clamping limit to [1, maxLimit] (falling back to defLimit) and offset to
-// a non-negative value (falling back to 0, no upper bound — matches every
-// existing call site's behavior, none of which capped offset).
+// ClampPagination reads the "limit" and "offset" query parameters from r.
+// A zero/negative limit falls back to defLimit rather than clamping to 1 —
+// the original per-handler parsers guarded assignment with `n > 0`, so
+// anything non-positive kept the default; only above-ceiling values clamp
+// down to maxLimit. Offset clamps to a non-negative value (falling back to
+// 0, no upper bound — no existing call site capped offset).
 func ClampPagination(r *http.Request, defLimit, maxLimit int) (limit, offset int) {
-	limit = ClampInt(r.URL.Query().Get("limit"), defLimit, 1, maxLimit)
+	limit = defLimit
+	if s := r.URL.Query().Get("limit"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			limit = v
+			if limit > maxLimit {
+				limit = maxLimit
+			}
+		}
+	}
 	offset = ClampInt(r.URL.Query().Get("offset"), 0, 0, math.MaxInt)
 	return limit, offset
 }
