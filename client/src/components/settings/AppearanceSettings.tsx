@@ -34,6 +34,8 @@ function AppearanceSettings() {
   const setTheme = useSettingsStore((s) => s.setTheme);
   const blurEnabled = useSettingsStore((s) => s.blurEnabled);
   const setBlurEnabled = useSettingsStore((s) => s.setBlurEnabled);
+  const blurStrength = useSettingsStore((s) => s.blurStrength);
+  const setBlurStrength = useSettingsStore((s) => s.setBlurStrength);
   const wallpaperEnabled = useSettingsStore((s) => s.wallpaperEnabled);
   const setWallpaperEnabled = useSettingsStore((s) => s.setWallpaperEnabled);
   const transparentBackground = useSettingsStore((s) => s.transparentBackground);
@@ -422,10 +424,36 @@ function AppearanceSettings() {
           role="switch"
           aria-checked={blurEnabled}
           type="button"
+          disabled={transparentBackground}
         >
           <span className="ub-switch-thumb" />
         </button>
       </label>
+
+      {transparentBackground && (
+        <p className="theme-section-desc" style={{ color: "var(--yellow)" }}>
+          {t("blurDisabledInTransparent")}
+        </p>
+      )}
+
+      {blurEnabled && !transparentBackground && (
+        <label className="settings-toggle-row" style={{ alignItems: "center", gap: 12 }}>
+          <span style={{ minWidth: 140 }}>{t("blurStrengthLabel")}</span>
+          <input
+            type="range"
+            min={8}
+            max={40}
+            step={2}
+            value={blurStrength}
+            onChange={(e) => setBlurStrength(parseInt(e.target.value, 10))}
+            style={{ flex: 1, accentColor: "var(--primary)" }}
+            aria-label={t("blurStrengthLabel")}
+          />
+          <span style={{ minWidth: 46, textAlign: "right", color: "var(--t2)", fontVariantNumeric: "tabular-nums" }}>
+            {blurStrength} px
+          </span>
+        </label>
+      )}
 
       {/* Neon decorations — edge halo + ambient aurora. Toggle gates the
           slider, slider scales --neon-intensity. Lightning has its own

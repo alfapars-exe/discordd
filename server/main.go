@@ -204,7 +204,7 @@ func main() {
 	// messageService/reactionService — no setter call needed here anymore.
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
-	registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
+	stopPresenceDebounce := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
 
 	// 10a. WS-layer defense-in-depth authorizer for voice moderation events
 	// (admin mute/deafen, move, disconnect) — see voice_authorizer.go and
@@ -457,6 +457,11 @@ func main() {
 	stopRuntimeStats()
 	stopMaintenance()
 	stopReadiness()
+	// Cancel any pending presence-offline debounce timers (presence_debounce.go)
+	// before the Hub and DB pool below are torn down — see stopAll's doc
+	// comment for why an in-flight timer firing after shutdown begins is
+	// unsafe rather than merely wasteful.
+	stopPresenceDebounce()
 	metricsCollector.Stop()
 	hub.Shutdown()
 

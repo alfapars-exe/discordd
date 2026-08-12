@@ -55,7 +55,7 @@ func TestUserFirstConnectCallback_PassesBoundedContextToRepo(t *testing.T) {
 		},
 	}
 
-	userFirstConnectCallback(ws.NewHub(), userRepo)("user-1", "")
+	userFirstConnectCallback(ws.NewHub(), userRepo, newPresenceOfflineDebouncer(time.Minute))("user-1", "")
 
 	if !sawGetByID {
 		t.Error("callback never called userRepo.GetByID")
@@ -121,7 +121,7 @@ func TestUserFirstConnectCallback_BoundsContextOnInvisiblePath(t *testing.T) {
 		},
 	}
 
-	userFirstConnectCallback(ws.NewHub(), userRepo)("user-1", "")
+	userFirstConnectCallback(ws.NewHub(), userRepo, newPresenceOfflineDebouncer(time.Minute))("user-1", "")
 
 	if !sawGetByID {
 		t.Fatal("callback never called userRepo.GetByID")

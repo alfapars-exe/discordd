@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useSettingsStore, scaleFromPosition } from "./settingsStore";
 
 /**
@@ -70,5 +70,77 @@ describe("scaleFromPosition (UI-scale slider drag mapping)", () => {
       expect(v).toBeGreaterThanOrEqual(prev);
       prev = v;
     }
+  });
+});
+
+/**
+ * Background blur default flip (2026-08-13, product decision): blur used to
+ * default ON (hardware-heuristic). It now defaults OFF for everyone,
+ * including clients that already had "1" persisted from the old default —
+ * we can't tell an explicit opt-in from the old auto-on default, so this is
+ * a deliberate one-time reset gated by a migration marker key. Each test
+ * re-imports the module fresh (vi.resetModules) to replay module-load-time
+ * migration logic, mirroring the pattern in e2eeStore.test.ts.
+ */
+describe("settingsStore — blur default migration", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("forces blurEnabled off on first load even if '1' was already persisted, and marks the migration done", async () => {
+    localStorage.setItem("mqvi_blur_enabled", "1");
+
+    vi.resetModules();
+    const fresh = await import("./settingsStore");
+
+    expect(fresh.useSettingsStore.getState().blurEnabled).toBe(false);
+    expect(localStorage.getItem("mqvi_blur_enabled")).toBe("0");
+    expect(localStorage.getItem("mqvi_blur_default_migrated_v1")).toBe("1");
+  });
+
+  it("defaults to false for a brand-new client with nothing persisted", async () => {
+    vi.resetModules();
+    const fresh = await import("./settingsStore");
+
+    expect(fresh.useSettingsStore.getState().blurEnabled).toBe(false);
+  });
+
+  it("respects an explicit re-enable made after the one-time migration already ran", async () => {
+    localStorage.setItem("mqvi_blur_default_migrated_v1", "1");
+    localStorage.setItem("mqvi_blur_enabled", "1");
+
+    vi.resetModules();
+    const fresh = await import("./settingsStore");
+
+    expect(fresh.useSettingsStore.getState().blurEnabled).toBe(true);
+  });
+});
+
+/**
+ * Blur strength (Appearance → Background blur, 8-40px, default 20, step 2).
+ * Mirrors the lightningBlur/neonIntensity setter tests above — persists to
+ * localStorage and clamps to range.
+ */
+describe("settingsStore — blurStrength", () => {
+  beforeEach(() => {
+    useSettingsStore.getState().setBlurStrength(20);
+  });
+
+  it("defaults to 20px", () => {
+    expect(useSettingsStore.getState().blurStrength).toBe(20);
+  });
+
+  it("persists and clamps to the 8-40 range", () => {
+    const { setBlurStrength } = useSettingsStore.getState();
+
+    setBlurStrength(30);
+    expect(useSettingsStore.getState().blurStrength).toBe(30);
+    expect(localStorage.getItem("mqvi_blur_strength")).toBe("30");
+
+    setBlurStrength(2);
+    expect(useSettingsStore.getState().blurStrength).toBe(8);
+
+    setBlurStrength(999);
+    expect(useSettingsStore.getState().blurStrength).toBe(40);
   });
 });

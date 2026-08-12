@@ -302,6 +302,8 @@
   "themeDescription": "Arayüz için bir renk paleti seçin",
   "blurTitle": "Arka plan bulanıklığı",
   "blurDescription": "Kenar çubuğu panellerinde buzlu cam efekti. Düşük donanımlarda takılma yaşıyorsanız kapatın.",
+  "blurStrengthLabel": "Bulanıklık şiddeti",
+  "blurDisabledInTransparent": "Saydam arka plan açıkken bulanıklık kullanılamaz — saydam bir Electron penceresi arka plan bulanıklığını oluşturamıyor.",
   "lightningTitle": "Yıldırım efekti",
   "lightningDescription": "Ana panelde animasyonlu neon yıldırımlar çakar. Düşük donanımda kapatın.",
   "lightningBlurLabel": "Yıldırım yumuşaklığı",
