@@ -69,8 +69,19 @@ export function useUpdateChecker(): UpdateChecker {
 
     api.onUpdateError((message) => {
       // Network errors (tunnel failures, no internet) are expected —
-      // don't show a banner, just log for debugging
+      // don't show a banner, just log for debugging.
       console.warn("[updater] Update check failed:", message);
+      // A failed DOWNLOAD must also clear the "downloading" banner, or it
+      // sits at "Güncelleme indiriliyor N%" forever — the next successful
+      // periodic check restarts the flow cleanly. A finished download
+      // (status "ready", or a snoozed ready state held in
+      // downloadedUpdateRef) is preserved: the installer is on disk and a
+      // later check hiccup shouldn't hide the restart prompt.
+      if (!downloadedUpdateRef.current) {
+        setStatus((s) => (s === "downloading" ? "idle" : s));
+        setUpdate(null);
+        setProgress(0);
+      }
     });
 
     // Listeners persist for app lifetime — no cleanup needed

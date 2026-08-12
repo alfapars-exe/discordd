@@ -212,7 +212,12 @@ button, a, [role="button"] { touch-action: manipulation; }
    sidebar). A more-opaque in-window backing gives the blur a stable surface.
    Trades window see-through for blur stability — keep this high. */
 .transparent-bg #root { background:rgba(5,6,11,0.85);border:1px solid var(--panel-border);border-radius:12px; }
-.transparent-bg .settings-overlay { background:rgba(5,6,11,0.6); }
+/* Transparent Electron windows cannot composite backdrop-filter (Chromium
+   limitation — rendered by luck on Electron 42, not at all on 43+), so the
+   frosted tokens fall back to near-opaque panels here. body.* specificity
+   ties body.blur-enabled; being later in the file, this wins. Window edges
+   still show the desktop through #root's 0.85 backing above. */
+body.transparent-bg { --panel-bg:linear-gradient(180deg, rgba(26,30,39,0.96) 0%, rgba(17,20,27,0.96) 100%); --panel-backdrop:none; }
 .transparent-bg .auth-page,
 .transparent-bg .landing-page { background:transparent !important; }
 #root {
@@ -1599,7 +1604,12 @@ button.ch-tree-vu-stream svg { width:14px;height:14px; }
 /* ═══════════════════════════════════════
    SETTINGS MODAL
    ═══════════════════════════════════════ */
-.settings-overlay { position:fixed;top:var(--safe-area-inset-top);left:0;right:0;bottom:var(--safe-area-inset-bottom);z-index:50;display:flex;background:transparent;padding:var(--panel-gap);gap:var(--panel-gap); }
+/* The overlay carries its own dim UNCONDITIONALLY. Legibility of the
+   settings panels must never depend on backdrop-filter: in a transparent
+   Electron window Chromium does not composite backdrop-filter at all
+   (worked by accident on Electron 42, gone on 43), so a transparent
+   overlay let the sidebar text bleed straight through the glass panels. */
+.settings-overlay { position:fixed;top:var(--safe-area-inset-top);left:0;right:0;bottom:var(--safe-area-inset-bottom);z-index:50;display:flex;background:rgba(5,6,11,0.72);padding:var(--panel-gap);gap:var(--panel-gap); }
 .settings-nav { width:218px;background:var(--panel-bg);backdrop-filter:var(--panel-backdrop);-webkit-backdrop-filter:var(--panel-backdrop);border:1px solid var(--panel-border);border-radius:var(--panel-radius);box-shadow:var(--panel-inset),var(--panel-shadow);display:flex;flex-direction:column;padding:16px 10px;overflow-y:auto;flex-shrink:0; }
 .settings-nav-label { font-size:13px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;padding:12px 8px 4px; }
 .settings-nav-item { display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--t2);border:none;background:transparent;width:100%;text-align:left;transition:background .08s; }
