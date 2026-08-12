@@ -164,12 +164,17 @@ func (d *routeDeps) registerMiscGlobalRoutes() {
 // Badges — literal paths before parametric
 func (d *routeDeps) registerBadgeRoutes() {
 	d.mux.Handle("GET /api/badges", d.auth(d.h.Badge.ListBadges))
-	d.mux.Handle("POST /api/badges", d.auth(d.h.Badge.CreateBadge))
-	d.mux.Handle("POST /api/badges/icon", d.auth(d.h.Badge.UploadBadgeIcon))
-	d.mux.Handle("PATCH /api/badges/{id}", d.auth(d.h.Badge.UpdateBadge))
-	d.mux.Handle("DELETE /api/badges/{id}", d.auth(d.h.Badge.DeleteBadge))
-	d.mux.Handle("POST /api/badges/{id}/assign", d.auth(d.h.Badge.AssignBadge))
-	d.mux.Handle("DELETE /api/badges/{id}/assign/{userId}", d.auth(d.h.Badge.UnassignBadge))
+	// Mutation endpoints are platform-admin-gated (authAdmin), not just
+	// authenticated (auth) — badge creation/assignment previously relied on
+	// a hardcoded user ID check inside the service layer (BadgeAdminUserID),
+	// which meant any authenticated user could reach the handler and only
+	// got rejected deep inside the service. Read endpoints stay auth-only.
+	d.mux.Handle("POST /api/badges", d.authAdmin(d.h.Badge.CreateBadge))
+	d.mux.Handle("POST /api/badges/icon", d.authAdmin(d.h.Badge.UploadBadgeIcon))
+	d.mux.Handle("PATCH /api/badges/{id}", d.authAdmin(d.h.Badge.UpdateBadge))
+	d.mux.Handle("DELETE /api/badges/{id}", d.authAdmin(d.h.Badge.DeleteBadge))
+	d.mux.Handle("POST /api/badges/{id}/assign", d.authAdmin(d.h.Badge.AssignBadge))
+	d.mux.Handle("DELETE /api/badges/{id}/assign/{userId}", d.authAdmin(d.h.Badge.UnassignBadge))
 	d.mux.Handle("GET /api/users/{userId}/badges", d.auth(d.h.Badge.GetUserBadges))
 }
 

@@ -7,9 +7,34 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
 	"github.com/argeinfina/hichat/ws"
 )
+
+// passthroughDeviceTxRunner satisfies repository.DeviceTxRunner without a
+// real transaction — runs fn directly against the given repo, mirroring
+// passthroughTxRunner in message_service_test.go (same package, same
+// pattern: RegisterDevice's atomicity is a repository/DB-level concern, not
+// something the service-layer unit tests need a real *sql.Tx to observe).
+type passthroughDeviceTxRunner struct {
+	repo repository.DeviceRepository
+}
+
+func (p passthroughDeviceTxRunner) InTx(_ context.Context, fn func(*repository.DeviceTxRepos) error) error {
+	return fn(&repository.DeviceTxRepos{Device: p.repo})
+}
+
+// failingDeviceTxRunner never calls fn — simulates a transaction that fails
+// to even begin (or is deliberately short-circuited), for the "no partial
+// side effects on failure" test below.
+type failingDeviceTxRunner struct {
+	err error
+}
+
+func (f failingDeviceTxRunner) InTx(context.Context, func(*repository.DeviceTxRepos) error) error {
+	return f.err
+}
 
 // mockDeviceRepo is a test-local DeviceRepository. Only the methods a test
 // wires are meaningful; the rest satisfy the interface as no-ops.
@@ -116,7 +141,7 @@ func TestRegisterDevice(t *testing.T) {
 	t.Run("invalid request is rejected before any write", func(t *testing.T) {
 		called := false
 		repo := &mockDeviceRepo{RegisterFn: func(context.Context, *models.Device) error { called = true; return nil }}
-		svc := NewDeviceService(repo, &testutil.MockBroadcaster{}, nil)
+		svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, &testutil.MockBroadcaster{}, nil)
 		if _, err := svc.RegisterDevice(ctx, "u1", &models.RegisterDeviceRequest{}); !errors.Is(err, pkg.ErrBadRequest) {
 			t.Errorf("err = %v, want ErrBadRequest", err)
 		}
@@ -128,7 +153,7 @@ func TestRegisterDevice(t *testing.T) {
 	t.Run("valid request registers and broadcasts an add", func(t *testing.T) {
 		var events []ws.Event
 		repo := &mockDeviceRepo{}
-		svc := NewDeviceService(repo, captureHub(&events), nil)
+		svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, captureHub(&events), nil)
 		if _, err := svc.RegisterDevice(ctx, "u1", validRegisterReq()); err != nil {
 			t.Fatalf("RegisterDevice: %v", err)
 		}
@@ -147,7 +172,7 @@ func TestRegisterDevice(t *testing.T) {
 			uploaded = true
 			return nil
 		}}
-		svc := NewDeviceService(repo, &testutil.MockBroadcaster{}, nil)
+		svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, &testutil.MockBroadcaster{}, nil)
 		req := validRegisterReq()
 		req.OneTimePrekeys = []models.OTPKey{{PublicKey: "pk1"}}
 		if _, err := svc.RegisterDevice(ctx, "u1", req); err != nil {
@@ -157,11 +182,29 @@ func TestRegisterDevice(t *testing.T) {
 			t.Error("initial prekeys must be uploaded when present")
 		}
 	})
+
+	// TestRegisterDevice/transaction failure surfaces as an error and skips
+	// the broadcast (P1.12): before Register+UploadPrekeys shared one
+	// transaction, an UploadPrekeys failure was invisible to the caller
+	// (nothing checked its error) and the broadcast fired regardless — so a
+	// device with zero prekeys was announced as fully registered.
+	t.Run("transaction failure surfaces as an error and skips the broadcast", func(t *testing.T) {
+		var events []ws.Event
+		repo := &mockDeviceRepo{}
+		failing := failingDeviceTxRunner{err: errors.New("tx exploded")}
+		svc := NewDeviceService(repo, failing, captureHub(&events), nil)
+		if _, err := svc.RegisterDevice(ctx, "u1", validRegisterReq()); err == nil {
+			t.Fatal("expected RegisterDevice to surface the transaction failure, got nil error")
+		}
+		if len(events) != 0 {
+			t.Errorf("events = %+v, want none — no broadcast before a successful commit", events)
+		}
+	})
 }
 
 func TestListDevices_NilNormalizesToEmpty(t *testing.T) {
 	repo := &mockDeviceRepo{ListByUserFn: func(context.Context, string) ([]models.Device, error) { return nil, nil }}
-	svc := NewDeviceService(repo, &testutil.MockBroadcaster{}, nil)
+	svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, &testutil.MockBroadcaster{}, nil)
 	got, err := svc.ListDevices(context.Background(), "u1")
 	if err != nil {
 		t.Fatalf("ListDevices: %v", err)
@@ -178,7 +221,7 @@ func TestDeleteDevice_BroadcastsRemoval(t *testing.T) {
 	var events []ws.Event
 	deleted := false
 	repo := &mockDeviceRepo{DeleteFn: func(context.Context, string, string) error { deleted = true; return nil }}
-	svc := NewDeviceService(repo, captureHub(&events), nil)
+	svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, captureHub(&events), nil)
 	if err := svc.DeleteDevice(context.Background(), "u1", "dev-1"); err != nil {
 		t.Fatalf("DeleteDevice: %v", err)
 	}
@@ -208,7 +251,7 @@ func TestRegisterDevice_FansOutToUserServers(t *testing.T) {
 	serverLister := &testutil.MockServerRepo{
 		GetMemberServerIDsFn: func(context.Context, string) ([]string, error) { return []string{"srv-1", "srv-2"}, nil },
 	}
-	svc := NewDeviceService(repo, hub, serverLister)
+	svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, hub, serverLister)
 
 	if _, err := svc.RegisterDevice(context.Background(), "u1", validRegisterReq()); err != nil {
 		t.Fatalf("RegisterDevice: %v", err)
@@ -231,7 +274,7 @@ func TestDeleteDevice_FansOutToUserServers(t *testing.T) {
 	serverLister := &testutil.MockServerRepo{
 		GetMemberServerIDsFn: func(context.Context, string) ([]string, error) { return []string{"srv-1"}, nil },
 	}
-	svc := NewDeviceService(repo, hub, serverLister)
+	svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, hub, serverLister)
 
 	if err := svc.DeleteDevice(context.Background(), "u1", "dev-1"); err != nil {
 		t.Fatalf("DeleteDevice: %v", err)
@@ -243,7 +286,8 @@ func TestDeleteDevice_FansOutToUserServers(t *testing.T) {
 }
 
 func TestUpdateSignedPrekey_InvalidRejected(t *testing.T) {
-	svc := NewDeviceService(&mockDeviceRepo{}, &testutil.MockBroadcaster{}, nil)
+	deviceRepo := &mockDeviceRepo{}
+	svc := NewDeviceService(deviceRepo, passthroughDeviceTxRunner{repo: deviceRepo}, &testutil.MockBroadcaster{}, nil)
 	if err := svc.UpdateSignedPrekey(context.Background(), "u1", "dev-1", &models.UpdateSignedPrekeyRequest{}); !errors.Is(err, pkg.ErrBadRequest) {
 		t.Errorf("err = %v, want ErrBadRequest", err)
 	}
@@ -265,7 +309,7 @@ func TestGetPrekeyBundles_EmitsPrekeyLowBelowThreshold(t *testing.T) {
 			return PrekeyLowThreshold + 50, nil // above -> no alert
 		},
 	}
-	svc := NewDeviceService(repo, captureHub(&events), nil)
+	svc := NewDeviceService(repo, passthroughDeviceTxRunner{repo: repo}, captureHub(&events), nil)
 	if _, err := svc.GetPrekeyBundles(context.Background(), "u1"); err != nil {
 		t.Fatalf("GetPrekeyBundles: %v", err)
 	}

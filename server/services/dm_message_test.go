@@ -321,12 +321,9 @@ func TestSendMessage_firstMessageToMessageRequestUserTransitionsToPending(t *tes
 		return 0, nil
 	}
 	updated := ""
-	f.repo.UpdateChannelStatusFn = func(_ context.Context, _, status string) error {
-		updated = status
-		return nil
-	}
 	initiator := ""
-	f.repo.SetInitiatedByFn = func(_ context.Context, _, userID string) error {
+	f.repo.TransitionToPendingFn = func(_ context.Context, _, userID string) error {
+		updated = models.DMStatusPending
 		initiator = userID
 		return nil
 	}
@@ -349,6 +346,53 @@ func TestSendMessage_firstMessageToMessageRequestUserTransitionsToPending(t *tes
 	}
 	if initiator != "alice" {
 		t.Errorf("SetInitiatedBy = %q, want %q", initiator, "alice")
+	}
+}
+
+// TestSendMessage_transitionToPendingFailureSurfacesAsError pins P1.11: a
+// TransitionToPending failure must surface as SendMessage's own error and
+// stop before CreateMessage — previously the two UPDATEs this replaced
+// (UpdateChannelStatus + SetInitiatedBy) had their errors discarded with
+// `_ =`, so a failure here silently fell through to creating the message
+// against a channel whose pending-transition never actually landed in the
+// DB.
+func TestSendMessage_transitionToPendingFailureSurfacesAsError(t *testing.T) {
+	f := newDMFixture()
+	f.repo.GetChannelByIDFn = func(_ context.Context, id string) (*models.DMChannel, error) {
+		return &models.DMChannel{
+			ID: id, User1ID: "alice", User2ID: "bob",
+			Status: models.DMStatusAccepted,
+		}, nil
+	}
+	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		u := &models.User{ID: id, DMPrivacy: "accepted"}
+		if id == "bob" {
+			u.DMPrivacy = "message_request"
+		}
+		return u, nil
+	}
+	f.friends.AreFriendsFn = func(_ context.Context, _, _ string) (bool, error) {
+		return false, nil
+	}
+	f.repo.CountMessagesBySenderFn = func(_ context.Context, _, _ string) (int, error) {
+		return 0, nil
+	}
+	f.repo.TransitionToPendingFn = func(_ context.Context, _, _ string) error {
+		return errors.New("db write failed")
+	}
+	created := false
+	f.repo.CreateMessageFn = func(_ context.Context, _ *models.DMMessage) error {
+		created = true
+		return nil
+	}
+
+	_, err := f.svc.SendMessage(context.Background(), "alice", "ch-1",
+		&models.CreateDMMessageRequest{Content: "first message"})
+	if err == nil {
+		t.Fatal("expected SendMessage to surface the TransitionToPending failure, got nil error")
+	}
+	if created {
+		t.Error("CreateMessage must not be called when the pending transition failed")
 	}
 }
 

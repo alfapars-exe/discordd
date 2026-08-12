@@ -36,16 +36,22 @@ func (stubBadgeRepo) CountUserBadges(context.Context, string) (int, error) { ret
 func TestBadgeService_RejectsSteeringCharsInName(t *testing.T) {
 	svc := NewBadgeService(stubBadgeRepo{}, &testutil.MockEventPublisher{})
 
+	// Admin authorization for badge mutations is now enforced by the HTTP
+	// route's authAdmin middleware chain (init_routes_global.go), not by
+	// the service layer, so any caller ID exercises the name-validation
+	// path under test here.
+	const callerID = "steering-chars-test-caller"
+
 	t.Run("create", func(t *testing.T) {
 		req := &models.CreateBadgeRequest{Name: spoofedIdentityName, IconType: "builtin", Color1: "#fff"}
-		if _, err := svc.CreateBadge(context.Background(), BadgeAdminUserID, req); err == nil {
+		if _, err := svc.CreateBadge(context.Background(), callerID, req); err == nil {
 			t.Fatal("spoofed badge name should be rejected")
 		}
 	})
 
 	t.Run("update", func(t *testing.T) {
 		req := &models.CreateBadgeRequest{Name: spoofedIdentityName, IconType: "builtin", Color1: "#fff"}
-		if _, err := svc.UpdateBadge(context.Background(), BadgeAdminUserID, "b1", req); err == nil {
+		if _, err := svc.UpdateBadge(context.Background(), callerID, "b1", req); err == nil {
 			t.Fatal("spoofed badge name should be rejected")
 		}
 	})

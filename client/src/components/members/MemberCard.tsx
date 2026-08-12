@@ -31,8 +31,6 @@ import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatDate } from "../../utils/dateFormat";
 import { showApiError } from "../../utils/apiError";
 
-const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
-
 type MemberCardProps = {
   member?: MemberWithRoles;
   user?: PublicUser;
@@ -102,7 +100,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const canSetOwnNickname = isServerContext && isMe;
   const canSetOtherNickname = isServerContext && !isMe && hasPermission(myPerms, Permissions.ManageNicknames);
   const canEditNickname = canSetOwnNickname || canSetOtherNickname;
-  const isBadgeAdmin = currentUser?.id === BADGE_ADMIN_USER_ID;
+  const isBadgeAdmin = currentUser?.is_platform_admin === true;
   const hasModActions = canKick || canBan || canTimeout || canManageRoles;
   // Duration picker state — null when closed; "timeout" or "tempban" picks
   // which preset list + which API to hit on selection.

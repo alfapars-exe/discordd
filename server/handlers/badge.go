@@ -178,18 +178,10 @@ func (h *BadgeHandler) GetUserBadges(w http.ResponseWriter, r *http.Request) {
 // UploadBadgeIcon handles POST /api/badges/icon (multipart/form-data)
 // Saves the icon image to disk and returns the URL path.
 func (h *BadgeHandler) UploadBadgeIcon(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
-	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
-		return
-	}
-
-	// Only badge admin can upload icons
-	if user.ID != services.BadgeAdminUserID {
-		pkg.ErrorWithMessage(w, http.StatusForbidden, "only badge admin can upload icons")
-		return
-	}
-
+	// Route is authAdmin-gated (platform admin only, init_routes_global.go's
+	// registerBadgeRoutes) — no in-handler admin check needed, and this
+	// endpoint doesn't need the caller's user ID for anything (unlike
+	// CreateBadge/AssignBadge etc., the uploaded icon isn't attributed).
 	if err := pkg.LimitedParseMultipartForm(w, r, badgeIconMaxSize); err != nil {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "failed to parse multipart form")
 		return

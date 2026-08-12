@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 )
@@ -173,11 +174,11 @@ func startMaintenanceSweeper(
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			if err := sessions.DeleteExpired(ctx); err != nil {
-				logger.Error("expired session sweep failed", "error", err)
+				logger.Error("expired session sweep failed", "err", pkg.ErrText(err))
 			}
 			deleted, err := previews.DeleteExpired(ctx, time.Now().Add(-linkPreviewRetention))
 			if err != nil {
-				logger.Error("link preview sweep failed", "error", err)
+				logger.Error("link preview sweep failed", "err", pkg.ErrText(err))
 			} else if deleted > 0 {
 				logger.Info("link preview sweep", "deleted_rows", deleted)
 			}
@@ -188,7 +189,7 @@ func startMaintenanceSweeper(
 			if conn != nil {
 				reports, err := censusOrphans(ctx, conn)
 				if err != nil {
-					logger.Error("orphan census failed", "error", err)
+					logger.Error("orphan census failed", "err", pkg.ErrText(err))
 				}
 				for _, r := range reports {
 					logger.Warn("orphaned rows detected",

@@ -14,12 +14,16 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// BadgeAdminUserID is the only user allowed to manage badges.
-const BadgeAdminUserID = "95a8b295072f98a5"
-
 const maxBadgeNameLength = 20
 
 // BadgeService defines business logic for badge management.
+//
+// AUTHORIZATION CONTRACT: none of the mutation methods perform their own
+// authorization — the route layer's authAdmin (platform-admin) chain is the
+// single gate (init_routes_global.go). The adminID parameters are provenance
+// data (CreatedBy/AssignedBy), NOT an authorization input. Any new caller
+// outside the badge routes MUST sit behind an equivalent platform-admin
+// check.
 type BadgeService interface {
 	CreateBadge(ctx context.Context, adminID string, req *models.CreateBadgeRequest) (*models.Badge, error)
 	ListBadges(ctx context.Context) ([]models.Badge, error)
@@ -41,13 +45,6 @@ func NewBadgeService(badgeRepo repository.BadgeRepository, hub ws.EventPublisher
 	return &badgeService{badgeRepo: badgeRepo, hub: hub}
 }
 
-func (s *badgeService) requireAdmin(adminID string) error {
-	if adminID != BadgeAdminUserID {
-		return fmt.Errorf("%w: only badge admin can perform this action", pkg.ErrForbidden)
-	}
-	return nil
-}
-
 func generateID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
@@ -55,10 +52,6 @@ func generateID() string {
 }
 
 func (s *badgeService) CreateBadge(ctx context.Context, adminID string, req *models.CreateBadgeRequest) (*models.Badge, error) {
-	if err := s.requireAdmin(adminID); err != nil {
-		return nil, err
-	}
-
 	if req.Name == "" {
 		return nil, fmt.Errorf("%w: badge name is required", pkg.ErrBadRequest)
 	}
@@ -98,10 +91,6 @@ func (s *badgeService) ListBadges(ctx context.Context) ([]models.Badge, error) {
 }
 
 func (s *badgeService) UpdateBadge(ctx context.Context, adminID string, badgeID string, req *models.CreateBadgeRequest) (*models.Badge, error) {
-	if err := s.requireAdmin(adminID); err != nil {
-		return nil, err
-	}
-
 	existing, err := s.badgeRepo.GetByID(ctx, badgeID)
 	if err != nil {
 		return nil, fmt.Errorf("update badge: %w", err)
@@ -134,10 +123,6 @@ func (s *badgeService) UpdateBadge(ctx context.Context, adminID string, badgeID 
 }
 
 func (s *badgeService) DeleteBadge(ctx context.Context, adminID string, badgeID string) error {
-	if err := s.requireAdmin(adminID); err != nil {
-		return err
-	}
-
 	existing, err := s.badgeRepo.GetByID(ctx, badgeID)
 	if err != nil {
 		return fmt.Errorf("delete badge: %w", err)
@@ -150,10 +135,6 @@ func (s *badgeService) DeleteBadge(ctx context.Context, adminID string, badgeID 
 }
 
 func (s *badgeService) AssignBadge(ctx context.Context, adminID, userID, badgeID string) (*models.UserBadge, error) {
-	if err := s.requireAdmin(adminID); err != nil {
-		return nil, err
-	}
-
 	// Verify badge exists
 	badge, err := s.badgeRepo.GetByID(ctx, badgeID)
 	if err != nil {
@@ -198,10 +179,6 @@ func (s *badgeService) AssignBadge(ctx context.Context, adminID, userID, badgeID
 }
 
 func (s *badgeService) UnassignBadge(ctx context.Context, adminID, userID, badgeID string) error {
-	if err := s.requireAdmin(adminID); err != nil {
-		return err
-	}
-
 	if err := s.badgeRepo.Unassign(ctx, userID, badgeID); err != nil {
 		return fmt.Errorf("unassign badge: %w", err)
 	}

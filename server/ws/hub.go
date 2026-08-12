@@ -112,6 +112,17 @@ type Hub struct {
 	// Defense-in-depth check for voice moderation events delivered over WS.
 	// Nil-safe — when absent, legacy single-layer behaviour applies. Set in main.go.
 	voiceAdminAuthz VoiceAdminAuthorizer
+
+	// ─── Runtime op counters (P3.10) — surfaced via Stats() into
+	// startRuntimeStatsLogger's periodic slog line, not exposed as an HTTP
+	// endpoint. atomic.Uint64 rather than h.mu: these are incremented from
+	// per-connection read-pump goroutines on every inbound event, so gating
+	// them behind the same lock that guards the clients map would add
+	// contention to the hottest path in the hub for a metric nobody reads
+	// per-request.
+	dispatchCount  atomic.Uint64 // successfully routed to a registered handler (client_dispatch.go)
+	rateLimitDrops atomic.Uint64 // dropped by the per-(client,op) rate limiter (client_dispatch.go)
+	queueDrops     atomic.Uint64 // queueUnregister's buffer-full default branch, below
 }
 
 func NewHub() *Hub {
@@ -162,6 +173,32 @@ func (h *Hub) queueUnregister(c *Client) {
 	case h.unregister <- c:
 	default:
 		// Buffer full; client will be unregistered via its read-pump exit.
+		h.queueDrops.Add(1)
+	}
+}
+
+// HubStats is a point-in-time snapshot of the Hub's runtime op counters, for
+// startRuntimeStatsLogger's periodic log line (see Stats).
+type HubStats struct {
+	DispatchCount        uint64
+	RateLimitDrops       uint64
+	QueueUnregisterDrops uint64
+	// QueueUnregisterLen is the current unregister channel backlog, not a
+	// cumulative counter — a sustained non-zero value means the Run loop
+	// (hub.go's single register/unregister goroutine) is falling behind.
+	QueueUnregisterLen int
+}
+
+// Stats returns a snapshot of the hub's runtime op counters. Safe to call
+// from any goroutine; len(h.unregister) races with concurrent sends/receives
+// by definition (channel len is inherently a snapshot), which is exactly
+// the "how full is it right now" signal the caller wants.
+func (h *Hub) Stats() HubStats {
+	return HubStats{
+		DispatchCount:        h.dispatchCount.Load(),
+		RateLimitDrops:       h.rateLimitDrops.Load(),
+		QueueUnregisterDrops: h.queueDrops.Load(),
+		QueueUnregisterLen:   len(h.unregister),
 	}
 }
 

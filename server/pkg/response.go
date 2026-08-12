@@ -79,6 +79,14 @@ func Error(w http.ResponseWriter, err error) {
 // with the request's correlation id (RequestIDFrom) and, on 5xx, logs with
 // the same request_id/method/path breadcrumb as ErrorCtx. Prefer this over
 // Error at call sites that already have a context.Context in scope.
+//
+// Not used anywhere in production code as of P3.7 (middleware/permission.go,
+// middleware/server_membership.go) — those call sites already know their
+// status is a hardcoded 500 (a DB lookup failed, not a domain sentinel), so
+// ErrorCtx(ctx, w, http.StatusInternalServerError, msg, err) fits directly.
+// ErrorCtxErr's sentinel -> status mapping only pays off for a caller that
+// has just an err and wants Error's original behavior with a correlation id
+// attached; kept for that future use, not currently exercised.
 func ErrorCtxErr(ctx context.Context, w http.ResponseWriter, err error) {
 	status := mapErrorToStatus(err)
 	code := errorCode(err)

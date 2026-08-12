@@ -173,7 +173,12 @@ func TestHardDeleteUser(t *testing.T) {
 		email := "gone@example.com"
 		ur := userReturning(&models.User{ID: "t", Email: &email})
 		deleted := false
-		ur.HardDeleteUserFn = func(context.Context, string) error { deleted = true; return nil }
+		var reassignedTo string
+		ur.HardDeleteUserFn = func(_ context.Context, _, reassignToUserID string) error {
+			deleted = true
+			reassignedTo = reassignToUserID
+			return nil
+		}
 		emailSentBeforeDelete := false
 		mail := &testutil.MockEmailSender{SendAccountDeleteNotificationFn: func(context.Context, string, string) error {
 			emailSentBeforeDelete = !deleted // delete must not have happened yet
@@ -189,6 +194,9 @@ func TestHardDeleteUser(t *testing.T) {
 		}
 		if !deleted {
 			t.Error("HardDeleteUser must be called")
+		}
+		if reassignedTo != "admin" {
+			t.Errorf("reassignToUserID = %q, want the acting admin's ID %q", reassignedTo, "admin")
 		}
 		if len(h.hub.disconnected) != 1 || len(h.voice.disconnected) != 1 || len(h.inval.invalidated) != 1 {
 			t.Errorf("expected one disconnect+invalidate each, got hub=%v voice=%v inval=%v",

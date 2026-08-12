@@ -99,7 +99,6 @@ type VoiceService interface {
 	StartOrphanCleanup()
 	StartAFKChecker()
 	SetAppLogger(logger VoiceAppLogger)
-	SetAuditLogger(logger AuditWriter)
 	SetMusicBotHook(hook MusicBotChannelHook)
 	// EnforceModerationOnJoin evicts userID from the LiveKit room for
 	// (serverID, channelID) if they are currently timed out or banned on
@@ -126,7 +125,7 @@ type MusicBotChannelHook interface {
 
 // VoiceAppLogger writes structured logs. ISP interface to avoid importing services.AppLogService.
 type VoiceAppLogger interface {
-	Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
+	Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
 }
 
 // forceMoveGrant is a one-time permission bypass for a force-moved user.
@@ -191,6 +190,7 @@ func NewVoiceService(
 	encryptionKey []byte,
 	timeoutChecker MemberTimeoutChecker,
 	banChecker BanChecker,
+	auditLogger AuditWriter,
 ) VoiceService {
 	return &voiceService{
 		states:             make(map[string]*models.VoiceState),
@@ -207,6 +207,7 @@ func NewVoiceService(
 		encryptionKey:      encryptionKey,
 		timeoutChecker:     timeoutChecker,
 		banChecker:         banChecker,
+		auditLogger:        auditLogger,
 	}
 }
 
@@ -216,10 +217,6 @@ func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {
 	s.appLogger = logger
-}
-
-func (s *voiceService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -240,9 +237,15 @@ func (s *voiceService) audit(entry models.AuditLog) {
 }
 
 // logError writes a structured error log if appLogger is set.
+//
+// context.Background(): logError/logInfo are called from dozens of sites
+// across voice_admin.go/voice_lifecycle.go/voice_token.go, many of them
+// background LiveKit reconciliation paths with no request-scoped context at
+// all. Threading ctx through every one of those call sites is out of scope
+// for P3.8 — see AppLogService.Log's doc comment.
 func (s *voiceService) logError(category models.LogCategory, userID *string, message string, metadata map[string]string) {
 	if s.appLogger != nil {
-		s.appLogger.Log(models.LogLevelError, category, userID, nil, message, metadata)
+		s.appLogger.Log(context.Background(), models.LogLevelError, category, userID, nil, message, metadata)
 	}
 }
 
@@ -252,6 +255,6 @@ func (s *voiceService) logError(category models.LogCategory, userID *string, mes
 // drowned out genuine anomalies in dashboards / alerting.
 func (s *voiceService) logInfo(category models.LogCategory, userID *string, message string, metadata map[string]string) {
 	if s.appLogger != nil {
-		s.appLogger.Log(models.LogLevelInfo, category, userID, nil, message, metadata)
+		s.appLogger.Log(context.Background(), models.LogLevelInfo, category, userID, nil, message, metadata)
 	}
 }

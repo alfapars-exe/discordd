@@ -87,15 +87,18 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// Defense-in-depth: reject at the WS layer if the actor isn't allowed
 	// to moderate the target. The service callback enforces this too, but
 	// failing closed here means a forgotten check in the service can't
-	// degrade into a moderation bypass.
-	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
-		dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
-			"actor_id", c.userID, "target_id", data.TargetUserID)
-		return
-	}
-
+	// degrade into a moderation bypass. The gate runs INSIDE the goroutine:
+	// handlers dispatch synchronously on this client's read pump, and the
+	// authorizer's DB-backed resolve (up to 5 s on a wedged DB) must not
+	// stall inbound processing — the check is equally effective here, still
+	// ahead of the service call in the same goroutine.
 	if c.hub.onVoiceAdminStateUpdate != nil {
 		logx.Go("ws.voice_admin_state_update", func() {
+			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
+				dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
+					"actor_id", c.userID, "target_id", data.TargetUserID)
+				return
+			}
 			c.hub.onVoiceAdminStateUpdate(c.userID, data.TargetUserID, data.IsServerMuted, data.IsServerDeafened)
 		})
 	}
@@ -117,14 +120,16 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 		return
 	}
 
-	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
-		dispatchLogger.Warn("voice_move_user denied: insufficient perms",
-			"actor_id", c.userID, "target_id", data.TargetUserID)
-		return
-	}
-
+	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
 	if c.hub.onVoiceMoveUser != nil {
-		logx.Go("ws.voice_move_user", func() { c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID) })
+		logx.Go("ws.voice_move_user", func() {
+			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
+				dispatchLogger.Warn("voice_move_user denied: insufficient perms",
+					"actor_id", c.userID, "target_id", data.TargetUserID)
+				return
+			}
+			c.hub.onVoiceMoveUser(c.userID, data.TargetUserID, data.TargetChannelID)
+		})
 	}
 }
 
@@ -144,14 +149,16 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 		return
 	}
 
-	if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
-		dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
-			"actor_id", c.userID, "target_id", data.TargetUserID)
-		return
-	}
-
+	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
 	if c.hub.onVoiceDisconnectUser != nil {
-		logx.Go("ws.voice_disconnect_user", func() { c.hub.onVoiceDisconnectUser(c.userID, data.TargetUserID) })
+		logx.Go("ws.voice_disconnect_user", func() {
+			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
+				dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
+					"actor_id", c.userID, "target_id", data.TargetUserID)
+				return
+			}
+			c.hub.onVoiceDisconnectUser(c.userID, data.TargetUserID)
+		})
 	}
 }
 

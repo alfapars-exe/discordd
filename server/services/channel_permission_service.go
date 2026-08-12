@@ -15,12 +15,10 @@ package services
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
-	"github.com/argeinfina/hichat/pkg/cache"
 	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
@@ -29,9 +27,6 @@ import (
 var channelPermLogger = logx.Component("service.channel_permission")
 
 const (
-	permCacheTTL     = 30 * time.Second
-	permCacheCleanup = 5 * time.Minute
-
 	// broadcastResolveTimeout bounds permission resolution that runs after the
 	// originating request has already committed — WS fan-out happens in
 	// goroutines with no request context to inherit, so without a bound a
@@ -108,30 +103,52 @@ type PermissionInvalidator interface {
 	InvalidateAll()
 }
 
+// channelPermService is the uncached core: plain DB-backed permission
+// resolution and override CRUD, no caching or invalidation. It does NOT
+// implement the full ChannelPermissionService interface (InvalidateUser/
+// InvalidateAll live only on the caching decorator, since they only mean
+// something in the presence of a cache) — see newUncachedChannelPermService
+// and channel_permission_cache.go for why that's structural, not just a
+// convention.
 type channelPermService struct {
 	permRepo      repository.ChannelPermissionRepository
 	roleRepo      repository.RoleRepository
 	channelGetter ChannelGetter
 	hub           ws.Broadcaster
-
-	// Cache for ResolveChannelPermissions results. Key: "userID:channelID".
-	// Invalidated per-channel when overrides change.
-	permCache *cache.TTLCache[string, models.Permission]
 }
 
+// newUncachedChannelPermService constructs the core resolver, deliberately
+// unexported: the ONLY way to obtain a ChannelPermissionService from this
+// package is NewChannelPermissionService below, which always wraps this in
+// cachingPermResolver. That makes "a permission revocation is invisible to
+// invalidation because something got a direct handle on the uncached core"
+// a compile-time impossibility rather than a code-review rule — see
+// channel_permission_cache.go's doc comment for the incident this closes.
+func newUncachedChannelPermService(
+	permRepo repository.ChannelPermissionRepository,
+	roleRepo repository.RoleRepository,
+	channelGetter ChannelGetter,
+	hub ws.Broadcaster,
+) *channelPermService {
+	return &channelPermService{
+		permRepo:      permRepo,
+		roleRepo:      roleRepo,
+		channelGetter: channelGetter,
+		hub:           hub,
+	}
+}
+
+// NewChannelPermissionService constructs the full service: the uncached
+// core wrapped in the caching decorator. Every caller in this codebase gets
+// caching this way — there is no exported path to the uncached core.
 func NewChannelPermissionService(
 	permRepo repository.ChannelPermissionRepository,
 	roleRepo repository.RoleRepository,
 	channelGetter ChannelGetter,
 	hub ws.Broadcaster,
 ) ChannelPermissionService {
-	return &channelPermService{
-		permRepo:      permRepo,
-		roleRepo:      roleRepo,
-		channelGetter: channelGetter,
-		hub:           hub,
-		permCache:     cache.New[string, models.Permission](permCacheTTL, permCacheCleanup),
-	}
+	inner := newUncachedChannelPermService(permRepo, roleRepo, channelGetter, hub)
+	return newCachingPermResolver(inner)
 }
 
 func (s *channelPermService) GetOverrides(ctx context.Context, serverID, channelID string) ([]models.ChannelPermissionOverride, error) {
@@ -151,6 +168,10 @@ func (s *channelPermService) GetOverrides(ctx context.Context, serverID, channel
 	return overrides, nil
 }
 
+// SetOverride writes the override and broadcasts it. Cache invalidation is
+// NOT this method's job — the uncached core has no cache. cachingPermResolver
+// invalidates the channel after this returns successfully (see its
+// SetOverride wrapper).
 func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelID, roleID, actorID string, req *models.SetOverrideRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("invalid override request: %w", err)
@@ -180,8 +201,6 @@ func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelI
 			channelPermLogger.Error("failed to delete override (idempotent, non-fatal)", "channel_id", channelID, "role_id", roleID, "err", pkg.ErrText(err))
 		}
 
-		s.invalidateChannelCache(channelID)
-
 		s.hub.BroadcastToServer(serverID, ws.Event{
 			Op: ws.OpChannelPermissionDelete,
 			Data: map[string]string{
@@ -204,8 +223,6 @@ func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelI
 		return fmt.Errorf("failed to set channel override: %w", err)
 	}
 
-	s.invalidateChannelCache(channelID)
-
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op:   ws.OpChannelPermissionUpdate,
 		Data: override,
@@ -214,6 +231,9 @@ func (s *channelPermService) SetOverride(ctx context.Context, serverID, channelI
 	return nil
 }
 
+// DeleteOverride removes the override and broadcasts it. Same cache-
+// invalidation split as SetOverride: cachingPermResolver invalidates after
+// this returns successfully.
 func (s *channelPermService) DeleteOverride(ctx context.Context, serverID, channelID, roleID, actorID string) error {
 	_, role, err := s.validateOverrideScope(ctx, serverID, channelID, roleID)
 	if err != nil {
@@ -234,8 +254,6 @@ func (s *channelPermService) DeleteOverride(ctx context.Context, serverID, chann
 	if err := s.permRepo.Delete(ctx, channelID, roleID); err != nil {
 		return fmt.Errorf("failed to delete channel override: %w", err)
 	}
-
-	s.invalidateChannelCache(channelID)
 
 	s.hub.BroadcastToServer(serverID, ws.Event{
 		Op: ws.OpChannelPermissionDelete,
@@ -468,15 +486,6 @@ func (s *channelPermService) ResolveUserChannelPermissions(ctx context.Context, 
 	return result, nil
 }
 
-// permCacheKey is the single source of truth for the permission cache key
-// format. invalidateChannelCache and InvalidateUser match on the two halves of
-// this string, so every code path that writes the cache MUST build its key
-// here — a divergent key would be invisible to invalidation and let a revoked
-// permission survive.
-func permCacheKey(userID, channelID string) string {
-	return userID + ":" + channelID
-}
-
 // effectiveChannelPermission applies the Discord resolution formula shared by
 // the single-user and bulk paths.
 //
@@ -494,12 +503,14 @@ func effectiveChannelPermission(base, allow, deny models.Permission) models.Perm
 	return (base &^ deny) | allow
 }
 
+// ResolveChannelPermissions computes effective permissions for userID in
+// channelID directly from the database — no caching here (see the
+// channelPermService doc comment). Callers normally reach this indirectly
+// through cachingPermResolver via NewChannelPermissionService; the core
+// stays uncached in part so checkOverrideEscalation (called from
+// SetOverride) always sees a fresh result for the actor's own permission,
+// not a cache entry that could be stale mid-mutation.
 func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
-	cacheKey := permCacheKey(userID, channelID)
-	if cached, ok := s.permCache.Get(cacheKey); ok {
-		return cached, nil
-	}
-
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get channel for permission resolution: %w", err)
@@ -519,7 +530,6 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 
 	// Admin bypasses all overrides
 	if base.Has(models.PermAdmin) {
-		s.permCache.Set(cacheKey, models.PermAll)
 		return models.PermAll, nil
 	}
 
@@ -529,7 +539,6 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 	}
 
 	if len(overrides) == 0 {
-		s.permCache.Set(cacheKey, base)
 		return base, nil
 	}
 
@@ -540,55 +549,38 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 		channelDeny |= o.Deny
 	}
 
-	effective := effectiveChannelPermission(base, channelAllow, channelDeny)
-
-	s.permCache.Set(cacheKey, effective)
-
-	return effective, nil
+	return effectiveChannelPermission(base, channelAllow, channelDeny), nil
 }
 
-// ResolveChannelPermissionsBulk resolves effective permissions for many users
-// in one channel using a bounded number of queries.
-//
-// The single-user path costs 3 queries on a cache miss (channel + roles +
-// overrides), so filtering a broadcast to the online members of a server used
-// to cost 3N round trips — ~300 for a 100-member server every time the 30s
-// cache expired, each one a network hop against remote Turso over a
-// 4-connection pool. This collapses that to at most 3 regardless of N:
+// ResolveChannelPermissionsBulk resolves effective permissions for every
+// user in userIDs directly from the database — no caching (see
+// ResolveChannelPermissions's doc comment above). cachingPermResolver is the
+// one that turns this into "misses only" for its cache-miss list; this
+// method just needs to resolve whatever list it's given in a bounded number
+// of queries:
 //
 //  1. one channelGetter.GetByID for the server id
-//  2. one roleRepo.GetRolesForUsers for the cache misses
+//  2. one roleRepo.GetRolesForUsers for userIDs
 //  3. one permRepo.GetByChannel, filtered per user's role set in memory
 //
-// Cache keys, TTL and the resolution formula are shared with the single-user
-// path, so existing invalidation hooks cover bulk-written entries unchanged
-// and the two paths cannot disagree. Users holding no roles resolve to 0,
-// matching the single-user behaviour.
+// regardless of len(userIDs). Users holding no roles resolve to 0.
 func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
 	resolved := make(map[string]models.Permission, len(userIDs))
 	if len(userIDs) == 0 {
 		return resolved, nil
 	}
 
-	// Probe the cache first; only the misses reach the database. Duplicates in
-	// the caller's list (shouldn't happen, but the online-user list is built
-	// from connections) are collapsed here.
-	misses := make([]string, 0, len(userIDs))
+	// Dedup — the caller's list (built from live connections) shouldn't
+	// contain repeats, but a duplicate here would waste a
+	// roleRepo.GetRolesForUsers slot for nothing.
+	unique := make([]string, 0, len(userIDs))
 	seen := make(map[string]struct{}, len(userIDs))
 	for _, userID := range userIDs {
 		if _, dup := seen[userID]; dup {
 			continue
 		}
 		seen[userID] = struct{}{}
-
-		if cached, ok := s.permCache.Get(permCacheKey(userID, channelID)); ok {
-			resolved[userID] = cached
-			continue
-		}
-		misses = append(misses, userID)
-	}
-	if len(misses) == 0 {
-		return resolved, nil
+		unique = append(unique, userID)
 	}
 
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
@@ -596,7 +588,7 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 		return nil, fmt.Errorf("failed to get channel for bulk permission resolution: %w", err)
 	}
 
-	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, channel.ServerID, misses)
+	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, channel.ServerID, unique)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roles for users: %w", err)
 	}
@@ -619,7 +611,7 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 		byRole[o.RoleID] = bits
 	}
 
-	for _, userID := range misses {
+	for _, userID := range unique {
 		roles := rolesByUser[userID]
 
 		var base, channelAllow, channelDeny models.Permission
@@ -639,45 +631,8 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 			}
 		}
 
-		effective := effectiveChannelPermission(base, channelAllow, channelDeny)
-		s.permCache.Set(permCacheKey(userID, channelID), effective)
-		resolved[userID] = effective
+		resolved[userID] = effectiveChannelPermission(base, channelAllow, channelDeny)
 	}
 
 	return resolved, nil
-}
-
-// invalidateChannelCache clears all cached permissions for a given channel.
-// Uses suffix match on "userID:channelID" keys since we can't know which users are affected.
-func (s *channelPermService) invalidateChannelCache(channelID string) {
-	suffix := ":" + channelID
-	s.permCache.DeleteFunc(func(key string) bool {
-		return strings.HasSuffix(key, suffix)
-	})
-}
-
-// InvalidateUser clears every cached entry for one user.
-//
-// Mirrors invalidateChannelCache, just by the other half of the
-// "userID:channelID" composite key. Called when a single user's role
-// membership changes (assign/remove) or when they are kicked/banned
-// from a server (defence — they should already be unable to call the
-// API, but the cache entry would still leak through any half-finished
-// request).
-func (s *channelPermService) InvalidateUser(userID string) {
-	prefix := userID + ":"
-	s.permCache.DeleteFunc(func(key string) bool {
-		return strings.HasPrefix(key, prefix)
-	})
-}
-
-// InvalidateAll drops the entire cache.
-//
-// Used by role mutations (Update / Delete) where the change affects
-// every member who holds the role across every channel. Enumerating
-// those users would cost an extra "roles → users" query at every role
-// edit; a full cache wipe lets the next request rebuild lazily and
-// the system returns to steady state within permCacheTTL (30s).
-func (s *channelPermService) InvalidateAll() {
-	s.permCache.DeleteFunc(func(string) bool { return true })
 }

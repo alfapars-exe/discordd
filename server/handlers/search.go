@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -44,19 +43,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		channelID = &cid
 	}
 
-	limit := 25
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			limit = parsed
-		}
-	}
-
-	offset := 0
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
+	limit, offset := pkg.ClampPagination(r, 25, 100)
 
 	result, err := h.searchService.Search(r.Context(), serverID, user.ID, query, channelID, limit, offset)
 	if err != nil {

@@ -178,7 +178,7 @@ func (s *adminUserService) HardDeleteUser(ctx context.Context, adminUserID, targ
 	s.voiceKit.DisconnectUser(targetUserID)
 	s.hub.DisconnectUser(targetUserID)
 
-	if err := s.userRepo.HardDeleteUser(ctx, targetUserID); err != nil {
+	if err := s.userRepo.HardDeleteUser(ctx, targetUserID, adminUserID); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 	// Cached row now points at a deleted user — drop it so the next request

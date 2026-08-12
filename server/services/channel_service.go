@@ -51,7 +51,6 @@ type ChannelService interface {
 	Update(ctx context.Context, serverID, actorID, id string, req *models.UpdateChannelRequest) (*models.Channel, error)
 	Delete(ctx context.Context, serverID, actorID, id string) error
 	ReorderChannels(ctx context.Context, serverID string, req *models.ReorderChannelsRequest, userID string) ([]models.CategoryWithChannels, error)
-	SetAuditLogger(logger AuditWriter)
 	SetUploadDir(dir string)
 }
 
@@ -67,10 +66,6 @@ type channelService struct {
 	// wired in init_services.go so the constructor signature below stays
 	// unchanged.
 	uploadDir string
-}
-
-func (s *channelService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
 }
 
 func (s *channelService) SetUploadDir(dir string) {
@@ -96,6 +91,7 @@ func NewChannelService(
 	hub ws.Broadcaster,
 	visChecker ChannelVisibilityChecker,
 	voiceProvider UserVoiceChannelProvider,
+	auditLogger AuditWriter,
 ) ChannelService {
 	return &channelService{
 		channelRepo:   channelRepo,
@@ -103,6 +99,7 @@ func NewChannelService(
 		hub:           hub,
 		visChecker:    visChecker,
 		voiceProvider: voiceProvider,
+		auditLogger:   auditLogger,
 	}
 }
 

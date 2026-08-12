@@ -154,6 +154,7 @@ func NewMusicBotService(
 	hub ws.Broadcaster,
 	users MusicBotUserGetter,
 	encryptionKey []byte,
+	appLogger VoiceAppLogger,
 ) MusicBotService {
 	return &musicBotService{
 		bots:          make(map[string]*botInstance),
@@ -163,14 +164,9 @@ func NewMusicBotService(
 		hub:           hub,
 		encryptionKey: encryptionKey,
 		users:         users,
+		appLogger:     appLogger,
 		extractSem:    make(chan struct{}, maxConcurrentMusicExtractions),
 	}
-}
-
-// SetAppLogger — wire the structured logger after construction (mirror of
-// VoiceService.SetAppLogger so init_services.go can keep its symmetric shape).
-func (s *musicBotService) SetAppLogger(logger VoiceAppLogger) {
-	s.appLogger = logger
 }
 
 // Enqueue — add track(s) to the channel's queue. Returns the resolved tracks
@@ -521,6 +517,10 @@ func (s *musicBotService) broadcastPlaybackError(bot *botInstance, cause error, 
 	})
 }
 
+// context.Background(): logErr fires from the bot's own background playback
+// loop, not an HTTP request, so there is no request-scoped context to
+// thread through without widening this helper's signature across every
+// call site (out of scope for P3.8 — see AppLogService.Log's doc comment).
 func (s *musicBotService) logErr(category models.LogCategory, channelID, msg string, meta map[string]string) {
 	if s.appLogger == nil {
 		musicBotLogger.Error(msg, "channel_id", channelID, "metadata", meta)
@@ -530,5 +530,5 @@ func (s *musicBotService) logErr(category models.LogCategory, channelID, msg str
 		meta = map[string]string{}
 	}
 	meta["channel_id"] = channelID
-	s.appLogger.Log(models.LogLevelError, category, nil, nil, msg, meta)
+	s.appLogger.Log(context.Background(), models.LogLevelError, category, nil, nil, msg, meta)
 }

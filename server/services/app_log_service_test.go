@@ -6,11 +6,13 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // fakeAppLogRepo is a minimal repository.AppLogRepository fake. mu guards
@@ -56,7 +58,7 @@ func TestAppLogService_Log_countsDroppedWhenChannelFull(t *testing.T) {
 
 	capacity := cap(svc.ch)
 	for i := 0; i < capacity; i++ {
-		svc.Log(models.LogLevelInfo, models.LogCategoryWS, nil, nil, "fill", nil)
+		svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryWS, nil, nil, "fill", nil)
 	}
 	if got := svc.dropped.Load(); got != 0 {
 		t.Fatalf("dropped = %d after filling to capacity (not overflowing), want 0", got)
@@ -64,7 +66,7 @@ func TestAppLogService_Log_countsDroppedWhenChannelFull(t *testing.T) {
 
 	const overflow = 10
 	for i := 0; i < overflow; i++ {
-		svc.Log(models.LogLevelInfo, models.LogCategoryWS, nil, nil, "overflow", nil)
+		svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryWS, nil, nil, "overflow", nil)
 	}
 	if got := svc.dropped.Load(); got != uint64(overflow) {
 		t.Errorf("dropped = %d, want %d", got, overflow)
@@ -89,6 +91,79 @@ func TestAppLogService_droppedCounter_swapResetsToZero(t *testing.T) {
 	}
 }
 
+// TestAppLogService_Log_StampsRequestIDFromContext — P3.8: when ctx carries
+// a request id, it must land in the persisted row's metadata under
+// "request_id" without mutating the caller's own metadata map (the caller
+// may reuse or re-read it after the call).
+func TestAppLogService_Log_StampsRequestIDFromContext(t *testing.T) {
+	repo := &fakeAppLogRepo{}
+	svc := NewAppLogService(repo).(*appLogService)
+	svc.Start()
+	defer svc.Stop()
+
+	ctx := pkg.WithRequestID(context.Background(), "req-abc123")
+	callerMeta := map[string]string{"foo": "bar"}
+	svc.Log(ctx, models.LogLevelInfo, models.LogCategoryWS, nil, nil, "with request id", callerMeta)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for repo.count() < 1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if repo.count() != 1 {
+		t.Fatalf("repo received %d entries, want 1", repo.count())
+	}
+
+	repo.mu.Lock()
+	got := repo.inserts[0].Metadata
+	repo.mu.Unlock()
+
+	var meta map[string]string
+	if err := json.Unmarshal([]byte(got), &meta); err != nil {
+		t.Fatalf("unmarshal metadata %q: %v", got, err)
+	}
+	if meta["request_id"] != "req-abc123" {
+		t.Errorf("metadata[request_id] = %q, want req-abc123 (full metadata: %v)", meta["request_id"], meta)
+	}
+	if meta["foo"] != "bar" {
+		t.Errorf("caller's own metadata key was lost: %v", meta)
+	}
+
+	if _, mutated := callerMeta["request_id"]; mutated {
+		t.Error("Log must not mutate the caller's metadata map in place")
+	}
+	if len(callerMeta) != 1 {
+		t.Errorf("caller's metadata map was mutated: %v", callerMeta)
+	}
+}
+
+// TestAppLogService_Log_NoRequestIDInContext_NilMetadataStaysNil — the
+// common background-goroutine case (context.Background(), no metadata):
+// Log must not panic or synthesize an empty metadata map when there's
+// nothing to add.
+func TestAppLogService_Log_NoRequestIDInContext_NilMetadataStaysNil(t *testing.T) {
+	repo := &fakeAppLogRepo{}
+	svc := NewAppLogService(repo).(*appLogService)
+	svc.Start()
+	defer svc.Stop()
+
+	svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryWS, nil, nil, "no request id", nil)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for repo.count() < 1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if repo.count() != 1 {
+		t.Fatalf("repo received %d entries, want 1", repo.count())
+	}
+
+	repo.mu.Lock()
+	got := repo.inserts[0].Metadata
+	repo.mu.Unlock()
+	if got != "{}" {
+		t.Errorf("metadata = %q, want the empty-object sentinel {}", got)
+	}
+}
+
 // TestAppLogService_Start_writesEntriesAndStopsCleanly is a sanity check
 // that wrapping the writer goroutine with logx.Go didn't change its
 // observable behavior: entries pushed via Log() still reach the repo, and
@@ -98,7 +173,7 @@ func TestAppLogService_Start_writesEntriesAndStopsCleanly(t *testing.T) {
 	svc := NewAppLogService(repo).(*appLogService)
 	svc.Start()
 
-	svc.Log(models.LogLevelInfo, models.LogCategoryWS, nil, nil, "hello", nil)
+	svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryWS, nil, nil, "hello", nil)
 
 	deadline := time.Now().Add(2 * time.Second)
 	for repo.count() < 1 && time.Now().Before(deadline) {

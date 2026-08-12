@@ -17,8 +17,11 @@ var appLogger = logx.Component("service.applog")
 
 // AppLogService writes and queries structured app logs.
 type AppLogService interface {
-	// Log writes a log entry asynchronously (non-blocking).
-	Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
+	// Log writes a log entry asynchronously (non-blocking). ctx is used only
+	// to pull the request's correlation id (pkg.RequestIDFrom) into
+	// metadata["request_id"] when present — pass context.Background() from a
+	// background goroutine that has no request context.
+	Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
 	// List returns paginated, filtered log entries.
 	List(ctx context.Context, filter models.AppLogFilter) ([]models.AppLog, int, error)
 	// Clear deletes all logs.
@@ -52,7 +55,21 @@ func NewAppLogService(repo repository.AppLogRepository) AppLogService {
 	}
 }
 
-func (s *appLogService) Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string) {
+func (s *appLogService) Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string) {
+	// Stamp the request's correlation id when one is present, so an app_logs
+	// row can be matched back to the request that produced it the same way
+	// an API error response's correlation_id already can (pkg.ErrorCtx).
+	// Copy rather than mutate: metadata is the caller's map (often reused or
+	// read again after this call), and it may be nil.
+	if reqID := pkg.RequestIDFrom(ctx); reqID != "" {
+		withReqID := make(map[string]string, len(metadata)+1)
+		for k, v := range metadata {
+			withReqID[k] = v
+		}
+		withReqID["request_id"] = reqID
+		metadata = withReqID
+	}
+
 	metaJSON := "{}"
 	if metadata != nil {
 		if b, err := json.Marshal(metadata); err == nil {

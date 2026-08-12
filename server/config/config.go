@@ -24,6 +24,19 @@ type Config struct {
 	Logging         LoggingConfig
 	EncryptionKey   string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
 	HetznerAPIToken string // Hetzner Cloud API token (read-only) — optional
+	// AuditLogRetentionDays is how many days audit_logs rows are kept before
+	// the background purge deletes them (env AUDIT_LOG_RETENTION_DAYS,
+	// default 180). <= 0 disables the purge — audit history is kept forever,
+	// a deliberate choice some deployments may want for compliance, unlike
+	// BACKUP_DAILY_KEEP where <= 0 is treated as a typo and replaced.
+	AuditLogRetentionDays int
+	// TelemetryRetentionDays is how many days runtime_telemetry rows are
+	// kept before startRuntimeStatsLogger's periodic purge deletes them (env
+	// TELEMETRY_RETENTION_DAYS, default 30). Unlike AuditLogRetentionDays,
+	// an invalid OR non-positive value falls back to the default — there is
+	// no "keep forever" use case for a per-minute operational rollup table,
+	// so silently disabling its purge would just let it grow unbounded.
+	TelemetryRetentionDays int
 	// TrustedProxies is the raw CIDR/IP list parsed from the
 	// TRUSTED_PROXIES env var. The ratelimit package consumes it via
 	// SetTrustedProxies at boot; the IP-extraction logic uses it to
@@ -116,6 +129,17 @@ type BackupConfig struct {
 // notices over a weekend, short enough that the retained copies stay cheap —
 // the DB is small and Xet dedups unchanged pages).
 const defaultBackupDailyKeep = 7
+
+// defaultAuditLogRetentionDays — 180 days (~6 months) balances keeping
+// enough moderation history for post-incident review against unbounded
+// growth of the audit_logs table on long-running self-hosted deployments.
+const defaultAuditLogRetentionDays = 180
+
+// defaultTelemetryRetentionDays — one minute-bucketed row per minute is
+// ~43k rows/month; 30 days (~43k rows) is enough trend history for
+// operational triage without the table growing unbounded on a long-running
+// self-hosted deployment.
+const defaultTelemetryRetentionDays = 30
 
 // LoggingConfig configures structured logging (slog) and optional Sentry
 // error tracking. Zero values are safe: an empty SentryDSN disables Sentry
@@ -230,6 +254,44 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// AUDIT_LOG_RETENTION_DAYS (optional) controls the audit_logs auto-purge
+	// window. A malformed value falls back to the default rather than
+	// failing boot — retention tuning is not a correctness input. Unlike
+	// BACKUP_DAILY_KEEP, an explicit non-positive value IS honoured (it
+	// disables the purge) rather than being replaced by the default; only a
+	// parse failure falls back.
+	auditLogRetentionDays := defaultAuditLogRetentionDays
+	if rStr := getEnv("AUDIT_LOG_RETENTION_DAYS", ""); rStr != "" {
+		if r, rErr := strconv.Atoi(rStr); rErr == nil {
+			auditLogRetentionDays = r
+		} else {
+			slog.Warn("ignoring invalid AUDIT_LOG_RETENTION_DAYS env value, using default",
+				"component", "config",
+				"value", rStr,
+				"default", auditLogRetentionDays,
+			)
+		}
+	}
+
+	// TELEMETRY_RETENTION_DAYS (optional) controls the runtime_telemetry
+	// auto-purge window. Unlike AUDIT_LOG_RETENTION_DAYS above, any
+	// non-positive value ALSO falls back to the default (not just a parse
+	// failure) — there's no "keep forever" use case for a per-minute
+	// operational table, so a 0/negative value here is treated the same as
+	// a typo rather than an intentional "disable" signal.
+	telemetryRetentionDays := defaultTelemetryRetentionDays
+	if tStr := getEnv("TELEMETRY_RETENTION_DAYS", ""); tStr != "" {
+		if tVal, tErr := strconv.Atoi(tStr); tErr == nil && tVal > 0 {
+			telemetryRetentionDays = tVal
+		} else {
+			slog.Warn("ignoring invalid TELEMETRY_RETENTION_DAYS env value, using default",
+				"component", "config",
+				"value", tStr,
+				"default", telemetryRetentionDays,
+			)
+		}
+	}
+
 	hfToken := getEnv("HF_TOKEN", "")
 
 	jwtSecret := getEnv("JWT_SECRET", "")
@@ -331,9 +393,11 @@ func Load() (*Config, error) {
 			Environment: environment,
 			Release:     getEnv("RELEASE", ""),
 		},
-		EncryptionKey:   encKey,
-		HetznerAPIToken: getEnv("HETZNER_API_TOKEN", ""),
-		TrustedProxies:  trustedProxies,
+		EncryptionKey:          encKey,
+		HetznerAPIToken:        getEnv("HETZNER_API_TOKEN", ""),
+		TrustedProxies:         trustedProxies,
+		AuditLogRetentionDays:  auditLogRetentionDays,
+		TelemetryRetentionDays: telemetryRetentionDays,
 	}
 
 	return cfg, nil

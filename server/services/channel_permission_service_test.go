@@ -484,6 +484,145 @@ func TestInvalidateAll_DropsEveryEntry(t *testing.T) {
 	}
 }
 
+// ─── P3.5: SetOverride/DeleteOverride must actually invalidate the cache ───
+//
+// TestInvalidateUser/TestInvalidateAll above only prove InvalidateUser/
+// InvalidateAll work when called directly — they say nothing about whether
+// SetOverride/DeleteOverride actually CALL them. After splitting the cache
+// out into cachingPermResolver (P3.5), a decorator method that forgot its
+// `c.invalidateChannelCache(channelID)` call would still compile and every
+// other test in this file would still pass; only a test that resolves,
+// mutates, and resolves again — checking the second resolve did NOT come
+// from the cache — catches that. This is the non-vacuity check the task
+// calls out explicitly.
+
+// nonVacuityFixture wires a channel with an admin role (bypasses the
+// SetOverride/DeleteOverride escalation + hierarchy checks entirely, so the
+// test can focus purely on cache behaviour) and a plain victim role whose
+// ResolveChannelPermissions calls are counted via permRepo.GetByChannelAndRoles
+// — that call only fires on a genuine cache miss, since PermAdmin resolves
+// short-circuit before reaching it.
+type nonVacuityFixture struct {
+	resolveCalls int
+}
+
+func (f *nonVacuityFixture) build() (ChannelPermissionService, *bool, *bool) {
+	const (
+		serverID      = "srv-nv"
+		targetRoleID  = "role-nv-target"
+		adminRoleID   = "role-nv-admin"
+		victimRoleID  = "role-nv-victim"
+	)
+	adminRole := models.Role{ID: adminRoleID, Position: 10, Permissions: models.PermAdmin}
+	victimRole := models.Role{ID: victimRoleID, Position: 2, Permissions: models.PermSendMessages}
+	targetRole := &models.Role{ID: targetRoleID, ServerID: serverID, Position: 1}
+
+	var setCalled, deleteCalled bool
+	permRepo := &testutil.MockChannelPermRepo{
+		GetByChannelAndRolesFn: func(_ context.Context, _ string, _ []string) ([]models.ChannelPermissionOverride, error) {
+			f.resolveCalls++
+			return nil, nil
+		},
+		SetFn: func(_ context.Context, _ *models.ChannelPermissionOverride) error {
+			setCalled = true
+			return nil
+		},
+		DeleteFn: func(_ context.Context, _, _ string) error {
+			deleteCalled = true
+			return nil
+		},
+	}
+	roleRepo := &testutil.MockRoleRepo{
+		GetByUserIDAndServerFn: func(_ context.Context, userID, _ string) ([]models.Role, error) {
+			switch userID {
+			case "admin":
+				return []models.Role{adminRole}, nil
+			case "victim":
+				return []models.Role{victimRole}, nil
+			default:
+				return nil, nil
+			}
+		},
+		GetByIDFn: func(_ context.Context, id string) (*models.Role, error) {
+			if id == targetRoleID {
+				return targetRole, nil
+			}
+			return nil, errors.New("unknown role")
+		},
+	}
+	channelRepo := &testutil.MockChannelRepo{
+		GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+			return &models.Channel{ID: id, ServerID: serverID}, nil
+		},
+	}
+
+	svc := newTestChannelPermService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+	return svc, &setCalled, &deleteCalled
+}
+
+func TestSetOverride_InvalidatesCache_NonVacuous(t *testing.T) {
+	const channelID = "chan-nv"
+	f := &nonVacuityFixture{}
+	svc, setCalled, _ := f.build()
+	ctx := context.Background()
+
+	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
+		t.Fatalf("warm resolve: %v", err)
+	}
+	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
+		t.Fatalf("cached resolve: %v", err)
+	}
+	if f.resolveCalls != 1 {
+		t.Fatalf("expected the second resolve to be served from cache (1 repo call), got %d", f.resolveCalls)
+	}
+
+	req := &models.SetOverrideRequest{Allow: models.PermSendMessages}
+	if err := svc.SetOverride(ctx, "srv-nv", channelID, "role-nv-target", "admin", req); err != nil {
+		t.Fatalf("SetOverride: %v", err)
+	}
+	if !*setCalled {
+		t.Fatal("permRepo.Set was never called")
+	}
+
+	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
+		t.Fatalf("post-SetOverride resolve: %v", err)
+	}
+	if f.resolveCalls != 2 {
+		t.Errorf("resolveCalls = %d, want 2 — SetOverride must invalidate the channel's cache instead of leaving the pre-mutation result cached", f.resolveCalls)
+	}
+}
+
+func TestDeleteOverride_InvalidatesCache_NonVacuous(t *testing.T) {
+	const channelID = "chan-nv"
+	f := &nonVacuityFixture{}
+	svc, _, deleteCalled := f.build()
+	ctx := context.Background()
+
+	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
+		t.Fatalf("warm resolve: %v", err)
+	}
+	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
+		t.Fatalf("cached resolve: %v", err)
+	}
+	if f.resolveCalls != 1 {
+		t.Fatalf("expected the second resolve to be served from cache (1 repo call), got %d", f.resolveCalls)
+	}
+
+	if err := svc.DeleteOverride(ctx, "srv-nv", channelID, "role-nv-target", "admin"); err != nil {
+		t.Fatalf("DeleteOverride: %v", err)
+	}
+	if !*deleteCalled {
+		t.Fatal("permRepo.Delete was never called")
+	}
+
+	if _, err := svc.ResolveChannelPermissions(ctx, "victim", channelID); err != nil {
+		t.Fatalf("post-DeleteOverride resolve: %v", err)
+	}
+	if f.resolveCalls != 2 {
+		t.Errorf("resolveCalls = %d, want 2 — DeleteOverride must invalidate the channel's cache instead of leaving the pre-mutation result cached", f.resolveCalls)
+	}
+}
+
 // ─── ResolveChannelPermissionsBulk ───
 //
 // The bulk resolver exists to kill the fan-out N+1: broadcasting one message
@@ -657,8 +796,8 @@ func TestResolveChannelPermissionsBulk_MixedCacheHitsAndMisses(t *testing.T) {
 	counter.reset()
 
 	var askedFor []string
-	svcImpl := svc.(*channelPermService)
-	inner := svcImpl.roleRepo.(*testutil.MockRoleRepo)
+	svcImpl := svc.(*cachingPermResolver)
+	inner := svcImpl.inner.roleRepo.(*testutil.MockRoleRepo)
 	prev := inner.GetRolesForUsersFn
 	inner.GetRolesForUsersFn = func(ctx context.Context, serverID string, userIDs []string) (map[string][]models.Role, error) {
 		askedFor = append([]string(nil), userIDs...)

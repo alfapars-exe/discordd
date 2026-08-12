@@ -25,7 +25,7 @@ import (
 // care about the log content.
 type noopAppLog struct{}
 
-func (noopAppLog) Log(models.LogLevel, models.LogCategory, *string, *string, string, map[string]string) {
+func (noopAppLog) Log(context.Context, models.LogLevel, models.LogCategory, *string, *string, string, map[string]string) {
 }
 func (noopAppLog) List(context.Context, models.AppLogFilter) ([]models.AppLog, int, error) {
 	return nil, 0, nil

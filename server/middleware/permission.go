@@ -138,7 +138,7 @@ func (m *PermissionMiddleware) Load(next http.Handler) http.Handler {
 
 		effectivePerms, err := m.resolveEffectivePerms(r, user.ID, serverID)
 		if err != nil {
-			pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to get user roles")
+			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to get user roles", err)
 			return
 		}
 
@@ -164,7 +164,7 @@ func (m *PermissionMiddleware) Require(perm models.Permission, next http.Handler
 
 		effectivePerms, err := m.resolveEffectivePerms(r, user.ID, serverID)
 		if err != nil {
-			pkg.ErrorWithMessage(w, http.StatusInternalServerError, "failed to get user roles")
+			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to get user roles", err)
 			return
 		}
 

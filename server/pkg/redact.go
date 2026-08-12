@@ -24,7 +24,7 @@ func ErrText(err error) string {
 	if err == nil {
 		return ""
 	}
-	return redactSecrets(err.Error())
+	return RedactSecrets(err.Error())
 }
 
 // secretParams are query-string keys whose values must never be logged.
@@ -38,7 +38,12 @@ var secretParams = []string{"authtoken=", "password=", "apikey=", "api_key=", "s
 // value would otherwise swallow the \r along with the rest of the line.
 const valueTerminators = "&\"' \t\r\n"
 
-func redactSecrets(s string) string {
+// RedactSecrets masks known credential-shaped query parameters in an
+// arbitrary string. Exported so callers outside this package (e.g. the
+// client-log handler, which persists client-supplied free text into
+// app_logs) can apply the same masking before the text reaches a durable
+// sink, not just error strings routed through ErrText.
+func RedactSecrets(s string) string {
 	for _, key := range secretParams {
 		if key == "" {
 			// indexFold("", ...) returns 0 for an empty substr, so an empty

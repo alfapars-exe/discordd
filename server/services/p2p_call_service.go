@@ -30,7 +30,7 @@ type UserInfoGetter interface {
 
 // P2PAppLogger writes structured logs. ISP to avoid circular dependency.
 type P2PAppLogger interface {
-	Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
+	Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
 }
 
 type P2PCallService interface {
@@ -60,9 +60,14 @@ func (s *p2pCallService) SetAppLogger(logger P2PAppLogger) {
 	s.appLogger = logger
 }
 
+// context.Background(): logError's callers span request-handling and
+// WS-disconnect-driven cleanup, not all of which carry a request-scoped
+// context that's still relevant by the time the log fires. Threading ctx
+// through every caller is out of scope for P3.8 — see AppLogService.Log's
+// doc comment.
 func (s *p2pCallService) logError(userID *string, message string, metadata map[string]string) {
 	if s.appLogger != nil {
-		s.appLogger.Log(models.LogLevelError, models.LogCategoryVoice, userID, nil, message, metadata)
+		s.appLogger.Log(context.Background(), models.LogLevelError, models.LogCategoryVoice, userID, nil, message, metadata)
 	}
 }
 

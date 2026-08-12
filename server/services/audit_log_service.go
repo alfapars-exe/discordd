@@ -56,28 +56,36 @@ type auditLogService struct {
 	hub       ws.Broadcaster
 	hubOnline ws.UserStateProvider
 
+	// retentionDays is how long an audit_logs row is kept before the
+	// background purge deletes it. <= 0 disables the purge (config.Config's
+	// AuditLogRetentionDays doc explains why 0 is a deliberate "keep
+	// forever" choice here, not a fallback-to-default case).
+	retentionDays int
+
 	ch     chan models.AuditLog
 	cancel context.CancelFunc
 	done   chan struct{}
 }
 
 // NewAuditLogService constructs the service. Call Start() to begin
-// the async writer.
+// the async writer. retentionDays <= 0 disables the auto-purge loop.
 func NewAuditLogService(
 	repo repository.AuditLogRepository,
 	userRepo repository.UserRepository,
 	roleRepo ServerRoleResolver,
 	hub ws.Broadcaster,
 	hubOnline ws.UserStateProvider,
+	retentionDays int,
 ) AuditLogService {
 	return &auditLogService{
-		repo:      repo,
-		userRepo:  userRepo,
-		roleRepo:  roleRepo,
-		hub:       hub,
-		hubOnline: hubOnline,
-		ch:        make(chan models.AuditLog, 256),
-		done:      make(chan struct{}),
+		repo:          repo,
+		userRepo:      userRepo,
+		roleRepo:      roleRepo,
+		hub:           hub,
+		hubOnline:     hubOnline,
+		retentionDays: retentionDays,
+		ch:            make(chan models.AuditLog, 256),
+		done:          make(chan struct{}),
 	}
 }
 
@@ -209,6 +217,37 @@ func (s *auditLogService) Start() {
 			}
 		}
 	})
+	logx.Go("audit_log.auto_purge", func() { s.autoPurgeLoop(ctx) })
+}
+
+// auditLogPurgeInterval controls how often the retention purge checks;
+// mirrors appLogService.autoPurgeLoop's 6-hour cadence.
+const auditLogPurgeInterval = 6 * time.Hour
+
+// autoPurgeLoop deletes audit_logs rows older than retentionDays, checking
+// every auditLogPurgeInterval. A no-op loop when retentionDays <= 0 — see
+// the retentionDays field doc for why 0 means "keep forever" here rather
+// than falling back to a default.
+func (s *auditLogService) autoPurgeLoop(ctx context.Context) {
+	if s.retentionDays <= 0 {
+		return
+	}
+	ticker := time.NewTicker(auditLogPurgeInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().AddDate(0, 0, -s.retentionDays).UTC().Format("2006-01-02 15:04:05")
+			deleted, err := s.repo.DeleteBefore(ctx, cutoff)
+			if err != nil {
+				auditLogger.Error("auto-purge failed", "err", pkg.ErrText(err))
+			} else if deleted > 0 {
+				auditLogger.Info("auto-purge deleted old audit logs", "count", deleted, "retention_days", s.retentionDays)
+			}
+		}
+	}
 }
 
 func (s *auditLogService) Stop() {

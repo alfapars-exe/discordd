@@ -115,15 +115,20 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 				ctx, cancel := context.WithTimeout(context.Background(), diagnosticsEmailTimeout)
 				defer cancel()
 				if sendErr := h.email.SendDiagnosticsReport(ctx, h.reportTo, reporter, description, filename, data); sendErr != nil {
-					h.appLogger.Log(models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
+					// ctx here is the goroutine's own Background-derived timeout context
+					// (see the deliberately-detached-from-r.Context() note on the line
+					// starting this goroutine), not r.Context(), so this never carries the
+					// original request's correlation id — same outcome as passing
+					// context.Background() directly, just reusing the var already in scope.
+					h.appLogger.Log(ctx, models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
 						"diagnostics_email_failed", map[string]string{"error": pkg.ErrText(sendErr)})
 				} else {
-					h.appLogger.Log(models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
+					h.appLogger.Log(ctx, models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
 						"diagnostics_email_sent", map[string]string{"to": h.reportTo, "bytes": strconv.Itoa(len(data))})
 				}
 			}()
 		default:
-			h.appLogger.Log(models.LogLevelWarn, models.LogCategoryGeneral, &uid, nil,
+			h.appLogger.Log(r.Context(), models.LogLevelWarn, models.LogCategoryGeneral, &uid, nil,
 				"diagnostics_email_skipped_backpressure", map[string]string{"bytes": strconv.Itoa(len(data))})
 		}
 	}

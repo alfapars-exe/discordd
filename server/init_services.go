@@ -113,13 +113,27 @@ type RateLimiters struct {
 // initServices creates all services. Order matters:
 // channelPermService -> voiceService/messageService (dependency)
 // voiceService/p2pCallService -> before Hub callbacks (closure scoping)
-func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte) (*Services, *RateLimiters, services.MetricsCollector) {
+//
+// reachabilityReporter is the readiness cache (constructed in main.go BEFORE
+// this call, specifically so it can be threaded through to
+// services.NewMetricsCollector below) — nil-safe, so tests/callers that
+// don't care about readiness integration can pass nil.
+func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *config.Config, encryptionKey []byte, reachabilityReporter services.LiveKitReachabilityReporter) (*Services, *RateLimiters, services.MetricsCollector) {
 	// Order-sensitive services
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
 	)
+	// auditLogService is constructed here, right after channelPermService,
+	// so it can be passed as a constructor parameter (not a post-construction
+	// setter) to every service that emits moderation audit events below —
+	// voiceService immediately after this, plus channelService/memberService/
+	// roleService/serverService/messageService further down. A setter that
+	// nothing calls compiles fine and silently drops every audit event (see
+	// wiring_test.go); a constructor parameter can't be forgotten without a
+	// compile error.
+	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub, cfg.AuditLogRetentionDays)
 	voiceService := services.NewVoiceService(
-		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban,
+		repos.Channel, repos.LiveKit, channelPermService, hub, hub, repos.Server, encryptionKey, repos.MemberTimeout, repos.Ban, auditLogService,
 	)
 	p2pCallService := services.NewP2PCallService(repos.Friendship, repos.User, hub)
 
@@ -143,28 +157,31 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// path (security review 2026-08-01, finding 3). voiceService already
 	// exists at this point (constructed above), so no ordering hazard.
 	authService.SetVoiceDisconnecter(voiceService)
-	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService)
-	// Enables best-effort on-disk cleanup of attachment files on delete
-	// (see services/upload_cleanup.go) without widening the constructor
-	// signature — mirrors the SetAuditLogger wiring pattern below.
+	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService, auditLogService)
+	// Enables best-effort on-disk cleanup of attachment files on delete (see
+	// services/upload_cleanup.go) without widening the constructor signature
+	// — uploadDir stays a setter (unlike auditLogger above) because it's a
+	// plain config string, not a dependency other services also need wired
+	// before construction.
 	channelService.SetUploadDir(cfg.Upload.Dir)
 	categoryService := services.NewCategoryService(repos.Category, hub)
 	messageService := services.NewMessageService(
 		repos.Message, repos.Attachment, repos.Channel, repos.User,
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
-		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService,
+		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService, auditLogService,
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
-	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService)
-	roleService := services.NewRoleService(repos.Role, repos.User, hub)
+	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService, auditLogService)
+	roleService := services.NewRoleService(repos.Role, repos.User, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
 	// which is only constructed inside initRoutes. See main.go's comment
 	// near initRoutes for the full rationale.
 	serverService := services.NewServerService(
 		db, repos.Server, repos.LiveKit, repos.Role, repos.Channel,
-		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey,
+		repos.Category, repos.User, repos.Ban, inviteService, hub, encryptionKey, auditLogService,
+		repository.NewServerMembershipTxRunner(db),
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
 	livekitAdminService := services.NewLiveKitAdminService(
@@ -197,7 +214,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	reportService := services.NewReportService(repos.Report, repos.User)
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
-	deviceService := services.NewDeviceService(repos.Device, hub, repos.Server)
+	deviceService := services.NewDeviceService(repos.Device, repository.NewDeviceTxRunner(db), hub, repos.Server)
 	// E2EE key-backup integrity MAC key (P0-BD-01): an HKDF subkey of the
 	// server master key, so a DB-only tamper of a stored backup is detectable.
 	backupHMACKey := crypto.DeriveBackupHMACKey(encryptionKey)
@@ -211,7 +228,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 	preferencesService := services.NewPreferencesService(repos.Preferences)
 	appLogService := services.NewAppLogService(repos.AppLog)
-	auditLogService := services.NewAuditLogService(repos.AuditLog, repos.User, repos.Role, hub, hub)
+	// auditLogService itself was constructed earlier (right after
+	// channelPermService above) so it could be passed as a constructor
+	// parameter to voice/channel/message/member/role/server services.
 
 	metricsHistoryService := services.NewMetricsHistoryService(repos.MetricsHistory, repos.LiveKit)
 	feedbackService := services.NewFeedbackService(repos.Feedback)
@@ -221,7 +240,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
 	)
 	musicBotService := services.NewMusicBotService(
-		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey,
+		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService,
 	)
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
@@ -232,6 +251,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		30,
 		cfg.HetznerAPIToken,
 		voiceService,
+		reachabilityReporter,
 	)
 
 	// Rate limiters

@@ -90,6 +90,7 @@ func newTestMessageService(
 		mentionRepo, roleMentionRepo, roleRepo, reactionRepo,
 		noopReadStateRepo{}, noopTimeoutRepo{},
 		runner, hub, permResolver,
+		nil, // auditLogger — not under test here
 	)
 }
 
@@ -869,6 +870,7 @@ func TestMessageCreate_TimedOutUserBlocked(t *testing.T) {
 				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
 			},
 		},
+		nil, // auditLogger — not under test here
 	)
 
 	req := &models.CreateMessageRequest{Content: "hello"}
@@ -921,6 +923,7 @@ func TestMessageCreate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
 			},
 		},
+		nil, // auditLogger — not under test here
 	)
 
 	req := &models.CreateMessageRequest{Content: "hello"}
@@ -977,6 +980,7 @@ func TestMessageUpdate_TimedOutUserBlocked(t *testing.T) {
 				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
 			},
 		},
+		nil, // auditLogger — not under test here
 	)
 
 	req := &models.UpdateMessageRequest{Content: "edited"}
@@ -1024,6 +1028,7 @@ func TestMessageUpdate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
 			},
 		},
+		nil, // auditLogger — not under test here
 	)
 
 	req := &models.UpdateMessageRequest{Content: "edited"}

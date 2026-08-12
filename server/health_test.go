@@ -100,6 +100,63 @@ func TestHealthHandler_BeforeFirstPoll(t *testing.T) {
 	}
 }
 
+// TestHealthHandler_LiveKitReachable_ReflectsReport — P3.9: a positive
+// ReportLiveKitReachable call must surface as checks.livekit_reachable=true
+// in the /api/health body, independent of whether the readiness poller has
+// run at all (metricsCollector's interval and startReadinessChecker's are
+// decoupled).
+func TestHealthHandler_LiveKitReachable_ReflectsReport(t *testing.T) {
+	cache := &readinessCache{}
+	cache.ReportLiveKitReachable(true)
+
+	rec := httptest.NewRecorder()
+	healthHandler(cache)(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+
+	body := decodeHealthBody(t, rec)
+	checks, _ := body["checks"].(map[string]any)
+	if checks["livekit_reachable"] != true {
+		t.Fatalf("checks.livekit_reachable = %v, want true after a positive report", checks["livekit_reachable"])
+	}
+}
+
+// TestHealthHandler_LiveKitReachable_DefaultsFalse — without any report ever
+// arriving, the field must read false, not an incorrect "true" (zero value
+// correctness) and not be silently absent from the body.
+func TestHealthHandler_LiveKitReachable_DefaultsFalse(t *testing.T) {
+	rec := httptest.NewRecorder()
+	healthHandler(&readinessCache{})(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+
+	body := decodeHealthBody(t, rec)
+	checks, _ := body["checks"].(map[string]any)
+	if checks["livekit_reachable"] != false {
+		t.Fatalf("checks.livekit_reachable = %v, want false with no report ever received", checks["livekit_reachable"])
+	}
+}
+
+// TestReportLiveKitReachable_FalseReportDoesNotClearTrue — "at least one
+// instance OK": once any instance has reported reachable, a later false
+// report (e.g. from a different, unreachable instance) must not flip the
+// aggregate back to false.
+func TestReportLiveKitReachable_FalseReportDoesNotClearTrue(t *testing.T) {
+	cache := &readinessCache{}
+	cache.ReportLiveKitReachable(true)
+	cache.ReportLiveKitReachable(false)
+
+	if !cache.liveKitReachableStatus() {
+		t.Fatal("a false report cleared a previously-true reachability signal")
+	}
+}
+
+// TestReportLiveKitReachable_NilSafe — mirrors load()'s nil-safety: a cache
+// obtained before full wiring must not panic.
+func TestReportLiveKitReachable_NilSafe(t *testing.T) {
+	var cache *readinessCache
+	cache.ReportLiveKitReachable(true) // must not panic
+	if cache.liveKitReachableStatus() {
+		t.Fatal("nil cache must report false, not true")
+	}
+}
+
 func TestReadyHandler_DBUp(t *testing.T) {
 	h := readyHandler(pingFn(func(context.Context) error { return nil }), &config.Config{})
 

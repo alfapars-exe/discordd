@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/argeinfina/hichat/models"
@@ -73,7 +72,7 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		for _, fh := range r.MultipartForm.File["files"] {
 			f, openErr := fh.Open()
 			if openErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
 					fmt.Sprintf("failed to open uploaded file %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(openErr)), nil)
 				continue
 			}
@@ -84,7 +83,7 @@ func (h *FeedbackHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 			// one as its own upload finishes.
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &user.ID, nil,
 					fmt.Sprintf("failed to upload file %s for ticket %s: %s", pkg.SanitizeFilename(fh.Filename), ticket.ID, pkg.ErrText(uploadErr)), nil)
 				continue
 			}
@@ -102,7 +101,7 @@ func (h *FeedbackHandler) ListMyTickets(w http.ResponseWriter, r *http.Request) 
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
-	limit, offset := parsePagination(r)
+	limit, offset := pkg.ClampPagination(r, 20, 100)
 
 	tickets, total, err := h.service.ListByUser(r.Context(), user.ID, limit, offset)
 	if err != nil {
@@ -187,7 +186,7 @@ func (h *FeedbackHandler) DeleteTicket(w http.ResponseWriter, r *http.Request) {
 func (h *FeedbackHandler) AdminListTickets(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	ticketType := r.URL.Query().Get("type")
-	limit, offset := parsePagination(r)
+	limit, offset := pkg.ClampPagination(r, 20, 100)
 
 	tickets, total, err := h.service.ListAll(r.Context(), status, ticketType, limit, offset)
 	if err != nil {
@@ -284,7 +283,7 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 		for _, fh := range r.MultipartForm.File["files"] {
 			f, openErr := fh.Open()
 			if openErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
 					fmt.Sprintf("failed to open reply attachment %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(openErr)), nil)
 				continue
 			}
@@ -294,7 +293,7 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 			// open until the whole handler returns.
 			_ = f.Close() // read-side handle — nothing buffered to flush, safe to ignore
 			if uploadErr != nil {
-				h.appLog.Log(models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
+				h.appLog.Log(r.Context(), models.LogLevelError, models.LogCategoryFeedback, &userID, nil,
 					fmt.Sprintf("failed to upload reply attachment %s: %s", pkg.SanitizeFilename(fh.Filename), pkg.ErrText(uploadErr)), nil)
 				continue
 			}
@@ -303,23 +302,4 @@ func (h *FeedbackHandler) parseAndCreateReply(w http.ResponseWriter, r *http.Req
 	}
 
 	return reply, nil
-}
-
-func parsePagination(r *http.Request) (limit, offset int) {
-	limit = 20
-	offset = 0
-	if v := r.URL.Query().Get("limit"); v != "" {
-		// Upper bound alongside the existing lower bound — matches the
-		// clamp convention used elsewhere for user-supplied page limits
-		// (e.g. handlers/message.go, handlers/search.go).
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
-			limit = n
-		}
-	}
-	if v := r.URL.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			offset = n
-		}
-	}
-	return
 }

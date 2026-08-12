@@ -27,9 +27,6 @@ import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatFullDateTime, lastSeenLabel } from "../../utils/dateFormat";
 
-/** The user ID that can assign badges to other users. */
-const BADGE_ADMIN_USER_ID = "95a8b295072f98a5";
-
 type MemberItemProps = {
   member: MemberWithRoles;
   isOnline: boolean;
@@ -222,7 +219,7 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
       });
 
       // ─── Assign Badge (badge admin only, including self) ───
-      if (currentUser?.id === BADGE_ADMIN_USER_ID) {
+      if (currentUser?.is_platform_admin === true) {
         items.push({
           label: t("assignBadge"),
           onClick: () => setShowBadgeAssign(true),

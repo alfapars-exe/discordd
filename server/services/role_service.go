@@ -20,7 +20,6 @@ type RoleService interface {
 	Update(ctx context.Context, serverID, actorID, roleID string, req *models.UpdateRoleRequest) (*models.Role, error)
 	Delete(ctx context.Context, serverID, actorID, roleID string) error
 	ReorderRoles(ctx context.Context, serverID, actorID string, items []models.PositionUpdate) ([]models.Role, error)
-	SetAuditLogger(logger AuditWriter)
 	// SetPermInvalidator wires the per-channel permission cache so that
 	// role mutations (Update / Delete) clear stale resolution results.
 	// Optional: if not wired, permission revocations take up to
@@ -35,10 +34,6 @@ type roleService struct {
 	hub             ws.Broadcaster
 	auditLogger     AuditWriter
 	permInvalidator PermissionInvalidator
-}
-
-func (s *roleService) SetAuditLogger(logger AuditWriter) {
-	s.auditLogger = logger
 }
 
 func (s *roleService) SetPermInvalidator(inv PermissionInvalidator) {
@@ -71,11 +66,13 @@ func NewRoleService(
 	roleRepo repository.RoleRepository,
 	userRepo repository.UserRepository,
 	hub ws.Broadcaster,
+	auditLogger AuditWriter,
 ) RoleService {
 	return &roleService{
-		roleRepo: roleRepo,
-		userRepo: userRepo,
-		hub:      hub,
+		roleRepo:    roleRepo,
+		userRepo:    userRepo,
+		hub:         hub,
+		auditLogger: auditLogger,
 	}
 }
 

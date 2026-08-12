@@ -26,7 +26,7 @@ var authLogger = logx.Component(string(models.LogCategoryAuth))
 
 // AuthAppLogger writes structured logs. ISP to avoid circular dependency.
 type AuthAppLogger interface {
-	Log(level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
+	Log(ctx context.Context, level models.LogLevel, category models.LogCategory, userID, serverID *string, message string, metadata map[string]string)
 }
 
 type AuthService interface {
@@ -250,9 +250,14 @@ func (s *authService) revokeAllSessions(ctx context.Context, userID string) {
 	s.disconnectVoice(userID)
 }
 
+// context.Background(): logWarn/logError are called from several call sites
+// across authService (Register, RefreshToken's reuse-detection path, ...),
+// not all of which carry a request-scoped context that's still relevant by
+// the time the log fires. Threading ctx through every caller is out of
+// scope for P3.8 — see AppLogService.Log's doc comment.
 func (s *authService) logWarn(userID *string, message string, metadata map[string]string) {
 	if s.appLogger != nil {
-		s.appLogger.Log(models.LogLevelWarn, models.LogCategoryAuth, userID, nil, message, metadata)
+		s.appLogger.Log(context.Background(), models.LogLevelWarn, models.LogCategoryAuth, userID, nil, message, metadata)
 	}
 }
 
@@ -267,7 +272,7 @@ func (s *authService) logWarn(userID *string, message string, metadata map[strin
 // surface as a support ticket about a missing account.
 func (s *authService) logError(userID *string, message string, metadata map[string]string) {
 	if s.appLogger != nil {
-		s.appLogger.Log(models.LogLevelError, models.LogCategoryAuth, userID, nil, message, metadata)
+		s.appLogger.Log(context.Background(), models.LogLevelError, models.LogCategoryAuth, userID, nil, message, metadata)
 	}
 }
 

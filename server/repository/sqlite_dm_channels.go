@@ -181,6 +181,21 @@ func (r *sqliteDMRepo) SetInitiatedBy(ctx context.Context, channelID, userID str
 	return nil
 }
 
+// TransitionToPending sets status=pending and initiated_by=userID in one
+// UPDATE — see the DMRepository interface doc comment for why this replaced
+// two separate calls (UpdateChannelStatus + SetInitiatedBy) at its one call
+// site in dm_message.go.
+func (r *sqliteDMRepo) TransitionToPending(ctx context.Context, channelID, userID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE dm_channels SET status = ?, initiated_by = ? WHERE id = ?",
+		models.DMStatusPending, userID, channelID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to transition DM channel to pending: %w", err)
+	}
+	return nil
+}
+
 func (r *sqliteDMRepo) CountMessagesBySender(ctx context.Context, channelID, userID string) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx,
