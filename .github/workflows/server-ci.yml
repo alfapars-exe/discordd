@@ -127,8 +127,13 @@ jobs:
       # someone edits either side by hand they stop matching and this fails.
       # Regenerating locally (`python security/tools/sync_agent_guardrail.py`)
       # is the fix — never hand-edit the .claude/ copies.
+      # Python is pinned like every other toolchain here — a hard gate must
+      # not depend on whatever `python` alias the runner image ships.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
       - name: Guardrail drift check (SECURE-CODING §0.12.3)
-        run: python security/tools/sync_agent_guardrail.py --check
+        run: python3 security/tools/sync_agent_guardrail.py --check
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

@@ -52,10 +52,13 @@ PATHS = {
     "js": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
     "go": ["**/*.go"],
     "ci": ["**/*.yml", "**/*.yaml"],
+    "sh": ["**/*.sh"],
     # katlanmış çok dilli kurallar (FOLD sonucu)
     "any": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.go", "**/*.sh"],
 }
-EXCLUDES = ["**/node_modules/**", "**/dist/**", "**/build/**", "**/dtln/**"]
+# build/ dışlanmaz: electron-builder hook'ları (build/after-pack.js) birinci
+# taraf koddur; CI self-scan da build/'i tarar (EXC listesinden çıkarıldı).
+EXCLUDES = ["**/node_modules/**", "**/dist/**", "**/dtln/**"]
 
 # etiket -> (güvenli biçim, standart bölümü). Etiketler self-scan.sh ile birebir.
 #
@@ -134,19 +137,26 @@ META = {
     "orchestrator template": ("Ayrı argv elemanı veya env geçişi", "G4.17"),
     "OIDC trust kapsamı": ("sub claim'i tam eşleşme; ':*' StringLike yasak", "§19"),
     "SHA pinsiz 3. taraf action": ("40 karakter SHA pin", "§31"),
+    # ---- §0.5 Shell (çevre kod) seti ----
+    "777 izinler (sh)": ("Oluşturma anında 0600/0700; umask 022", "G4.14"),
+    "TLS bypass (sh)": ("Sertifika doğrulaması hiçbir ortamda kapatılamaz", "§3"),
+    "uzak kaynaktan boru kurulum": ("Sürümlü indirme + checksum doğrulaması", "§15"),
+    "shell eval": ("Sabit kod yolu; dinamik değerlendirme gerekçelendirilir", "§7"),
 }
 
 # --- self-scan.sh ayrıştırma -------------------------------------------------
 
 CALL_RE = re.compile(
-    r"""^\s*(blok|incele|blok_go|incele_go|incele_ci)\s+   # fonksiyon
+    r"""^\s*(blok|incele|blok_go|incele_go|incele_ci|blok_sh|incele_sh)\s+   # fonksiyon
         (?P<lq>["'])(?P<label>.*?)(?P=lq)\s+               # etiket
         (?P<pq>["'])(?P<pat>.*)(?P=pq)\s*$                 # desen
     """,
     re.VERBOSE,
 )
-LANG = {"blok": "js", "incele": "js", "blok_go": "go", "incele_go": "go", "incele_ci": "ci"}
-KLASS = {"blok": "BLOK", "blok_go": "BLOK", "incele": "İNCELEME", "incele_go": "İNCELEME", "incele_ci": "İNCELEME"}
+LANG = {"blok": "js", "incele": "js", "blok_go": "go", "incele_go": "go", "incele_ci": "ci",
+        "blok_sh": "sh", "incele_sh": "sh"}
+KLASS = {"blok": "BLOK", "blok_go": "BLOK", "incele": "İNCELEME", "incele_go": "İNCELEME", "incele_ci": "İNCELEME",
+         "blok_sh": "BLOK", "incele_sh": "İNCELEME"}
 
 # İki aşamalı kontroller doğrudan grep ile yazıldığından fonksiyon çağrısı
 # olarak görünmez; birinci aşama desenleri burada elle eşlenir (etiket, sınıf,
@@ -184,7 +194,8 @@ FOLD = {
     ],
     "Go — SQL string birleştirme": ["SQL Sprintf ile kuruluyor", "SQL string concat"],
     "JS — SQL string birleştirme": ["SQLi template literal", "SQLi string concat"],
-    "777 izinler (dosya modu)": ["777 izinler (JS/sh)", "777 izinler"],
+    "777 izinler (dosya modu)": ["777 izinler (JS/sh)", "777 izinler", "777 izinler (sh)"],
+    "TLS bypass": ["TLS bypass", "TLS bypass (sh)"],
     "Web storage'da hassas veri": ["Web storage'da hassas veri", "test kodunda web storage anahtarı"],
     "JWT none algoritması": ["JWT none algoritması", "negatif test: alg=none reddi"],
 }
@@ -197,6 +208,8 @@ EDITOR_SKIP = {
     "postMessage/message dinleyici": "6 saha; Electron/Capacitor köprüleri, tasarım gereği",
     "SSRF fetch/axios": "11 saha; client'ın aynı-köken API katmanı",
     "spoofable header yetkisi": "yetki kararı bu repo'da header'a bakmıyor; yüksek FP",
+    "uzak kaynaktan boru kurulum": "tek saha: deploy/livekit-setup.sh (operatör-koşumlu VM kiti); CI self-scan görünür tutuyor",
+    "shell eval": "3 saha; deploy kitinin prompt/ssh-agent idiomları, CI self-scan yeterli",
 }
 
 

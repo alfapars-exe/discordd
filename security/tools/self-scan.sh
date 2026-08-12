@@ -4,10 +4,15 @@
 # yazılır ve B4 raporunun 7. bölümüne eklenir.
 #
 # Dil kapsamı (§0.11 madde 3.5 — repo'daki HER dil zorunlu):
-#   - JS/TS  : §0.10 taban seti (client/, electron/, e2e/)
+#   - JS/TS  : §0.10 taban seti (client/, electron/, e2e/, build/)
 #   - Go     : §0.10.3 HiChat seti — bu repo için türetildi, aşağıya bak
 #   - CI/YAML: §0.10.2 seti (.github/workflows/)
-# Python seti (§0.10.1) bilinçli olarak yok: repo'da Python üretim kodu yok.
+#   - Shell  : §0.5 çevre kod seti (deploy/*.sh) — 777/TLS-bypass BLOK;
+#              uzak-boru kurulum ve eval İNCELEME (deploy kiti operatör-koşumlu,
+#              tek bilinen boru sahası deploy/livekit-setup.sh; agent-time
+#              eşdeğeri policies/agent-tools.yml F5'te zaten YASAK).
+# Python seti (§0.10.1) bilinçli olarak yok: repo'da Python üretim kodu yok
+# (security/tools/*.py geliştirme aracıdır, ürün yüzeyi değildir).
 #
 # Kullanım: security/tools/self-scan.sh [KAYNAK_DIZIN] [CIKTI_DOSYASI]
 set -u
@@ -19,9 +24,13 @@ OUT="${2:-self-scan-inceleme.txt}"
 INC='--include=*.ts --include=*.tsx --include=*.js --include=*.jsx'
 INC_GO='--include=*.go'
 INC_CI='--include=*.yml --include=*.yaml'
+INC_SH='--include=*.sh'
 # dtln: client/public altındaki emscripten/WASM ses bundle'ı — üçüncü taraf,
 # minified, tek satır; SECURITY-SCOPE.yml'de "dependency-metadata" sınıfında.
-EXC='--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=build --exclude-dir=.next
+# NOT: kök build/ BİLİNÇLİ dışlanmıyor — electron-builder paketleme hook'ları
+# (after-pack.js) birinci taraf koddur ve taranır; "build" adı çıktı dizini
+# değildir bu repo'da (çıktılar dist/ ve release/ altındadır).
+EXC='--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next
      --exclude-dir=vendor --exclude-dir=coverage --exclude-dir=venv --exclude-dir=.venv
      --exclude-dir=site-packages --exclude-dir=__pycache__ --exclude-dir=.git
      --exclude-dir=release --exclude-dir=playwright-report --exclude-dir=test-results
@@ -42,6 +51,14 @@ incele_go() { local d="$1" p="$2"
 
 incele_ci() { local d="$1" p="$2"
   grep -RInE $INC_CI $EXC -e "$p" "$SRC" | sed "s|^|🔎 İNCELEME [$d]: |" | tee -a "$OUT" || true; }
+
+# --exclude=self-scan.sh: desen tanımları ('curl[^|]*--insecure' gibi) kendi
+# kaynak satırlarıyla eşleşir; agent-bypass kuralındaki emsalin aynısı.
+blok_sh() { local d="$1" p="$2"
+  if grep -RInE $INC_SH --exclude=self-scan.sh $EXC -e "$p" "$SRC"; then
+    echo "❌ BLOK: $d"; FAIL=1; fi; }
+incele_sh() { local d="$1" p="$2"
+  grep -RInE $INC_SH --exclude=self-scan.sh $EXC -e "$p" "$SRC" | sed "s|^|🔎 İNCELEME [$d]: |" | tee -a "$OUT" || true; }
 
 # ============================================================
 # §0.10 taban seti — JS / TS
@@ -198,6 +215,19 @@ grep -RInE $INC_CI $EXC -e 'uses:\s*[A-Za-z0-9_.-]+/' "$SRC" \
 if grep -RIn $EXC --include='*.yml' --include='*.yaml' --include='*.sh' --include='*.json' \
      --exclude=self-scan.sh -e 'dangerously-skip-permissions' -e 'bypassPermissions' "$SRC"; then
   echo "❌ BLOK: agent izin bypass bayrağı"; FAIL=1; fi
+
+# ============================================================
+# §0.5 Shell (çevre kod) seti — deploy/*.sh
+# ============================================================
+# umask: yalnız tüm-sıfır (000/0000) BLOK'tur; umask 022 idiomatik ve güvenlidir.
+blok_sh "777 izinler (sh)"          'chmod\s+777|chmod\s+-R\s+777|umask\s+0+\b'
+blok_sh "TLS bypass (sh)"           'curl[^|]*--insecure|curl[^|]*\s-k\b|wget[^|]*--no-check-certificate'
+# Uzak boru kurulum: bilinen tek saha deploy/livekit-setup.sh (operatör-koşumlu
+# VM kurulum kiti; ağ hattı TLS). Agent-time eşdeğeri policies/agent-tools.yml
+# F5'te YASAK — burada İNCELEME olarak görünür kalır, build'i kırmaz.
+incele_sh "uzak kaynaktan boru kurulum" '(curl|wget)[^|]*\|\s*(ba|z)?sh\b'
+# eval: deploy kitinin prompt/ssh-agent idiomları; görünür kalsın diye İNCELEME.
+incele_sh "shell eval"              '\beval\b'
 
 echo "---"
 echo "İNCELEME satırı: $(wc -l < "$OUT")  →  $OUT (B4 raporu 7. bölümüne eklenir)"
