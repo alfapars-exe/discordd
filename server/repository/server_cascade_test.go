@@ -348,25 +348,22 @@ func listTableNames(t *testing.T, db *database.DB) []string {
 	return names
 }
 
-// tableHasColumn reports whether table has a column named column, via
-// PRAGMA table_info. table comes from sqlite_master (listTableNames above),
-// never from external input, so building the PRAGMA statement with
-// fmt.Sprintf is safe — PRAGMA doesn't accept bound parameters for the
-// table name anyway.
+// tableHasColumn reports whether table has a column named column, via the
+// table-valued pragma function pragma_table_info — unlike the bare
+// `PRAGMA table_info(...)` statement, the function form accepts a bound
+// parameter, so the table name (from sqlite_master) never gets spliced
+// into SQL text.
 func tableHasColumn(t *testing.T, db *database.DB, table, column string) bool {
 	t.Helper()
-	rows, err := db.Conn.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	rows, err := db.Conn.Query(`SELECT name FROM pragma_table_info(?)`, table)
 	if err != nil {
 		t.Fatalf("table_info(%s): %v", table, err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull, pk int
-		var dfltValue any
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+		var name string
+		if err := rows.Scan(&name); err != nil {
 			t.Fatalf("scan table_info(%s): %v", table, err)
 		}
 		if name == column {
