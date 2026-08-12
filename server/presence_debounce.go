@@ -144,11 +144,10 @@ func (d *presenceOfflineDebouncer) pending(userID string) bool {
 // stopAll cancels every pending timer. Called during graceful shutdown
 // (main.go) before the dependencies a fired timer would touch — the DB pool
 // (db.Close) and the Hub (hub.Shutdown) — are torn down. Stop()ing here
-// ensures no NEW timer goroutine starts after shutdown begins; a callback
-// that had already committed to firing microseconds earlier is not joined,
-// but the generation bump below invalidates it (current() turns false), and
-// even its worst-case pre-gen side effects were verified benign against a
-// closed DB / drained hub (error-logged, no panic).
+// ensures no NEW timer goroutine starts after shutdown begins. A callback
+// that already passed its generation check and left the timers map is
+// neither joined nor invalidated — its side effects against a closed DB /
+// drained hub were verified benign (error-logged, no panic).
 func (d *presenceOfflineDebouncer) stopAll() {
 	d.mu.Lock()
 	defer d.mu.Unlock()

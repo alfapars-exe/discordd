@@ -358,7 +358,12 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 	// re-asserting ONLINE and skip the offline broadcast — the reconnect's
 	// own broadcast carries the correct state.
 	if !debouncer.current(userID, gen) {
-		if compErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOnline); compErr != nil && !errors.Is(compErr, pkg.ErrNotFound) {
+		// Fresh context: the offline write above may have consumed most of
+		// the shared 5s budget, and this compensation must not fail for
+		// that reason alone.
+		compCtx, compCancel := services.BroadcastContext()
+		defer compCancel()
+		if compErr := userRepo.UpdateStatus(compCtx, userID, models.UserStatusOnline); compErr != nil && !errors.Is(compErr, pkg.ErrNotFound) {
 			hubLogger.Error("failed to re-assert online after offline/reconnect race", "area", "presence", "user_id", userID, "err", pkg.ErrText(compErr))
 		}
 		return
