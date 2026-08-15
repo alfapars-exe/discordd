@@ -24,7 +24,7 @@
 # could not be built at all until that tag was corrected.
 
 # ─── Builder Stage ───
-FROM golang:1.26.5-bookworm AS builder
+FROM golang:1.27rc2-bookworm AS builder
 
 WORKDIR /build
 COPY go.mod go.sum ./
