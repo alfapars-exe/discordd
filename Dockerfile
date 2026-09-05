@@ -39,7 +39,7 @@ RUN npm run build
 # satisfies the >=1.25.12 stdlib fixes CI's govulncheck cares about:
 # GO-2026-5856 (crypto/tls), GO-2026-5037 (crypto/x509), GO-2026-5039
 # (net/textproto) — matches the go-version pin in server-ci.yml.
-FROM golang:1.26.5-bookworm AS backend
+FROM golang:1.27.1-bookworm AS backend
 WORKDIR /app
 
 # Module cache layer: download what's already in go.sum. We don't run
