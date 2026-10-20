@@ -496,11 +496,10 @@ select option:disabled { color:var(--t3); }
 /* Voice user status icons — right-aligned */
 .ch-tree-vu-icons { display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0; }
 .ch-tree-vu-icon { width:14px;height:14px;flex-shrink:0; }
-/* Streaming icon — clickable, turns green when watching */
-button.ch-tree-vu-stream { all:unset;display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;cursor:pointer;color:var(--t2);transition:color .15s; }
-button.ch-tree-vu-stream:hover { color:var(--t0); }
-button.ch-tree-vu-stream.watching { color:var(--green); }
-button.ch-tree-vu-stream svg { width:14px;height:14px; }
+/* Streaming "LIVE" badge — clickable, white ring when watching */
+button.ch-tree-vu-stream { all:unset;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:1px 5px;border-radius:4px;background:#ed4245;color:#fff;font-size:10px;font-weight:700;line-height:14px;letter-spacing:.02em;text-transform:uppercase;transition:filter .15s,box-shadow .15s; }
+button.ch-tree-vu-stream:hover { filter:brightness(1.1); }
+button.ch-tree-vu-stream.watching { box-shadow:0 0 0 1.5px #fff; }
 .ch-tree-vu-viewer-count { font-size:13px;color:var(--color-text-muted);margin-left:2px;min-width:14px;text-align:center; }
 .ch-tree-vu-mute { color:var(--red);opacity:0.7; }
 .ch-tree-vu-deafen { color:var(--red);opacity:0.7; }
