@@ -92,9 +92,23 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// accessLogLevel picks the level of a request's access-log line. Accepted
+// POST /api/client-log calls (204) drop to Debug: every publisher and viewer
+// of a screen share posts telemetry there every 10 s, which otherwise buries
+// the rest of the access log. Any other status (429 rate limit, 400, 5xx)
+// stays at Info so abuse and failures remain visible, and the HTTPStatsSink
+// counters see every request regardless of level.
+func accessLogLevel(path string, status int) slog.Level {
+	if path == "/api/client-log" && status == http.StatusNoContent {
+		return slog.LevelDebug
+	}
+	return slog.LevelInfo
+}
+
 // RequestLogger returns middleware that assigns each request a request_id
 // (surfaced via the X-Request-Id response header and the request context) and
-// emits one structured access-log line per request at Info level.
+// emits one structured access-log line per request, at the level
+// accessLogLevel picks (Info except for routine client-log telemetry).
 //
 // sink, if non-nil, additionally receives an Observe(status, duration) call
 // per request — the durable runtime-telemetry rollup's HTTP counters (P3.11)
@@ -155,7 +169,7 @@ func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) h
 				sink.Observe(rec.status, duration)
 			}
 
-			logger.LogAttrs(ctx, slog.LevelInfo, "http request",
+			logger.LogAttrs(ctx, accessLogLevel(r.URL.Path, rec.status), "http request",
 				slog.String("request_id", reqID),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
