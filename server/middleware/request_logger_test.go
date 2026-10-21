@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -225,5 +227,37 @@ func TestRequestLogger_AlsoWritesIntoPkgRequestIDKey(t *testing.T) {
 	if pkgSideID != rec.Header().Get("X-Request-Id") {
 		t.Fatalf("pkg-side id %q != response header %q — keys are out of sync",
 			pkgSideID, rec.Header().Get("X-Request-Id"))
+	}
+}
+
+func TestRequestLogger_ClientLogTelemetryLogsAtDebug(t *testing.T) {
+	cases := []struct {
+		name      string
+		path      string
+		status    int
+		wantLevel string
+	}{
+		{"accepted client-log is debug", "/api/client-log", http.StatusNoContent, "DEBUG"},
+		{"rate-limited client-log stays info", "/api/client-log", http.StatusTooManyRequests, "INFO"},
+		{"other paths stay info", "/api/version", http.StatusNoContent, "INFO"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			sink := &stubHTTPStatsSink{}
+			h := RequestLogger(logger, sink)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+			}))
+
+			h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, tc.path, nil))
+
+			if !strings.Contains(buf.String(), "level="+tc.wantLevel) {
+				t.Fatalf("log line %q, want level=%s", buf.String(), tc.wantLevel)
+			}
+			if sink.calls != 1 {
+				t.Fatalf("sink calls = %d, want 1 — the level must not affect telemetry", sink.calls)
+			}
+		})
 	}
 }
