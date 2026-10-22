@@ -49,6 +49,7 @@ type Repositories struct {
 	Emoji             repository.EmojiRepository
 	Sticker           repository.StickerRepository
 	Entrance          repository.EntranceRepository
+	Cosmetic          repository.CosmeticRepository
 	MediaAsset        repository.MediaAssetRepository
 	RuntimeTelemetry  repository.RuntimeTelemetryRepository
 	DMRead            repository.DMReadRepository
@@ -107,6 +108,7 @@ func initRepositories(conn *sql.DB) *Repositories {
 		Emoji:             repository.NewSQLiteEmojiRepo(db),
 		Sticker:           repository.NewSQLiteStickerRepo(db),
 		Entrance:          repository.NewSQLiteEntranceRepo(db),
+		Cosmetic:          repository.NewSQLiteCosmeticRepo(db),
 		MediaAsset:        repository.NewSQLiteMediaAssetRepo(db),
 		RuntimeTelemetry:  repository.NewSQLiteRuntimeTelemetryRepo(db),
 		DMRead:            repository.NewSQLiteDMReadRepo(db),

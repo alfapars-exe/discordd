@@ -21,6 +21,7 @@ function MessageList() {
   const { t } = useTranslation("chat");
   const {
     mode,
+    serverId,
     channelId,
     channelName,
     messages,
@@ -438,6 +439,7 @@ function MessageList() {
                       isCompact={isCompact(vi.index)}
                       isPinned={isMessagePinned(msg.id)}
                       mode={mode}
+                      cosmeticScope={mode === "channel" ? (serverId ?? null) : null}
                       canManageMessages={canManageMessages}
                       member={showRoleColors ? memberById.get(msg.user_id) : undefined}
                       currentMember={currentMember}

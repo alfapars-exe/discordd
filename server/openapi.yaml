@@ -140,6 +140,16 @@ tags:
       (on/off, max duration, per-channel switch, moderator mute). Playback is
       server-triggered on a fresh voice join (WS entrance_sound_play to the
       channel's participants only); there is no play endpoint.
+  - name: Cosmetics
+    description: >-
+      Profile cosmetics — avatar frames, nameplates, name styles, profile
+      themes and profile effects. Every asset is a small structured token
+      document validated against a strict schema and re-serialized
+      canonically (no raw CSS, no SVG bytes; built-in frames are client
+      components keyed by an enum). One item per (scope, slot type); scope
+      "global" or a server the caller is in, a server scope overriding the
+      global one there. Changes fan out as WS user_cosmetics_update (not
+      bot-readable). Everyone mode: no shop, no premium tier.
   - name: Friends
     description: Friend requests and the friends roster.
   - name: Blocks
@@ -3797,6 +3807,104 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
 
+  # ── Cosmetics ──
+  /api/users/me/cosmetics:
+    get:
+      operationId: myCosmeticsGet
+      summary: The caller's wearable catalog, grants, equipped slots and plain servers.
+      description: >-
+        `items` are the built-in catalog (by type and sort order) plus the
+        items of servers the caller is in that they can wear (free, or
+        granted to them). `equipped.global` and `equipped.servers[<id>]` are
+        the raw slots per scope (only filled slots are present).
+        `plain_server_ids` lists the servers where the caller looks plain.
+        Lists are `[]` and maps `{}` when empty (never null).
+      tags: [Cosmetics]
+      responses:
+        '200': { $ref: '#/components/responses/MyCosmeticsOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/cosmetics/equipped:
+    put:
+      operationId: myCosmeticsEquip
+      summary: Equip or clear 1-5 of the caller's slots in one scope.
+      description: >-
+        Body `{"scope": "global" | serverId, "slots": {type: itemId | null}}`
+        with 1-5 known slot keys; null clears the slot, a key left out is
+        unchanged. All slots change in one transaction; the item's canonical
+        asset is snapshotted. A request that changes nothing broadcasts
+        nothing; otherwise one user_cosmetics_update per affected context.
+        Body at most 4 KiB, unknown fields rejected. Error codes: 400
+        COSMETIC_SLOTS_INVALID (no/unknown slot key, bad scope or id), 400
+        COSMETIC_SLOT_MISMATCH (item type differs from the key), 400
+        COSMETIC_SCOPE_MISMATCH (a server item outside its own server), 403
+        COSMETIC_NOT_OWNED (a granted item without a grant), 404 for a
+        missing item and for a scope server the caller is not in (the same
+        response). Shares the per-user CosmeticEquip rate limit (10/min, 429
+        with Retry-After). Returns the same body as GET.
+      tags: [Cosmetics]
+      requestBody: { $ref: '#/components/requestBodies/EquipCosmeticsRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/MyCosmeticsOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/users/me/cosmetics/plain-servers/{serverId}:
+    put:
+      operationId: myCosmeticsPlainServerSet
+      summary: Look plain (no cosmetics) in one server, or stop doing so.
+      description: >-
+        Body `{"plain": bool}` (required). Not a member of the server is 404.
+        A change broadcasts user_cosmetics_update to that server only (with
+        `plain: true` the slots are `{}`). Shares the CosmeticEquip rate
+        limit (429 with Retry-After).
+      tags: [Cosmetics]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/SetCosmeticPlainServerRequestBody' }
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/users/cosmetics:
+    get:
+      operationId: usersCosmeticsLookup
+      summary: Global cosmetics of up to 100 users (DM / friends context).
+      description: >-
+        `?ids=a,b,c` — 1-100 ids after collapsing duplicates, each matching
+        ^[A-Za-z0-9_-]{1,64}$ (400 COSMETIC_IDS_INVALID otherwise). Only
+        global slots are returned; users without any slot are left out.
+      tags: [Cosmetics]
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema: { type: string }
+          description: Comma-separated user ids.
+      responses:
+        '200': { $ref: '#/components/responses/CosmeticsLookupOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/servers/{serverId}/cosmetics:
+    get:
+      operationId: serverCosmeticsGet
+      summary: Resolved cosmetics of a server's members.
+      description: >-
+        Membership is the gate. Each member's slots resolved for this server
+        (server override over global, per type); members who look plain here
+        and members without any slot are left out.
+      tags: [Cosmetics]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/ServerCosmeticsOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
   # ── WebSocket ──
   /ws:
     get:
@@ -5392,6 +5500,157 @@ components:
         preset: { $ref: '#/components/schemas/EntrancePreset' }
         play_ms: { type: integer }
       required: [server_id, channel_id, user_id, kind, play_ms]
+    # ── Cosmetics ──
+    CosmeticItem:
+      description: >-
+        models.CosmeticItem — one catalog item. `server_id` null = built-in.
+        `asset` is the canonical asset document for (type, format): svg
+        {"v":1,"frame":key}; nameplate {"v":1,"stops":[hex x2-3],"angle":0-359,"pattern":p};
+        name_style {"v":1,"font":f,"stops":[hex x1-2],"angle":0-359};
+        profile_theme {"v":1,"accent":hex,"gradient":[hex,hex],"angle":0-359};
+        profile_effect {"v":1,"effect":e,"color":hex}; raster frame (server
+        items only) {"v":1,"url":U,"animated_url":A?}. Hex is #rrggbb lower
+        case. Clients re-validate before rendering. `created_at` is RFC3339 UTC.
+      type: object
+      properties:
+        id: { type: string }
+        server_id: { type: [string, "null"] }
+        type: { type: string, enum: [avatar_frame, nameplate, name_style, profile_theme, profile_effect] }
+        format: { type: string, enum: [svg, css, raster] }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        asset: { type: object }
+        animated: { type: boolean }
+        availability: { type: string, enum: [free, granted] }
+        created_at: { type: string, format: date-time }
+      required: [id, server_id, type, format, name, description, asset, animated, availability, created_at]
+    EquippedCosmetic:
+      description: >-
+        models.EquippedCosmetic — one filled slot, from the equip-time
+        snapshot of the item's canonical asset.
+      type: object
+      properties:
+        item_id: { type: string }
+        format: { type: string, enum: [svg, css, raster] }
+        animated: { type: boolean }
+        asset: { type: object }
+      required: [item_id, format, animated, asset]
+    CosmeticSlots:
+      description: >-
+        models.CosmeticSlots — slot type to equipped item; only filled slots
+        are present, `{}` when none.
+      type: object
+      properties:
+        avatar_frame: { $ref: '#/components/schemas/EquippedCosmetic' }
+        nameplate: { $ref: '#/components/schemas/EquippedCosmetic' }
+        name_style: { $ref: '#/components/schemas/EquippedCosmetic' }
+        profile_theme: { $ref: '#/components/schemas/EquippedCosmetic' }
+        profile_effect: { $ref: '#/components/schemas/EquippedCosmetic' }
+      additionalProperties: false
+    CosmeticGrant:
+      description: >-
+        models.CosmeticGrant — a granted server item given to the caller.
+        `granted_by` is null once the granting account is gone.
+        `granted_at` is RFC3339 UTC.
+      type: object
+      properties:
+        item_id: { type: string }
+        server_id: { type: string }
+        granted_by:
+          oneOf:
+            - type: object
+              properties:
+                id: { type: string }
+                username: { type: string }
+                display_name: { type: [string, "null"] }
+              required: [id, username, display_name]
+            - type: "null"
+        reason: { type: string }
+        granted_at: { type: string, format: date-time }
+      required: [item_id, server_id, granted_by, reason, granted_at]
+    MyCosmetics:
+      description: >-
+        models.MyCosmetics — body of GET /api/users/me/cosmetics and of PUT
+        /api/users/me/cosmetics/equipped.
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CosmeticItem' }
+        grants:
+          type: array
+          items: { $ref: '#/components/schemas/CosmeticGrant' }
+        equipped:
+          type: object
+          properties:
+            global: { $ref: '#/components/schemas/CosmeticSlots' }
+            servers:
+              type: object
+              additionalProperties: { $ref: '#/components/schemas/CosmeticSlots' }
+          required: [global, servers]
+        plain_server_ids:
+          type: array
+          items: { type: string }
+      required: [items, grants, equipped, plain_server_ids]
+    EquipRequest:
+      description: >-
+        models.EquipRequest — body of PUT /api/users/me/cosmetics/equipped.
+        1-5 slot keys; an item id equips, null clears.
+      type: object
+      additionalProperties: false
+      properties:
+        scope: { type: string, description: '"global" or a server id.' }
+        slots:
+          type: object
+          minProperties: 1
+          maxProperties: 5
+          additionalProperties: false
+          properties:
+            avatar_frame: { type: [string, "null"] }
+            nameplate: { type: [string, "null"] }
+            name_style: { type: [string, "null"] }
+            profile_theme: { type: [string, "null"] }
+            profile_effect: { type: [string, "null"] }
+      required: [scope, slots]
+    SetCosmeticPlainServerRequest:
+      description: models.SetPlainServerRequest — body of PUT /api/users/me/cosmetics/plain-servers/{serverId}.
+      type: object
+      additionalProperties: false
+      properties:
+        plain: { type: boolean }
+      required: [plain]
+    CosmeticsLookup:
+      description: models.CosmeticsLookupResponse — body of GET /api/users/cosmetics.
+      type: object
+      properties:
+        users:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/CosmeticSlots' }
+      required: [users]
+    ServerCosmetics:
+      description: models.ServerCosmeticsResponse — body of GET /api/servers/{serverId}/cosmetics.
+      type: object
+      properties:
+        server_id: { type: string }
+        users:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/CosmeticSlots' }
+      required: [server_id, users]
+    CosmeticsUpdateEvent:
+      description: >-
+        models.CosmeticsUpdateEvent — the `d` of the WS op
+        `user_cosmetics_update`. Not bot-readable. With `server_id` a server
+        id it goes to that server and carries the user's slots resolved for
+        it (`plain: true` and `{}` slots when the user looks plain there);
+        with `server_id` null it goes to the user only and carries their
+        global slots. One event per affected context per request.
+      type: object
+      properties:
+        user_id: { type: string }
+        server_id: { type: [string, "null"] }
+        slots: { $ref: '#/components/schemas/CosmeticSlots' }
+        plain: { type: boolean }
+      required: [user_id, server_id, slots, plain]
   responses:
     StubOK:
       description: Success (200). Payload is a stub in this phase — see StubData.
@@ -5728,6 +5987,39 @@ components:
                 properties:
                   data:
                     $ref: '#/components/schemas/EntranceMutes'
+    MyCosmeticsOK:
+      description: Success (200) — the caller's cosmetics.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MyCosmetics'
+    CosmeticsLookupOK:
+      description: Success (200) — global slots per user.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CosmeticsLookup'
+    ServerCosmeticsOK:
+      description: Success (200) — the server members' resolved slots.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServerCosmetics'
     SavedMessageIDsOK:
       description: Success (200) — every bookmarked message id.
       content:
@@ -6139,3 +6431,15 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/SetChannelEntranceRequest' }
+    EquipCosmeticsRequestBody:
+      description: Body of PUT /api/users/me/cosmetics/equipped.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/EquipRequest' }
+    SetCosmeticPlainServerRequestBody:
+      description: Body of PUT /api/users/me/cosmetics/plain-servers/{serverId}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SetCosmeticPlainServerRequest' }

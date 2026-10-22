@@ -6,8 +6,12 @@
 import { useTranslation } from "react-i18next";
 import ProfileHero from "../members/memberCard/ProfileHero";
 import ProfileAbout from "../members/memberCard/ProfileAbout";
+import StyledName from "../cosmetics/StyledName";
+import type { CosmeticSlots } from "../../types/cosmetics";
 
 type Props = {
+  /** Draft cosmetics (Settings → Cosmetics preview). Omitted = none. */
+  cosmetics?: CosmeticSlots;
   username: string;
   displayName: string;
   avatarUrl: string | null;
@@ -20,6 +24,7 @@ type Props = {
 };
 
 function ProfilePreviewCard({
+  cosmetics,
   username,
   displayName,
   avatarUrl,
@@ -44,10 +49,16 @@ function ProfilePreviewCard({
           bannerUrl={bannerUrl}
           accentColor={accentColor || null}
           animate
+          frame={cosmetics?.avatar_frame}
+          theme={cosmetics?.profile_theme}
+          effect={cosmetics?.profile_effect}
+          effectActive={!!cosmetics}
         />
         <div className="mc-body">
           <div className="mc-identity">
-            <div className="mc-name">{name}</div>
+            <div className="mc-name">
+              {cosmetics ? <StyledName name={name} style={cosmetics.name_style} /> : name}
+            </div>
             {displayName.trim() && <div className="mc-username">@{username}</div>}
             {customStatus && <div className="mc-custom-status">{customStatus}</div>}
           </div>

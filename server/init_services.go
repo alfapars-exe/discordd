@@ -58,6 +58,7 @@ type Services struct {
 	Emoji             services.EmojiService
 	Sticker           services.StickerService
 	Entrance          services.EntranceService
+	Cosmetic          services.CosmeticService
 	ExpressionClone   services.ExpressionCloneService
 	MusicBot          services.MusicBotService
 	WSTicket          services.WSTicketService
@@ -122,6 +123,12 @@ type RateLimiters struct {
 	// shared budget for both endpoints. Rate limiting bounds frequency, not
 	// concurrency -- no semaphore needed here (no CPU/memory-heavy work).
 	SocialAction *ratelimit.MessageRateLimiter
+	// CosmeticEquip (Faz G1): PUT /api/users/me/cosmetics/equipped and PUT
+	// /api/users/me/cosmetics/plain-servers/{serverId}. A global change fans
+	// out one WS event to every server the caller is in, so an unthrottled
+	// caller could spam N servers per request. 10/min per user, 30s
+	// cooldown (same shape as SocialAction). One shared budget for both.
+	CosmeticEquip *ratelimit.MessageRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -280,6 +287,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	entranceService := services.NewEntranceService(repos.Entrance, repos.Server, repos.Role, repos.Channel,
 		channelPermService, hub, voiceService, cfg.Upload.Dir)
 	voiceService.SetEntranceHook(entranceService)
+	// Profile cosmetics (everyone mode: no shop, no premium tier).
+	cosmeticService := services.NewCosmeticService(repos.Cosmetic, repos.Server,
+		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
 	musicBotService := services.NewMusicBotService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService,
 	)
@@ -345,6 +355,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// once exceeded -- see the RateLimiters.SocialAction doc comment above.
 	socialActionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
 
+	// CosmeticEquip (Faz G1): 10 per minute per user, 30s cooldown once
+	// exceeded -- see the RateLimiters.CosmeticEquip doc comment above.
+	cosmeticEquipLimiter := ratelimit.NewMessageRateLimiter(10, 1*time.Minute, 30*time.Second)
+
 	svcs := &Services{
 		Auth:              authService,
 		Server:            serverService,
@@ -389,6 +403,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Emoji:             emojiService,
 		Sticker:           stickerService,
 		Entrance:          entranceService,
+		Cosmetic:          cosmeticService,
 		ExpressionClone:   expressionCloneService,
 		MusicBot:          musicBotService,
 		WSTicket:          services.NewWSTicketService(),
@@ -399,20 +414,21 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	}
 
 	limiters := &RateLimiters{
-		Login:        loginLimiter,
-		Message:      messageLimiter,
-		DMMessage:    dmMessageLimiter,
-		Register:     registerLimiter,
-		ForgotPwd:    forgotPwdLimiter,
-		ResetPwd:     resetPwdLimiter,
-		Feedback:     feedbackLimiter,
-		WSTicket:     wsTicketLimiter,
-		DeviceEnum:   deviceEnumLimiter,
-		Upload:       uploadLimiter,
-		GroupSession: groupSessionLimiter,
-		Refresh:      refreshLimiter,
-		MusicPlay:    musicPlayLimiter,
-		SocialAction: socialActionLimiter,
+		Login:         loginLimiter,
+		Message:       messageLimiter,
+		DMMessage:     dmMessageLimiter,
+		Register:      registerLimiter,
+		ForgotPwd:     forgotPwdLimiter,
+		ResetPwd:      resetPwdLimiter,
+		Feedback:      feedbackLimiter,
+		WSTicket:      wsTicketLimiter,
+		DeviceEnum:    deviceEnumLimiter,
+		Upload:        uploadLimiter,
+		GroupSession:  groupSessionLimiter,
+		Refresh:       refreshLimiter,
+		MusicPlay:     musicPlayLimiter,
+		SocialAction:  socialActionLimiter,
+		CosmeticEquip: cosmeticEquipLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

@@ -142,6 +142,9 @@ func (r *sqliteUserRepo) DeleteAllMessagesByUser(ctx context.Context, userID str
 //     NULL, not reassigned — the creator alone controls the copyable
 //     licence. Emojis and stickers of servers the user owned go with those
 //     servers' cascade.
+//   - user_equipped / user_cosmetic_plain_servers / user_cosmetics.user_id:
+//     deleted; user_cosmetics.granted_by and cosmetic_items.created_by are
+//     cleared to NULL (grants to others and server items survive).
 //
 // Disk files are deliberately NOT touched here — this repo layer only owns
 // DB rows. Most orphaned files are unreachable (media_access fails closed
@@ -280,6 +283,28 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 	}
 	if _, err := q.ExecContext(ctx, `DELETE FROM user_entrance_sounds WHERE user_id = ?`, userID); err != nil {
 		return fmt.Errorf("failed to delete entrance sounds for user: %w", err)
+	}
+	// Cosmetics (migration 089): the user's slots, plain switches and the
+	// grants they received go - unenforced cascades on Turso. user_cosmetics
+	// names two users, so grants they made to others survive with
+	// granted_by cleared, and items they created survive with created_by
+	// cleared (the item belongs to its server).
+	if _, err := q.ExecContext(ctx, `DELETE FROM user_equipped WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete equipped cosmetics for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM user_cosmetic_plain_servers WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete cosmetic plain servers for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM user_cosmetics WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete cosmetic grants for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx,
+		`UPDATE user_cosmetics SET granted_by = NULL WHERE granted_by = ?`, userID); err != nil {
+		return fmt.Errorf("failed to clear granted_by on cosmetic grants: %w", err)
+	}
+	if _, err := q.ExecContext(ctx,
+		`UPDATE cosmetic_items SET created_by = NULL WHERE created_by = ?`, userID); err != nil {
+		return fmt.Errorf("failed to clear created_by on cosmetic items: %w", err)
 	}
 
 	// Main delete — CASCADE handles all remaining related data.

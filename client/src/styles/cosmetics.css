@@ -1,0 +1,261 @@
+/* ─── Cosmetics (Faz G) ───────────────────────────────────────────────
+ * Every colour / angle here comes in as a CSS custom property set from a
+ * VALIDATED token (utils/cosmetics.ts) — no server-provided CSS strings,
+ * no url(). Enum values select the classes below. All motion is opt-in
+ * (.cos-frame--animate / --hoverable, .cos-effect) and disabled under
+ * prefers-reduced-motion (components also stop rendering it).
+ */
+
+/* ── Avatar frame ── */
+.cos-avatar {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.cos-frame {
+  position: absolute;
+  pointer-events: none;
+  display: block;
+  z-index: 1;
+}
+
+/* The member-list presence dot sits on the avatar's corner, where a 1.25x
+   frame's ring passes; presence must stay visible above any frame. */
+.member-av-wrap > .member-status { z-index: 2; }
+
+.cos-frame-svg,
+.cos-frame-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.cos-frame-svg { overflow: visible; }
+
+.cos-anim-spin { transform-origin: 60px 60px; transform-box: view-box; }
+
+.cos-frame--animate .cos-anim-spin,
+.ch-tree-dm:hover .cos-frame--hoverable .cos-anim-spin,
+.cos-avatar:hover > .cos-frame--hoverable .cos-anim-spin {
+  animation: cos-spin 8s linear infinite;
+}
+
+.cos-frame--animate .cos-anim-flicker,
+.ch-tree-dm:hover .cos-frame--hoverable .cos-anim-flicker,
+.cos-avatar:hover > .cos-frame--hoverable .cos-anim-flicker {
+  animation: cos-flicker 1.2s ease-in-out infinite alternate;
+}
+
+.cos-frame--animate .cos-anim-dash,
+.ch-tree-dm:hover .cos-frame--hoverable .cos-anim-dash,
+.cos-avatar:hover > .cos-frame--hoverable .cos-anim-dash {
+  animation: cos-dash 2.4s linear infinite;
+}
+
+@keyframes cos-spin { to { transform: rotate(360deg); } }
+@keyframes cos-flicker { from { opacity: 0.55; } to { opacity: 1; } }
+@keyframes cos-dash { to { stroke-dashoffset: -48; } }
+
+/* ── Nameplate (row background) ── */
+.cos-np-host {
+  position: relative;
+  isolation: isolate;
+}
+
+.cos-nameplate {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: linear-gradient(var(--cos-np-angle, 90deg), var(--cos-np-a), var(--cos-np-b));
+  overflow: hidden;
+}
+
+.cos-nameplate.cos-np--3 {
+  background-image: linear-gradient(var(--cos-np-angle, 90deg), var(--cos-np-a), var(--cos-np-b), var(--cos-np-c));
+}
+
+/* Scrim keeps the row text readable on bright plates. */
+.cos-nameplate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.1));
+}
+
+.cos-np-pattern-dots::before,
+.cos-np-pattern-stripes::before,
+.cos-np-pattern-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.cos-np-pattern-dots::before {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1.6px);
+  background-size: 8px 8px;
+}
+
+.cos-np-pattern-stripes::before {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.18) 0 3px, transparent 3px 9px);
+}
+
+.cos-np-pattern-grain::before {
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.16) 0.6px, transparent 1px),
+    radial-gradient(rgba(0, 0, 0, 0.2) 0.6px, transparent 1px);
+  background-size: 3px 3px, 5px 5px;
+  background-position: 0 0, 1px 2px;
+}
+
+/* ── Name style ── */
+.cos-name {
+  color: var(--cos-ns-a);
+  font-family: "Manrope", sans-serif;
+}
+
+.cos-name.cos-name--gradient {
+  background-image: linear-gradient(var(--cos-ns-angle, 90deg), var(--cos-ns-a), var(--cos-ns-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.cos-font-default { font-family: "Manrope", sans-serif; font-weight: 600; }
+.cos-font-bold { font-family: "Manrope", sans-serif; font-weight: 800; }
+.cos-font-mono { font-family: "Source Code Pro", ui-monospace, monospace; font-weight: 500; }
+
+/* ── Profile theme (card hero) ── */
+.mc-hero-banner.cos-hero-theme {
+  background: linear-gradient(var(--cos-theme-angle, 180deg), var(--cos-theme-a), var(--cos-theme-b));
+}
+
+.mc-hero.cos-hero--themed .mc-avatar-ring {
+  box-shadow: 0 0 0 2px var(--mc-accent);
+}
+
+/* ── Profile effect ── */
+.mc-hero { isolation: isolate; }
+
+.cos-effect {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.cos-effect::before,
+.cos-effect::after {
+  content: "";
+  position: absolute;
+  inset: -50% 0 0 0;
+}
+
+.cos-effect--sparkle::before,
+.cos-effect--stars::before {
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 12% 30%, var(--cos-effect-color) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 38% 70%, var(--cos-effect-color) 0 1px, transparent 2px),
+    radial-gradient(circle at 63% 22%, var(--cos-effect-color) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 85% 58%, var(--cos-effect-color) 0 1px, transparent 2px),
+    radial-gradient(circle at 52% 45%, var(--cos-effect-color) 0 1px, transparent 2px);
+  animation: cos-twinkle 1.8s ease-in-out infinite alternate;
+}
+
+.cos-effect--stars::after {
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 25% 15%, var(--cos-effect-color) 0 1px, transparent 2px),
+    radial-gradient(circle at 75% 35%, var(--cos-effect-color) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 90% 12%, var(--cos-effect-color) 0 1px, transparent 2px);
+  animation: cos-twinkle 2.6s ease-in-out 0.8s infinite alternate;
+}
+
+.cos-effect--snow::before,
+.cos-effect--confetti::before,
+.cos-effect--petals::before {
+  background-size: 48px 48px;
+  animation: cos-fall 6s linear infinite;
+}
+
+.cos-effect--snow::before {
+  background-image:
+    radial-gradient(circle at 10px 12px, var(--cos-effect-color) 0 1.6px, transparent 2.2px),
+    radial-gradient(circle at 34px 30px, var(--cos-effect-color) 0 1.2px, transparent 1.8px);
+}
+
+.cos-effect--confetti::before {
+  background-image:
+    linear-gradient(35deg, transparent 46%, var(--cos-effect-color) 46% 54%, transparent 54%),
+    radial-gradient(circle at 36px 10px, var(--cos-effect-color) 0 1.6px, transparent 2px);
+  animation-duration: 4.5s;
+}
+
+.cos-effect--petals::before {
+  background-image:
+    radial-gradient(ellipse 3px 5px at 12px 14px, var(--cos-effect-color) 0 100%, transparent 100%),
+    radial-gradient(ellipse 4px 2.5px at 34px 32px, var(--cos-effect-color) 0 100%, transparent 100%);
+  animation: cos-drift 7s linear infinite;
+}
+
+.cos-effect--glow::before {
+  inset: 0;
+  box-shadow: inset 0 0 28px 6px var(--cos-effect-color);
+  animation: cos-pulse 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes cos-twinkle { from { opacity: 0.2; } to { opacity: 1; } }
+@keyframes cos-fall { from { transform: translateY(0); } to { transform: translateY(48px); } }
+@keyframes cos-drift { from { transform: translate(0, 0); } to { transform: translate(24px, 48px); } }
+@keyframes cos-pulse { from { opacity: 0.35; } to { opacity: 0.9; } }
+
+/* ── Settings tab ── */
+.cos-settings-scope { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.cos-equipped-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px; margin: 0 0 16px; padding: 0; list-style: none; }
+.cos-equipped-list li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--t2); }
+.cos-equipped-list strong { color: var(--t0); font-weight: 600; }
+.cos-type-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.cos-type-tab { border: 1px solid var(--panel-border, var(--bg-5)); background: transparent; color: var(--t1); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.cos-type-tab[aria-selected="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+.cos-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-bottom: 16px; }
+.cos-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 108px; padding: 12px 8px 8px; border: 2px solid transparent; border-radius: 8px; background: var(--bg-3, rgba(255, 255, 255, 0.04)); color: var(--t1); cursor: pointer; text-align: center; font-size: 12px; }
+.cos-tile:hover { background: var(--bg-h, rgba(255, 255, 255, 0.08)); }
+.cos-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.cos-tile[aria-checked="true"] { border-color: var(--primary); }
+.cos-tile-preview { display: flex; align-items: center; justify-content: center; min-height: 52px; width: 100%; }
+.cos-tile-badge { position: absolute; top: 4px; right: 4px; font-size: 10px; padding: 1px 5px; border-radius: 999px; background: var(--bg-5); color: var(--t1); }
+.cos-tile-warn { position: absolute; top: 4px; left: 6px; color: var(--yellow, #fbbf24); font-size: 12px; }
+.cos-tile-row { position: relative; isolation: isolate; width: 100%; height: 32px; border-radius: 6px; overflow: hidden; }
+.cos-tile-theme { width: 100%; height: 40px; border-radius: 6px; background: var(--bg-5); }
+.cos-tile-theme.cos-hero-theme { background: linear-gradient(var(--cos-theme-angle, 180deg), var(--cos-theme-a), var(--cos-theme-b)); box-shadow: inset 0 -3px 0 var(--mc-accent); }
+.cos-tile-effect { position: relative; width: 100%; height: 40px; border-radius: 6px; background: var(--bg-5); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.cos-tile-effect-static { font-size: 11px; color: var(--t2); }
+.cos-actions { display: flex; gap: 8px; margin: 4px 0 20px; }
+.cos-preview-grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.cos-preview-side { display: flex; flex-direction: column; gap: 12px; min-width: 220px; flex: 1; }
+.cos-preview-member { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px; max-width: 260px; }
+.cos-preview-msg { display: flex; gap: 10px; align-items: flex-start; padding: 8px; }
+.cos-preview-msg-body { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.cos-preview-msg-text { color: var(--t1); }
+.cos-grants { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cos-grants li { padding: 8px 10px; border-radius: 6px; background: var(--bg-3, rgba(255, 255, 255, 0.04)); font-size: 13px; color: var(--t1); }
+.cos-note { font-size: 12px; color: var(--t2); margin: 4px 0 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cos-frame *,
+  .cos-effect,
+  .cos-effect::before,
+  .cos-effect::after {
+    animation: none !important;
+  }
+}

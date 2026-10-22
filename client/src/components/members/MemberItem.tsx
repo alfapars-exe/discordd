@@ -3,7 +3,9 @@
 import { memo, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import Avatar from "../shared/Avatar";
+import DecoratedAvatar from "../cosmetics/DecoratedAvatar";
+import Nameplate from "../cosmetics/Nameplate";
+import { useUserCosmetics } from "../../hooks/useUserCosmetics";
 import ContextMenu from "../shared/ContextMenu";
 import { useContextMenu } from "../../hooks/useContextMenu";
 import type { ContextMenuItem } from "../../hooks/useContextMenu";
@@ -99,6 +101,8 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
   const activeServerId = useServerStore((s) => s.activeServerId);
   const timeout = useMemberTimeout(activeServerId, member.id);
   const timeoutExpiresAt = timeout?.expires_at ?? member.timeout_expires_at ?? undefined;
+  // Cosmetics (Faz G) — the name keeps its presence colour (no name style).
+  const cosmetics = useUserCosmetics(member.id, activeServerId);
 
   const [showCard, setShowCard] = useState(false);
   const [cardPos, setCardPos] = useState({ top: 0, left: 0 });
@@ -373,17 +377,21 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setRowHovered(true)}
         onMouseLeave={() => setRowHovered(false)}
-        className={`member ${getRowStatusClass(member.status, isOnline)}${!isOnline ? " offline" : ""}`}
+        className={`member ${getRowStatusClass(member.status, isOnline)}${!isOnline ? " offline" : ""}${cosmetics.nameplate ? " cos-np-host" : ""}`}
       >
+        {/* Cosmetic nameplate — decorative background layer (Faz G). */}
+        <Nameplate nameplate={cosmetics.nameplate} />
         {/* Avatar + status dot */}
         <div className="member-av-wrap">
-          <Avatar
+          <DecoratedAvatar
             name={member.username}
             role={roleType}
             avatarUrl={member.avatar_url ?? undefined}
             animatedUrl={member.avatar_animated_url}
             animate={rowHovered}
             size={32}
+            frame={cosmetics.avatar_frame}
+            animateFrame={rowHovered}
           />
           <span className={`member-status ${getStatusClass(member.status)}`} />
         </div>

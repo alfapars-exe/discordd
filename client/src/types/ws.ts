@@ -35,6 +35,7 @@ import type { VoiceState, VoiceStateUpdateData } from "./voice";
 import type { MusicBotChannelState } from "./music";
 import type { AppNotification } from "./notification";
 import type { EntranceSoundPlayEvent } from "./entrance";
+import type { CosmeticsUpdateEvent } from "./cosmetics";
 import type {
   ServerEmoji,
   ServerEmojiDeleteEvent,
@@ -124,6 +125,8 @@ export interface WSPayloadMap {
   soundboard_play: SoundboardPlayEvent;
   // Entrance sounds (Faz E) — BroadcastToUsers (joined channel only); entranceEventHandlers.
   entrance_sound_play: EntranceSoundPlayEvent;
+  // Cosmetics (Faz G) — BroadcastToServer / BroadcastToUser (self); cosmeticsEventHandlers.
+  user_cosmetics_update: CosmeticsUpdateEvent;
   // Custom emojis (Faz D1) — BroadcastToServer; handled by expressionEventHandlers.
   server_emoji_create: ServerEmoji;
   server_emoji_update: ServerEmoji;

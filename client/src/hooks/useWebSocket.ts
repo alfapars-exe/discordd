@@ -35,6 +35,7 @@ import { handleVoiceEvent } from "./ws/voiceEventHandlers";
 import { handleSystemEvent } from "./ws/systemEventHandlers";
 import { handleExpressionEvent } from "./ws/expressionEventHandlers";
 import { handleEntranceEvent } from "./ws/entranceEventHandlers";
+import { handleCosmeticsEvent } from "./ws/cosmeticsEventHandlers";
 import type { WSHandlerContext } from "./ws/types";
 
 /**
@@ -240,6 +241,7 @@ export function useWebSocket() {
     if (await handleVoiceEvent(msg, ctx)) return;
     if (handleExpressionEvent(msg)) return;
     if (handleEntranceEvent(msg)) return;
+    if (handleCosmeticsEvent(msg)) return;
     if (await handleSystemEvent(msg, ctx, setConnectionStatus)) return;
   }
 

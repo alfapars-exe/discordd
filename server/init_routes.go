@@ -228,6 +228,7 @@ func initRoutes(
 	d.registerSoundboardRoutes()
 	d.registerExpressionRoutes()
 	d.registerEntranceRoutes()
+	d.registerCosmeticRoutes()
 	d.registerWSRoutes()
 
 	return authMw, permMw

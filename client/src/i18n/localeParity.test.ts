@@ -31,6 +31,8 @@ import enExpressions from "./locales/en/expressions.json";
 import trExpressions from "./locales/tr/expressions.json";
 import enEntrance from "./locales/en/entrance.json";
 import trEntrance from "./locales/tr/entrance.json";
+import enCosmetics from "./locales/en/cosmetics.json";
+import trCosmetics from "./locales/tr/cosmetics.json";
 import enMusic from "./locales/en/music.json";
 import trMusic from "./locales/tr/music.json";
 import { RECOVERY_PASSPHRASE_I18N_KEYS } from "../crypto/recoveryPassphrase";
@@ -79,6 +81,7 @@ describe("EN/TR locale key parity", () => {
   it("saved.json", () => assertKeyParity("saved", enSaved, trSaved));
   it("expressions.json", () => assertKeyParity("expressions", enExpressions, trExpressions));
   it("entrance.json", () => assertKeyParity("entrance", enEntrance, trEntrance));
+  it("cosmetics.json", () => assertKeyParity("cosmetics", enCosmetics, trCosmetics));
   it("music.json", () => assertKeyParity("music", enMusic, trMusic));
 });
 

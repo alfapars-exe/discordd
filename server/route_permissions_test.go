@@ -153,6 +153,9 @@ var handlerInternalGates = map[string]string{
 
 	// ── Server stickers (read) ──
 	"GET /api/servers/{serverId}/stickers": "read-only — membership is the intended view gate",
+
+	// ── Profile cosmetics (read) ──
+	"GET /api/servers/{serverId}/cosmetics": "membership is the gate — returns only the server's members' public cosmetics",
 }
 
 // TestRoutePermissions_EveryRouteHasADeclaredGate is this file's core

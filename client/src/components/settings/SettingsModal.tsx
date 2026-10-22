@@ -41,6 +41,7 @@ const EmojiSettings = lazy(() => import("./EmojiSettings"));
 const StickerSettings = lazy(() => import("./StickerSettings"));
 const EntranceSoundSettings = lazy(() => import("./EntranceSoundSettings"));
 const EntranceServerSettings = lazy(() => import("./EntranceServerSettings"));
+const CosmeticsSettings = lazy(() => import("./CosmeticsSettings"));
 
 function SettingsModal() {
   const { t } = useTranslation("settings");
@@ -157,6 +158,9 @@ function SettingsContent({ activeTab }: { activeTab: string }) {
 
     case "entrance":
       return <EntranceSoundSettings />;
+
+    case "cosmetics":
+      return <CosmeticsSettings />;
 
     case "channels":
       return <ChannelSettings />;

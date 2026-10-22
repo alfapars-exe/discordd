@@ -293,6 +293,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
       >
         <MemberCardIdentity
           member={member}
+          userId={userId}
           username={username}
           displayName={displayName}
           avatarUrl={avatarUrl}
