@@ -79,6 +79,7 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   const currentUserId = useAuthStore((s) => s.user?.id);
   const isExpanded = expandedSections["dms"] ?? true;
   const [requestsExpanded, setRequestsExpanded] = useState(false);
+  const [query, setQuery] = useState("");
 
   // The self-DM ("My Notes") has its own pinned row — keep it out of the list.
   const acceptedChannels = dmChannels.filter(
@@ -90,6 +91,12 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   const pendingOutgoing = dmChannels.filter(
     (dm) => dm.status === "pending" && dm.initiated_by === currentUserId
   );
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleChannels = [...acceptedChannels, ...pendingOutgoing].filter((dm) => {
+    if (!normalizedQuery) return true;
+    const name = dm.other_user.display_name || dm.other_user.username;
+    return name.toLocaleLowerCase().includes(normalizedQuery);
+  });
 
   function handleDMClick(dmId: string, userName: string) {
     selectDM(dmId);
@@ -245,6 +252,18 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
         {isExpanded && (
           <div className="ch-tree-section-body">
             <SelfNotesRow onOpen={handleDMClick} />
+            {(acceptedChannels.length + pendingOutgoing.length) > 3 && (
+              <label className="ch-tree-search">
+                <span className="ch-tree-search-icon" aria-hidden="true">⌕</span>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t("search")}
+                  aria-label={t("search")}
+                />
+                {query && <button type="button" onClick={() => setQuery("")} aria-label={t("clear")}>×</button>}
+              </label>
+            )}
             {/* ── Message Requests (collapsible, default collapsed) ── */}
             {pendingChannels.length > 0 && (
               <div className="ch-tree-dm-requests">
@@ -281,12 +300,12 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
               </div>
             )}
             {/* ── Normal DMs + outgoing pending ── */}
-            {[...acceptedChannels, ...pendingOutgoing].length === 0 && pendingChannels.length === 0 ? (
+            {visibleChannels.length === 0 && pendingChannels.length === 0 ? (
               <div className="ch-tree-placeholder">
-                <span className="ch-tree-placeholder-text">—</span>
+                <span className="ch-tree-placeholder-text">{query ? t("noResults") : "—"}</span>
               </div>
             ) : (
-              [...acceptedChannels, ...pendingOutgoing].map((dm) => {
+              visibleChannels.map((dm) => {
                 const isActive = dm.id === selectedDMId;
                 const unread = dmUnreadCounts[dm.id] ?? 0;
                 const name = dm.other_user.display_name || dm.other_user.username;
