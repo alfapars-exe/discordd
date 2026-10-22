@@ -13,7 +13,7 @@ func TestContainsSteeringCharsMultiline(t *testing.T) {
 		{"tab is allowed", "col1\tcol2", false},
 		{"non-ascii passes", "Zeynep 🎉 Зейнеп\nikinci satır", false},
 		{"carriage return is still rejected", "a\r\nb", true},
-		{"bidi override is rejected", "safe‮evil", true},
+		{"bidi override is rejected", "safe\u202eevil", true},
 		{"zero width space is rejected", "zero​width", true},
 		{"other C0 control is rejected", "bell\x07", true},
 		{"line separator is rejected", "a b", true},
@@ -35,7 +35,7 @@ func TestContainsSteeringCharsMultiline_StricterThanSingleLineOnlyForNewlines(t 
 	if !ContainsSteeringChars("a\nb") || ContainsSteeringCharsMultiline("a\nb") {
 		t.Error("newline must be rejected by the single-line check and accepted by the multi-line one")
 	}
-	if !ContainsSteeringChars("a‮b") || !ContainsSteeringCharsMultiline("a‮b") {
+	if !ContainsSteeringChars("a\u202eb") || !ContainsSteeringCharsMultiline("a\u202eb") {
 		t.Error("a bidi override must be rejected by both checks")
 	}
 }

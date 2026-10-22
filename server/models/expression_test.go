@@ -81,7 +81,7 @@ func TestCreateEmojiRequest_Validate(t *testing.T) {
 		}
 	}
 
-	for _, dn := range []string{"", "   ", "evil‮eman", strings.Repeat("ş", 33)} {
+	for _, dn := range []string{"", "   ", "evil\u202eeman", strings.Repeat("ş", 33)} {
 		r := CreateEmojiRequest{DisplayName: dn, Name: "ok_name"}
 		if err := r.Validate(); !errors.Is(err, ErrExpressionDisplayNameInvalid) {
 			t.Errorf("display_name %q: err = %v, want ErrExpressionDisplayNameInvalid", dn, err)
@@ -146,13 +146,13 @@ func TestParseReactionEmoji(t *testing.T) {
 		{"🇹🇷", want{ok: true}}, // flag (regional indicators)
 		{"🏴\U000E0067\U000E0062\U000E0073\U000E0063\U000E0074\U000E007F", want{ok: true}}, // tag-sequence flag
 		{"👩‍❤️‍👨", want{ok: true}},                                                        // ZWJ + VS16
-		{"👍‮", want{}},
-		{"‪👍", want{}},
-		{"👍⁦", want{}},
-		{"👍⁩", want{}},
-		{"👍‎", want{}},
-		{"👍‏", want{}},
-		{"👍؜", want{}},
+		{"👍\u202e", want{}},
+		{"\u202a👍", want{}},
+		{"👍\u2066", want{}},
+		{"👍\u2069", want{}},
+		{"👍\u200e", want{}},
+		{"👍\u200f", want{}},
+		{"👍\u061c", want{}},
 		{strings.Repeat("a", 32), want{ok: true}},
 		{strings.Repeat("a", 33), want{}},
 		{"<:0123456789abcdef>", want{custom: true, id: "0123456789abcdef", ok: true}},

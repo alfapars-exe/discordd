@@ -273,13 +273,14 @@ func (r *sqliteMessageRepo) GetByChannelIDAround(ctx context.Context, channelID,
 	}
 	half := limit / 2
 
-	olderRows, err := r.db.QueryContext(ctx, messageHistorySelect+`
+	olderQuery := messageHistorySelect + `
 		WHERE m.channel_id = ?
 		  AND ( m.created_at < (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 		     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 		          AND m.id < ? ) )
 		ORDER BY m.created_at DESC, m.id DESC
-		LIMIT ?`,
+		LIMIT ?`
+	olderRows, err := r.db.QueryContext(ctx, olderQuery,
 		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+1)
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to get messages around anchor: %w", err)
@@ -293,13 +294,14 @@ func (r *sqliteMessageRepo) GetByChannelIDAround(ctx context.Context, channelID,
 		older = older[:half]
 	}
 
-	newerRows, err := r.db.QueryContext(ctx, messageHistorySelect+`
+	newerQuery := messageHistorySelect + `
 		WHERE m.channel_id = ?
 		  AND ( m.created_at > (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 		     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 		          AND m.id >= ? ) )
 		ORDER BY m.created_at ASC, m.id ASC
-		LIMIT ?`,
+		LIMIT ?`
+	newerRows, err := r.db.QueryContext(ctx, newerQuery,
 		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+2)
 	if err != nil {
 		return nil, false, false, fmt.Errorf("failed to get messages around anchor: %w", err)
@@ -328,13 +330,14 @@ func (r *sqliteMessageRepo) GetByChannelIDAfter(ctx context.Context, channelID, 
 	if err := r.anchorExists(ctx, channelID, afterID); err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, messageHistorySelect+`
+	query := messageHistorySelect + `
 		WHERE m.channel_id = ?
 		  AND ( m.created_at > (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 		     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 		          AND m.id > ? ) )
 		ORDER BY m.created_at ASC, m.id ASC
-		LIMIT ?`,
+		LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, query,
 		channelID, afterID, channelID, afterID, channelID, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages after anchor: %w", err)

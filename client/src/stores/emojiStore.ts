@@ -49,7 +49,7 @@ type EmojiState = {
 let generation = 0;
 
 export function serverIdSignature(serverIds: string[]): string {
-  return [...serverIds].sort().join(",");
+  return [...serverIds].sort((a, b) => a.localeCompare(b)).join(",");
 }
 
 function sortByName(list: ServerEmoji[]): ServerEmoji[] {

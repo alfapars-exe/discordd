@@ -26,7 +26,7 @@ func TestNormalizeStickerTags(t *testing.T) {
 		{"duplicates do not count toward the cap", []string{"a", "A", "b", "c", "d", "e"}, []string{"a", "b", "c", "d", "e"}},
 		{"21 runes rejected", []string{strings.Repeat("x", 21)}, nil},
 		{"20 runes allowed", []string{strings.Repeat("ş", 20)}, []string{strings.Repeat("ş", 20)}},
-		{"bidi override rejected", []string{"‮ab"}, nil},
+		{"bidi override rejected", []string{"\u202eab"}, nil},
 		{"newline rejected", []string{"a\nb"}, nil},
 		{"Turkish dotted case folds", []string{"Şeker", "şeker"}, []string{"Şeker"}},
 	}
@@ -70,12 +70,12 @@ func TestCreateStickerRequest_Validate(t *testing.T) {
 	}{
 		{"empty display name", CreateStickerRequest{DisplayName: "  "}, ErrExpressionDisplayNameInvalid},
 		{"33 rune display name", CreateStickerRequest{DisplayName: strings.Repeat("a", 33)}, ErrExpressionDisplayNameInvalid},
-		{"bidi display name", CreateStickerRequest{DisplayName: "evil‮"}, ErrExpressionDisplayNameInvalid},
+		{"bidi display name", CreateStickerRequest{DisplayName: "evil\u202e"}, ErrExpressionDisplayNameInvalid},
 		{"bad explicit name", CreateStickerRequest{DisplayName: "Kedi", Name: "Bad Name"}, ErrExpressionNameInvalid},
 		{"unsluggable display name", CreateStickerRequest{DisplayName: "!!"}, ErrExpressionNameInvalid},
 		{"101 rune description", CreateStickerRequest{DisplayName: "Kedi", Description: strings.Repeat("ç", 101)}, ErrExpressionDescriptionInvalid},
 		{"multi-line description", CreateStickerRequest{DisplayName: "Kedi", Description: "bir\niki"}, ErrExpressionDescriptionInvalid},
-		{"bidi description", CreateStickerRequest{DisplayName: "Kedi", Description: "a‮b"}, ErrExpressionDescriptionInvalid},
+		{"bidi description", CreateStickerRequest{DisplayName: "Kedi", Description: "a\u202eb"}, ErrExpressionDescriptionInvalid},
 		{"bad tag", CreateStickerRequest{DisplayName: "Kedi", Tags: []string{"a,b"}}, ErrExpressionTagsInvalid},
 	}
 	for _, tc := range cases {

@@ -100,6 +100,7 @@ function ExpressionInfoPopover({ kind, id, name, animated, anchor, onClose }: Ex
       <div
         className="expression-popover"
         onClick={stop}
+        onKeyDown={stop}
         onContextMenu={stop}
         onTouchStart={stop}
         onTouchMove={stop}

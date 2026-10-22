@@ -125,7 +125,8 @@ func (r *sqliteDMRepo) dmAnchorExists(ctx context.Context, channelID, anchorID s
 }
 
 func (r *sqliteDMRepo) queryDMHistory(ctx context.Context, tail string, args ...any) ([]models.DMMessage, error) {
-	rows, err := r.db.QueryContext(ctx, dmMessageHistorySelect+tail, args...)
+	query := dmMessageHistorySelect + tail
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DM messages: %w", err)
 	}

@@ -176,7 +176,7 @@ func TestEntranceCreateSound_Rejections(t *testing.T) {
 		t.Errorf("6 s clip: err = %v, want ErrEntranceDurationInvalid", err)
 	}
 	file, header = buildUpload(t, "clip.wav", "audio/wav", entranceWav(1000))
-	if _, err := f.svc.CreateSound(context.Background(), entAlice, "bad‮name", file, header); !errors.Is(err, models.ErrEntranceNameInvalid) {
+	if _, err := f.svc.CreateSound(context.Background(), entAlice, "bad\u202ename", file, header); !errors.Is(err, models.ErrEntranceNameInvalid) {
 		t.Errorf("steering name: err = %v, want ErrEntranceNameInvalid", err)
 	}
 	if n := f.repo.SoundCount(); n != 0 {

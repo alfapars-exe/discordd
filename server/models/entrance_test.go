@@ -90,7 +90,7 @@ func TestValidEntranceName(t *testing.T) {
 		strings.Repeat("ğ", 32): true,
 		strings.Repeat("a", 33): false,
 		"":                      false,
-		"evil‮eman":             false,
+		"evil\u202eeman":             false,
 		"tab\tname":             false,
 		"zero​width":            false,
 	}
@@ -117,7 +117,7 @@ func TestPutEntranceSelectionRequest_Validate(t *testing.T) {
 		{"clip without id", PutEntranceSelectionRequest{Scope: "global", Kind: "clip"}, ErrEntranceScopeInvalid},
 		{"clip empty id", PutEntranceSelectionRequest{Scope: "global", Kind: "clip", SoundID: &empty}, ErrEntranceScopeInvalid},
 		{"preset without body", PutEntranceSelectionRequest{Scope: "global", Kind: "preset"}, ErrEntrancePresetInvalid},
-		{"steering scope", PutEntranceSelectionRequest{Scope: "srv‮1", Kind: "none"}, ErrEntranceScopeInvalid},
+		{"steering scope", PutEntranceSelectionRequest{Scope: "srv\u202e1", Kind: "none"}, ErrEntranceScopeInvalid},
 	}
 	for _, c := range cases {
 		err := c.req.Validate()

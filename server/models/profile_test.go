@@ -21,7 +21,7 @@ func TestNormalizeBio(t *testing.T) {
 		{"CR stripped before counting", strings.Repeat("a\r\n", 95), strings.TrimSpace(strings.Repeat("a\n", 95)), false},
 		{"newline and tab allowed", "a\n\tb", "a\n\tb", false},
 		{"surrounding whitespace trimmed", "  hi  \n", "hi", false},
-		{"bidi override rejected", "evil‮txt", "", true},
+		{"bidi override rejected", "evil\u202etxt", "", true},
 		{"empty means clear", "   ", "", false},
 	}
 	for _, tc := range cases {
@@ -55,7 +55,7 @@ func TestNormalizePronouns(t *testing.T) {
 		{"41 runes rejected", ok40 + "x", "", true},
 		{"trimmed", "  she/her ", "she/her", false},
 		{"newline rejected (single line)", "she\nher", "", true},
-		{"bidi override rejected", "he‮him", "", true},
+		{"bidi override rejected", "he\u202ehim", "", true},
 		{"empty means clear", "", "", false},
 	}
 	for _, tc := range cases {

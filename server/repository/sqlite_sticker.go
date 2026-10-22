@@ -113,7 +113,8 @@ func (r *sqliteStickerRepo) CreateWithCap(ctx context.Context, s *models.ServerS
 }
 
 func (r *sqliteStickerRepo) GetByID(ctx context.Context, id string) (*models.ServerSticker, error) {
-	row := r.db.QueryRowContext(ctx, `SELECT `+stickerColumns+` FROM server_stickers s WHERE s.id = ?`, id)
+	query := `SELECT ` + stickerColumns + ` FROM server_stickers s WHERE s.id = ?`
+	row := r.db.QueryRowContext(ctx, query, id)
 	return r.scanOne(row)
 }
 

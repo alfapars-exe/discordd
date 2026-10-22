@@ -141,7 +141,7 @@ func TestSavedHandler_UpdateNoteAndDelete_ForeignIs404(t *testing.T) {
 		{http.MethodPatch, "theirs", `{"note":"x"}`, http.StatusNotFound},
 		{http.MethodPatch, "mine", `{"note":"x"}`, http.StatusOK},
 		{http.MethodPatch, "mine", `{"note":null}`, http.StatusOK},
-		{http.MethodPatch, "mine", `{"note":"a‮b"}`, http.StatusBadRequest},
+		{http.MethodPatch, "mine", `{"note":"a\u202eb"}`, http.StatusBadRequest},
 		{http.MethodDelete, "theirs", "", http.StatusNotFound},
 		{http.MethodDelete, "mine", "", http.StatusOK},
 	} {

@@ -177,7 +177,7 @@ func TestSavedService_Save_ValidationAndLimits(t *testing.T) {
 			t.Errorf("blank note stored as %q, want nil", *f.created[0].Note)
 		}
 
-		bidi := "safe‮evil"
+		bidi := "safe\u202eevil"
 		if _, _, err := f.svc.Save(context.Background(), "alice", &models.CreateSavedMessageRequest{MessageID: "m1", Note: &bidi}); !errors.Is(err, pkg.ErrBadRequest) {
 			t.Errorf("steering-char note err = %v, want ErrBadRequest", err)
 		}

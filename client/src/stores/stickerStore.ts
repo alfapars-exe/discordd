@@ -47,7 +47,7 @@ type StickerState = {
 let generation = 0;
 
 function signature(serverIds: string[]): string {
-  return [...serverIds].sort().join(",");
+  return [...serverIds].sort((a, b) => a.localeCompare(b)).join(",");
 }
 
 function sortByName(list: ServerSticker[]): ServerSticker[] {

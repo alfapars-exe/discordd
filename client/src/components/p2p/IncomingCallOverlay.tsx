@@ -101,6 +101,8 @@ function IncomingCallOverlay() {
         } else {
           stopRingtoneRef.current = stop;
         }
+      }).catch(() => {
+        // Autoplay can be refused; the overlay still shows without sound.
       });
     }
 

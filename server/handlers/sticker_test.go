@@ -133,7 +133,7 @@ func TestStickerHandler_CreateErrorCodes(t *testing.T) {
 		code   string
 	}{
 		{"bad name", map[string]string{"display_name": "Kedi", "name": "Bad Name"}, nil, nil, http.StatusBadRequest, "EXPRESSION_NAME_INVALID"},
-		{"bad display name", map[string]string{"display_name": "evil‮"}, nil, nil, http.StatusBadRequest, "EXPRESSION_DISPLAY_NAME_INVALID"},
+		{"bad display name", map[string]string{"display_name": "evil\u202e"}, nil, nil, http.StatusBadRequest, "EXPRESSION_DISPLAY_NAME_INVALID"},
 		{"bad description", map[string]string{"display_name": "Kedi", "description": "bir\niki"}, nil, nil, http.StatusBadRequest, "EXPRESSION_DESCRIPTION_INVALID"},
 		{"too many tags", map[string]string{"display_name": "Kedi", "tags": "a,b,c,d,e,f"}, nil, nil, http.StatusBadRequest, "EXPRESSION_TAGS_INVALID"},
 		{"name taken", map[string]string{"display_name": "Kedi"}, nil, func(f *stickerHandlerFixture) {

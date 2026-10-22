@@ -146,7 +146,7 @@ export function convertEmojiShortcodes(
     }
   };
   if (currentServerId) addServer(byServer[currentServerId]);
-  for (const sid of Object.keys(byServer).sort()) {
+  for (const sid of Object.keys(byServer).sort((a, b) => a.localeCompare(b))) {
     if (sid !== currentServerId) addServer(byServer[sid]);
   }
   if (byName.size === 0) return text;

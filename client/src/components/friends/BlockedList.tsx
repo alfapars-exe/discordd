@@ -26,6 +26,8 @@ function BlockedList() {
         setBlockedUsers(res.data);
       }
       setIsLoading(false);
+    }).catch(() => {
+      if (!cancelled) setIsLoading(false);
     });
     return () => { cancelled = true; };
   }, [blockedIds]);

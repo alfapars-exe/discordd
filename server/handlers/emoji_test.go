@@ -182,7 +182,7 @@ func TestEmojiHandler_CreateErrorCodes(t *testing.T) {
 		code   string
 	}{
 		{"bad name", map[string]string{"display_name": "Kedi", "name": "Bad Name"}, nil, nil, http.StatusBadRequest, "EXPRESSION_NAME_INVALID"},
-		{"bad display name", map[string]string{"display_name": "evil‮"}, nil, nil, http.StatusBadRequest, "EXPRESSION_DISPLAY_NAME_INVALID"},
+		{"bad display name", map[string]string{"display_name": "evil\u202e"}, nil, nil, http.StatusBadRequest, "EXPRESSION_DISPLAY_NAME_INVALID"},
 		{"name taken", map[string]string{"display_name": "Kedi"}, nil, func(f *emojiHandlerFixture) {
 			f.repo.Put(models.ServerEmoji{ID: "aaaaaaaaaaaaaaaa", ServerID: "srv", Name: "kedi"})
 		}, http.StatusConflict, "EXPRESSION_NAME_TAKEN"},

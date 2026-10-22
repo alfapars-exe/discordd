@@ -317,7 +317,7 @@ export async function handleSystemEvent(
       const quiet = manualStatus === "dnd" || manualStatus === "offline";
       playNotificationSound();
       if (!quiet) {
-        window.electronAPI?.flashFrame();
+        void window.electronAPI?.flashFrame();
         useToastStore.getState().addToast("info", i18n.t("inbox:friendRequestToast", { name }));
       }
       showNotification({
