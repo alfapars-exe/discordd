@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -87,7 +87,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -138,7 +138,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -219,7 +219,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.5" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
           cache: true
           cache-dependency-path: server/go.sum
 
