@@ -542,8 +542,13 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     const current = get().peerTrustAlerts;
     const existing = current[key];
     if (existing?.kind === alert.kind) {
-      // Already flagged with the same kind — avoid re-rendering subscribers.
-      return;
+      // Keep the alert fresh when the same kind is observed again (for
+      // example, a later identity change with a new key pair). Avoid a
+      // render only when every field is unchanged.
+      const unchanged = Object.keys({ ...existing, ...alert }).every(
+        (field) => existing[field as keyof PeerTrustAlert] === alert[field as keyof PeerTrustAlert],
+      ) && Object.keys(existing).every((field) => field in alert);
+      if (unchanged) return;
     }
     // A more severe kind may overwrite a less severe one, never the reverse:
     // a plain new_device sighting must not erase an outstanding

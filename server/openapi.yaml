@@ -815,7 +815,7 @@ paths:
             Category-prefixed relative file path as stored at upload time,
             e.g. `<16-hex>_<name>.png` (channel/DM/report/feedback
             attachment or avatar/icon), `soundboard/<16-hex>_<name>.mp3`,
-            `badges/<16-hex>_<name>.png`, `emojis/<16-hex>.png|.gif`,
+            `badges/badge_<16-hex>.<ext>`, `emojis/<16-hex>.png|.gif`,
             `stickers/<16-hex>.png|.gif`.
       responses:
         '200':

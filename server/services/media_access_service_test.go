@@ -139,7 +139,7 @@ const (
 	feedbackAttURL = "/api/uploads/feedback-evidence.png"
 	publicAssetURL = "/api/uploads/avatar123.png"
 	soundboardURL  = "/api/uploads/soundboard/aabbccddeeff0011_clip.mp3"
-	badgesURL      = "/api/uploads/badges/aabbccddeeff0011_icon.png"
+	badgesURL      = "/api/uploads/badges/badge_aabbccddeeff0011.png"
 	orphanURL      = "/api/uploads/nothing-claims-this.png"
 
 	reporterID    = "user-reporter"

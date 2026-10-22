@@ -151,7 +151,7 @@ describe("e2eeStore", () => {
       expect(useE2EEStore.getState().peerTrustAlerts["u1:d1"]).toEqual(alert);
     });
 
-    it("should not change the state reference when marking the same alert kind twice", () => {
+    it("should refresh metadata when the same alert kind changes", () => {
       const alert: PeerTrustAlert = {
         userId: "u1",
         deviceId: "d1",
@@ -162,7 +162,8 @@ describe("e2eeStore", () => {
       const before = useE2EEStore.getState().peerTrustAlerts;
       useE2EEStore.getState().markPeerTrustAlert({ ...alert, detectedAt: 2 });
       const after = useE2EEStore.getState().peerTrustAlerts;
-      expect(after).toBe(before);
+      expect(after).not.toBe(before);
+      expect(after["u1:d1"].detectedAt).toBe(2);
     });
 
     it("should let identity_changed overwrite an existing new_device alert", () => {

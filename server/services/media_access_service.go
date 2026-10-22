@@ -198,9 +198,12 @@ func (s *mediaAccessService) Authorize(ctx context.Context, fileURL string, reso
 		}
 		report, err := s.reports.GetByID(ctx, reportAtt.ReportID)
 		if err != nil {
-			// Attachment points at a deleted report — 404, not 403, so we
-			// don't disclose the orphan.
-			return MediaNotFound, nil
+			if errors.Is(err, pkg.ErrNotFound) {
+				// Attachment points at a deleted report — 404, not 403, so we
+				// don't disclose the orphan.
+				return MediaNotFound, nil
+			}
+			return mediaDecisionUnset, err
 		}
 		if report.ReporterID == userID {
 			return MediaAllowed, nil

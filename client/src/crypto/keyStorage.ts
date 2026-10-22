@@ -521,11 +521,14 @@ export async function getTrustedDeviceIdsForUser(
 ): Promise<Set<string>> {
   const db = await getDB();
   const prefix = `${userId}:`;
-  const keys = await db.getAllKeys("trustedIdentities");
+  const keys = await db.getAllKeys(
+    "trustedIdentities",
+    IDBKeyRange.bound(prefix, `${prefix}\uffff`),
+  );
 
   const deviceIds = new Set<string>();
   for (const key of keys) {
-    if (typeof key === "string" && key.startsWith(prefix)) {
+    if (typeof key === "string") {
       deviceIds.add(key.slice(prefix.length));
     }
   }
