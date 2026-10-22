@@ -194,6 +194,32 @@ var deleteServerCascadeStmts = []struct {
 		query: `DELETE FROM server_entrance_settings WHERE server_id = ?`,
 		args:  func(id string) []any { return []any{id} },
 	},
+	// Cosmetics (migration 089): the server-scoped rows below declare ON
+	// DELETE CASCADE, which Turso never enforces. Built-in items (server_id
+	// NULL) and users' global slots wearing them are untouched. Slots
+	// scoped to this server and slots anywhere wearing one of its items go
+	// first, then grants, plain switches and the items themselves. Raster
+	// frame files (Faz G2) are collected by serverFileURLs before this runs.
+	{
+		query: `DELETE FROM user_equipped WHERE scope_server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM user_equipped WHERE item_id IN (SELECT id FROM cosmetic_items WHERE server_id = ?)`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM user_cosmetics WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM user_cosmetic_plain_servers WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM cosmetic_items WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
 	{
 		// The server row itself, last — everything above joins through it.
 		query: `DELETE FROM servers WHERE id = ?`,

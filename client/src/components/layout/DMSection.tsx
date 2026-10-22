@@ -15,7 +15,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useToastStore } from "../../stores/toastStore";
 import { copyToClipboard } from "../../utils/constants";
-import Avatar from "../shared/Avatar";
+import { UserDecoratedAvatar, UserNameplate } from "../cosmetics/UserCosmetics";
 import ContextMenu from "../shared/ContextMenu";
 import DMMuteDurationPicker from "../dm/DMMuteDurationPicker";
 import SelfNotesRow from "../dm/SelfNotesRow";
@@ -265,7 +265,15 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
                       className={`ch-tree-item ch-tree-dm ch-tree-dm--pending${isActive ? " active" : ""}`}
                       onClick={() => handleDMClick(dm.id, name)}
                     >
-                      <Avatar name={name} avatarUrl={dm.other_user.avatar_url} size={24} isCircle />
+                      <UserDecoratedAvatar
+                        userId={dm.other_user.id}
+                        scope={null}
+                        animateFrame="hover"
+                        name={name}
+                        avatarUrl={dm.other_user.avatar_url}
+                        size={24}
+                        isCircle
+                      />
                       <span className="ch-tree-label">{name}</span>
                     </button>
                   );
@@ -287,11 +295,15 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
                 return (
                   <button
                     key={dm.id}
-                    className={`ch-tree-item ch-tree-dm${isActive ? " active" : ""}${unread > 0 ? " has-unread" : ""}${dm.is_muted ? " muted" : ""}`}
+                    className={`ch-tree-item ch-tree-dm cos-np-host${isActive ? " active" : ""}${unread > 0 ? " has-unread" : ""}${dm.is_muted ? " muted" : ""}`}
                     onClick={() => handleDMClick(dm.id, name)}
                     onContextMenu={(e) => handleDMContextMenu(e, dm)}
                   >
-                    <Avatar
+                    {dm.status === "accepted" && <UserNameplate userId={dm.other_user.id} scope={null} />}
+                    <UserDecoratedAvatar
+                      userId={dm.other_user.id}
+                      scope={null}
+                      animateFrame="hover"
                       name={name}
                       avatarUrl={dm.other_user.avatar_url}
                       size={24}

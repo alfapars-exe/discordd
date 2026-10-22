@@ -173,6 +173,7 @@
   "stickers": "Stickers",
   "entranceSounds": "Entrance Sound",
   "serverEntranceSounds": "Entrance Sounds",
+  "cosmetics": "Cosmetics",
   "permUseEntranceSound": "Use Entrance Sound",
   "permUseEntranceSoundDesc": "Have your entrance sound played when you join a voice channel",
   "inviteExpiry": "Expire After",

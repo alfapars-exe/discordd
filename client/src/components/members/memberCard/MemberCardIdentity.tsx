@@ -12,10 +12,15 @@ import ProfileHero from "./ProfileHero";
 import ProfileAbout from "./ProfileAbout";
 import BadgePill from "../../shared/BadgePill";
 import RoleBadge from "../RoleBadge";
+import StyledName from "../../cosmetics/StyledName";
 import { formatFullDateTime, formatRelativeFuture } from "../../../utils/dateFormat";
+import { useUserCosmetics } from "../../../hooks/useUserCosmetics";
+import { useServerStore } from "../../../stores/serverStore";
 
 type Props = {
   member?: MemberWithRoles;
+  /** Card target's user id — cosmetics lookup (falls back to member.id). */
+  userId?: string;
   username: string;
   displayName?: string | null;
   avatarUrl?: string | null;
@@ -45,6 +50,7 @@ type Props = {
 
 function MemberCardIdentity({
   member,
+  userId,
   username,
   displayName,
   avatarUrl,
@@ -71,6 +77,10 @@ function MemberCardIdentity({
   children,
 }: Props) {
   const { t, i18n } = useTranslation("common");
+  // Cosmetics (Faz G): server-resolved slots inside a server, global ones
+  // in DM / friends context (same context rule as isServerContext).
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const cosmetics = useUserCosmetics(userId ?? member?.id, isServerContext ? activeServerId : null);
 
   return (
     <>
@@ -106,6 +116,10 @@ function MemberCardIdentity({
         bannerUrl={bannerUrl}
         accentColor={accentColor}
         animate={animateAvatar}
+        frame={cosmetics.avatar_frame}
+        theme={cosmetics.profile_theme}
+        effect={cosmetics.profile_effect}
+        effectActive={animateAvatar}
       />
 
       {/* Body */}
@@ -116,7 +130,7 @@ function MemberCardIdentity({
               Edit pencil shows when the viewer is either renaming
               themselves OR has ManageNicknames for others. */}
           <div className="mc-name">
-            {member?.nickname || displayName || username}
+            <StyledName name={member?.nickname || displayName || username} style={cosmetics.name_style} />
             {canEditNickname && nicknameDraft === null && (
               <button
                 className="mc-name-edit"

@@ -19,6 +19,7 @@ type NavItem = {
 /** User Settings — visible to everyone */
 const USER_ITEMS: NavItem[] = [
   { id: "profile", labelKey: "profile" },
+  { id: "cosmetics", labelKey: "cosmetics" },
   { id: "appearance", labelKey: "appearance" },
   { id: "accessibility", labelKey: "accessibility" },
   { id: "voice", labelKey: "voiceSettings" },

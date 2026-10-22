@@ -152,6 +152,7 @@ func main() {
 	repairOrphanedServerData(db)
 	repairOrphanedSoundboard(db, cfg.Upload.Dir)
 	repairOrphanedEntranceSounds(db, cfg.Upload.Dir)
+	repairOrphanedCosmetics(db, cfg.Upload.Dir)
 	resetStalePresence(db)
 	purgeExpiredNotifications(db)
 	seedPlatformLiveKit(db, repos, cfg, encryptionKey)

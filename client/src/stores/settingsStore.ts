@@ -277,6 +277,7 @@ type SettingsTab =
   | "stickers"
   | "entrance"
   | "entrance-sounds"
+  | "cosmetics"
   | "platform"
   | "platform-quota"
   | "platform-servers"
