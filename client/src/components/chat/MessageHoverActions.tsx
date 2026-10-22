@@ -1,6 +1,7 @@
 /** MessageHoverActions — Floating action bar shown on hover (reply, react, pin, edit, delete). */
 
 import { useTranslation } from "react-i18next";
+import { toReactionKey } from "../../utils/expressionTokens";
 import EmojiPicker from "../shared/EmojiPicker";
 
 type MessageHoverActionsProps = {
@@ -47,8 +48,9 @@ function MessageHoverActions({
         </button>
         {pickerSource === "hover" && (
           <EmojiPicker
-            onSelect={onReaction}
+            onSelect={(emoji) => onReaction(toReactionKey(emoji))}
             onClose={onPickerClose}
+            customEmojis
           />
         )}
       </div>

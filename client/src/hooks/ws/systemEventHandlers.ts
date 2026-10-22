@@ -20,6 +20,12 @@ import { useBadgeStore } from "../../stores/badgeStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useAuditStore } from "../../stores/auditStore";
 import { useUIStore } from "../../stores/uiStore";
+import { useNotificationStore } from "../../stores/notificationStore";
+import { usePresenceStore } from "../../stores/presenceStore";
+import { useToastStore } from "../../stores/toastStore";
+import i18n from "../../i18n";
+import { playNotificationSound } from "../../utils/sounds";
+import { showNotification } from "../../utils/notifications";
 import {
   decryptChannelMessage,
   markAllChannelRecipientsStale,
@@ -58,12 +64,14 @@ export async function handleSystemEvent(
       if (data.pref_status) useAuthStore.getState().setManualStatus(data.pref_status as UserStatus);
 
       useMemberStore.getState().handleReady(data.online_user_ids);
+      usePresenceStore.getState().handleReady(data.online_user_ids);
       useReadStateStore.getState().fetchAllUnreadCounts();
       useDMStore.getState().fetchChannels();
       useDMStore.getState().fetchDMSettings();
       useFriendStore.getState().fetchFriends();
       useFriendStore.getState().fetchRequests();
       useBlockStore.getState().fetchBlocked();
+      useNotificationStore.getState().fetchCount();
 
       // Roster/device changes missed while offline can't be caught by the
       // per-event member_join/leave/update marks below — bump the epoch so
@@ -141,6 +149,7 @@ export async function handleSystemEvent(
     case "presence_update": {
       const data = msg.d;
       useMemberStore.getState().handlePresenceUpdate(data.user_id, data.status);
+      usePresenceStore.getState().handlePresenceUpdate(data.user_id, data.status);
       const myId = useAuthStore.getState().user?.id;
       if (data.user_id === myId) {
         useAuthStore.getState().updateUser({ status: data.status });
@@ -295,9 +304,30 @@ export async function handleSystemEvent(
     }
 
     // ─── Friends ───
-    case "friend_request_create":
-      useFriendStore.getState().handleFriendRequestCreate(msg.d);
+    case "friend_request_create": {
+      const request = msg.d;
+      useFriendStore.getState().handleFriendRequestCreate(request);
+      // An incoming request used to be silent — only the sidebar badge moved.
+      // Give it the same cue set as a DM: ping, window flash, in-app toast
+      // and (when unfocused) an OS toast.
+      const name = request.display_name || request.username;
+      // playNotificationSound() already stays silent in DND/invisible; keep the
+      // in-app toast and window flash on the same rule so DND really is quiet.
+      const manualStatus = useAuthStore.getState().manualStatus;
+      const quiet = manualStatus === "dnd" || manualStatus === "offline";
+      playNotificationSound();
+      if (!quiet) {
+        window.electronAPI?.flashFrame();
+        useToastStore.getState().addToast("info", i18n.t("inbox:friendRequestToast", { name }));
+      }
+      showNotification({
+        title: name,
+        body: i18n.t("inbox:kind.friendRequest", { name }),
+        icon: request.avatar_url ?? null,
+        tag: "friend-request",
+      });
       return true;
+    }
     case "friend_request_accept":
       useFriendStore.getState().handleFriendRequestAccept(msg.d);
       return true;
@@ -306,6 +336,16 @@ export async function handleSystemEvent(
       return true;
     case "friend_remove":
       useFriendStore.getState().handleFriendRemove(msg.d);
+      return true;
+
+    // ─── Notifications (persisted feed) ───
+    // No cues here: the ping/flash/toast for a mention or request already
+    // fires in the owning domain handler; this only keeps the feed in sync.
+    case "notification_create":
+      useNotificationStore.getState().handleCreate(msg.d);
+      return true;
+    case "notification_read":
+      useNotificationStore.getState().handleReadSync(msg.d);
       return true;
 
     // ─── Blocks ───

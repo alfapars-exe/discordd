@@ -37,6 +37,10 @@ const FeedbackSettings = lazy(() => import("./FeedbackSettings"));
 const BlockedUsersSettings = lazy(() => import("./BlockedUsersSettings"));
 const AdminFeedbackList = lazy(() => import("./AdminFeedbackList"));
 const DiagnosticsSettings = lazy(() => import("./DiagnosticsSettings"));
+const EmojiSettings = lazy(() => import("./EmojiSettings"));
+const StickerSettings = lazy(() => import("./StickerSettings"));
+const EntranceSoundSettings = lazy(() => import("./EntranceSoundSettings"));
+const EntranceServerSettings = lazy(() => import("./EntranceServerSettings"));
 
 function SettingsModal() {
   const { t } = useTranslation("settings");
@@ -139,8 +143,20 @@ function SettingsContent({ activeTab }: { activeTab: string }) {
     case "invites":
       return <InviteSettings />;
 
+    case "emojis":
+      return <EmojiSettings />;
+
+    case "stickers":
+      return <StickerSettings />;
+
+    case "entrance-sounds":
+      return <EntranceServerSettings />;
+
     case "voice":
       return <VoiceSettings />;
+
+    case "entrance":
+      return <EntranceSoundSettings />;
 
     case "channels":
       return <ChannelSettings />;

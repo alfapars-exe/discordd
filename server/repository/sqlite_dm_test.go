@@ -212,6 +212,109 @@ func TestDMRepo_ListChannels(t *testing.T) {
 		}
 	})
 
+	t.Run("unread_count and last_message come from dm_reads and the newest message", func(t *testing.T) {
+		readRepo := NewSQLiteDMReadRepo(db.Conn)
+		// No row, no messages: zero and nil — the migration-081 "no backfill" default.
+		list, err := repo.ListChannels(ctx, dmAlice)
+		if err != nil {
+			t.Fatalf("ListChannels: %v", err)
+		}
+		for _, c := range list {
+			if c.UnreadCount != 0 || c.LastMessage != nil {
+				t.Errorf("fresh channel %s: unread=%d last=%+v, want 0/nil", c.ID, c.UnreadCount, c.LastMessage)
+			}
+		}
+
+		older := newDMMessage(t, ctx, repo, withBob.ID, dmBob, "eski")
+		newest := newDMMessage(t, ctx, repo, withBob.ID, dmBob, "en yeni")
+		// Force a strict created_at order: the DB default is second-granular,
+		// so two inserts in one test tie and only the (created_at, id) sort
+		// would decide — pin it to the time column the sidebar actually uses.
+		execSeed(t, db, []seedStmt{
+			{`UPDATE dm_messages SET created_at = '2026-01-01 10:00:00' WHERE id = ?`, []any{older.ID}},
+			{`UPDATE dm_messages SET created_at = '2026-01-01 10:00:05' WHERE id = ?`, []any{newest.ID}},
+		})
+		if err := readRepo.IncrementUnread(ctx, dmAlice, withBob.ID); err != nil {
+			t.Fatalf("IncrementUnread: %v", err)
+		}
+		if err := readRepo.IncrementUnread(ctx, dmAlice, withBob.ID); err != nil {
+			t.Fatalf("IncrementUnread: %v", err)
+		}
+
+		list, err = repo.ListChannels(ctx, dmAlice)
+		if err != nil {
+			t.Fatalf("ListChannels: %v", err)
+		}
+		var got *models.DMChannelWithUser
+		for i := range list {
+			if list[i].ID == withBob.ID {
+				got = &list[i]
+			}
+		}
+		if got == nil {
+			t.Fatal("channel with bob missing from alice's list")
+		}
+		if got.UnreadCount != 2 {
+			t.Errorf("unread_count = %d, want 2", got.UnreadCount)
+		}
+		if got.LastMessage == nil {
+			t.Fatal("last_message is nil, want the newest message")
+		}
+		if got.LastMessage.ID != newest.ID || got.LastMessage.UserID != dmBob {
+			t.Errorf("last_message = %+v, want id=%s user=%s", got.LastMessage, newest.ID, dmBob)
+		}
+		if got.LastMessage.Content == nil || *got.LastMessage.Content != "en yeni" {
+			t.Errorf("last_message.content = %v, want %q", got.LastMessage.Content, "en yeni")
+		}
+		if got.LastMessage.EncryptionVersion != 0 {
+			t.Errorf("last_message.encryption_version = %d, want 0", got.LastMessage.EncryptionVersion)
+		}
+
+		// Per-user counter: Bob (the sender) still reads 0 on the same channel.
+		bobList, err := repo.ListChannels(ctx, dmBob)
+		if err != nil {
+			t.Fatalf("ListChannels(bob): %v", err)
+		}
+		for _, c := range bobList {
+			if c.ID == withBob.ID && c.UnreadCount != 0 {
+				t.Errorf("bob's unread_count = %d, want 0", c.UnreadCount)
+			}
+		}
+	})
+
+	t.Run("last_message never exposes E2EE ciphertext", func(t *testing.T) {
+		cipher := "opaque-blob"
+		device := "dev-1"
+		enc := &models.DMMessage{
+			DMChannelID:       withCarol.ID,
+			UserID:            dmCarol,
+			EncryptionVersion: 1,
+			Ciphertext:        &cipher,
+			SenderDeviceID:    &device,
+		}
+		if err := repo.CreateMessage(ctx, enc); err != nil {
+			t.Fatalf("CreateMessage(E2EE): %v", err)
+		}
+		list, err := repo.ListChannels(ctx, dmAlice)
+		if err != nil {
+			t.Fatalf("ListChannels: %v", err)
+		}
+		for _, c := range list {
+			if c.ID != withCarol.ID {
+				continue
+			}
+			if c.LastMessage == nil {
+				t.Fatal("last_message is nil for the E2EE channel")
+			}
+			if c.LastMessage.EncryptionVersion != 1 {
+				t.Errorf("encryption_version = %d, want 1", c.LastMessage.EncryptionVersion)
+			}
+			if c.LastMessage.Content != nil {
+				t.Errorf("content = %q on an E2EE preview, want nil", *c.LastMessage.Content)
+			}
+		}
+	})
+
 	t.Run("empty result is a non-nil slice", func(t *testing.T) {
 		// The handler serialises this straight to JSON; nil would render as
 		// `null` and break clients that iterate it.

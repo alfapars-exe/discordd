@@ -7,7 +7,6 @@ import { searchCachedMessages } from "../../crypto/keyStorage";
 import { useServerStore } from "../../stores/serverStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useMessageStore } from "../../stores/messageStore";
-import { useToastStore } from "../../stores/toastStore";
 import type { SearchResult } from "../../api/search";
 import type { Message } from "../../types";
 import Avatar from "../shared/Avatar";
@@ -18,8 +17,11 @@ const DEBOUNCE_MS = 300;
 type SearchPanelProps = {
   channelId?: string;
   onClose: () => void;
-  /** Navigate to message's channel on result click */
-  onSelectResult?: (message: Message) => void;
+  /**
+   * Navigate to the message on result click. Resolves false when the
+   * message no longer exists (the panel then drops the row and toasts).
+   */
+  onSelectResult?: (message: Message) => Promise<boolean>;
 };
 
 function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
@@ -148,7 +150,6 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     doSearch(query, newOffset);
   }
 
-  const addToast = useToastStore((s) => s.addToast);
 
   // Live deletion while the panel is open: results are a snapshot, so a
   // WS-deleted message would linger as a dead row. Subscribe to the narrow
@@ -175,30 +176,27 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
     return () => unsubscribe();
   }, []);
 
-  /** Clicking a result navigates to the original message, but the
-   *  result list is a snapshot — if the message has been deleted in
-   *  another tab/session, the chat scroll-target no longer exists.
-   *  Verify against messageStore at click time and bail out with a
-   *  toast + local filter instead of leaving the user stranded. */
+  /** Clicking a result navigates to the original message. The result
+   *  list is a snapshot — if the message was deleted meanwhile, the
+   *  navigation (which fetches a window around it) resolves false; drop
+   *  the dead row. The navigator (useOpenAtMessage) already toasted, so
+   *  the panel stays silent to avoid a duplicate. */
   const handleResultClick = useCallback(
-    (msg: Message) => {
-      const live = useMessageStore.getState().messagesByChannel[msg.channel_id];
-      if (!live?.some((m) => m.id === msg.id)) {
-        addToast("info", t("messageNoLongerExists"));
-        setResults((prev) =>
-          prev
-            ? {
-                ...prev,
-                messages: prev.messages.filter((m) => m.id !== msg.id),
-                total_count: Math.max(0, prev.total_count - 1),
-              }
-            : null,
-        );
-        return;
-      }
-      onSelectResult?.(msg);
+    async (msg: Message) => {
+      if (!onSelectResult) return;
+      const found = await onSelectResult(msg);
+      if (found) return;
+      setResults((prev) =>
+        prev
+          ? {
+              ...prev,
+              messages: prev.messages.filter((m) => m.id !== msg.id),
+              total_count: Math.max(0, prev.total_count - 1),
+            }
+          : null,
+      );
     },
-    [onSelectResult, addToast, t],
+    [onSelectResult],
   );
 
   function formatDate(dateStr: string): string {
@@ -269,7 +267,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
                 <div
                   key={msg.id}
                   className="search-result-item"
-                  onClick={() => handleResultClick(msg)}
+                  onClick={() => void handleResultClick(msg)}
                 >
                   <div className="search-result-header">
                     <Avatar

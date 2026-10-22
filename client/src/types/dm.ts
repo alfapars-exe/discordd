@@ -10,6 +10,19 @@ import type { ReactionGroup } from "./common";
 import type { MessageReference } from "./message";
 import type { EncryptionVersion } from "./e2ee";
 
+/**
+ * Last-message preview carried on the DM channel list. `content` is null
+ * whenever the message is E2EE (encryption_version=1) or file-only — the
+ * server never ships ciphertext here.
+ */
+export type DMLastMessage = {
+  id: string;
+  user_id: string;
+  content: string | null;
+  encryption_version: 0 | 1;
+  created_at: string;
+};
+
 /** DM channel with the other participant's user info. */
 export type DMChannelWithUser = {
   id: string;
@@ -21,6 +34,9 @@ export type DMChannelWithUser = {
   last_message_at: string | null;
   is_pinned: boolean;
   is_muted: boolean;
+  /** Server-side unread count (per-user read cursor). */
+  unread_count: number;
+  last_message: DMLastMessage | null;
 };
 
 export type DMMessage = {
@@ -56,4 +72,6 @@ export type DMAttachment = {
 export type DMMessagePage = {
   messages: DMMessage[];
   has_more: boolean;
+  /** Newer messages exist after the window (?around= / ?after= pages only). */
+  has_more_after?: boolean;
 };

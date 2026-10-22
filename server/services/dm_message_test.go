@@ -12,6 +12,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/testutil"
 )
 
@@ -27,7 +28,22 @@ type dmTestFixture struct {
 	friends *testutil.MockFriendshipChecker
 	unhide  *testutil.MockDMSettingsUnhider
 	hub     *testutil.MockBroadcaster
+	dmRead  *testutil.MockDMReadRepo
+	notif   *testutil.MockNotificationRepo
 	svc     DMService
+}
+
+// passthroughDMTxRunner satisfies repository.DMMessageTxRunner without a
+// real transaction: fn runs against the fixture's own mocks, so per-test Fn
+// overrides apply inside the "transaction" too (same idea as
+// passthroughTxRunner in message_service_test.go).
+type passthroughDMTxRunner struct {
+	repos repository.DMTxRepos
+}
+
+func (p passthroughDMTxRunner) InTx(_ context.Context, fn func(*repository.DMTxRepos) error) error {
+	r := p.repos
+	return fn(&r)
 }
 
 func newDMFixture() *dmTestFixture {
@@ -38,8 +54,11 @@ func newDMFixture() *dmTestFixture {
 		friends: &testutil.MockFriendshipChecker{},
 		unhide:  &testutil.MockDMSettingsUnhider{},
 		hub:     &testutil.MockBroadcaster{},
+		dmRead:  &testutil.MockDMReadRepo{},
+		notif:   &testutil.MockNotificationRepo{},
 	}
-	f.svc = NewDMService(f.repo, f.users, f.hub, f.block, f.friends, f.unhide)
+	runner := passthroughDMTxRunner{repos: repository.DMTxRepos{DM: f.repo, DMRead: f.dmRead, Notification: f.notif}}
+	f.svc = NewDMService(f.repo, f.users, f.hub, f.block, f.friends, f.unhide, f.dmRead, f.notif, runner)
 	return f
 }
 

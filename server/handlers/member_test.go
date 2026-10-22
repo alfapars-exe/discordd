@@ -20,12 +20,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/services"
+	"github.com/argeinfina/hichat/testutil"
 )
 
 // stubMemberService implements services.MemberService with the minimum
@@ -49,6 +51,11 @@ type stubMemberService struct {
 	// RemoveTimeout capture/err — used by TestRemoveTimeoutHandler.
 	removeTimeoutCalled bool
 	removeTimeoutErr    error
+
+	// GetPublicProfile capture/result — used by TestGetUserProfileHandler.
+	profileUserID string
+	profile       *models.UserProfile
+	profileErr    error
 }
 
 func (s *stubMemberService) GetAll(context.Context, string) ([]models.MemberWithRoles, error) {
@@ -68,6 +75,11 @@ func (s *stubMemberService) UpdateProfile(_ context.Context, _ string, req *mode
 		return s.result, nil
 	}
 	return &models.MemberWithRoles{}, nil
+}
+
+func (s *stubMemberService) GetPublicProfile(_ context.Context, userID string) (*models.UserProfile, error) {
+	s.profileUserID = userID
+	return s.profile, s.profileErr
 }
 
 func (s *stubMemberService) UpdatePresence(context.Context, string, models.UserStatus) error {
@@ -386,6 +398,161 @@ func TestUpdateProfile_AvatarURLGuard(t *testing.T) {
 		}
 		if stub.lastReq.AvatarURL != nil {
 			t.Fatalf("AvatarURL = %q, want nil when the field was never sent", *stub.lastReq.AvatarURL)
+		}
+	})
+}
+
+// TestUpdateProfile_MediaFieldGuard extends the avatar_url guard to the
+// migration-085 media fields: a PATCH body naming avatar_animated_url,
+// banner_url or clear_banner must never reach the service with them set,
+// while the user-written profile fields in the same body pass through.
+func TestUpdateProfile_MediaFieldGuard(t *testing.T) {
+	const body = `{"avatar_animated_url":"/api/uploads/orphan.gif","banner_url":"/api/uploads/orphan.png",` +
+		`"clear_banner":true,"bio":"hello","pronouns":"she/her","accent_color":"#ABCDEF"}`
+	stub := &stubMemberService{}
+	h := NewMemberHandler(stub)
+	rec := httptest.NewRecorder()
+
+	h.UpdateProfile(rec, newUpdateProfileRequest(t, body))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+	}
+	if stub.lastReq == nil {
+		t.Fatal("service never received a request")
+	}
+	if stub.lastReq.AvatarAnimatedURL != nil || stub.lastReq.BannerURL != nil || stub.lastReq.ClearBanner {
+		t.Fatalf("media fields leaked into the service request: animated=%v banner=%v clear=%v",
+			stub.lastReq.AvatarAnimatedURL, stub.lastReq.BannerURL, stub.lastReq.ClearBanner)
+	}
+	if stub.lastReq.Bio == nil || *stub.lastReq.Bio != "hello" ||
+		stub.lastReq.Pronouns == nil || *stub.lastReq.Pronouns != "she/her" ||
+		stub.lastReq.AccentColor == nil || *stub.lastReq.AccentColor != "#ABCDEF" {
+		t.Errorf("profile text fields not passed through: %+v", stub.lastReq)
+	}
+}
+
+// newRealMemberHandler wires MemberHandler to the REAL services.MemberService
+// over testutil mocks (handlers/saved_test.go pattern), so Validate and the
+// nil / "" / value PATCH semantics run for real. Returns the handler and a
+// pointer to the last user row the service wrote.
+func newRealMemberHandler(t *testing.T, current *models.User) (*MemberHandler, **models.User) {
+	t.Helper()
+	var written *models.User
+	users := &testutil.MockUserRepo{
+		GetByIDFn: func(_ context.Context, id string) (*models.User, error) {
+			if id != current.ID {
+				return nil, pkg.ErrNotFound
+			}
+			cp := *current
+			return &cp, nil
+		},
+		UpdateFn: func(_ context.Context, u *models.User) error {
+			written = u
+			return nil
+		},
+	}
+	svc := services.NewMemberService(users, nil, nil, nil, &testutil.MockServerRepo{},
+		&testutil.MockEventPublisher{}, nil, nil)
+	return NewMemberHandler(svc), &written
+}
+
+func TestUpdateProfile_ProfileFields_RealService(t *testing.T) {
+	oldBio := "old bio"
+	oldAccent := "#000000"
+	current := &models.User{ID: "user-1", Username: "tester", Bio: &oldBio, AccentColor: &oldAccent}
+
+	t.Run("191-rune bio is 400 through models.Validate", func(t *testing.T) {
+		h, written := newRealMemberHandler(t, current)
+		rec := httptest.NewRecorder()
+		body := `{"bio":"` + strings.Repeat("x", models.BioMaxRunes+1) + `"}`
+		h.UpdateProfile(rec, newUpdateProfileRequest(t, body))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400 (body %q)", rec.Code, rec.Body.String())
+		}
+		if *written != nil {
+			t.Fatal("user row written despite validation failure")
+		}
+	})
+
+	t.Run("invalid accent colour is 400", func(t *testing.T) {
+		h, _ := newRealMemberHandler(t, current)
+		rec := httptest.NewRecorder()
+		h.UpdateProfile(rec, newUpdateProfileRequest(t, `{"accent_color":"red"}`))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rec.Code)
+		}
+	})
+
+	t.Run("set, clear and keep", func(t *testing.T) {
+		h, written := newRealMemberHandler(t, current)
+		rec := httptest.NewRecorder()
+		// pronouns set (trimmed), bio cleared with "", accent_color omitted (kept).
+		h.UpdateProfile(rec, newUpdateProfileRequest(t, `{"pronouns":"  they/them ","bio":""}`))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+		}
+		u := *written
+		if u == nil {
+			t.Fatal("user row never written")
+		}
+		if u.Pronouns == nil || *u.Pronouns != "they/them" {
+			t.Errorf("Pronouns = %v, want they/them", u.Pronouns)
+		}
+		if u.Bio != nil {
+			t.Errorf("Bio = %q, want nil (cleared)", *u.Bio)
+		}
+		if u.AccentColor == nil || *u.AccentColor != oldAccent {
+			t.Errorf("AccentColor = %v, want unchanged %s", u.AccentColor, oldAccent)
+		}
+		var resp models.MemberWithRoles
+		decodeEnvelope(t, rec, &resp)
+		if resp.Pronouns == nil || *resp.Pronouns != "they/them" || resp.Bio != nil {
+			t.Errorf("response profile fields = pronouns %v bio %v", resp.Pronouns, resp.Bio)
+		}
+	})
+}
+
+func TestGetUserProfileHandler(t *testing.T) {
+	newReq := func(userID string) *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/api/users/"+userID+"/profile", nil)
+		req.SetPathValue("userId", userID)
+		return req
+	}
+
+	t.Run("200 with the profile", func(t *testing.T) {
+		bio := "hi"
+		stub := &stubMemberService{profile: &models.UserProfile{ID: "u-2", Username: "bob", Bio: &bio}}
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub).GetUserProfile(rec, newReq("u-2"))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
+		}
+		if stub.profileUserID != "u-2" {
+			t.Errorf("service got user id %q, want u-2", stub.profileUserID)
+		}
+		var got models.UserProfile
+		decodeEnvelope(t, rec, &got)
+		if got.ID != "u-2" || got.Bio == nil || *got.Bio != "hi" {
+			t.Errorf("profile = %+v", got)
+		}
+	})
+
+	t.Run("404 for an unknown user", func(t *testing.T) {
+		stub := &stubMemberService{profileErr: pkg.ErrNotFound}
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub).GetUserProfile(rec, newReq("ghost"))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404", rec.Code)
+		}
+	})
+
+	t.Run("400 without a user id", func(t *testing.T) {
+		stub := &stubMemberService{}
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub).GetUserProfile(rec, httptest.NewRequest(http.MethodGet, "/api/users//profile", nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rec.Code)
 		}
 	})
 }

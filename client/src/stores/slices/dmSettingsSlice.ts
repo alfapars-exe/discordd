@@ -19,7 +19,11 @@ export type DMSettingsSlice = {
 
   incrementDMUnread: (channelId: string) => void;
   decrementDMUnread: (channelId: string) => void;
+  /** Local clear + server read-cursor advance (best-effort). */
   clearDMUnread: (channelId: string) => void;
+  /** `dm_read` from another of our sessions: local clear only, no API call. */
+  handleDMReadSync: (data: { dm_channel_id: string }) => void;
+  /** Sum of unread counts, excluding muted channels. */
   getTotalDMUnread: () => number;
 };
 
@@ -144,16 +148,40 @@ export const createDMSettingsSlice: StateCreator<
   },
 
   clearDMUnread: (channelId) => {
+    const hadUnread = !!get().dmUnreadCounts[channelId];
     set((state) => {
       if (!state.dmUnreadCounts[channelId]) return state;
       const next = { ...state.dmUnreadCounts };
       delete next[channelId];
       return { dmUnreadCounts: next };
     });
+    // Advance the server cursor only when something was actually unread —
+    // every DM click lands here, and a no-op POST per click is wasted traffic.
+    // Failure is silent: the local clear already happened and the next
+    // fetchChannels re-seeds from the server's view.
+    if (!hadUnread) return;
+    const messages = get().messagesByChannel[channelId];
+    const lastId = messages && messages.length > 0 ? messages[messages.length - 1].id : undefined;
+    dmApi.markDMRead(channelId, lastId).catch(() => {});
+  },
+
+  handleDMReadSync: (data) => {
+    set((state) => {
+      if (!state.dmUnreadCounts[data.dm_channel_id]) return state;
+      const next = { ...state.dmUnreadCounts };
+      delete next[data.dm_channel_id];
+      return { dmUnreadCounts: next };
+    });
   },
 
   getTotalDMUnread: () => {
-    const counts = get().dmUnreadCounts;
-    return Object.values(counts).reduce((sum, c) => sum + c, 0);
+    const { dmUnreadCounts, channels } = get();
+    let total = 0;
+    for (const [channelId, count] of Object.entries(dmUnreadCounts)) {
+      const ch = channels.find((c) => c.id === channelId);
+      if (ch?.is_muted) continue;
+      total += count;
+    }
+    return total;
   },
 });

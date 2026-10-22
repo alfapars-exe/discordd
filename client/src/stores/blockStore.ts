@@ -98,9 +98,14 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     const myId = useAuthStore.getState().user?.id;
 
     if (data.user_id === myId) {
-      set((s) => ({
-        blockedUserIds: s.blockedUserIds.filter((id) => id !== data.unblocked_user_id),
-      }));
+      set((s) => {
+        // Keep the same array reference when the id is already gone (e.g. the
+        // optimistic unblock ran first) so subscribers don't refetch twice.
+        if (!s.blockedUserIds.includes(data.unblocked_user_id)) return s;
+        return {
+          blockedUserIds: s.blockedUserIds.filter((id) => id !== data.unblocked_user_id),
+        };
+      });
     }
   },
 }));

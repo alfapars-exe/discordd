@@ -32,8 +32,11 @@ const (
 	// this one.
 	mediaDecisionUnset MediaDecision = iota
 	// MediaPublic — fileURL is POSITIVELY confirmed to be a public asset: it
-	// matches a public media column (user avatar/wallpaper, server icon/banner
-	// via MediaAssetRepository.IsPublicAsset) or a known-public path prefix
+	// matches a public media column (user avatar/wallpaper/animated avatar/
+	// profile banner, server icon/banner, server custom emoji or sticker
+	// static/animated file, user entrance sounds (DB-row public) via
+	// MediaAssetRepository.IsPublicAsset) or a
+	// known-public path prefix
 	// (soundboard/, badges/). Serve to anyone. This is a positive allowlist,
 	// not "nothing claimed it" — see MediaNotFound for the fail-closed dip
 	// below it.
@@ -88,7 +91,9 @@ type (
 	}
 	mediaPublicAssetChecker interface {
 		// IsPublicAsset reports whether fileURL is referenced by a public media
-		// column (avatar/wallpaper/icon/banner) — see MediaAssetRepository.
+		// column (user avatar/wallpaper/animated avatar/banner, server
+		// icon/banner, server emojis and stickers, user entrance sounds (DB-row
+		// public)) — see MediaAssetRepository.
 		IsPublicAsset(ctx context.Context, fileURL string) (bool, error)
 	}
 )
@@ -240,7 +245,9 @@ func (s *mediaAccessService) Authorize(ctx context.Context, fileURL string, reso
 	}
 
 	// Positive public-asset check — fileURL is referenced by a public media
-	// column (avatar/wallpaper/icon/banner). This MUST run after every
+	// column (user avatar/wallpaper/animated avatar/banner, server
+	// icon/banner, server emojis and stickers, user entrance sounds (DB-row
+	// public)). This MUST run after every
 	// ownership query above: checking it first would let a caller point their
 	// own avatar_url at someone else's orphaned private file and have it
 	// classified public before ownership is ever consulted.

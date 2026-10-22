@@ -15,6 +15,7 @@ import { usePinStore } from "../../stores/pinStore";
 import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
 import { useChatContext } from "../../hooks/useChatContext";
 import { useFileDrop } from "../../hooks/useFileDrop";
+import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import ChannelChatProvider from "../chat/ChannelChatProvider";
 import MessageList from "../chat/MessageList";
 import MessageInput from "../chat/MessageInput";
@@ -23,7 +24,7 @@ import PinnedMessages from "../chat/PinnedMessages";
 import SearchPanel from "../chat/SearchPanel";
 import FileDropOverlay from "../shared/FileDropOverlay";
 import SectionErrorBoundary from "../shared/SectionErrorBoundary";
-import type { Channel } from "../../types";
+import type { Channel, Message } from "../../types";
 
 type ChatAreaProps = {
   channelId: string;
@@ -65,9 +66,17 @@ function ChatAreaContent({
   const getPinsForChannel = usePinStore((s) => s.getPinsForChannel);
   const fetchPins = usePinStore((s) => s.fetchPins);
   const fetchOverrides = useChannelPermissionStore((s) => s.fetchOverrides);
+  const { openAtMessage } = useOpenAtMessage();
 
   const [showPins, setShowPins] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+
+  // Search hit → window around the message (works outside the loaded tail).
+  // The hook falls back to the active server when serverId is undefined.
+  const handleSelectSearchResult = useCallback(
+    (msg: Message) => openAtMessage(serverId ?? "", msg.channel_id, msg.id, channel?.name),
+    [openAtMessage, serverId, channel?.name]
+  );
 
   // Fetch pins and permission overrides when channel changes
   useEffect(() => {
@@ -148,6 +157,7 @@ function ChatAreaContent({
         <SearchPanel
           channelId={channelId}
           onClose={() => setShowSearch(false)}
+          onSelectResult={handleSelectSearchResult}
         />
       )}
 

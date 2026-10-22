@@ -34,6 +34,7 @@ type AdminUserService interface {
 	HardDeleteUser(ctx context.Context, adminUserID, targetUserID, reason string) error
 	SetPlatformAdmin(ctx context.Context, adminUserID, targetUserID string, isAdmin bool) error
 	SetUserCacheInvalidator(inv UserCacheInvalidator)
+	SetUploadDir(dir string)
 }
 
 type adminUserService struct {
@@ -45,6 +46,14 @@ type adminUserService struct {
 	// change. Optional (nil-safe): absent wiring, the change still lands
 	// within the cache TTL — this just makes it immediate.
 	userInvalidator UserCacheInvalidator
+	// uploadDir enables best-effort removal of the files of servers the
+	// deleted user owned (see upload_cleanup.go). Blank disables it.
+	uploadDir string
+}
+
+// SetUploadDir wires the upload directory for HardDeleteUser's file cleanup.
+func (s *adminUserService) SetUploadDir(dir string) {
+	s.uploadDir = dir
 }
 
 func NewAdminUserService(
@@ -145,14 +154,12 @@ func (s *adminUserService) PlatformUnbanUser(ctx context.Context, adminUserID, t
 // HardDeleteUser permanently deletes a user and all associated data.
 // Email notification is sent BEFORE deletion (email address is lost after delete).
 //
-// Deliberately NOT wired into the upload_cleanup.go best-effort disk cleanup
-// that message/DM-message/channel/server/feedback-ticket delete got: this
-// path is admin-only and rare, and "all associated data" here spans every
-// table with a user_id FK (messages, attachments across four tables,
-// avatars, etc.) via whatever CASCADE/explicit-delete shape
-// userRepo.HardDeleteUser implements — collecting every file_url that
-// implies is a distinct, larger piece of work than the per-resource delete
-// paths above and was scoped out rather than done partially.
+// Disk cleanup covers the servers the user owned: their files (attachments,
+// emojis, stickers and soundboard clips — the last are public by URL prefix,
+// so leaving them would keep them served) are collected before the delete
+// and removed after it commits, like the server-delete path. The user's own
+// files elsewhere (avatars, attachments in other servers and DMs) are still
+// not swept here — those are unreachable once their rows are gone.
 func (s *adminUserService) HardDeleteUser(ctx context.Context, adminUserID, targetUserID, reason string) error {
 	if adminUserID == targetUserID {
 		return fmt.Errorf("%w: cannot delete yourself", pkg.ErrBadRequest)
@@ -178,9 +185,18 @@ func (s *adminUserService) HardDeleteUser(ctx context.Context, adminUserID, targ
 	s.voiceKit.DisconnectUser(targetUserID)
 	s.hub.DisconnectUser(targetUserID)
 
+	// Collect owned servers' files BEFORE the delete — the cascade removes
+	// the rows that point at them. A failure here must not block the delete.
+	fileURLs, urlErr := s.userRepo.GetOwnedServerFileURLs(ctx, targetUserID)
+	if urlErr != nil {
+		adminUserLogger.Warn("failed to collect owned-server files before user delete; files will leak",
+			"target_id", targetUserID, "err", pkg.ErrText(urlErr))
+	}
+
 	if err := s.userRepo.HardDeleteUser(ctx, targetUserID, adminUserID); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
+	removeUploadFilesByURL(s.uploadDir, fileURLs)
 	// Cached row now points at a deleted user — drop it so the next request
 	// re-reads (and 401s) instead of serving the stale identity for the TTL.
 	s.invalidateUserCache(targetUserID)

@@ -61,5 +61,8 @@
   "dmRequestReceived": "{{name}} sana mesaj göndermek istiyor",
   "dmRequestAccept": "Kabul Et",
   "dmRequestDecline": "Reddet",
-  "dmRequestWaiting": "Alıcının mesaj isteğinizi kabul etmesi bekleniyor"
+  "dmRequestWaiting": "Alıcının mesaj isteğinizi kabul etmesi bekleniyor",
+
+  "myNotes": "Notlarım",
+  "myNotesHint": "Yalnız sen görürsün"
 }

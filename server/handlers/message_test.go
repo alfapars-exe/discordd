@@ -84,6 +84,12 @@ func (s *stubMessageService) assertNoBroadcast(t *testing.T) {
 func (s *stubMessageService) GetByChannelID(_ context.Context, _, _, _ string, _ string, _ int) (*models.MessagePage, error) {
 	return nil, nil
 }
+func (s *stubMessageService) GetAround(_ context.Context, _, _, _, _ string, _ int) (*models.MessagePage, error) {
+	return nil, nil
+}
+func (s *stubMessageService) GetAfter(_ context.Context, _, _, _, _ string, _ int) (*models.MessagePage, error) {
+	return nil, nil
+}
 
 func (s *stubMessageService) Create(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error) {
 	if s.createFn != nil {

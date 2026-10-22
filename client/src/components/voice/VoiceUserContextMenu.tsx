@@ -14,6 +14,8 @@ import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
 import { hasPermission, Permissions, resolveChannelPermissions } from "../../utils/permissions";
 import { useServerStore } from "../../stores/serverStore";
 import * as memberApi from "../../api/members";
+import * as entranceApi from "../../api/entrance";
+import { useToastStore } from "../../stores/toastStore";
 import { showApiError } from "../../utils/apiError";
 import Avatar from "../shared/Avatar";
 import { IconSpeaker, IconSpeakerOff, IconSpeakerMuted, IconMic, IconMicMuted, IconHeadphones, IconHeadphonesMuted } from "../shared/Icons";
@@ -95,7 +97,27 @@ function VoiceUserContextMenu({
   const activeServerId = useServerStore((s) => s.activeServerId);
   const targetTimeout = useMemberTimeout(activeServerId, userId);
 
-  const hasAnyModPerm = canMuteMembers || canDeafenMembers || canMoveMembers || canTimeout || canBanTemp;
+  // Entrance-sound mute (Faz E) — server-level MuteMembers, matching the
+  // server route gate. The mute state is fetched lazily when the menu opens;
+  // on a failed fetch the entry stays hidden.
+  const canEntranceMute = !isMe && hasPermission(basePerms, Permissions.MuteMembers);
+  const [entranceMuted, setEntranceMuted] = useState<boolean | null>(null);
+  const addToast = useToastStore((s) => s.addToast);
+
+  useEffect(() => {
+    if (!canEntranceMute || !activeServerId) return;
+    let cancelled = false;
+    void entranceApi.listMutes(activeServerId).then((res) => {
+      if (cancelled || !res.success || !res.data || !Array.isArray(res.data.user_ids)) return;
+      setEntranceMuted(res.data.user_ids.includes(userId));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canEntranceMute, activeServerId, userId]);
+
+  const hasAnyModPerm =
+    canMuteMembers || canDeafenMembers || canMoveMembers || canTimeout || canBanTemp || canEntranceMute;
 
   // Duration picker state. null = closed; "timeout" / "tempban" selects
   // which preset list + which API to fire on selection.
@@ -216,6 +238,22 @@ function VoiceUserContextMenu({
       is_server_deafened: !isServerDeafened,
     });
   }, [userId, isServerDeafened, wsSend]);
+
+  const handleEntranceMuteToggle = useCallback(async () => {
+    const serverId = useServerStore.getState().activeServerId;
+    if (!serverId || entranceMuted === null) return;
+    const next = !entranceMuted;
+    const res = next
+      ? await entranceApi.muteMember(serverId, userId)
+      : await entranceApi.unmuteMember(serverId, userId);
+    if (!res.success) {
+      addToast("error", t(entranceApi.entranceErrorKey(res), { ns: "entrance" }));
+      return;
+    }
+    setEntranceMuted(next);
+    const who = displayName || username;
+    addToast("success", t(next ? "mutedToast" : "unmutedToast", { ns: "entrance", name: who }));
+  }, [entranceMuted, userId, displayName, username, addToast, t]);
 
   const handleDisconnect = useCallback(() => {
     wsSend?.("voice_disconnect_user", { target_user_id: userId });
@@ -350,6 +388,18 @@ function VoiceUserContextMenu({
               >
                 {isServerMuted ? <IconMicMuted /> : <IconMic />}
                 {isServerMuted ? t("serverUnmute") : t("serverMute")}
+              </button>
+            )}
+
+            {canEntranceMute && entranceMuted !== null && (
+              <button
+                className={`voice-ctx-item danger${entranceMuted ? " active" : ""}`}
+                onClick={() => void handleEntranceMuteToggle()}
+              >
+                {entranceMuted ? <IconSpeakerMuted /> : <IconSpeaker />}
+                {entranceMuted
+                  ? t("unmuteEntrance", { ns: "entrance" })
+                  : t("muteEntrance", { ns: "entrance" })}
               </button>
             )}
 

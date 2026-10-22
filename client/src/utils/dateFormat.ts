@@ -126,6 +126,29 @@ export function formatRelativeFuture(toIso: string, locale: string): string {
   return formatFullDateTime(toIso, locale);
 }
 
+/**
+ * Localised past-relative label for feed rows ("5 minutes ago" / "5 dakika
+ * önce"). Mirrors formatRelativeFuture: Intl.RelativeTimeFormat picks the
+ * largest sensible unit, and anything older than 28 days falls back to the
+ * absolute date so a stale row never reads "2 months ago".
+ */
+export function formatRelativePast(fromIso: string, locale: string): string {
+  const now = Date.now();
+  const target = Date.parse(fromIso);
+  if (Number.isNaN(target)) return "";
+
+  const diffSec = Math.round((now - target) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (diffSec < 60) return rtf.format(0, "second");
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return rtf.format(-diffMin, "minute");
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return rtf.format(-diffHr, "hour");
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay <= 28) return rtf.format(-diffDay, "day");
+  return formatFullDateTime(fromIso, locale);
+}
+
 // ─── Singleton-locale helpers (QA 2026-05-28 bug #4) ───
 //
 // Hardcoded/default-locale toLocale* calls rendered English-shaped dates for

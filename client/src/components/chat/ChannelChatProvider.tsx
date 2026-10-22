@@ -39,6 +39,9 @@ function ChannelChatProvider({
   const hasMore = useMessageStore((s) =>
     channelId ? s.hasMoreByChannel[channelId] ?? false : false
   );
+  const hasMoreAfter = useMessageStore((s) =>
+    channelId ? s.hasMoreAfterByChannel[channelId] ?? false : false
+  );
   const replyingTo = useMessageStore((s) => s.replyingTo) as ChatMessage | null;
   const scrollToMessageId = useMessageStore((s) => s.scrollToMessageId);
   const typingUsers = useMessageStore((s) =>
@@ -53,6 +56,8 @@ function ChannelChatProvider({
   const storeToggleReaction = useMessageStore((s) => s.toggleReaction);
   const storeFetchMessages = useMessageStore((s) => s.fetchMessages);
   const storeFetchOlderMessages = useMessageStore((s) => s.fetchOlderMessages);
+  const storeFetchNewerMessages = useMessageStore((s) => s.fetchNewerMessages);
+  const storeJumpToPresent = useMessageStore((s) => s.jumpToPresent);
 
   const pinAction = usePinStore((s) => s.pin);
   const unpinAction = usePinStore((s) => s.unpin);
@@ -117,6 +122,16 @@ function ChannelChatProvider({
     [channelId, storeFetchOlderMessages, explicitServerId]
   );
 
+  const fetchNewerMessages = useCallback(
+    () => storeFetchNewerMessages(channelId, explicitServerId),
+    [channelId, storeFetchNewerMessages, explicitServerId]
+  );
+
+  const jumpToPresent = useCallback(
+    () => storeJumpToPresent(channelId, explicitServerId),
+    [channelId, storeJumpToPresent, explicitServerId]
+  );
+
   const toggleReaction = useCallback(
     (messageId: string, emoji: string) =>
       storeToggleReaction(messageId, channelId, emoji, explicitServerId),
@@ -176,6 +191,7 @@ function ChannelChatProvider({
       isLoading,
       isLoadingMore,
       hasMore,
+      hasMoreAfter,
       replyingTo,
       scrollToMessageId,
       typingUsers,
@@ -184,6 +200,8 @@ function ChannelChatProvider({
       deleteMessage,
       fetchMessages,
       fetchOlderMessages,
+      fetchNewerMessages,
+      jumpToPresent,
       toggleReaction,
       setReplyingTo,
       setScrollToMessageId,
@@ -200,8 +218,9 @@ function ChannelChatProvider({
     }),
     [
       channelId, channelName, explicitServerId, messages, isLoading, isLoadingMore, hasMore,
-      replyingTo, scrollToMessageId, typingUsers,
+      hasMoreAfter, replyingTo, scrollToMessageId, typingUsers,
       sendMessage, editMessage, deleteMessage, fetchMessages, fetchOlderMessages,
+      fetchNewerMessages, jumpToPresent,
       toggleReaction, setReplyingTo, setScrollToMessageId, sendTyping,
       pinMessage, unpinMessage, isMessagePinned,
       canSend, canManageMessages, members, addFilesRef, selfTimeout,

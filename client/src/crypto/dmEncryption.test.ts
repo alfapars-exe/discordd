@@ -52,6 +52,10 @@ const h = vi.hoisted(() => {
     registration: null as RegistrationData | null,
     /** Stand-in for the keyStorage metadata store. */
     metadata: new Map<string, unknown>(),
+    /** When true, the OWN-account prekey-bundle fetch fails (success: false). */
+    selfFetchFails: false,
+    /** e2eeStore.localDeviceId; mutable to model a recovery restore. */
+    localDeviceId: "dev-local" as string | null,
     /** Shared spy so assertions see one stable reference across getState() calls. */
     markPeerTrustAlert: vi.fn(),
     /** Yield to the macrotask queue so concurrent sends actually interleave. */
@@ -133,6 +137,9 @@ vi.mock("../api/e2ee", () => ({
     await h.tick();
     // Argument-sensitive: self and peer fan-out sets must be settable
     // independently, otherwise the "kinds don't get crossed" test is vacuous.
+    if (userId === ME && h.selfFetchFails) {
+      return { success: false, error: "unavailable" };
+    }
     return {
       success: true,
       data: (userId === ME ? h.selfDeviceIds : h.peerDeviceIds).map(bundle),
@@ -163,7 +170,7 @@ vi.mock("./signalProtocol", () => ({
 vi.mock("../stores/e2eeStore", () => ({
   useE2EEStore: {
     getState: () => ({
-      localDeviceId: LOCAL_DEVICE,
+      localDeviceId: h.localDeviceId,
       markIncompatibleDevice: vi.fn(),
       addDecryptionError: vi.fn(),
       markPeerTrustAlert: h.markPeerTrustAlert,
@@ -183,6 +190,8 @@ import {
   encryptDMMessage,
   decryptDMMessage,
   markSelfFanoutNeedsReset,
+  pushSentPlaintext,
+  popSentPlaintext,
 } from "./dmEncryption";
 import * as keyStorage from "./keyStorage";
 import * as signalProtocol from "./signalProtocol";
@@ -207,6 +216,8 @@ beforeEach(() => {
   h.sessions.clear();
   h.trustedIdentities.clear();
   h.metadata.clear();
+  h.selfFetchFails = false;
+  h.localDeviceId = LOCAL_DEVICE;
   h.peerDeviceIds = [RECIPIENT_DEVICE];
   h.selfDeviceIds = [LOCAL_DEVICE, SELF_DEVICE_A, SELF_DEVICE_B];
   h.registration = {
@@ -630,6 +641,21 @@ describe("dmEncryption — silent peer-device addition (receive path)", () => {
     expect(h.markPeerTrustAlert).not.toHaveBeenCalled();
   });
 
+  it("never hands an envelope 'from this very device' to decryptMessage", async () => {
+    // The send path never encrypts to the local device, so such an envelope
+    // is either our own send on a cache miss or server-forged. Decrypting it
+    // could only open a session with ourselves.
+    const payload = await decryptDMMessage(
+      ME,
+      ciphertextFrom(LOCAL_DEVICE),
+      LOCAL_DEVICE
+    );
+
+    expect(payload).toBeNull();
+    expect(signalProtocol.decryptMessage).not.toHaveBeenCalled();
+    expect(h.markPeerTrustAlert).not.toHaveBeenCalled();
+  });
+
   it("raises the alert only after decryptMessage has returned", async () => {
     // Ordering, not just presence: the alert has to trail the decryption, and
     // the pin-set comparison has to precede it (decryptMessage pins the sender
@@ -658,5 +684,155 @@ describe("dmEncryption — silent peer-device addition (receive path)", () => {
 
     expect(order).toEqual(["read-pins", "decrypt", "alert"]);
     expect(payload?.content).toBe("hello");
+  });
+});
+
+// ──────────────────────────────────
+// Self-DM ("My Notes")
+// ──────────────────────────────────
+//
+// A self channel has recipientUserId === currentUserId. The recipient's
+// devices are then our own devices, already covered by the self-fanout pass;
+// running the recipient pass too would open a Signal session with the LOCAL
+// device (a session with ourselves) and encrypt every sibling twice.
+
+describe("dmEncryption — self-DM (recipient is the sender)", () => {
+  it("produces exactly one envelope per sibling device and none for the local device", async () => {
+    const envelopes = await encryptDMMessage(ME, ME, LOCAL_DEVICE, "note");
+
+    const recipients = envelopes.map((e) => e.recipient_device_id);
+    expect([...recipients].sort()).toEqual([SELF_DEVICE_A, SELF_DEVICE_B].sort());
+    expect(recipients).not.toContain(LOCAL_DEVICE);
+    expect(envelopes.every((e) => e.sender_device_id === LOCAL_DEVICE)).toBe(true);
+
+    // No session with ourselves, and no self pin under the local device id.
+    expect(h.sessions.has(`${ME}:${LOCAL_DEVICE}`)).toBe(false);
+    expect(h.trustedIdentities.has(`${ME}:${LOCAL_DEVICE}`)).toBe(false);
+    const handshaked = vi
+      .mocked(signalProtocol.processPreKeyBundle)
+      .mock.calls.map((call) => call[1]);
+    expect(handshaked.sort()).toEqual([SELF_DEVICE_A, SELF_DEVICE_B].sort());
+
+    // Each sibling ratchet advanced once per message, not twice.
+    expect(signalProtocol.encryptMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("a single-device user can still send an encrypted note (no RECIPIENT_NO_KEYS)", async () => {
+    // RECIPIENT_NO_KEYS triggers the caller's PLAINTEXT fallback — it must
+    // never fire for a self-DM. Zero envelopes is the correct result: the
+    // local device renders its own sends from the sent-plaintext cache.
+    h.selfDeviceIds = [LOCAL_DEVICE];
+
+    const envelopes = await encryptDMMessage(ME, ME, LOCAL_DEVICE, "note");
+
+    expect(envelopes).toEqual([]);
+    expect(signalProtocol.processPreKeyBundle).not.toHaveBeenCalled();
+    expect(signalProtocol.encryptMessage).not.toHaveBeenCalled();
+  });
+
+  it("raises no peer-facing alert, and an injected own device is reported exactly once", async () => {
+    h.trustedIdentities.add(`${ME}:${SELF_DEVICE_A}`);
+    h.trustedIdentities.add(`${ME}:${SELF_DEVICE_B}`);
+    h.selfDeviceIds = [LOCAL_DEVICE, SELF_DEVICE_A, SELF_DEVICE_B, SELF_DEVICE_C];
+
+    const envelopes = await encryptDMMessage(ME, ME, LOCAL_DEVICE, "note");
+
+    expect(alertsOfKind("new_device")).toHaveLength(0);
+    expect(alertsOfKind("own_new_device")).toEqual([
+      expect.objectContaining({ userId: ME, deviceId: SELF_DEVICE_C }),
+    ]);
+    expect(envelopes).toHaveLength(3);
+  });
+
+  it("concurrent self-DM sends with reset armed re-handshake exactly once per sibling", async () => {
+    await markSelfFanoutNeedsReset();
+
+    const [first, second] = await Promise.all([
+      encryptDMMessage(ME, ME, LOCAL_DEVICE, "one"),
+      encryptDMMessage(ME, ME, LOCAL_DEVICE, "two"),
+    ]);
+
+    expect(deletedDevices().sort()).toEqual([SELF_DEVICE_A, SELF_DEVICE_B].sort());
+    expect(h.metadata.get("self_fanout_reset")).toBe(false);
+    expect(first).toHaveLength(2);
+    expect(second).toHaveLength(2);
+  });
+
+  it("a failed own-bundle fetch fails the self-DM send (never an unreadable '[]')", async () => {
+    // Not RECIPIENT_NO_KEYS: that code makes dmStore resend as plaintext.
+    h.selfFetchFails = true;
+    await markSelfFanoutNeedsReset();
+
+    await expect(encryptDMMessage(ME, ME, LOCAL_DEVICE, "note")).rejects.toThrow(
+      "SELF_FANOUT_UNAVAILABLE"
+    );
+    // No handshake happened, so the reset stays armed for the next send.
+    expect(h.metadata.get("self_fanout_reset")).toBe(true);
+
+    // The lock is not poisoned: the next send goes through.
+    h.selfFetchFails = false;
+    await expect(encryptDMMessage(ME, ME, LOCAL_DEVICE, "retry")).resolves.toHaveLength(2);
+  });
+
+  it("a peer DM keeps the lenient behaviour when the own-bundle fetch fails", async () => {
+    h.selfFetchFails = true;
+
+    const envelopes = await encryptDMMessage(ME, PEER, LOCAL_DEVICE, "hello");
+
+    expect(envelopes.map((e) => e.recipient_device_id)).toEqual([RECIPIENT_DEVICE]);
+  });
+
+  it("an envelope from another own device in the self channel decrypts", async () => {
+    h.trustedIdentities.add(`${ME}:${SELF_DEVICE_A}`);
+    vi.mocked(signalProtocol.decryptMessage).mockResolvedValueOnce("note from laptop");
+
+    const payload = await decryptDMMessage(
+      ME,
+      ciphertextFrom(SELF_DEVICE_A),
+      SELF_DEVICE_A
+    );
+
+    expect(payload?.content).toBe("note from laptop");
+    expect(signalProtocol.decryptMessage).toHaveBeenCalledWith(
+      ME,
+      SELF_DEVICE_A,
+      expect.anything()
+    );
+    expect(h.markPeerTrustAlert).not.toHaveBeenCalled();
+  });
+});
+
+describe("dmEncryption — sent-plaintext FIFO across a local device id change", () => {
+  // The module-level queue persists across tests: drain what each test owns.
+  const CHANNEL = "dm-fifo";
+
+  it("pops in FIFO order under a stable device id", () => {
+    pushSentPlaintext(CHANNEL, { content: "a" });
+    pushSentPlaintext(CHANNEL, { content: "b" });
+
+    expect(popSentPlaintext(CHANNEL)?.content).toBe("a");
+    expect(popSentPlaintext(CHANNEL)?.content).toBe("b");
+    expect(popSentPlaintext(CHANNEL)).toBeNull();
+  });
+
+  it("drops entries pushed under a previous device id (recovery restore mid-send)", () => {
+    // Pushed under the old id; its echo carries the old sender_device_id and is
+    // never popped, so without the reset this entry would land on the NEXT
+    // send's echo.
+    pushSentPlaintext(CHANNEL, { content: "stale" });
+
+    h.localDeviceId = "dev-restored";
+    pushSentPlaintext(CHANNEL, { content: "fresh" });
+
+    expect(popSentPlaintext(CHANNEL)?.content).toBe("fresh");
+    expect(popSentPlaintext(CHANNEL)).toBeNull();
+  });
+
+  it("a pop after the id changed finds nothing stale", () => {
+    pushSentPlaintext(CHANNEL, { content: "stale" });
+
+    h.localDeviceId = "dev-restored-2";
+
+    expect(popSentPlaintext(CHANNEL)).toBeNull();
   });
 });

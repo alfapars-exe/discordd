@@ -22,6 +22,14 @@ import enAudit from "./locales/en/audit.json";
 import trAudit from "./locales/tr/audit.json";
 import enE2EE from "./locales/en/e2ee.json";
 import trE2EE from "./locales/tr/e2ee.json";
+import enInbox from "./locales/en/inbox.json";
+import trInbox from "./locales/tr/inbox.json";
+import enSaved from "./locales/en/saved.json";
+import trSaved from "./locales/tr/saved.json";
+import enExpressions from "./locales/en/expressions.json";
+import trExpressions from "./locales/tr/expressions.json";
+import enEntrance from "./locales/en/entrance.json";
+import trEntrance from "./locales/tr/entrance.json";
 import { RECOVERY_PASSPHRASE_I18N_KEYS } from "../crypto/recoveryPassphrase";
 
 /** Recursively flattens a JSON translation tree into dot-separated key paths. */
@@ -63,6 +71,10 @@ describe("EN/TR locale key parity", () => {
   it("settings.json", () => assertKeyParity("settings", enSettings, trSettings));
   it("audit.json", () => assertKeyParity("audit", enAudit, trAudit));
   it("e2ee.json", () => assertKeyParity("e2ee", enE2EE, trE2EE));
+  it("inbox.json", () => assertKeyParity("inbox", enInbox, trInbox));
+  it("saved.json", () => assertKeyParity("saved", enSaved, trSaved));
+  it("expressions.json", () => assertKeyParity("expressions", enExpressions, trExpressions));
+  it("entrance.json", () => assertKeyParity("entrance", enEntrance, trEntrance));
 });
 
 /**

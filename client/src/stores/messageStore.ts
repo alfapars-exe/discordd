@@ -35,6 +35,13 @@ type MessageState = {
   messagesByChannel: Record<string, Message[]>;
   hasMoreByChannel: Record<string, boolean>;
   /**
+   * channelId -> newer messages exist AFTER the loaded window. Only true
+   * after a jump (fetchAroundMessage) landed somewhere in the past; while
+   * set, live WS inserts are dropped (they would attach to the wrong end)
+   * and the list offers "jump to present" instead.
+   */
+  hasMoreAfterByChannel: Record<string, boolean>;
+  /**
    * channelId -> fetch in flight. Per-channel, not global: with split panes
    * several channels are visible at once, and one channel's fetch must not
    * blank every other pane's message list with a skeleton.
@@ -56,6 +63,16 @@ type MessageState = {
   // ─── Actions ───
   fetchMessages: (channelId: string, serverId?: string) => Promise<void>;
   fetchOlderMessages: (channelId: string, serverId?: string) => Promise<void>;
+  /**
+   * Replace the channel's window with one centred on `messageId` (jump to
+   * message). Resolves false when the message no longer exists. Does NOT
+   * mark the channel read — the user is looking at the past, not the tail.
+   */
+  fetchAroundMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>;
+  /** Append the next page after the window's last message (forward paging). */
+  fetchNewerMessages: (channelId: string, serverId?: string) => Promise<void>;
+  /** Drop a jumped-to window and reload the channel tail. */
+  jumpToPresent: (channelId: string, serverId?: string) => void;
   /** Clear fetch cache — forces re-fetch + re-decrypt (E2EE restore) */
   invalidateFetchCache: () => void;
   /**
@@ -102,6 +119,25 @@ const fetchedChannels = new Set<string>();
  */
 const inflightFetches = new Map<string, AbortController>();
 
+/** Channels with a forward (?after=) page in flight — one at a time each. */
+const inflightNewerFetches = new Set<string>();
+
+/**
+ * Channels with a jump (fetchAroundMessage) in flight. Claimed synchronously
+ * before the first await so MessageList's mount-time fetchMessages — which
+ * would otherwise abort the jump via abortChannelFetch — skips the channel.
+ * Keyed to the owning controller so a superseded jump can't release a newer one's claim.
+ */
+const aroundPending = new Map<string, AbortController>();
+
+/**
+ * Live messages that arrived while the channel showed a jumped-to window
+ * (hasMoreAfter). They can't be appended there — the window's end isn't the
+ * tail — so they wait here and are merged once forward paging reaches the
+ * end. jumpToPresent / invalidateFetchCache discard them (a refetch covers it).
+ */
+const detachedWsMessages = new Map<string, Message[]>();
+
 /** Abort an in-flight fetch for the given channel, if any. */
 function abortChannelFetch(channelId: string): void {
   const ctrl = inflightFetches.get(channelId);
@@ -126,6 +162,7 @@ function unwrapSentMessage(data: unknown): Message | null {
 export const useMessageStore = create<MessageState>((set, get) => ({
   messagesByChannel: {},
   hasMoreByChannel: {},
+  hasMoreAfterByChannel: {},
   isLoadingByChannel: {},
   isLoadingMore: false,
   typingUsers: {},
@@ -142,7 +179,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     }
     inflightFetches.clear();
     fetchedChannels.clear();
-    set({ messagesByChannel: {}, hasMoreByChannel: {} });
+    aroundPending.clear();
+    detachedWsMessages.clear();
+    set({ messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {} });
   },
 
   invalidateFetchedFlags: () => {
@@ -164,7 +203,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   fetchMessages: async (channelId, explicitServerId?) => {
-    if (fetchedChannels.has(channelId)) return;
+    // A jump in flight owns the channel — see aroundPending.
+    if (fetchedChannels.has(channelId) || aroundPending.has(channelId)) return;
 
     // If a previous fetch for this channel is still in flight, cancel it.
     // The two main triggers: user spam-clicking channels, and E2EE store
@@ -287,9 +327,148 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     }
   },
 
+  fetchAroundMessage: async (serverId, channelId, messageId) => {
+    // Same abort discipline as fetchMessages: the tail fetch MessageList
+    // kicks off on mount must not land after this window and replace it.
+    abortChannelFetch(channelId);
+    const controller = new AbortController();
+    inflightFetches.set(channelId, controller);
+    // Claim BEFORE the first await: MessageList mounts (tab just opened)
+    // and calls fetchMessages while this request is in flight.
+    aroundPending.set(channelId, controller);
+    const release = () => {
+      if (aroundPending.get(channelId) === controller) aroundPending.delete(channelId);
+    };
+    const clearLoadingIfOwner = () => {
+      const owner = inflightFetches.get(channelId);
+      if (!owner || owner === controller) {
+        set((state) => ({
+          isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: false },
+        }));
+      }
+    };
+
+    set((state) => ({
+      isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: true },
+    }));
+
+    const res = await messageApi.getMessagesAround(
+      serverId, channelId, messageId, DEFAULT_MESSAGE_LIMIT
+    );
+    if (controller.signal.aborted) {
+      release();
+      clearLoadingIfOwner();
+      return false;
+    }
+
+    const page = res.success ? res.data : undefined;
+    const raw = page?.messages ?? [];
+    if (!page || !raw.some((m) => m.id === messageId)) {
+      // 404 (deleted) or a page that doesn't contain the target — keep
+      // whatever window the channel had; if it had none (the claim made
+      // MessageList skip its fetch), load the tail now.
+      inflightFetches.delete(channelId);
+      release();
+      clearLoadingIfOwner();
+      void get().fetchMessages(channelId, serverId);
+      return false;
+    }
+
+    const decrypted = await decryptChannelMessages(raw);
+    if (controller.signal.aborted) {
+      release();
+      clearLoadingIfOwner();
+      return false;
+    }
+    inflightFetches.delete(channelId);
+
+    // Mark fetched so a later fetchMessages() is a no-op and doesn't pull
+    // the tail over this window; the claim is no longer needed after that.
+    fetchedChannels.add(channelId);
+    release();
+    detachedWsMessages.delete(channelId);
+    set((state) => ({
+      messagesByChannel: { ...state.messagesByChannel, [channelId]: decrypted },
+      hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
+      hasMoreAfterByChannel: {
+        ...state.hasMoreAfterByChannel,
+        [channelId]: page.has_more_after ?? false,
+      },
+      isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: false },
+    }));
+    return true;
+  },
+
+  fetchNewerMessages: async (channelId, explicitServerId?) => {
+    const messages = get().messagesByChannel[channelId];
+    if (!messages || messages.length === 0) return;
+    if (!get().hasMoreAfterByChannel[channelId]) return;
+    if (inflightNewerFetches.has(channelId)) return;
+
+    const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
+    if (!serverId) return;
+
+    inflightNewerFetches.add(channelId);
+    const afterId = messages[messages.length - 1].id;
+    try {
+      const res = await messageApi.getMessagesAfter(
+        serverId, channelId, afterId, DEFAULT_MESSAGE_LIMIT
+      );
+      if (!res.success || !res.data) return;
+      const decrypted = await decryptChannelMessages(res.data.messages ?? []);
+      const hasMoreAfter = res.data.has_more_after ?? false;
+      // Reached the tail: live messages held back while detached belong
+      // after it now (dedup by id below — the page may already carry them).
+      const held = hasMoreAfter ? [] : detachedWsMessages.get(channelId) ?? [];
+      if (!hasMoreAfter) detachedWsMessages.delete(channelId);
+
+      set((state) => {
+        const current = state.messagesByChannel[channelId] ?? [];
+        const seen = new Set(current.map((m) => m.id));
+        const appended: Message[] = [];
+        for (const m of [...decrypted, ...held]) {
+          if (seen.has(m.id)) continue;
+          seen.add(m.id);
+          appended.push(m);
+        }
+        return {
+          messagesByChannel: {
+            ...state.messagesByChannel,
+            [channelId]: [...current, ...appended],
+          },
+          hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
+        };
+      });
+    } finally {
+      inflightNewerFetches.delete(channelId);
+    }
+  },
+
+  jumpToPresent: (channelId, explicitServerId?) => {
+    abortChannelFetch(channelId);
+    fetchedChannels.delete(channelId);
+    aroundPending.delete(channelId);
+    detachedWsMessages.delete(channelId);
+    set((state) => {
+      const { [channelId]: _, ...messagesByChannel } = state.messagesByChannel;
+      const { [channelId]: __, ...hasMoreByChannel } = state.hasMoreByChannel;
+      return {
+        messagesByChannel,
+        hasMoreByChannel,
+        hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: false },
+      };
+    });
+    void get().fetchMessages(channelId, explicitServerId);
+  },
+
   sendMessage: async (channelId, content, files, replyToId, explicitServerId?) => {
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return false;
+
+    // Sending from a jumped-to window: return to the tail first so the
+    // sender's own message (inserted below via handleMessageCreate) lands
+    // in the refetch's WS-buffer merge instead of being held back.
+    if (get().hasMoreAfterByChannel[channelId]) get().jumpToPresent(channelId, serverId);
 
     // E2EE: encrypt with Sender Key
     const e2eeState = useE2EEStore.getState();
@@ -316,8 +495,16 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             plaintext
           );
           const ciphertext = JSON.stringify(senderKeyMsg);
+          // The server cannot read mentions out of ciphertext, so the
+          // recipient ids ride along in plaintext metadata (ids only — no
+          // message text). `content` is already tokenised (<@userId>);
+          // role mentions (<@&roleId>) deliberately don't match.
+          const mentionUserIds = [
+            ...new Set([...content.matchAll(/<@([a-z0-9]+)>/g)].map((m) => m[1])),
+          ];
           const metadata = JSON.stringify({
             distribution_id: senderKeyMsg.distributionId,
+            ...(mentionUserIds.length ? { mention_user_ids: mentionUserIds } : {}),
           });
 
           const res = await sendWithRetryAndToast(() =>
@@ -481,6 +668,17 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   // ─── WebSocket Event Handlers ───
 
   handleMessageCreate: (message) => {
+    // Jumped-to window: the tail isn't loaded, so a live insert would be
+    // appended after messages that are NOT the newest. Hold it until forward
+    // paging reaches the end (fetchNewerMessages merges it).
+    if (get().hasMoreAfterByChannel[message.channel_id]) {
+      const held = detachedWsMessages.get(message.channel_id) ?? [];
+      if (!held.some((m) => m.id === message.id)) {
+        detachedWsMessages.set(message.channel_id, [...held, message]);
+      }
+      return;
+    }
+
     set((state) => {
       // Buffer messages even if channel isn't fetched yet.
       // fetchMessages will merge buffered messages when it completes.
@@ -516,6 +714,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   handleMessageDelete: (data) => {
+    const held = detachedWsMessages.get(data.channel_id);
+    if (held) detachedWsMessages.set(data.channel_id, held.filter((m) => m.id !== data.id));
     set((state) => ({
       messagesByChannel: deleteMessageFromRecord(
         state.messagesByChannel, data.channel_id, data.id

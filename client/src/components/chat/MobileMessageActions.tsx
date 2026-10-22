@@ -21,6 +21,10 @@ type MobileMessageActionsProps = {
   onReaction: (emoji: string) => void;
   /** Copy message content */
   onCopy: () => void;
+  /** Bookmark toggle (savedStore; channel vs DM id picked by the caller) */
+  onSaveToggle: () => void;
+  /** Is message bookmarked? */
+  isSaved: boolean;
   /** Permission: can manage messages */
   canManageMessages: boolean;
   /** Is message pinned? */
@@ -40,11 +44,14 @@ function MobileMessageActions({
   onDelete,
   onReaction,
   onCopy,
+  onSaveToggle,
+  isSaved,
   canManageMessages,
   isPinned,
 }: MobileMessageActionsProps) {
   const { t } = useTranslation("chat");
   const { t: tCommon } = useTranslation("common");
+  const { t: tSaved } = useTranslation("saved");
   const currentUser = useAuthStore((s) => s.user);
 
   if (!message) return null;
@@ -96,6 +103,16 @@ function MobileMessageActions({
             {t("copyMessage")}
           </button>
         )}
+
+        {/* Save / Remove bookmark — always */}
+        <button className="mobile-bs-action" onClick={() => handleAction(onSaveToggle)}>
+          <span className="mobile-bs-action-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+          </span>
+          {isSaved ? tSaved("unsave") : tSaved("save")}
+        </button>
 
         {/* Pin/Unpin — canManageMessages */}
         {canManageMessages && (

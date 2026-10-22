@@ -25,17 +25,39 @@ const (
 	DMStatusPending  = "pending"
 )
 
+// DMLastMessage is the sidebar preview of a channel's newest message
+// (GET /api/dms "last_message"). Content is nil whenever the message is
+// E2EE (encryption_version=1) or file-only — ciphertext is never included.
+type DMLastMessage struct {
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	Content           *string   `json:"content"`
+	EncryptionVersion int       `json:"encryption_version"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
 // DMChannelWithUser includes the other participant's info for sidebar rendering.
+// UnreadCount comes from dm_reads (0 when the caller has no row yet) and
+// LastMessage is nil for a channel with no messages.
 type DMChannelWithUser struct {
-	ID            string      `json:"id"`
-	OtherUser     *PublicUser `json:"other_user"`
-	E2EEEnabled   bool        `json:"e2ee_enabled"`
-	Status        string      `json:"status"`
-	InitiatedBy   *string     `json:"initiated_by"`
-	CreatedAt     time.Time   `json:"created_at"`
-	LastMessageAt *time.Time  `json:"last_message_at"`
-	IsPinned      bool        `json:"is_pinned"`
-	IsMuted       bool        `json:"is_muted"`
+	ID            string         `json:"id"`
+	OtherUser     *PublicUser    `json:"other_user"`
+	E2EEEnabled   bool           `json:"e2ee_enabled"`
+	Status        string         `json:"status"`
+	InitiatedBy   *string        `json:"initiated_by"`
+	CreatedAt     time.Time      `json:"created_at"`
+	LastMessageAt *time.Time     `json:"last_message_at"`
+	IsPinned      bool           `json:"is_pinned"`
+	IsMuted       bool           `json:"is_muted"`
+	UnreadCount   int            `json:"unread_count"`
+	LastMessage   *DMLastMessage `json:"last_message"`
+}
+
+// MarkDMReadRequest is the (optional) body of POST /api/dms/{channelId}/read.
+// An empty body or empty message_id resets the unread counter without
+// moving the last-read watermark.
+type MarkDMReadRequest struct {
+	MessageID string `json:"message_id"`
 }
 
 type DMMessage struct {
@@ -160,9 +182,12 @@ func (r *ToggleDMReactionRequest) Validate() error {
 	return nil
 }
 
+// DMMessagePage — same contract as MessagePage: ASC messages, HasMore = older
+// rows exist, HasMoreAfter = newer rows exist (around=/after= only).
 type DMMessagePage struct {
-	Messages []DMMessage `json:"messages"`
-	HasMore  bool        `json:"has_more"`
+	Messages     []DMMessage `json:"messages"`
+	HasMore      bool        `json:"has_more"`
+	HasMoreAfter bool        `json:"has_more_after"`
 }
 
 type DMSearchResult struct {

@@ -55,10 +55,14 @@ type Attachment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// MessagePage is the cursor-based pagination response.
+// MessagePage is the cursor-based pagination response. Messages are ASC
+// (oldest first). HasMore means older rows exist beyond the page; HasMoreAfter
+// means newer rows exist — only meaningful for the around=/after= forms
+// (always false for before=, where the page ends at "now").
 type MessagePage struct {
-	Messages []Message `json:"messages"`
-	HasMore  bool      `json:"has_more"`
+	Messages     []Message `json:"messages"`
+	HasMore      bool      `json:"has_more"`
+	HasMoreAfter bool      `json:"has_more_after"`
 }
 
 // CreateMessageRequest — E2EE: when encryption_version=1, ciphertext is

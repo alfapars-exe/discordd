@@ -62,26 +62,36 @@ func (r *sqliteDMRepo) GetChannelByID(ctx context.Context, id string) (*models.D
 }
 
 // ListChannels returns a user's DM channels with the other user's info.
-// Joins user_dm_settings to filter hidden channels and include pin/mute state.
+// Joins user_dm_settings to filter hidden channels and include pin/mute state,
+// dm_reads for the caller's unread counter (0 without a row), and the
+// channel's newest dm_messages row as the sidebar preview (NULL columns when
+// the channel has no messages). The preview's content is dropped for E2EE
+// messages so ciphertext never reaches the list payload.
 // Sorted: pinned first (by activity), then unpinned by activity.
 func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]models.DMChannelWithUser, error) {
 	query := `
 		SELECT dc.id, dc.e2ee_enabled, dc.status, dc.initiated_by, dc.created_at, dc.last_message_at,
 			u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
 			COALESCE(ds.is_pinned, 0),
-			CASE WHEN ds.muted_until IS NOT NULL AND ds.muted_until > datetime('now') THEN 1 ELSE 0 END
+			CASE WHEN ds.muted_until IS NOT NULL AND ds.muted_until > datetime('now') THEN 1 ELSE 0 END,
+			COALESCE(dr.unread_count, 0),
+			lm.id, lm.user_id, lm.content, lm.encryption_version, lm.created_at
 		FROM dm_channels dc
 		JOIN users u ON u.id = CASE
 			WHEN dc.user1_id = ? THEN dc.user2_id
 			ELSE dc.user1_id
 		END
 		LEFT JOIN user_dm_settings ds ON ds.user_id = ? AND ds.dm_channel_id = dc.id
+		LEFT JOIN dm_reads dr ON dr.user_id = ? AND dr.dm_channel_id = dc.id
+		LEFT JOIN dm_messages lm ON lm.id = (
+			SELECT id FROM dm_messages WHERE dm_channel_id = dc.id
+			ORDER BY created_at DESC, id DESC LIMIT 1)
 		WHERE (dc.user1_id = ? OR dc.user2_id = ?)
 		  AND COALESCE(ds.is_hidden, 0) = 0
 		ORDER BY COALESCE(ds.is_pinned, 0) DESC,
 		         COALESCE(dc.last_message_at, dc.created_at) DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, userID, userID, userID, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID, userID, userID, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list DM channels: %w", err)
 	}
@@ -94,13 +104,36 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		var displayName, avatarURL, initiatedBy, customStatus sql.NullString
 		var lastMsgAt, userCreatedAt sql.NullTime
 		var isPinned, isMuted int
+		var lmID, lmUserID, lmContent sql.NullString
+		var lmEncryptionVersion sql.NullInt64
+		var lmCreatedAt sql.NullTime
 
 		if err := rows.Scan(
 			&ch.ID, &ch.E2EEEnabled, &ch.Status, &initiatedBy, &ch.CreatedAt, &lastMsgAt,
 			&user.ID, &user.Username, &displayName, &avatarURL, &user.Status, &customStatus, &userCreatedAt,
 			&isPinned, &isMuted,
+			&ch.UnreadCount,
+			&lmID, &lmUserID, &lmContent, &lmEncryptionVersion, &lmCreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan DM channel: %w", err)
+		}
+
+		if lmID.Valid {
+			last := &models.DMLastMessage{
+				ID:                lmID.String,
+				UserID:            lmUserID.String,
+				EncryptionVersion: int(lmEncryptionVersion.Int64),
+			}
+			if lmCreatedAt.Valid {
+				last.CreatedAt = lmCreatedAt.Time
+			}
+			// Plaintext only: an E2EE row's content column is NULL anyway,
+			// but the version check makes the "never ciphertext" rule explicit.
+			if last.EncryptionVersion == 0 && lmContent.Valid && lmContent.String != "" {
+				content := lmContent.String
+				last.Content = &content
+			}
+			ch.LastMessage = last
 		}
 
 		if lastMsgAt.Valid {
@@ -220,9 +253,24 @@ func (r *sqliteDMRepo) DeleteChannel(ctx context.Context, channelID string) erro
 		SELECT id FROM dm_messages WHERE dm_channel_id = ?)`, channelID); err != nil {
 		return fmt.Errorf("failed to delete DM attachments: %w", err)
 	}
+	// saved_messages (migration 083) — same rule and same ordering as
+	// dm_attachments above: the subquery joins through dm_messages.
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM saved_messages WHERE dm_message_id IN (
+		SELECT id FROM dm_messages WHERE dm_channel_id = ?)`, channelID); err != nil {
+		return fmt.Errorf("failed to delete saved references for DM channel: %w", err)
+	}
 	_, err := r.db.ExecContext(ctx, "DELETE FROM dm_messages WHERE dm_channel_id = ?", channelID)
 	if err != nil {
 		return fmt.Errorf("failed to delete DM messages: %w", err)
+	}
+	// dm_reads / notifications declare ON DELETE CASCADE to dm_channels
+	// (migrations 081/082) but, as above, the production connection never
+	// enforces it — delete them explicitly, before the parent row.
+	if _, err := r.db.ExecContext(ctx, "DELETE FROM dm_reads WHERE dm_channel_id = ?", channelID); err != nil {
+		return fmt.Errorf("failed to delete DM read states: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx, "DELETE FROM notifications WHERE dm_channel_id = ?", channelID); err != nil {
+		return fmt.Errorf("failed to delete DM notifications: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx, "DELETE FROM dm_channels WHERE id = ?", channelID)
 	if err != nil {

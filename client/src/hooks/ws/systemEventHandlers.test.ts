@@ -81,6 +81,15 @@ vi.mock("../../stores/soundboardStore", () => ({
   useSoundboardStore: { getState: () => ({}) },
 }));
 vi.mock("../../stores/auditStore", () => ({ useAuditStore: { getState: () => ({}) } }));
+vi.mock("../../stores/notificationStore", () => ({
+  useNotificationStore: { getState: () => ({ fetchCount: vi.fn() }) },
+}));
+vi.mock("../../stores/toastStore", () => ({
+  useToastStore: { getState: () => ({ addToast: vi.fn() }) },
+}));
+vi.mock("../../i18n", () => ({ default: { t: (key: string) => key, language: "en" } }));
+vi.mock("../../utils/sounds", () => ({ playNotificationSound: vi.fn() }));
+vi.mock("../../utils/notifications", () => ({ showNotification: vi.fn() }));
 // Two panels: panel-1's ACTIVE tab is a cross-server channel (its own
 // serverId), with a background tab that must NOT be eagerly healed; panel-2's
 // active tab shows the sidebar-selected channel.

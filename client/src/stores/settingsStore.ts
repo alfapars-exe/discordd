@@ -22,6 +22,14 @@ const LIGHTNING_BLUR_KEY = "mqvi_lightning_blur";
 const NEON_ENABLED_KEY = "mqvi_neon_enabled";
 const NEON_INTENSITY_KEY = "mqvi_neon_intensity";
 const UI_SCALE_KEY = "mqvi_ui_scale";
+const AVATAR_ANIMATION_KEY = "hichat-avatar-animation";
+
+/**
+ * When animated (GIF) avatars play: "hover" = only while the pointer is over
+ * them (default), "always" = autoplay. Reduce Motion overrides "always" back
+ * to hover-only — see components/shared/Avatar.tsx.
+ */
+export type AvatarAnimationMode = "hover" | "always";
 
 /** Default blur for the lightning bolts (px) — matches the original hard-coded value. */
 const LIGHTNING_BLUR_DEFAULT = 4;
@@ -230,6 +238,16 @@ function loadPersistedUiScale(): number {
   return UI_SCALE_DEFAULT;
 }
 
+function loadPersistedAvatarAnimation(): AvatarAnimationMode {
+  try {
+    const stored = localStorage.getItem(AVATAR_ANIMATION_KEY);
+    if (stored === "always") return "always";
+  } catch {
+    /* localStorage access error */
+  }
+  return "hover";
+}
+
 /**
  * Whole-app UI scale. Writes the zoom factor (pct/100) to the --ui-scale
  * custom property on :root; globals.css turns it into `html { zoom: var(--ui-scale) }`
@@ -255,6 +273,10 @@ type SettingsTab =
   | "roles"
   | "members"
   | "invites"
+  | "emojis"
+  | "stickers"
+  | "entrance"
+  | "entrance-sounds"
   | "platform"
   | "platform-quota"
   | "platform-servers"
@@ -287,6 +309,8 @@ type SettingsState = {
   neonIntensity: number;
   /** Whole-app UI scale (100-200%) - zoom factor for the entire interface. */
   uiScale: number;
+  /** When animated avatars play (default "hover"). */
+  avatarAnimation: AvatarAnimationMode;
   /** Live preview blob URL — applied to the app background without persisting. */
   pendingWallpaperPreviewUrl: string | null;
 
@@ -303,6 +327,7 @@ type SettingsState = {
   setNeonEnabled: (enabled: boolean) => void;
   setNeonIntensity: (pct: number) => void;
   setUiScale: (pct: number) => void;
+  setAvatarAnimation: (mode: AvatarAnimationMode) => void;
   setPendingWallpaperPreviewUrl: (url: string | null) => void;
   /** Apply theme from server preferences (no re-sync to server) */
   applyFromServer: (themeId: string) => void;
@@ -346,6 +371,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   neonEnabled: initialNeonEnabled,
   neonIntensity: initialNeonIntensity,
   uiScale: initialUiScale,
+  avatarAnimation: loadPersistedAvatarAnimation(),
   pendingWallpaperPreviewUrl: null,
 
   openSettings: (tab = "profile") => set({ isOpen: true, activeTab: tab }),
@@ -464,6 +490,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyUiScale(clamped);
     set({ uiScale: clamped });
+  },
+
+  setAvatarAnimation: (mode) => {
+    try {
+      localStorage.setItem(AVATAR_ANIMATION_KEY, mode);
+    } catch {
+      /* localStorage full or inaccessible */
+    }
+    set({ avatarAnimation: mode });
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),

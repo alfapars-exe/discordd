@@ -27,6 +27,8 @@ import {
 } from "./slices/dmSettingsSlice";
 import {
   createDMWsSlice,
+  takeDetachedDMMessages,
+  clearDetachedDMMessages,
   type DMWsSlice,
 } from "./slices/dmWsSlice";
 
@@ -45,6 +47,17 @@ const EMPTY_STRINGS: string[] = [];
  */
 const dmInflightFetches = new Map<string, AbortController>();
 
+/** DM channels with a forward (?after=) page in flight — one at a time each. */
+const dmInflightNewerFetches = new Set<string>();
+
+/**
+ * DM channels with a jump (fetchMessagesAround) in flight, keyed to the
+ * owning controller. Claimed synchronously before the first await so the
+ * mount-time fetchMessages of the freshly opened DM tab — which would abort
+ * the jump via abortDMChannelFetch — skips the channel.
+ */
+const dmAroundPending = new Map<string, AbortController>();
+
 /** Abort an in-flight fetch for the given DM channel, if any. */
 function abortDMChannelFetch(channelId: string): void {
   const ctrl = dmInflightFetches.get(channelId);
@@ -59,6 +72,12 @@ type DMCoreState = {
   selectedDMId: string | null;
   messagesByChannel: Record<string, DMMessage[]>;
   hasMoreByChannel: Record<string, boolean>;
+  /**
+   * channelId -> newer messages exist AFTER the loaded window (only after a
+   * fetchMessagesAround jump). While set, live inserts are dropped by
+   * handleDMMessageCreate and the list offers "jump to present".
+   */
+  hasMoreAfterByChannel: Record<string, boolean>;
   isLoading: boolean;
   isLoadingMessages: boolean;
 
@@ -70,8 +89,19 @@ type DMCoreState = {
   fetchChannels: () => Promise<void>;
   selectDM: (channelId: string | null) => void;
   createOrGetChannel: (userId: string) => Promise<string | null>;
+  /** Self-DM ("My Notes") channel id — created server-side on first use. */
+  ensureSelfChannel: () => Promise<string | null>;
   fetchMessages: (channelId: string) => Promise<void>;
   fetchOlderMessages: (channelId: string) => Promise<void>;
+  /**
+   * Replace the channel's window with one centred on `messageId`. Resolves
+   * false when the message no longer exists. Does not touch unread state.
+   */
+  fetchMessagesAround: (channelId: string, messageId: string) => Promise<boolean>;
+  /** Append the next page after the window's last message (forward paging). */
+  fetchNewerMessages: (channelId: string) => Promise<void>;
+  /** Drop a jumped-to window and reload the channel tail. */
+  jumpToPresent: (channelId: string) => void;
   sendMessage: (channelId: string, content: string, files?: File[], replyToId?: string) => Promise<boolean>;
   editMessage: (messageId: string, content: string) => Promise<boolean>;
   deleteMessage: (messageId: string) => Promise<boolean>;
@@ -108,6 +138,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
   selectedDMId: null,
   messagesByChannel: {},
   hasMoreByChannel: {},
+  hasMoreAfterByChannel: {},
   isLoading: false,
   isLoadingMessages: false,
   replyingTo: null,
@@ -118,7 +149,13 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     set({ isLoading: true });
     const res = await dmApi.listDMChannels();
     if (res.success && res.data) {
-      set({ channels: res.data, isLoading: false });
+      // Seed unread counts from the server's per-user read cursor so a fresh
+      // tab (or a reconnect) shows what was missed instead of starting at 0.
+      const dmUnreadCounts: Record<string, number> = {};
+      for (const ch of res.data) {
+        if (ch.unread_count > 0) dmUnreadCounts[ch.id] = ch.unread_count;
+      }
+      set({ channels: res.data, dmUnreadCounts, isLoading: false });
     } else {
       set({ isLoading: false });
     }
@@ -141,8 +178,22 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     return null;
   },
 
+  ensureSelfChannel: async () => {
+    const res = await dmApi.getOrCreateSelfDMChannel();
+    if (res.success && res.data) {
+      set((state) => {
+        const exists = state.channels.some((ch) => ch.id === res.data!.id);
+        if (exists) return state;
+        return { channels: [res.data!, ...state.channels] };
+      });
+      return res.data.id;
+    }
+    return null;
+  },
+
   fetchMessages: async (channelId) => {
-    if (get().messagesByChannel[channelId]) return;
+    // A jump in flight owns the channel — see dmAroundPending.
+    if (get().messagesByChannel[channelId] || dmAroundPending.has(channelId)) return;
 
     const e2eeStatus = useE2EEStore.getState().initStatus;
     if (e2eeStatus !== "ready") return;
@@ -213,7 +264,108 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
     }
   },
 
+  fetchMessagesAround: async (channelId, messageId) => {
+    // Same abort discipline as fetchMessages: the tail fetch DMChat kicks
+    // off on mount must not land after this window and replace it.
+    abortDMChannelFetch(channelId);
+    const controller = new AbortController();
+    dmInflightFetches.set(channelId, controller);
+    // Claim BEFORE the first await — see dmAroundPending.
+    dmAroundPending.set(channelId, controller);
+    const release = () => {
+      if (dmAroundPending.get(channelId) === controller) dmAroundPending.delete(channelId);
+    };
+    set({ isLoadingMessages: true });
+
+    const res = await dmApi.getDMMessagesAround(channelId, messageId, 50);
+    if (controller.signal.aborted) {
+      release();
+      return false;
+    }
+
+    const page = res.success ? res.data : undefined;
+    const raw = page?.messages ?? [];
+    if (!page || !raw.some((m) => m.id === messageId)) {
+      // Target gone — keep any existing window; if there is none (the claim
+      // made the tab's mount fetch skip), load the tail now.
+      dmInflightFetches.delete(channelId);
+      release();
+      set({ isLoadingMessages: false });
+      void get().fetchMessages(channelId);
+      return false;
+    }
+
+    const decrypted = await decryptDMMessages(raw);
+    if (controller.signal.aborted) {
+      release();
+      return false;
+    }
+    dmInflightFetches.delete(channelId);
+    release();
+    clearDetachedDMMessages(channelId);
+
+    set((state) => ({
+      messagesByChannel: { ...state.messagesByChannel, [channelId]: decrypted },
+      hasMoreByChannel: { ...state.hasMoreByChannel, [channelId]: page.has_more },
+      hasMoreAfterByChannel: {
+        ...state.hasMoreAfterByChannel,
+        [channelId]: page.has_more_after ?? false,
+      },
+      isLoadingMessages: false,
+    }));
+    return true;
+  },
+
+  fetchNewerMessages: async (channelId) => {
+    const messages = get().messagesByChannel[channelId];
+    if (!messages || messages.length === 0) return;
+    if (!get().hasMoreAfterByChannel[channelId]) return;
+    if (dmInflightNewerFetches.has(channelId)) return;
+
+    dmInflightNewerFetches.add(channelId);
+    const afterId = messages[messages.length - 1].id;
+    try {
+      const res = await dmApi.getDMMessagesAfter(channelId, afterId, 50);
+      if (!res.success || !res.data) return;
+      const decrypted = await decryptDMMessages(res.data.messages ?? []);
+      const hasMoreAfter = res.data.has_more_after ?? false;
+      // Reached the tail: merge live messages held back while detached.
+      const held = hasMoreAfter ? [] : takeDetachedDMMessages(channelId);
+
+      set((state) => {
+        const current = state.messagesByChannel[channelId] ?? [];
+        const seen = new Set(current.map((m) => m.id));
+        const appended: DMMessage[] = [];
+        for (const m of [...decrypted, ...held]) {
+          if (seen.has(m.id)) continue;
+          seen.add(m.id);
+          appended.push(m);
+        }
+        return {
+          messagesByChannel: {
+            ...state.messagesByChannel,
+            [channelId]: [...current, ...appended],
+          },
+          hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: hasMoreAfter },
+        };
+      });
+    } finally {
+      dmInflightNewerFetches.delete(channelId);
+    }
+  },
+
+  jumpToPresent: (channelId) => {
+    dmAroundPending.delete(channelId);
+    clearDetachedDMMessages(channelId);
+    get().invalidateMessages(channelId);
+    set((state) => ({
+      hasMoreAfterByChannel: { ...state.hasMoreAfterByChannel, [channelId]: false },
+    }));
+    void get().fetchMessages(channelId);
+  },
+
   sendMessage: async (channelId, content, files, replyToId) => {
+    const ok = await (async (): Promise<boolean> => {
     const e2eeState = useE2EEStore.getState();
 
     const dmChannel = get().channels.find((ch) => ch.id === channelId);
@@ -222,6 +374,10 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       const currentUserId = useAuthStore.getState().user?.id;
 
       if (channel && currentUserId) {
+        // Only this send's own queue entry may be discarded on failure; if
+        // encryption threw before the push, discarding would drop the entry of
+        // another in-flight send to the same channel.
+        let pushedPlaintext = false;
         try {
           let encryptedFiles: File[] | undefined;
           let fileMetas: import("../crypto/fileEncryption").EncryptedFileMeta[] | undefined;
@@ -245,6 +401,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
           const metadata = JSON.stringify({});
 
           pushSentPlaintext(channelId, { content, file_keys: fileMetas });
+          pushedPlaintext = true;
 
           const res = await sendWithRetryAndToast(() =>
             dmApi.sendEncryptedDMMessage(
@@ -271,7 +428,7 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
           return res.success;
         } catch (err) {
-          discardLastSentPlaintext(channelId);
+          if (pushedPlaintext) discardLastSentPlaintext(channelId);
           console.error("[dmStore] E2EE encrypt failed:", err);
 
           const errMsg = err instanceof Error ? err.message : "";
@@ -298,6 +455,12 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       dmApi.sendDMMessage(channelId, content, files, replyToId)
     );
     return res.success;
+    })();
+    // Sent from a jumped-to window: DMs have no local insert (the WS echo is
+    // the only path, and it is held back while detached), so return to the
+    // tail AFTER the POST persisted — the refetch then includes the message.
+    if (ok && get().hasMoreAfterByChannel[channelId]) get().jumpToPresent(channelId);
+    return ok;
   },
 
   editMessage: async (messageId, content) => {
@@ -446,8 +609,10 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
 
   invalidateMessages: (channelId) => {
     // Abort any in-flight fetch for this channel so a late response can't
-    // re-populate the entry we're about to clear.
+    // re-populate the entry we're about to clear. An aborted jump gives up
+    // its claim immediately so the caller's follow-up fetchMessages runs.
     abortDMChannelFetch(channelId);
+    dmAroundPending.delete(channelId);
     set((state) => {
       const { [channelId]: _, ...rest } = state.messagesByChannel;
       const { [channelId]: __, ...restMore } = state.hasMoreByChannel;
@@ -463,6 +628,8 @@ export const useDMStore = create<DMStore>((set, get, store) => ({
       ctrl.abort();
     }
     dmInflightFetches.clear();
-    set({ messagesByChannel: {}, hasMoreByChannel: {} });
+    dmAroundPending.clear();
+    clearDetachedDMMessages();
+    set({ messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {} });
   },
 }));

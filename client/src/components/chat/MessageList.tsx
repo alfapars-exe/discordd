@@ -9,6 +9,7 @@ import { useActiveMembers } from "../../stores/memberStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { MessageSkeleton } from "../shared/Skeleton";
 import Message from "./Message";
+import JumpToPresentPill from "./JumpToPresentPill";
 
 /** Compact threshold for consecutive messages from same author (ms) */
 const COMPACT_THRESHOLD = 5 * 60 * 1000;
@@ -26,8 +27,11 @@ function MessageList() {
     isLoading,
     isLoadingMore,
     hasMore,
+    hasMoreAfter,
     fetchMessages,
     fetchOlderMessages,
+    fetchNewerMessages,
+    jumpToPresent,
     scrollToMessageId,
     setScrollToMessageId,
     editMessage,
@@ -73,6 +77,23 @@ function MessageList() {
    *  messages.length is now in its dep array (lint required it because
    *  the body reads messages.length). */
   const restoredForChannelRef = useRef<string | null>(null);
+  /** Mirror of hasMoreAfter for the ResizeObserver callbacks (created once). */
+  const hasMoreAfterRef = useRef(false);
+
+  // A jumped-to window is anchored to the target message, not the floor:
+  // while newer messages exist after it, nothing may snap to the bottom.
+  // Back at the present (pill, own send, or forward paging hit the tail):
+  // re-arm the one-shot restore so the list lands on the bottom like a fresh open.
+  useEffect(() => {
+    const wasDetached = hasMoreAfterRef.current;
+    hasMoreAfterRef.current = hasMoreAfter;
+    if (hasMoreAfter) {
+      stickToBottomRef.current = false;
+    } else if (wasDetached) {
+      restoredForChannelRef.current = null;
+      scrollPositions.delete(channelId);
+    }
+  }, [hasMoreAfter, channelId]);
 
   /**
    * Virtualized rows — only the visible window (+overscan) mounts to the DOM.
@@ -165,9 +186,14 @@ function MessageList() {
     }
   }
 
-  // Auto-scroll on new message (only when already at bottom)
+  // Auto-scroll on new message (only when already at bottom, and never
+  // while a jumped-to window is appending forward pages)
   useEffect(() => {
-    if (messages.length > prevMessageCountRef.current && stickToBottomRef.current) {
+    if (
+      messages.length > prevMessageCountRef.current &&
+      stickToBottomRef.current &&
+      !hasMoreAfterRef.current
+    ) {
       scrollToBottom();
     }
     prevMessageCountRef.current = messages.length;
@@ -187,7 +213,7 @@ function MessageList() {
     const content = contentRef.current;
     if (!content) return;
     const observer = new ResizeObserver(() => {
-      if (stickToBottomRef.current && scrollRef.current) {
+      if (stickToBottomRef.current && !hasMoreAfterRef.current && scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
     });
@@ -286,10 +312,11 @@ function MessageList() {
     // bottom, which fought the ResizeObserver. Now: a user-initiated
     // scroll UP by 5+ pixels turns sticky OFF, returning to within
     // 20px of the floor turns it back ON.
-    const nearBottom = scrollHeight - scrollTop - clientHeight < 20;
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+    const nearBottom = distanceToBottom < 20;
     if (scrollTop < prev - 5) {
       stickToBottomRef.current = false;
-    } else if (nearBottom) {
+    } else if (nearBottom && !hasMoreAfter) {
       stickToBottomRef.current = true;
     }
     prevScrollTopRef.current = scrollTop;
@@ -307,7 +334,14 @@ function MessageList() {
         }
       });
     }
-  }, [hasMore, isLoadingMore, channelId, fetchOlderMessages]);
+
+    // Forward paging out of a jumped-to window. The store ignores
+    // overlapping calls, so firing on every near-bottom scroll is safe.
+    if (distanceToBottom < 100 && hasMoreAfter && channelId) {
+      void fetchNewerMessages();
+    }
+  }, [hasMore, hasMoreAfter, isLoadingMore, channelId, fetchOlderMessages, fetchNewerMessages]);
+
 
   /** Compact mode for consecutive messages from same author within 5min. Replies always show full header. */
   function isCompact(index: number): boolean {
@@ -424,6 +458,9 @@ function MessageList() {
         )}
         </div>
       </div>
+
+      {/* Jumped-to window with newer messages after it */}
+      {hasMoreAfter && <JumpToPresentPill onClick={jumpToPresent} />}
 
       {/* Mention Navigation FAB */}
       {mentionCount > 0 && (

@@ -11,6 +11,27 @@ import {
 import { sortChannelsByActivity } from "../shared/dmSort";
 import type { DMStore } from "../dmStore";
 
+/**
+ * Live DM messages that arrived while their channel showed a jumped-to
+ * window (hasMoreAfter). Lives here because the WS handler fills it; dmStore
+ * drains it when forward paging reaches the tail and drops it on
+ * jumpToPresent (the refetch covers those messages).
+ */
+const detachedDMMessages = new Map<string, DMMessage[]>();
+
+/** Remove and return the held messages for a channel. */
+export function takeDetachedDMMessages(channelId: string): DMMessage[] {
+  const held = detachedDMMessages.get(channelId) ?? [];
+  detachedDMMessages.delete(channelId);
+  return held;
+}
+
+/** Drop held messages for one channel, or all channels when omitted. */
+export function clearDetachedDMMessages(channelId?: string): void {
+  if (channelId === undefined) detachedDMMessages.clear();
+  else detachedDMMessages.delete(channelId);
+}
+
 export type DMWsSlice = {
   /** Last WS-deleted DM message ref. Snapshot consumers (DM search panel
    *  results) subscribe to this narrow field to drop rows that no longer
@@ -52,7 +73,19 @@ export const createDMWsSlice: StateCreator<
     set((state) => {
       const updatedChannels = state.channels.map((ch) =>
         ch.id === message.dm_channel_id
-          ? { ...ch, last_message_at: message.created_at }
+          ? {
+              ...ch,
+              last_message_at: message.created_at,
+              // Inbox preview. `content` is the client-decrypted text for
+              // E2EE messages (the REST list carries null for those).
+              last_message: {
+                id: message.id,
+                user_id: message.user_id,
+                content: message.content,
+                encryption_version: message.encryption_version,
+                created_at: message.created_at,
+              },
+            }
           : ch
       );
       const sortedChannels = sortChannelsByActivity(updatedChannels);
@@ -65,6 +98,15 @@ export const createDMWsSlice: StateCreator<
       }
 
       const channelMessages = state.messagesByChannel[message.dm_channel_id];
+      // Jumped-to window (tail not loaded): keep the preview/sort update but
+      // hold the message back — fetchNewerMessages merges it at the tail.
+      if (channelMessages && state.hasMoreAfterByChannel[message.dm_channel_id]) {
+        const held = detachedDMMessages.get(message.dm_channel_id) ?? [];
+        if (!held.some((m) => m.id === message.id)) {
+          detachedDMMessages.set(message.dm_channel_id, [...held, message]);
+        }
+        return { channels: sortedChannels, typingUsers };
+      }
       if (!channelMessages) {
         return { channels: sortedChannels, typingUsers };
       }
@@ -93,9 +135,17 @@ export const createDMWsSlice: StateCreator<
   },
 
   handleDMMessageDelete: (data) => {
+    const held = detachedDMMessages.get(data.dm_channel_id);
+    if (held) detachedDMMessages.set(data.dm_channel_id, held.filter((m) => m.id !== data.id));
     set((state) => ({
       messagesByChannel: deleteMessageFromRecord(
         state.messagesByChannel, data.dm_channel_id, data.id
+      ),
+      // Drop the inbox preview if it pointed at the deleted message.
+      channels: state.channels.map((ch) =>
+        ch.id === data.dm_channel_id && ch.last_message?.id === data.id
+          ? { ...ch, last_message: null }
+          : ch
       ),
       lastDeletedDM: data,
     }));

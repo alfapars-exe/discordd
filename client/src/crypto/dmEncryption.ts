@@ -49,6 +49,23 @@ import type { SignalWireMessage } from "./types";
  */
 const preSendQueue = new Map<string, E2EEPayload[]>();
 
+/**
+ * Local device id the queued entries were pushed under. The WS handler only
+ * pops for echoes whose sender_device_id is the CURRENT local device, so an
+ * entry pushed before a recovery restore (which changes the id) would never
+ * match its own echo and would instead be popped onto a later send's echo.
+ * Every queue access first drops the whole queue if the id has moved on.
+ */
+let preSendQueueDeviceId: string | null = null;
+
+function syncPreSendQueueDevice(): void {
+  const current = useE2EEStore.getState().localDeviceId;
+  if (current !== preSendQueueDeviceId) {
+    preSendQueue.clear();
+    preSendQueueDeviceId = current;
+  }
+}
+
 /** In-memory cache for edit operations. messageId is known, so a direct Map suffices. */
 const editCache = new Map<string, E2EEPayload>();
 
@@ -85,6 +102,7 @@ function withSelfFanoutLock<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Push plaintext to FIFO queue before API call, so WS echo can find it. */
 export function pushSentPlaintext(dmChannelId: string, payload: E2EEPayload): void {
+  syncPreSendQueueDevice();
   const queue = preSendQueue.get(dmChannelId);
   if (queue) {
     queue.push(payload);
@@ -95,6 +113,7 @@ export function pushSentPlaintext(dmChannelId: string, payload: E2EEPayload): vo
 
 /** Pop own message plaintext from FIFO on WS echo. Order is preserved by server. */
 export function popSentPlaintext(dmChannelId: string): E2EEPayload | null {
+  syncPreSendQueueDevice();
   const queue = preSendQueue.get(dmChannelId);
   if (!queue || queue.length === 0) return null;
 
@@ -105,6 +124,7 @@ export function popSentPlaintext(dmChannelId: string): E2EEPayload | null {
 
 /** Remove last queued entry on send failure (LIFO — failed send's push is last). */
 export function discardLastSentPlaintext(dmChannelId: string): void {
+  syncPreSendQueueDevice();
   const queue = preSendQueue.get(dmChannelId);
   if (!queue || queue.length === 0) return;
 
@@ -153,6 +173,53 @@ export async function persistSentPlaintext(
  */
 export async function encryptDMMessage(
   currentUserId: string,
+  recipientUserId: string,
+  localDeviceId: string,
+  plaintext: string
+): Promise<EncryptedEnvelope[]> {
+  const envelopes: EncryptedEnvelope[] = [];
+
+  // Self-DM ("My Notes": a DM channel whose other_user is the sender). The
+  // recipient's devices ARE our own devices, which the self-fanout block below
+  // already covers — so the recipient pass is skipped entirely. Running it
+  // would (a) open a Signal session with the LOCAL device, i.e. with ourselves,
+  // and pin our own identity under it, and (b) encrypt a second copy for every
+  // sibling device, advancing each sibling ratchet twice per message.
+  //
+  // RECIPIENT_NO_KEYS is skipped with it on purpose: that error triggers the
+  // caller's PLAINTEXT fallback, and a single-device user must still be able
+  // to write encrypted notes. That user ends up with zero envelopes, which is
+  // correct — the local device never reads its own sends from ciphertext; it
+  // renders them from the sent-plaintext cache (pushSentPlaintext →
+  // popSentPlaintext on the WS echo, persistSentPlaintext for history).
+  if (recipientUserId !== currentUserId) {
+    envelopes.push(
+      ...(await encryptForRecipientDevices(
+        recipientUserId,
+        localDeviceId,
+        plaintext
+      ))
+    );
+  }
+
+  envelopes.push(
+    ...(await encryptForSelfFanout(
+      currentUserId,
+      localDeviceId,
+      plaintext,
+      recipientUserId === currentUserId
+    ))
+  );
+
+  return envelopes;
+}
+
+/**
+ * Recipient pass of encryptDMMessage: one envelope per device of a PEER
+ * account. Never called with the sender's own userId (see the self-DM note
+ * in encryptDMMessage). Extracted verbatim; behaviour for peer DMs unchanged.
+ */
+async function encryptForRecipientDevices(
   recipientUserId: string,
   localDeviceId: string,
   plaintext: string
@@ -229,6 +296,26 @@ export async function encryptDMMessage(
     throw new LegacyDeviceError(recipientUserId, recipientBundles.data[0].device_id);
   }
 
+  return envelopes;
+}
+
+/**
+ * Self-fanout pass of encryptDMMessage: one envelope per OTHER device of the
+ * sender's own account (the local device is always skipped). For a self-DM
+ * this is the only pass that runs.
+ *
+ * selfFanoutRequired: set for a self-DM. A failed own-bundle fetch is then
+ * fatal (SELF_FANOUT_UNAVAILABLE) instead of silently yielding no envelopes —
+ * with no recipient pass, "[]" would make the note permanently unreadable on
+ * every sibling device. Deliberately NOT RECIPIENT_NO_KEYS, which would make
+ * the caller resend as plaintext. Peer DMs keep the lenient behaviour.
+ */
+async function encryptForSelfFanout(
+  currentUserId: string,
+  localDeviceId: string,
+  plaintext: string,
+  selfFanoutRequired: boolean
+): Promise<EncryptedEnvelope[]> {
   // Self-fanout: encrypt for sender's other devices.
   //
   // Earlier code deleted the existing session before every send to force
@@ -247,13 +334,17 @@ export async function encryptDMMessage(
   // The flag read, the per-device delete + re-handshake, and the flag clear
   // form one read-check-act sequence, so they run under selfFanoutLock —
   // see its doc comment for what that does and does not protect. Only this
-  // block is serialized; encrypting for recipient devices above stays
-  // parallel-friendly.
-  const selfEnvelopes = await withSelfFanoutLock(async () => {
+  // block is serialized; encrypting for recipient devices
+  // (encryptForRecipientDevices) stays parallel-friendly.
+  return withSelfFanoutLock(async () => {
     const produced: EncryptedEnvelope[] = [];
     const needsReset =
       (await keyStorage.getMetadata<boolean>("self_fanout_reset")) === true;
     const selfBundles = await e2eeApi.fetchPreKeyBundles(currentUserId);
+    if (selfFanoutRequired && !(selfBundles.success && selfBundles.data)) {
+      // Reset flag untouched: no handshake happened, the next send retries it.
+      throw new Error("SELF_FANOUT_UNAVAILABLE");
+    }
     if (selfBundles.success && selfBundles.data) {
       // Snapshot of OUR OWN pinned device set, taken once BEFORE the loop.
       //
@@ -290,9 +381,6 @@ export async function encryptDMMessage(
     }
     return produced;
   });
-  envelopes.push(...selfEnvelopes);
-
-  return envelopes;
 }
 
 /**
@@ -487,6 +575,16 @@ export async function decryptDMMessage(
 ): Promise<E2EEPayload | null> {
   const localDeviceId = useE2EEStore.getState().localDeviceId;
   if (!localDeviceId) return null;
+
+  // A message sent FROM this very device never carries an envelope this
+  // device can open: the send path never encrypts to the local device (no
+  // session to self — that copy lives in the sent-plaintext cache). So an
+  // envelope claiming sender == local device is either a cache miss on our
+  // own send (benign, nothing to decrypt) or server-forged; either way,
+  // handing it to decryptMessage could only establish a session with
+  // ourselves and pin a server-chosen identity under our own device id.
+  // Matters most for the self-DM, where sender and recipient are both us.
+  if (senderDeviceId === localDeviceId) return null;
 
   // Parse envelope array
   let envelopes: EncryptedEnvelope[];

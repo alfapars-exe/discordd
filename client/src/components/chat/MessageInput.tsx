@@ -11,11 +11,19 @@ import { useToastStore } from "../../stores/toastStore";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH, MAX_FILES } from "../../utils/constants";
 import { convertMentionTokens } from "../../utils/mention";
+import {
+  convertEmojiShortcodes,
+  parseCustomEmojiToken,
+  type CustomEmojiRef,
+} from "../../utils/expressionTokens";
+import { getMemberEmojiCatalog } from "../../hooks/useEmojiCatalog";
 import { formatRelativeFuture } from "../../utils/dateFormat";
 import EmojiPicker from "../shared/EmojiPicker";
 import GifPicker from "../shared/GifPicker";
+import StickerPicker from "../shared/StickerPicker";
 import FilePreview from "./FilePreview";
 import MentionAutocomplete, { type MentionSelection } from "./MentionAutocomplete";
+import EmojiAutocomplete from "./EmojiAutocomplete";
 import ReplyBar from "./ReplyBar";
 
 function MessageInput() {
@@ -61,6 +69,9 @@ function MessageInput() {
   // GIF picker state
   const [showGifPicker, setShowGifPicker] = useState(false);
 
+  // Sticker picker state (Faz D2)
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   /** Character index where the @ trigger starts */
@@ -80,6 +91,15 @@ function MessageInput() {
    * updates synchronously and dodges the race entirely.
    */
   const mentionActiveRef = useRef(false);
+
+  // Custom emoji `:shortcode` autocomplete — same ref-based activity pattern
+  // as the mention popup (see mentionActiveRef for the Enter race).
+  const [emojiQuery, setEmojiQuery] = useState<string | null>(null);
+  /** Character index of the `:` that opened the emoji popup */
+  const emojiStartRef = useRef<number>(-1);
+  const emojiActiveRef = useRef(false);
+  /** Emojis picked via picker/autocomplete — resolved first on send */
+  const emojiSelectionsRef = useRef<CustomEmojiRef[]>([]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,6 +160,7 @@ function MessageInput() {
     setFiles([]);
     setReplyingTo(null);
     mentionSelectionsRef.current = [];
+    emojiSelectionsRef.current = [];
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -181,7 +202,12 @@ function MessageInput() {
       }
 
       const replyToId = replyingTo?.id;
-      const tokenized = convertMentionTokens(content.trim(), mentionSelectionsRef.current);
+      const tokenized = convertEmojiShortcodes(
+        convertMentionTokens(content.trim(), mentionSelectionsRef.current),
+        emojiSelectionsRef.current,
+        getMemberEmojiCatalog(),
+        serverId,
+      );
       const success = await sendMessage(tokenized, files, replyToId);
       if (success) {
         resetInputAfterSend();
@@ -198,7 +224,7 @@ function MessageInput() {
       // dismissed it deliberately, and forcing focus would reopen it.
       if (!isTouch) requestAnimationFrame(() => textareaRef.current?.focus());
     }
-  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend, isTouch, selfTimeoutExpiresAt]);
+  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend, isTouch, selfTimeoutExpiresAt, serverId]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -206,7 +232,7 @@ function MessageInput() {
     // (mentionActiveRef) rather than the state (mentionQuery) because the
     // state lags one render behind the popup's actual visibility — see the
     // comment on mentionActiveRef for the full race description.
-    if (mentionActiveRef.current) {
+    if (mentionActiveRef.current || emojiActiveRef.current) {
       if (["Enter", "Tab", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) {
         return;
       }
@@ -271,6 +297,21 @@ function MessageInput() {
       setMentionQuery(null);
     }
 
+    // Custom emoji detection — `:` + 2..32 slug chars right before the
+    // cursor, with the `:` at the start or after whitespace. Takes priority
+    // over a (space-tolerant) mention query so only one popup owns the keys.
+    const emojiMatch = /(^|\s):([a-z0-9_]{2,32})$/.exec(textBeforeCursor);
+    if (emojiMatch) {
+      emojiStartRef.current = emojiMatch.index + emojiMatch[1].length;
+      emojiActiveRef.current = true;
+      setEmojiQuery(emojiMatch[2]);
+      mentionActiveRef.current = false;
+      setMentionQuery(null);
+    } else {
+      emojiActiveRef.current = false;
+      setEmojiQuery(null);
+    }
+
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
@@ -312,8 +353,43 @@ function MessageInput() {
     mentionStartRef.current = -1;
   }
 
-  /** Insert emoji at cursor position */
-  function handleEmojiSelect(emoji: string) {
+  /** Insert the autocompleted `:name:` and remember the pick for send. */
+  const handleEmojiAutocompleteSelect = useCallback(
+    (emoji: CustomEmojiRef) => {
+      const start = emojiStartRef.current;
+      if (start < 0) return;
+      emojiSelectionsRef.current.push(emoji);
+
+      const cursorPos = textareaRef.current?.selectionStart ?? content.length;
+      const insert = `:${emoji.name}: `;
+      setContent(content.slice(0, start) + insert + content.slice(cursorPos));
+      emojiActiveRef.current = false;
+      setEmojiQuery(null);
+      emojiStartRef.current = -1;
+
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          const pos = start + insert.length;
+          textareaRef.current.selectionStart = pos;
+          textareaRef.current.selectionEnd = pos;
+          textareaRef.current.focus();
+        }
+      });
+    },
+    [content],
+  );
+
+  const handleEmojiAutocompleteClose = useCallback(() => {
+    emojiActiveRef.current = false;
+    setEmojiQuery(null);
+    emojiStartRef.current = -1;
+  }, []);
+
+  /** Insert emoji at cursor position (custom picks insert `:name:`) */
+  function handleEmojiSelect(picked: string) {
+    const custom = parseCustomEmojiToken(picked);
+    if (custom) emojiSelectionsRef.current.push(custom);
+    const emoji = custom ? `:${custom.name}:` : picked;
     const cursorPos = textareaRef.current?.selectionStart ?? content.length;
     const newContent = content.slice(0, cursorPos) + emoji + content.slice(cursorPos);
     setContent(newContent);
@@ -329,18 +405,20 @@ function MessageInput() {
     });
   }
 
-  /** Send GIF URL as message content immediately */
-  async function handleGifSelect(url: string) {
+  /**
+   * Send a picker result (GIF URL / sticker token) as the whole message
+   * content immediately. Shared by the GIF and sticker pickers.
+   */
+  async function sendInstant(text: string) {
     if (!channelId) return;
     // Same ref-based guard as handleSend — a fast double-click on a GIF
     // tile used to fire two API requests because the state-based check
     // only saw isSending=false until React flushed the next render.
     if (isSendingRef.current) return;
     isSendingRef.current = true;
-    setShowGifPicker(false);
     setIsSending(true);
     try {
-      const success = await sendMessage(url, [], undefined);
+      const success = await sendMessage(text, [], undefined);
       if (success) {
         setContent("");
         setFiles([]);
@@ -354,6 +432,12 @@ function MessageInput() {
         textareaRef.current?.focus();
       });
     }
+  }
+
+  /** Send GIF URL as message content immediately */
+  function handleGifSelect(url: string) {
+    setShowGifPicker(false);
+    void sendInstant(url);
   }
 
   /** Paste handler — supports pasting images/files from clipboard */
@@ -422,6 +506,16 @@ function MessageInput() {
           serverId={serverId}
           onSelect={handleMentionSelect}
           onClose={handleMentionClose}
+        />
+      )}
+
+      {/* Custom emoji `:shortcode` autocomplete — channel and DM */}
+      {emojiQuery !== null && (
+        <EmojiAutocomplete
+          query={emojiQuery}
+          serverId={serverId}
+          onSelect={handleEmojiAutocompleteSelect}
+          onClose={handleEmojiAutocompleteClose}
         />
       )}
 
@@ -498,6 +592,7 @@ function MessageInput() {
             title={t("emoji")}
             onClick={() => {
               setShowGifPicker(false);
+              setShowStickerPicker(false);
               setShowEmojiPicker((prev) => !prev);
             }}
           >
@@ -513,6 +608,7 @@ function MessageInput() {
               <EmojiPicker
                 onSelect={handleEmojiSelect}
                 onClose={() => setShowEmojiPicker(false)}
+                customEmojis
               />
             </div>
           )}
@@ -525,6 +621,7 @@ function MessageInput() {
             title={t("gif")}
             onClick={() => {
               setShowEmojiPicker(false);
+              setShowStickerPicker(false);
               setShowGifPicker((prev) => !prev);
             }}
           >
@@ -535,6 +632,39 @@ function MessageInput() {
               <GifPicker
                 onSelect={handleGifSelect}
                 onClose={() => setShowGifPicker(false)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Sticker button + picker (Faz D2) */}
+        <div style={{ position: "relative" }}>
+          <button
+            className="input-action-btn"
+            title={t("expressions:stickerButton")}
+            aria-label={t("expressions:stickerButton")}
+            onClick={() => {
+              setShowEmojiPicker(false);
+              setShowGifPicker(false);
+              setShowStickerPicker((prev) => !prev);
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9.5L21 14.5V5a2 2 0 0 0-2-2h-3.5" />
+              <path d="M15 21v-4a2 2 0 0 1 2-2h4" />
+              <path d="M8 13s1.5 2 4 2" />
+              <line x1="9" y1="9" x2="9.01" y2="9" />
+              <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
+          </button>
+          {showStickerPicker && (
+            <div className="input-gif-picker-wrap">
+              <StickerPicker
+                onSelect={(token) => {
+                  setShowStickerPicker(false);
+                  void sendInstant(token);
+                }}
+                onClose={() => setShowStickerPicker(false)}
               />
             </div>
           )}

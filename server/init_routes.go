@@ -226,6 +226,8 @@ func initRoutes(
 	d.registerServerMiscRoutes()
 	d.registerVoiceMusicRoutes()
 	d.registerSoundboardRoutes()
+	d.registerExpressionRoutes()
+	d.registerEntranceRoutes()
 	d.registerWSRoutes()
 
 	return authMw, permMw

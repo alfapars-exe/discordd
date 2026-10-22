@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
-import { useToastStore } from "../../stores/toastStore";
+import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { searchCachedDMMessages } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
 import type { DMMessage } from "../../types";
@@ -149,7 +149,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
     doSearch(query, newOffset);
   }
 
-  const addToast = useToastStore((s) => s.addToast);
+  const { openAtDMMessage } = useOpenAtMessage();
 
   // Live deletion while the panel is open: results are a snapshot, so a
   // WS-deleted message would linger as a dead row. Subscribe to the narrow
@@ -176,28 +176,32 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
     return () => unsubscribe();
   }, []);
 
-  /** Scroll to message on result click. Results are a snapshot — if
-   *  the message has been deleted (other session, peer revocation),
-   *  the scroll target won't be in dmStore anymore. Verify against
-   *  the live store and bail out with a toast + local filter instead
-   *  of silently navigating to a no-longer-existing record. */
-  function handleSelectResult(msg: DMMessage) {
+  /** Scroll to message on result click. Inside the loaded window this is
+   *  a plain scroll; outside it, fetch a window around the message. Results
+   *  are a snapshot — if the message has been deleted (other session, peer
+   *  revocation) the around-fetch resolves false: drop the row. The hook
+   *  already toasted, so no second toast here. */
+  async function handleSelectResult(msg: DMMessage) {
     const live = useDMStore.getState().messagesByChannel[channelId];
-    if (!live?.some((m) => m.id === msg.id)) {
-      addToast("info", t("messageNoLongerExists"));
-      setResults((prev) =>
-        prev
-          ? {
-              ...prev,
-              messages: prev.messages.filter((m) => m.id !== msg.id),
-              totalCount: Math.max(0, prev.totalCount - 1),
-            }
-          : null,
-      );
+    if (live?.some((m) => m.id === msg.id)) {
+      setScrollToMessageId(msg.id);
+      onClose();
       return;
     }
-    setScrollToMessageId(msg.id);
-    onClose();
+    const found = await openAtDMMessage(channelId, msg.id);
+    if (found) {
+      onClose();
+      return;
+    }
+    setResults((prev) =>
+      prev
+        ? {
+            ...prev,
+            messages: prev.messages.filter((m) => m.id !== msg.id),
+            totalCount: Math.max(0, prev.totalCount - 1),
+          }
+        : null,
+    );
   }
 
   /** Format timestamp using the user's chosen i18n language. Passing []
@@ -269,7 +273,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
                 <div
                   key={msg.id}
                   className="search-result-item"
-                  onClick={() => handleSelectResult(msg)}
+                  onClick={() => void handleSelectResult(msg)}
                 >
                   <div className="search-result-header">
                     <Avatar

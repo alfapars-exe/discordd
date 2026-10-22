@@ -31,6 +31,14 @@ type User struct {
 	DisplayName     *string    `json:"display_name"`
 	AvatarURL       *string    `json:"avatar_url"`
 	WallpaperURL    *string    `json:"wallpaper_url"`
+	// Profile fields (migration 085). AvatarURL above always stays a static
+	// image (the poster); AvatarAnimatedURL is the optional animated GIF.
+	// All five are NULL until the user sets them.
+	AvatarAnimatedURL *string `json:"avatar_animated_url"`
+	BannerURL         *string `json:"banner_url"`
+	Bio               *string `json:"bio"`
+	Pronouns          *string `json:"pronouns"`
+	AccentColor       *string `json:"accent_color"`
 	PasswordHash    string     `json:"-"`
 	Status          UserStatus `json:"status"`
 	PrefStatus      UserStatus `json:"pref_status"`

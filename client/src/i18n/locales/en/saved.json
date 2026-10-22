@@ -1,0 +1,21 @@
+{
+  "title": "Saved messages",
+  "empty": "No saved messages yet",
+  "save": "Save",
+  "unsave": "Remove bookmark",
+  "saved": "Saved",
+  "unsaved": "Removed",
+  "limitReached": "You can save up to 500 messages",
+  "notePlaceholder": "Add a note…",
+  "editNote": "Edit note",
+  "jump": "Jump to message",
+  "inChannel": "in #{{channel}} · {{server}}",
+  "inDM": "Direct message",
+  "encrypted": "Encrypted message",
+  "attachments_one": "{{count}} attachment",
+  "attachments_other": "{{count}} attachments",
+  "loadError": "Couldn't load saved messages",
+  "jumpToPresent": "Jump to present",
+  "messageGone": "This message no longer exists",
+  "unavailable": "No longer available"
+}

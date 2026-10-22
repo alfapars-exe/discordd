@@ -6,6 +6,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trendingGifs, searchGifs, type GifResult } from "../../api/gif";
+import { useGifFavorites, MAX_GIF_FAVORITES } from "../../hooks/useGifFavorites";
+import { useToastStore } from "../../stores/toastStore";
+import "../../styles/expressions.css";
 
 type GifPickerProps = {
   onSelect: (url: string) => void;
@@ -19,6 +22,9 @@ function GifPicker({ onSelect, onClose }: GifPickerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const [tab, setTab] = useState<"browse" | "favorites">("browse");
+  const { favorites, isFavorite, toggle } = useGifFavorites();
+  const addToast = useToastStore((s) => s.addToast);
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -114,6 +120,48 @@ function GifPicker({ onSelect, onClose }: GifPickerProps) {
     onClose();
   }
 
+  function handleFavoriteClick(e: React.MouseEvent, gif: GifResult) {
+    e.stopPropagation();
+    if (toggle(gif) === "full") {
+      addToast("warning", t("expressions:favoritesFull", { max: MAX_GIF_FAVORITES }));
+    }
+  }
+
+  function renderGrid(list: GifResult[]) {
+    return (
+      <div className="gif-picker-grid">
+        {list.map((gif) => {
+          const fav = isFavorite(gif.id);
+          return (
+            <div
+              key={gif.id}
+              className="gif-picker-item"
+              onClick={() => handleGifClick(gif)}
+              title={gif.title}
+            >
+              <img
+                src={gif.preview_url}
+                alt={gif.title}
+                loading="lazy"
+                decoding="async"
+              />
+              <button
+                type="button"
+                className="gif-fav-btn"
+                aria-pressed={fav}
+                aria-label={fav ? t("expressions:removeFavorite") : t("expressions:addFavorite")}
+                title={fav ? t("expressions:removeFavorite") : t("expressions:addFavorite")}
+                onClick={(e) => handleFavoriteClick(e, gif)}
+              >
+                {fav ? "★" : "☆"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className={`gif-picker${flipped ? " gif-picker-flipped" : ""}`} ref={pickerRef}>
       {/* Search input */}
@@ -125,35 +173,46 @@ function GifPicker({ onSelect, onClose }: GifPickerProps) {
           placeholder={t("gifSearch")}
           value={query}
           onChange={handleSearchChange}
+          onFocus={() => setTab("browse")}
         />
+        <div className="gif-picker-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            className="gif-picker-tab"
+            aria-selected={tab === "browse"}
+            onClick={() => setTab("browse")}
+          >
+            GIF
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className="gif-picker-tab"
+            aria-selected={tab === "favorites"}
+            onClick={() => setTab("favorites")}
+          >
+            {"★ "}{t("expressions:gifFavorites")}
+          </button>
+        </div>
       </div>
 
       {/* Content */}
       <div className="gif-picker-body">
-        {isUnavailable ? (
+        {tab === "favorites" ? (
+          favorites.length === 0 ? (
+            <div className="gif-picker-empty">{t("expressions:noFavorites")}</div>
+          ) : (
+            renderGrid(favorites)
+          )
+        ) : isUnavailable ? (
           <div className="gif-picker-empty">{t("gifUnavailable")}</div>
         ) : isLoading && results.length === 0 ? (
           <div className="gif-picker-empty">{t("gifLoading")}</div>
         ) : results.length === 0 ? (
           <div className="gif-picker-empty">{t("gifNoResults")}</div>
         ) : (
-          <div className="gif-picker-grid">
-            {results.map((gif) => (
-              <div
-                key={gif.id}
-                className="gif-picker-item"
-                onClick={() => handleGifClick(gif)}
-                title={gif.title}
-              >
-                <img
-                  src={gif.preview_url}
-                  alt={gif.title}
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-            ))}
-          </div>
+          renderGrid(results)
         )}
       </div>
 

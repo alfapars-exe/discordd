@@ -42,6 +42,12 @@ export type MemberWithRoles = {
    *  while online or if never tracked. Drives the "last seen X ago"
    *  label under offline members in the member list. */
   last_seen_at?: string | null;
+  /** Profile fields (Faz F) — same semantics as on User. */
+  avatar_animated_url?: string | null;
+  banner_url?: string | null;
+  bio?: string | null;
+  pronouns?: string | null;
+  accent_color?: string | null;
 };
 
 /** Badge template created by the badge admin. */

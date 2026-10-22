@@ -516,6 +516,11 @@ func dmTypingCallback(hub *ws.Hub, dmRepo repository.DMRepository) ws.DMTypingCa
 		if otherUserID == senderUserID {
 			otherUserID = channel.User2ID
 		}
+		// Self-DM (services/dm_self.go): the only other member is the
+		// sender, who has no use for their own typing indicator.
+		if otherUserID == senderUserID {
+			return
+		}
 		hub.BroadcastToUser(otherUserID, ws.Event{
 			Op: ws.OpDMTypingStart,
 			Data: ws.DMTypingStartData{

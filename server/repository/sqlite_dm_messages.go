@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -58,12 +59,13 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 			LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.dm_channel_id = ?
-			  AND ( m.created_at < (SELECT created_at FROM dm_messages WHERE id = ?)
-			     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ?)
+			  AND ( m.created_at < (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+			     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
 			          AND m.id < ? ) )
 			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT ?`
-		args = []any{channelID, beforeID, beforeID, beforeID, limit}
+		// Channel-scoped cursor subqueries — see sqliteMessageRepo.GetByChannelID.
+		args = []any{channelID, beforeID, channelID, beforeID, channelID, beforeID, limit}
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -89,6 +91,124 @@ func (r *sqliteDMRepo) GetMessages(ctx context.Context, channelID string, before
 		messages = []models.DMMessage{}
 	}
 	return messages, nil
+}
+
+// dmMessageHistorySelect is the column list + joins shared by every DM
+// history query so each scans through scanDMMessageRow — SELECT list and
+// Scan argument list must stay identical.
+const dmMessageHistorySelect = `
+	SELECT m.id, m.dm_channel_id, m.user_id, m.content, m.edited_at, m.created_at,
+	       m.reply_to_id, m.is_pinned,
+	       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+	       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
+	       rm.id, rm.content,
+	       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
+	FROM dm_messages m
+	LEFT JOIN users u ON m.user_id = u.id
+	LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+	LEFT JOIN users ru ON rm.user_id = ru.id`
+
+// dmAnchorExists — channel-scoped anchor check, see
+// sqliteMessageRepo.anchorExists.
+func (r *sqliteDMRepo) dmAnchorExists(ctx context.Context, channelID, anchorID string) error {
+	var createdAt string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?`, anchorID, channelID,
+	).Scan(&createdAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: anchor message not found", pkg.ErrNotFound)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to resolve anchor DM message: %w", err)
+	}
+	return nil
+}
+
+func (r *sqliteDMRepo) queryDMHistory(ctx context.Context, tail string, args ...any) ([]models.DMMessage, error) {
+	rows, err := r.db.QueryContext(ctx, dmMessageHistorySelect+tail, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get DM messages: %w", err)
+	}
+	defer rows.Close()
+
+	messages := []models.DMMessage{}
+	for rows.Next() {
+		msg, err := scanDMMessageRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, *msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating DM messages: %w", err)
+	}
+	return messages, nil
+}
+
+// GetMessagesAround — DM twin of sqliteMessageRepo.GetByChannelIDAround:
+// older half DESC (limit half+1), anchor + newer half ASC (limit half+2),
+// both boolean-expanded (created_at, id) keysets with a channel-scoped
+// anchor subquery; the window is returned ASC.
+func (r *sqliteDMRepo) GetMessagesAround(ctx context.Context, channelID, anchorID string, limit int) ([]models.DMMessage, bool, bool, error) {
+	if err := r.dmAnchorExists(ctx, channelID, anchorID); err != nil {
+		return nil, false, false, err
+	}
+	half := limit / 2
+
+	older, err := r.queryDMHistory(ctx, `
+		WHERE m.dm_channel_id = ?
+		  AND ( m.created_at < (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		          AND m.id < ? ) )
+		ORDER BY m.created_at DESC, m.id DESC
+		LIMIT ?`,
+		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+1)
+	if err != nil {
+		return nil, false, false, err
+	}
+	hasMoreBefore := len(older) > half
+	if hasMoreBefore {
+		older = older[:half]
+	}
+
+	newer, err := r.queryDMHistory(ctx, `
+		WHERE m.dm_channel_id = ?
+		  AND ( m.created_at > (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		          AND m.id >= ? ) )
+		ORDER BY m.created_at ASC, m.id ASC
+		LIMIT ?`,
+		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+2)
+	if err != nil {
+		return nil, false, false, err
+	}
+	hasMoreAfter := len(newer) > half+1
+	if hasMoreAfter {
+		newer = newer[:half+1]
+	}
+
+	out := make([]models.DMMessage, 0, len(older)+len(newer))
+	for i := len(older) - 1; i >= 0; i-- {
+		out = append(out, older[i])
+	}
+	out = append(out, newer...)
+	return out, hasMoreBefore, hasMoreAfter, nil
+}
+
+// GetMessagesAfter — strictly newer than afterID, ASC; the caller passes
+// limit+1 to detect hasMoreAfter.
+func (r *sqliteDMRepo) GetMessagesAfter(ctx context.Context, channelID, afterID string, limit int) ([]models.DMMessage, error) {
+	if err := r.dmAnchorExists(ctx, channelID, afterID); err != nil {
+		return nil, err
+	}
+	return r.queryDMHistory(ctx, `
+		WHERE m.dm_channel_id = ?
+		  AND ( m.created_at > (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		     OR ( m.created_at = (SELECT created_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?)
+		          AND m.id > ? ) )
+		ORDER BY m.created_at ASC, m.id ASC
+		LIMIT ?`,
+		channelID, afterID, channelID, afterID, channelID, afterID, limit)
 }
 
 func (r *sqliteDMRepo) GetMessageByID(ctx context.Context, id string) (*models.DMMessage, error) {
@@ -241,6 +361,11 @@ func (r *sqliteDMRepo) DeleteMessage(ctx context.Context, id string) error {
 	// sqlite_dm_channels.go).
 	if _, err := r.db.ExecContext(ctx, "DELETE FROM dm_attachments WHERE dm_message_id = ?", id); err != nil {
 		return fmt.Errorf("failed to delete DM message attachments: %w", err)
+	}
+	// saved_messages (migration 083): same unenforced cascade, same explicit
+	// delete — see sqliteMessageRepo.Delete.
+	if _, err := r.db.ExecContext(ctx, "DELETE FROM saved_messages WHERE dm_message_id = ?", id); err != nil {
+		return fmt.Errorf("failed to delete saved references to DM message: %w", err)
 	}
 	result, err := r.db.ExecContext(ctx, "DELETE FROM dm_messages WHERE id = ?", id)
 	if err != nil {

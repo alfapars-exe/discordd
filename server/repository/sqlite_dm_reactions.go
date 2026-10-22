@@ -41,6 +41,21 @@ func (r *sqliteDMRepo) ToggleReaction(ctx context.Context, messageID, userID, em
 	return false, nil
 }
 
+// RemoveReaction deletes the user's DM reaction if present — never inserts
+// (see sqliteReactionRepo.RemoveReaction).
+func (r *sqliteDMRepo) RemoveReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	result, err := r.db.ExecContext(ctx,
+		`DELETE FROM dm_reactions WHERE dm_message_id = ? AND user_id = ? AND emoji = ?`, messageID, userID, emoji)
+	if err != nil {
+		return false, fmt.Errorf("remove DM reaction: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("remove DM reaction rows affected: %w", err)
+	}
+	return n > 0, nil
+}
+
 func (r *sqliteDMRepo) GetReactionsByMessageID(ctx context.Context, messageID string) ([]models.ReactionGroup, error) {
 	query := `
 		SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as users

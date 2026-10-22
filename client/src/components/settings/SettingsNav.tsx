@@ -22,6 +22,7 @@ const USER_ITEMS: NavItem[] = [
   { id: "appearance", labelKey: "appearance" },
   { id: "accessibility", labelKey: "accessibility" },
   { id: "voice", labelKey: "voiceSettings" },
+  { id: "entrance", labelKey: "entranceSounds" },
   { id: "security", labelKey: "security" },
   { id: "encryption", labelKey: "encryption" },
   { id: "blocked-users", labelKey: "blockedUsers" },
@@ -36,6 +37,9 @@ const SERVER_ITEMS: NavItem[] = [
   { id: "roles", labelKey: "roles" },
   { id: "members", labelKey: "members" },
   { id: "invites", labelKey: "invites" },
+  { id: "emojis", labelKey: "emojis" },
+  { id: "stickers", labelKey: "stickers" },
+  { id: "entrance-sounds", labelKey: "serverEntranceSounds" },
 ];
 
 /**
@@ -80,7 +84,17 @@ function SettingsNav() {
     hasPermission(perms, Permissions.ManageChannels) ||
     hasPermission(perms, Permissions.ManageRoles) ||
     hasPermission(perms, Permissions.KickMembers) ||
-    hasPermission(perms, Permissions.BanMembers);
+    hasPermission(perms, Permissions.BanMembers) ||
+    hasPermission(perms, Permissions.ManageExpressions);
+
+  // Entrance sounds (Faz E): its own gate. A member holding only
+  // ManageSoundboard / MuteMembers sees the server section with just this item.
+  const canSeeEntranceSounds =
+    hasPermission(perms, Permissions.ManageSoundboard) ||
+    hasPermission(perms, Permissions.MuteMembers);
+  const serverItems = canSeeServerSettings
+    ? SERVER_ITEMS.filter((item) => item.id !== "entrance-sounds" || canSeeEntranceSounds)
+    : SERVER_ITEMS.filter((item) => item.id === "entrance-sounds" && canSeeEntranceSounds);
 
   return (
     <nav className="settings-nav">
@@ -113,11 +127,11 @@ function SettingsNav() {
       )}
 
       {/* Server Settings (permission-gated) */}
-      {canSeeServerSettings && (
+      {serverItems.length > 0 && (
         <>
           {!isMobile && <div className="settings-nav-divider" />}
           <h3 className="settings-nav-label">{t("serverSettings")}</h3>
-          {SERVER_ITEMS.map((item) => (
+          {serverItems.map((item) => (
             <button
               key={item.id}
               className={`settings-nav-item${activeTab === item.id ? " active" : ""}`}

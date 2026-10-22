@@ -2,17 +2,21 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 
 	"github.com/google/uuid"
 )
+
+var friendshipLogger = logx.Component("service.friendship")
 
 type FriendshipService interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
@@ -38,6 +42,7 @@ type FriendRequestsResponse struct {
 type friendshipService struct {
 	friendRepo repository.FriendshipRepository
 	userRepo   repository.UserRepository
+	notifRepo  repository.NotificationRepository
 	hub        ws.Broadcaster
 	dmAcceptor DMRequestAcceptor
 }
@@ -45,11 +50,13 @@ type friendshipService struct {
 func NewFriendshipService(
 	friendRepo repository.FriendshipRepository,
 	userRepo repository.UserRepository,
+	notifRepo repository.NotificationRepository,
 	hub ws.Broadcaster,
 ) FriendshipService {
 	return &friendshipService{
 		friendRepo: friendRepo,
 		userRepo:   userRepo,
+		notifRepo:  notifRepo,
 		hub:        hub,
 	}
 }
@@ -155,6 +162,24 @@ func (s *friendshipService) SendRequest(ctx context.Context, senderID string, re
 		},
 	})
 
+	// Inbox row for the target — best-effort: the request itself already
+	// persisted and was pushed above, so a notifications write failure is
+	// logged, not surfaced. The mutual auto-accept path (acceptExisting)
+	// deliberately writes no inbox row.
+	notif := &models.Notification{
+		UserID:  target.ID,
+		Kind:    models.NotificationKindFriendRequest,
+		ActorID: &sender.ID,
+		Payload: json.RawMessage(fmt.Sprintf(`{"friendship_id":%q}`, friendship.ID)),
+	}
+	if err := s.notifRepo.Create(ctx, notif); err != nil {
+		friendshipLogger.Error("failed to write friend_request notification",
+			"target_id", target.ID, "friendship_id", friendship.ID, "err", pkg.ErrText(err))
+	} else {
+		notif.Actor = models.ToPublicUser(sender)
+		broadcastNotificationCreate(s.hub, notif)
+	}
+
 	return result, nil
 }
 
@@ -193,6 +218,11 @@ func (s *friendshipService) acceptExisting(ctx context.Context, existing *models
 	if s.dmAcceptor != nil {
 		_ = s.dmAcceptor.AcceptPendingChannels(ctx, existing.UserID, acceptorID)
 	}
+
+	// The acceptor was the recipient of the existing request; their inbox
+	// row for it is now stale (best-effort, see settleRequestNotifications).
+	ids, markErr := s.notifRepo.MarkFriendRequestRead(ctx, acceptorID, existing.UserID)
+	settleRequestNotifications(ctx, s.notifRepo, s.hub, acceptorID, ids, markErr)
 
 	return &models.FriendshipWithUser{
 		ID:               existing.ID,
@@ -257,6 +287,11 @@ func (s *friendshipService) AcceptRequest(ctx context.Context, userID, requestID
 		_ = s.dmAcceptor.AcceptPendingChannels(ctx, friendship.UserID, friendship.FriendID)
 	}
 
+	// The recipient just acted on the request; retire their inbox row for
+	// it (best-effort, see settleRequestNotifications).
+	ids, markErr := s.notifRepo.MarkFriendRequestRead(ctx, friendship.FriendID, friendship.UserID)
+	settleRequestNotifications(ctx, s.notifRepo, s.hub, friendship.FriendID, ids, markErr)
+
 	return &models.FriendshipWithUser{
 		ID:               friendship.ID,
 		Status:           models.FriendshipStatusAccepted,
@@ -302,6 +337,12 @@ func (s *friendshipService) DeclineRequest(ctx context.Context, userID, requestI
 			"user_id": userID,
 		},
 	})
+
+	// Whether the recipient declined or the sender cancelled, the
+	// recipient's (FriendID) inbox row for this request is now stale
+	// (best-effort, see settleRequestNotifications).
+	ids, markErr := s.notifRepo.MarkFriendRequestRead(ctx, friendship.FriendID, friendship.UserID)
+	settleRequestNotifications(ctx, s.notifRepo, s.hub, friendship.FriendID, ids, markErr)
 
 	return nil
 }

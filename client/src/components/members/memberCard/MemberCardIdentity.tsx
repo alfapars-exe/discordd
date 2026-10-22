@@ -1,13 +1,15 @@
 /** MemberCardIdentity — top section of the MemberCard popover: header bar,
- *  badge pills, avatar, name + nickname editor, join date, active-timeout
- *  banner and role pills. Also renders the mc-body wrapper; the remaining
- *  card sections (status picker / actions / moderation) come in through
- *  `children` so the DOM structure matches the pre-split markup. */
+ *  badge pills, profile hero (banner / accent + avatar), name + nickname
+ *  editor, join date, pronouns + "About me", active-timeout banner and role
+ *  pills. Also renders the mc-body wrapper; the remaining card sections
+ *  (status picker / actions / moderation) come in through `children` so
+ *  the DOM structure matches the pre-split markup. */
 
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { MemberWithRoles, Role, UserBadge } from "../../../types";
-import Avatar from "../../shared/Avatar";
+import ProfileHero from "./ProfileHero";
+import ProfileAbout from "./ProfileAbout";
 import BadgePill from "../../shared/BadgePill";
 import RoleBadge from "../RoleBadge";
 import { formatFullDateTime, formatRelativeFuture } from "../../../utils/dateFormat";
@@ -17,6 +19,13 @@ type Props = {
   username: string;
   displayName?: string | null;
   avatarUrl?: string | null;
+  animatedUrl?: string | null;
+  bannerUrl?: string | null;
+  accentColor?: string | null;
+  bio?: string | null;
+  pronouns?: string | null;
+  /** Play an animated avatar (the card is an explicitly opened context). */
+  animateAvatar?: boolean;
   customStatus?: string | null;
   userBadges: UserBadge[];
   joinDate: string;
@@ -39,6 +48,12 @@ function MemberCardIdentity({
   username,
   displayName,
   avatarUrl,
+  animatedUrl,
+  bannerUrl,
+  accentColor,
+  bio,
+  pronouns,
+  animateAvatar = false,
   customStatus,
   userBadges,
   joinDate,
@@ -83,17 +98,15 @@ function MemberCardIdentity({
         </div>
       )}
 
-      {/* Avatar area */}
-      <div className="mc-avatar-area">
-        <div className="mc-avatar-ring">
-          <Avatar
-            name={displayName ?? username}
-            avatarUrl={avatarUrl}
-            size={80}
-            isCircle
-          />
-        </div>
-      </div>
+      {/* Profile hero: banner (or accent colour / gradient) + avatar */}
+      <ProfileHero
+        name={displayName ?? username}
+        avatarUrl={avatarUrl}
+        animatedUrl={animatedUrl}
+        bannerUrl={bannerUrl}
+        accentColor={accentColor}
+        animate={animateAvatar}
+      />
 
       {/* Body */}
       <div className="mc-body">
@@ -147,6 +160,8 @@ function MemberCardIdentity({
             <span>{t("joinedAt", { date: joinDate })}</span>
           </div>
         </div>
+
+        <ProfileAbout bio={bio} pronouns={pronouns} />
 
         {/* Active moderator timeout banner — visible to everyone (so
             the target user themselves can see "you're muted until X"

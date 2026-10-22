@@ -111,19 +111,18 @@ func (s *blockService) BlockUser(ctx context.Context, blockerID, targetID string
 		return fmt.Errorf("failed to create block record: %w", err)
 	}
 
-	// Notify both parties
-	s.hub.BroadcastToUser(blockerID, ws.Event{
+	// Notify both parties with the SAME payload: user_id is always the
+	// blocker and blocked_user_id the target, so each client can tell which
+	// side it is on instead of guessing from a single ambiguous user_id.
+	blockEvent := ws.Event{
 		Op: ws.OpUserBlock,
 		Data: map[string]string{
-			"user_id": targetID,
+			"user_id":         blockerID,
+			"blocked_user_id": targetID,
 		},
-	})
-	s.hub.BroadcastToUser(targetID, ws.Event{
-		Op: ws.OpUserBlock,
-		Data: map[string]string{
-			"user_id": blockerID,
-		},
-	})
+	}
+	s.hub.BroadcastToUser(blockerID, blockEvent)
+	s.hub.BroadcastToUser(targetID, blockEvent)
 
 	return nil
 }
@@ -150,7 +149,8 @@ func (s *blockService) UnblockUser(ctx context.Context, blockerID, targetID stri
 	s.hub.BroadcastToUser(blockerID, ws.Event{
 		Op: ws.OpUserUnblock,
 		Data: map[string]string{
-			"user_id": targetID,
+			"user_id":           blockerID,
+			"unblocked_user_id": targetID,
 		},
 	})
 

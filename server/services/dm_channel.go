@@ -33,6 +33,7 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 		return &models.DMChannelWithUser{
 			ID:            existing.ID,
 			OtherUser:     models.ToPublicUser(otherUser),
+			E2EEEnabled:   existing.E2EEEnabled,
 			Status:        existing.Status,
 			InitiatedBy:   existing.InitiatedBy,
 			CreatedAt:     existing.CreatedAt,

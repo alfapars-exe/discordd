@@ -330,6 +330,12 @@ func (h *MemberHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// calls MemberService.UpdateProfile directly and never goes through this
 	// JSON body.
 	req.AvatarURL = nil
+	// Same IsPublicAsset-laundering defence for the migration-085 media
+	// columns. They are already json:"-" on the request type; zeroing them
+	// here keeps the guard independent of that tag.
+	req.AvatarAnimatedURL = nil
+	req.BannerURL = nil
+	req.ClearBanner = false
 
 	member, err := h.memberService.UpdateProfile(r.Context(), user.ID, &req)
 	if err != nil {
@@ -338,4 +344,24 @@ func (h *MemberHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSON(w, http.StatusOK, member)
+}
+
+// GetUserProfile handles GET /api/users/{userId}/profile — the public
+// profile card (models.UserProfile) of any user. Authenticated only, no
+// shared-context requirement: every field is public by design and already
+// visible in member lists (same access model as GET /api/users/{userId}/badges).
+func (h *MemberHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
+	userID := r.PathValue("userId")
+	if userID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "user id is required")
+		return
+	}
+
+	profile, err := h.memberService.GetPublicProfile(r.Context(), userID)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	pkg.JSON(w, http.StatusOK, profile)
 }

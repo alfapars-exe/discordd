@@ -77,12 +77,18 @@ func TestGetOrCreateChannel_ExistingChannel_OtherUserPayloadHasNoPII(t *testing.
 		}, nil
 	}
 	f.repo.GetChannelByUsersFn = func(_ context.Context, _, _ string) (*models.DMChannel, error) {
-		return &models.DMChannel{ID: "ch-existing", User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted}, nil
+		return &models.DMChannel{ID: "ch-existing", User1ID: "alice", User2ID: "bob", Status: models.DMStatusAccepted, E2EEEnabled: true}, nil
 	}
 
 	result, err := f.svc.GetOrCreateChannel(context.Background(), "alice", "bob")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	// The existing-channel branch builds its DMChannelWithUser by hand and
+	// used to drop E2EEEnabled, so a re-opened encrypted DM reported
+	// e2ee_enabled=false until the next list refresh.
+	if !result.E2EEEnabled {
+		t.Errorf("E2EEEnabled = false, want true (existing channel's flag must be copied)")
 	}
 
 	body, err := json.Marshal(result)

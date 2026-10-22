@@ -50,6 +50,22 @@ func (r *sqliteReactionRepo) Toggle(ctx context.Context, messageID, userID, emoj
 	return false, nil
 }
 
+// RemoveReaction deletes the user's reaction if present — never inserts. Used
+// for custom-emoji reactions that can no longer be validated (emoji deleted,
+// user left its server), so they can still be taken back.
+func (r *sqliteReactionRepo) RemoveReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	result, err := r.db.ExecContext(ctx,
+		`DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`, messageID, userID, emoji)
+	if err != nil {
+		return false, fmt.Errorf("remove reaction: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("remove reaction rows affected: %w", err)
+	}
+	return n > 0, nil
+}
+
 func (r *sqliteReactionRepo) GetByMessageID(ctx context.Context, messageID string) ([]models.ReactionGroup, error) {
 	query := `
 		SELECT emoji, COUNT(*) as count, GROUP_CONCAT(user_id) as users

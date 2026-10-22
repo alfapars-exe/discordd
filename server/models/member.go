@@ -38,6 +38,12 @@ type MemberWithRoles struct {
 	// nil for currently-online members or users never yet stamped. Used by
 	// the client to render "last seen X ago" under offline member names.
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+	// Public profile fields (migration 085), copied verbatim from User.
+	AvatarAnimatedURL *string `json:"avatar_animated_url"`
+	BannerURL         *string `json:"banner_url"`
+	Bio               *string `json:"bio"`
+	Pronouns          *string `json:"pronouns"`
+	AccentColor       *string `json:"accent_color"`
 }
 
 // ToMemberWithRoles builds a MemberWithRoles from a User and their roles.
@@ -79,6 +85,11 @@ func ToMemberWithRoles(user *User, roles []Role) MemberWithRoles {
 		Roles:                roles,
 		EffectivePermissions: effectivePerms,
 		LastSeenAt:           lastSeenAt,
+		AvatarAnimatedURL:    user.AvatarAnimatedURL,
+		BannerURL:            user.BannerURL,
+		Bio:                  user.Bio,
+		Pronouns:             user.Pronouns,
+		AccentColor:          user.AccentColor,
 	}
 }
 
@@ -113,6 +124,19 @@ type UpdateProfileRequest struct {
 	CustomStatus *string `json:"custom_status"`
 	Language     *string `json:"language"`
 	DMPrivacy    *string `json:"dm_privacy"`
+	// Bio / Pronouns / AccentColor: nil = no change, "" = clear (NULL).
+	// Validate normalises them in place (see models/profile.go).
+	Bio         *string `json:"bio"`
+	Pronouns    *string `json:"pronouns"`
+	AccentColor *string `json:"accent_color"`
+
+	// Server-internal media fields — never decoded from a request body.
+	// Only handlers/avatar.go sets them, after writing the file itself.
+	// AvatarAnimatedURL is applied only alongside AvatarURL (nil clears
+	// it); ClearBanner wins over BannerURL.
+	AvatarAnimatedURL *string `json:"-"`
+	BannerURL         *string `json:"-"`
+	ClearBanner       bool    `json:"-"`
 }
 
 var allowedLanguages = map[string]bool{
@@ -161,6 +185,27 @@ func (r *UpdateProfileRequest) Validate() error {
 	}
 	if r.DMPrivacy != nil && !allowedDMPrivacy[*r.DMPrivacy] {
 		return fmt.Errorf("unsupported dm_privacy value: %s", *r.DMPrivacy)
+	}
+	if r.Bio != nil {
+		v, err := NormalizeBio(*r.Bio)
+		if err != nil {
+			return err
+		}
+		r.Bio = &v
+	}
+	if r.Pronouns != nil {
+		v, err := NormalizePronouns(*r.Pronouns)
+		if err != nil {
+			return err
+		}
+		r.Pronouns = &v
+	}
+	if r.AccentColor != nil {
+		v, err := NormalizeAccentColor(*r.AccentColor)
+		if err != nil {
+			return err
+		}
+		r.AccentColor = &v
 	}
 	return nil
 }

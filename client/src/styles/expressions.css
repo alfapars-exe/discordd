@@ -1,0 +1,386 @@
+/* expressions.css — Faz D1: custom emojis, markdown-lite, emoji autocomplete,
+   emoji settings, GIF favorites. Uses the global theme tokens only. */
+
+/* ─── Custom emoji ─── */
+.msg-custom-emoji {
+  display: inline-block;
+  width: 1.375em;
+  height: 1.375em;
+  object-fit: contain;
+  vertical-align: -0.3em;
+  margin: 0 0.05em;
+}
+.msg-emoji-jumbo .msg-custom-emoji {
+  width: 48px;
+  height: 48px;
+  vertical-align: middle;
+}
+.msg-reaction-emoji .msg-custom-emoji {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  margin: 0;
+}
+.msg-custom-emoji-fallback {
+  color: var(--t2);
+}
+
+/* ─── Markdown-lite ─── */
+.msg-code-block {
+  display: block;
+  margin: 4px 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--bg-0);
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  white-space: pre;
+}
+.msg-text .msg-code-block code {
+  padding: 0;
+  border: none;
+  background: transparent;
+  white-space: pre;
+}
+.msg-spoiler {
+  background: var(--bg-4);
+  border-radius: 3px;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: background var(--motion-duration) ease;
+}
+.msg-spoiler:not([data-revealed]):hover {
+  background: var(--bg-5);
+}
+.msg-spoiler:not([data-revealed]) > .msg-spoiler-content {
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.msg-spoiler[data-revealed] {
+  background: var(--b2);
+  cursor: auto;
+}
+.msg-spoiler:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* ─── Emoji autocomplete (inherits .mention-popup positioning) ─── */
+.emoji-autocomplete-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.emoji-autocomplete-img .msg-custom-emoji {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  vertical-align: middle;
+}
+.emoji-autocomplete-server {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--t3);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Emoji settings ─── */
+.emoji-settings-counts {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--t2);
+  margin-bottom: 16px;
+}
+.emoji-settings-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+.emoji-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.emoji-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--b1);
+  border-radius: 8px;
+  background: var(--input-bg);
+}
+.emoji-settings-row .msg-custom-emoji {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+}
+.emoji-settings-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.emoji-settings-display {
+  font-size: 14px;
+  color: var(--t0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.emoji-settings-code {
+  font-family: var(--f-m);
+  font-size: 12px;
+  color: var(--t2);
+}
+.emoji-settings-badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--t3);
+  border: 1px solid var(--b2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.emoji-settings-hint {
+  font-size: 12px;
+  color: var(--t3);
+}
+.emoji-settings-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ─── GIF favorites ─── */
+.gif-picker-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.gif-picker-tab {
+  border: none;
+  background: transparent;
+  color: var(--t2);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.gif-picker-tab[aria-selected="true"] {
+  background: var(--bg-h);
+  color: var(--t0);
+}
+.gif-picker-item {
+  position: relative;
+}
+.gif-fav-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--t0);
+  font-size: 14px;
+  line-height: 24px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion-duration) ease;
+}
+.gif-picker-item:hover .gif-fav-btn,
+.gif-fav-btn:focus-visible,
+.gif-fav-btn[aria-pressed="true"] {
+  opacity: 1;
+}
+.gif-fav-btn[aria-pressed="true"] {
+  color: var(--yellow);
+}
+
+/* ─── Stickers (Faz D2) ─── */
+.msg-sticker {
+  display: block;
+  object-fit: contain;
+}
+.msg-sticker-message {
+  max-width: 160px;
+  max-height: 160px;
+  width: auto;
+  height: auto;
+}
+.msg-sticker-picker {
+  width: 100%;
+  height: 100%;
+}
+.msg-sticker-settings {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+.msg-sticker-fallback {
+  color: var(--t2);
+}
+.msg-sticker-btn,
+.msg-custom-emoji-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.msg-sticker-btn {
+  display: block;
+  margin: 2px 0;
+}
+.msg-custom-emoji-btn {
+  display: inline;
+  vertical-align: baseline;
+  line-height: inherit;
+}
+.msg-sticker-btn:focus-visible,
+.msg-custom-emoji-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* Picker (frame + search reuse .gif-picker*) */
+.sticker-picker-group {
+  padding: 6px 10px 2px;
+}
+.sticker-picker-server {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--t3);
+}
+.sticker-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+}
+.sticker-picker-item {
+  aspect-ratio: 1 / 1;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-4);
+  padding: 6px;
+  cursor: pointer;
+  transition: background var(--motion-duration) ease;
+}
+.sticker-picker-item:hover {
+  background: var(--bg-h);
+}
+.sticker-picker-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* Info popover (frame = .inbox-popover via PopoverShell) */
+.expression-popover {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  overflow-y: auto;
+}
+.expression-popover-preview {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expression-popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.expression-popover-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t0);
+  overflow-wrap: anywhere;
+}
+.expression-popover-code {
+  font-family: var(--f-m);
+  font-size: 12px;
+  color: var(--t2);
+  overflow-wrap: anywhere;
+}
+.expression-popover-meta,
+.expression-popover-desc {
+  font-size: 13px;
+  color: var(--t2);
+  overflow-wrap: anywhere;
+}
+.expression-popover-badges {
+  display: flex;
+  gap: 6px;
+}
+.expression-popover-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.expression-popover-tag {
+  font-size: 11px;
+  color: var(--t2);
+  background: var(--bg-4);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.expression-popover-clone {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+/* Settings */
+.sticker-settings-wide {
+  flex-basis: 100%;
+}
+.sticker-settings-tags-error {
+  font-size: 12px;
+  color: var(--red);
+}
+.expression-clone-section {
+  margin-top: 24px;
+}
+.expression-clone-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t0);
+}
+.expression-clone-group {
+  margin-top: 12px;
+}
+.expression-clone-server {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--t3);
+}
+.expression-clone-empty {
+  font-size: 13px;
+  color: var(--t2);
+}

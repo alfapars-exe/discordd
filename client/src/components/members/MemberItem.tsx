@@ -109,6 +109,8 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
   // which preset list + API to fire on selection. Mirrors MemberCard's
   // picker plumbing since this menu bypasses MemberCard entirely.
   const [pickerMode, setPickerMode] = useState<"timeout" | "tempban" | null>(null);
+  // Hovering anywhere on the row plays an animated avatar (Discord-style).
+  const [rowHovered, setRowHovered] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   const roleType = getRoleType(member);
   const displayName = member.display_name ?? member.username;
@@ -369,6 +371,8 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
         ref={itemRef}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        onMouseEnter={() => setRowHovered(true)}
+        onMouseLeave={() => setRowHovered(false)}
         className={`member ${getRowStatusClass(member.status, isOnline)}${!isOnline ? " offline" : ""}`}
       >
         {/* Avatar + status dot */}
@@ -377,6 +381,8 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
             name={member.username}
             role={roleType}
             avatarUrl={member.avatar_url ?? undefined}
+            animatedUrl={member.avatar_animated_url}
+            animate={rowHovered}
             size={32}
           />
           <span className={`member-status ${getStatusClass(member.status)}`} />

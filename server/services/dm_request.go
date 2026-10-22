@@ -39,6 +39,11 @@ func (s *dmService) AcceptRequest(ctx context.Context, userID, channelID string)
 		},
 	})
 
+	// The accepting recipient's dm_request inbox row is now stale
+	// (best-effort, see settleRequestNotifications).
+	ids, markErr := s.notificationRepo.MarkDMRequestRead(ctx, userID, channelID)
+	settleRequestNotifications(ctx, s.notificationRepo, s.hub, userID, ids, markErr)
+
 	return nil
 }
 
@@ -63,6 +68,13 @@ func (s *dmService) DeclineRequest(ctx context.Context, userID, channelID string
 			"dm_channel_id": channelID,
 		},
 	})
+
+	// Retire the recipient's dm_request inbox row BEFORE DeleteChannel
+	// removes every notification on this channel: marking first yields the
+	// ids for the notification_read push, and the unread count it carries
+	// already excludes them (best-effort, see settleRequestNotifications).
+	ids, markErr := s.notificationRepo.MarkDMRequestRead(ctx, userID, channelID)
+	settleRequestNotifications(ctx, s.notificationRepo, s.hub, userID, ids, markErr)
 
 	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
 	// A fetch failure here is logged and non-fatal — the decline still
@@ -104,6 +116,14 @@ func (s *dmService) AcceptPendingChannels(ctx context.Context, userA, userB stri
 			"dm_channel_id": ch.ID,
 		},
 	})
+
+	// Only the non-initiator holds a dm_request row, but InitiatedBy can be
+	// NULL on legacy rows, so settle both sides — the initiator's call
+	// matches nothing and pushes nothing.
+	for _, uid := range []string{u1, u2} {
+		ids, markErr := s.notificationRepo.MarkDMRequestRead(ctx, uid, ch.ID)
+		settleRequestNotifications(ctx, s.notificationRepo, s.hub, uid, ids, markErr)
+	}
 
 	return nil
 }

@@ -61,5 +61,8 @@
   "dmRequestReceived": "{{name}} wants to send you a message",
   "dmRequestAccept": "Accept",
   "dmRequestDecline": "Decline",
-  "dmRequestWaiting": "Waiting for the recipient to accept your message request"
+  "dmRequestWaiting": "Waiting for the recipient to accept your message request",
+
+  "myNotes": "My Notes",
+  "myNotesHint": "Only you can see this"
 }

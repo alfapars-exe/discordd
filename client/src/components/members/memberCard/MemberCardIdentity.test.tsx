@@ -88,3 +88,48 @@ describe("MemberCardIdentity — timeout banner", () => {
     expect(handleRemoveTimeout).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("MemberCardIdentity — profile hero + about (Faz F)", () => {
+  it("renders the banner image when bannerUrl is set", () => {
+    const { container } = render(
+      <MemberCardIdentity {...baseProps({ bannerUrl: "https://cdn.test/banner.png" })} />
+    );
+    const banner = container.querySelector("img.mc-hero-banner");
+    expect(banner?.getAttribute("src")).toBe("https://cdn.test/banner.png");
+  });
+
+  it("falls back to the accent colour without a banner", () => {
+    const { container } = render(<MemberCardIdentity {...baseProps({ accentColor: "#336699" })} />);
+    const hero = container.querySelector(".mc-hero-banner.mc-hero-accent") as HTMLElement | null;
+    expect(hero).not.toBeNull();
+    expect(hero?.style.getPropertyValue("--mc-accent")).toBe("#336699");
+  });
+
+  it("renders pronouns and the bio under the name", () => {
+    render(
+      <MemberCardIdentity {...baseProps({ bio: "Hello there", pronouns: "she/her" })} />
+    );
+    expect(screen.getByText("she/her")).toBeInTheDocument();
+    expect(screen.getByText("profileAboutMe")).toBeInTheDocument();
+    expect(screen.getByText("Hello there")).toBeInTheDocument();
+  });
+
+  it("plays the animated avatar when animateAvatar is set", () => {
+    render(
+      <MemberCardIdentity
+        {...baseProps({
+          avatarUrl: "https://cdn.test/poster.png",
+          animatedUrl: "https://cdn.test/anim.gif",
+          animateAvatar: true,
+        })}
+      />
+    );
+    const avatar = document.querySelector(".mc-avatar-ring img") as HTMLImageElement | null;
+    expect(avatar?.src).toBe("https://cdn.test/anim.gif");
+  });
+
+  it("omits the About me block when there is no bio or pronouns", () => {
+    render(<MemberCardIdentity {...baseProps()} />);
+    expect(screen.queryByText("profileAboutMe")).not.toBeInTheDocument();
+  });
+});

@@ -428,6 +428,15 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		},
 	})
 
+	// Entrance sound (Faz E): only this fresh-join branch reaches here — the
+	// same-channel rejoin (WS reconnect) returned early above, and authorizeJoin
+	// already rejected unauthorized joins, so a reconnect never replays the
+	// sound. MoveUser does not go through JoinChannel, so admin moves don't
+	// trigger it either. Goroutine: the hook does DB work and s.mu is held.
+	if s.entranceHook != nil {
+		go s.entranceHook.OnVoiceJoined(userID, serverID, channelID)
+	}
+
 	// Note: unlike LeaveChannel below, this remaining section does NOT run
 	// with the lock actually released — s.mu.Unlock() was replaced by the
 	// deferred call at the top of this function (safe defer-lock

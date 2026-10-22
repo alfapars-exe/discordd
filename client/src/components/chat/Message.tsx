@@ -14,6 +14,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
+import { useSavedStore } from "../../stores/savedStore";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
 import { formatFullDateTime, formatMessageTime } from "../../utils/dateFormat";
@@ -31,6 +32,7 @@ import {
   getRoleType,
   renderMessageContent,
 } from "../../utils/messageParsers";
+import { plainPreview } from "../../utils/expressionTokens";
 import type { MemberWithRoles, PublicUser } from "../../types";
 import Avatar from "../shared/Avatar";
 import BadgePill from "../shared/BadgePill";
@@ -93,7 +95,14 @@ function Message({
 }: MessageProps) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
+  const { t: tSaved } = useTranslation("saved");
   const currentUser = useAuthStore((s) => s.user);
+  // Bookmark state — channel and DM messages live in separate id indexes.
+  const isSaved = useSavedStore((s) =>
+    mode === "dm" ? !!s.savedDMMessageIds[message.id] : !!s.savedMessageIds[message.id],
+  );
+  const toggleSaved = useSavedStore((s) => s.toggle);
+  const ensureSavedIds = useSavedStore((s) => s.ensureIds);
   // Surface E2EE decryption failures inline so empty bubbles aren't
   // mistaken for blank messages. dmEncryption.ts pushes both failure
   // paths (decrypt throw + missing envelope for this device) into the
@@ -182,6 +191,10 @@ function Message({
     if (message.reply_to_id) setScrollToMessageId(message.reply_to_id);
   }, [message.reply_to_id, setScrollToMessageId]);
 
+  const handleToggleSave = useCallback(() => {
+    void toggleSaved({ kind: mode === "dm" ? "dm" : "message", id: message.id });
+  }, [toggleSaved, mode, message.id]);
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       const items: ContextMenuItem[] = [];
@@ -194,6 +207,13 @@ function Message({
         onClick: () => {
           if (message.content) copyToClipboard(message.content);
         },
+      });
+      // Bookmark. The id index is normally warmed by the sidebar header;
+      // this keeps the label right when that button never mounted.
+      void ensureSavedIds();
+      items.push({
+        label: isSaved ? tSaved("unsave") : tSaved("save"),
+        onClick: handleToggleSave,
       });
 
       // Pin/unpin requires manage permission
@@ -232,7 +252,7 @@ function Message({
 
       openMenu(e, items);
     },
-    [t, handleReply, message.content, message.id, canManageMessages, isOwner, isPinned, handlePinToggle, handleDelete, startEdit, openMenu],
+    [t, tSaved, handleReply, message.content, message.id, canManageMessages, isOwner, isPinned, isSaved, handlePinToggle, handleToggleSave, ensureSavedIds, handleDelete, startEdit, openMenu],
   );
 
   // Long-press → bottom-sheet on mobile (in lieu of context menu)
@@ -312,7 +332,7 @@ function Message({
                       message.referenced_message.author.username}
                   </span>
                   <span className="msg-reply-content">
-                    {message.referenced_message.content ?? t("noContent")}
+                    {plainPreview(message.referenced_message.content) || t("noContent")}
                   </span>
                 </>
               ) : (
@@ -437,6 +457,8 @@ function Message({
           onCopy={() => {
             if (message.content) copyToClipboard(message.content);
           }}
+          onSaveToggle={handleToggleSave}
+          isSaved={isSaved}
           canManageMessages={canManageMessages}
           isPinned={isPinned}
         />

@@ -61,6 +61,9 @@ type channelService struct {
 	visChecker    ChannelVisibilityChecker
 	voiceProvider UserVoiceChannelProvider
 	auditLogger   AuditWriter
+	// notificationRepo is only used for the best-effort inbox cleanup in
+	// Delete (notifications.channel_id has no enforced FK on Turso).
+	notificationRepo repository.NotificationRepository
 	// uploadDir enables best-effort disk cleanup on channel delete (see
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
 	// wired in init_services.go so the constructor signature below stays
@@ -92,14 +95,16 @@ func NewChannelService(
 	visChecker ChannelVisibilityChecker,
 	voiceProvider UserVoiceChannelProvider,
 	auditLogger AuditWriter,
+	notificationRepo repository.NotificationRepository,
 ) ChannelService {
 	return &channelService{
-		channelRepo:   channelRepo,
-		categoryRepo:  categoryRepo,
-		hub:           hub,
-		visChecker:    visChecker,
-		voiceProvider: voiceProvider,
-		auditLogger:   auditLogger,
+		channelRepo:      channelRepo,
+		categoryRepo:     categoryRepo,
+		hub:              hub,
+		visChecker:       visChecker,
+		voiceProvider:    voiceProvider,
+		auditLogger:      auditLogger,
+		notificationRepo: notificationRepo,
 	}
 }
 
@@ -359,6 +364,13 @@ func (s *channelService) Delete(ctx context.Context, serverID, actorID, id strin
 
 	if err := s.channelRepo.Delete(ctx, id); err != nil {
 		return err
+	}
+
+	// Best-effort: mention/reply inbox rows scoped to this channel would
+	// otherwise deep-link into a deleted channel. Logged, never fatal —
+	// the channel delete above already committed.
+	if err := s.notificationRepo.DeleteByChannelID(ctx, id); err != nil {
+		channelLogger.Error("failed to delete notifications for channel", "channel_id", id, "err", pkg.ErrText(err))
 	}
 
 	// Only remove files once the DB delete has actually committed — see

@@ -10,6 +10,7 @@ import { useMobileStore } from "../../stores/mobileStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useFriendStore } from "../../stores/friendStore";
 import { useBlockStore } from "../../stores/blockStore";
+import { usePresenceStore, presenceDotColor } from "../../stores/presenceStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useToastStore } from "../../stores/toastStore";
@@ -17,6 +18,7 @@ import { copyToClipboard } from "../../utils/constants";
 import Avatar from "../shared/Avatar";
 import ContextMenu from "../shared/ContextMenu";
 import DMMuteDurationPicker from "../dm/DMMuteDurationPicker";
+import SelfNotesRow from "../dm/SelfNotesRow";
 import ReportModal from "../shared/ReportModal";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import { useConfirm } from "../../hooks/useConfirm";
@@ -58,6 +60,9 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   const isBlocked = useBlockStore((s) => s.isBlocked);
   const blockUser = useBlockStore((s) => s.blockUser);
   const unblockUser = useBlockStore((s) => s.unblockUser);
+  // Live overlay from presence_update; falls back to the status the DM list
+  // was fetched with (DM partners are not always in a cached server roster).
+  const presence = usePresenceStore((s) => s.statusByUserId);
   const initiateCall = useP2PCallStore((s) => s.initiateCall);
 
   const { menuState, openMenu, closeMenu } = useContextMenu();
@@ -75,7 +80,10 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   const isExpanded = expandedSections["dms"] ?? true;
   const [requestsExpanded, setRequestsExpanded] = useState(false);
 
-  const acceptedChannels = dmChannels.filter((dm) => dm.status !== "pending");
+  // The self-DM ("My Notes") has its own pinned row — keep it out of the list.
+  const acceptedChannels = dmChannels.filter(
+    (dm) => dm.status !== "pending" && dm.other_user.id !== currentUserId
+  );
   const pendingChannels = dmChannels.filter(
     (dm) => dm.status === "pending" && dm.initiated_by !== currentUserId
   );
@@ -236,6 +244,7 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
 
         {isExpanded && (
           <div className="ch-tree-section-body">
+            <SelfNotesRow onOpen={handleDMClick} />
             {/* ── Message Requests (collapsible, default collapsed) ── */}
             {pendingChannels.length > 0 && (
               <div className="ch-tree-dm-requests">
@@ -273,6 +282,7 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
                 const isActive = dm.id === selectedDMId;
                 const unread = dmUnreadCounts[dm.id] ?? 0;
                 const name = dm.other_user.display_name || dm.other_user.username;
+                const status = presence[dm.other_user.id] ?? dm.other_user.status;
 
                 return (
                   <button
@@ -288,6 +298,13 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
                       isCircle
                     />
                     <span className="ch-tree-label">{name}</span>
+                    {dm.status === "accepted" && (
+                      <span
+                        className="ch-tree-vu-dot"
+                        style={{ background: presenceDotColor(status) }}
+                        aria-label={t(status)}
+                      />
+                    )}
                     <span className="ch-tree-dm-indicators">
                       {dm.is_pinned && (
                         <svg className="ch-tree-dm-pin-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="currentColor" strokeWidth={2} aria-label={tDM("pinConversation")}>

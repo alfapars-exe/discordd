@@ -10,6 +10,7 @@ import { useDMStore } from "../../stores/dmStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { useChannelStore } from "../../stores/channelStore";
 import Avatar from "../shared/Avatar";
+import HeaderInboxButtons from "../inbox/HeaderInboxButtons";
 import { publicAsset } from "../../utils/constants";
 
 function CollapsedSidebar() {
@@ -61,6 +62,9 @@ function CollapsedSidebar() {
           <span className="sb-collapsed-badge">{totalDMUnread}</span>
         )}
       </button>
+
+      {/* Inbox + notifications — popovers open to the right of the rail */}
+      <HeaderInboxButtons variant="rail" />
 
       {/* Spacer */}
       <div className="sb-collapsed-spacer" />

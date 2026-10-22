@@ -17,6 +17,11 @@
 //   - Picks files matching the avatar / icon / wallpaper naming convention
 //     (suffix-based — see avatarSuffixRe). Other files are ignored, so
 //     accidentally pointing it at /data won't touch attachments.
+//   - Two more skips protect the profile media (migration 085):
+//     profile banners ("<hex>_banner.<ext>", 1200×480 by design) are never
+//     touched — ResizeAvatarBytes would crush them to 256 px — and a .gif
+//     with two or more frames (handlers.ScanGIF) is left alone, because
+//     ResizeAvatarBytes would flatten an animated avatar to its first frame.
 //   - For each match: decodes, ResizeAvatarBytes, atomic rename. Source is
 //     kept on a `.bak` sidecar by default (--in-place to skip the backup).
 //   - DB rows do not change. The avatar URL in the DB still references the
@@ -34,14 +39,17 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/argeinfina/hichat/handlers"
 )
@@ -57,6 +65,9 @@ import (
 // pattern, to avoid trampling on regular message attachments stored in the
 // same directory (which also live in UPLOAD_DIR).
 var avatarSuffixRe = regexp.MustCompile(`(?i)^[0-9a-f]{16}_.+\.(jpe?g|png|gif|webp)$`)
+
+// bannerMarker is the fixed name part processUpload gives profile banners.
+const bannerMarker = "_banner."
 
 func main() {
 	dir := flag.String("dir", defaultUploadDir(), "uploads directory to walk")
@@ -104,7 +115,7 @@ func main() {
 			}
 			stats.seen++
 			name := d.Name()
-			if !avatarSuffixRe.MatchString(name) {
+			if !avatarSuffixRe.MatchString(name) || strings.Contains(name, bannerMarker) {
 				stats.skipped++
 				return nil
 			}
@@ -130,6 +141,16 @@ func main() {
 			if err != nil {
 				log.Printf("[resize] open %s: %v", name, err)
 				stats.errors++
+				return nil
+			}
+			if animated, err := isAnimatedGIF(in, name); err != nil || animated {
+				_ = in.Close() // read-side handle — nothing buffered to flush, safe to ignore
+				if err != nil {
+					log.Printf("[resize] scan %s: %v", name, err)
+					stats.errors++
+				} else {
+					stats.skipped++
+				}
 				return nil
 			}
 			resized, ext, err := handlers.ResizeAvatarBytes(in)
@@ -200,6 +221,26 @@ func main() {
 
 	log.Printf("[resize] done — seen=%d resized=%d kept=%d skipped=%d errors=%d saved=%s",
 		stats.seen, stats.resized, stats.kept, stats.skipped, stats.errors, humanBytes(stats.savedBytes))
+}
+
+// isAnimatedGIF reports whether a .gif file has two or more frames, using
+// the upload pipeline's allocation-free block scanner, and rewinds f so the
+// caller can decode it from byte 0. Non-.gif names return false untouched.
+func isAnimatedGIF(f *os.File, name string) (bool, error) {
+	if !strings.EqualFold(filepath.Ext(name), ".gif") {
+		return false, nil
+	}
+	frames, _, _, err := handlers.ScanGIF(f, 2)
+	if errors.Is(err, handlers.ErrTooManyFrames) {
+		return true, nil // stopped early: more than 2 frames
+	}
+	if err != nil {
+		return false, err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	return frames >= 2, nil
 }
 
 func deltaNote(oldName, newName string) string {

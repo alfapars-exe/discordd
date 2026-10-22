@@ -1,11 +1,20 @@
 /** Avatar — Role-based gradient avatar with image or initial fallback. */
 
+import { useState } from "react";
 import { resolveAssetUrl } from "../../utils/constants";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 type AvatarProps = {
   name: string;
   role?: "admin" | "mod" | null;
   avatarUrl?: string | null;
+  /** Optional animated GIF. `avatarUrl` is always the static poster; the
+   *  animated file is only requested while the avatar is playing. */
+  animatedUrl?: string | null;
+  /** Parent-driven play signal (e.g. the whole member row is hovered, or the
+   *  profile card is open). Plays regardless of the viewer's mode. */
+  animate?: boolean;
   size?: number;
   isCircle?: boolean;
   /** True when the consumer renders the name next to the avatar. Lighthouse
@@ -27,14 +36,32 @@ function getGradientClass(role?: "admin" | "mod" | null): string {
   }
 }
 
-function Avatar({ name, role, avatarUrl, size = 30, isCircle = true, hasAdjacentLabel = true }: AvatarProps) {
+function Avatar({
+  name,
+  role,
+  avatarUrl,
+  animatedUrl,
+  animate = false,
+  size = 30,
+  isCircle = true,
+  hasAdjacentLabel = true,
+}: AvatarProps) {
   const roundClass = isCircle ? "avatar avatar-round" : "avatar";
   const fontSize = size * 0.37;
+  const mode = useSettingsStore((s) => s.avatarAnimation);
+  const reduceMotion = useReducedMotion();
+  const [hovered, setHovered] = useState(false);
 
   if (avatarUrl) {
+    // Autoplay ("always") is suppressed under Reduce Motion; hover and the
+    // parent `animate` signal are treated as user intent and still play
+    // (callers that open a context on their own gate `animate` themselves).
+    const autoplay = mode === "always" && !reduceMotion;
+    const playing = !!animatedUrl && (animate || hovered || autoplay);
+    const src = playing && animatedUrl ? animatedUrl : avatarUrl;
     return (
       <img
-        src={resolveAssetUrl(avatarUrl)}
+        src={resolveAssetUrl(src)}
         alt={hasAdjacentLabel ? "" : name}
         // role="presentation" reinforces empty alt for older assistive tech
         // when the adjacent label is the canonical announcement.
@@ -43,6 +70,9 @@ function Avatar({ name, role, avatarUrl, size = 30, isCircle = true, hasAdjacent
         decoding="async"
         className={roundClass}
         style={{ width: size, height: size, objectFit: "cover" }}
+        {...(animatedUrl
+          ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
+          : {})}
       />
     );
   }

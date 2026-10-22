@@ -8,6 +8,7 @@
 import { useTranslation } from "react-i18next";
 import { useUIStore } from "../../stores/uiStore";
 import { useMobileStore } from "../../stores/mobileStore";
+import HeaderInboxButtons from "../inbox/HeaderInboxButtons";
 
 function MobileHeader() {
   const { t } = useTranslation("common");
@@ -34,6 +35,9 @@ function MobileHeader() {
       case "dm": return "@";
       case "friends": return "\uD83D\uDC65";
       case "p2p": return "\uD83D\uDCDE";
+      case "inbox": return "\uD83D\uDCE5";
+      case "notifications": return "\uD83D\uDD14";
+      case "saved": return "\uD83D\uDD16";
       default: return "#";
     }
   }
@@ -56,6 +60,9 @@ function MobileHeader() {
         <span className="mobile-header-hash">{getTabIcon()}</span>
         <span>{activeTab?.label ?? t("channels")}</span>
       </div>
+
+      {/* Inbox + notifications — full-width sheet under the header */}
+      <HeaderInboxButtons variant="mobile" />
 
       {/* Members drawer toggle */}
       <button

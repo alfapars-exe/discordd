@@ -32,10 +32,10 @@ import (
 	"strings"
 
 	"golang.org/x/image/draw"
-	// Blank imports register decoders with the image package. We never call
-	// gif.* or webp.* directly — image.Decode picks them up via init() — but
-	// without these the decoder for animated avatars or webp uploads
-	// disappears.
+	// Blank imports register decoders with the image package. image.Decode
+	// picks them up via init() — without these the gif / webp decoders
+	// disappear from every static path below. (image_gif.go additionally
+	// calls gif.DecodeAll directly for the animated-avatar branch.)
 	_ "golang.org/x/image/webp"
 	_ "image/gif"
 )
@@ -148,17 +148,23 @@ func ResizeAvatarBytes(src io.ReadSeeker) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	hasAlpha := imageHasAlpha(resized)
+	return encodeStatic(resized)
+}
 
+// encodeStatic re-encodes img as PNG when any pixel is translucent and as
+// JPEG (quality jpegQuality) otherwise, returning the bytes and the matching
+// on-disk extension (".png" or ".jpg"). Shared by the avatar, poster and
+// banner paths so every static file written to disk is encoder output.
+func encodeStatic(img image.Image) ([]byte, string, error) {
 	var buf bytes.Buffer
-	if hasAlpha {
-		if err := png.Encode(&buf, resized); err != nil {
+	if imageHasAlpha(img) {
+		if err := png.Encode(&buf, img); err != nil {
 			return nil, "", fmt.Errorf("encode png: %w", err)
 		}
 		return buf.Bytes(), ".png", nil
 	}
 
-	if err := jpeg.Encode(&buf, resized, &jpeg.Options{Quality: jpegQuality}); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: jpegQuality}); err != nil {
 		return nil, "", fmt.Errorf("encode jpeg: %w", err)
 	}
 	return buf.Bytes(), ".jpg", nil
@@ -188,6 +194,56 @@ func scaleToFit(img image.Image, maxDim int) image.Image {
 
 	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
 	draw.CatmullRom.Scale(dst, dst.Rect, img, b, draw.Over, nil)
+	return dst
+}
+
+// centerCropAspect returns the largest rectangle with aspect ratio aw:ah
+// centred inside b ("cover" crop). Each edge is at least 1 px so a
+// degenerate source never yields an empty rectangle.
+func centerCropAspect(b image.Rectangle, aw, ah int) image.Rectangle {
+	w, h := b.Dx(), b.Dy()
+	cropW, cropH := w, h
+	if w*ah > h*aw {
+		// Too wide: keep full height, trim the sides.
+		cropW = h * aw / ah
+	} else {
+		// Too tall (or exact): keep full width, trim top and bottom.
+		cropH = w * ah / aw
+	}
+	cropW = max(cropW, 1)
+	cropH = max(cropH, 1)
+	x0 := b.Min.X + (w-cropW)/2
+	y0 := b.Min.Y + (h-cropH)/2
+	return image.Rect(x0, y0, x0+cropW, y0+cropH)
+}
+
+// centerCropSquare is centerCropAspect for a 1:1 crop of side min(W, H).
+func centerCropSquare(b image.Rectangle) image.Rectangle {
+	return centerCropAspect(b, 1, 1)
+}
+
+// cropScale copies the region r of src into a fresh RGBA image, scaled down
+// with scaler so its longest edge is at most maxDim (never scaled up). The
+// result always starts at (0,0) and owns its pixels, so callers may keep it
+// after src is mutated.
+func cropScale(src image.Image, r image.Rectangle, maxDim int, scaler draw.Scaler) *image.RGBA {
+	srcW, srcH := r.Dx(), r.Dy()
+	dstW, dstH := srcW, srcH
+	if srcW > maxDim || srcH > maxDim {
+		if srcW >= srcH {
+			dstW = maxDim
+			dstH = max((srcH*maxDim+srcW/2)/srcW, 1)
+		} else {
+			dstH = maxDim
+			dstW = max((srcW*maxDim+srcH/2)/srcH, 1)
+		}
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	if dstW == srcW && dstH == srcH {
+		draw.Draw(dst, dst.Rect, src, r.Min, draw.Src)
+		return dst
+	}
+	scaler.Scale(dst, dst.Rect, src, r, draw.Src, nil)
 	return dst
 }
 

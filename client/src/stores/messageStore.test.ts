@@ -22,6 +22,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("../api/messages", () => ({
   getMessages: vi.fn(),
+  getMessagesAround: vi.fn(),
+  getMessagesAfter: vi.fn(),
   sendMessage: vi.fn(),
   sendEncryptedMessage: vi.fn(),
   editMessage: vi.fn(),
@@ -68,6 +70,8 @@ import { decryptChannelMessages } from "../crypto/channelEncryption";
 import type { APIResponse, Message, MessagePage } from "../types";
 
 const getMessages = vi.mocked(messageApi.getMessages);
+const getMessagesAround = vi.mocked(messageApi.getMessagesAround);
+const getMessagesAfter = vi.mocked(messageApi.getMessagesAfter);
 const sendMessage = vi.mocked(messageApi.sendMessage);
 const decryptMock = vi.mocked(decryptChannelMessages);
 
@@ -111,6 +115,7 @@ function resetStore() {
   useMessageStore.setState({
     messagesByChannel: {},
     hasMoreByChannel: {},
+    hasMoreAfterByChannel: {},
     isLoadingByChannel: {},
     isLoadingMore: false,
     typingUsers: {},
@@ -123,6 +128,8 @@ function resetStore() {
 beforeEach(() => {
   resetStore();
   getMessages.mockReset();
+  getMessagesAround.mockReset();
+  getMessagesAfter.mockReset();
   sendMessage.mockReset();
   decryptMock.mockReset();
   decryptMock.mockImplementation(async (msgs) => msgs as Message[]);
@@ -351,5 +358,107 @@ describe("messageStore — sendMessage inserts the POST body", () => {
     const okSend = await useMessageStore.getState().sendMessage("ch-1", "hello");
     expect(okSend).toBe(false);
     expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+  });
+});
+
+function aroundPage(
+  messages: Message[],
+  hasMore: boolean,
+  hasMoreAfter: boolean
+): APIResponse<MessagePage> {
+  return { success: true, data: { messages, has_more: hasMore, has_more_after: hasMoreAfter } };
+}
+
+/** Put ch-1 into a jumped-to window [old-1, target, old-3] with newer messages after it. */
+async function jumpIntoPast() {
+  getMessagesAround.mockResolvedValueOnce(
+    aroundPage([makeMessage("old-1"), makeMessage("target"), makeMessage("old-3")], true, true)
+  );
+  const found = await useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target");
+  expect(found).toBe(true);
+}
+
+describe("messageStore — fetchAroundMessage vs mount-time fetchMessages race", () => {
+  it("a fetchMessages call during the jump is skipped; the around window wins", async () => {
+    const around = deferred<APIResponse<MessagePage>>();
+    getMessagesAround.mockReturnValueOnce(around.promise);
+
+    const jumping = useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target");
+    // MessageList mounts on the freshly opened tab and asks for the tail.
+    await useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    expect(getMessages).not.toHaveBeenCalled();
+
+    around.resolve(aroundPage([makeMessage("a-1"), makeMessage("target")], true, true));
+    expect(await jumping).toBe(true);
+
+    const s = useMessageStore.getState();
+    expect(s.messagesByChannel["ch-1"].map((m) => m.id)).toEqual(["a-1", "target"]);
+    expect(s.hasMoreAfterByChannel["ch-1"]).toBe(true);
+    expect(s.isLoadingByChannel["ch-1"]).toBe(false);
+
+    // Still skipped afterwards — the window is marked fetched.
+    await useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it("releases the claim when the target is gone and loads the tail instead", async () => {
+    getMessagesAround.mockResolvedValueOnce({ success: false, status: 404, error: "not found" });
+    getMessages.mockResolvedValueOnce(ok([makeMessage("tail-1")]));
+
+    const found = await useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "gone");
+    expect(found).toBe(false);
+    await vi.waitFor(() =>
+      expect(useMessageStore.getState().messagesByChannel["ch-1"]?.map((m) => m.id)).toEqual(["tail-1"])
+    );
+    expect(getMessages).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("messageStore — leaving a jumped-to window", () => {
+  it("sending while detached returns to the present and shows the sender's own message", async () => {
+    await jumpIntoPast();
+
+    const tail = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(tail.promise);
+    const created = makeMessage("mine");
+    sendMessage.mockResolvedValueOnce({ success: true, data: created });
+
+    const okSend = await useMessageStore.getState().sendMessage("ch-1", "hello", undefined, undefined, "srv-1");
+    expect(okSend).toBe(true);
+    expect(useMessageStore.getState().hasMoreAfterByChannel["ch-1"]).toBe(false);
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    // The tail refetch (issued before the POST) doesn't contain it — the
+    // WS-buffer merge must keep it.
+    tail.resolve(ok([makeMessage("t-1"), makeMessage("t-2")]));
+    await vi.waitFor(() =>
+      expect(useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)).toEqual([
+        "t-1", "t-2", "mine",
+      ])
+    );
+  });
+
+  it("holds live messages while detached and merges them when forward paging hits the tail", async () => {
+    await jumpIntoPast();
+
+    // Two live messages while looking at the past: not appended to the window.
+    useMessageStore.getState().handleMessageCreate(makeMessage("live-1"));
+    useMessageStore.getState().handleMessageCreate(makeMessage("live-2"));
+    expect(useMessageStore.getState().messagesByChannel["ch-1"].map((m) => m.id)).toEqual([
+      "old-1", "target", "old-3",
+    ]);
+
+    // Last forward page: includes live-1 (already persisted) but not live-2.
+    getMessagesAfter.mockResolvedValueOnce(
+      aroundPage([makeMessage("new-1"), makeMessage("live-1")], false, false)
+    );
+    await useMessageStore.getState().fetchNewerMessages("ch-1", "srv-1");
+
+    const s = useMessageStore.getState();
+    expect(getMessagesAfter).toHaveBeenCalledWith("srv-1", "ch-1", "old-3", expect.any(Number));
+    expect(s.hasMoreAfterByChannel["ch-1"]).toBe(false);
+    expect(s.messagesByChannel["ch-1"].map((m) => m.id)).toEqual([
+      "old-1", "target", "old-3", "new-1", "live-1", "live-2",
+    ]);
   });
 });

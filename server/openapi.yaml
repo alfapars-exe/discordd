@@ -67,6 +67,22 @@ tags:
     description: Registration, login, session refresh/logout, password reset, WS ticket issuance.
   - name: Users
     description: The caller's own profile, avatar, wallpaper, preferences, and onboarding-prompt state.
+  - name: Notifications
+    description: >-
+      The caller's persistent inbox (mention / reply / friend_request /
+      dm_request rows, 90-day retention). Read and acknowledge only — rows
+      are written server-side by the message, DM and friendship flows and
+      pushed live as the `notification_create` WebSocket event.
+  - name: Saved
+    description: >-
+      The caller's private bookmarks of channel or DM messages
+      (saved_messages, migration 083) with an optional plaintext note.
+      Saving requires current read access to the message; listing re-checks
+      channel permissions and drops rows the caller can no longer read.
+  - name: UserNotes
+    description: >-
+      The caller's private note about another user (user_notes, migration
+      084). Owner-scoped: the target never sees it.
   - name: Servers
     description: Server (guild) lifecycle, membership, server-level mute, icon, and LiveKit settings.
   - name: DMs
@@ -113,6 +129,17 @@ tags:
     description: Per-channel YouTube-to-LiveKit music bot (play/skip/pause/resume/stop/state).
   - name: Soundboard
     description: Per-server soundboard clip CRUD and playback.
+  - name: Expressions
+    description: >-
+      Per-server custom emojis and stickers (static PNG + optional animated
+      GIF), and copying copyable ones between servers.
+  - name: EntranceSounds
+    description: >-
+      Voice-channel entrance sounds — a user's uploaded PCM WAV clips and
+      parametric presets, per-scope selection, and the server-side controls
+      (on/off, max duration, per-channel switch, moderator mute). Playback is
+      server-triggered on a fresh voice join (WS entrance_sound_play to the
+      channel's participants only); there is no play endpoint.
   - name: Friends
     description: Friend requests and the friends roster.
   - name: Blocks
@@ -172,9 +199,10 @@ x-permissions:
     PermManageSoundboard: 131072
     PermTimeoutMembers: 262144
     PermManageNicknames: 524288
-  PermAll: 1048575
+    PermManageExpressions: 1048576
+  PermAll: 2097151
   PermAllNote: >-
-    Sum of every bit above — (1 << 20) - 1. Distinct from the boolean
+    Sum of every bit above — (1 << 21) - 1. Distinct from the boolean
     models.User.IsPlatformAdmin used by authAdmin routes (see x-platform-admin),
     which is a platform-wide flag, not a bit in this server-scoped field.
 security:
@@ -393,12 +421,30 @@ paths:
     post:
       operationId: usersUploadAvatar
       summary: Upload the caller's avatar image.
+      description: >-
+        Multipart field "file", at most 8 MiB. avatar_url is always a static
+        PNG/JPEG (longest edge 256 px). A GIF with two or more frames also
+        produces avatar_animated_url (128×128 GIF, at most 100 frames, 1 MP
+        logical screen, 40 MP total); any other upload clears it. Animated
+        WebP is rejected with 400. Responds with MemberWithRoles and
+        broadcasts member_update.
       tags: [Users]
       requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+        '503':
+          description: >-
+            The animated-avatar processing slot was busy (or processing hit
+            its 10 s deadline). Retry after the Retry-After header (5 s).
+          headers:
+            Retry-After:
+              schema: { type: integer, example: 5 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /api/users/me/wallpaper:
     post:
       operationId: usersUploadWallpaper
@@ -416,6 +462,32 @@ paths:
       responses:
         '204': { $ref: '#/components/responses/StubNoContent' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/banner:
+    post:
+      operationId: usersUploadBanner
+      summary: Upload the caller's profile banner image.
+      description: >-
+        Multipart field "file", at most 8 MiB. Static only (an animated GIF
+        contributes its first frame, an APNG its default image; animated
+        WebP is rejected with 400). Centre-cropped to 5:2 and scaled down to
+        at most 1200×480, stored as PNG (translucent) or JPEG. Broadcasts
+        member_update.
+      tags: [Users]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '200': { $ref: '#/components/responses/MemberWithRolesOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+    delete:
+      operationId: usersDeleteBanner
+      summary: Remove the caller's profile banner.
+      description: Sets banner_url to null, deletes the file and broadcasts member_update.
+      tags: [Users]
+      responses:
+        '200': { $ref: '#/components/responses/MemberWithRolesOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
   /api/users/me/preferences:
     get:
       operationId: usersGetPreferences
@@ -453,6 +525,199 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Notifications (inbox) ──
+  /api/users/me/notifications:
+    get:
+      operationId: notificationsList
+      summary: List the caller's inbox, newest first, with keyset pagination.
+      description: >-
+        `before` is the id of the oldest notification already loaded (keyset
+        cursor on created_at DESC, id DESC); an unknown cursor yields an empty
+        page. `limit` is clamped to 1..50 (default 20). `unread_only=1` (or
+        `true`) restricts to rows with `read_at` null.
+      tags: [Notifications]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          schema: { type: string }
+        - name: unread_only
+          in: query
+          required: false
+          schema: { type: string, enum: ["1", "true"] }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200': { $ref: '#/components/responses/NotificationPageOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/notifications/count:
+    get:
+      operationId: notificationsCount
+      summary: Unread notification count for the badge.
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/NotificationCountOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/notifications/read-all:
+    post:
+      operationId: notificationsReadAll
+      summary: Mark every unread notification as read.
+      description: >-
+        Also pushes `notification_read` (`all: true`, `unread_count: 0`) to the caller's own sessions.
+      tags: [Notifications]
+      responses:
+        '200': { $ref: '#/components/responses/NotificationsMarkedOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/notifications/{id}/read:
+    post:
+      operationId: notificationsRead
+      summary: Mark one notification as read (idempotent).
+      description: >-
+        404 covers both "no such notification" and "not yours" — the two are
+        deliberately indistinguishable so ids cannot be probed. Pushes
+        `notification_read` (`ids: [id]`, `all: false`, current
+        `unread_count`) to the caller's own sessions.
+      tags: [Notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Notification ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Saved messages (bookmarks) ──
+  /api/users/me/saved:
+    get:
+      operationId: savedList
+      summary: List the caller's bookmarks, newest first, with keyset pagination.
+      description: >-
+        `before` is the id of the oldest saved row already loaded (keyset
+        cursor on created_at DESC, id DESC, scoped to the caller — an unknown
+        or foreign cursor yields an empty page). `limit` is clamped to 1..50
+        (default 20). Channel permissions are re-resolved per distinct channel
+        on the page. Rows are never dropped: a row the caller can no longer
+        read (or whose permission resolve fails, or whose message is gone) is
+        returned as a stub with `message`/`dm_message` null and
+        `unavailable: true`, so it can still be seen and deleted. `has_more`
+        and `next_before` (the last row's id, pass it as `before`; null when
+        `has_more` is false) are computed from the raw rows.
+      tags: [Saved]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200': { $ref: '#/components/responses/SavedMessagePageOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: savedCreate
+      summary: Bookmark a channel or DM message.
+      description: >-
+        Exactly one of `message_id` / `dm_message_id` is required. The caller
+        must be able to read the message now (channel: ViewChannel +
+        ReadMessages, override-aware → 403; DM: channel membership → 403;
+        unknown id → 404). Idempotent: a message that is already saved answers
+        200 with the existing row (the note in the repeat request is ignored).
+        At most 500 bookmarks per user — past that, 400 with error
+        `saved_limit_reached`. `note` is ≤1024 runes, CRLF-normalised,
+        rejected (400) if it carries bidi/zero-width/control characters other
+        than newline and tab.
+      tags: [Saved]
+      requestBody: { $ref: '#/components/requestBodies/CreateSavedMessageRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/SavedMessageOK' }
+        '201': { $ref: '#/components/responses/SavedMessageCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/me/saved/ids:
+    get:
+      operationId: savedListIDs
+      summary: Every message id the caller has bookmarked (for painting bookmark state).
+      tags: [Saved]
+      responses:
+        '200': { $ref: '#/components/responses/SavedMessageIDsOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/saved/{id}:
+    patch:
+      operationId: savedUpdateNote
+      summary: Replace the note on a bookmark.
+      description: >-
+        `note` null or empty clears it (stored NULL). 404 covers both "no such
+        row" and "not yours" — deliberately indistinguishable so ids cannot
+        be probed. Same note validation as POST.
+      tags: [Saved]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Saved message ID.
+      requestBody: { $ref: '#/components/requestBodies/UpdateSavedNoteRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/SavedMessageOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: savedDelete
+      summary: Remove a bookmark (same 404 rule as PATCH).
+      tags: [Saved]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Saved message ID.
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Private user notes ──
+  /api/users/{userId}/note:
+    get:
+      operationId: userNoteGet
+      summary: The caller's private note about a user.
+      description: >-
+        Answers `{note: "", updated_at: null}` when nothing is stored.
+      tags: [UserNotes]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200': { $ref: '#/components/responses/UserNoteOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    put:
+      operationId: userNoteSet
+      summary: Store (or clear) the caller's private note about a user.
+      description: >-
+        The note is trimmed, CRLF-normalised, bounded to 1024 runes and
+        rejected (400) on bidi/zero-width/control characters other than
+        newline and tab. An empty note deletes the row and answers
+        `{note: "", updated_at: null}`. 404 when the target user does not
+        exist.
+      tags: [UserNotes]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody: { $ref: '#/components/requestBodies/UpsertUserNoteRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/UserNoteOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   # ── Servers (global) ──
   /api/servers:
@@ -516,7 +781,9 @@ paths:
         attachment (participant only) -> report attachment (reporter or
         platform admin) -> feedback attachment (ticket owner or platform admin)
         -> positive public-asset match (users.avatar_url|wallpaper_url,
-        servers.icon_url|banner_url) -> soundboard/badges path prefix -> 404
+        servers.icon_url|banner_url, server_emojis.file_url|animated_url,
+        server_stickers.file_url|animated_url)
+        -> soundboard/badges path prefix -> 404
         for anything matching none of the above (fail closed, not served
         public). Channel/DM/report/feedback attachments require either a
         Bearer session token or the `hichat_media` cookie; the public-asset
@@ -538,7 +805,8 @@ paths:
             Category-prefixed relative file path as stored at upload time,
             e.g. `<16-hex>_<name>.png` (channel/DM/report/feedback
             attachment or avatar/icon), `soundboard/<16-hex>_<name>.mp3`,
-            `badges/<16-hex>_<name>.png`.
+            `badges/<16-hex>_<name>.png`, `emojis/<16-hex>.png|.gif`,
+            `stickers/<16-hex>.png|.gif`.
       responses:
         '200':
           description: File bytes, Content-Type inferred from extension.
@@ -559,19 +827,61 @@ paths:
     get:
       operationId: dmsList
       summary: List the caller's DM channels.
+      description: >-
+        Each item (models.DMChannelWithUser) also carries `unread_count`
+        (the caller's dm_reads counter, 0 without a row) and `last_message`
+        (DMLastMessage, or null for a channel with no messages).
       tags: [DMs]
       responses:
-        '200': { $ref: '#/components/responses/StubOK' }
+        '200': { $ref: '#/components/responses/DMChannelListOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
     post:
       operationId: dmsCreate
       summary: Create or get the existing 1:1 DM channel with another user.
+      description: '`user_id` equal to the caller is rejected (400) — the self-DM lives at POST /api/dms/self.'
       tags: [DMs]
       requestBody: { $ref: '#/components/requestBodies/StubJSON' }
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/self:
+    post:
+      operationId: dmsSelf
+      summary: Create or get the caller's "notes to self" DM channel.
+      description: >-
+        No body. An ordinary DM channel whose two participants are both the
+        caller (`other_user` is the caller's own public view). Created once
+        and always `accepted`; sending into it skips block/privacy/request
+        checks and the recipient unread bump. On first creation
+        `dm_channel_create` is pushed to the caller's own sessions.
+      tags: [DMs]
+      responses:
+        '200': { $ref: '#/components/responses/DMChannelOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/dms/{channelId}/read:
+    post:
+      operationId: dmsMarkRead
+      summary: Mark a DM channel as read for the caller.
+      description: >-
+        Resets the caller's `unread_count` on the channel. The body is
+        optional: `{"message_id": "<id>"}` also moves the last-read
+        watermark; an empty body (or empty message_id) keeps the stored
+        watermark. Echoes `dm_read` to the caller's own sessions only.
+      tags: [DMs]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody:
+        description: Optional — see the operation description.
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkDMReadRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
   /api/dms/channels/{channelId}/hide:
     post:
@@ -675,10 +985,18 @@ paths:
     get:
       operationId: dmMessagesList
       summary: List messages in a DM channel.
+      description: >-
+        Same cursor contract as the channel history endpoint: `before`
+        (older, default), `around` (window centred on a message) or `after`
+        (newer) — mutually exclusive (400 when combined); the anchor must
+        belong to this channel (404 otherwise). Messages are ASC;
+        `has_more_after` is only meaningful for `around`/`after`.
       tags: [Messages]
       parameters:
         - $ref: '#/components/parameters/ChannelId'
         - $ref: '#/components/parameters/BeforeParam'
+        - $ref: '#/components/parameters/AroundParam'
+        - $ref: '#/components/parameters/AfterParam'
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
@@ -822,6 +1140,7 @@ paths:
         '204': { $ref: '#/components/responses/StubNoContent' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
     delete:
       operationId: blocksUnblockUser
       summary: Unblock a user.
@@ -1210,6 +1529,32 @@ paths:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/{userId}/profile:
+    get:
+      operationId: usersGetProfile
+      summary: Get a user's public profile card.
+      description: >-
+        Any authenticated caller, no shared server/DM/friendship required —
+        every field is public by design. Never includes email, presence,
+        privacy settings or wallpaper (see the UserProfile schema).
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: The user's public profile card.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserProfile'
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   # ── GIFs (Klipy proxy) ──
   /api/gifs/trending:
@@ -1257,6 +1602,7 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
   /api/friends/requests/{id}/accept:
     post:
       operationId: friendsAcceptRequest
@@ -2122,7 +2468,16 @@ paths:
     get:
       operationId: messagesList
       summary: List messages in a channel.
-      description: Cursor-based pagination — `before` is a message ID (older messages), `limit` is capped server-side at 100 (default 50).
+      description: >-
+        Cursor-based pagination, `limit` capped server-side at 100 (default
+        50). Exactly one cursor form: `before` (messages older than the id —
+        the default), `around` (a window centred on the id: up to limit/2
+        older rows, the anchor, up to limit/2 newer rows) or `after`
+        (messages strictly newer than the id); combining them is a 400. The
+        anchor must be a message of THIS channel — an unknown id or another
+        channel's id is a 404. Messages are always ASC (oldest first);
+        `has_more` means older rows exist, `has_more_after` newer ones
+        (always false for the `before` form).
       tags: [Messages]
       parameters:
         - $ref: '#/components/parameters/ServerId'
@@ -2132,6 +2487,8 @@ paths:
           schema: { type: string }
           description: Channel ID.
         - $ref: '#/components/parameters/BeforeParam'
+        - $ref: '#/components/parameters/AroundParam'
+        - $ref: '#/components/parameters/AfterParam'
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200': { $ref: '#/components/responses/MessagePageOK' }
@@ -2996,6 +3353,450 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
 
+  # ── Custom emojis (expressions) ──
+  /api/servers/{serverId}/emojis:
+    get:
+      operationId: serverEmojisList
+      summary: List a server's custom emojis (members only), ordered by name.
+      description: >-
+        Returns `[]` (never null) when the server has none. Emoji images are
+        public assets served from `url` / `animated_url` while the emoji row
+        exists.
+      tags: [Expressions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/ServerEmojiListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: serverEmojiCreate
+      summary: Upload a custom emoji.
+      description: >-
+        multipart/form-data with `file` (required, at most 512 KiB),
+        `display_name` (required, 1-32 characters, no bidi/zero-width/control
+        characters), `name` (optional shortcode `^[a-z0-9_]{2,32}$`, derived
+        from display_name when omitted) and `copyable` ("true"/"false",
+        default false). No other field is read. The image is decoded and
+        re-encoded: static output is always a PNG fitted into 128 px (aspect
+        kept, never cropped or upscaled, at most 4 MP source); a multi-frame
+        GIF additionally yields a 128 px animated GIF (at most 100 frames,
+        512 KiB output). Animated WebP is rejected; APNG keeps only its first
+        frame. At most 100 static and 50 animated emojis per server. Shares
+        the per-user upload rate limit (429 with Retry-After); 503 with
+        Retry-After when image processing is busy. Error codes:
+        EXPRESSION_NAME_INVALID, EXPRESSION_DISPLAY_NAME_INVALID (400),
+        EXPRESSION_NAME_TAKEN (409), EXPRESSION_LIMIT_REACHED (400).
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/ServerEmojiCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/servers/{serverId}/emojis/{emojiId}:
+    patch:
+      operationId: serverEmojiUpdate
+      summary: Rename an emoji or change whether it is copyable.
+      description: >-
+        Every field is optional but at least one is required. Changing
+        `copyable` is reserved to the emoji's creator (403
+        EXPRESSION_LICENSE_CREATOR_ONLY for anyone else, administrators
+        included); when the creator's account is gone it may only be switched
+        off. A clone's `copyable` can never change (403
+        EXPRESSION_LICENSE_LOCKED). An emoji id of another server is 404. A
+        taken name is 409 EXPRESSION_NAME_TAKEN.
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/EmojiId'
+      requestBody: { $ref: '#/components/requestBodies/UpdateServerEmojiRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/ServerEmojiOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+    delete:
+      operationId: serverEmojiDelete
+      summary: Delete an emoji (row first, then its files).
+      description: >-
+        Existing reactions that use the emoji are kept. An emoji id of
+        another server is 404.
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/EmojiId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/me/emojis:
+    get:
+      operationId: myEmojisList
+      summary: The custom emojis of every server the caller is a member of.
+      description: >-
+        Ordered by server_id then name; `[]` when there are none.
+      tags: [Expressions]
+      responses:
+        '200': { $ref: '#/components/responses/ServerEmojiListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Server stickers (expressions) ──
+  /api/servers/{serverId}/stickers:
+    get:
+      operationId: serverStickersList
+      summary: List a server's stickers (members only), ordered by name.
+      description: >-
+        Returns `[]` (never null) when the server has none. Sticker images
+        are public assets served from `url` / `animated_url` while the
+        sticker row exists.
+      tags: [Expressions]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/ServerStickerListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: serverStickerCreate
+      summary: Upload a sticker.
+      description: >-
+        multipart/form-data with `file` (required, at most 512 KiB),
+        `display_name` (required, 1-32 characters, no bidi/zero-width/control
+        characters), `name` (optional shortcode `^[a-z0-9_]{2,32}$`, derived
+        from display_name when omitted), `description` (optional, at most 100
+        characters, one line), `tags` (optional, comma-separated; at most 5
+        after case-insensitive de-duplication, each 1-20 characters) and
+        `copyable` ("true"/"false", default false). No other field is read.
+        Static output is always a PNG fitted into 320 px (aspect kept, never
+        cropped or upscaled, at most 4 MP source); a multi-frame GIF
+        additionally yields a 320 px animated GIF (at most 100 frames, 1 MiB
+        output). Animated WebP is rejected; APNG keeps only its first frame.
+        At most 30 stickers (static and animated together) per server. Shares
+        the per-user upload rate limit (429 with Retry-After); 503 with
+        Retry-After when image processing is busy. Error codes:
+        EXPRESSION_NAME_INVALID, EXPRESSION_DISPLAY_NAME_INVALID,
+        EXPRESSION_DESCRIPTION_INVALID, EXPRESSION_TAGS_INVALID (400),
+        EXPRESSION_NAME_TAKEN (409), EXPRESSION_LIMIT_REACHED (400).
+        A message sends a sticker as its whole content
+        `<sticker:name:id>` / `<sticker:a:name:id>` (client-side token, not
+        validated by the server); a sticker can never be a reaction.
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/ServerStickerCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/servers/{serverId}/stickers/{stickerId}:
+    patch:
+      operationId: serverStickerUpdate
+      summary: Edit a sticker's name, display name, description, tags or copyable flag.
+      description: >-
+        Every field is optional but at least one is required. Changing
+        `copyable` is reserved to the sticker's creator (403
+        EXPRESSION_LICENSE_CREATOR_ONLY for anyone else, administrators
+        included); when the creator's account is gone it may only be switched
+        off; a clone's `copyable` can never change (403
+        EXPRESSION_LICENSE_LOCKED). A sticker id of another server is 404. A
+        taken name is 409 EXPRESSION_NAME_TAKEN.
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/StickerId'
+      requestBody: { $ref: '#/components/requestBodies/UpdateServerStickerRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/ServerStickerOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+    delete:
+      operationId: serverStickerDelete
+      summary: Delete a sticker (row first, then its files).
+      description: >-
+        A sticker id of another server is 404.
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/StickerId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/me/stickers:
+    get:
+      operationId: myStickersList
+      summary: The stickers of every server the caller is a member of.
+      description: >-
+        Ordered by server_id then name; `[]` when there are none.
+      tags: [Expressions]
+      responses:
+        '200': { $ref: '#/components/responses/ServerStickerListOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+
+  # ── Copying expressions between servers ──
+  /api/servers/{serverId}/emojis/clone:
+    post:
+      operationId: serverEmojiClone
+      summary: Copy a copyable emoji of another server into this server.
+      description: >-
+        {serverId} is the TARGET server (PermManageExpressions required
+        there). The caller must be a member of the source emoji's server: a
+        source the caller cannot see and a missing one are the same 404
+        EXPRESSION_NOT_FOUND (also when the source file is gone). A source
+        in the target server is 400 EXPRESSION_CLONE_SAME_SERVER; a source
+        that is not copyable (clones never are) is 403
+        EXPRESSION_NOT_COPYABLE. The stored files are copied byte for byte;
+        the new emoji has `cloned_from` = source id, `copyable` false
+        (locked), `created_by` = caller, and goes through the normal upload
+        caps and name rules (EXPRESSION_LIMIT_REACHED 400,
+        EXPRESSION_NAME_TAKEN 409 — retry with `name`). Shares the per-user
+        upload rate limit (429 with Retry-After). A malformed `source_id` is
+        400.
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/CloneExpressionRequestBody' }
+      responses:
+        '201': { $ref: '#/components/responses/ServerEmojiCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/servers/{serverId}/stickers/clone:
+    post:
+      operationId: serverStickerClone
+      summary: Copy a copyable sticker of another server into this server.
+      description: >-
+        Same rules as POST /api/servers/{serverId}/emojis/clone, for
+        stickers (description and tags are copied too).
+      tags: [Expressions]
+      x-required-permission: { name: PermManageExpressions, value: 1048576 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/CloneExpressionRequestBody' }
+      responses:
+        '201': { $ref: '#/components/responses/ServerStickerCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+
+  # ── Entrance sounds ──
+  /api/users/me/entrance-sounds:
+    get:
+      operationId: myEntranceSoundsList
+      summary: The caller's entrance clips and per-scope selections.
+      description: >-
+        `sounds` and `selections` are `[]` (never null) when empty. A
+        selection's `scope` is "global" or a server id.
+      tags: [EntranceSounds]
+      responses:
+        '200': { $ref: '#/components/responses/EntranceMineOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: myEntranceSoundUpload
+      summary: Upload an entrance clip (16-bit PCM WAV, server-measured).
+      description: >-
+        multipart/form-data with `file` (required, at most 1 MiB, claimed as
+        audio/wav) and `name` (1-32 characters, no bidi/zero-width/control
+        characters). No other field is read — duration, size and URL are
+        always derived by the server. The file must be a RIFF/WAVE with
+        integer PCM, 1-2 channels, 8000-48000 Hz, 16 bit, 100-5000 ms long;
+        the stored file is a canonical 44-byte-header WAV with the samples
+        only (metadata chunks dropped). At most 5 clips per account. Shares
+        the per-user upload rate limit (429 with Retry-After). Error codes
+        (400): ENTRANCE_NAME_INVALID, ENTRANCE_FILE_TOO_LARGE,
+        ENTRANCE_INVALID_AUDIO, ENTRANCE_DURATION_INVALID,
+        ENTRANCE_LIMIT_REACHED. The clip is served publicly from `url` while
+        its row exists.
+      tags: [EntranceSounds]
+      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      responses:
+        '201': { $ref: '#/components/responses/EntranceSoundCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/users/me/entrance-sounds/{soundId}:
+    patch:
+      operationId: myEntranceSoundRename
+      summary: Rename one of the caller's clips.
+      description: >-
+        Body `{"name": "..."}` (ENTRANCE_NAME_INVALID on a bad name). Another
+        user's clip id is 404.
+      tags: [EntranceSounds]
+      parameters:
+        - $ref: '#/components/parameters/EntranceSoundId'
+      requestBody: { $ref: '#/components/requestBodies/RenameEntranceSoundRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/EntranceSoundOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: myEntranceSoundDelete
+      summary: Delete one of the caller's clips (row and selections first, then the file).
+      description: >-
+        Selections pointing at the clip are removed with it. Another user's
+        clip id is 404.
+      tags: [EntranceSounds]
+      parameters:
+        - $ref: '#/components/parameters/EntranceSoundId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/me/entrance-selection:
+    put:
+      operationId: myEntranceSelectionPut
+      summary: Set or clear the caller's entrance sound for one scope.
+      description: >-
+        `scope` is "global" or a server id the caller is a member of (404
+        otherwise). `kind` "clip" needs `sound_id` (one of the caller's clips,
+        404 otherwise), "preset" needs `preset` (strict EntrancePreset,
+        ENTRANCE_PRESET_INVALID otherwise; stored canonically), "none" removes
+        the scope's selection. A server-scoped selection wins over the global
+        one. Returns every selection of the caller. Other 400 code:
+        ENTRANCE_SCOPE_INVALID.
+      tags: [EntranceSounds]
+      requestBody: { $ref: '#/components/requestBodies/PutEntranceSelectionRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/EntranceSelectionListOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/entrance-settings:
+    get:
+      operationId: serverEntranceSettingsGet
+      summary: A server's entrance-sound settings and disabled voice channels.
+      description: >-
+        Defaults when never set: enabled true, max_duration_ms 5000.
+      tags: [EntranceSounds]
+      x-required-permission: { name: PermManageSoundboard, value: 131072 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/ServerEntranceSettingsOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    patch:
+      operationId: serverEntranceSettingsPatch
+      summary: Switch entrance sounds on/off for the server or change the max play length.
+      description: >-
+        At least one of `enabled` / `max_duration_ms` (500-5000) is required
+        (ENTRANCE_SETTINGS_INVALID otherwise). Clips longer than the max are
+        cut off at it (`play_ms`).
+      tags: [EntranceSounds]
+      x-required-permission: { name: PermManageSoundboard, value: 131072 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/PatchServerEntranceSettingsRequestBody' }
+      responses:
+        '200': { $ref: '#/components/responses/ServerEntranceSettingsOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/entrance:
+    put:
+      operationId: serverChannelEntranceSet
+      summary: Switch entrance sounds on/off for one voice channel.
+      description: >-
+        Body `{"enabled": bool}` (required). A channel of another server is
+        404; a non-voice channel is 400 ENTRANCE_CHANNEL_NOT_VOICE.
+      tags: [EntranceSounds]
+      x-required-permission: { name: PermManageSoundboard, value: 131072 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/SetChannelEntranceRequestBody' }
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/entrance-mutes:
+    get:
+      operationId: serverEntranceMutesList
+      summary: Members whose entrance sound is muted on this server.
+      description: >-
+        `{"user_ids": [...]}`, `[]` when none.
+      tags: [EntranceSounds]
+      x-required-permission: { name: PermMuteMembers, value: 16384 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200': { $ref: '#/components/responses/EntranceMutesOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/entrance-mutes/{userId}:
+    put:
+      operationId: serverEntranceMuteAdd
+      summary: Mute a member's entrance sound on this server.
+      description: >-
+        Idempotent. The server owner can never be targeted and the caller's
+        highest role must outrank the target's (403 ENTRANCE_HIERARCHY);
+        targeting yourself is 400; a non-member is 404.
+      tags: [EntranceSounds]
+      x-required-permission: { name: PermMuteMembers, value: 16384 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: serverEntranceMuteRemove
+      summary: Unmute a member's entrance sound on this server.
+      description: >-
+        Idempotent; same hierarchy rule as muting (403 ENTRANCE_HIERARCHY,
+        400 for yourself).
+      tags: [EntranceSounds]
+      x-required-permission: { name: PermMuteMembers, value: 16384 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+
   # ── WebSocket ──
   /ws:
     get:
@@ -3179,6 +3980,24 @@ components:
       required: true
       schema: { type: string }
       description: Soundboard sound ID.
+    EmojiId:
+      name: emojiId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-f0-9]{16}$' }
+      description: Custom emoji ID (16 lowercase hex).
+    StickerId:
+      name: stickerId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-f0-9]{16}$' }
+      description: Sticker ID (16 lowercase hex).
+    EntranceSoundId:
+      name: soundId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-f0-9]{16}$' }
+      description: Entrance clip ID (16 lowercase hex).
     BotId:
       name: botID
       in: path
@@ -3215,6 +4034,18 @@ components:
       required: false
       schema: { type: string }
       description: Cursor — return items before this ID (or, for the audit log, timestamp).
+    AroundParam:
+      name: around
+      in: query
+      required: false
+      schema: { type: string }
+      description: Message history only — a window centred on this message ID. Mutually exclusive with before/after.
+    AfterParam:
+      name: after
+      in: query
+      required: false
+      schema: { type: string }
+      description: Message history only — items strictly newer than this message ID. Mutually exclusive with before/around.
     QParam:
       name: q
       in: query
@@ -3313,6 +4144,13 @@ components:
         display_name: { type: [string, "null"] }
         avatar_url: { type: [string, "null"] }
         wallpaper_url: { type: [string, "null"] }
+        avatar_animated_url:
+          type: [string, "null"]
+          description: Animated GIF avatar (migration 085); avatar_url stays the static poster.
+        banner_url: { type: [string, "null"] }
+        bio: { type: [string, "null"], maxLength: 190 }
+        pronouns: { type: [string, "null"], maxLength: 40 }
+        accent_color: { type: [string, "null"], pattern: '^#[0-9a-f]{6}$' }
         status:
           $ref: '#/components/schemas/UserStatus'
         pref_status:
@@ -3607,6 +4445,21 @@ components:
         dm_privacy:
           type: string
           enum: [everyone, message_request, friends_only]
+        bio:
+          type: string
+          maxLength: 190
+          description: >-
+            Multi-line. "\r" is stripped and surrounding whitespace trimmed
+            before the 190-rune check; bidi/control characters other than
+            newline and tab are rejected. Explicit empty string clears it.
+        pronouns:
+          type: string
+          maxLength: 40
+          description: Single line, trimmed. Explicit empty string clears it.
+        accent_color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          description: Stored lower-case. Explicit empty string clears it.
       example:
         display_name: Wanderer
         custom_status: "on a quest"
@@ -3646,6 +4499,11 @@ components:
         last_seen_at:
           type: [string, "null"]
           format: date-time
+        avatar_animated_url: { type: [string, "null"] }
+        banner_url: { type: [string, "null"] }
+        bio: { type: [string, "null"] }
+        pronouns: { type: [string, "null"] }
+        accent_color: { type: [string, "null"] }
       required: [id, username, status, created_at, roles, effective_permissions]
       example:
         id: "a1b2c3d4e5f6a7b8"
@@ -3658,6 +4516,27 @@ components:
         created_at: "2026-01-15T10:20:30Z"
         roles: []
         effective_permissions: 0
+    UserProfile:
+      description: >-
+        models.UserProfile — the public profile card returned by
+        GET /api/users/{userId}/profile. A deliberate allowlist: never
+        carries email, status, pref_status, last_seen_at, dm_privacy,
+        language, wallpaper_url, is_platform_*, has_seen_* or owner_user_id.
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        display_name: { type: [string, "null"] }
+        avatar_url: { type: [string, "null"] }
+        avatar_animated_url: { type: [string, "null"] }
+        banner_url: { type: [string, "null"] }
+        bio: { type: [string, "null"] }
+        pronouns: { type: [string, "null"] }
+        accent_color: { type: [string, "null"] }
+        custom_status: { type: [string, "null"] }
+        is_bot: { type: boolean }
+        created_at: { type: string, format: date-time }
+      required: [id, username, display_name, avatar_url, avatar_animated_url, banner_url, bio, pronouns, accent_color, custom_status, is_bot, created_at]
     UserPreferences:
       description: models.UserPreferences — GET/PATCH /api/users/me/preferences payload.
       type: object
@@ -3794,14 +4673,20 @@ components:
         reactions: []
         encryption_version: 0
     MessagePage:
-      description: models.MessagePage — cursor-based pagination response for GET .../messages.
+      description: >-
+        models.MessagePage — cursor-based pagination response for GET
+        .../messages (channel and DM share the shape). `messages` is ASC;
+        `has_more` = older rows exist beyond the page; `has_more_after` =
+        newer rows exist — only meaningful for the around=/after= forms,
+        always false for before=.
       type: object
       properties:
         messages:
           type: array
           items: { $ref: '#/components/schemas/Message' }
         has_more: { type: boolean }
-      required: [messages, has_more]
+        has_more_after: { type: boolean }
+      required: [messages, has_more, has_more_after]
     CreateMessageRequest:
       description: >-
         models.CreateMessageRequest — JSON body of POST .../messages when no
@@ -4079,6 +4964,434 @@ components:
         name: { type: string, minLength: 1, maxLength: 50 }
       example:
         name: "Voice Channels"
+
+    # ── DMs (read state + sidebar preview) ──
+    DMLastMessage:
+      description: >-
+        models.DMLastMessage — the newest message of a DM channel as shown
+        in the sidebar. `content` is null for E2EE (encryption_version=1)
+        and file-only messages; ciphertext is never included.
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        content: { type: [string, "null"] }
+        encryption_version: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
+      required: [id, user_id, content, encryption_version, created_at]
+    DMChannelWithUser:
+      description: >-
+        models.DMChannelWithUser — one GET /api/dms item. `unread_count` is
+        the caller's dm_reads counter (0 when no row exists yet);
+        `last_message` is null for a channel with no messages.
+      type: object
+      properties:
+        id: { type: string }
+        other_user: { $ref: '#/components/schemas/PublicUser' }
+        e2ee_enabled: { type: boolean }
+        status: { type: string, enum: [accepted, pending] }
+        initiated_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        last_message_at: { type: [string, "null"], format: date-time }
+        is_pinned: { type: boolean }
+        is_muted: { type: boolean }
+        unread_count: { type: integer, minimum: 0 }
+        last_message:
+          oneOf:
+            - $ref: '#/components/schemas/DMLastMessage'
+            - type: "null"
+      required: [id, other_user, e2ee_enabled, status, created_at, is_pinned, is_muted, unread_count, last_message]
+    MarkDMReadRequest:
+      description: models.MarkDMReadRequest — optional body of POST /api/dms/{channelId}/read.
+      type: object
+      properties:
+        message_id: { type: string, description: "Newest message the caller has seen; omitted/empty keeps the stored watermark." }
+
+    # ── Notifications ──
+    Notification:
+      description: >-
+        models.Notification — one inbox row. `created_at` / `read_at` are
+        RFC3339 UTC strings (e.g. 2026-10-21T09:17:28Z; the DB stores
+        'YYYY-MM-DD HH:MM:SS' text and the repository converts on read).
+        `actor` is the LEFT JOINed public view of `actor_id` (null when the
+        actor was deleted). Payload keys by kind —
+        mention|reply: {preview: string|null (≤120 runes, plaintext only),
+        channel_name}; friend_request: {friendship_id}; dm_request: {};
+        system: {title, body} (reserved, no writer yet).
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        kind: { type: string, enum: [mention, reply, friend_request, dm_request, system] }
+        actor_id: { type: [string, "null"] }
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: "null"
+        server_id: { type: [string, "null"] }
+        channel_id: { type: [string, "null"] }
+        message_id: { type: [string, "null"] }
+        dm_channel_id: { type: [string, "null"] }
+        payload: { type: object, additionalProperties: true }
+        read_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+      required: [id, user_id, kind, actor_id, actor, server_id, channel_id, message_id, dm_channel_id, payload, read_at, created_at]
+    NotificationPage:
+      description: models.NotificationPage — GET /api/users/me/notifications payload.
+      type: object
+      properties:
+        notifications:
+          type: array
+          items: { $ref: '#/components/schemas/Notification' }
+        has_more: { type: boolean }
+      required: [notifications, has_more]
+
+    # ── Saved messages ──
+    SavedChannelMessage:
+      description: >-
+        models.SavedChannelMessage — the bookmark view of a channel message:
+        enough to render a preview and deep-link, never the full
+        attachment/reaction/mention graph. E2EE bodies stay opaque (content
+        null, ciphertext set) exactly as on Message.
+      type: object
+      properties:
+        id: { type: string }
+        channel_id: { type: string }
+        server_id: { type: string }
+        channel_name: { type: string }
+        server_name: { type: string }
+        user_id: { type: string }
+        content: { type: [string, "null"] }
+        encryption_version: { type: integer, enum: [0, 1] }
+        ciphertext: { type: string }
+        sender_device_id: { type: string }
+        e2ee_metadata: { type: string }
+        created_at: { type: string, format: date-time }
+        attachment_count: { type: integer, minimum: 0 }
+        author:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: "null"
+      required: [id, channel_id, server_id, channel_name, server_name, user_id, content, encryption_version, created_at, attachment_count, author]
+    SavedDMMessage:
+      description: models.SavedDMMessage — the DM counterpart of SavedChannelMessage.
+      type: object
+      properties:
+        id: { type: string }
+        dm_channel_id: { type: string }
+        user_id: { type: string }
+        content: { type: [string, "null"] }
+        encryption_version: { type: integer, enum: [0, 1] }
+        ciphertext: { type: string }
+        sender_device_id: { type: string }
+        e2ee_metadata: { type: string }
+        created_at: { type: string, format: date-time }
+        attachment_count: { type: integer, minimum: 0 }
+        author:
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: "null"
+      required: [id, dm_channel_id, user_id, content, encryption_version, created_at, attachment_count, author]
+    SavedMessage:
+      description: >-
+        models.SavedMessage — one bookmark. When `unavailable` is false,
+        exactly one of `message` / `dm_message` is non-null (mirroring
+        `message_id` / `dm_message_id`). When `unavailable` is true both are
+        null — the referenced message is gone or the caller can no longer
+        read it — and only the row's own columns are exposed. `created_at`
+        is RFC3339 UTC (the DB stores 'YYYY-MM-DD HH:MM:SS' text; the
+        repository converts on read).
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        note: { type: [string, "null"], maxLength: 1024 }
+        created_at: { type: string, format: date-time }
+        message_id: { type: [string, "null"] }
+        dm_message_id: { type: [string, "null"] }
+        message:
+          oneOf:
+            - $ref: '#/components/schemas/SavedChannelMessage'
+            - type: "null"
+        dm_message:
+          oneOf:
+            - $ref: '#/components/schemas/SavedDMMessage'
+            - type: "null"
+        unavailable: { type: boolean }
+      required: [id, user_id, note, created_at, message_id, dm_message_id, message, dm_message, unavailable]
+    SavedMessagePage:
+      description: >-
+        models.SavedMessagePage — GET /api/users/me/saved payload.
+        `next_before` is the id of the page's last raw row (null when
+        `has_more` is false).
+      type: object
+      properties:
+        saved:
+          type: array
+          items: { $ref: '#/components/schemas/SavedMessage' }
+        has_more: { type: boolean }
+        next_before: { type: [string, "null"] }
+      required: [saved, has_more, next_before]
+    SavedMessageIDs:
+      description: models.SavedMessageIDs — GET /api/users/me/saved/ids payload.
+      type: object
+      properties:
+        message_ids:
+          type: array
+          items: { type: string }
+        dm_message_ids:
+          type: array
+          items: { type: string }
+      required: [message_ids, dm_message_ids]
+    CreateSavedMessageRequest:
+      description: models.CreateSavedMessageRequest — body of POST /api/users/me/saved. Exactly one of message_id / dm_message_id.
+      type: object
+      properties:
+        message_id: { type: string }
+        dm_message_id: { type: string }
+        note: { type: [string, "null"], maxLength: 1024 }
+    UpdateSavedNoteRequest:
+      description: models.UpdateSavedNoteRequest — body of PATCH /api/users/me/saved/{id}. null/empty clears the note.
+      type: object
+      properties:
+        note: { type: [string, "null"], maxLength: 1024 }
+      required: [note]
+
+    # ── User notes ──
+    UserNote:
+      description: >-
+        models.UserNote — GET/PUT /api/users/{userId}/note payload.
+        `updated_at` is RFC3339 UTC, null when no note is stored (then
+        `note` is "").
+      type: object
+      properties:
+        note: { type: string, maxLength: 1024 }
+        updated_at: { type: [string, "null"], format: date-time }
+      required: [note, updated_at]
+    UpsertUserNoteRequest:
+      description: models.UpsertUserNoteRequest — body of PUT /api/users/{userId}/note. An empty note deletes the row.
+      type: object
+      properties:
+        note: { type: string, maxLength: 1024 }
+      required: [note]
+
+    # ── Custom emojis ──
+    ServerEmoji:
+      description: >-
+        models.ServerEmoji — one server custom emoji. `url` is
+        "/api/uploads/emojis/{id}.png" and `animated_url`
+        "/api/uploads/emojis/{id}.gif" (null for static emojis); both are
+        server-generated. Message content references an emoji as
+        `<:name:id>` / `<a:name:id>`; a reaction stores `<:id>` / `<a:id>`
+        and is accepted only from a member of the emoji's server.
+        `created_by` is null once the creator's account is deleted.
+        `cloned_from` is the source emoji id when this emoji is a copy (the
+        source may since be gone); a copy is never copyable.
+        `created_at` is RFC3339 UTC.
+      type: object
+      properties:
+        id: { type: string, pattern: '^[a-f0-9]{16}$' }
+        server_id: { type: string }
+        name: { type: string, pattern: '^[a-z0-9_]{2,32}$' }
+        display_name: { type: string, minLength: 1, maxLength: 32 }
+        animated: { type: boolean }
+        url: { type: string }
+        animated_url: { type: [string, "null"] }
+        copyable: { type: boolean }
+        created_by: { type: [string, "null"] }
+        cloned_from: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+      required: [id, server_id, name, display_name, animated, url, animated_url, copyable, created_by, cloned_from, created_at]
+    UpdateServerEmojiRequest:
+      description: models.UpdateEmojiRequest — body of PATCH /api/servers/{serverId}/emojis/{emojiId}; at least one field.
+      type: object
+      properties:
+        name: { type: string, pattern: '^[a-z0-9_]{2,32}$' }
+        display_name: { type: string, minLength: 1, maxLength: 32 }
+        copyable: { type: boolean }
+
+    # ── Server stickers ──
+    ServerSticker:
+      description: >-
+        models.ServerSticker — one server sticker. `url` is
+        "/api/uploads/stickers/{id}.png" and `animated_url`
+        "/api/uploads/stickers/{id}.gif" (null for static stickers); both
+        are server-generated. `description` is never null ("" when unset),
+        `tags` never null ([] when none). `cloned_from` is the source
+        sticker id when this sticker is a copy (never copyable).
+        `created_by` is null once the creator's account is deleted.
+        `created_at` is RFC3339 UTC.
+      type: object
+      properties:
+        id: { type: string, pattern: '^[a-f0-9]{16}$' }
+        server_id: { type: string }
+        name: { type: string, pattern: '^[a-z0-9_]{2,32}$' }
+        display_name: { type: string, minLength: 1, maxLength: 32 }
+        description: { type: string, maxLength: 100 }
+        tags:
+          type: array
+          maxItems: 5
+          items: { type: string, minLength: 1, maxLength: 20 }
+        animated: { type: boolean }
+        url: { type: string }
+        animated_url: { type: [string, "null"] }
+        copyable: { type: boolean }
+        cloned_from: { type: [string, "null"] }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+      required: [id, server_id, name, display_name, description, tags, animated, url, animated_url, copyable, cloned_from, created_by, created_at]
+    UpdateServerStickerRequest:
+      description: >-
+        models.UpdateStickerRequest — body of PATCH
+        /api/servers/{serverId}/stickers/{stickerId}; at least one field.
+        Tags are trimmed and de-duplicated case-insensitively; a tag with a
+        comma is rejected (EXPRESSION_TAGS_INVALID).
+      type: object
+      properties:
+        name: { type: string, pattern: '^[a-z0-9_]{2,32}$' }
+        display_name: { type: string, minLength: 1, maxLength: 32 }
+        description: { type: string, maxLength: 100 }
+        tags:
+          type: array
+          maxItems: 5
+          items: { type: string, maxLength: 20 }
+        copyable: { type: boolean }
+    CloneExpressionRequest:
+      description: >-
+        models.CloneExpressionRequest — body of POST
+        /api/servers/{serverId}/{emojis|stickers}/clone. `name` optionally
+        renames the copy (e.g. when the source name is taken in the target
+        server); blank or absent keeps the source's name.
+      type: object
+      properties:
+        source_id: { type: string, pattern: '^[a-f0-9]{16}$' }
+        name: { type: [string, "null"], pattern: '^[a-z0-9_]{2,32}$' }
+      required: [source_id]
+
+    # ── Entrance sounds ──
+    EntranceSound:
+      description: >-
+        models.EntranceSound — one uploaded clip. `url` is
+        "/api/uploads/entrance/{id}.wav" (server-generated, public while the
+        row exists); `duration_ms` and `size` are measured by the server.
+        `created_at` is RFC3339 UTC.
+      type: object
+      properties:
+        id: { type: string, pattern: '^[a-f0-9]{16}$' }
+        name: { type: string, minLength: 1, maxLength: 32 }
+        url: { type: string, pattern: '^/api/uploads/entrance/[a-f0-9]{16}\.wav$' }
+        duration_ms: { type: integer, minimum: 100, maximum: 5000 }
+        size: { type: integer }
+        created_at: { type: string, format: date-time }
+      required: [id, name, url, duration_ms, size, created_at]
+    EntrancePreset:
+      description: >-
+        models.EntrancePreset — strict parametric preset, schema v1. No other
+        field is accepted; the raw document is at most 256 bytes and is
+        stored re-serialized in this field order. Note patterns and volume
+        are client-side (the listener sets the volume).
+      type: object
+      additionalProperties: false
+      properties:
+        v: { type: integer, enum: [1] }
+        theme: { type: string, enum: [chime, rise, fall, arcade, bell, fanfare] }
+        waveform: { type: string, enum: [sine, triangle, square, sawtooth] }
+        pitch: { type: integer, minimum: -12, maximum: 12, description: Semitones. }
+        duration_ms: { type: integer, minimum: 150, maximum: 2000 }
+      required: [v, theme, waveform, pitch, duration_ms]
+    EntranceSelection:
+      description: >-
+        models.EntranceSelection — one scope's choice. `scope` is "global" or
+        a server id; exactly one of `sound_id` / `preset` is non-null,
+        matching `kind`. `updated_at` is RFC3339 UTC.
+      type: object
+      properties:
+        scope: { type: string }
+        kind: { type: string, enum: [clip, preset] }
+        sound_id: { type: [string, "null"] }
+        preset:
+          oneOf:
+            - $ref: '#/components/schemas/EntrancePreset'
+            - type: "null"
+        updated_at: { type: string, format: date-time }
+      required: [scope, kind, sound_id, preset, updated_at]
+    EntranceMine:
+      description: models.EntranceMineResponse — body of GET /api/users/me/entrance-sounds.
+      type: object
+      properties:
+        sounds:
+          type: array
+          items: { $ref: '#/components/schemas/EntranceSound' }
+        selections:
+          type: array
+          items: { $ref: '#/components/schemas/EntranceSelection' }
+      required: [sounds, selections]
+    PutEntranceSelectionRequest:
+      description: >-
+        models.PutEntranceSelectionRequest — body of PUT
+        /api/users/me/entrance-selection. `sound_id` for kind "clip",
+        `preset` for kind "preset", neither for "none".
+      type: object
+      properties:
+        scope: { type: string, description: '"global" or a server id.' }
+        kind: { type: string, enum: [clip, preset, none] }
+        sound_id: { type: string, pattern: '^[a-f0-9]{16}$' }
+        preset: { $ref: '#/components/schemas/EntrancePreset' }
+      required: [scope, kind]
+    ServerEntranceSettings:
+      description: models.ServerEntranceSettings — a server's entrance-sound configuration.
+      type: object
+      properties:
+        server_id: { type: string }
+        enabled: { type: boolean }
+        max_duration_ms: { type: integer, minimum: 500, maximum: 5000 }
+        disabled_channel_ids:
+          type: array
+          items: { type: string }
+      required: [server_id, enabled, max_duration_ms, disabled_channel_ids]
+    PatchServerEntranceSettingsRequest:
+      description: >-
+        models.PatchServerEntranceSettingsRequest — body of PATCH
+        /api/servers/{serverId}/entrance-settings; at least one field.
+      type: object
+      properties:
+        enabled: { type: boolean }
+        max_duration_ms: { type: integer, minimum: 500, maximum: 5000 }
+    SetChannelEntranceRequest:
+      description: models.SetChannelEntranceRequest — body of PUT /api/servers/{serverId}/channels/{channelId}/entrance.
+      type: object
+      properties:
+        enabled: { type: boolean }
+      required: [enabled]
+    EntranceMutes:
+      description: models.EntranceMutesResponse — body of GET /api/servers/{serverId}/entrance-mutes.
+      type: object
+      properties:
+        user_ids:
+          type: array
+          items: { type: string }
+      required: [user_ids]
+    EntranceSoundPlayEvent:
+      description: >-
+        models.EntranceSoundPlayEvent — the `d` of the WS op
+        `entrance_sound_play`, sent only to the voice channel's participants
+        (the joiner included) after a fresh, authorized join, at most once
+        per user per 30 s. Not bot-readable. `sound_url` is present only for
+        kind "clip", `preset` only for kind "preset". Clients stop the clip
+        at `play_ms` (the clip length capped by the server's
+        max_duration_ms) and should re-validate `sound_url` against
+        ^/api/uploads/entrance/[a-f0-9]{16}\.wav$ and the preset against the
+        EntrancePreset schema.
+      type: object
+      properties:
+        server_id: { type: string }
+        channel_id: { type: string }
+        user_id: { type: string }
+        kind: { type: string, enum: [clip, preset] }
+        sound_url: { type: string }
+        preset: { $ref: '#/components/schemas/EntrancePreset' }
+        play_ms: { type: integer }
+      required: [server_id, channel_id, user_id, kind, play_ms]
   responses:
     StubOK:
       description: Success (200). Payload is a stub in this phase — see StubData.
@@ -4220,6 +5533,266 @@ components:
                 properties:
                   data:
                     $ref: '#/components/schemas/UserPreferences'
+
+    # ── DMs ──
+    DMChannelListOK:
+      description: Success (200) — the caller's visible DM channels, pinned first then by activity.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/DMChannelWithUser' }
+    DMChannelOK:
+      description: Success (200) — one DM channel with the other participant's public view.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DMChannelWithUser'
+
+    # ── Saved messages ──
+    SavedMessagePageOK:
+      description: Success (200) — one page of the caller's bookmarks.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SavedMessagePage'
+    SavedMessageOK:
+      description: Success (200) — one bookmark (existing row on an idempotent POST, or the updated row on PATCH).
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SavedMessage'
+    SavedMessageCreated:
+      description: Success (201) — the freshly created bookmark.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SavedMessage'
+    ServerEmojiOK:
+      description: Success (200) — the updated emoji.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServerEmoji'
+    ServerEmojiCreated:
+      description: Success (201) — the new emoji.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServerEmoji'
+    ServerEmojiListOK:
+      description: Success (200) — a list of emojis (empty list, never null).
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ServerEmoji' }
+    ServerStickerOK:
+      description: Success (200) — the updated sticker.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServerSticker'
+    ServerStickerCreated:
+      description: Success (201) — the new sticker.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServerSticker'
+    ServerStickerListOK:
+      description: Success (200) — a list of stickers (empty list, never null).
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ServerSticker' }
+    EntranceMineOK:
+      description: Success (200) — the caller's clips and selections.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/EntranceMine'
+    EntranceSoundCreated:
+      description: Success (201) — the new clip.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/EntranceSound'
+    EntranceSoundOK:
+      description: Success (200) — the renamed clip.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/EntranceSound'
+    EntranceSelectionListOK:
+      description: Success (200) — every selection of the caller (empty list, never null).
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EntranceSelection' }
+    ServerEntranceSettingsOK:
+      description: Success (200) — the server's entrance-sound settings.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServerEntranceSettings'
+    EntranceMutesOK:
+      description: Success (200) — muted member ids.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/EntranceMutes'
+    SavedMessageIDsOK:
+      description: Success (200) — every bookmarked message id.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SavedMessageIDs'
+
+    # ── User notes ──
+    UserNoteOK:
+      description: Success (200) — the caller's note about the user (empty when none).
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserNote'
+
+    # ── Notifications ──
+    NotificationPageOK:
+      description: Success (200) — one page of the caller's inbox.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NotificationPage'
+    NotificationCountOK:
+      description: Success (200) — unread badge count.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      unread_count: { type: integer, minimum: 0 }
+                    required: [unread_count]
+    NotificationsMarkedOK:
+      description: Success (200) — how many rows read-all changed.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      marked: { type: integer, minimum: 0 }
+                    required: [marked]
 
     # ── Messages ──
     MessagePageOK:
@@ -4500,3 +6073,69 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/UpdateCategoryRequest' }
+
+    # ── Saved messages / user notes ──
+    CreateSavedMessageRequestBody:
+      description: Body of POST /api/users/me/saved.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CreateSavedMessageRequest' }
+    UpdateSavedNoteRequestBody:
+      description: Body of PATCH /api/users/me/saved/{id}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateSavedNoteRequest' }
+    UpsertUserNoteRequestBody:
+      description: Body of PUT /api/users/{userId}/note.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpsertUserNoteRequest' }
+    UpdateServerEmojiRequestBody:
+      description: Body of PATCH /api/servers/{serverId}/emojis/{emojiId}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateServerEmojiRequest' }
+    UpdateServerStickerRequestBody:
+      description: Body of PATCH /api/servers/{serverId}/stickers/{stickerId}.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateServerStickerRequest' }
+    CloneExpressionRequestBody:
+      description: Body of POST /api/servers/{serverId}/{emojis|stickers}/clone.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CloneExpressionRequest' }
+    RenameEntranceSoundRequestBody:
+      description: Body of PATCH /api/users/me/entrance-sounds/{soundId}.
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string, minLength: 1, maxLength: 32 }
+            required: [name]
+    PutEntranceSelectionRequestBody:
+      description: Body of PUT /api/users/me/entrance-selection.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PutEntranceSelectionRequest' }
+    PatchServerEntranceSettingsRequestBody:
+      description: Body of PATCH /api/servers/{serverId}/entrance-settings.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PatchServerEntranceSettingsRequest' }
+    SetChannelEntranceRequestBody:
+      description: Body of PUT /api/servers/{serverId}/channels/{channelId}/entrance.
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SetChannelEntranceRequest' }

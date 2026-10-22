@@ -21,10 +21,27 @@ export function createDMChannel(userId: string) {
   });
 }
 
+/** The caller's self-DM ("My Notes") channel — created on first call. */
+export function getOrCreateSelfDMChannel() {
+  return apiClient<DMChannelWithUser>("/dms/self", { method: "POST" });
+}
+
 export function getDMMessages(channelId: string, before?: string, limit = 50) {
   const params = new URLSearchParams();
   if (before) params.set("before", before);
   params.set("limit", String(limit));
+  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`);
+}
+
+/** Window centred on one DM message (jump-to-message); ASC order. */
+export function getDMMessagesAround(channelId: string, messageId: string, limit = 50) {
+  const params = new URLSearchParams({ around: messageId, limit: String(limit) });
+  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`);
+}
+
+/** DM messages newer than `afterId` (forward paging out of a jumped-to window). */
+export function getDMMessagesAfter(channelId: string, afterId: string, limit = 50) {
+  const params = new URLSearchParams({ after: afterId, limit: String(limit) });
   return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`);
 }
 
@@ -164,6 +181,20 @@ export function unpinDMMessage(messageId: string) {
 
 export function getDMPinnedMessages(channelId: string) {
   return apiClient<DMMessage[]>(`/dms/${channelId}/pinned`);
+}
+
+// ─── Read State ───
+
+/**
+ * Advances the caller's read cursor for a DM channel. `messageId` is optional:
+ * omitted means "up to the latest message". The server echoes `dm_read` to
+ * the caller's other sessions.
+ */
+export function markDMRead(channelId: string, messageId?: string) {
+  return apiClient<{ message: string }>(`/dms/${channelId}/read`, {
+    method: "POST",
+    body: messageId ? { message_id: messageId } : {},
+  });
 }
 
 // ─── DM Settings ───

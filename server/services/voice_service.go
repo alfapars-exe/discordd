@@ -100,6 +100,9 @@ type VoiceService interface {
 	StartAFKChecker()
 	SetAppLogger(logger VoiceAppLogger)
 	SetMusicBotHook(hook MusicBotChannelHook)
+	// SetEntranceHook wires the entrance-sound trigger fired on a fresh
+	// voice join (see VoiceEntranceHook). Nil disables it.
+	SetEntranceHook(hook VoiceEntranceHook)
 	// EnforceModerationOnJoin evicts userID from the LiveKit room for
 	// (serverID, channelID) if they are currently timed out or banned on
 	// serverID. See voice_lifecycle.go for the implementation and the
@@ -121,6 +124,13 @@ type AuditWriter interface {
 // MusicBotService.StopAllForChannel. Nil-safe — feature is optional.
 type MusicBotChannelHook interface {
 	StopAllForChannel(channelID string)
+}
+
+// VoiceEntranceHook — narrow interface JoinChannel calls (in its own
+// goroutine) after a fresh, authorized join has been broadcast. Implemented
+// by EntranceService.OnVoiceJoined. Nil-safe — feature is optional.
+type VoiceEntranceHook interface {
+	OnVoiceJoined(userID, serverID, channelID string)
 }
 
 // VoiceAppLogger writes structured logs. ISP interface to avoid importing services.AppLogService.
@@ -157,6 +167,7 @@ type voiceService struct {
 	appLogger        VoiceAppLogger
 	auditLogger      AuditWriter
 	musicBotHook     MusicBotChannelHook
+	entranceHook     VoiceEntranceHook
 	// Wired through NewVoiceService (mirrors reaction_service.go's
 	// constructor-injected timeoutChecker) so production wiring cannot
 	// silently omit it the way the old SetMemberTimeoutChecker setter
@@ -213,6 +224,12 @@ func NewVoiceService(
 
 func (s *voiceService) SetMusicBotHook(hook MusicBotChannelHook) {
 	s.musicBotHook = hook
+}
+
+// SetEntranceHook is called once during wiring, before any WS client can
+// join a voice channel, so the field needs no lock (same as SetMusicBotHook).
+func (s *voiceService) SetEntranceHook(hook VoiceEntranceHook) {
+	s.entranceHook = hook
 }
 
 func (s *voiceService) SetAppLogger(logger VoiceAppLogger) {

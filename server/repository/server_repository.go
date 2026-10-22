@@ -16,7 +16,8 @@ type ServerRepository interface {
 	// Delete removes a server. CASCADE handles all related data.
 	Delete(ctx context.Context, serverID string) error
 	// GetFileURLsByServerID returns every attachment file_url belonging to
-	// messages in any channel of the given server. Callers must fetch this
+	// messages in any channel of the given server, plus the server's custom
+	// emoji files. Callers must fetch this
 	// BEFORE Delete — see services.removeUploadFilesByURL.
 	GetFileURLsByServerID(ctx context.Context, serverID string) ([]string, error)
 

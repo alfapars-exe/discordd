@@ -11,7 +11,8 @@ import (
 // services/media_access_service.go.
 type MediaAssetRepository interface {
 	// IsPublicAsset reports whether fileURL is referenced by a public-facing
-	// media column (user avatar/wallpaper, server icon/banner). It does not
+	// media column (user avatar/animated avatar/wallpaper/profile banner,
+	// server icon/banner, server custom emoji static/animated file). It does not
 	// distinguish which column matched — callers only need the yes/no.
 	IsPublicAsset(ctx context.Context, fileURL string) (bool, error)
 }

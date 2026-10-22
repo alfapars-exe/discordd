@@ -58,6 +58,8 @@ export type ChatContextValue = {
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
+  /** Newer messages exist after the loaded window (jumped-to-message state). */
+  hasMoreAfter: boolean;
   replyingTo: ChatMessage | null;
   scrollToMessageId: string | null;
   typingUsers: string[];
@@ -68,6 +70,10 @@ export type ChatContextValue = {
   deleteMessage: (id: string) => Promise<boolean>;
   fetchMessages: () => Promise<void>;
   fetchOlderMessages: () => Promise<void>;
+  /** Forward paging out of a jumped-to window (no-op unless hasMoreAfter). */
+  fetchNewerMessages: () => Promise<void>;
+  /** Drop the jumped-to window and reload the channel tail. */
+  jumpToPresent: () => void;
 
   // ─── Reaction ───
   toggleReaction: (messageId: string, emoji: string) => void;

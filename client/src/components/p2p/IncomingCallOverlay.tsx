@@ -3,19 +3,35 @@
  *
  * Mounted at AppLayout level, visible when incomingCall !== null.
  * 30s timeout auto-declines (handled in useP2PCall hook).
+ *
+ * The ringtone honours the user's sound settings (Faz E bugfix): it does not
+ * start in DND / invisible mode or when join/leave sounds are turned off —
+ * the overlay and its buttons still show — and its gain follows the
+ * accessibility notification volume.
  */
 
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useVoiceStore } from "../../stores/voiceStore";
+import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import Avatar from "../shared/Avatar";
+
+/** DND / invisible, the "sounds off" switch and a zero volume silence the ringtone. */
+function shouldRing(): boolean {
+  const manualStatus = useAuthStore.getState().manualStatus;
+  if (manualStatus === "dnd" || manualStatus === "offline") return false;
+  if (useVoiceStore.getState().soundsEnabled === false) return false;
+  return useAccessibilityStore.getState().notificationSoundVolume > 0;
+}
 
 /**
  * Plays a ringtone via Web Audio API oscillators (440Hz + 554Hz, 1s on / 1s off).
- * Returns a stop function to call when the overlay closes.
+ * `volume01` scales the base gain (0.15). Returns a stop function to call
+ * when the overlay closes.
  */
-async function playRingtone(): Promise<() => void> {
+async function playRingtone(volume01: number): Promise<() => void> {
   try {
     const ctx = new AudioContext();
 
@@ -24,7 +40,7 @@ async function playRingtone(): Promise<() => void> {
     }
 
     const gainNode = ctx.createGain();
-    gainNode.gain.value = 0.15;
+    gainNode.gain.value = 0.15 * Math.min(1, Math.max(0, volume01));
     gainNode.connect(ctx.destination);
 
     let isPlaying = true;
@@ -77,8 +93,9 @@ function IncomingCallOverlay() {
   useEffect(() => {
     let cancelled = false;
 
-    if (incomingCall) {
-      playRingtone().then((stop) => {
+    if (incomingCall && shouldRing()) {
+      const pct = useAccessibilityStore.getState().notificationSoundVolume;
+      playRingtone(pct / 100).then((stop) => {
         if (cancelled) {
           stop();
         } else {

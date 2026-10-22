@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/argeinfina/hichat/models"
@@ -44,8 +45,34 @@ func NewMessageHandler(
 	}
 }
 
+// historyCursor is the parsed ?before= | ?around= | ?after= selector shared
+// by the channel and DM history endpoints. At most one may be set.
+type historyCursor struct {
+	before, around, after string
+}
+
+// parseHistoryCursor reads the three cursor params and rejects a request
+// that combines them — each selects a different window shape, so a mix has
+// no single meaning. ok is false after the 400 has been written.
+func parseHistoryCursor(w http.ResponseWriter, q url.Values) (historyCursor, bool) {
+	c := historyCursor{before: q.Get("before"), around: q.Get("around"), after: q.Get("after")}
+	set := 0
+	for _, v := range []string{c.before, c.around, c.after} {
+		if v != "" {
+			set++
+		}
+	}
+	if set > 1 {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "before, around and after are mutually exclusive")
+		return c, false
+	}
+	return c, true
+}
+
 // List handles GET /api/channels/{id}/messages?before=ID&limit=50
-// Cursor-based pagination: before=messageID for older messages, limit max 100.
+// Cursor-based pagination: before=messageID for older messages (the default
+// form), around=messageID for a window centred on a message, after=messageID
+// for newer messages; the three are mutually exclusive. limit max 100.
 func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("id")
 	serverID, ok := r.Context().Value(ServerIDContextKey).(string)
@@ -60,7 +87,10 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	beforeID := r.URL.Query().Get("before")
+	cursor, ok := parseHistoryCursor(w, r.URL.Query())
+	if !ok {
+		return
+	}
 
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
@@ -69,7 +99,16 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	page, err := h.messageService.GetByChannelID(r.Context(), serverID, channelID, user.ID, beforeID, limit)
+	var page *models.MessagePage
+	var err error
+	switch {
+	case cursor.around != "":
+		page, err = h.messageService.GetAround(r.Context(), serverID, channelID, user.ID, cursor.around, limit)
+	case cursor.after != "":
+		page, err = h.messageService.GetAfter(r.Context(), serverID, channelID, user.ID, cursor.after, limit)
+	default:
+		page, err = h.messageService.GetByChannelID(r.Context(), serverID, channelID, user.ID, cursor.before, limit)
+	}
 	if err != nil {
 		pkg.Error(w, err)
 		return

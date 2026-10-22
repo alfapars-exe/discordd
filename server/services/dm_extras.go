@@ -18,8 +18,24 @@ func (s *dmService) ToggleReaction(ctx context.Context, userID, messageID, emoji
 		return err
 	}
 
-	_, err = s.dmRepo.ToggleReaction(ctx, messageID, userID, emoji)
+	// Same rules as channel reactions: 32-rune Unicode cap, custom emoji
+	// only of a server the reactor belongs to.
+	key, removeOnly, err := validateReactionEmoji(ctx, s.emojiResolver, userID, emoji)
 	if err != nil {
+		return err
+	}
+
+	// A custom emoji that no longer validates can only be taken back:
+	// delete-only, and the same unknown-emoji error when nothing matched.
+	if removeOnly {
+		removed, err := s.dmRepo.RemoveReaction(ctx, messageID, userID, key)
+		if err != nil {
+			return fmt.Errorf("failed to remove DM reaction: %w", err)
+		}
+		if !removed {
+			return models.ErrUnknownEmoji
+		}
+	} else if _, err := s.dmRepo.ToggleReaction(ctx, messageID, userID, key); err != nil {
 		return fmt.Errorf("failed to toggle DM reaction: %w", err)
 	}
 

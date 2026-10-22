@@ -36,6 +36,10 @@ declare module "i18next" {
       privacy: LooseNamespace;
       terms: LooseNamespace;
       audit: LooseNamespace;
+      inbox: LooseNamespace;
+      saved: LooseNamespace;
+      expressions: LooseNamespace;
+      entrance: LooseNamespace;
       errors: typeof enErrors;
     };
   }

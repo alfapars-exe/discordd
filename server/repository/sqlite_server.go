@@ -108,15 +108,29 @@ func (r *sqliteServerRepo) Delete(ctx context.Context, serverID string) error {
 
 // GetFileURLsByServerID returns every attachment file_url for messages in
 // any channel of the given server — the SELECT counterpart of the first
-// statement in deleteServerCascadeStmts. Callers must run this before
-// Delete: the attachments rows (and the messages/channels they scope
-// through) are gone once the cascade completes.
+// statement in deleteServerCascadeStmts — plus the server's custom emoji
+// and sticker files (static and animated) and soundboard clips. Callers
+// must run this before Delete: the attachments, server_emojis,
+// server_stickers and soundboard_sounds rows
+// (and the messages/channels they scope through) are gone once the cascade
+// completes.
 func (r *sqliteServerRepo) GetFileURLsByServerID(ctx context.Context, serverID string) ([]string, error) {
+	return serverFileURLs(ctx, r.db, serverID)
+}
+
+// serverFileURLs is GetFileURLsByServerID's query, shared with the user
+// hard-delete path, which cascades every server the user owned.
+func serverFileURLs(ctx context.Context, q database.TxQuerier, serverID string) ([]string, error) {
 	query := `SELECT file_url FROM attachments WHERE message_id IN (
 		SELECT id FROM messages WHERE channel_id IN (
-			SELECT id FROM channels WHERE server_id = ?))`
+			SELECT id FROM channels WHERE server_id = ?))
+		UNION ALL SELECT file_url FROM server_emojis WHERE server_id = ?
+		UNION ALL SELECT animated_url FROM server_emojis WHERE server_id = ? AND animated_url IS NOT NULL
+		UNION ALL SELECT file_url FROM server_stickers WHERE server_id = ?
+		UNION ALL SELECT animated_url FROM server_stickers WHERE server_id = ? AND animated_url IS NOT NULL
+		UNION ALL SELECT file_url FROM soundboard_sounds WHERE server_id = ?`
 
-	rows, err := r.db.QueryContext(ctx, query, serverID)
+	rows, err := q.QueryContext(ctx, query, serverID, serverID, serverID, serverID, serverID, serverID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file urls by server id: %w", err)
 	}

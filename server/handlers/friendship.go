@@ -2,19 +2,27 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
 
 type FriendshipHandler struct {
 	friendService services.FriendshipService
+	// requestLimiter throttles SendRequest only (Faz B, 2026-10-21): each
+	// call fans out a WS event plus an inbox row to the target, so it is the
+	// one friendship endpoint a caller could use to spam someone else. It is
+	// shared with BlockHandler.BlockUser (see RateLimiters.SocialAction).
+	// nil disables the check (tests).
+	requestLimiter *ratelimit.MessageRateLimiter
 }
 
-func NewFriendshipHandler(friendService services.FriendshipService) *FriendshipHandler {
-	return &FriendshipHandler{friendService: friendService}
+func NewFriendshipHandler(friendService services.FriendshipService, requestLimiter *ratelimit.MessageRateLimiter) *FriendshipHandler {
+	return &FriendshipHandler{friendService: friendService, requestLimiter: requestLimiter}
 }
 
 // ListFriends handles GET /api/friends
@@ -57,6 +65,15 @@ func (h *FriendshipHandler) SendRequest(w http.ResponseWriter, r *http.Request) 
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	if h.requestLimiter != nil && !h.requestLimiter.Allow(user.ID) {
+		retryAfter := h.requestLimiter.CooldownSeconds(user.ID)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many friend requests, please wait %s",
+				ratelimit.FormatRetryMessage(retryAfter)))
 		return
 	}
 
