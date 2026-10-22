@@ -38,3 +38,21 @@ type MusicBotChannelState struct {
 	IsPaused     bool         `json:"is_paused"`
 	StartedAt    *time.Time   `json:"started_at,omitempty"`    // CurrentTrack play start; client computes elapsed
 }
+
+// MusicBotErrorPayload — the `music_bot_error` WebSocket event's data. Sent
+// once per failed track (Fatal=false, Failures = consecutive failures so far)
+// and once more with Fatal=true right before the bot gives up and leaves.
+//
+// Reason is a fixed code (forbidden, bot_check, unavailable, age_restricted,
+// geo_blocked, rate_limited, network, stalled, tool_missing, unknown), never
+// error text: the raw error and the yt-dlp/ffmpeg stderr stay in the server
+// log. This struct deliberately has no free-text error field, so none can be
+// added to the payload by accident.
+type MusicBotErrorPayload struct {
+	ChannelID  string `json:"channel_id"`
+	ServerID   string `json:"server_id"`
+	TrackTitle string `json:"track_title"`
+	Reason     string `json:"reason"`
+	Failures   int    `json:"failures"`
+	Fatal      bool   `json:"fatal"`
+}

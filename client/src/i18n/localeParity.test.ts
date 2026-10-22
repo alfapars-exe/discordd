@@ -1,6 +1,7 @@
 /**
  * EN/TR locale key-parity check — namespaces touched by the moderation
- * timeout/temp-ban UX change (B1). Every user-facing string must exist in
+ * timeout/temp-ban UX change (B1), plus e2ee and music. Every user-facing
+ * string must exist in
  * both languages; this test catches an EN key added without its TR
  * counterpart (or vice versa) going forward.
  *
@@ -32,7 +33,10 @@ import enEntrance from "./locales/en/entrance.json";
 import trEntrance from "./locales/tr/entrance.json";
 import enCosmetics from "./locales/en/cosmetics.json";
 import trCosmetics from "./locales/tr/cosmetics.json";
+import enMusic from "./locales/en/music.json";
+import trMusic from "./locales/tr/music.json";
 import { RECOVERY_PASSPHRASE_I18N_KEYS } from "../crypto/recoveryPassphrase";
+import { MUSIC_BOT_ERROR_REASONS } from "../types/music";
 
 /** Recursively flattens a JSON translation tree into dot-separated key paths. */
 function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[] {
@@ -78,6 +82,26 @@ describe("EN/TR locale key parity", () => {
   it("expressions.json", () => assertKeyParity("expressions", enExpressions, trExpressions));
   it("entrance.json", () => assertKeyParity("entrance", enEntrance, trEntrance));
   it("cosmetics.json", () => assertKeyParity("cosmetics", enCosmetics, trCosmetics));
+  it("music.json", () => assertKeyParity("music", enMusic, trMusic));
+});
+
+/**
+ * The music_bot_error handler builds `music:reason_<code>` from a whitelisted
+ * server reason code. Same failure mode as the block below: a code with no
+ * key in either locale would render the raw key, and parity alone would
+ * still pass.
+ */
+describe("music bot reason keys resolve", () => {
+  const enKeys = new Set(flattenKeys(enMusic));
+  const trKeys = new Set(flattenKeys(trMusic));
+
+  for (const code of MUSIC_BOT_ERROR_REASONS) {
+    const key = `reason_${code}`;
+    it(`${code} -> ${key}`, () => {
+      expect(enKeys.has(key), `music/en is missing "${key}"`).toBe(true);
+      expect(trKeys.has(key), `music/tr is missing "${key}"`).toBe(true);
+    });
+  }
 });
 
 /**

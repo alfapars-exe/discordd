@@ -39,3 +39,33 @@ export type MusicBotChannelState = {
 export type PlayMusicResponse = {
   added_tracks: MusicTrack[];
 };
+
+/**
+ * Reason codes the server attaches to a `music_bot_error` event. Mirrors the
+ * musicBotErrorReason enum in server/services/music_bot_errors.go. Each code
+ * maps to the `music:reason_<code>` i18n key; the parity test in
+ * i18n/localeParity.test.ts fails if a code has no key in either locale.
+ */
+export const MUSIC_BOT_ERROR_REASONS = [
+  "forbidden",
+  "bot_check",
+  "unavailable",
+  "age_restricted",
+  "geo_blocked",
+  "rate_limited",
+  "network",
+  "stalled",
+  "tool_missing",
+  "unknown",
+] as const;
+
+export type MusicBotErrorReason = (typeof MUSIC_BOT_ERROR_REASONS)[number];
+
+/**
+ * Narrows an untrusted wire value to a known reason code. Anything else (a
+ * newer server's code, a missing field, a crafted string) is rejected, so a
+ * caller can never build an i18n key the server chose.
+ */
+export function isMusicBotErrorReason(x: unknown): x is MusicBotErrorReason {
+  return typeof x === "string" && (MUSIC_BOT_ERROR_REASONS as readonly string[]).includes(x);
+}

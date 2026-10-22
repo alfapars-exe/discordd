@@ -209,7 +209,17 @@ export interface WSPayloadMap {
   voice_replaced: unknown;
   voice_passphrase_rotated: { channel_id: string; passphrase: string };
   music_bot_state: { channel_id?: string; state?: MusicBotChannelState };
-  music_bot_error: { track_title?: string; reason?: string };
+  // `reason` stays `string` on the wire: it is untrusted and a newer server
+  // may send a code this client doesn't know. Narrow with
+  // isMusicBotErrorReason (types/music.ts) before using it.
+  music_bot_error: {
+    channel_id: string;
+    server_id: string;
+    track_title: string;
+    reason: string;
+    failures: number;
+    fatal: boolean;
+  };
 }
 
 /**
