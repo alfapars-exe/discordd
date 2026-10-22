@@ -6,8 +6,9 @@ package services
 // dial path is bypassed entirely by seeding svc.bots directly, and
 // extractTracksFn (the same seam idea as playTrackFn in
 // music_bot_pipeline.go) stands in for the real yt-dlp call. Each seeded
-// bot starts with a non-nil currentTrack so Enqueue's wasIdle branch never
-// fires and playLoop is never spawned -- these tests only exercise Enqueue.
+// bot starts with loopRunning set, so Enqueue believes a playLoop already
+// owns the bot and never spawns one (which would run the real playTrack) --
+// these tests only exercise Enqueue.
 
 import (
 	"context"
@@ -44,8 +45,8 @@ func (stubMusicUserGetter) GetByID(_ context.Context, _ string) (*models.User, e
 // newTestMusicBotService builds a musicBotService with a bot already seeded
 // for channelID/serverID, so Enqueue's getOrCreateBot fast path (existing
 // entry in s.bots) is taken and the real LiveKit dial in connectBotToRoom is
-// never reached. currentTrack is pre-set (non-nil) so wasIdle is always
-// false and Enqueue never spawns playLoop.
+// never reached. loopRunning is pre-set so Enqueue never spawns playLoop;
+// currentTrack is set too, to look like a bot mid-track.
 func newTestMusicBotService(channelID, serverID string) *musicBotService {
 	svc := &musicBotService{
 		bots: make(map[string]*botInstance),
@@ -61,6 +62,7 @@ func newTestMusicBotService(channelID, serverID string) *musicBotService {
 		serverID:     serverID,
 		roomName:     serverID + ":" + channelID,
 		currentTrack: &models.MusicTrack{VideoID: "already-playing"},
+		loopRunning:  true,
 	}
 	return svc
 }
@@ -93,6 +95,7 @@ func TestEnqueue_ExtractionConcurrencyBounded(t *testing.T) {
 
 	const n = 10
 	results := make([]error, n)
+	var returned atomic.Int32
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)
@@ -100,14 +103,23 @@ func TestEnqueue_ExtractionConcurrencyBounded(t *testing.T) {
 			defer wg.Done()
 			_, err := svc.Enqueue(context.Background(), "user-1", "ch-1", "https://youtube.com/watch?v=x")
 			results[i] = err
+			returned.Add(1)
 		}(i)
 	}
 
-	// Wait for exactly maxConcurrentMusicExtractions to be blocked in-flight
-	// before releasing them -- the semaphore is non-blocking, so every other
-	// goroutine has already failed fast by this point.
-	deadline := time.Now().Add(2 * time.Second)
-	for inFlight.Load() < maxConcurrentMusicExtractions && time.Now().Before(deadline) {
+	// Release only once every goroutine has either taken a slot (and is
+	// blocked in extract) or already returned. Seeing the slots full is not
+	// enough: a goroutine that has not reached the semaphore yet would find
+	// a free slot after the release and succeed, making the counts below
+	// depend on scheduling (it flaked that way under -race -count=20 on a
+	// busy host). The in-flight ones cannot return before release, so
+	// returned == n-max means all the others were turned away.
+	deadline := time.Now().Add(5 * time.Second)
+	for inFlight.Load() < maxConcurrentMusicExtractions || returned.Load() < n-maxConcurrentMusicExtractions {
+		if time.Now().After(deadline) {
+			t.Fatalf("before release: %d extraction(s) in flight (want %d), %d Enqueue(s) returned (want %d)",
+				inFlight.Load(), maxConcurrentMusicExtractions, returned.Load(), n-maxConcurrentMusicExtractions)
+		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	if got := inFlight.Load(); got != maxConcurrentMusicExtractions {

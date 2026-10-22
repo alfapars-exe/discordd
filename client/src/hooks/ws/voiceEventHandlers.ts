@@ -1,6 +1,7 @@
 /**
  * Voice-domain WS event handlers.
- * Handles: voice state, screen share, force move/disconnect, AFK kick, voice replaced.
+ * Handles: voice state, screen share, force move/disconnect, AFK kick, voice replaced,
+ * passphrase rotation, music bot state/errors.
  */
 
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -11,6 +12,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { useToastStore } from "../../stores/toastStore";
 import { playJoinSound, playLeaveSound } from "../../utils/sounds";
 import i18n from "../../i18n";
+import { isMusicBotErrorReason } from "../../types/music";
 import type { WSMessage } from "../../types";
 import type { WSHandlerContext } from "./types";
 import { isVoiceRecoveryAllowed } from "../../stores/shared/voiceRecovery";
@@ -261,28 +263,35 @@ export async function handleVoiceEvent(
     }
 
     case "music_bot_error": {
-      // playTrack failed (yt-dlp 410, malformed Ogg, codec issue, etc.).
-      // The bot already moved to the next queue entry; we just need to
-      // tell the user *why* the track they queued never played. The
-      // reason field is included verbatim (truncated) so the user can
-      // self-diagnose: "yt-dlp start: …" → binary missing on server,
-      // "ogg parse: …" → codec issue, etc. Without the reason the user
-      // would have to open DevTools console to see what broke.
+      // The server sends one event per failed track (fatal=false) and, when
+      // its consecutive-failure cap trips, one more with fatal=true right
+      // before the bot leaves. `reason` is a classified code, never raw
+      // server error text (that stays in the server log); the reason the
+      // user sees comes only from our own `music:reason_<code>` keys.
+      //
+      // The event is broadcast to the whole server, so only listeners in the
+      // bot's voice channel get a toast — everyone else would be told about
+      // a queue they never heard.
       const data = msg.d;
-      const title = data?.track_title?.trim() || i18n.t("music:unknownTrack", { defaultValue: "track" });
-      const reasonRaw = data?.reason?.trim() ?? "";
-      // Trim to the first ~120 chars so the toast doesn't wrap forever
-      // when yt-dlp dumps a full stack of fallback URLs.
-      const reasonShort = reasonRaw.length > 120 ? `${reasonRaw.slice(0, 117)}…` : reasonRaw;
-      const message = reasonShort
-        ? i18n.t("music:playbackFailedWithReason", {
-            title,
-            reason: reasonShort,
-            defaultValue: `"${title}" çalınamadı — ${reasonShort}`,
-          })
-        : i18n.t("music:playbackFailed", { title, defaultValue: `Could not play "${title}"` });
-      useToastStore.getState().addToast("error", message, 8000);
+      if (!data?.channel_id || data.channel_id !== useVoiceStore.getState().currentVoiceChannelId) {
+        return true;
+      }
       console.warn("[music] playback error from server:", data);
+      const addToast = useToastStore.getState().addToast;
+      const rawTitle = typeof data.track_title === "string" ? data.track_title.trim() : "";
+      const title = rawTitle || i18n.t("music:unknownTrack");
+      // Whitelist before building the key: an unknown, missing or crafted
+      // code falls back to "unknown" instead of a server-chosen i18n key.
+      const code = isMusicBotErrorReason(data.reason) ? data.reason : "unknown";
+      const reasonText = i18n.t(`music:reason_${code}`);
+      addToast("error", i18n.t("music:playbackFailedWithReason", { title, reason: reasonText }), 8000);
+      // The fatal toast is shown IN ADDITION to the per-track one: the
+      // server sends the cap-tripping track's own non-fatal event right
+      // before the fatal one, so this toast only adds the "bot gave up"
+      // signal.
+      if (data.fatal === true) {
+        addToast("error", i18n.t("music:botStoppedAfterFailures", { count: data.failures }), 10000);
+      }
       return true;
     }
 

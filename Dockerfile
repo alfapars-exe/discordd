@@ -94,8 +94,19 @@ FROM debian:bookworm-slim
 # extractor name appeared, so the class-name pattern below still matches
 # only the intended family, and `generic` -- the extractor --use-extractors
 # is here specifically to exclude -- is still present and still excluded
-# by omission. See music_url_guard.go and music_bot_pipeline.go:342.
-ARG YT_DLP_VERSION=2026.07.04
+# by omission. See music_url_guard.go and playTrackYtdlpArgs in
+# music_bot_pipeline.go.
+#
+# Bumped 2026.07.04 -> 2026.08.19 (2026-10-20): 2026.07.04's
+# `-f bestaudio -o -` got `HTTP Error 403: Forbidden` (exit 1, 0 bytes) on
+# music videos with or without a JS runtime, so /play queued tracks that
+# never played; 2026.08.19 works with no JS runtime, so no deno/node is
+# added. The --use-extractors "Youtube.*" pattern is unchanged, and the same
+# check as above was repeated: both release binaries downloaded and
+# checksum-verified, `--list-extractors` filtered to ^youtube gives the same
+# 20 names on both pins (no addition, no removal), `generic` still present
+# and still excluded by omission.
+ARG YT_DLP_VERSION=2026.08.19
 
 # huggingface_hub pinned for the same reason as yt-dlp above (security scan
 # 2026-07-31, finding N-16). The constraint used to be `>=0.20` with no upper

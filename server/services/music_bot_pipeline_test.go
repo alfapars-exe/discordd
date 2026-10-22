@@ -9,10 +9,14 @@ package services
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os/exec"
+	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -139,7 +143,7 @@ func TestStallWatchdog_CancelsStalledPump(t *testing.T) {
 		_ = pw.CloseWithError(errors.New("subprocess killed"))
 	}()
 
-	watchdog := newStallWatchdog(ctx, cancel, 80*time.Millisecond, 5*time.Millisecond, "chan-stall")
+	watchdog := newStallWatchdog(ctx, cancel, 80*time.Millisecond, 5*time.Millisecond, "chan-stall", nil)
 	defer watchdog.close()
 
 	track := &recordingTrack{}
@@ -180,7 +184,7 @@ func TestStallWatchdog_ProgressKeepsTrackAlive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	watchdog := newStallWatchdog(ctx, cancel, 200*time.Millisecond, 5*time.Millisecond, "chan-alive")
+	watchdog := newStallWatchdog(ctx, cancel, 200*time.Millisecond, 5*time.Millisecond, "chan-alive", nil)
 	defer watchdog.close()
 
 	deadline := time.Now().Add(400 * time.Millisecond)
@@ -202,13 +206,48 @@ func TestStallWatchdog_FiresWhenNoPageEverArrives(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	watchdog := newStallWatchdog(ctx, cancel, 50*time.Millisecond, 5*time.Millisecond, "chan-silent")
+	watchdog := newStallWatchdog(ctx, cancel, 50*time.Millisecond, 5*time.Millisecond, "chan-silent", nil)
 	defer watchdog.close()
 
 	select {
 	case <-ctx.Done():
 	case <-time.After(5 * time.Second):
 		t.Fatal("watchdog did not fire on a pipeline that produced no pages at all")
+	}
+}
+
+// A paused track (ffmpeg SIGSTOPped) emits no pages by design. The watchdog
+// must not read a pause longer than the timeout as a wedge, and after Resume
+// it must start from a fresh timeout rather than fire on the next tick.
+func TestStallWatchdog_PauseIsNotAStall(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var paused atomic.Bool
+	paused.Store(true)
+	watchdog := newStallWatchdog(ctx, cancel, 50*time.Millisecond, 5*time.Millisecond, "chan-paused", paused.Load)
+	defer watchdog.close()
+
+	// Four timeouts with no progress while paused.
+	time.Sleep(200 * time.Millisecond)
+	if watchdog.stalled() || ctx.Err() != nil {
+		t.Fatal("watchdog fired while the track was paused")
+	}
+
+	// Resume with no progress: the full timeout must elapse again before it
+	// fires, and then it must fire.
+	paused.Store(false)
+	resumedAt := time.Now()
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("watchdog never fired after resume with no progress")
+	}
+	if waited := time.Since(resumedAt); waited < 40*time.Millisecond {
+		t.Fatalf("watchdog fired %v after resume, want a fresh ~50ms timeout", waited)
+	}
+	if !watchdog.stalled() {
+		t.Fatal("watchdog.stalled() = false after firing")
 	}
 }
 
@@ -247,14 +286,54 @@ func newFailureCapTestBot(t *testing.T, play func(bot *botInstance, track *model
 	}
 }
 
+// musicBotErrorKeys is the FIXED music_bot_error contract shared with the
+// client (client/src/types/ws.ts). In particular there is no "error" key:
+// raw error text must never reach clients.
+var musicBotErrorKeys = []string{"channel_id", "server_id", "track_title", "reason", "failures", "fatal"}
+
+// musicBotErrorPayloads JSON-round-trips every music_bot_error event, the
+// way a client receives it, and fails the test if any payload's key set
+// differs from musicBotErrorKeys.
+func musicBotErrorPayloads(t *testing.T, events []ws.Event) []map[string]any {
+	t.Helper()
+	var out []map[string]any
+	for _, e := range events {
+		if e.Op != "music_bot_error" {
+			continue
+		}
+		raw, err := json.Marshal(e.Data)
+		if err != nil {
+			t.Fatalf("marshal music_bot_error payload: %v", err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatalf("unmarshal music_bot_error payload: %v", err)
+		}
+		got := make([]string, 0, len(m))
+		for k := range m {
+			got = append(got, k)
+		}
+		sort.Strings(got)
+		want := append([]string(nil), musicBotErrorKeys...)
+		sort.Strings(want)
+		if !slices.Equal(got, want) {
+			t.Fatalf("music_bot_error keys = %v, want exactly %v (payload %s)", got, want, raw)
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // playLoop used to continue to the next track on ANY error with no cap, so a
 // broken yt-dlp binary burned through the whole queue in a tight loop. After
-// N back-to-back failures the bot stops and says why.
+// N back-to-back failures the bot stops. Every failed track is reported on
+// its own (fatal=false), and the give-up gets one more, fatal, event that
+// arrives before the final IsActive=false state.
 func TestPlayLoop_StopsAfterConsecutiveFailures(t *testing.T) {
 	var attempts atomic.Int32
 	svc, bot, recorded := newFailureCapTestBot(t, func(*botInstance, *models.MusicTrack) error {
 		attempts.Add(1)
-		return errors.New("yt-dlp: executable file not found in $PATH")
+		return fmt.Errorf("yt-dlp: %w", exec.ErrNotFound)
 	})
 
 	done := make(chan struct{})
@@ -269,33 +348,112 @@ func TestPlayLoop_StopsAfterConsecutiveFailures(t *testing.T) {
 		t.Fatalf("playTrack called %d time(s), want exactly %d", got, maxConsecutiveTrackFailures)
 	}
 	if svc.lookupBot(bot.channelID) != nil {
-		t.Fatal("bot still registered after the failure cap tripped; Stop() was not called")
+		t.Fatal("bot still registered after the failure cap tripped; stopBot() was not called")
 	}
 
-	var errEvents int
-	for _, e := range recorded() {
-		if e.Op != "music_bot_error" {
-			continue
+	events := recorded()
+	payloads := musicBotErrorPayloads(t, events)
+	if len(payloads) != maxConsecutiveTrackFailures+1 {
+		t.Fatalf("broadcast %d music_bot_error event(s), want %d (one per failure + one fatal)", len(payloads), maxConsecutiveTrackFailures+1)
+	}
+	for i, p := range payloads {
+		wantFatal := i == len(payloads)-1
+		wantFailures := float64(i + 1)
+		if wantFatal {
+			wantFailures = float64(maxConsecutiveTrackFailures)
 		}
-		errEvents++
-		data, ok := e.Data.(map[string]any)
-		if !ok {
-			t.Fatalf("music_bot_error payload = %T, want map[string]any", e.Data)
+		if p["channel_id"] != bot.channelID {
+			t.Fatalf("event %d channel_id = %v, want %s", i, p["channel_id"], bot.channelID)
 		}
-		if data["channel_id"] != bot.channelID {
-			t.Fatalf("music_bot_error channel_id = %v, want %s", data["channel_id"], bot.channelID)
+		if p["fatal"] != wantFatal {
+			t.Fatalf("event %d fatal = %v, want %v", i, p["fatal"], wantFatal)
 		}
-		if msg, _ := data["error"].(string); msg == "" {
-			t.Fatal("music_bot_error carried no error text; users would see the bot vanish with no reason")
+		if p["failures"] != wantFailures {
+			t.Fatalf("event %d failures = %v, want %v", i, p["failures"], wantFailures)
+		}
+		if p["reason"] != string(reasonToolMissing) {
+			t.Fatalf("event %d reason = %v, want %q", i, p["reason"], reasonToolMissing)
 		}
 	}
-	if errEvents != 1 {
-		t.Fatalf("broadcast %d music_bot_error event(s), want exactly 1", errEvents)
+
+	// The fatal event must precede the final IsActive=false state push, so
+	// the client has the reason in hand when the panel disappears.
+	fatalIdx, finalIdx := -1, -1
+	for i, e := range events {
+		if e.Op == "music_bot_error" {
+			fatalIdx = i
+		}
+		if e.Op == "music_bot_state" {
+			finalIdx = i
+		}
+	}
+	if fatalIdx == -1 || finalIdx == -1 || fatalIdx > finalIdx {
+		t.Fatalf("fatal music_bot_error at index %d, final music_bot_state at %d; the error must come first", fatalIdx, finalIdx)
+	}
+	data, _ := events[finalIdx].Data.(map[string]any)
+	if st, ok := data["state"].(models.MusicBotChannelState); !ok || st.IsActive {
+		t.Fatalf("last music_bot_state = %#v, want the IsActive=false state from stopBot", events[finalIdx].Data)
+	}
+}
+
+// A single failed track used to be silent: playLoop only logged it, the
+// queue drained, and the panel just disappeared. Now the one failure is
+// reported (non-fatal, classified, no error text) before the idle state.
+func TestPlayLoop_SingleFailureBroadcastsNonFatal(t *testing.T) {
+	svc, bot, recorded := newFailureCapTestBot(t, func(*botInstance, *models.MusicTrack) error {
+		return errors.New("ERROR: [youtube] x: Sign in to confirm you’re not a bot")
+	})
+	bot.queue = []models.MusicTrack{{VideoID: "vid-song", Title: "Song"}}
+	t.Cleanup(func() {
+		bot.mu.Lock()
+		bot.cancelIdleTimer()
+		bot.mu.Unlock()
+	})
+
+	done := make(chan struct{})
+	go func() { defer close(done); svc.playLoop(bot) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("playLoop never returned")
+	}
+
+	events := recorded()
+	payloads := musicBotErrorPayloads(t, events)
+	if len(payloads) != 1 {
+		t.Fatalf("broadcast %d music_bot_error event(s), want exactly 1", len(payloads))
+	}
+	p := payloads[0]
+	if p["reason"] != string(reasonBotCheck) || p["failures"] != float64(1) || p["fatal"] != false ||
+		p["track_title"] != "Song" || p["channel_id"] != bot.channelID || p["server_id"] != bot.serverID {
+		t.Fatalf("music_bot_error = %v, want bot_check / failures 1 / non-fatal / \"Song\"", p)
+	}
+
+	// After the error: a state push with no current track (queue drained).
+	errIdx := -1
+	for i, e := range events {
+		if e.Op == "music_bot_error" {
+			errIdx = i
+		}
+	}
+	idleAfter := false
+	for _, e := range events[errIdx+1:] {
+		if e.Op != "music_bot_state" {
+			continue
+		}
+		data, _ := e.Data.(map[string]any)
+		if st, ok := data["state"].(*models.MusicBotChannelState); ok && st.CurrentTrack == nil {
+			idleAfter = true
+		}
+	}
+	if !idleAfter {
+		t.Fatal("no music_bot_state with current_track nil after the error event")
 	}
 }
 
 // The cap counts CONSECUTIVE failures: one good track resets it, so an
-// occasional dud video never stops a working bot.
+// occasional dud video never stops a working bot. Each dud is still
+// reported, non-fatally, with the counter as it stood at that point.
 func TestPlayLoop_SuccessResetsFailureCounter(t *testing.T) {
 	var attempts atomic.Int32
 	svc, bot, recorded := newFailureCapTestBot(t, func(*botInstance, *models.MusicTrack) error {
@@ -322,9 +480,19 @@ func TestPlayLoop_SuccessResetsFailureCounter(t *testing.T) {
 	if svc.lookupBot(bot.channelID) == nil {
 		t.Fatal("bot was stopped despite never failing 3 times in a row")
 	}
-	for _, e := range recorded() {
-		if e.Op == "music_bot_error" {
-			t.Fatal("broadcast a music_bot_error even though the failure cap was never reached")
+
+	// Failures at attempts 1,2,4,5,7,8,10 -> counter 1,2,1,2,1,2,1.
+	wantFailures := []float64{1, 2, 1, 2, 1, 2, 1}
+	payloads := musicBotErrorPayloads(t, recorded())
+	if len(payloads) != len(wantFailures) {
+		t.Fatalf("broadcast %d music_bot_error event(s), want %d (one per failed track)", len(payloads), len(wantFailures))
+	}
+	for i, p := range payloads {
+		if p["fatal"] != false {
+			t.Fatalf("event %d fatal = %v; the cap was never reached", i, p["fatal"])
+		}
+		if p["failures"] != wantFailures[i] {
+			t.Fatalf("event %d failures = %v, want %v", i, p["failures"], wantFailures[i])
 		}
 	}
 	bot.mu.Lock()
@@ -368,8 +536,17 @@ func TestStopAll_StopsEveryBot(t *testing.T) {
 // flag matters and why this test can only pin its presence in argv, not that
 // GenericIE actually stays disabled.
 func TestPlayTrackYtdlpArgs_RestrictsToYoutubeExtractors(t *testing.T) {
-	args := playTrackYtdlpArgs("https://www.youtube.com/watch?v=x")
+	const url = "https://www.youtube.com/watch?v=x"
+	args := playTrackYtdlpArgs(url)
 	assertHasAdjacentPair(t, args, "--use-extractors", "Youtube.*")
+	assertHasAdjacentPair(t, args, "-f", "bestaudio/best")
+	if n := len(args); n < 2 || args[n-2] != "--" || args[n-1] != url {
+		t.Fatalf("argv %v must end with \"--\", url", args)
+	}
+	// Warnings must reach playTrack's stderr tail (they are only logged).
+	if slices.Contains(args, "--no-warnings") {
+		t.Fatalf("argv %v still passes --no-warnings", args)
+	}
 }
 
 // stubHangingResolver blocks until its context is cancelled, then returns
@@ -407,6 +584,11 @@ func TestPlayTrack_GuardHasOwnDeadline(t *testing.T) {
 	case err := <-done:
 		if err == nil {
 			t.Fatal("expected a DNS-timeout rejection, got nil — the guard did not actually wait on the hanging resolver")
+		}
+		// The deadline must stay in the chain so playLoop classifies the
+		// track as a network failure rather than "unknown".
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("playTrack = %v, want an error wrapping context.DeadlineExceeded", err)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("playTrack did not return within 10s — the guard has no bounded deadline")

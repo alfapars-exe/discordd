@@ -20,5 +20,21 @@
   "commandHintSkip": "/skip to skip the current track",
   "commandHintPause": "/pause to pause, /resume to continue",
   "commandHintStop": "/stop to stop the bot",
-  "notInVoice": "Join a voice channel first"
+  "notInVoice": "Join a voice channel first",
+  "playbackFailed": "Could not play \"{{title}}\"",
+  "playbackFailedWithReason": "Could not play \"{{title}}\" — {{reason}}",
+  "unknownTrack": "Unknown track",
+  "botStoppedAfterFailures_one": "Music bot stopped: {{count}} track failed in a row",
+  "botStoppedAfterFailures_other": "Music bot stopped: {{count}} tracks failed in a row",
+  "reason_forbidden": "YouTube refused access",
+  "reason_bot_check": "YouTube asked for bot verification",
+  "reason_unavailable": "Video is unavailable",
+  "reason_age_restricted": "Video is age-restricted",
+  "reason_geo_blocked": "Video is not available in this region",
+  "reason_rate_limited": "YouTube is rate-limiting requests, try again later",
+  "reason_network": "Network error while fetching audio",
+  "reason_stalled": "Playback stalled",
+  "reason_tool_missing": "Server audio tools are unavailable",
+  "reason_unknown": "Unknown error",
+  "playTimeout": "This is taking longer than usual — the track may still appear in the queue"
 }

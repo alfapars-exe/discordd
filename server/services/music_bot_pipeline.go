@@ -5,14 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
+	"github.com/argeinfina/hichat/pkg/logx"
 
 	"github.com/livekit/protocol/auth"
 	livekitproto "github.com/livekit/protocol/livekit"
@@ -108,8 +112,19 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 		return fmt.Errorf("publish track: %w", err)
 	}
 
+	// Publish under bot.mu. If stopBot ran while we were dialing, it found
+	// no room to disconnect — so this connection is ours to close, or it
+	// would leak a ghost participant in the LiveKit room.
+	bot.mu.Lock()
+	if bot.stopFlag || bot.stopping.Load() {
+		bot.mu.Unlock()
+		room.Disconnect()
+		musicBotLogger.Info("connectBotToRoom: bot stopped while dialing, disconnected", "channel_id", bot.channelID)
+		return errBotStopping
+	}
 	bot.lkRoom = room
 	bot.audioTrack = track
+	bot.mu.Unlock()
 	musicBotLogger.Info("bot joined room",
 		"room", bot.roomName, "identity", models.MusicBotUserID+":"+bot.channelID, "pub_sid", pub.SID())
 	return nil
@@ -128,6 +143,13 @@ const (
 	// instantly on every track, so an uncapped "continue to the next one"
 	// burns the entire queue in a tight loop.
 	maxConsecutiveTrackFailures = 3
+	// playTrackReapGrace — after the pump returns, how long playTrack lets
+	// yt-dlp and ffmpeg exit on their own before killing them.
+	playTrackReapGrace = 3 * time.Second
+	// subprocessWaitDelay — exec.Cmd.WaitDelay for both subprocesses: bounds
+	// how long Wait blocks on a process that ignores the kill or on a stderr
+	// pipe that stays open after the process exits.
+	subprocessWaitDelay = 5 * time.Second
 )
 
 // playLoop — the per-bot driver goroutine. Dequeues tracks one at a time and
@@ -135,10 +157,21 @@ const (
 // queue empties, schedules an idle-leave timer; another Enqueue arriving
 // before the timer fires cancels it and restarts the loop.
 //
+// Every failed track is broadcast as a non-fatal music_bot_error with its
+// reason code. A panic inside the per-track work is recovered (safePlay) and
+// counted as a failure, so one bad track cannot wedge the bot.
+//
 // Exits when:
-//   - bot.stopFlag is set (Stop() was called) — bot already disconnected
+//   - bot.stopFlag is set (stopBot() was called) — bot already disconnected
 //   - the queue drains (idle-leave timer armed)
-//   - maxConsecutiveTrackFailures tracks fail back to back
+//   - maxConsecutiveTrackFailures tracks fail back to back (one more,
+//     fatal, music_bot_error, then stopBot)
+//
+// In the first two cases loopRunning is cleared in the same critical section
+// that decides to exit, so the next Enqueue starts a fresh loop (the third
+// leaves it set on a stopped bot, which is never queued onto again). Any other
+// exit (a panic outside safePlay) is caught by the deferred cleanup below,
+// which does the same and arms the idle timer.
 func (s *musicBotService) playLoop(bot *botInstance) {
 	// Seam for tests (mirrors BackupService.runCmd): production runs the real
 	// subprocess pipeline, tests substitute a stub so the loop's control flow
@@ -148,32 +181,38 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 		play = s.playTrack
 	}
 
-	consecutiveFailures := 0
-	for {
-		bot.mu.Lock()
-		if bot.stopFlag {
-			bot.mu.Unlock()
+	cleanExit := false
+	defer func() {
+		if cleanExit {
 			return
 		}
-		if len(bot.queue) == 0 {
-			bot.currentTrack = nil
-			bot.startedAt = nil
+		bot.mu.Lock()
+		bot.loopRunning = false
+		bot.currentTrack = nil
+		bot.startedAt = nil
+		if !bot.stopFlag && !bot.stopping.Load() {
 			s.scheduleIdleLeaveLocked(bot)
-			bot.mu.Unlock()
+		}
+		bot.mu.Unlock()
+		s.broadcastState(bot)
+	}()
+
+	consecutiveFailures := 0
+	for {
+		next, step := s.nextTrack(bot)
+		switch step {
+		case loopStopped:
+			cleanExit = true
+			return
+		case loopDrained:
+			cleanExit = true
 			s.broadcastState(bot)
 			return
 		}
-		next := bot.queue[0]
-		bot.queue = bot.queue[1:]
-		bot.currentTrack = &next
-		now := time.Now()
-		bot.startedAt = &now
-		bot.skipFlag = false
-		bot.mu.Unlock()
 
 		s.broadcastState(bot)
 
-		err := play(bot, &next)
+		err := s.safePlay(play, bot, &next)
 		if err == nil {
 			// Only CONSECUTIVE failures count — one good track means the
 			// pipeline works and the earlier errors were per-video duds.
@@ -182,25 +221,100 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 		}
 
 		consecutiveFailures++
+		reason := playbackReason(err)
 		s.logErr(models.LogCategoryVoice, bot.channelID, "music playback failed", map[string]string{
 			"video_id":             next.VideoID,
 			"error":                pkg.ErrText(err),
+			"reason":               string(reason),
 			"consecutive_failures": strconv.Itoa(consecutiveFailures),
 		})
+		s.broadcastPlaybackError(bot, &next, reason, consecutiveFailures, false)
 		if consecutiveFailures >= maxConsecutiveTrackFailures {
 			// Something systemic is broken (missing binary, dead network,
 			// wedged pipeline). Stop rather than spinning the queue, and tell
-			// the users why before the panel disappears.
-			s.broadcastPlaybackError(bot, err, consecutiveFailures)
-			_ = s.Stop(bot.channelID)
+			// the users the bot gave up before the panel disappears.
+			//
+			// stopping is set under bot.mu first (as the idle timer does), so
+			// an Enqueue that takes bot.mu from here on moves to a fresh bot
+			// instead of queueing onto this one, getting 200, and having
+			// stopBot clear its tracks a moment later.
+			bot.mu.Lock()
+			bot.stopping.Store(true)
+			bot.mu.Unlock()
+			s.broadcastPlaybackError(bot, &next, reason, consecutiveFailures, true)
+			cleanExit = true
+			s.stopBot(bot)
 			return
 		}
 	}
 }
 
+// loopStep is nextTrack's verdict for playLoop.
+type loopStep int
+
+const (
+	loopPlay    loopStep = iota // a track was dequeued; play it
+	loopStopped                 // the bot was stopped; exit without touching state
+	loopDrained                 // the queue is empty; idle timer armed, exit
+)
+
+// nextTrack dequeues the next track under bot.mu. On loopStopped and
+// loopDrained it clears loopRunning in the same critical section, which is
+// what lets a later Enqueue start a new loop. The deferred unlock means a
+// panic in here cannot leave bot.mu held for playLoop's own cleanup.
+func (s *musicBotService) nextTrack(bot *botInstance) (models.MusicTrack, loopStep) {
+	bot.mu.Lock()
+	defer bot.mu.Unlock()
+	if bot.stopFlag {
+		bot.loopRunning = false
+		return models.MusicTrack{}, loopStopped
+	}
+	if len(bot.queue) == 0 {
+		bot.loopRunning = false
+		bot.currentTrack = nil
+		bot.startedAt = nil
+		s.scheduleIdleLeaveLocked(bot)
+		return models.MusicTrack{}, loopDrained
+	}
+	next := bot.queue[0]
+	bot.queue = bot.queue[1:]
+	bot.currentTrack = &next
+	now := time.Now()
+	bot.startedAt = &now
+	bot.skipFlag = false
+	return next, loopPlay
+}
+
+// safePlay runs one track and turns a panic into a counted failure (reason
+// "unknown") instead of letting it end playLoop: logx.Go would recover it,
+// but the loop — and with it the bot — would be gone (pkg/logx/go.go: loops
+// that must survive per-iteration failures wrap the iteration, not the loop).
+func (s *musicBotService) safePlay(play func(*botInstance, *models.MusicTrack) error, bot *botInstance, track *models.MusicTrack) (err error) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		musicBotLogger.Error("playTrack panic recovered",
+			slog.String("channel_id", bot.channelID),
+			slog.String("video_id", track.VideoID),
+			slog.String("panic", fmt.Sprintf("%v", r)),
+			slog.String("stack", string(debug.Stack())),
+		)
+		err = &trackPlaybackError{Reason: reasonUnknown, err: fmt.Errorf("playTrack panic: %v", r)}
+	}()
+	return play(bot, track)
+}
+
 // playTrack — run the yt-dlp + ffmpeg pipeline for one track and pump
 // each Opus page into the LiveKit audio track. Returns when the track ends
 // (subprocess EOF), is skipped (Skip() killed the cmd), or errors.
+//
+// A failed track returns a *trackPlaybackError whose Reason is what clients
+// are told; the error text (which may quote yt-dlp's "ERROR:" line) and both
+// stderr tails are for the server log only. Skip/Stop kills return nil — they
+// are not failures — including a Skip/Stop that lands before the pipeline is
+// running (during the URL guard or while the subprocesses start).
 func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) error {
 	musicBotLogger.Info("playTrack start", "channel_id", bot.channelID, "video_id", track.VideoID, "title", track.Title)
 
@@ -221,10 +335,44 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// pipeline that was never started.
 	guardCtx, guardCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	guardErr := validateMusicURLNetwork(guardCtx, track.URL)
+	// Read before guardCancel, which would turn the context's error into
+	// Canceled.
+	guardTimedOut := errors.Is(guardCtx.Err(), context.DeadlineExceeded)
 	guardCancel()
+
+	// A Skip or Stop that landed during the guard (up to 5 s of DNS) had
+	// nothing to kill: bot.cmd and bot.cancelFn are not set yet. Honour it
+	// here, whatever the guard said — otherwise a skipped track plays to its
+	// end, and a stopped bot reports a failure for a track nobody wants.
+	//
+	// The audio track is snapshotted in the same critical section (stopBot
+	// clears it): a nil track seen here can then never be a Stop, which is
+	// already reported as endedEarly. The nil check is on the concrete
+	// pointer: once converted to the sampleWriter interface a nil
+	// *LocalSampleTrack is a non-nil interface value, and WriteSample on it
+	// panics.
+	bot.mu.Lock()
+	endedEarly := bot.killRequestedLocked()
+	audio := bot.audioTrack
+	bot.mu.Unlock()
+	if endedEarly {
+		musicBotLogger.Info("playTrack: skipped or stopped before the pipeline started",
+			"channel_id", bot.channelID, "video_id", track.VideoID)
+		return nil
+	}
 	if guardErr != nil {
+		if guardTimedOut {
+			// The guard reports a resolver timeout as its generic "DNS
+			// lookup failed" bad request. Keep the deadline in the chain so
+			// the track is classified as a network failure, not "unknown".
+			return fmt.Errorf("%w (%w)", guardErr, context.DeadlineExceeded)
+		}
 		return guardErr
 	}
+	if audio == nil {
+		return &trackPlaybackError{Reason: reasonUnknown, err: errBotNotConnected}
+	}
+	var sink sampleWriter = audio
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -232,6 +380,28 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	bot.mu.Lock()
 	bot.cancelFn = cancel
 	bot.mu.Unlock()
+	// Deferred before the reaper below, so it runs after it.
+	defer func() {
+		bot.mu.Lock()
+		bot.cmd = nil
+		bot.cancelFn = nil
+		bot.isPaused = false
+		bot.mu.Unlock()
+	}()
+
+	// endedOnPurpose tells a start failure caused by Skip/Stop apart from a
+	// broken tool. stopBot's cancelFn makes CommandContext's Start fail with
+	// the context error, which must not be reported as tool_missing: a
+	// Skip/Stop-initiated kill is not a failure. Until the pipeline runs,
+	// only stopBot cancels ctx (the stall watchdog is armed later).
+	endedOnPurpose := func() bool {
+		if ctx.Err() != nil {
+			return true
+		}
+		bot.mu.Lock()
+		defer bot.mu.Unlock()
+		return bot.killRequestedLocked()
+	}
 
 	// yt-dlp pipes raw audio to stdout; ffmpeg consumes it and emits Ogg/Opus.
 	// `-re` makes ffmpeg pace its output to real-time, so our blocking reads
@@ -244,7 +414,10 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// same argument-injection risk fixed in extractTracks.
 	ytBin, err := ytDlpPath()
 	if err != nil {
-		return fmt.Errorf("yt-dlp not available: %w", err)
+		if endedOnPurpose() {
+			return nil
+		}
+		return fmt.Errorf("%w: yt-dlp not available: %w", errToolMissing, err)
 	}
 	yt := exec.CommandContext(ctx, ytBin, playTrackYtdlpArgs(track.URL)...) // #nosec G204 -- fixed argv; ytBin is an absolute path resolved once by ytDlpPath (see music_bot_metadata.go); track.URL passes validateMusicURLNetwork above (host allow-list + post-DNS private/reserved-IP check, see music_url_guard.go) and is isolated behind `--` in playTrackYtdlpArgs
 	ff := exec.CommandContext(ctx, "ffmpeg",
@@ -263,6 +436,18 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		"pipe:1",
 	)
 
+	// stderr goes into bounded tail buffers: yt-dlp prints the reason a
+	// track failed (HTTP 403, bot check, ...) there and nowhere else. The
+	// tails feed classifyPlaybackFailure and the failure log line. Because
+	// a non-*os.File Stderr makes exec copy it from a goroutine that Wait
+	// waits for, WaitDelay bounds that wait in case a pipe is held open.
+	ytTail := newTailBuffer(ytDlpStderrTailBytes)
+	ffTail := newTailBuffer(ffmpegStderrTailBytes)
+	yt.Stderr = ytTail
+	ff.Stderr = ffTail
+	yt.WaitDelay = subprocessWaitDelay
+	ff.WaitDelay = subprocessWaitDelay
+
 	ytOut, err := yt.StdoutPipe()
 	if err != nil {
 		musicBotLogger.Error("playTrack: yt-dlp stdout pipe failed", "err", pkg.ErrText(err))
@@ -277,56 +462,161 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	}
 
 	if err := ff.Start(); err != nil {
+		if endedOnPurpose() {
+			musicBotLogger.Info("playTrack: ffmpeg start interrupted by skip/stop", "channel_id", bot.channelID, "err", pkg.ErrText(err))
+			return nil
+		}
 		musicBotLogger.Error("playTrack: ffmpeg start failed (binary missing in PATH?)", "err", pkg.ErrText(err))
-		return fmt.Errorf("ffmpeg start: %w", err)
+		return fmt.Errorf("%w: ffmpeg start: %w", errToolMissing, err)
 	}
+	// ffmpeg now holds its own copy of the pipe's read end. Drop ours, or
+	// yt-dlp never sees EPIPE when ffmpeg dies (Skip kills only ffmpeg) and
+	// sits blocked on a full pipe until the reaper's grace period kills it.
+	// yt.Wait closes this again later; that second close is a no-op error.
+	_ = ytOut.Close()
 	if err := yt.Start(); err != nil {
-		musicBotLogger.Error("playTrack: yt-dlp start failed (binary missing in PATH?)", "err", pkg.ErrText(err))
 		_ = ff.Process.Kill()
-		return fmt.Errorf("yt-dlp start: %w", err)
+		_ = ff.Wait()
+		if endedOnPurpose() {
+			musicBotLogger.Info("playTrack: yt-dlp start interrupted by skip/stop", "channel_id", bot.channelID, "err", pkg.ErrText(err))
+			return nil
+		}
+		musicBotLogger.Error("playTrack: yt-dlp start failed (binary missing in PATH?)", "err", pkg.ErrText(err))
+		return fmt.Errorf("%w: yt-dlp start: %w", errToolMissing, err)
 	}
 	musicBotLogger.Info("playTrack: pipeline started", "ytdlp_pid", yt.Process.Pid, "ffmpeg_pid", ff.Process.Pid)
 
 	bot.mu.Lock()
 	bot.cmd = ff // ffmpeg holds the pipeline; killing it cascades to yt-dlp via EOF
+	if bot.killRequestedLocked() {
+		// Skip/Stop landed while the pipeline was starting, when Skip had no
+		// cmd to kill. Kill it now: the pump sees EOF, and the skipped/
+		// stopped check after it returns nil.
+		_ = ff.Process.Kill()
+	}
 	bot.mu.Unlock()
 
-	defer func() {
-		bot.mu.Lock()
-		bot.cmd = nil
-		bot.cancelFn = nil
-		bot.isPaused = false
-		bot.mu.Unlock()
-		_ = yt.Wait() // reap zombie
-		_ = ff.Wait()
-	}()
+	// Reaper. Runs once: explicitly with a grace period after the pump
+	// returns, or from the defer with none. The grace path lets both
+	// processes exit on their own first, so ytErr is yt-dlp's real exit
+	// status (e.g. exit 1 after a 403) rather than the kill cancel() would
+	// cause. The deferred path — a panic, or any return that skipped the
+	// explicit call — cancels first and only then waits: waiting first
+	// would block forever on a pipeline nobody is reading any more.
+	var (
+		reapOnce     sync.Once
+		ytErr, ffErr error
+	)
+	reap := func(grace time.Duration) {
+		reapOnce.Do(func() {
+			if grace <= 0 {
+				cancel()
+			}
+			done := make(chan struct{})
+			logx.Go("service.music_bot.reap", func() {
+				defer close(done)
+				ytErr = yt.Wait()
+				ffErr = ff.Wait()
+			})
+			if grace > 0 {
+				select {
+				case <-done:
+					return
+				case <-time.After(grace):
+					cancel()
+				}
+			}
+			<-done
+		})
+	}
+	defer reap(0)
 
 	// Stall watchdog. Without it, a hung yt-dlp that neither writes nor exits
-	// leaves pumpOggToTrack blocked on a read forever: the deferred Wait()s
-	// above never run, so both subprocesses and this goroutine leak until
-	// someone calls Skip/Stop. Cancelling the track context makes
-	// CommandContext kill the pair, which returns the read and runs the defers.
+	// leaves pumpOggToTrack blocked on a read forever, so the reaper never
+	// runs and both subprocesses and this goroutine leak until someone calls
+	// Skip/Stop. Cancelling the track context makes CommandContext kill the
+	// pair, which returns the read.
 	stallTimeout, stallPoll := s.stallThresholds()
-	watchdog := newStallWatchdog(ctx, cancel, stallTimeout, stallPoll, bot.channelID)
+	// A paused ffmpeg (SIGSTOP) emits nothing by design; isPaused keeps the
+	// watchdog from reading that as a wedge.
+	isPaused := func() bool {
+		bot.mu.Lock()
+		defer bot.mu.Unlock()
+		return bot.isPaused
+	}
+	watchdog := newStallWatchdog(ctx, cancel, stallTimeout, stallPoll, bot.channelID, isPaused)
 	defer watchdog.close()
 
-	pumpErr := pumpOggToTrack(ffOut, bot.audioTrack, watchdog.progress)
+	pumpErr := pumpOggToTrack(ffOut, sink, watchdog.progress)
+
+	bot.mu.Lock()
+	killRequested := bot.killRequestedLocked()
+	bot.mu.Unlock()
+	if killRequested {
+		// Skip/Stop: the exit status is irrelevant, so don't hold the next
+		// track for the grace period.
+		reap(0)
+	} else {
+		reap(playTrackReapGrace)
+	}
 
 	bot.mu.Lock()
 	skipped := bot.skipFlag
-	stopped := bot.stopFlag
+	stopped := bot.stopFlag || bot.stopping.Load()
 	bot.mu.Unlock()
 	if skipped || stopped {
 		// Killed on purpose — not a playback failure.
 		return nil
 	}
-	if watchdog.stalled() {
+
+	ytStderr := ytTail.String()
+	var failErr *trackPlaybackError
+	switch {
+	case watchdog.stalled():
 		// Killing the subprocess usually surfaces as a clean EOF, so without
 		// this the caller would count a wedged track as a successful one and
 		// the consecutive-failure cap would never trip.
-		return fmt.Errorf("playback stalled: no audio progress for %s", stallTimeout)
+		failErr = &trackPlaybackError{
+			Reason: reasonStalled,
+			err:    fmt.Errorf("%w: no audio progress for %s", errPlaybackStalled, stallTimeout),
+		}
+	case pumpErr != nil || ytErr != nil:
+		cause := pumpErr
+		if pumpErr == nil {
+			cause = fmt.Errorf("yt-dlp exit: %w", ytErr)
+		} else if ytErr != nil {
+			cause = fmt.Errorf("%w; yt-dlp exit: %w", pumpErr, ytErr)
+		}
+		reason := classifyPlaybackFailure(cause, ytStderr)
+		// yt-dlp's own "ERROR:" line is the useful part of the server-side
+		// error (the pump only sees "oggreader init: EOF"). Quoted because
+		// it is subprocess output.
+		if line := lastYtDlpErrorLine(ytStderr); line != "" {
+			cause = fmt.Errorf("yt-dlp: %s: %w", strconv.Quote(truncateRunes(line, maxPlaybackErrorLineLen)), cause)
+		}
+		failErr = &trackPlaybackError{Reason: reason, err: cause}
+	default:
+		return nil
 	}
-	return pumpErr
+
+	// Server-side only. Subprocess output is tainted, hence strconv.Quote.
+	musicBotLogger.Warn("playTrack failed",
+		slog.String("channel_id", bot.channelID),
+		slog.String("video_id", track.VideoID),
+		slog.String("reason", string(failErr.Reason)),
+		slog.String("err", pkg.ErrText(failErr)),
+		slog.String("yt_stderr_tail", strconv.Quote(ytStderr)),
+		slog.String("ff_stderr_tail", strconv.Quote(ffTail.String())),
+		slog.String("yt_exit", pkg.ErrText(ytErr)),
+		slog.String("ff_exit", pkg.ErrText(ffErr)),
+	)
+	return failErr
+}
+
+// killRequestedLocked reports whether Skip or a stop has asked the current
+// track to end. Caller holds bot.mu.
+func (b *botInstance) killRequestedLocked() bool {
+	return b.skipFlag || b.stopFlag || b.stopping.Load()
 }
 
 // playTrackYtdlpArgs builds playTrack's yt-dlp argv. Factored out (rather
@@ -335,10 +625,14 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 // subprocess — see TestPlayTrackYtdlpArgs_RestrictsToYoutubeExtractors.
 // "--use-extractors" mirrors extractTracksArgs in music_bot_metadata.go —
 // see that file's comment for why GenericIE must stay disabled here too.
+//
+// "bestaudio/best" falls back to a combined format when a video offers no
+// audio-only one (ffmpeg drops the video stream with -vn). There is no
+// --no-warnings: yt-dlp's warnings land in playTrack's stderr tail, which is
+// only logged, and they often explain the ERROR that follows.
 func playTrackYtdlpArgs(url string) []string {
 	return []string{
-		"-f", "bestaudio",
-		"--no-warnings",
+		"-f", "bestaudio/best",
 		"--use-extractors", "Youtube.*",
 		"-o", "-",
 		"--",
@@ -371,8 +665,10 @@ type stallWatchdog struct {
 
 // newStallWatchdog arms the watchdog and starts its ticker goroutine. Progress
 // is seeded at arm time, so a pipeline that never emits a single page — the
-// common yt-dlp wedge — is caught by the same timeout.
-func newStallWatchdog(ctx context.Context, cancel context.CancelFunc, timeout, poll time.Duration, channelID string) *stallWatchdog {
+// common yt-dlp wedge — is caught by the same timeout. While paused (nil
+// means never) reports true, each tick counts as progress, so a pause of any
+// length never fires it and Resume starts from a fresh timeout.
+func newStallWatchdog(ctx context.Context, cancel context.CancelFunc, timeout, poll time.Duration, channelID string, paused func() bool) *stallWatchdog {
 	w := &stallWatchdog{stop: make(chan struct{}), done: make(chan struct{})}
 	w.last.Store(time.Now().UnixNano())
 
@@ -387,6 +683,10 @@ func newStallWatchdog(ctx context.Context, cancel context.CancelFunc, timeout, p
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if paused != nil && paused() {
+					w.progress()
+					continue
+				}
 				if time.Since(time.Unix(0, w.last.Load())) < timeout {
 					continue
 				}
@@ -471,12 +771,34 @@ func pumpOggToTrack(reader io.Reader, track sampleWriter, onPage func()) error {
 }
 
 // scheduleIdleLeaveLocked — caller holds bot.mu. Arms a one-shot timer that
-// calls Stop() if no track has been enqueued by then. Re-arming is handled
-// by Enqueue cancelling the existing timer before appending.
+// stops THIS bot (stopBot, not the channel-keyed Stop, which could hit a
+// newer bot in the same channel) if it is still idle when the timer fires.
+// Enqueue cancels the timer before appending, but a callback that has
+// already started cannot be recalled, so the callback re-checks under
+// bot.mu: a changed idleGen (the timer was cancelled or re-armed), a running
+// loop, queued tracks, or an earlier stop all mean "not idle any more".
+// stopping is set inside that same critical section, so an Enqueue that
+// takes bot.mu afterwards sees it and moves to a fresh bot.
 func (s *musicBotService) scheduleIdleLeaveLocked(bot *botInstance) {
 	bot.cancelIdleTimer()
-	bot.idleTimer = time.AfterFunc(idleLeaveAfter, func() {
+	gen := bot.idleGen
+	bot.idleTimer = time.AfterFunc(s.idleLeaveDelay(), func() {
+		bot.mu.Lock()
+		if gen != bot.idleGen || bot.loopRunning || len(bot.queue) > 0 || bot.stopFlag {
+			bot.mu.Unlock()
+			return
+		}
+		bot.stopping.Store(true)
+		bot.mu.Unlock()
 		musicBotLogger.Info("idle leave", "channel_id", bot.channelID)
-		_ = s.Stop(bot.channelID)
+		s.stopBot(bot)
 	})
+}
+
+// idleLeaveDelay returns idleLeaveAfter unless a test shrank it.
+func (s *musicBotService) idleLeaveDelay() time.Duration {
+	if s.idleLeaveOverride > 0 {
+		return s.idleLeaveOverride
+	}
+	return idleLeaveAfter
 }
