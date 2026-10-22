@@ -142,9 +142,11 @@ describe("parseMarkdownLite — depth and linearity", () => {
   });
 
   // Linearity is asserted by how parse time scales, not by a wall-clock
-  // budget: a 4× larger input must take well under the ~16× a quadratic
-  // parser would need. Ratios stay stable on a loaded CI box where a fixed
-  // millisecond threshold flakes. A generous absolute cap remains as a
+  // budget: an 8× larger input must take well under the ~64× a quadratic
+  // parser would need. The step is 8×, not 4×, because allocation-heavy
+  // inputs (one node per delimiter) pay superlinear GC cost on a large
+  // heap — a linear parse measured 14× on a 4× step on CI, too close to the
+  // quadratic 16× to tell apart. A generous absolute cap remains as a
   // backstop against pathological slowness.
   const cases: [string, (n: number) => string, number][] = [
     ["*", (n) => "*".repeat(n), 100_000],
@@ -165,12 +167,12 @@ describe("parseMarkdownLite — depth and linearity", () => {
   };
   for (const [label, build, n] of cases) {
     it(`${label} scales linearly (${n} units)`, () => {
-      const small = fastest(build(Math.floor(n / 4)));
+      const small = fastest(build(Math.floor(n / 8)));
       const large = fastest(build(n));
       expect(large).toBeLessThan(3000);
       // Below ~5 ms the ratio is timer noise; the absolute cap covers it.
       if (large > 5) {
-        expect(large / Math.max(small, 0.5)).toBeLessThan(10);
+        expect(large / Math.max(small, 0.5)).toBeLessThan(32);
       }
     });
   }
