@@ -61,31 +61,10 @@ Format: `[ID] Severity | Kategori | Dosya:Satır | Problem → Risk → Düzeltm
 
 #### Güvenlik / Secrets
 
-**[P0-IN-01] SSH private key repo'da düz metin (CONFIRMED)**
-- Dosya: [livekit-oracle/ssh/livekit-oci](../livekit-oracle/ssh/livekit-oci) (419 bytes, OpenSSH ed25519)
-- Problem: `-----BEGIN OPENSSH PRIVATE KEY-----` ile başlayan canlı VM SSH anahtarı version control'de
-- Risk: Anyone with repo access → Oracle VM root SSH (IP `79.76.123.59`) → LiveKit takeover, voice/video servisi down, tüm odaları snoop
-- Reproduce: `ssh -i livekit-oracle/ssh/livekit-oci ubuntu@79.76.123.59`
-- Düzeltme:
-  1. Oracle Console → instance → SSH keys → eski public key'i kaldır + yeni key pair üret
-  2. `.gitignore`'a ekle: `livekit-oracle/ssh/`, `livekit-oci`, `livekit-oci.pub`
-  3. `git filter-repo --invert-paths --path livekit-oracle/ssh/livekit-oci` ile history'den temizle
-  4. Force push (collaborator'ları uyar)
-  5. Yeni anahtarı **asla repo'ya koyma** — local `~/.ssh/` veya 1Password/Bitwarden
-
-**[P0-IN-02] LiveKit production API credentials repo'da düz metin (CONFIRMED — agent eksik bildirdi, gerçekte 2 dosyada)**
-- Dosyalar:
-  - [livekit-oracle/DEPLOYED.md:13-14](../livekit-oracle/DEPLOYED.md#L13)
-  - [livekit-oracle/config/livekit.yaml:18](../livekit-oracle/config/livekit.yaml#L18) (`keys:` bloğu içinde hardcoded)
-- Problem: `APIeb80fb802673:IK9KCzUqXrf99of9X-jVLGbse4mBhUC0tnj21qNhlMrT65_bBEijRIXbJcmJCP73` — bu **canlı production credentials**, hem markdown hem yaml'da düz metin
-- Risk: API key+secret ile attacker imzalı LiveKit token üretebilir → istediği room'a istediği kullanıcı kimliğiyle girebilir, mesajları dinleyebilir, DoS yapabilir
-- Düzeltme:
-  1. LiveKit'te yeni key pair üret (livekit-server config rotation)
-  2. `DEPLOYED.md`'den credential bloğunu kaldır (placeholder: `*** redacted — see vault ***`)
-  3. `livekit.yaml`'ı template'e dönüştür: `keys: ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}` + Caddy/docker'da envsubst
-  4. Eski credentials'ı revoke et (LiveKit `livekit-server` config reload)
-  5. HiChat backend tarafındaki `LIVEKIT_API_KEY/SECRET` env var'ı güncelle (HF Space secrets)
-  6. `git filter-repo` ile history'den temizle
+**[P0-IN-01/02] Tarihsel secret sızıntısı — ayrıntılar redakte edildi**
+- Önceki denetim, artık repoda bulunmayan deploy artefaktlarında SSH/LiveKit secret'ları tespit etmişti.
+- Credential değerleri ve altyapı adresleri bu belgede tutulmamalıdır; gerçek sistemlerde anahtarlar döndürülmeli ve secret manager kullanılmalıdır.
+- Güncel yapılandırma şablonları credential içermez; kurulum scriptleri yerel, rastgele değerler üretir.
 
 **[P0-IN-03] `.gitignore` `ssh/` ve uzantısız private key'leri engellemiyor**
 - Dosya: [.gitignore:31-32](.gitignore#L31)

@@ -28,9 +28,9 @@ keys:
   # Easiest path: mount a generated livekit.yaml at deploy time and
   # write `keys: ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}` (templated
   # by envsubst or similar). For local dev / Docker Desktop, the
-  # placeholder pair below is harmless because the network is
-  # container-only.
-  devkey: devsecret
+  # values are expanded from the environment at startup; never commit
+  # credentials here.
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
 
 logging:
   level: info

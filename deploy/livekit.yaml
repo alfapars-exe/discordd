@@ -12,7 +12,7 @@ rtc:
 
 # API key / secret — must match LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env
 #
-# ⚠️  BUNU DEĞİŞTİRİN — `devkey: secret` LiveKit'in kendi genel bilinen
+# ⚠️  BUNU DEĞİŞTİRİN — credential değerleri ortamdan sağlanır; bu şablona
 # quickstart varsayılanıdır (resmi dokümantasyonda örnek olarak geçer),
 # tesadüfi bir sızıntı değildir. Şablonu olduğu gibi bırakıp bu portu
 # (7880) internete açan bir kurulumda, bu çifti bilen HERKES geçerli bir
@@ -22,7 +22,7 @@ rtc:
 # `openssl rand -hex 32` (secret). Değeri hem burada hem .env'deki
 # LIVEKIT_API_KEY / LIVEKIT_API_SECRET'te aynı şekilde güncelleyin.
 keys:
-  devkey: secret
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
 
 logging:
   level: info
