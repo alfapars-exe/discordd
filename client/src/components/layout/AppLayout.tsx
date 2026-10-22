@@ -67,6 +67,7 @@ import { useInviteStore } from "../../stores/inviteStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useNotificationBadge } from "../../hooks/useNotificationBadge";
+import { useServerCosmeticsSync } from "../../hooks/useServerCosmeticsSync";
 import { ensureNotificationPermission } from "../../utils/notifications";
 
 function AppLayout() {
@@ -81,6 +82,10 @@ function AppLayout() {
 
   // Electron taskbar badge for unread count
   useNotificationBadge();
+
+  // Active server's member cosmetics map (Faz G). Covers the mobile layout
+  // too — MobileAppLayout renders inside this component.
+  useServerCosmeticsSync();
 
   // Ask the OS for notification permission once after the user reaches
   // the main app. We do this here (post-auth) instead of at App.tsx so

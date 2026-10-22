@@ -40,6 +40,7 @@ declare module "i18next" {
       saved: LooseNamespace;
       expressions: LooseNamespace;
       entrance: LooseNamespace;
+      cosmetics: LooseNamespace;
       errors: typeof enErrors;
     };
   }

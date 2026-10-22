@@ -3,7 +3,7 @@
  *
  * Namespaces: common, auth, channels, chat, settings, voice, landing, privacy,
  *             servers, dm, e2ee, soundboard, music, terms, audit, errors, inbox,
- *             saved, expressions, entrance.
+ *             saved, expressions, entrance, cosmetics.
  * Supported languages: EN (fallback), TR.
  */
 
@@ -32,6 +32,7 @@ import enInbox from "./locales/en/inbox.json";
 import enSaved from "./locales/en/saved.json";
 import enExpressions from "./locales/en/expressions.json";
 import enEntrance from "./locales/en/entrance.json";
+import enCosmetics from "./locales/en/cosmetics.json";
 
 // ─── TR Translation Files ───
 import trCommon from "./locales/tr/common.json";
@@ -54,6 +55,7 @@ import trInbox from "./locales/tr/inbox.json";
 import trSaved from "./locales/tr/saved.json";
 import trExpressions from "./locales/tr/expressions.json";
 import trEntrance from "./locales/tr/entrance.json";
+import trCosmetics from "./locales/tr/cosmetics.json";
 
 export const SUPPORTED_LANGUAGES = {
   en: "English",
@@ -95,6 +97,7 @@ i18n
         saved: enSaved,
         expressions: enExpressions,
         entrance: enEntrance,
+        cosmetics: enCosmetics,
       },
       tr: {
         common: trCommon,
@@ -117,6 +120,7 @@ i18n
         saved: trSaved,
         expressions: trExpressions,
         entrance: trEntrance,
+        cosmetics: trCosmetics,
       },
     },
 
@@ -124,7 +128,7 @@ i18n
     supportedLngs: Object.keys(SUPPORTED_LANGUAGES),
 
     defaultNS: "common",
-    ns: ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors", "inbox", "saved", "expressions", "entrance"],
+    ns: ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors", "inbox", "saved", "expressions", "entrance", "cosmetics"],
 
     interpolation: {
       // React already handles XSS protection

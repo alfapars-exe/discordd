@@ -47,6 +47,7 @@ type Handlers struct {
 	Emoji             *handlers.EmojiHandler
 	Sticker           *handlers.StickerHandler
 	Entrance          *handlers.EntranceHandler
+	Cosmetic          *handlers.CosmeticHandler
 	ExpressionClone   *handlers.ExpressionCloneHandler
 	Music             *handlers.MusicHandler
 	LiveKitWebhook    *handlers.LiveKitWebhookHandler
@@ -98,6 +99,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Emoji:             handlers.NewEmojiHandler(svcs.Emoji, limiters.Upload),
 		Sticker:           handlers.NewStickerHandler(svcs.Sticker, limiters.Upload),
 		Entrance:          handlers.NewEntranceHandler(svcs.Entrance, limiters.Upload),
+		Cosmetic:          handlers.NewCosmeticHandler(svcs.Cosmetic, limiters.CosmeticEquip),
 		ExpressionClone:   handlers.NewExpressionCloneHandler(svcs.ExpressionClone, limiters.Upload),
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog, svcs.Voice),

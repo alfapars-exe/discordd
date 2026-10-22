@@ -34,7 +34,9 @@ import {
 } from "../../utils/messageParsers";
 import { plainPreview } from "../../utils/expressionTokens";
 import type { MemberWithRoles, PublicUser } from "../../types";
-import Avatar from "../shared/Avatar";
+import DecoratedAvatar from "../cosmetics/DecoratedAvatar";
+import StyledName from "../cosmetics/StyledName";
+import { useUserCosmetics } from "../../hooks/useUserCosmetics";
 import BadgePill from "../shared/BadgePill";
 import ContextMenu from "../shared/ContextMenu";
 import LinkPreviewCard from "./LinkPreviewCard";
@@ -60,6 +62,8 @@ type MessageProps = {
    */
   isPinned: boolean;
   mode: "channel" | "dm";
+  /** Cosmetics scope: the server id in a channel, null in DMs (Faz G). */
+  cosmeticScope: string | null;
   canManageMessages: boolean;
   /** Author's member entry (role color/type) — undefined in DMs. */
   member: MemberWithRoles | undefined;
@@ -81,6 +85,7 @@ function Message({
   isCompact,
   isPinned,
   mode,
+  cosmeticScope,
   canManageMessages,
   member,
   currentMember,
@@ -148,6 +153,7 @@ function Message({
   const roleColor = getHighestRoleColor(member);
 
   const userBadges = useUserBadges(message.user_id);
+  const cosmetics = useUserCosmetics(message.author?.id ?? message.user_id, cosmeticScope);
 
   // Highlight the message if the current user is mentioned (direct or via role).
   const isMentioned = useMemo(() => {
@@ -296,19 +302,22 @@ function Message({
               });
             }}
           >
-            <Avatar
+            {/* Never animated in the message list (Karar G-12). */}
+            <DecoratedAvatar
               name={displayName}
               role={roleType}
               avatarUrl={message.author?.avatar_url ?? undefined}
               size={30}
+              frame={cosmetics.avatar_frame}
+              animateFrame={false}
             />
           </button>
         </div>
 
         <div className="msg-body">
           <div className="msg-meta">
-            <span className="msg-name" style={roleColor ? { color: roleColor } : undefined}>
-              {displayName}
+            <span className="msg-name">
+              <StyledName name={displayName} style={cosmetics.name_style} fallbackColor={roleColor} />
             </span>
             {userBadges.length > 0 && (
               <span className="msg-badges">

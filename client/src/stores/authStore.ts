@@ -17,6 +17,7 @@ import { useUserNoteStore } from "./userNoteStore";
 import { useEmojiStore } from "./emojiStore";
 import { useStickerStore } from "./stickerStore";
 import { useEntranceStore } from "./entranceStore";
+import { useCosmeticsStore } from "./cosmeticsStore";
 import type { APIResponse, AuthTokens, User, UserStatus } from "../types";
 import { oneOf } from "../utils/validation";
 
@@ -163,6 +164,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     useEmojiStore.getState().reset();
     useStickerStore.getState().reset();
     useEntranceStore.getState().reset();
+    useCosmeticsStore.getState().reset();
 
     // Refresh token now lives in the HttpOnly cookie — the server reads it
     // from there during logout and clears the cookie via Set-Cookie. We

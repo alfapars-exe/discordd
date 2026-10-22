@@ -226,5 +226,10 @@ PUT /api/servers/{serverId}/channels/{channelId}/entrance
 GET /api/servers/{serverId}/entrance-mutes
 PUT /api/servers/{serverId}/entrance-mutes/{userId}
 DELETE /api/servers/{serverId}/entrance-mutes/{userId}
+GET /api/users/me/cosmetics
+PUT /api/users/me/cosmetics/equipped
+PUT /api/users/me/cosmetics/plain-servers/{serverId}
+GET /api/users/cosmetics
+GET /api/servers/{serverId}/cosmetics
 GET /ws
 GET /api/bot/gateway
