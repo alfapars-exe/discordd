@@ -4,14 +4,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
 	"github.com/argeinfina/hichat/services"
 )
+
+var musicHandlerLogger = logx.Component("handler.music")
+
+// playWriteDeadline is Play's per-response write deadline. The client gives
+// up at 50 s, so the server must be able to answer before that.
+const playWriteDeadline = 45 * time.Second
 
 // MusicHandler — HTTP entry points for the per-channel music bot.
 //
@@ -89,6 +98,16 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
 		pkg.Error(w, err)
 		return
+	}
+
+	// Enqueue can outlive the server-wide WriteTimeout (main.go): yt-dlp
+	// extraction alone may take up to 30 s, plus the LiveKit connect on a
+	// channel's first /play. When it did, the track was queued but the
+	// response was lost. Extend this one response's deadline instead of
+	// raising the global timeout. Failure is logged, not fatal: the request
+	// still works whenever Enqueue is fast enough.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(playWriteDeadline)); err != nil {
+		musicHandlerLogger.Warn("play: extend write deadline failed", slog.String("err", pkg.ErrText(err)))
 	}
 
 	tracks, err := h.music.Enqueue(r.Context(), user.ID, channelID, req.URL)

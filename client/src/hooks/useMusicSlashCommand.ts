@@ -69,6 +69,12 @@ export function useMusicSlashCommand() {
           if (res.success && res.data) {
             const count = res.data.added_tracks.length;
             addToast("success", t("addedToQueue", { count }));
+          } else if (res.isTimeout) {
+            // Our 50 s client timeout fired, not a server rejection: the
+            // server may still finish and queue the track, so "playError"
+            // ("Could not start playback") would be wrong. showApiError
+            // has no timeout branch of its own.
+            addToast("info", t("playTimeout"));
           } else {
             showApiError(res, { fallbackKey: "music:playError" });
           }

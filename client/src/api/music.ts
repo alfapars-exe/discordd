@@ -13,10 +13,17 @@
 import { apiClient } from "./client";
 import type { PlayMusicResponse, MusicBotChannelState } from "../types";
 
+/**
+ * The server extends this request's write deadline to 45 s (YouTube
+ * extraction + LiveKit connect can outlast the global 15 s WriteTimeout);
+ * 50 s leaves headroom for the response to arrive. On expiry the call
+ * resolves with `isTimeout: true` — the server may still have queued the
+ * track, so callers must not report that as a hard failure.
+ */
 export async function playMusic(serverId: string, channelId: string, url: string) {
   return apiClient<PlayMusicResponse>(
     `/servers/${serverId}/channels/${channelId}/music/play`,
-    { method: "POST", body: { url } },
+    { method: "POST", body: { url }, timeoutMs: 50_000 },
   );
 }
 

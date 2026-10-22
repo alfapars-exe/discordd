@@ -3,6 +3,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { handleVoiceEvent } from "./voiceEventHandlers";
 import type { WSHandlerContext } from "./types";
+import type { WSPayloadMap } from "../../types/ws";
+
+// vi.hoisted: the toastStore factory below runs before top-level consts are
+// initialised, so the spy must be created in the hoisted scope (§4 TDZ trap).
+const addToast = vi.hoisted(() => vi.fn());
 
 vi.mock("../../api/voice", () => ({}));
 vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn() }));
@@ -24,12 +29,18 @@ vi.mock("../../stores/uiStore", () => ({
   useUIStore: { getState: () => ({ panels: {}, openTab: vi.fn(), setActiveTab: vi.fn() }) },
 }));
 vi.mock("../../stores/toastStore", () => ({
-  useToastStore: { getState: () => ({ addToast: vi.fn() }) },
+  useToastStore: { getState: () => ({ addToast }) },
 }));
 vi.mock("../../stores/authStore", () => ({
   useAuthStore: { getState: () => ({ user: { id: "me" } }) },
 }));
-vi.mock("../../i18n", () => ({ default: { t: (k: string) => k } }));
+// Echoes the key plus its interpolation options so tests can assert which
+// key was used and what was interpolated into it.
+vi.mock("../../i18n", () => ({
+  default: {
+    t: (k: string, o?: Record<string, unknown>) => (o ? `${k}|${JSON.stringify(o)}` : k),
+  },
+}));
 vi.mock("../../stores/shared/voiceRecovery", () => ({
   isVoiceRecoveryAllowed: () => false,
   // Partial-mock trap (PROJECT_MEMORY §4): the force-move path also calls
@@ -439,5 +450,106 @@ describe("handleVoiceEvent — voice_force_move preserves server-mute/deafen acr
     const state = useVoiceStore.getState();
     expect(state.isServerMuted).toBe(false);
     expect(state.isServerDeafened).toBe(false);
+  });
+});
+
+describe("handleVoiceEvent — music_bot_error", () => {
+  type MusicBotErrorPayload = WSPayloadMap["music_bot_error"];
+
+  const basePayload: MusicBotErrorPayload = {
+    channel_id: "ch1",
+    server_id: "srv1",
+    track_title: "Song",
+    reason: "forbidden",
+    failures: 1,
+    fatal: false,
+  };
+
+  // Sends the event with an arbitrary (possibly off-contract) payload — the
+  // wire is untrusted, so the handler must cope with missing/odd fields.
+  async function send(d: Partial<Record<keyof MusicBotErrorPayload, unknown>>) {
+    await handleVoiceEvent({ op: "music_bot_error", d: d as MusicBotErrorPayload }, ctx);
+  }
+
+  function toastMessages(): string[] {
+    return addToast.mock.calls.map((call) => String(call[1]));
+  }
+
+  beforeEach(() => {
+    resetStore();
+    addToast.mockClear();
+    useVoiceStore.setState({ currentVoiceChannelId: "ch1" });
+  });
+
+  it("ignores an event for a different voice channel than the one we're in", async () => {
+    await send({ ...basePayload, channel_id: "ch2" });
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("ignores the event when we're not in any voice channel", async () => {
+    useVoiceStore.setState({ currentVoiceChannelId: null });
+    await send(basePayload);
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("ignores an event with no channel_id even when we're not in voice (null vs missing)", async () => {
+    useVoiceStore.setState({ currentVoiceChannelId: null });
+    await send({ ...basePayload, channel_id: undefined });
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it.each(["forbidden", "bot_check", "stalled"])(
+    "maps reason %s to its own music:reason_ key",
+    async (reason) => {
+      await send({ ...basePayload, reason });
+      expect(addToast).toHaveBeenCalledTimes(1);
+      const [variant, message, duration] = addToast.mock.calls[0];
+      expect(variant).toBe("error");
+      expect(duration).toBe(8000);
+      expect(message).toContain("music:playbackFailedWithReason");
+      expect(message).toContain(`"reason":"music:reason_${reason}"`);
+      expect(message).toContain(`"title":"Song"`);
+    },
+  );
+
+  it.each([
+    ["an unknown future code", "something_new"],
+    ["a missing reason", undefined],
+    ["a key-injection attempt", "../x"],
+    ["a non-string reason", 42],
+  ])("falls back to music:reason_unknown for %s", async (_label, reason) => {
+    await send({ ...basePayload, reason });
+    expect(addToast).toHaveBeenCalledTimes(1);
+    const message = toastMessages()[0];
+    expect(message).toContain(`"reason":"music:reason_unknown"`);
+    expect(message).not.toContain("something_new");
+    expect(message).not.toContain("../x");
+  });
+
+  it.each([
+    ["empty", ""],
+    ["whitespace-only", "   "],
+    ["missing", undefined],
+    ["non-string", 42],
+  ])("uses music:unknownTrack for a %s track_title", async (_label, track_title) => {
+    await send({ ...basePayload, track_title });
+    expect(toastMessages()[0]).toContain(`"title":"music:unknownTrack"`);
+  });
+
+  it("shows exactly one toast for a non-fatal failure", async () => {
+    await send({ ...basePayload, fatal: false, failures: 2 });
+    expect(addToast).toHaveBeenCalledTimes(1);
+    expect(toastMessages()[0]).not.toContain("music:botStoppedAfterFailures");
+  });
+
+  it("adds a second 'bot stopped' toast with the failure count when fatal", async () => {
+    await send({ ...basePayload, fatal: true, failures: 3 });
+    expect(addToast).toHaveBeenCalledTimes(2);
+    expect(toastMessages()[0]).toContain("music:playbackFailedWithReason");
+    const [variant, message, duration] = addToast.mock.calls[1];
+    expect(variant).toBe("error");
+    expect(duration).toBe(10000);
+    expect(message).toContain("music:botStoppedAfterFailures");
+    expect(message).toContain(`"count":3`);
   });
 });

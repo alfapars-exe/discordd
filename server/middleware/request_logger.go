@@ -105,6 +105,14 @@ func accessLogLevel(path string, status int) slog.Level {
 	return slog.LevelInfo
 }
 
+// Unwrap exposes the wrapped writer to http.ResponseController. Without it,
+// a handler's NewResponseController(w).SetWriteDeadline (handlers/music.go's
+// Play extends its deadline this way) returns http.ErrNotSupported, because
+// statusRecorder itself has no SetWriteDeadline method.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 // RequestLogger returns middleware that assigns each request a request_id
 // (surfaced via the X-Request-Id response header and the request context) and
 // emits one structured access-log line per request, at the level

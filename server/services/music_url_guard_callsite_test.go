@@ -10,10 +10,10 @@ package services
 //
 // Both tests assert the returned error is pkg.ErrBadRequest specifically, not
 // merely non-nil. That is what makes them mutation-sensitive: with the guard
-// in place the rejection is ErrBadRequest; with it removed, execution reaches
-// exec.CommandContext and whatever comes back (yt-dlp missing, non-zero exit,
-// network failure) is a different error, so errors.Is fails and the test goes
-// red. They also never spawn a subprocess in the passing case, so they stay
+// in place the rejection is ErrBadRequest; with it removed, execution goes
+// past the guard and whatever comes back (playTrack's missing-audio-track
+// check on the bare test bot, yt-dlp missing, non-zero exit, network failure)
+// is a different error, so errors.Is fails and the test goes red. They also never spawn a subprocess in the passing case, so they stay
 // fast and hermetic.
 
 import (

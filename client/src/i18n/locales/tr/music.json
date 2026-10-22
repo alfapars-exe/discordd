@@ -20,5 +20,21 @@
   "commandHintSkip": "/skip ile şu anki şarkıyı geç",
   "commandHintPause": "/pause ile duraklat, /resume ile devam et",
   "commandHintStop": "/stop ile botu durdur",
-  "notInVoice": "Önce bir ses kanalına gir"
+  "notInVoice": "Önce bir ses kanalına gir",
+  "playbackFailed": "\"{{title}}\" çalınamadı",
+  "playbackFailedWithReason": "\"{{title}}\" çalınamadı — {{reason}}",
+  "unknownTrack": "Bilinmeyen şarkı",
+  "botStoppedAfterFailures_one": "Müzik botu durdu: {{count}} şarkı üst üste çalınamadı",
+  "botStoppedAfterFailures_other": "Müzik botu durdu: {{count}} şarkı üst üste çalınamadı",
+  "reason_forbidden": "YouTube erişimi reddetti",
+  "reason_bot_check": "YouTube bot doğrulaması istedi",
+  "reason_unavailable": "Video kullanılamıyor",
+  "reason_age_restricted": "Video yaş sınırlamalı",
+  "reason_geo_blocked": "Video bu bölgede kullanılamıyor",
+  "reason_rate_limited": "YouTube istekleri sınırlıyor, daha sonra tekrar dene",
+  "reason_network": "Ses alınırken ağ hatası oluştu",
+  "reason_stalled": "Çalma takıldı",
+  "reason_tool_missing": "Sunucudaki ses araçları kullanılamıyor",
+  "reason_unknown": "Bilinmeyen hata",
+  "playTimeout": "İşlem beklenenden uzun sürüyor — şarkı yine de kuyrukta görünebilir"
 }
