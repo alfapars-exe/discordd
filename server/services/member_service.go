@@ -23,6 +23,10 @@ type MemberService interface {
 	GetAll(ctx context.Context, serverID string) ([]models.MemberWithRoles, error)
 	GetByID(ctx context.Context, serverID, userID string) (*models.MemberWithRoles, error)
 	UpdateProfile(ctx context.Context, userID string, req *models.UpdateProfileRequest) (*models.MemberWithRoles, error)
+	// GetPublicProfile returns the public profile card of any user
+	// (models.UserProfile — no email/presence/privacy fields). pkg.ErrNotFound
+	// when the user doesn't exist.
+	GetPublicProfile(ctx context.Context, userID string) (*models.UserProfile, error)
 	UpdatePresence(ctx context.Context, userID string, status models.UserStatus) error
 	ModifyRoles(ctx context.Context, serverID, actorID, targetID string, roleIDs []string) (*models.MemberWithRoles, error)
 	Kick(ctx context.Context, serverID, actorID, targetID string) error
@@ -294,7 +298,18 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 	}
 	if req.AvatarURL != nil {
 		user.AvatarURL = req.AvatarURL
+		// The animated GIF only ever travels with its static poster: a
+		// static upload passes nil here and so clears a previous GIF.
+		user.AvatarAnimatedURL = req.AvatarAnimatedURL
 	}
+	if req.ClearBanner {
+		user.BannerURL = nil
+	} else if req.BannerURL != nil {
+		user.BannerURL = req.BannerURL
+	}
+	user.Bio = applyClearableText(user.Bio, req.Bio)
+	user.Pronouns = applyClearableText(user.Pronouns, req.Pronouns)
+	user.AccentColor = applyClearableText(user.AccentColor, req.AccentColor)
 	if req.CustomStatus != nil {
 		if *req.CustomStatus == "" {
 			user.CustomStatus = nil
@@ -340,6 +355,26 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 	}
 
 	return &member, nil
+}
+
+// applyClearableText implements the PATCH semantics of the optional profile
+// text fields: nil = keep current, "" = clear (NULL), anything else = set.
+func applyClearableText(current, requested *string) *string {
+	if requested == nil {
+		return current
+	}
+	if *requested == "" {
+		return nil
+	}
+	return requested
+}
+
+func (s *memberService) GetPublicProfile(ctx context.Context, userID string) (*models.UserProfile, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return models.ToUserProfile(user), nil
 }
 
 func (s *memberService) UpdatePresence(ctx context.Context, userID string, status models.UserStatus) error {

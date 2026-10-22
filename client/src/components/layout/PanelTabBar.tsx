@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useUIStore } from "../../stores/uiStore";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { resolveAssetUrl } from "../../utils/constants";
+import { IconInbox, IconBell } from "../shared/Icons";
 
 type PanelTabBarProps = {
   panelId: string;
@@ -167,6 +168,13 @@ function PanelTabBar({ panelId }: PanelTabBarProps) {
                   <circle cx="9" cy="7" r="4" />
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              )}
+              {tab.type === "inbox" && <IconInbox width={14} height={14} />}
+              {tab.type === "notifications" && <IconBell width={14} height={14} />}
+              {tab.type === "saved" && (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                 </svg>
               )}
               {tab.type === "p2p" && (

@@ -8,14 +8,16 @@ import (
 )
 
 // MessageTxRepos bundles tx-scoped repositories for the message-create write
-// set (message INSERT + unread increments + mention rows). Every constructor
-// already accepts database.TxQuerier, so binding them to a *sql.Tx requires
-// no changes to the repositories themselves.
+// set (message INSERT + unread increments + mention rows + mention/reply
+// notification rows). Every constructor already accepts database.TxQuerier,
+// so binding them to a *sql.Tx requires no changes to the repositories
+// themselves.
 type MessageTxRepos struct {
-	Message     MessageRepository
-	Mention     MentionRepository
-	RoleMention RoleMentionRepository
-	ReadState   ReadStateRepository
+	Message      MessageRepository
+	Mention      MentionRepository
+	RoleMention  RoleMentionRepository
+	ReadState    ReadStateRepository
+	Notification NotificationRepository
 }
 
 // MessageTxRunner runs fn with repositories bound to a single transaction:
@@ -35,10 +37,11 @@ func NewMessageTxRunner(db *sql.DB) MessageTxRunner {
 func (r *messageTxRunner) InTx(ctx context.Context, fn func(*MessageTxRepos) error) error {
 	return database.WithTx(ctx, r.db, func(tx *sql.Tx) error {
 		return fn(&MessageTxRepos{
-			Message:     NewSQLiteMessageRepo(tx),
-			Mention:     NewSQLiteMentionRepo(tx),
-			RoleMention: NewSQLiteRoleMentionRepo(tx),
-			ReadState:   NewSQLiteReadStateRepo(tx),
+			Message:      NewSQLiteMessageRepo(tx),
+			Mention:      NewSQLiteMentionRepo(tx),
+			RoleMention:  NewSQLiteRoleMentionRepo(tx),
+			ReadState:    NewSQLiteReadStateRepo(tx),
+			Notification: NewSQLiteNotificationRepo(tx),
 		})
 	})
 }

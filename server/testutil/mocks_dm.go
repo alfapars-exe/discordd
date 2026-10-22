@@ -24,6 +24,24 @@ type MockDMRepo struct {
 	GetAttachmentsByMessageIDsFn       func(ctx context.Context, messageIDs []string) (map[string][]models.DMAttachment, error)
 	GetAttachmentFileURLsByChannelIDFn func(ctx context.Context, channelID string) ([]string, error)
 	DeleteChannelFn                    func(ctx context.Context, channelID string) error
+	CreateChannelFn                    func(ctx context.Context, channel *models.DMChannel) error
+	GetMessagesAroundFn                func(ctx context.Context, channelID, anchorID string, limit int) ([]models.DMMessage, bool, bool, error)
+	GetMessagesAfterFn                 func(ctx context.Context, channelID, afterID string, limit int) ([]models.DMMessage, error)
+	ToggleReactionFn                   func(ctx context.Context, messageID, userID, emoji string) (bool, error)
+	RemoveReactionFn                   func(ctx context.Context, messageID, userID, emoji string) (bool, error)
+}
+
+func (m *MockDMRepo) GetMessagesAround(ctx context.Context, channelID, anchorID string, limit int) ([]models.DMMessage, bool, bool, error) {
+	if m.GetMessagesAroundFn != nil {
+		return m.GetMessagesAroundFn(ctx, channelID, anchorID, limit)
+	}
+	return nil, false, false, nil
+}
+func (m *MockDMRepo) GetMessagesAfter(ctx context.Context, channelID, afterID string, limit int) ([]models.DMMessage, error) {
+	if m.GetMessagesAfterFn != nil {
+		return m.GetMessagesAfterFn(ctx, channelID, afterID, limit)
+	}
+	return nil, nil
 }
 
 func (m *MockDMRepo) GetChannelByUsers(ctx context.Context, u1, u2 string) (*models.DMChannel, error) {
@@ -41,7 +59,12 @@ func (m *MockDMRepo) GetChannelByID(ctx context.Context, id string) (*models.DMC
 func (m *MockDMRepo) ListChannels(_ context.Context, _ string) ([]models.DMChannelWithUser, error) {
 	return nil, nil
 }
-func (m *MockDMRepo) CreateChannel(_ context.Context, _ *models.DMChannel) error { return nil }
+func (m *MockDMRepo) CreateChannel(ctx context.Context, channel *models.DMChannel) error {
+	if m.CreateChannelFn != nil {
+		return m.CreateChannelFn(ctx, channel)
+	}
+	return nil
+}
 func (m *MockDMRepo) UpdateChannelStatus(ctx context.Context, channelID, status string) error {
 	if m.UpdateChannelStatusFn != nil {
 		return m.UpdateChannelStatusFn(ctx, channelID, status)
@@ -102,7 +125,16 @@ func (m *MockDMRepo) DeleteMessage(ctx context.Context, id string) error {
 	return nil
 }
 
-func (m *MockDMRepo) ToggleReaction(_ context.Context, _, _, _ string) (bool, error) {
+func (m *MockDMRepo) ToggleReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	if m.ToggleReactionFn != nil {
+		return m.ToggleReactionFn(ctx, messageID, userID, emoji)
+	}
+	return false, nil
+}
+func (m *MockDMRepo) RemoveReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	if m.RemoveReactionFn != nil {
+		return m.RemoveReactionFn(ctx, messageID, userID, emoji)
+	}
 	return false, nil
 }
 func (m *MockDMRepo) GetReactionsByMessageID(_ context.Context, _ string) ([]models.ReactionGroup, error) {

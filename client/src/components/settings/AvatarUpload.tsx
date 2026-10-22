@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { resolveAssetUrl } from "../../utils/constants";
+import { sniffImageKind } from "../../utils/imageSniff";
+import { useToastStore } from "../../stores/toastStore";
 
 const ACCEPTED_TYPES = "image/jpeg,image/png,image/gif,image/webp";
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
@@ -25,6 +27,7 @@ function AvatarUpload({
   isCircle = true,
 }: AvatarUploadProps) {
   const { t } = useTranslation("settings");
+  const addToast = useToastStore((s) => s.addToast);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,20 +39,27 @@ function AvatarUpload({
 
   const firstLetter = fallbackText.charAt(0).toUpperCase();
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > MAX_FILE_SIZE) return;
 
-    // Track T2 — animated GIF / WebP shortcut. Cropping these on a 2D canvas
-    // would flatten them to a single static PNG frame, killing the animation
-    // (canvas.toBlob() returns one frame). For animated avatars we skip the
-    // crop UI entirely and upload the original file as-is. The Go backend
-    // accepts image/gif + image/webp in allowedImageMimes, so the file path
-    // works end-to-end. Users see a one-shot upload instead of the crop modal.
-    if (file.type === "image/gif" || file.type === "image/webp") {
+    // GIF shortcut, decided from the file's bytes (not the declared
+    // file.type). Cropping on a 2D canvas would flatten a GIF to one static
+    // PNG frame (canvas.toBlob() returns one frame), so GIFs skip the crop UI
+    // and go up as-is: the server (K-021 — its decoder is the only gate)
+    // centre-crops a multi-frame GIF to a 128 px square animated avatar plus
+    // a static poster. Animated WebP is rejected by the server, so warn
+    // here and stop. Everything else, still WebP included, gets the crop.
+    const kind = await sniffImageKind(file);
+    if (kind === "gif") {
       onUpload(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (kind === "webp-animated") {
+      addToast("error", t("avatarAnimatedWebpUnsupported"));
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }

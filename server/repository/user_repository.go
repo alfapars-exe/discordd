@@ -55,6 +55,11 @@ type UserRepository interface {
 	// reassignToUserID receives ownership of records that must survive the
 	// deleted account (badges created_by, user_badges assigned_by).
 	HardDeleteUser(ctx context.Context, userID, reassignToUserID string) error
+	// GetOwnedServerFileURLs returns every upload file_url of every server
+	// the user owns (the GetFileURLsByServerID set, per owned server) AND
+	// the user's own entrance clips. Call it before HardDeleteUser — its
+	// owned-server cascade and entrance cleanup remove the rows.
+	GetOwnedServerFileURLs(ctx context.Context, userID string) ([]string, error)
 
 	// ─── Download Prompt ───
 

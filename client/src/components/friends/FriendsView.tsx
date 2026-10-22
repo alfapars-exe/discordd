@@ -1,8 +1,9 @@
-/** Friends management page with Online/All/Pending/Add tabs and search. */
+/** Friends management page with Online/All/Pending/Blocked/Add tabs and search. */
 
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useFriendStore } from "../../stores/friendStore";
+import { useBlockStore } from "../../stores/blockStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useConfirmStore } from "../../stores/confirmStore";
@@ -10,9 +11,10 @@ import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useToastStore } from "../../stores/toastStore";
 import FriendItem from "./FriendItem";
 import FriendRequestForm from "./FriendRequestForm";
+import BlockedList from "./BlockedList";
 import type { FriendshipWithUser } from "../../types";
 
-type FriendsTab = "online" | "all" | "pending" | "add";
+type FriendsTab = "online" | "all" | "pending" | "blocked" | "add";
 
 function FriendsView() {
   const { t } = useTranslation("common");
@@ -28,6 +30,7 @@ function FriendsView() {
   const acceptRequest = useFriendStore((s) => s.acceptRequest);
   const declineRequest = useFriendStore((s) => s.declineRequest);
   const removeFriend = useFriendStore((s) => s.removeFriend);
+  const blockedCount = useBlockStore((s) => s.blockedUserIds.length);
 
   const createOrGetChannel = useDMStore((s) => s.createOrGetChannel);
   const selectDM = useDMStore((s) => s.selectDM);
@@ -185,6 +188,15 @@ function FriendsView() {
             )}
           </button>
           <button
+            className={`fv-tab${activeTab === "blocked" ? " active" : ""}`}
+            onClick={() => handleTabChange("blocked")}
+          >
+            {t("friendsBlocked")}
+            {blockedCount > 0 && (
+              <span className="fv-tab-count">{blockedCount}</span>
+            )}
+          </button>
+          <button
             className={`fv-tab fv-tab-add${activeTab === "add" ? " active" : ""}`}
             onClick={() => handleTabChange("add")}
           >
@@ -232,6 +244,8 @@ function FriendsView() {
               <div className="fv-empty">{t("noPendingRequests")}</div>
             )}
           </div>
+        ) : activeTab === "blocked" ? (
+          <BlockedList />
         ) : (
           <FriendRequestForm />
         )}

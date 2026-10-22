@@ -28,6 +28,12 @@ type DMRepository interface {
 
 	// Message operations
 	GetMessages(ctx context.Context, channelID string, beforeID string, limit int) ([]models.DMMessage, error)
+	// GetMessagesAround / GetMessagesAfter mirror MessageRepository's
+	// GetByChannelIDAround / GetByChannelIDAfter for DM channels: ASC
+	// windows anchored on a channel-scoped message id (pkg.ErrNotFound when
+	// the anchor is unknown or belongs to another channel).
+	GetMessagesAround(ctx context.Context, channelID, anchorID string, limit int) (msgs []models.DMMessage, hasMoreBefore, hasMoreAfter bool, err error)
+	GetMessagesAfter(ctx context.Context, channelID, afterID string, limit int) ([]models.DMMessage, error)
 	GetMessageByID(ctx context.Context, id string) (*models.DMMessage, error)
 	CreateMessage(ctx context.Context, msg *models.DMMessage) error
 	UpdateMessage(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error
@@ -35,6 +41,8 @@ type DMRepository interface {
 
 	// Reaction operations
 	ToggleReaction(ctx context.Context, messageID, userID, emoji string) (added bool, err error)
+	// RemoveReaction only ever deletes; removed reports whether a row matched.
+	RemoveReaction(ctx context.Context, messageID, userID, emoji string) (removed bool, err error)
 	GetReactionsByMessageID(ctx context.Context, messageID string) ([]models.ReactionGroup, error)
 	GetReactionsByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]models.ReactionGroup, error)
 

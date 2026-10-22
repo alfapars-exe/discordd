@@ -30,6 +30,9 @@ function DMChatProvider({
   const hasMore = useDMStore((s) =>
     channelId ? s.hasMoreByChannel[channelId] ?? false : false
   );
+  const hasMoreAfter = useDMStore((s) =>
+    channelId ? s.hasMoreAfterByChannel[channelId] ?? false : false
+  );
   const replyingTo = useDMStore((s) => s.replyingTo) as ChatMessage | null;
   const scrollToMessageId = useDMStore((s) => s.scrollToMessageId);
   const typingUsers = useDMStore((s) =>
@@ -44,6 +47,8 @@ function DMChatProvider({
   const storeToggleReaction = useDMStore((s) => s.toggleReaction);
   const storeFetchMessages = useDMStore((s) => s.fetchMessages);
   const storeFetchOlderMessages = useDMStore((s) => s.fetchOlderMessages);
+  const storeFetchNewerMessages = useDMStore((s) => s.fetchNewerMessages);
+  const storeJumpToPresent = useDMStore((s) => s.jumpToPresent);
   const storePinMessage = useDMStore((s) => s.pinMessage);
   const storeUnpinMessage = useDMStore((s) => s.unpinMessage);
 
@@ -75,6 +80,16 @@ function DMChatProvider({
   const fetchOlderMessages = useCallback(
     () => storeFetchOlderMessages(channelId),
     [channelId, storeFetchOlderMessages]
+  );
+
+  const fetchNewerMessages = useCallback(
+    () => storeFetchNewerMessages(channelId),
+    [channelId, storeFetchNewerMessages]
+  );
+
+  const jumpToPresent = useCallback(
+    () => storeJumpToPresent(channelId),
+    [channelId, storeJumpToPresent]
   );
 
   const toggleReaction = useCallback(
@@ -135,6 +150,7 @@ function DMChatProvider({
       isLoading: isLoadingMessages,
       isLoadingMore: false, // DM store has no separate isLoadingMore state
       hasMore,
+      hasMoreAfter,
       replyingTo,
       scrollToMessageId,
       typingUsers,
@@ -143,6 +159,8 @@ function DMChatProvider({
       deleteMessage,
       fetchMessages,
       fetchOlderMessages,
+      fetchNewerMessages,
+      jumpToPresent,
       toggleReaction,
       setReplyingTo,
       setScrollToMessageId,
@@ -157,9 +175,10 @@ function DMChatProvider({
       addFilesRef,
     }),
     [
-      channelId, channelName, messages, isLoadingMessages, hasMore,
+      channelId, channelName, messages, isLoadingMessages, hasMore, hasMoreAfter,
       replyingTo, scrollToMessageId, typingUsers,
       sendMessage, editMessage, deleteMessage, fetchMessages, fetchOlderMessages,
+      fetchNewerMessages, jumpToPresent,
       toggleReaction, setReplyingTo, setScrollToMessageId, sendTyping,
       pinMessage, unpinMessage, isMessagePinned, addFilesRef,
     ]

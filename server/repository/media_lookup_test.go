@@ -144,6 +144,19 @@ func TestMediaAssetRepo_IsPublicAsset(t *testing.T) {
 		t.Fatalf("set wallpaper: %v", err)
 	}
 
+	// Migration 085 columns: animated avatar + profile banner.
+	animatedURL := "/api/uploads/0123456789abcdef_avatar.gif"
+	bannerURL := "/api/uploads/fedcba9876543210_banner.jpg"
+	fresh, err := userRepo.GetByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("reload user: %v", err)
+	}
+	fresh.AvatarAnimatedURL = &animatedURL
+	fresh.BannerURL = &bannerURL
+	if err := userRepo.Update(ctx, fresh); err != nil {
+		t.Fatalf("set animated avatar / banner: %v", err)
+	}
+
 	iconURL := "/api/uploads/icon_1.png"
 	server := &models.Server{Name: "public-asset-server", OwnerID: user.ID, IconURL: &iconURL}
 	if err := serverRepo.Create(ctx, server); err != nil {
@@ -157,6 +170,8 @@ func TestMediaAssetRepo_IsPublicAsset(t *testing.T) {
 	}{
 		{"avatar", avatarURL, true},
 		{"wallpaper", wallpaperURL, true},
+		{"animated avatar", animatedURL, true},
+		{"profile banner", bannerURL, true},
 		{"server icon", iconURL, true},
 		{"unknown path", "/api/uploads/nobody_knows_this.png", false},
 	}

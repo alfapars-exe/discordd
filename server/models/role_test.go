@@ -72,6 +72,17 @@ func TestPermAll_Covers_All_Permissions(t *testing.T) {
 		PermManageMessages, PermSendMessages, PermConnectVoice, PermSpeak,
 		PermStream, PermAdmin, PermManageInvites, PermReadMessages,
 		PermViewChannel, PermMoveMembers, PermMuteMembers, PermDeafenMembers,
+		PermUseSoundboard, PermManageSoundboard, PermTimeoutMembers, PermManageNicknames,
+		PermManageExpressions, PermUseEntranceSound,
+	}
+	if PermManageExpressions != 1<<20 {
+		t.Errorf("PermManageExpressions = %d, want 1048576 (client permissions.ts mirrors it)", PermManageExpressions)
+	}
+	if PermUseEntranceSound != 1<<21 {
+		t.Errorf("PermUseEntranceSound = %d, want 2097152 (client permissions.ts mirrors it)", PermUseEntranceSound)
+	}
+	if PermAll != 4194303 {
+		t.Errorf("PermAll = %d, want 4194303 (client permissions.ts PermAll literal mirrors it)", PermAll)
 	}
 
 	for _, perm := range allPerms {

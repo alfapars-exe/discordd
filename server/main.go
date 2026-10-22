@@ -150,7 +150,10 @@ func main() {
 	// LiveKit seeding so an orphan empty-ID instance isn't seeded over.
 	repairCorruptIDs(db)
 	repairOrphanedServerData(db)
+	repairOrphanedSoundboard(db, cfg.Upload.Dir)
+	repairOrphanedEntranceSounds(db, cfg.Upload.Dir)
 	resetStalePresence(db)
+	purgeExpiredNotifications(db)
 	seedPlatformLiveKit(db, repos, cfg, encryptionKey)
 	// PLATFORM_ADMIN_USERNAME is read from env so the "who's admin?"
 	// decision lives in HF Space secrets, not in committed source.

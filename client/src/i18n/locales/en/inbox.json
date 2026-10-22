@@ -1,0 +1,22 @@
+{
+  "inbox": "Inbox",
+  "notifications": "Notifications",
+  "viewAll": "View all",
+  "empty": "No conversations yet",
+  "noNotifications": "No notifications",
+  "markAllRead": "Mark all as read",
+  "unreadOnly": "Unread only",
+  "loadMore": "Load more",
+  "encryptedMessage": "Encrypted message",
+  "attachment": "Attachment",
+  "messageRequests": "Message requests",
+  "youPrefix": "You:",
+  "kind": {
+    "mention": "{{name}} mentioned you in #{{channel}}",
+    "reply": "{{name}} replied to you in #{{channel}}",
+    "friendRequest": "{{name}} sent you a friend request",
+    "dmRequest": "{{name}} wants to message you",
+    "system": "System notification"
+  },
+  "friendRequestToast": "{{name}} sent you a friend request"
+}

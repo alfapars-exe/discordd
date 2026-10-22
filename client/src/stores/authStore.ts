@@ -12,6 +12,11 @@ import { useE2EEStore } from "./e2eeStore";
 import { usePreferencesStore } from "./preferencesStore";
 import { useVoiceStore } from "./voiceStore";
 import { useSettingsStore } from "./settingsStore";
+import { useSavedStore } from "./savedStore";
+import { useUserNoteStore } from "./userNoteStore";
+import { useEmojiStore } from "./emojiStore";
+import { useStickerStore } from "./stickerStore";
+import { useEntranceStore } from "./entranceStore";
 import type { APIResponse, AuthTokens, User, UserStatus } from "../types";
 import { oneOf } from "../utils/validation";
 
@@ -152,6 +157,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Reset E2EE state (IndexedDB keys preserved)
     await useE2EEStore.getState().reset();
     usePreferencesStore.getState().reset();
+    // Per-account private data (bookmarks, user notes) — SPA, no reload.
+    useSavedStore.getState().reset();
+    useUserNoteStore.getState().reset();
+    useEmojiStore.getState().reset();
+    useStickerStore.getState().reset();
+    useEntranceStore.getState().reset();
 
     // Refresh token now lives in the HttpOnly cookie — the server reads it
     // from there during logout and clears the cookie via Set-Cookie. We

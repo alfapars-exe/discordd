@@ -33,6 +33,8 @@ import { handleChannelEvent } from "./ws/channelEventHandlers";
 import { handleDMEvent } from "./ws/dmEventHandlers";
 import { handleVoiceEvent } from "./ws/voiceEventHandlers";
 import { handleSystemEvent } from "./ws/systemEventHandlers";
+import { handleExpressionEvent } from "./ws/expressionEventHandlers";
+import { handleEntranceEvent } from "./ws/entranceEventHandlers";
 import type { WSHandlerContext } from "./ws/types";
 
 /**
@@ -236,6 +238,8 @@ export function useWebSocket() {
     if (await handleChannelEvent(msg)) return;
     if (await handleDMEvent(msg)) return;
     if (await handleVoiceEvent(msg, ctx)) return;
+    if (handleExpressionEvent(msg)) return;
+    if (handleEntranceEvent(msg)) return;
     if (await handleSystemEvent(msg, ctx, setConnectionStatus)) return;
   }
 

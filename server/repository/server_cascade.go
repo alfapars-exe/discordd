@@ -73,6 +73,15 @@ var deleteServerCascadeStmts = []struct {
 		args: func(id string) []any { return []any{id} },
 	},
 	{
+		// saved_messages (migration 083) bookmarks reference messages by id;
+		// like every statement above, this one joins through messages and so
+		// must precede the messages delete below.
+		query: `DELETE FROM saved_messages WHERE message_id IN (
+			SELECT id FROM messages WHERE channel_id IN (
+				SELECT id FROM channels WHERE server_id = ?))`,
+		args: func(id string) []any { return []any{id} },
+	},
+	{
 		// Must run after every statement above that identifies its rows via
 		// messages — once this runs, that lookup path is gone.
 		query: `DELETE FROM messages WHERE channel_id IN (
@@ -134,6 +143,55 @@ var deleteServerCascadeStmts = []struct {
 	{
 		// (server_id, user_id) primary key, no FK on either column.
 		query: `DELETE FROM bans WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		// Inbox notifications (migration 082) carry a bare server_id with
+		// no FK to servers at all — scoped directly, so order relative to
+		// the channel/message deletes above does not matter, only that it
+		// runs before the servers row goes.
+		query: `DELETE FROM notifications WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		// Custom emojis (migration 086): the declared ON DELETE CASCADE to
+		// servers is not enforced on Turso. Their files are collected by
+		// GetFileURLsByServerID before this cascade runs.
+		query: `DELETE FROM server_emojis WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		// Stickers (migration 087): same unenforced ON DELETE CASCADE as
+		// the emojis above; their files are collected by
+		// GetFileURLsByServerID before this cascade runs.
+		query: `DELETE FROM server_stickers WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		// Soundboard clips (migration 051): same unenforced ON DELETE
+		// CASCADE. Their files are collected by GetFileURLsByServerID
+		// before this cascade runs.
+		query: `DELETE FROM soundboard_sounds WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	// Entrance sounds (migration 088): the server-scoped rows below declare
+	// ON DELETE CASCADE, which Turso never enforces. Users' own clips
+	// (user_entrance_sounds) are user-scoped and survive the server; only
+	// selections scoped to this server go.
+	{
+		query: `DELETE FROM user_entrance_selection WHERE scope_server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM channel_entrance_disabled WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM server_entrance_mutes WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM server_entrance_settings WHERE server_id = ?`,
 		args:  func(id string) []any { return []any{id} },
 	},
 	{

@@ -6,11 +6,18 @@
 
 import { create } from "zustand";
 import * as friendsApi from "../api/friends";
-import type { FriendshipWithUser } from "../types";
+import type { FriendshipWithUser, UserStatus } from "../types";
 
 const EMPTY_FRIENDS: FriendshipWithUser[] = [];
 const EMPTY_INCOMING: FriendshipWithUser[] = [];
 const EMPTY_OUTGOING: FriendshipWithUser[] = [];
+
+export type SendFriendRequestResult = {
+  success: boolean;
+  error?: string;
+  /** On success: the created (or mutually auto-accepted) row — `user_id` is the TARGET. */
+  friendship?: FriendshipWithUser;
+};
 
 type FriendState = {
   friends: FriendshipWithUser[];
@@ -21,7 +28,7 @@ type FriendState = {
   // ─── Actions ───
   fetchFriends: () => Promise<void>;
   fetchRequests: () => Promise<void>;
-  sendRequest: (username: string) => Promise<{ success: boolean; error?: string }>;
+  sendRequest: (username: string) => Promise<SendFriendRequestResult>;
   acceptRequest: (requestId: string) => Promise<boolean>;
   declineRequest: (requestId: string) => Promise<boolean>;
   removeFriend: (userId: string) => Promise<boolean>;
@@ -31,6 +38,8 @@ type FriendState = {
   handleFriendRequestAccept: (data: FriendshipWithUser) => void;
   handleFriendRequestDecline: (data: { id: string; user_id: string }) => void;
   handleFriendRemove: (data: { user_id: string }) => void;
+  /** WS presence_update (via presenceStore) — refresh `user_status` on every row for that user. */
+  handlePresenceUpdate: (userId: string, status: UserStatus) => void;
 };
 
 export const useFriendStore = create<FriendState>((set, get) => ({
@@ -75,7 +84,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       } else {
         set((s) => ({ outgoing: [res.data!, ...s.outgoing] }));
       }
-      return { success: true };
+      return { success: true, friendship: res.data };
     }
     return { success: false, error: res.error };
   },
@@ -143,5 +152,21 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     set((s) => ({
       friends: s.friends.filter((f) => f.user_id !== data.user_id),
     }));
+  },
+
+  handlePresenceUpdate: (userId, status) => {
+    set((s) => {
+      const patch = (list: FriendshipWithUser[]) =>
+        list.some((f) => f.user_id === userId && f.user_status !== status)
+          ? list.map((f) => (f.user_id === userId ? { ...f, user_status: status } : f))
+          : list;
+      const friends = patch(s.friends);
+      const incoming = patch(s.incoming);
+      const outgoing = patch(s.outgoing);
+      // No row for this user (or nothing changed) — keep the same reference
+      // so selectors don't re-render.
+      if (friends === s.friends && incoming === s.incoming && outgoing === s.outgoing) return s;
+      return { friends, incoming, outgoing };
+    });
   },
 }));

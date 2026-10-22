@@ -51,10 +51,15 @@ export type Attachment = {
   mime_type: string | null;
 };
 
-/** Cursor-based pagination response. */
+/**
+ * Cursor-based pagination response. `has_more` = older messages exist
+ * before the window; `has_more_after` (only on ?around= / ?after= pages)
+ * = newer messages exist after it.
+ */
 export type MessagePage = {
   messages: Message[];
   has_more: boolean;
+  has_more_after?: boolean;
 };
 
 /** Pinned message with full message data and pinner info. */

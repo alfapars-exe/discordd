@@ -129,6 +129,21 @@ func (r *sqliteChannelRepo) Update(ctx context.Context, channel *models.Channel)
 }
 
 func (r *sqliteChannelRepo) Delete(ctx context.Context, id string) error {
+	// saved_messages (migration 083) bookmarks of this channel's messages:
+	// the local SQLite branch cascades channels -> messages, which would take
+	// the subquery's lookup path away, so this must run BEFORE the channels
+	// delete; on Turso no cascade fires at all and this is the only cleanup.
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM saved_messages WHERE message_id IN (
+		SELECT id FROM messages WHERE channel_id = ?)`, id); err != nil {
+		return fmt.Errorf("failed to delete saved references for channel: %w", err)
+	}
+	// channel_entrance_disabled (migration 088): the FK cascade only fires
+	// on local SQLite, never on Turso, so the per-channel entrance-sound
+	// switch is removed explicitly — before the channels row, so a failure
+	// here leaves the channel in place instead of 500-ing after it is gone.
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM channel_entrance_disabled WHERE channel_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete entrance settings for channel: %w", err)
+	}
 	result, err := r.db.ExecContext(ctx, `DELETE FROM channels WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete channel: %w", err)

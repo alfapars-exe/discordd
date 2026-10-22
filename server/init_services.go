@@ -55,9 +55,16 @@ type Services struct {
 	Feedback          services.FeedbackService
 	FeedbackUpload    services.FeedbackUploadService
 	Soundboard        services.SoundboardService
+	Emoji             services.EmojiService
+	Sticker           services.StickerService
+	Entrance          services.EntranceService
+	ExpressionClone   services.ExpressionCloneService
 	MusicBot          services.MusicBotService
 	WSTicket          services.WSTicketService
 	Backup            *services.BackupService
+	Notification      services.NotificationService
+	Saved             services.SavedService
+	UserNote          services.UserNoteService
 }
 
 type RateLimiters struct {
@@ -108,6 +115,13 @@ type RateLimiters struct {
 	// spawn rate. Only Play is limited -- skip/pause/resume/stop/state are
 	// cheap in-memory operations on the already-running bot.
 	MusicPlay *ratelimit.MessageRateLimiter
+	// SocialAction (Faz B, 2026-10-21): POST /api/friends/requests and POST
+	// /api/users/{id}/block had no rate limit; both fan out WS events (+ an
+	// inbox row for requests), so an unthrottled caller could spam a target.
+	// 20/min per user, 30s cooldown (same shape as Upload/GroupSession). One
+	// shared budget for both endpoints. Rate limiting bounds frequency, not
+	// concurrency -- no semaphore needed here (no CPU/memory-heavy work).
+	SocialAction *ratelimit.MessageRateLimiter
 }
 
 // initServices creates all services. Order matters:
@@ -157,7 +171,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// path (security review 2026-08-01, finding 3). voiceService already
 	// exists at this point (constructed above), so no ordering hazard.
 	authService.SetVoiceDisconnecter(voiceService)
-	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService, auditLogService)
+	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService, auditLogService, repos.Notification)
 	// Enables best-effort on-disk cleanup of attachment files on delete (see
 	// services/upload_cleanup.go) without widening the constructor signature
 	// — uploadDir stays a setter (unlike auditLogger above) because it's a
@@ -169,6 +183,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repos.Message, repos.Attachment, repos.Channel, repos.User,
 		repos.Mention, repos.RoleMention, repos.Role, repos.Reaction, repos.ReadState,
 		repos.MemberTimeout, repository.NewMessageTxRunner(db), hub, channelPermService, auditLogService,
+		repos.Notification,
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
@@ -203,11 +218,23 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// DMSettingsService before DMService (DMService uses it as DMSettingsUnhider)
 	dmSettingsService := services.NewDMSettingsService(repos.DMSettings, repos.DM, hub)
 
-	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, hub)
-	dmService := services.NewDMService(repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService)
+	// Inbox notifications: the read/ack service here, the writers are the
+	// message/DM/friendship services below (each takes repos.Notification).
+	notificationService := services.NewNotificationService(repos.Notification, hub)
+
+	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub)
+	dmService := services.NewDMService(
+		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
+		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
+	)
 	dmService.SetUploadDir(cfg.Upload.Dir)
 	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
+	// Bookmarks (Faz C): saving a channel message is gated on the same
+	// per-channel read resolution the message list uses (channelPermService),
+	// a DM message on channel membership (repos.DM).
+	savedService := services.NewSavedService(repos.Saved, repos.Message, repos.Channel, repos.DM, channelPermService)
+	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
 	channelMuteService := services.NewChannelMuteService(repos.ChannelMute)
@@ -221,6 +248,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	e2eeService := services.NewE2EEService(repos.E2EEBackup, repos.GroupSession, repos.Device, repos.Server, hub, repos.Channel, channelPermService, backupHMACKey)
 
 	adminUserService := services.NewAdminUserService(repos.User, hub, voiceService, emailSender)
+	adminUserService.SetUploadDir(cfg.Upload.Dir)
 	adminServerService := services.NewAdminServerService(db, repos.Server, repos.User, repos.LiveKit, hub, emailSender)
 	adminServerService.SetUploadDir(cfg.Upload.Dir)
 
@@ -239,6 +267,19 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	soundboardService := services.NewSoundboardService(
 		repos.Soundboard, repos.User, hub, voiceService, cfg.Upload.Dir, cfg.Upload.MaxSize,
 	)
+	// Custom emojis; also the resolver that lets channel and DM reactions
+	// use them.
+	emojiService := services.NewEmojiService(repos.Emoji, repos.Server, hub, cfg.Upload.Dir)
+	reactionService.SetEmojiResolver(emojiService)
+	dmService.SetEmojiResolver(emojiService)
+	// Server stickers, and copying copyable emojis/stickers between servers.
+	stickerService := services.NewStickerService(repos.Sticker, hub, cfg.Upload.Dir)
+	expressionCloneService := services.NewExpressionCloneService(repos.Emoji, emojiService, repos.Sticker, stickerService, repos.Server, cfg.Upload.Dir)
+	// Entrance sounds: JoinChannel fires the hook on every fresh, authorized
+	// voice join; the service broadcasts only to that channel's participants.
+	entranceService := services.NewEntranceService(repos.Entrance, repos.Server, repos.Role, repos.Channel,
+		channelPermService, hub, voiceService, cfg.Upload.Dir)
+	voiceService.SetEntranceHook(entranceService)
 	musicBotService := services.NewMusicBotService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService,
 	)
@@ -300,6 +341,10 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// above for the subprocess-cost rationale.
 	musicPlayLimiter := ratelimit.NewMessageRateLimiter(5, 1*time.Minute, 30*time.Second)
 
+	// SocialAction (Faz B, 2026-10-21): 20 per minute per user, 30s cooldown
+	// once exceeded -- see the RateLimiters.SocialAction doc comment above.
+	socialActionLimiter := ratelimit.NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
+
 	svcs := &Services{
 		Auth:              authService,
 		Server:            serverService,
@@ -341,9 +386,16 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		Feedback:          feedbackService,
 		FeedbackUpload:    feedbackUploadService,
 		Soundboard:        soundboardService,
+		Emoji:             emojiService,
+		Sticker:           stickerService,
+		Entrance:          entranceService,
+		ExpressionClone:   expressionCloneService,
 		MusicBot:          musicBotService,
 		WSTicket:          services.NewWSTicketService(),
 		Backup:            services.NewBackupService(cfg.Backup),
+		Notification:      notificationService,
+		Saved:             savedService,
+		UserNote:          userNoteService,
 	}
 
 	limiters := &RateLimiters{
@@ -360,6 +412,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		GroupSession: groupSessionLimiter,
 		Refresh:      refreshLimiter,
 		MusicPlay:    musicPlayLimiter,
+		SocialAction: socialActionLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

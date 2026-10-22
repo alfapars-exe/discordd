@@ -48,6 +48,7 @@ vi.mock("../../stores/messageStore", async () => {
     useMessageStore: create(() => ({
       messagesByChannel: {},
       hasMoreByChannel: {},
+      hasMoreAfterByChannel: {},
       isLoadingByChannel: {} as Record<string, boolean>,
       isLoadingMore: false,
       typingUsers: {},
@@ -61,6 +62,8 @@ vi.mock("../../stores/messageStore", async () => {
       toggleReaction: vi.fn(),
       fetchMessages: vi.fn(),
       fetchOlderMessages: vi.fn(),
+      fetchNewerMessages: vi.fn(),
+      jumpToPresent: vi.fn(),
     })),
   };
 });

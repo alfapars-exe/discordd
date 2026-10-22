@@ -22,8 +22,9 @@
 //     evidence / support-ticket screenshots), verifies the caller is the
 //     reporter/ticket owner or a platform admin.
 //  5. Everything else is decided by a positive public-asset check
-//     (MediaAssetRepository.IsPublicAsset — avatars, wallpapers, server
-//     icons/banners — plus soundboard/badges path prefixes). A path that
+//     (MediaAssetRepository.IsPublicAsset — avatars, animated avatars,
+//     wallpapers, profile banners, server icons/banners, server custom
+//     emojis — plus soundboard/badges path prefixes). A path that
 //     matches NONE of the above 404s rather than falling open — see
 //     services/media_access_service.go.
 package handlers
@@ -125,7 +126,8 @@ func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
 // (reporter/ticket owner or platform admin). Auth is accepted via Bearer
 // header OR the hichat_media HttpOnly cookie so rendered <img>/<video> tags
 // work without JS. Everything else is decided by a positive public-asset
-// check (avatars, server icons, soundboard samples, badge icons); a path that
+// check (avatars, animated avatars, wallpapers, profile banners, server
+// icons/banners, server custom emojis, soundboard samples, badge icons); a path that
 // matches none of the above is a 404, not a public serve — see
 // services/media_access_service.go for the full decision order.
 //

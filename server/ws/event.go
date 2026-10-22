@@ -70,6 +70,13 @@ const (
 	OpDMRequestAccept       = "dm_request_accept"
 	OpDMRequestDecline      = "dm_request_decline"
 	OpDMChannelStatusChange = "dm_channel_status_change"
+	// OpDMRead — sent to the reader only, after POST /api/dms/{id}/read.
+	// data: dm_channel_id, user_id, last_read_message_id (string|null)
+	OpDMRead = "dm_read"
+
+	// Inbox notification operations (notifications table, migration 082)
+	OpNotificationCreate = "notification_create" // data: models.Notification, sent to the target user
+	OpNotificationRead   = "notification_read"   // data: ids []string, all bool, unread_count — sent to the reader
 
 	// Block operations
 	OpUserBlock   = "user_block"
@@ -154,8 +161,10 @@ const (
 // BotReadableOps is the curated subset of server->client events a bot
 // connection receives. Deliberately minimal for the MVP: message lifecycle,
 // reactions, member join/leave, typing, and channel lifecycle. Voice/screen,
-// DM, E2EE/device, presence, audit, and friend events are withheld — bots
-// have no use for them and broadcasting them widens the exfiltration surface.
+// DM (including dm_read), E2EE/device, presence, audit, friend, and inbox
+// notification events (notification_create / notification_read) are
+// withheld — bots have no use for them and broadcasting them widens the
+// exfiltration surface.
 var BotReadableOps = map[string]bool{
 	OpMessageCreate:  true,
 	OpMessageUpdate:  true,

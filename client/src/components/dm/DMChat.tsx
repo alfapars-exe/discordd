@@ -31,6 +31,16 @@ type DMChatProps = {
   sendDMTyping: (dmChannelId: string) => void;
 };
 
+/**
+ * Self-DM ("My Notes") E2EE. encryptDMMessage addresses a self channel through
+ * the self-fanout pass only (no session with the local device), so the E2EE
+ * toggle and key banner work there. Setting this false hides them again on the
+ * self channel without touching the layout. Peer verification (safety number,
+ * trust-alert banner) stays hidden on the self channel regardless — see
+ * showPeerVerification.
+ */
+const SELF_DM_E2EE_ENABLED = true;
+
 // Explicit per-kind mapping (not a ternary) so a new PeerTrustAlertKind is a
 // compile error here instead of silently falling through to the wrong
 // label — own_new_device is about OUR OWN account and must never be shown
@@ -43,9 +53,14 @@ const TRUST_ALERT_LABEL_KEYS: Record<PeerTrustAlertKind, string> = {
 
 /** DMChat — Provider wrapper. Delegates content to DMChatContent. */
 function DMChat({ channelId, sendDMTyping }: DMChatProps) {
+  const { t: tDM } = useTranslation("dm");
   const channels = useDMStore((s) => s.channels);
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const otherUser = channels.find((ch) => ch.id === channelId)?.other_user;
-  const channelName = otherUser?.display_name ?? otherUser?.username ?? "DM";
+  const isSelf = !!otherUser && otherUser.id === currentUserId;
+  const channelName = isSelf
+    ? tDM("myNotes")
+    : otherUser?.display_name ?? otherUser?.username ?? "DM";
 
   return (
     <DMChatProvider
@@ -57,6 +72,7 @@ function DMChat({ channelId, sendDMTyping }: DMChatProps) {
         channelId={channelId}
         channelName={channelName}
         otherUser={otherUser ?? null}
+        isSelf={isSelf}
       />
     </DMChatProvider>
   );
@@ -67,10 +83,13 @@ function DMChatContent({
   channelId,
   channelName,
   otherUser,
+  isSelf,
 }: {
   channelId: string;
   channelName: string;
   otherUser: PublicUser | null;
+  /** Self-DM ("My Notes"): no calls, no search, no peer verification; E2EE gated by SELF_DM_E2EE_ENABLED. */
+  isSelf: boolean;
 }) {
   const { t } = useTranslation("chat");
   const { t: tDM } = useTranslation("dm");
@@ -94,6 +113,12 @@ function DMChatContent({
   const blockUser = useBlockStore((s) => s.blockUser);
 
   const dmChannel = channels.find((ch) => ch.id === channelId);
+  const showE2EEControls = !isSelf || SELF_DM_E2EE_ENABLED;
+  // Safety number + trust-alert banner are PEER verification: on the self
+  // channel the "peer" is our own account, whose device changes are already
+  // surfaced as own_new_device on every send, and a safety number with
+  // yourself has nothing to compare against. Hidden for self even with E2EE on.
+  const showPeerVerification = showE2EEControls && !isSelf;
   const isPending = dmChannel?.status === "pending";
   const isInitiator = isPending && dmChannel?.initiated_by === currentUserId;
   const isRecipient = isPending && !isInitiator;
@@ -214,10 +239,12 @@ function DMChatContent({
           size={24}
         />
         <span className="dm-header-name">{channelName}</span>
+        {isSelf && <span className="dm-header-hint">{tDM("myNotesHint")}</span>}
 
         {/* Header actions — e2ee, pin, search */}
         <div className="ch-actions">
           {/* E2EE toggle */}
+          {showE2EEControls && (
           <button
             className={dmE2EEEnabled ? "active" : ""}
             onClick={async () => {
@@ -250,7 +277,10 @@ function DMChatContent({
               </svg>
             )}
           </button>
-          {/* Voice call */}
+          )}
+          {/* Voice / video call — not on the self channel */}
+          {!isSelf && (
+          <>
           <button
             onClick={() => {
               if (otherUser) useP2PCallStore.getState().initiateCall(otherUser.id, "voice");
@@ -261,7 +291,6 @@ function DMChatContent({
               <path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
             </svg>
           </button>
-          {/* Video call */}
           <button
             onClick={() => {
               if (otherUser) useP2PCallStore.getState().initiateCall(otherUser.id, "video");
@@ -272,6 +301,8 @@ function DMChatContent({
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9.75a2.25 2.25 0 002.25-2.25V7.5a2.25 2.25 0 00-2.25-2.25H4.5A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
             </svg>
           </button>
+          </>
+          )}
           {/* Pin toggle */}
           <button
             className={showPins ? "active" : ""}
@@ -282,7 +313,8 @@ function DMChatContent({
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 4v4l2 2v4h-5v6l-1 1-1-1v-6H6v-4l2-2V4a1 1 0 011-1h6a1 1 0 011 1z" />
             </svg>
           </button>
-          {/* Search toggle */}
+          {/* Search toggle — not on the self channel */}
+          {!isSelf && (
           <button
             className={showSearch ? "active" : ""}
             onClick={handleToggleSearch}
@@ -292,9 +324,11 @@ function DMChatContent({
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
+          )}
           {/* Safety number / device verification toggle — always available,
               not gated on an active trust alert, so verification can happen
               proactively too. */}
+          {showPeerVerification && (
           <button
             className={showSafetyNumber ? "active" : ""}
             onClick={handleToggleSafetyNumber}
@@ -304,11 +338,12 @@ function DMChatContent({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
           </button>
+          )}
         </div>
       </div>
 
       {/* ─── E2EE Recipient No Keys Banner ─── */}
-      {dmE2EEEnabled && !recipientHasKeys && (
+      {showE2EEControls && dmE2EEEnabled && !recipientHasKeys && (
         <div className="e2ee-warning-banner">
           <svg style={{ width: 16, height: 16, flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -318,7 +353,7 @@ function DMChatContent({
       )}
 
       {/* ─── Peer Trust Alert Banner (MITM / new-device surface) ─── */}
-      {otherUserMostSevereTrustAlert && (
+      {showPeerVerification && otherUserMostSevereTrustAlert && (
         <div className="e2ee-warning-banner">
           <svg style={{ width: 16, height: 16, flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -373,7 +408,7 @@ function DMChatContent({
       )}
 
       {/* ─── DM Search Panel ─── */}
-      {showSearch && (
+      {showSearch && !isSelf && (
         <DMSearchPanel
           channelId={channelId}
           onClose={() => setShowSearch(false)}
@@ -381,7 +416,7 @@ function DMChatContent({
       )}
 
       {/* ─── DM Safety Number / Device Verification Panel ─── */}
-      {showSafetyNumber && otherUser && (
+      {showSafetyNumber && showPeerVerification && otherUser && (
         <DMSafetyNumberPanel
           otherUser={otherUser}
           onClose={() => setShowSafetyNumber(false)}

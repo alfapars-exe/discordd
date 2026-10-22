@@ -30,10 +30,33 @@ func (d *routeDeps) registerUserRoutes() {
 	d.mux.Handle("POST /api/users/me/avatar", d.auth(d.h.Avatar.UploadUserAvatar))
 	d.mux.Handle("POST /api/users/me/wallpaper", d.auth(d.h.Avatar.UploadUserWallpaper))
 	d.mux.Handle("DELETE /api/users/me/wallpaper", d.auth(d.h.Avatar.DeleteUserWallpaper))
+	d.mux.Handle("POST /api/users/me/banner", d.auth(d.h.Avatar.UploadUserBanner))
+	d.mux.Handle("DELETE /api/users/me/banner", d.auth(d.h.Avatar.DeleteUserBanner))
 	d.mux.Handle("GET /api/users/me/preferences", d.auth(d.h.Preferences.Get))
 	d.mux.Handle("POST /api/users/me/dismiss-download-prompt", d.auth(d.h.DownloadPrompt.Dismiss))
 	d.mux.Handle("POST /api/users/me/dismiss-welcome", d.auth(d.h.DownloadPrompt.DismissWelcome))
 	d.mux.Handle("PATCH /api/users/me/preferences", d.auth(d.h.Preferences.Update))
+
+	// Inbox notifications — literal "count" / "read-all" before the {id}
+	// wildcard. Self-scoped (the service filters by the caller's user_id),
+	// so d.auth is the full gate.
+	d.mux.Handle("GET /api/users/me/notifications", d.auth(d.h.Notification.List))
+	d.mux.Handle("GET /api/users/me/notifications/count", d.auth(d.h.Notification.Count))
+	d.mux.Handle("POST /api/users/me/notifications/read-all", d.auth(d.h.Notification.MarkAllRead))
+	d.mux.Handle("POST /api/users/me/notifications/{id}/read", d.auth(d.h.Notification.MarkRead))
+
+	// Saved messages (bookmarks) — literal "ids" before the {id} wildcard.
+	// Self-scoped like notifications: the service filters by the caller.
+	d.mux.Handle("GET /api/users/me/saved", d.auth(d.h.Saved.List))
+	d.mux.Handle("GET /api/users/me/saved/ids", d.auth(d.h.Saved.ListIDs))
+	d.mux.Handle("POST /api/users/me/saved", d.auth(d.h.Saved.Create))
+	d.mux.Handle("PATCH /api/users/me/saved/{id}", d.auth(d.h.Saved.UpdateNote))
+	d.mux.Handle("DELETE /api/users/me/saved/{id}", d.auth(d.h.Saved.Delete))
+
+	// Private per-user notes — {userId} is the note's target; the owner is
+	// always the caller (service-scoped), so d.auth is the full gate.
+	d.mux.Handle("GET /api/users/{userId}/note", d.auth(d.h.UserNote.Get))
+	d.mux.Handle("PUT /api/users/{userId}/note", d.auth(d.h.UserNote.Set))
 }
 
 // Servers
@@ -58,7 +81,7 @@ func (d *routeDeps) registerUploadRoutes() {
 	// Upload download — access is decided per category, in this order: channel
 	// attachment -> DM attachment -> report attachment (reporter or platform
 	// admin) -> feedback attachment (ticket owner or platform admin) ->
-	// positive public-asset match (users.avatar_url|wallpaper_url,
+	// positive public-asset match (users.avatar_url|wallpaper_url|avatar_animated_url|banner_url,
 	// servers.icon_url|banner_url) -> soundboard/badges path prefix -> 404 for
 	// anything matching none of the above. See services/media_access_service.go
 	// for the full decision order and why it fails closed rather than public.
@@ -82,6 +105,8 @@ func (d *routeDeps) registerDMRoutes() {
 	d.mux.Handle("GET /api/dms/settings", d.auth(d.h.DMSettings.GetSettings))
 	d.mux.Handle("GET /api/dms", d.auth(d.h.DM.ListChannels))
 	d.mux.Handle("POST /api/dms", d.auth(d.h.DM.CreateOrGetChannel))
+	// Self-DM ("notes to self") — literal "self" before {channelId}.
+	d.mux.Handle("POST /api/dms/self", d.auth(d.h.DM.GetOrCreateSelfChannel))
 
 	// DM Settings — /api/dms/channels/ prefix avoids route ambiguity with /api/dms/{channelId}
 	d.mux.Handle("POST /api/dms/channels/{channelId}/hide", d.auth(d.h.DMSettings.HideDM))
@@ -106,6 +131,8 @@ func (d *routeDeps) registerDMRoutes() {
 	d.mux.Handle("GET /api/dms/{channelId}/pinned", d.auth(d.h.DM.GetPinnedMessages))
 	d.mux.Handle("GET /api/dms/{channelId}/search", d.auth(d.h.DM.SearchMessages))
 	d.mux.Handle("PATCH /api/dms/channels/{channelId}/e2ee", d.auth(d.h.DM.ToggleE2EE))
+	// DM read state — membership is verified inside dmService.MarkRead.
+	d.mux.Handle("POST /api/dms/{channelId}/read", d.auth(d.h.DM.MarkRead))
 }
 
 func (d *routeDeps) registerBlockReportRoutes() {
@@ -176,6 +203,7 @@ func (d *routeDeps) registerBadgeRoutes() {
 	d.mux.Handle("POST /api/badges/{id}/assign", d.authAdmin(d.h.Badge.AssignBadge))
 	d.mux.Handle("DELETE /api/badges/{id}/assign/{userId}", d.authAdmin(d.h.Badge.UnassignBadge))
 	d.mux.Handle("GET /api/users/{userId}/badges", d.auth(d.h.Badge.GetUserBadges))
+	d.mux.Handle("GET /api/users/{userId}/profile", d.auth(d.h.Member.GetUserProfile))
 }
 
 // GIFs (Klipy proxy)

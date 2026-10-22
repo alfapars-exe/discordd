@@ -9,11 +9,26 @@ import (
 // ─── MessageRepository mock ───
 
 type MockMessageRepo struct {
-	CreateFn         func(ctx context.Context, message *models.Message) error
-	GetByIDFn        func(ctx context.Context, id string) (*models.Message, error)
-	GetByChannelIDFn func(ctx context.Context, channelID string, beforeID string, limit int) ([]models.Message, error)
-	UpdateFn         func(ctx context.Context, message *models.Message) error
-	DeleteFn         func(ctx context.Context, id string) error
+	CreateFn               func(ctx context.Context, message *models.Message) error
+	GetByIDFn              func(ctx context.Context, id string) (*models.Message, error)
+	GetByChannelIDFn       func(ctx context.Context, channelID string, beforeID string, limit int) ([]models.Message, error)
+	GetByChannelIDAroundFn func(ctx context.Context, channelID, anchorID string, limit int) ([]models.Message, bool, bool, error)
+	GetByChannelIDAfterFn  func(ctx context.Context, channelID, afterID string, limit int) ([]models.Message, error)
+	UpdateFn               func(ctx context.Context, message *models.Message) error
+	DeleteFn               func(ctx context.Context, id string) error
+}
+
+func (m *MockMessageRepo) GetByChannelIDAround(ctx context.Context, channelID, anchorID string, limit int) ([]models.Message, bool, bool, error) {
+	if m.GetByChannelIDAroundFn != nil {
+		return m.GetByChannelIDAroundFn(ctx, channelID, anchorID, limit)
+	}
+	return nil, false, false, nil
+}
+func (m *MockMessageRepo) GetByChannelIDAfter(ctx context.Context, channelID, afterID string, limit int) ([]models.Message, error) {
+	if m.GetByChannelIDAfterFn != nil {
+		return m.GetByChannelIDAfterFn(ctx, channelID, afterID, limit)
+	}
+	return nil, nil
 }
 
 func (m *MockMessageRepo) Create(ctx context.Context, message *models.Message) error {
@@ -151,6 +166,7 @@ func (m *MockRoleMentionRepo) GetByMessageIDs(ctx context.Context, messageIDs []
 
 type MockReactionRepo struct {
 	ToggleFn          func(ctx context.Context, messageID, userID, emoji string) (bool, error)
+	RemoveReactionFn  func(ctx context.Context, messageID, userID, emoji string) (bool, error)
 	GetByMessageIDFn  func(ctx context.Context, messageID string) ([]models.ReactionGroup, error)
 	GetByMessageIDsFn func(ctx context.Context, messageIDs []string) (map[string][]models.ReactionGroup, error)
 }
@@ -158,6 +174,12 @@ type MockReactionRepo struct {
 func (m *MockReactionRepo) Toggle(ctx context.Context, messageID, userID, emoji string) (bool, error) {
 	if m.ToggleFn != nil {
 		return m.ToggleFn(ctx, messageID, userID, emoji)
+	}
+	return false, nil
+}
+func (m *MockReactionRepo) RemoveReaction(ctx context.Context, messageID, userID, emoji string) (bool, error) {
+	if m.RemoveReactionFn != nil {
+		return m.RemoveReactionFn(ctx, messageID, userID, emoji)
 	}
 	return false, nil
 }

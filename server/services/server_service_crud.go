@@ -108,7 +108,8 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 
 		// Default "everyone" role
 		defaultPerms := models.PermViewChannel | models.PermReadMessages | models.PermSendMessages |
-			models.PermConnectVoice | models.PermSpeak | models.PermUseSoundboard
+			models.PermConnectVoice | models.PermSpeak | models.PermUseSoundboard |
+			models.PermUseEntranceSound
 
 		defaultRole := &models.Role{
 			ServerID:    server.ID,

@@ -11,7 +11,9 @@ import MemberCardIdentity from "./memberCard/MemberCardIdentity";
 import MemberCardSelfStatus from "./memberCard/MemberCardSelfStatus";
 import MemberCardActions from "./memberCard/MemberCardActions";
 import MemberCardModeration from "./memberCard/MemberCardModeration";
+import MemberCardNote from "./memberCard/MemberCardNote";
 import { useUserBadges } from "../../hooks/useUserBadges";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useActiveMembers, useMemberTimeout } from "../../stores/memberStore";
@@ -55,6 +57,20 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const customStatus = target?.custom_status;
   const createdAt = target?.created_at ?? "";
   const isServerContext = !!member;
+
+  // Profile fields (banner, bio, pronouns, accent, animated avatar) ride on
+  // MemberWithRoles in server context; a bare PublicUser (DM, friends,
+  // inbox) lacks them, so fetch the public profile lazily — except for the
+  // viewer's own card, which reads the auth store's user instead.
+  const isOwnTarget = !!currentUser && currentUser.id === userId;
+  const needsProfile = !member && !!userProp && !isOwnTarget;
+  const { profile } = useUserProfile(userId, needsProfile);
+  const prof = member ?? profile ?? (isOwnTarget ? currentUser : null);
+  const animatedUrl = prof?.avatar_animated_url;
+  const bannerUrl = prof?.banner_url;
+  const accentColor = prof?.accent_color;
+  const bio = prof?.bio;
+  const pronouns = prof?.pronouns;
 
   // Active moderator timeout (if any). Falls back to the inline field
   // on the freshly-fetched member object so the banner appears even
@@ -280,6 +296,12 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
           username={username}
           displayName={displayName}
           avatarUrl={avatarUrl}
+          animatedUrl={animatedUrl}
+          bannerUrl={bannerUrl}
+          accentColor={accentColor}
+          bio={bio}
+          pronouns={pronouns}
+          animateAvatar={true}
           customStatus={customStatus}
           userBadges={userBadges}
           joinDate={joinDate}
@@ -321,6 +343,9 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
             setShowBadgeAssign={setShowBadgeAssign}
             setShowReport={setShowReport}
           />
+
+          {/* Private note about this user (never on the viewer's own card) */}
+          {!isMe && <MemberCardNote userId={userId} />}
 
           {/* Moderation (server context only) */}
           {hasModActions && (

@@ -40,11 +40,22 @@ vi.mock("./e2eeStore", () => ({
 vi.mock("./settingsStore", () => ({
   useSettingsStore: { getState: () => ({ closeSettings: vi.fn() }) },
 }));
+// Stable spies (factory-scoped per #67) so logout's resets are observable.
+vi.mock("./savedStore", () => {
+  const reset = vi.fn();
+  return { useSavedStore: { getState: () => ({ reset }) } };
+});
+vi.mock("./userNoteStore", () => {
+  const reset = vi.fn();
+  return { useUserNoteStore: { getState: () => ({ reset }) } };
+});
 
 import { useAuthStore, isTransientAuthError } from "./authStore";
 import * as authApi from "../api/auth";
 import { clearTokens } from "../api/client";
 import { pingServer } from "../utils/serverProbe";
+import { useSavedStore } from "./savedStore";
+import { useUserNoteStore } from "./userNoteStore";
 import type { User } from "../types";
 
 const getMe = vi.mocked(authApi.getMe);
@@ -136,5 +147,16 @@ describe("initialize", () => {
     expect(s.isInitialized).toBe(true);
     expect(s.initPhase).toBe("failed");
     expect(mockedClearTokens).not.toHaveBeenCalled();
+  });
+});
+
+describe("authStore.logout — per-account private data", () => {
+  it("resets the saved-messages and user-notes stores", async () => {
+    vi.mocked(authApi.logout).mockResolvedValue({ success: true });
+    useAuthStore.setState({ user: fakeUser });
+    await useAuthStore.getState().logout();
+    expect(useSavedStore.getState().reset).toHaveBeenCalledTimes(1);
+    expect(useUserNoteStore.getState().reset).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().user).toBeNull();
   });
 });

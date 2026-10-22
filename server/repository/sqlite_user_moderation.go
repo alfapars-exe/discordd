@@ -83,6 +83,18 @@ func (r *sqliteUserRepo) IsEmailPlatformBanned(ctx context.Context, email string
 // DeleteAllMessagesByUser deletes all server messages and DM messages for a user.
 // Attachments are CASCADE-deleted with messages. Used for optional "delete messages" on platform ban.
 func (r *sqliteUserRepo) DeleteAllMessagesByUser(ctx context.Context, userID string) error {
+	// Bookmarks (saved_messages, migration 083) of these messages — by any
+	// user — go first: their cascade is unenforced on Turso, and the
+	// subqueries identify rows through the messages about to be deleted.
+	if _, err := r.db.ExecContext(ctx,
+		`DELETE FROM saved_messages WHERE message_id IN (SELECT id FROM messages WHERE user_id = ?)`, userID); err != nil {
+		return fmt.Errorf("failed to delete saved references to user messages: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx,
+		`DELETE FROM saved_messages WHERE dm_message_id IN (SELECT id FROM dm_messages WHERE user_id = ?)`, userID); err != nil {
+		return fmt.Errorf("failed to delete saved references to user DM messages: %w", err)
+	}
+
 	_, err := r.db.ExecContext(ctx, `DELETE FROM messages WHERE user_id = ?`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete user messages: %w", err)
@@ -126,12 +138,18 @@ func (r *sqliteUserRepo) DeleteAllMessagesByUser(ctx context.Context, userID str
 //     feedback_attachments CASCADEs from both (ticket_id and reply_id FKs).
 //   - badges.created_by / user_badges.assigned_by: reassigned to
 //     reassignToUserID (see above).
+//   - server_emojis.created_by / server_stickers.created_by: cleared to
+//     NULL, not reassigned — the creator alone controls the copyable
+//     licence. Emojis and stickers of servers the user owned go with those
+//     servers' cascade.
 //
-// Disk files (badge icons, feedback attachments, avatars, message
-// attachments) are deliberately NOT touched here — this repo layer only
-// owns DB rows. Orphaned files are harmless: media_access serves uploads by
-// path with a fail-closed 404 when the owning DB row is gone (finding A-21),
-// so an orphaned file is simply unreachable, not exposed.
+// Disk files are deliberately NOT touched here — this repo layer only owns
+// DB rows. Most orphaned files are unreachable (media_access fails closed
+// with 404 when the owning row is gone, finding A-21), but soundboard/ and
+// badges/ files are public by URL prefix and stay reachable. The files of
+// owned servers (soundboard clips included) and the user's own entrance
+// clips are therefore collected with GetOwnedServerFileURLs before this runs
+// and removed by the service after it commits.
 func (r *sqliteUserRepo) HardDeleteUser(ctx context.Context, userID, reassignToUserID string) error {
 	sqlDB := database.RawDB(r.db)
 	if sqlDB == nil {
@@ -213,6 +231,57 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 		return fmt.Errorf("failed to reassign badge assignments made by user: %w", err)
 	}
 
+	// dm_reads / notifications (migrations 081/082) declare ON DELETE
+	// CASCADE to users, but the production libSQL/Turso connection never
+	// enforces foreign keys, so remove them explicitly — both the rows the
+	// user owns and the ones that name them as the actor.
+	if _, err := q.ExecContext(ctx, `DELETE FROM dm_reads WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete DM read states for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx,
+		`DELETE FROM notifications WHERE user_id = ? OR actor_id = ?`,
+		userID, userID); err != nil {
+		return fmt.Errorf("failed to delete notifications for user: %w", err)
+	}
+	// saved_messages / user_notes (migrations 083/084): same unenforced
+	// cascade to users. Notes are removed on both sides — the ones the user
+	// wrote and the ones others wrote about them.
+	if _, err := q.ExecContext(ctx, `DELETE FROM saved_messages WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete saved messages for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx,
+		`DELETE FROM user_notes WHERE owner_user_id = ? OR target_user_id = ?`,
+		userID, userID); err != nil {
+		return fmt.Errorf("failed to delete user notes for user: %w", err)
+	}
+	// server_emojis.created_by (migration 086) is nullable with ON DELETE
+	// SET NULL, unenforced on Turso — clear it explicitly. Not reassigned:
+	// created_by decides who may change the emoji's copyable licence, which
+	// must not pass to the admin running this delete.
+	if _, err := q.ExecContext(ctx,
+		`UPDATE server_emojis SET created_by = NULL WHERE created_by = ?`,
+		userID); err != nil {
+		return fmt.Errorf("failed to clear created_by on server emojis: %w", err)
+	}
+	// server_stickers.created_by (migration 087): same rule as emojis.
+	if _, err := q.ExecContext(ctx,
+		`UPDATE server_stickers SET created_by = NULL WHERE created_by = ?`,
+		userID); err != nil {
+		return fmt.Errorf("failed to clear created_by on server stickers: %w", err)
+	}
+	// Entrance sounds (migration 088): selections, server-side mutes of the
+	// user and the user's own clips — unenforced cascades on Turso. The clip
+	// files were collected by GetOwnedServerFileURLs before this runs.
+	if _, err := q.ExecContext(ctx, `DELETE FROM user_entrance_selection WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete entrance selections for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM server_entrance_mutes WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete entrance mutes for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM user_entrance_sounds WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete entrance sounds for user: %w", err)
+	}
+
 	// Main delete — CASCADE handles all remaining related data.
 	result, err := q.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
 	if err != nil {
@@ -228,6 +297,40 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 	}
 
 	return nil
+}
+
+// GetOwnedServerFileURLs collects the upload file_urls of every server the
+// user owns, using the same query as GetFileURLsByServerID, plus the user's
+// own entrance-sound clips (migration 088).
+func (r *sqliteUserRepo) GetOwnedServerFileURLs(ctx context.Context, userID string) ([]string, error) {
+	ids, err := ownedServerIDs(ctx, r.db, userID)
+	if err != nil {
+		return nil, err
+	}
+	var urls []string
+	for _, id := range ids {
+		serverURLs, err := serverFileURLs(ctx, r.db, id)
+		if err != nil {
+			return nil, err
+		}
+		urls = append(urls, serverURLs...)
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT file_url FROM user_entrance_sounds WHERE user_id = ?`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query entrance sound urls: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			return nil, fmt.Errorf("failed to scan entrance sound url: %w", err)
+		}
+		urls = append(urls, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate entrance sound urls: %w", err)
+	}
+	return urls, nil
 }
 
 // ownedServerIDs lists the servers a user owns, for HardDeleteUser to

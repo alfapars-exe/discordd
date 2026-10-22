@@ -21,6 +21,7 @@ import {
   UI_SCALE_STEP,
 } from "../../stores/settingsStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useToastStore } from "../../stores/toastStore";
 import { uploadWallpaper, deleteWallpaper } from "../../api/profile";
 import { resolveAssetUrl } from "../../utils/constants";
@@ -51,6 +52,9 @@ function AppearanceSettings() {
   const uiScale = useSettingsStore((s) => s.uiScale);
   const setUiScale = useSettingsStore((s) => s.setUiScale);
   const setPendingWallpaperPreviewUrl = useSettingsStore((s) => s.setPendingWallpaperPreviewUrl);
+  const avatarAnimation = useSettingsStore((s) => s.avatarAnimation);
+  const setAvatarAnimation = useSettingsStore((s) => s.setAvatarAnimation);
+  const reduceMotion = useReducedMotion();
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
   const addToast = useToastStore((s) => s.addToast);
@@ -323,6 +327,25 @@ function AppearanceSettings() {
         >
           {t("uiScaleReset", { defaultValue: "100%'e sifirla" })}
         </button>
+      )}
+
+      {/* ─── Animated avatars — hover-only (default) or always ─────── */}
+      <h2 className="settings-section-title" style={{ marginTop: 28 }}>{t("avatarAnimationMode")}</h2>
+      <div className="settings-field">
+        <select
+          className="settings-input"
+          aria-label={t("avatarAnimationMode")}
+          value={avatarAnimation}
+          onChange={(e) => setAvatarAnimation(e.target.value === "always" ? "always" : "hover")}
+        >
+          <option value="hover">{t("avatarAnimationHover")}</option>
+          <option value="always">{t("avatarAnimationAlways")}</option>
+        </select>
+      </div>
+      {reduceMotion && (
+        <p className="theme-section-desc" style={{ marginTop: 4 }}>
+          {t("avatarAnimationReducedMotionNote")}
+        </p>
       )}
 
       {/* ─── Wallpaper — drag-drop zone ─────────────────────────────── */}

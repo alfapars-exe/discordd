@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"unicode/utf8"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -14,12 +13,9 @@ import (
 
 var reactionLogger = logx.Component("service.reaction")
 
-// MaxEmojiLength caps emoji string length. Most emojis are 1-2 codepoints but
-// compound emojis (family, flag) can exceed 10. 32 provides a safe margin.
-const MaxEmojiLength = 32
-
 type ReactionService interface {
 	ToggleReaction(ctx context.Context, serverID, messageID, userID, emoji string) error
+	SetEmojiResolver(r EmojiResolver)
 }
 
 type reactionService struct {
@@ -29,6 +25,9 @@ type reactionService struct {
 	hub            ws.BroadcastAndOnline
 	permResolver   ChannelPermResolver
 	timeoutChecker MemberTimeoutChecker
+	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
+	// nil rejects every custom emoji. Set via SetEmojiResolver.
+	emojiResolver EmojiResolver
 }
 
 func NewReactionService(
@@ -52,11 +51,9 @@ func NewReactionService(
 // ToggleReaction adds or removes an emoji reaction on a message.
 // Same endpoint toggles: call again to remove.
 func (s *reactionService) ToggleReaction(ctx context.Context, serverID, messageID, userID, emoji string) error {
-	if emoji == "" {
-		return fmt.Errorf("%w: emoji is required", pkg.ErrBadRequest)
-	}
-	if utf8.RuneCountInString(emoji) > MaxEmojiLength {
-		return fmt.Errorf("%w: emoji too long", pkg.ErrBadRequest)
+	emoji, removeOnly, err := validateReactionEmoji(ctx, s.emojiResolver, userID, emoji)
+	if err != nil {
+		return err
 	}
 
 	// Verify message exists (also need channel_id for broadcast)
@@ -98,9 +95,22 @@ func (s *reactionService) ToggleReaction(ctx context.Context, serverID, messageI
 		return fmt.Errorf("%w: missing read messages permission for this channel", pkg.ErrForbidden)
 	}
 
-	added, err := s.reactionRepo.Toggle(ctx, messageID, userID, emoji)
-	if err != nil {
-		return fmt.Errorf("failed to toggle reaction: %w", err)
+	// A custom emoji that no longer validates can only be taken back:
+	// delete-only, and the same unknown-emoji error when nothing matched.
+	var added bool
+	if removeOnly {
+		removed, err := s.reactionRepo.RemoveReaction(ctx, messageID, userID, emoji)
+		if err != nil {
+			return fmt.Errorf("failed to remove reaction: %w", err)
+		}
+		if !removed {
+			return models.ErrUnknownEmoji
+		}
+	} else {
+		added, err = s.reactionRepo.Toggle(ctx, messageID, userID, emoji)
+		if err != nil {
+			return fmt.Errorf("failed to toggle reaction: %w", err)
+		}
 	}
 
 	reactions, err := s.reactionRepo.GetByMessageID(ctx, messageID)

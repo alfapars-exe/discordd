@@ -2,7 +2,8 @@
  * i18n configuration — i18next + react-i18next setup.
  *
  * Namespaces: common, auth, channels, chat, settings, voice, landing, privacy,
- *             servers, dm, e2ee, soundboard, music, terms, audit, errors.
+ *             servers, dm, e2ee, soundboard, music, terms, audit, errors, inbox,
+ *             saved, expressions, entrance.
  * Supported languages: EN (fallback), TR.
  */
 
@@ -27,6 +28,10 @@ import enPrivacy from "./locales/en/privacy.json";
 import enTerms from "./locales/en/terms.json";
 import enAudit from "./locales/en/audit.json";
 import enErrors from "./locales/en/errors.json";
+import enInbox from "./locales/en/inbox.json";
+import enSaved from "./locales/en/saved.json";
+import enExpressions from "./locales/en/expressions.json";
+import enEntrance from "./locales/en/entrance.json";
 
 // ─── TR Translation Files ───
 import trCommon from "./locales/tr/common.json";
@@ -45,6 +50,10 @@ import trPrivacy from "./locales/tr/privacy.json";
 import trTerms from "./locales/tr/terms.json";
 import trAudit from "./locales/tr/audit.json";
 import trErrors from "./locales/tr/errors.json";
+import trInbox from "./locales/tr/inbox.json";
+import trSaved from "./locales/tr/saved.json";
+import trExpressions from "./locales/tr/expressions.json";
+import trEntrance from "./locales/tr/entrance.json";
 
 export const SUPPORTED_LANGUAGES = {
   en: "English",
@@ -82,6 +91,10 @@ i18n
         terms: enTerms,
         audit: enAudit,
         errors: enErrors,
+        inbox: enInbox,
+        saved: enSaved,
+        expressions: enExpressions,
+        entrance: enEntrance,
       },
       tr: {
         common: trCommon,
@@ -100,6 +113,10 @@ i18n
         terms: trTerms,
         audit: trAudit,
         errors: trErrors,
+        inbox: trInbox,
+        saved: trSaved,
+        expressions: trExpressions,
+        entrance: trEntrance,
       },
     },
 
@@ -107,7 +124,7 @@ i18n
     supportedLngs: Object.keys(SUPPORTED_LANGUAGES),
 
     defaultNS: "common",
-    ns: ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors"],
+    ns: ["common", "auth", "channels", "chat", "settings", "voice", "landing", "privacy", "terms", "servers", "dm", "e2ee", "soundboard", "music", "audit", "errors", "inbox", "saved", "expressions", "entrance"],
 
     interpolation: {
       // React already handles XSS protection

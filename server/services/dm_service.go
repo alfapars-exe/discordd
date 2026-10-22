@@ -3,7 +3,9 @@
 // Method implementations are split across concern-based files in this package:
 //
 //	dm_channel.go — GetOrCreateChannel, ListChannels
+//	dm_self.go    — GetOrCreateSelfChannel
 //	dm_message.go — GetMessages, SendMessage, BroadcastCreate, EditMessage, DeleteMessage
+//	dm_history.go — GetMessagesAround, GetMessagesAfter
 //	dm_request.go — AcceptRequest, DeclineRequest, AcceptPendingChannels
 //	dm_extras.go  — ToggleReaction, pins, search, ToggleE2EE
 //
@@ -26,13 +28,24 @@ var dmLogger = logx.Component("service.dm")
 
 type DMService interface {
 	GetOrCreateChannel(ctx context.Context, userID, otherUserID string) (*models.DMChannelWithUser, error)
+	// GetOrCreateSelfChannel is the "notes to self" DM (dm_self.go): the
+	// one channel whose two participants are the same user.
+	GetOrCreateSelfChannel(ctx context.Context, userID string) (*models.DMChannelWithUser, error)
 	ListChannels(ctx context.Context, userID string) ([]models.DMChannelWithUser, error)
 
 	GetMessages(ctx context.Context, userID, channelID string, beforeID string, limit int) (*models.DMMessagePage, error)
+	// GetMessagesAround / GetMessagesAfter are the jump-to-message history
+	// forms (dm_history.go); same membership gate as GetMessages.
+	GetMessagesAround(ctx context.Context, userID, channelID, anchorID string, limit int) (*models.DMMessagePage, error)
+	GetMessagesAfter(ctx context.Context, userID, channelID, afterID string, limit int) (*models.DMMessagePage, error)
 	SendMessage(ctx context.Context, userID, channelID string, req *models.CreateDMMessageRequest) (*models.DMMessage, error)
 	BroadcastCreate(message *models.DMMessage)
 	EditMessage(ctx context.Context, userID, messageID string, req *models.UpdateDMMessageRequest) (*models.DMMessage, error)
 	DeleteMessage(ctx context.Context, userID, messageID string) error
+	// MarkRead resets the caller's unread counter on a channel they belong
+	// to (messageID nil keeps the stored watermark) and echoes dm_read to
+	// the caller's own sessions.
+	MarkRead(ctx context.Context, userID, channelID string, messageID *string) error
 
 	AcceptRequest(ctx context.Context, userID, channelID string) error
 	DeclineRequest(ctx context.Context, userID, channelID string) error
@@ -45,6 +58,7 @@ type DMService interface {
 	SearchMessages(ctx context.Context, userID, channelID, query string, limit, offset int) (*models.DMSearchResult, error)
 	ToggleE2EE(ctx context.Context, userID, channelID string, enabled bool) (*models.DMChannel, error)
 	SetUploadDir(dir string)
+	SetEmojiResolver(r EmojiResolver)
 }
 
 // FriendshipChecker is a minimal ISP interface for friend checks (used by dmService).
@@ -53,17 +67,23 @@ type FriendshipChecker interface {
 }
 
 type dmService struct {
-	dmRepo        repository.DMRepository
-	userRepo      repository.UserRepository
-	hub           ws.Broadcaster
-	blockChecker  BlockChecker
-	friendChecker FriendshipChecker
-	unhider       DMSettingsUnhider
+	dmRepo           repository.DMRepository
+	userRepo         repository.UserRepository
+	dmReadRepo       repository.DMReadRepository
+	notificationRepo repository.NotificationRepository
+	txRunner         repository.DMMessageTxRunner
+	hub              ws.Broadcaster
+	blockChecker     BlockChecker
+	friendChecker    FriendshipChecker
+	unhider          DMSettingsUnhider
 	// uploadDir enables best-effort disk cleanup on message/channel delete
 	// (see upload_cleanup.go). Blank disables cleanup — set via
 	// SetUploadDir, wired in init_services.go so the constructor signature
 	// above stays unchanged.
 	uploadDir string
+	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
+	// nil rejects every custom emoji. Set via SetEmojiResolver.
+	emojiResolver EmojiResolver
 }
 
 func NewDMService(
@@ -73,14 +93,20 @@ func NewDMService(
 	blockChecker BlockChecker,
 	friendshipChecker FriendshipChecker,
 	unhider DMSettingsUnhider,
+	dmReadRepo repository.DMReadRepository,
+	notificationRepo repository.NotificationRepository,
+	txRunner repository.DMMessageTxRunner,
 ) DMService {
 	return &dmService{
-		dmRepo:        dmRepo,
-		userRepo:      userRepo,
-		hub:           hub,
-		blockChecker:  blockChecker,
-		friendChecker: friendshipChecker,
-		unhider:       unhider,
+		dmRepo:           dmRepo,
+		userRepo:         userRepo,
+		dmReadRepo:       dmReadRepo,
+		notificationRepo: notificationRepo,
+		txRunner:         txRunner,
+		hub:              hub,
+		blockChecker:     blockChecker,
+		friendChecker:    friendshipChecker,
+		unhider:          unhider,
 	}
 }
 

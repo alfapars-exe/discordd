@@ -1,0 +1,22 @@
+{
+  "inbox": "Gelen Kutusu",
+  "notifications": "Bildirimler",
+  "viewAll": "Tümünü gör",
+  "empty": "Henüz sohbet yok",
+  "noNotifications": "Bildirim yok",
+  "markAllRead": "Tümünü okundu işaretle",
+  "unreadOnly": "Yalnızca okunmamışlar",
+  "loadMore": "Daha fazla yükle",
+  "encryptedMessage": "Şifreli mesaj",
+  "attachment": "Dosya eki",
+  "messageRequests": "Mesaj istekleri",
+  "youPrefix": "Sen:",
+  "kind": {
+    "mention": "{{name}} seni #{{channel}} kanalında etiketledi",
+    "reply": "{{name}} #{{channel}} kanalında sana yanıt verdi",
+    "friendRequest": "{{name}} sana arkadaşlık isteği gönderdi",
+    "dmRequest": "{{name}} sana mesaj göndermek istiyor",
+    "system": "Sistem bildirimi"
+  },
+  "friendRequestToast": "{{name}} sana arkadaşlık isteği gönderdi"
+}

@@ -5,6 +5,9 @@
  *      resolving AFTER the newer one must not clobber the newer results.
  *   2. Live deletion — a WS delete (messageStore.lastDeleted) while the
  *      panel is open removes the matching row from the result snapshot.
+ *   3. Result click — onSelectResult resolving false (message gone on the
+ *      server) drops the row WITHOUT a panel toast (the navigator toasts —
+ *      one toast only); true leaves the snapshot alone.
  *
  * The real stores pull in the full crypto/i18n import graph, so every
  * store the panel touches is mocked with a minimal REAL zustand store —
@@ -73,6 +76,7 @@ vi.mock("../shared/Avatar", () => ({
 import SearchPanel from "./SearchPanel";
 import { searchMessages } from "../../api/search";
 import { useMessageStore } from "../../stores/messageStore";
+import { useToastStore } from "../../stores/toastStore";
 import type { SearchResult } from "../../api/search";
 import type { APIResponse, Message } from "../../types";
 
@@ -176,5 +180,43 @@ describe("SearchPanel — result races", () => {
 
     expect(screen.queryByText("doomed row")).not.toBeInTheDocument();
     expect(screen.getByText("surviving row")).toBeInTheDocument();
+  });
+});
+
+describe("SearchPanel — result click", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(searchMessages).mockReset();
+    vi.mocked(useToastStore.getState().addToast).mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("drops the row (no duplicate panel toast) when navigation reports the message gone", async () => {
+    vi.mocked(searchMessages).mockResolvedValueOnce(
+      ok([makeMessage("m-gone", "gone row"), makeMessage("m-ok", "kept row")])
+    );
+    const onSelectResult = vi.fn(async (m: Message) => m.id !== "m-gone");
+
+    render(<SearchPanel channelId="ch-1" onClose={() => {}} onSelectResult={onSelectResult} />);
+    typeQuery("row");
+    await act(async () => {});
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("gone row"));
+    });
+    expect(onSelectResult).toHaveBeenCalledWith(expect.objectContaining({ id: "m-gone" }));
+    expect(screen.queryByText("gone row")).not.toBeInTheDocument();
+    expect(screen.getByText("kept row")).toBeInTheDocument();
+
+    // A successful navigation leaves the snapshot untouched.
+    await act(async () => {
+      fireEvent.click(screen.getByText("kept row"));
+    });
+    expect(screen.getByText("kept row")).toBeInTheDocument();
+    // The panel itself never toasts — useOpenAtMessage owns that message.
+    expect(useToastStore.getState().addToast).not.toHaveBeenCalled();
   });
 });

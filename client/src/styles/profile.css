@@ -1,0 +1,143 @@
+/* profile.css — Faz F profile visuals: MemberCard hero (banner / accent
+ * colour / default gradient + overlapping avatar), pronouns, "About me",
+ * and the Settings → Profile live preview card. Loaded by ProfileHero.tsx
+ * (kept out of globals.css on purpose). */
+
+/* ── Hero ── */
+.mc-hero {
+  --mc-avatar-size: 80px;
+  --mc-avatar-ring: 4px;
+  position: relative;
+  /* Leave room for the half of the avatar that hangs below the banner. */
+  margin-bottom: calc(var(--mc-avatar-size) / 2 + var(--mc-avatar-ring) + 4px);
+}
+
+.mc-hero-banner {
+  display: block;
+  width: 100%;
+  /* Same 5:2 the server crops to, so the preview matches the result. */
+  aspect-ratio: 5 / 2;
+  object-fit: cover;
+  object-position: center;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+}
+
+.mc-hero-banner.mc-hero-accent {
+  background: var(--mc-accent);
+}
+
+.mc-hero .mc-avatar-ring {
+  position: absolute;
+  left: 50%;
+  bottom: calc(-1 * (var(--mc-avatar-size) / 2 + var(--mc-avatar-ring)));
+  transform: translateX(-50%);
+  padding: var(--mc-avatar-ring);
+  border-radius: 999px;
+  background: var(--bg-1, #111);
+}
+
+/* ── Pronouns + About me ── */
+.mc-pronouns {
+  font-size: 12.5px;
+  color: var(--t2);
+  margin-top: 2px;
+  text-align: center;
+}
+
+.mc-about {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.mc-about-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t2);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.mc-about-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--t1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── Settings → Profile preview ── */
+.profile-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 24px;
+}
+
+/* Visual twin of .member-card without its fixed positioning (and without
+ * the mobile bottom-sheet override, which targets .member-card). */
+.profile-preview-card {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-inset), 0 6px 24px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Settings → Profile banner uploader ── */
+.banner-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.banner-upload-box {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 5 / 2;
+  padding: 0;
+  border: 1px dashed var(--panel-border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: #fff;
+  font-size: 13px;
+}
+
+.banner-upload-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.banner-upload-box:disabled {
+  cursor: default;
+  opacity: .7;
+}
+
+.banner-upload-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Narrow phones: the card is already viewport-wide (globals.css mobile
+ * rule); shrink the avatar overlap so the name stays above the fold. */
+@media (max-width: 340px) {
+  .mc-hero {
+    --mc-avatar-ring: 3px;
+  }
+  .profile-preview-card,
+  .banner-upload-box {
+    max-width: 100%;
+  }
+}

@@ -27,6 +27,7 @@
  *   e2ee.ts        — Signal Protocol device + key + envelope shapes
  *   soundboard.ts  — uploaded sound clips
  *   music.ts       — music bot identity + queue
+ *   notification.ts — persisted activity feed (mentions, requests)
  *
  * Existing imports (`import { Message } from "../types"`) keep working
  * via the wildcard re-exports below. Prefer importing from the specific
@@ -56,3 +57,5 @@ export * from "./ws";
 export * from "./e2ee";
 export * from "./soundboard";
 export * from "./music";
+export * from "./notification";
+export * from "./saved";

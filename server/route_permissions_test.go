@@ -147,6 +147,12 @@ var handlerInternalGates = map[string]string{
 
 	// ── Soundboard (read) ──
 	"GET /api/servers/{serverId}/soundboard/sounds": "read-only — membership is the intended view gate",
+
+	// ── Custom emojis (read) ──
+	"GET /api/servers/{serverId}/emojis": "read-only — membership is the intended view gate",
+
+	// ── Server stickers (read) ──
+	"GET /api/servers/{serverId}/stickers": "read-only — membership is the intended view gate",
 }
 
 // TestRoutePermissions_EveryRouteHasADeclaredGate is this file's core

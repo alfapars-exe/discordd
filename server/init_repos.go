@@ -46,8 +46,15 @@ type Repositories struct {
 	AuditLog          repository.AuditLogRepository
 	Feedback          repository.FeedbackRepository
 	Soundboard        repository.SoundboardRepository
+	Emoji             repository.EmojiRepository
+	Sticker           repository.StickerRepository
+	Entrance          repository.EntranceRepository
 	MediaAsset        repository.MediaAssetRepository
 	RuntimeTelemetry  repository.RuntimeTelemetryRepository
+	DMRead            repository.DMReadRepository
+	Notification      repository.NotificationRepository
+	Saved             repository.SavedRepository
+	UserNote          repository.UserNoteRepository
 }
 
 // initRepositories creates all repositories from the shared DB connection pool.
@@ -97,7 +104,14 @@ func initRepositories(conn *sql.DB) *Repositories {
 		AuditLog:          repository.NewSQLiteAuditLogRepo(db),
 		Feedback:          repository.NewSQLiteFeedbackRepo(db),
 		Soundboard:        repository.NewSQLiteSoundboardRepo(db),
+		Emoji:             repository.NewSQLiteEmojiRepo(db),
+		Sticker:           repository.NewSQLiteStickerRepo(db),
+		Entrance:          repository.NewSQLiteEntranceRepo(db),
 		MediaAsset:        repository.NewSQLiteMediaAssetRepo(db),
 		RuntimeTelemetry:  repository.NewSQLiteRuntimeTelemetryRepo(db),
+		DMRead:            repository.NewSQLiteDMReadRepo(db),
+		Notification:      repository.NewSQLiteNotificationRepo(db),
+		Saved:             repository.NewSQLiteSavedRepo(db),
+		UserNote:          repository.NewSQLiteUserNoteRepo(db),
 	}
 }

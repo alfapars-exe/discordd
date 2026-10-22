@@ -6,6 +6,7 @@
 import { useDMStore } from "../../stores/dmStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
+import * as dmApi from "../../api/dm";
 import { decryptDMMessage, popSentPlaintext, popEditPlaintext } from "../../crypto/dmEncryption";
 import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
@@ -33,11 +34,17 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
 
       if (dmMsg.encryption_version === 1 && dmMsg.ciphertext && dmMsg.sender_device_id) {
         const isOwnMessage = dmMsg.user_id === dmCurrentUserId;
+        // The FIFO only holds sends from THIS device. An own message from a
+        // sibling device (self-fanout envelope) must not pop it — that would
+        // stamp an in-flight send's plaintext onto the wrong message. Unknown
+        // local device id → never pop (decryption can't run either).
+        const localDeviceId = useE2EEStore.getState().localDeviceId;
+        const isFromThisDevice = !!localDeviceId && dmMsg.sender_device_id === localDeviceId;
         let decrypted = false;
 
         if (isOwnMessage) {
           try {
-            const cached = popSentPlaintext(dmMsg.dm_channel_id);
+            const cached = isFromThisDevice ? popSentPlaintext(dmMsg.dm_channel_id) : null;
             if (cached) {
               dmMsg = { ...dmMsg, content: cached.content, e2ee_file_keys: cached.file_keys };
               decrypted = true;
@@ -87,8 +94,20 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
       if (dmMsg.user_id === dmCurrentUserId) return true;
 
       const dmState = useDMStore.getState();
-      if (dmMsg.dm_channel_id !== dmState.selectedDMId) {
-        dmState.incrementDMUnread(dmMsg.dm_channel_id);
+      if (dmMsg.dm_channel_id === dmState.selectedDMId) {
+        // Viewing this DM — advance the server read cursor so other devices
+        // (and the next fetchChannels seed) don't count it as unread. Same
+        // contract as channelEventHandlers' markAsRead for the active channel.
+        dmApi.markDMRead(dmMsg.dm_channel_id, dmMsg.id).catch(() => {});
+        return true;
+      }
+
+      // Unread always counts (the badge is still shown, dimmed, on a muted
+      // DM); only the attention-grabbing cues honour the mute.
+      dmState.incrementDMUnread(dmMsg.dm_channel_id);
+      const dmChannel = dmState.channels.find((c) => c.id === dmMsg.dm_channel_id);
+      const isMuted = dmChannel?.is_muted ?? false;
+      if (!isMuted) {
         playNotificationSound();
         window.electronAPI?.flashFrame();
         // OS toast for the DM. Same gating contract as channel messages
@@ -207,6 +226,12 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
       return true;
     case "dm_request_decline":
       useDMStore.getState().handleDMRequestDecline(msg.d);
+      return true;
+
+    case "dm_read":
+      // Echo of our own read cursor from another session — local clear only.
+      // Calling markDMRead here would echo again and loop.
+      useDMStore.getState().handleDMReadSync(msg.d);
       return true;
 
     default:

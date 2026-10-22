@@ -82,8 +82,9 @@ func newTestMessageService(
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
 		Message:     msgRepo,
 		Mention:     mentionRepo,
-		RoleMention: roleMentionRepo,
-		ReadState:   noopReadStateRepo{},
+		RoleMention:  roleMentionRepo,
+		ReadState:    noopReadStateRepo{},
+		Notification: &testutil.MockNotificationRepo{},
 	}}
 	return NewMessageService(
 		msgRepo, attachRepo, chanRepo, userRepo,
@@ -91,6 +92,7 @@ func newTestMessageService(
 		noopReadStateRepo{}, noopTimeoutRepo{},
 		runner, hub, permResolver,
 		nil, // auditLogger — not under test here
+		&testutil.MockNotificationRepo{},
 	)
 }
 
@@ -857,8 +859,9 @@ func TestMessageCreate_TimedOutUserBlocked(t *testing.T) {
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
 		Message:     msgRepo,
 		Mention:     mentionRepo,
-		RoleMention: roleMentionRepo,
-		ReadState:   noopReadStateRepo{},
+		RoleMention:  roleMentionRepo,
+		ReadState:    noopReadStateRepo{},
+		Notification: &testutil.MockNotificationRepo{},
 	}}
 	svc := NewMessageService(
 		msgRepo, &testutil.MockAttachmentRepo{}, channelRepo, userRepo,
@@ -871,6 +874,7 @@ func TestMessageCreate_TimedOutUserBlocked(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
+		&testutil.MockNotificationRepo{},
 	)
 
 	req := &models.CreateMessageRequest{Content: "hello"}
@@ -910,8 +914,9 @@ func TestMessageCreate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
 		Message:     msgRepo,
 		Mention:     mentionRepo,
-		RoleMention: roleMentionRepo,
-		ReadState:   noopReadStateRepo{},
+		RoleMention:  roleMentionRepo,
+		ReadState:    noopReadStateRepo{},
+		Notification: &testutil.MockNotificationRepo{},
 	}}
 	svc := NewMessageService(
 		msgRepo, &testutil.MockAttachmentRepo{}, channelRepo, userRepo,
@@ -924,6 +929,7 @@ func TestMessageCreate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
+		&testutil.MockNotificationRepo{},
 	)
 
 	req := &models.CreateMessageRequest{Content: "hello"}
@@ -967,8 +973,9 @@ func TestMessageUpdate_TimedOutUserBlocked(t *testing.T) {
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
 		Message:     msgRepo,
 		Mention:     mentionRepo,
-		RoleMention: roleMentionRepo,
-		ReadState:   noopReadStateRepo{},
+		RoleMention:  roleMentionRepo,
+		ReadState:    noopReadStateRepo{},
+		Notification: &testutil.MockNotificationRepo{},
 	}}
 	svc := NewMessageService(
 		msgRepo, &testutil.MockAttachmentRepo{}, channelRepo, &testutil.MockUserRepo{},
@@ -981,6 +988,7 @@ func TestMessageUpdate_TimedOutUserBlocked(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
+		&testutil.MockNotificationRepo{},
 	)
 
 	req := &models.UpdateMessageRequest{Content: "edited"}
@@ -1015,8 +1023,9 @@ func TestMessageUpdate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
 		Message:     msgRepo,
 		Mention:     mentionRepo,
-		RoleMention: roleMentionRepo,
-		ReadState:   noopReadStateRepo{},
+		RoleMention:  roleMentionRepo,
+		ReadState:    noopReadStateRepo{},
+		Notification: &testutil.MockNotificationRepo{},
 	}}
 	svc := NewMessageService(
 		msgRepo, &testutil.MockAttachmentRepo{}, channelRepo, &testutil.MockUserRepo{},
@@ -1029,6 +1038,7 @@ func TestMessageUpdate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 			},
 		},
 		nil, // auditLogger — not under test here
+		&testutil.MockNotificationRepo{},
 	)
 
 	req := &models.UpdateMessageRequest{Content: "edited"}

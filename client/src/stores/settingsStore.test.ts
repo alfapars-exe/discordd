@@ -144,3 +144,37 @@ describe("settingsStore — blurStrength", () => {
     expect(useSettingsStore.getState().blurStrength).toBe(40);
   });
 });
+
+/**
+ * Animated avatars (Appearance → "Animated avatars"). Default "hover";
+ * persisted under hichat-avatar-animation. Module-load hydration is replayed
+ * with vi.resetModules, like the blur migration tests above.
+ */
+describe("settingsStore — avatarAnimation", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("defaults to hover with nothing (or garbage) persisted", async () => {
+    vi.resetModules();
+    let fresh = await import("./settingsStore");
+    expect(fresh.useSettingsStore.getState().avatarAnimation).toBe("hover");
+
+    localStorage.setItem("hichat-avatar-animation", "sometimes");
+    vi.resetModules();
+    fresh = await import("./settingsStore");
+    expect(fresh.useSettingsStore.getState().avatarAnimation).toBe("hover");
+  });
+
+  it("persists the setter value and hydrates it on the next load", async () => {
+    vi.resetModules();
+    const first = await import("./settingsStore");
+    first.useSettingsStore.getState().setAvatarAnimation("always");
+    expect(first.useSettingsStore.getState().avatarAnimation).toBe("always");
+    expect(localStorage.getItem("hichat-avatar-animation")).toBe("always");
+
+    vi.resetModules();
+    const second = await import("./settingsStore");
+    expect(second.useSettingsStore.getState().avatarAnimation).toBe("always");
+  });
+});

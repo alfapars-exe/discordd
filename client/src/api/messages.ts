@@ -2,6 +2,7 @@
  * Message API — server-scoped message CRUD.
  *
  * - GET    /api/servers/{serverId}/channels/{id}/messages  — cursor-based pagination
+ *          (?before= older | ?around= jump window | ?after= newer)
  * - POST   /api/servers/{serverId}/channels/{id}/messages  — send message (JSON or multipart)
  * - PATCH  /api/servers/{serverId}/messages/{id}           — edit message
  * - DELETE /api/servers/{serverId}/messages/{id}           — delete message
@@ -33,6 +34,37 @@ export async function getMessages(
   const endpoint = `/servers/${serverId}/channels/${channelId}/messages${query ? `?${query}` : ""}`;
 
   return apiClient<MessagePage>(endpoint);
+}
+
+/**
+ * Window centred on one message (jump-to-message). The page is ASC like
+ * the default list; `has_more` covers older rows, `has_more_after` newer.
+ */
+export function getMessagesAround(
+  serverId: string,
+  channelId: string,
+  messageId: string,
+  limit?: number
+) {
+  const params = new URLSearchParams({ around: messageId });
+  if (limit) params.set("limit", limit.toString());
+  return apiClient<MessagePage>(
+    `/servers/${serverId}/channels/${channelId}/messages?${params}`
+  );
+}
+
+/** Messages newer than `afterId` (forward paging out of a jumped-to window). */
+export function getMessagesAfter(
+  serverId: string,
+  channelId: string,
+  afterId: string,
+  limit?: number
+) {
+  const params = new URLSearchParams({ after: afterId });
+  if (limit) params.set("limit", limit.toString());
+  return apiClient<MessagePage>(
+    `/servers/${serverId}/channels/${channelId}/messages?${params}`
+  );
 }
 
 /**

@@ -204,12 +204,15 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 			LEFT JOIN messages rm ON m.reply_to_id = rm.id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.channel_id = ?
-			  AND ( m.created_at < (SELECT created_at FROM messages WHERE id = ?)
-			     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ?)
+			  AND ( m.created_at < (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+			     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
 			          AND m.id < ? ) )
 			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT ?`
-		args = []any{channelID, beforeID, beforeID, beforeID, limit}
+		// The cursor subqueries are channel-scoped: another channel's
+		// message id resolves to NULL (empty page, same as an unknown id)
+		// instead of lending its timestamp as an oracle into this channel.
+		args = []any{channelID, beforeID, channelID, beforeID, channelID, beforeID, limit}
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -223,6 +226,123 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 	}
 
 	return messages, nil
+}
+
+// messageHistorySelect is the column list + joins shared by every channel
+// history query (before/around/after) so each one scans through scanMessage
+// — the SELECT list and the Scan argument list must stay identical.
+const messageHistorySelect = `
+	SELECT m.id, m.channel_id, m.user_id, m.content, m.edited_at, m.created_at, m.reply_to_id,
+	       m.encryption_version, m.ciphertext, m.sender_device_id, m.e2ee_metadata,
+	       u.id, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, u.created_at,
+	       rm.id, rm.content,
+	       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
+	FROM messages m
+	LEFT JOIN users u ON m.user_id = u.id
+	LEFT JOIN messages rm ON m.reply_to_id = rm.id
+	LEFT JOIN users ru ON rm.user_id = ru.id`
+
+// anchorExists reports whether anchorID is a message of channelID. The
+// anchor is channel-scoped so a message id from another channel cannot be
+// used as a cursor into this one (it reads as not found, same as an unknown
+// id) — the window queries below repeat the scoping in their subqueries.
+func (r *sqliteMessageRepo) anchorExists(ctx context.Context, channelID, anchorID string) error {
+	var createdAt string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT created_at FROM messages WHERE id = ? AND channel_id = ?`, anchorID, channelID,
+	).Scan(&createdAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: anchor message not found", pkg.ErrNotFound)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to resolve anchor message: %w", err)
+	}
+	return nil
+}
+
+// GetByChannelIDAround — three statements: the anchor check, the older half
+// (the before= form, DESC, limit half+1 so the extra row reveals
+// hasMoreBefore) and the anchor plus newer half (ASC, `m.id >= ?` keeps the
+// anchor itself, limit half+2 so the extra row reveals hasMoreAfter). Both
+// halves use the same boolean-expanded (created_at, id) keyset as
+// GetByChannelID — see that method for why row-value comparison is avoided
+// — with the anchor subquery channel-scoped.
+func (r *sqliteMessageRepo) GetByChannelIDAround(ctx context.Context, channelID, anchorID string, limit int) ([]models.Message, bool, bool, error) {
+	if err := r.anchorExists(ctx, channelID, anchorID); err != nil {
+		return nil, false, false, err
+	}
+	half := limit / 2
+
+	olderQuery := messageHistorySelect + `
+		WHERE m.channel_id = ?
+		  AND ( m.created_at < (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+		     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+		          AND m.id < ? ) )
+		ORDER BY m.created_at DESC, m.id DESC
+		LIMIT ?`
+	olderRows, err := r.db.QueryContext(ctx, olderQuery,
+		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+1)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to get messages around anchor: %w", err)
+	}
+	older, err := scanRows(olderRows, "message", scanMessage)
+	if err != nil {
+		return nil, false, false, err
+	}
+	hasMoreBefore := len(older) > half
+	if hasMoreBefore {
+		older = older[:half]
+	}
+
+	newerQuery := messageHistorySelect + `
+		WHERE m.channel_id = ?
+		  AND ( m.created_at > (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+		     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+		          AND m.id >= ? ) )
+		ORDER BY m.created_at ASC, m.id ASC
+		LIMIT ?`
+	newerRows, err := r.db.QueryContext(ctx, newerQuery,
+		channelID, anchorID, channelID, anchorID, channelID, anchorID, half+2)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to get messages around anchor: %w", err)
+	}
+	newer, err := scanRows(newerRows, "message", scanMessage)
+	if err != nil {
+		return nil, false, false, err
+	}
+	hasMoreAfter := len(newer) > half+1
+	if hasMoreAfter {
+		newer = newer[:half+1]
+	}
+
+	// Older half comes back DESC; emit the whole window ASC.
+	out := make([]models.Message, 0, len(older)+len(newer))
+	for i := len(older) - 1; i >= 0; i-- {
+		out = append(out, older[i])
+	}
+	out = append(out, newer...)
+	return out, hasMoreBefore, hasMoreAfter, nil
+}
+
+// GetByChannelIDAfter is the before= keyset mirrored: strictly newer than
+// afterID, ASC. The caller passes limit+1 to detect hasMoreAfter.
+func (r *sqliteMessageRepo) GetByChannelIDAfter(ctx context.Context, channelID, afterID string, limit int) ([]models.Message, error) {
+	if err := r.anchorExists(ctx, channelID, afterID); err != nil {
+		return nil, err
+	}
+	query := messageHistorySelect + `
+		WHERE m.channel_id = ?
+		  AND ( m.created_at > (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+		     OR ( m.created_at = (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
+		          AND m.id > ? ) )
+		ORDER BY m.created_at ASC, m.id ASC
+		LIMIT ?`
+	rows, err := r.db.QueryContext(ctx, query,
+		channelID, afterID, channelID, afterID, channelID, afterID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages after anchor: %w", err)
+	}
+	return scanRows(rows, "message", scanMessage)
 }
 
 // Update edits a message. For E2EE channel messages (encryption_version=1)
@@ -276,6 +396,12 @@ func (r *sqliteMessageRepo) Delete(ctx context.Context, id string) error {
 	// frontend shows "deleted message".
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM attachments WHERE message_id = ?`, id); err != nil {
 		return fmt.Errorf("failed to delete message attachments: %w", err)
+	}
+	// saved_messages (migration 083) declares the same unenforced-on-Turso
+	// cascade — a bookmark of a deleted message would otherwise linger as a
+	// dangling row the list query has to skip.
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM saved_messages WHERE message_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete saved references to message: %w", err)
 	}
 	result, err := r.db.ExecContext(ctx, `DELETE FROM messages WHERE id = ?`, id)
 	if err != nil {

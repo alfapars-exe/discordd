@@ -29,10 +29,40 @@ export type PublicUser = {
 /** The authenticated user's OWN record (GET /api/users/me, auth responses). */
 export type User = PublicUser & {
   wallpaper_url?: string | null;
+  /** Optional animated GIF avatar (128 px). `avatar_url` stays the static
+   *  poster; this is only set after an animated upload. */
+  avatar_animated_url?: string | null;
+  /** Static profile banner (5:2, ≤1200×480). */
+  banner_url?: string | null;
+  bio?: string | null;
+  pronouns?: string | null;
+  /** `#rrggbb`, lower-case. Banner fallback colour on the profile card. */
+  accent_color?: string | null;
   email: string | null;
   language: string;
   dm_privacy: "everyone" | "message_request" | "friends_only";
   is_platform_admin: boolean;
   has_seen_download_prompt: boolean;
   has_seen_welcome: boolean;
+};
+
+/**
+ * UserProfile — public profile of any user (GET /api/users/{userId}/profile).
+ * Used by the MemberCard outside server context (DM, friends, inbox), where
+ * only a PublicUser is at hand. Deliberately carries no presence (`status`)
+ * and none of the N-09 private fields.
+ */
+export type UserProfile = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  avatar_animated_url: string | null;
+  banner_url: string | null;
+  bio: string | null;
+  pronouns: string | null;
+  accent_color: string | null;
+  custom_status: string | null;
+  is_bot: boolean;
+  created_at: string;
 };

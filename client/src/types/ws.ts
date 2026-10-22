@@ -33,6 +33,14 @@ import type { ReactionGroup } from "./common";
 import type { DMChannelWithUser, DMMessage } from "./dm";
 import type { VoiceState, VoiceStateUpdateData } from "./voice";
 import type { MusicBotChannelState } from "./music";
+import type { AppNotification } from "./notification";
+import type { EntranceSoundPlayEvent } from "./entrance";
+import type {
+  ServerEmoji,
+  ServerEmojiDeleteEvent,
+  ServerSticker,
+  ServerStickerDeleteEvent,
+} from "./expression";
 
 /**
  * op → `d` payload shape for every inbound WS event.
@@ -114,6 +122,21 @@ export interface WSPayloadMap {
   soundboard_sound_update: SoundboardSound;
   soundboard_sound_delete: { id: string; server_id: string };
   soundboard_play: SoundboardPlayEvent;
+  // Entrance sounds (Faz E) — BroadcastToUsers (joined channel only); entranceEventHandlers.
+  entrance_sound_play: EntranceSoundPlayEvent;
+  // Custom emojis (Faz D1) — BroadcastToServer; handled by expressionEventHandlers.
+  server_emoji_create: ServerEmoji;
+  server_emoji_update: ServerEmoji;
+  server_emoji_delete: ServerEmojiDeleteEvent;
+  // Server stickers (Faz D2) — BroadcastToServer; handled by expressionEventHandlers.
+  server_sticker_create: ServerSticker;
+  server_sticker_update: ServerSticker;
+  server_sticker_delete: ServerStickerDeleteEvent;
+  // Persisted activity feed (mentions / replies / friend + DM requests).
+  // Sent only to the recipient's own sessions.
+  notification_create: AppNotification;
+  // Read-cursor sync across the recipient's devices (after a REST read call).
+  notification_read: { ids: string[]; all: boolean; unread_count: number };
 
   // ─── Channel ───
   channel_create: unknown;
@@ -163,6 +186,9 @@ export interface WSPayloadMap {
   };
   dm_request_accept: { dm_channel_id: string };
   dm_request_decline: { dm_channel_id: string };
+  // Echoed to the reader's own sessions after POST /dms/{id}/read so other
+  // devices drop their local unread count for that channel.
+  dm_read: { dm_channel_id: string; user_id: string; last_read_message_id: string | null };
 
   // ─── Voice ───
   voice_state_update: VoiceStateUpdateData;

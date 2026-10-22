@@ -18,6 +18,9 @@ import ChatArea from "./ChatArea";
 import VoiceRoom from "../voice/VoiceRoom";
 import DMChat from "../dm/DMChat";
 import FriendsView from "../friends/FriendsView";
+import InboxView from "../inbox/InboxView";
+import NotificationsView from "../inbox/NotificationsView";
+import SavedMessagesView from "../saved/SavedMessagesView";
 import P2PCallScreen from "../p2p/P2PCallScreen";
 import AuditChannel from "../audit/AuditChannel";
 import DropZoneOverlay from "./DropZoneOverlay";
@@ -184,6 +187,12 @@ function PanelView({ panelId, sendTyping, sendDMTyping }: PanelViewProps) {
         <DMChat channelId={activeTab.channelId} sendDMTyping={sendDMTyping} />
       ) : activeTab.type === "friends" ? (
         <FriendsView />
+      ) : activeTab.type === "inbox" ? (
+        <InboxView />
+      ) : activeTab.type === "notifications" ? (
+        <NotificationsView />
+      ) : activeTab.type === "saved" ? (
+        <SavedMessagesView />
       ) : activeTab.type === "p2p" ? (
         <P2PCallScreen />
       ) : activeTab.type === "audit" ? (

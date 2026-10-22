@@ -9,30 +9,32 @@ import "time"
 type Permission int64
 
 const (
-	PermManageChannels Permission = 1 << iota // 1
-	PermManageRoles                            // 2
-	PermKickMembers                            // 4
-	PermBanMembers                             // 8
-	PermManageMessages                         // 16
-	PermSendMessages                           // 32
-	PermConnectVoice                           // 64
-	PermSpeak                                  // 128
-	PermStream                                 // 256
-	PermAdmin                                  // 512
-	PermManageInvites                          // 1024
-	PermReadMessages                           // 2048
-	PermViewChannel                            // 4096
-	PermMoveMembers                            // 8192
-	PermMuteMembers                            // 16384
-	PermDeafenMembers                          // 32768
-	PermUseSoundboard                          // 65536
-	PermManageSoundboard                       // 131072
-	PermTimeoutMembers                         // 262144 — apply/lift Discord-style timeouts + temp bans
-	PermManageNicknames                        // 524288 — change OTHER members' server nicknames (self is always allowed)
+	PermManageChannels    Permission = 1 << iota // 1
+	PermManageRoles                              // 2
+	PermKickMembers                              // 4
+	PermBanMembers                               // 8
+	PermManageMessages                           // 16
+	PermSendMessages                             // 32
+	PermConnectVoice                             // 64
+	PermSpeak                                    // 128
+	PermStream                                   // 256
+	PermAdmin                                    // 512
+	PermManageInvites                            // 1024
+	PermReadMessages                             // 2048
+	PermViewChannel                              // 4096
+	PermMoveMembers                              // 8192
+	PermMuteMembers                              // 16384
+	PermDeafenMembers                            // 32768
+	PermUseSoundboard                            // 65536
+	PermManageSoundboard                         // 131072
+	PermTimeoutMembers                           // 262144 — apply/lift Discord-style timeouts + temp bans
+	PermManageNicknames                          // 524288 — change OTHER members' server nicknames (self is always allowed)
+	PermManageExpressions                        // 1048576 — create/rename/delete server custom emojis (and D2 stickers)
+	PermUseEntranceSound                         // 2097152 — have your entrance sound played when joining a voice channel
 )
 
 // PermAll is the sum of all permissions. Update when adding new perms: (1 << N) - 1
-const PermAll Permission = (1 << 20) - 1
+const PermAll Permission = (1 << 22) - 1
 
 // Has checks if a permission is set. Admin bypasses all checks.
 func (p Permission) Has(perm Permission) bool {

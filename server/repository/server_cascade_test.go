@@ -110,6 +110,10 @@ func TestDeleteServerCascade_RemovesEveryDescendant(t *testing.T) {
 		`INSERT INTO channel_permissions (channel_id, role_id, allow, deny)
 			VALUES ('`+channelID+`', '`+roleID+`', 0, 0)`,
 		`INSERT INTO bans (server_id, user_id) VALUES ('`+serverID+`', 'banned-user')`,
+		`INSERT INTO notifications (id, user_id, kind, server_id, channel_id, message_id)
+			VALUES ('notif-`+serverID+`', '', 'mention', '`+serverID+`', '`+channelID+`', '`+messageID+`')`,
+		`INSERT INTO saved_messages (id, user_id, message_id)
+			VALUES ('saved-`+serverID+`', '', '`+messageID+`')`,
 	)
 
 	ctx := context.Background()
@@ -122,6 +126,7 @@ func TestDeleteServerCascade_RemovesEveryDescendant(t *testing.T) {
 		query string
 	}{
 		{"servers", `SELECT COUNT(*) FROM servers WHERE id = ?`},
+		{"notifications", `SELECT COUNT(*) FROM notifications WHERE server_id = ?`},
 		{"channels", `SELECT COUNT(*) FROM channels WHERE server_id = ?`},
 		{"categories", `SELECT COUNT(*) FROM categories WHERE server_id = ?`},
 		{"roles", `SELECT COUNT(*) FROM roles WHERE server_id = ?`},
@@ -130,6 +135,7 @@ func TestDeleteServerCascade_RemovesEveryDescendant(t *testing.T) {
 		{"bans", `SELECT COUNT(*) FROM bans WHERE server_id = ?`},
 		{"messages", `SELECT COUNT(*) FROM messages WHERE channel_id = ?`},
 		{"attachments", `SELECT COUNT(*) FROM attachments WHERE message_id = ?`},
+		{"saved_messages", `SELECT COUNT(*) FROM saved_messages WHERE message_id = ?`},
 		{"pinned_messages", `SELECT COUNT(*) FROM pinned_messages WHERE channel_id = ?`},
 		{"channel_reads", `SELECT COUNT(*) FROM channel_reads WHERE channel_id = ?`},
 		{"channel_permissions", `SELECT COUNT(*) FROM channel_permissions WHERE channel_id = ?`},
@@ -139,7 +145,7 @@ func TestDeleteServerCascade_RemovesEveryDescendant(t *testing.T) {
 		switch c.table {
 		case "messages", "pinned_messages", "channel_reads", "channel_permissions":
 			arg = channelID
-		case "attachments":
+		case "attachments", "saved_messages":
 			arg = messageID
 		}
 		if got := countRows(t, db, c.query, arg); got != 0 {

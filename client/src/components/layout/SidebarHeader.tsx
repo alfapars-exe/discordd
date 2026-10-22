@@ -8,6 +8,8 @@ import { useUIStore } from "../../stores/uiStore";
 import { useMobileStore } from "../../stores/mobileStore";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { publicAsset } from "../../utils/constants";
+import HeaderInboxButtons from "../inbox/HeaderInboxButtons";
+import SavedHeaderButton from "../saved/SavedHeaderButton";
 
 function SidebarHeader() {
   const { t } = useTranslation("common");
@@ -24,6 +26,10 @@ function SidebarHeader() {
       </div>
 
       <div className="sb-header-actions">
+        {/* Inbox + notifications popovers */}
+        <HeaderInboxButtons variant="header" />
+        <SavedHeaderButton />
+
         {/* Search — opens QuickSwitcher */}
         <button
           className="sb-header-btn"

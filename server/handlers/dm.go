@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -62,6 +64,36 @@ func (h *DMHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSON(w, http.StatusOK, channels)
+}
+
+// MarkRead handles POST /api/dms/{channelId}/read
+// Body is optional: {"message_id": "<id>"} moves the watermark, an empty
+// body (or empty message_id) only clears the unread counter. A body that is
+// present but not JSON is still a 400.
+func (h *DMHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	channelID := r.PathValue("channelId")
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	var req models.MarkDMReadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	var messageID *string
+	if id := strings.TrimSpace(req.MessageID); id != "" {
+		messageID = &id
+	}
+
+	if err := h.dmService.MarkRead(r.Context(), user.ID, channelID, messageID); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	pkg.JSON(w, http.StatusOK, map[string]string{"message": "marked as read"})
 }
 
 // CreateOrGetChannel handles POST /api/dms
@@ -127,7 +159,27 @@ func (h *DMHandler) DeclineRequest(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetOrCreateSelfChannel handles POST /api/dms/self (no body): the caller's
+// "notes to self" channel, created on first call. The generic POST /api/dms
+// keeps rejecting user_id == me; this is the only entry point for it.
+func (h *DMHandler) GetOrCreateSelfChannel(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+
+	channel, err := h.dmService.GetOrCreateSelfChannel(r.Context(), user.ID)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	pkg.JSON(w, http.StatusOK, channel)
+}
+
 // GetMessages handles GET /api/dms/{channelId}/messages?before=&limit=
+// (or ?around= / ?after= — see parseHistoryCursor in message.go).
 func (h *DMHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelId")
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
@@ -136,7 +188,10 @@ func (h *DMHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	beforeID := r.URL.Query().Get("before")
+	cursor, ok := parseHistoryCursor(w, r.URL.Query())
+	if !ok {
+		return
+	}
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
 		// Upper bound alongside the existing lower bound so an unbounded
@@ -147,7 +202,16 @@ func (h *DMHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	page, err := h.dmService.GetMessages(r.Context(), user.ID, channelID, beforeID, limit)
+	var page *models.DMMessagePage
+	var err error
+	switch {
+	case cursor.around != "":
+		page, err = h.dmService.GetMessagesAround(r.Context(), user.ID, channelID, cursor.around, limit)
+	case cursor.after != "":
+		page, err = h.dmService.GetMessagesAfter(r.Context(), user.ID, channelID, cursor.after, limit)
+	default:
+		page, err = h.dmService.GetMessages(r.Context(), user.ID, channelID, cursor.before, limit)
+	}
 	if err != nil {
 		pkg.Error(w, err)
 		return

@@ -1,0 +1,21 @@
+{
+  "title": "Kaydedilenler",
+  "empty": "Henüz kaydedilmiş mesaj yok",
+  "save": "Kaydet",
+  "unsave": "Kaydı kaldır",
+  "saved": "Kaydedildi",
+  "unsaved": "Kaldırıldı",
+  "limitReached": "En fazla 500 mesaj kaydedebilirsin",
+  "notePlaceholder": "Not ekle…",
+  "editNote": "Notu düzenle",
+  "jump": "Mesaja git",
+  "inChannel": "#{{channel}} · {{server}}",
+  "inDM": "Direkt mesaj",
+  "encrypted": "Şifreli mesaj",
+  "attachments_one": "{{count}} ek",
+  "attachments_other": "{{count}} ek",
+  "loadError": "Kaydedilen mesajlar yüklenemedi",
+  "jumpToPresent": "Şimdiye dön",
+  "messageGone": "Bu mesaj artık yok",
+  "unavailable": "Artık erişilemiyor"
+}

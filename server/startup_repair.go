@@ -4,9 +4,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/config"
@@ -234,6 +238,55 @@ func repairOrphanedServerData(db *database.DB) {
 			SELECT 1 FROM servers s WHERE s.id = invites.server_id)`},
 		{"bans", `DELETE FROM bans WHERE NOT EXISTS (
 			SELECT 1 FROM servers s WHERE s.id = bans.server_id)`},
+		// notifications.server_id / channel_id are nullable (friend/dm_request
+		// rows have neither), so only rows that claim a server or channel are
+		// candidates. The channel predicate also catches rows left by a
+		// single-channel delete whose server still exists (the live path is
+		// channelService.Delete → DeleteByChannelID, best-effort).
+		{"notifications", `DELETE FROM notifications WHERE server_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = notifications.server_id)`},
+		{"notifications", `DELETE FROM notifications WHERE channel_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM channels c WHERE c.id = notifications.channel_id)`},
+		// saved_messages (migration 083) — a bookmark whose message (channel
+		// or DM) is gone. The live delete paths remove these explicitly; this
+		// catches rows left by any path that predates them or that ran on
+		// Turso where the declared cascade never fires.
+		{"saved_messages", `DELETE FROM saved_messages WHERE message_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM messages m WHERE m.id = saved_messages.message_id)`},
+		{"saved_messages", `DELETE FROM saved_messages WHERE dm_message_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM dm_messages d WHERE d.id = saved_messages.dm_message_id)`},
+		// server_emojis (migration 086) — emoji rows of a server that no
+		// longer exists (the declared cascade never fires on Turso). Their
+		// files stay on disk but are no longer served: IsPublicAsset finds
+		// no row for them.
+		{"server_emojis", `DELETE FROM server_emojis WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = server_emojis.server_id)`},
+		// server_stickers (migration 087) — same as server_emojis above:
+		// the rows go, the files stay on disk unserved (IsPublicAsset).
+		{"server_stickers", `DELETE FROM server_stickers WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = server_stickers.server_id)`},
+		// Entrance sounds (migration 088) — the declared cascades never fire
+		// on Turso. Selections scoped to a vanished server, of a vanished
+		// user, or pointing at a vanished clip; server settings, mutes and
+		// per-channel switches of a vanished server/user/channel. The clips
+		// themselves (user_entrance_sounds) have files on disk and are
+		// handled by repairOrphanedEntranceSounds.
+		{"user_entrance_selection", `DELETE FROM user_entrance_selection WHERE scope_server_id <> '' AND NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = user_entrance_selection.scope_server_id)`},
+		{"user_entrance_selection", `DELETE FROM user_entrance_selection WHERE NOT EXISTS (
+			SELECT 1 FROM users u WHERE u.id = user_entrance_selection.user_id)`},
+		{"user_entrance_selection", `DELETE FROM user_entrance_selection WHERE sound_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM user_entrance_sounds e WHERE e.id = user_entrance_selection.sound_id)`},
+		{"server_entrance_settings", `DELETE FROM server_entrance_settings WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = server_entrance_settings.server_id)`},
+		{"channel_entrance_disabled", `DELETE FROM channel_entrance_disabled WHERE NOT EXISTS (
+			SELECT 1 FROM channels c WHERE c.id = channel_entrance_disabled.channel_id)`},
+		{"server_entrance_mutes", `DELETE FROM server_entrance_mutes WHERE NOT EXISTS (
+			SELECT 1 FROM servers s WHERE s.id = server_entrance_mutes.server_id)
+			OR NOT EXISTS (SELECT 1 FROM users u WHERE u.id = server_entrance_mutes.user_id)`},
+		// soundboard_sounds is deliberately NOT here: its files are public by
+		// URL prefix, so deleting a row without its file would leave a public
+		// file with no pointer left. repairOrphanedSoundboard handles it.
 	}
 
 	var totalRows int64
@@ -258,6 +311,72 @@ func repairOrphanedServerData(db *database.DB) {
 	}
 }
 
+// soundboardURLPrefix is the only file_url shape repairOrphanedSoundboard
+// resolves to a disk path.
+const soundboardURLPrefix = "/api/uploads/soundboard/"
+
+// repairOrphanedSoundboard removes soundboard clips whose server no longer
+// exists (server deletes before the cascade fix, on Turso where the declared
+// ON DELETE CASCADE never fires) — the row AND its file. Soundboard files are
+// served to anyone by URL prefix, so the row is the only pointer to a still
+// public file: each row is deleted first and its file removed right after,
+// and with no uploadDir nothing is deleted at all, so the rows keep pointing
+// at their files until a run that can remove them.
+func repairOrphanedSoundboard(db *database.DB, uploadDir string) {
+	if uploadDir == "" {
+		return
+	}
+	ctx := context.Background()
+
+	rows, err := db.Conn.QueryContext(ctx, `SELECT id, file_url FROM soundboard_sounds
+		WHERE NOT EXISTS (SELECT 1 FROM servers s WHERE s.id = soundboard_sounds.server_id)`)
+	if err != nil {
+		startupLogger.Warn("orphaned-soundboard scan failed", "err", pkg.ErrText(err))
+		return
+	}
+	type orphan struct{ id, fileURL string }
+	var orphans []orphan
+	for rows.Next() {
+		var o orphan
+		if err := rows.Scan(&o.id, &o.fileURL); err != nil {
+			startupLogger.Warn("orphaned-soundboard scan row failed", "err", pkg.ErrText(err))
+			continue
+		}
+		orphans = append(orphans, o)
+	}
+	scanErr := rows.Err()
+	_ = rows.Close()
+	if scanErr != nil {
+		startupLogger.Warn("orphaned-soundboard scan iteration failed", "err", pkg.ErrText(scanErr))
+		return
+	}
+
+	removed := 0
+	for _, o := range orphans {
+		if _, err := db.Conn.ExecContext(ctx, `DELETE FROM soundboard_sounds WHERE id = ?`, o.id); err != nil {
+			startupLogger.Warn("orphaned-soundboard row delete failed", "id", o.id, "err", pkg.ErrText(err))
+			continue
+		}
+		removed++
+		rel, ok := strings.CutPrefix(o.fileURL, "/api/uploads/")
+		if !ok || !strings.HasPrefix(o.fileURL, soundboardURLPrefix) {
+			startupLogger.Warn("orphaned-soundboard file_url has an unexpected shape, file left", "id", o.id)
+			continue
+		}
+		full, err := pkg.SafeJoin(uploadDir, rel)
+		if err != nil {
+			startupLogger.Warn("refusing to remove soundboard file outside upload dir", "id", o.id, "err", pkg.ErrText(err))
+			continue
+		}
+		if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			startupLogger.Warn("failed to remove orphaned soundboard file", "id", o.id, "err", pkg.ErrText(err))
+		}
+	}
+	if removed > 0 {
+		startupLogger.Info("repaired orphaned soundboard clip(s) (deleted server, pre-cascade-fix)", "rows", removed)
+	}
+}
+
 // resetStalePresence flips any user marked as online/idle back to offline.
 // Required because the WebSocket disconnect handler is the source of truth
 // for presence transitions, and it doesn't run if the process was killed.
@@ -271,6 +390,23 @@ func resetStalePresence(db *database.DB) {
 	}
 	if affected, _ := result.RowsAffected(); affected > 0 {
 		startupLogger.Info("reset stale user status(es) to offline", "count", affected)
+	}
+}
+
+// purgeExpiredNotifications drops inbox rows older than 90 days. The
+// notifications table (migration 082) has no other retention mechanism, and
+// an inbox nobody scrolls back that far in would otherwise grow forever.
+// created_at is 'YYYY-MM-DD HH:MM:SS' UTC text, so the datetime() comparison
+// is lexical and correct on Turso as well as local SQLite.
+func purgeExpiredNotifications(db *database.DB) {
+	result, err := db.Conn.ExecContext(context.Background(),
+		`DELETE FROM notifications WHERE created_at < datetime('now', '-90 days')`)
+	if err != nil {
+		startupLogger.Error("failed to purge expired notifications", "err", pkg.ErrText(err))
+		return
+	}
+	if affected, _ := result.RowsAffected(); affected > 0 {
+		startupLogger.Info("purged expired notification(s)", "count", affected)
 	}
 }
 

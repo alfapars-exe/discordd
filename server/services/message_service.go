@@ -15,6 +15,10 @@ var messageLogger = logx.Component("service.message")
 
 type MessageService interface {
 	GetByChannelID(ctx context.Context, serverID, channelID, userID string, beforeID string, limit int) (*models.MessagePage, error)
+	// GetAround / GetAfter are the jump-to-message history forms (see
+	// message_history.go); same read gate as GetByChannelID.
+	GetAround(ctx context.Context, serverID, channelID, userID, anchorID string, limit int) (*models.MessagePage, error)
+	GetAfter(ctx context.Context, serverID, channelID, userID, afterID string, limit int) (*models.MessagePage, error)
 	Create(ctx context.Context, serverID, channelID, userID string, req *models.CreateMessageRequest) (*models.Message, error)
 	BroadcastCreate(message *models.Message)
 	Update(ctx context.Context, serverID, id, userID string, req *models.UpdateMessageRequest) (*models.Message, error)
@@ -37,6 +41,10 @@ type messageService struct {
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
 	auditLogger     AuditWriter
+	// notificationRepo is only used outside the create transaction (Delete's
+	// best-effort cleanup); Create writes inbox rows through the tx-bound
+	// MessageTxRepos.Notification instead.
+	notificationRepo repository.NotificationRepository
 	// uploadDir enables best-effort disk cleanup on message delete (see
 	// upload_cleanup.go). Blank (the zero value, and every existing test's
 	// default) disables cleanup — set via SetUploadDir, wired in
@@ -76,22 +84,24 @@ func NewMessageService(
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
 	auditLogger AuditWriter,
+	notificationRepo repository.NotificationRepository,
 ) MessageService {
 	return &messageService{
-		messageRepo:     messageRepo,
-		attachmentRepo:  attachmentRepo,
-		channelRepo:     channelRepo,
-		userRepo:        userRepo,
-		mentionRepo:     mentionRepo,
-		roleMentionRepo: roleMentionRepo,
-		roleRepo:        roleRepo,
-		reactionRepo:    reactionRepo,
-		readStateRepo:   readStateRepo,
-		timeoutRepo:     timeoutRepo,
-		txRunner:        txRunner,
-		hub:             hub,
-		permResolver:    permResolver,
-		auditLogger:     auditLogger,
+		messageRepo:      messageRepo,
+		attachmentRepo:   attachmentRepo,
+		channelRepo:      channelRepo,
+		userRepo:         userRepo,
+		mentionRepo:      mentionRepo,
+		roleMentionRepo:  roleMentionRepo,
+		roleRepo:         roleRepo,
+		reactionRepo:     reactionRepo,
+		readStateRepo:    readStateRepo,
+		timeoutRepo:      timeoutRepo,
+		txRunner:         txRunner,
+		hub:              hub,
+		permResolver:     permResolver,
+		auditLogger:      auditLogger,
+		notificationRepo: notificationRepo,
 	}
 }
 
@@ -130,61 +140,11 @@ func (s *messageService) GetByChannelID(ctx context.Context, serverID, channelID
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 
-	// Batch load attachments, mentions, reactions (avoid N+1)
-	if len(messages) > 0 {
-		messageIDs := make([]string, len(messages))
-		for i, m := range messages {
-			messageIDs[i] = m.ID
-		}
-
-		attachments, err := s.attachmentRepo.GetByMessageIDs(ctx, messageIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get attachments: %w", err)
-		}
-
-		attachmentMap := make(map[string][]models.Attachment)
-		for _, a := range attachments {
-			attachmentMap[a.MessageID] = append(attachmentMap[a.MessageID], a)
-		}
-
-		mentionMap, err := s.mentionRepo.GetByMessageIDs(ctx, messageIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get mentions: %w", err)
-		}
-
-		reactionMap, err := s.reactionRepo.GetByMessageIDs(ctx, messageIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get reactions: %w", err)
-		}
-
-		roleMentionMap, err := s.roleMentionRepo.GetByMessageIDs(ctx, messageIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get role mentions: %w", err)
-		}
-
-		for i := range messages {
-			messages[i].Attachments = attachmentMap[messages[i].ID]
-			if messages[i].Attachments == nil {
-				messages[i].Attachments = []models.Attachment{}
-			}
-			messages[i].Mentions = mentionMap[messages[i].ID]
-			if messages[i].Mentions == nil {
-				messages[i].Mentions = []string{}
-			}
-			messages[i].RoleMentions = roleMentionMap[messages[i].ID]
-			if messages[i].RoleMentions == nil {
-				messages[i].RoleMentions = []string{}
-			}
-			messages[i].Reactions = reactionMap[messages[i].ID]
-			if messages[i].Reactions == nil {
-				messages[i].Reactions = []models.ReactionGroup{}
-			}
-		}
-	}
-
-	// nil slice serializes as JSON null — ensure empty array
-	if messages == nil {
-		messages = []models.Message{}
+	// Batch load attachments, mentions, reactions (avoid N+1) and normalise
+	// nil slices — shared with GetAround/GetAfter (message_history.go).
+	messages, err = s.hydrateMessages(ctx, messages)
+	if err != nil {
+		return nil, err
 	}
 
 	return &models.MessagePage{
@@ -242,7 +202,9 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 		message.Content = &req.Content
 	}
 
-	// Reply validation — referenced message must be in the same channel
+	// Reply validation — referenced message must be in the same channel.
+	// replyTargetID is the referenced author, kept for the reply notification.
+	var replyTargetID string
 	if req.ReplyToID != nil && *req.ReplyToID != "" {
 		refMsg, err := s.messageRepo.GetByID(ctx, *req.ReplyToID)
 		if err != nil {
@@ -252,22 +214,34 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 			return nil, fmt.Errorf("%w: cannot reply to a message in a different channel", pkg.ErrBadRequest)
 		}
 		message.ReplyToID = req.ReplyToID
+		replyTargetID = refMsg.UserID
 	}
 
 	// Extract mentions BEFORE the write transaction — extraction is read-only
 	// (user/role lookups) and keeping reads out of the tx keeps it short.
 	// channel.ServerID comes from validateChannelScope above (the old code
-	// refetched the channel here for the same value).
+	// refetched the channel here for the same value). E2EE messages declare
+	// their mention targets in e2ee_metadata instead of <@id> tokens (the
+	// server cannot read the body); role mentions stay plaintext-only.
 	var mentionedIDs, roleMentionIDs []string
 	if req.EncryptionVersion == 0 {
 		mentionedIDs = s.extractMentions(ctx, req.Content)
 		roleMentionIDs = s.extractRoleMentions(ctx, req.Content, channel.ServerID)
+	} else {
+		mentionedIDs = s.extractMentionsFromMetadata(ctx, req.E2EEMetadata)
+		roleMentionIDs = []string{}
 	}
 
-	// Atomic write set: message INSERT + unread bumps + mention rows commit
-	// or roll back together. Previously each ran auto-commit with failures
-	// only logged, which left drifting unread badges and missing mention
-	// rows next to an already-persisted message.
+	// Inbox targets (also read-only, resolved before the tx): every mentioned
+	// user except the author, plus the replied-to author when not already
+	// mentioned. Each must be able to read the channel — a mention of
+	// someone who cannot see the channel must not leak its name/preview.
+	notifications := s.buildMessageNotifications(ctx, channel, message, req, mentionedIDs, replyTargetID)
+
+	// Atomic write set: message INSERT + unread bumps + mention rows +
+	// notification rows commit or roll back together. Previously each ran
+	// auto-commit with failures only logged, which left drifting unread
+	// badges and missing mention rows next to an already-persisted message.
 	txErr := s.txRunner.InTx(ctx, func(r *repository.MessageTxRepos) error {
 		if err := r.Message.Create(ctx, message); err != nil {
 			return fmt.Errorf("failed to create message: %w", err)
@@ -285,19 +259,21 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 				return fmt.Errorf("failed to save role mentions: %w", err)
 			}
 		}
+		for _, n := range notifications {
+			// message.ID is only known after r.Message.Create above.
+			n.MessageID = &message.ID
+			if err := r.Notification.Create(ctx, n); err != nil {
+				return fmt.Errorf("failed to create %s notification: %w", n.Kind, err)
+			}
+		}
 		return nil
 	})
 	if txErr != nil {
 		return nil, txErr
 	}
 
-	if req.EncryptionVersion == 0 {
-		message.Mentions = mentionedIDs
-		message.RoleMentions = roleMentionIDs
-	} else {
-		message.Mentions = []string{}
-		message.RoleMentions = []string{}
-	}
+	message.Mentions = mentionedIDs
+	message.RoleMentions = roleMentionIDs
 
 	author, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -306,6 +282,12 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	message.Author = models.ToPublicUser(author)
 	message.Attachments = []models.Attachment{}
 	message.Reactions = []models.ReactionGroup{}
+
+	// Post-commit only — see broadcastNotificationCreate.
+	for _, n := range notifications {
+		n.Actor = message.Author
+		broadcastNotificationCreate(s.hub, n)
+	}
 
 	// Load reply reference for API response / WS broadcast
 	if message.ReplyToID != nil {
@@ -566,6 +548,12 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 	// Uses the message's CreatedAt (captured before delete) as the watermark.
 	if err := s.readStateRepo.DecrementUnreadForDeleted(ctx, message.ChannelID, message.UserID, message.CreatedAt); err != nil {
 		messageLogger.Error("failed to decrement unread counts on delete", "channel_id", message.ChannelID, "err", pkg.ErrText(err))
+	}
+
+	// Best-effort: mention/reply inbox rows for this message would otherwise
+	// deep-link to a deleted message.
+	if err := s.notificationRepo.DeleteByMessageID(ctx, id); err != nil {
+		messageLogger.Error("failed to delete notifications for message", "message_id", id, "err", pkg.ErrText(err))
 	}
 
 	// Fail-closed on resolve failure (ok ignored) — same rationale as the

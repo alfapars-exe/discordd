@@ -6,10 +6,12 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -66,12 +68,21 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	if channel.User1ID == userID {
 		otherUserID = channel.User2ID
 	}
+	// Self-DM ("notes to self", dm_self.go): both participants are the
+	// caller, so there is nobody to block, no privacy/request gate to pass
+	// and no recipient whose unread counter should move.
+	isSelf := otherUserID == userID
 
 	sender, _ := s.userRepo.GetByID(ctx, userID)
 	isPlatformAdmin := sender != nil && sender.IsPlatformAdmin
 
+	// becamePending records whether THIS call flipped the channel to
+	// pending (the message-request transition below) — the one case that
+	// earns the recipient a dm_request inbox row.
+	becamePending := false
+
 	// Bidirectional block check — platform admins bypass
-	if !isPlatformAdmin && s.blockChecker != nil {
+	if !isSelf && !isPlatformAdmin && s.blockChecker != nil {
 		blocked, err := s.blockChecker.IsBlocked(ctx, userID, otherUserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check block status: %w", err)
@@ -83,7 +94,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 
 	// DM privacy + request enforcement
 
-	if !isPlatformAdmin {
+	if !isPlatformAdmin && !isSelf {
 		if channel.Status == models.DMStatusPending {
 			// Fail-closed on a pending channel with a nil InitiatedBy:
 			// the earlier code checked "InitiatedBy != nil && …" in BOTH
@@ -144,6 +155,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 							}
 							channel.Status = models.DMStatusPending
 							channel.InitiatedBy = &userID
+							becamePending = true
 						} else {
 							return nil, fmt.Errorf("%w: dm_request_pending", pkg.ErrForbidden)
 						}
@@ -190,8 +202,36 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		E2EEMetadata:      req.E2EEMetadata,
 	}
 
-	if err := s.dmRepo.CreateMessage(ctx, msg); err != nil {
-		return nil, fmt.Errorf("failed to create DM message: %w", err)
+	// Atomic write set: message INSERT + recipient unread bump + (on the
+	// request transition only) the dm_request inbox row commit or roll back
+	// together, so the sidebar badge can never drift from the messages the
+	// recipient actually has.
+	var requestNotif *models.Notification
+	txErr := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
+		if err := r.DM.CreateMessage(ctx, msg); err != nil {
+			return fmt.Errorf("failed to create DM message: %w", err)
+		}
+		if !isSelf {
+			if err := r.DMRead.IncrementUnread(ctx, otherUserID, channelID); err != nil {
+				return fmt.Errorf("failed to increment DM unread count: %w", err)
+			}
+		}
+		if becamePending {
+			requestNotif = &models.Notification{
+				UserID:      otherUserID,
+				Kind:        models.NotificationKindDMRequest,
+				ActorID:     &userID,
+				DMChannelID: &channelID,
+				Payload:     json.RawMessage(`{}`),
+			}
+			if err := r.Notification.Create(ctx, requestNotif); err != nil {
+				return fmt.Errorf("failed to create dm_request notification: %w", err)
+			}
+		}
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
 	}
 
 	author, err := s.userRepo.GetByID(ctx, userID)
@@ -199,6 +239,12 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		return nil, fmt.Errorf("failed to get message author: %w", err)
 	}
 	msg.Author = models.ToPublicUser(author)
+
+	// Post-commit only — see broadcastNotificationCreate.
+	if requestNotif != nil {
+		requestNotif.Actor = msg.Author
+		broadcastNotificationCreate(s.hub, requestNotif)
+	}
 
 	// Load reply reference
 	if msg.ReplyToID != nil && *msg.ReplyToID != "" {
@@ -220,7 +266,9 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 
 	// Auto-unhide: if either user hid this DM, show it again on new message (best-effort)
 	if s.unhider != nil {
-		_ = s.unhider.UnhideForNewMessage(ctx, otherUserID, channelID)
+		if !isSelf {
+			_ = s.unhider.UnhideForNewMessage(ctx, otherUserID, channelID)
+		}
 		_ = s.unhider.UnhideForNewMessage(ctx, userID, channelID)
 	}
 
@@ -321,6 +369,13 @@ func (s *dmService) DeleteMessage(ctx context.Context, userID, messageID string)
 		removeUploadFilesByURL(s.uploadDir, fileURLs)
 	}
 
+	// Best-effort: inbox rows that pointed at this message would otherwise
+	// deep-link to nothing. No DM writer sets message_id today, so this is
+	// forward-looking cleanup, logged rather than surfaced on failure.
+	if err := s.notificationRepo.DeleteByMessageID(ctx, messageID); err != nil {
+		dmLogger.Error("failed to delete notifications for DM message", "message_id", messageID, "err", pkg.ErrText(err))
+	}
+
 	s.broadcastToBothUsers(channel, ws.Event{
 		Op: ws.OpDMMessageDelete,
 		Data: map[string]string{
@@ -329,5 +384,27 @@ func (s *dmService) DeleteMessage(ctx context.Context, userID, messageID string)
 		},
 	})
 
+	return nil
+}
+
+// MarkRead — membership is checked first (403 for outsiders, 404 for an
+// unknown channel via GetChannelByID), then the caller's dm_reads row is
+// upserted. The dm_read echo goes to the caller only: the other participant
+// has no use for it (no read receipts in this phase).
+func (s *dmService) MarkRead(ctx context.Context, userID, channelID string, messageID *string) error {
+	if _, err := s.verifyChannelMembership(ctx, userID, channelID); err != nil {
+		return err
+	}
+	if err := s.dmReadRepo.MarkRead(ctx, userID, channelID, messageID); err != nil {
+		return err
+	}
+	s.hub.BroadcastToUser(userID, ws.Event{
+		Op: ws.OpDMRead,
+		Data: map[string]any{
+			"dm_channel_id":        channelID,
+			"user_id":              userID,
+			"last_read_message_id": messageID,
+		},
+	})
 	return nil
 }

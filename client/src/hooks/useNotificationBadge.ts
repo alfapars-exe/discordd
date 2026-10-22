@@ -5,13 +5,14 @@
  * 1. Electron (Windows): Taskbar overlay icon via 16x16 canvas -> IPC
  * 2. Web (Browser): document.title prefix + favicon badge overlay
  *
- * Tracks combined channel + DM unread totals.
+ * Tracks combined channel + DM (unmuted) + notification unread totals.
  */
 
 import { useEffect, useRef } from "react";
 import { useReadStateStore } from "../stores/readStateStore";
 import { useDMStore } from "../stores/dmStore";
 import { useServerStore } from "../stores/serverStore";
+import { useNotificationStore } from "../stores/notificationStore";
 
 const BADGE_COLOR = "#ED4245";
 const BADGE_TEXT_COLOR = "#FFFFFF";
@@ -125,6 +126,8 @@ function setFavicon(href: string): void {
 export function useNotificationBadge(): void {
   const channelUnreads = useReadStateStore((s) => s.unreadCounts);
   const dmUnreads = useDMStore((s) => s.dmUnreadCounts);
+  const dmChannels = useDMStore((s) => s.channels);
+  const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const activeServerId = useServerStore((s) => s.activeServerId);
   const mutedServerIds = useServerStore((s) => s.mutedServerIds);
 
@@ -155,11 +158,13 @@ export function useNotificationBadge(): void {
     const channelTotal = isActiveMuted
       ? 0
       : Object.values(channelUnreads).reduce((sum, c) => sum + c, 0);
-    const dmTotal = Object.values(dmUnreads).reduce(
-      (sum, c) => sum + c,
-      0,
-    );
-    const total = channelTotal + dmTotal;
+    // Muted DMs keep their per-row badge but stay out of the app-level total
+    // (same contract as muted channels in CollapsedSidebar).
+    const dmTotal = Object.entries(dmUnreads).reduce((sum, [chId, c]) => {
+      const ch = dmChannels.find((d) => d.id === chId);
+      return ch?.is_muted ? sum : sum + c;
+    }, 0);
+    const total = channelTotal + dmTotal + notificationUnread;
 
     document.title = total > 0 ? `(${total}) ${BASE_TITLE}` : BASE_TITLE;
 
@@ -187,5 +192,5 @@ export function useNotificationBadge(): void {
         }
       }
     }
-  }, [channelUnreads, dmUnreads, activeServerId, mutedServerIds]);
+  }, [channelUnreads, dmUnreads, dmChannels, notificationUnread, activeServerId, mutedServerIds]);
 }

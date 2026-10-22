@@ -44,10 +44,17 @@ type Handlers struct {
 	Diagnostics       *handlers.DiagnosticsHandler
 	AuditLog          *handlers.AuditLogHandler
 	Soundboard        *handlers.SoundboardHandler
+	Emoji             *handlers.EmojiHandler
+	Sticker           *handlers.StickerHandler
+	Entrance          *handlers.EntranceHandler
+	ExpressionClone   *handlers.ExpressionCloneHandler
 	Music             *handlers.MusicHandler
 	LiveKitWebhook    *handlers.LiveKitWebhookHandler
 	ClientLog         *handlers.ClientLogHandler
 	UploadDownload    *handlers.UploadDownloadHandler
+	Notification      *handlers.NotificationHandler
+	Saved             *handlers.SavedHandler
+	UserNote          *handlers.UserNoteHandler
 	WS                *ws.Handler
 }
 
@@ -68,14 +75,14 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		DM:                handlers.NewDMHandler(svcs.DM, svcs.DMUpload, cfg.Upload.MaxSize, limiters.DMMessage, limiters.Upload),
 		Reaction:          handlers.NewReactionHandler(svcs.Reaction),
 		ChannelPermission: handlers.NewChannelPermissionHandler(svcs.ChannelPermission),
-		Friendship:        handlers.NewFriendshipHandler(svcs.Friendship),
+		Friendship:        handlers.NewFriendshipHandler(svcs.Friendship, limiters.SocialAction),
 		Avatar:            handlers.NewAvatarHandler(repos.User, svcs.Member, svcs.Server, cfg.Upload.Dir, limiters.Upload),
 		Stats:             handlers.NewStatsHandler(repos.User),
 		Admin:             handlers.NewAdminHandler(svcs.LiveKitAdmin, svcs.MetricsHistory, svcs.AdminUser, svcs.AdminServer, svcs.Report, svcs.AppLog, svcs.Voice),
 		ServerMute:        handlers.NewServerMuteHandler(svcs.ServerMute),
 		ChannelMute:       handlers.NewChannelMuteHandler(svcs.ChannelMute),
 		DMSettings:        handlers.NewDMSettingsHandler(svcs.DMSettings),
-		Block:             handlers.NewBlockHandler(svcs.Block),
+		Block:             handlers.NewBlockHandler(svcs.Block, limiters.SocialAction),
 		Report:            handlers.NewReportHandler(svcs.Report, svcs.ReportUpload, cfg.Upload.MaxSize),
 		Gif:               handlers.NewGifHandler(cfg.Klipy.APIKey),
 		Device:            handlers.NewDeviceHandler(svcs.Device),
@@ -88,6 +95,10 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Diagnostics:       handlers.NewDiagnosticsHandler(svcs.Email, cfg.DiagSMTP.To, svcs.AppLog, cfg.Upload.MaxSize),
 		AuditLog:          handlers.NewAuditLogHandler(svcs.AuditLog),
 		Soundboard:        handlers.NewSoundboardHandler(svcs.Soundboard, cfg.Upload.MaxSize),
+		Emoji:             handlers.NewEmojiHandler(svcs.Emoji, limiters.Upload),
+		Sticker:           handlers.NewStickerHandler(svcs.Sticker, limiters.Upload),
+		Entrance:          handlers.NewEntranceHandler(svcs.Entrance, limiters.Upload),
+		ExpressionClone:   handlers.NewExpressionCloneHandler(svcs.ExpressionClone, limiters.Upload),
 		Music:             handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay),
 		LiveKitWebhook:    handlers.NewLiveKitWebhookHandler(repos.LiveKit, encryptionKey, svcs.AppLog, svcs.Voice),
 		ClientLog:         handlers.NewClientLogHandler(svcs.AppLog),
@@ -95,6 +106,9 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 			repos.Attachment, repos.Message, repos.DM, svcs.ChannelPermission,
 			repos.Report, repos.Feedback, repos.User, repos.MediaAsset,
 		), svcs.Auth),
+		Notification: handlers.NewNotificationHandler(svcs.Notification),
+		Saved:        handlers.NewSavedHandler(svcs.Saved),
+		UserNote:     handlers.NewUserNoteHandler(svcs.UserNote),
 		WS: ws.NewHandler(hub, svcs.Auth, svcs.WSTicket, nil, svcs.Voice, repos.User, repos.Server, svcs.ServerMute, svcs.ChannelMute, botService),
 	}
 }

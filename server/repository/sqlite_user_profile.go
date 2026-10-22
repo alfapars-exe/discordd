@@ -28,11 +28,13 @@ func (r *sqliteUserRepo) IncrementTokenVersion(ctx context.Context, userID strin
 
 func (r *sqliteUserRepo) Update(ctx context.Context, user *models.User) error {
 	query := `
-		UPDATE users SET username = ?, display_name = ?, avatar_url = ?, custom_status = ?, language = ?, dm_privacy = ?
+		UPDATE users SET username = ?, display_name = ?, avatar_url = ?, custom_status = ?, language = ?, dm_privacy = ?,
+			avatar_animated_url = ?, banner_url = ?, bio = ?, pronouns = ?, accent_color = ?
 		WHERE id = ?`
 
 	result, err := r.db.ExecContext(ctx, query,
-		user.Username, user.DisplayName, user.AvatarURL, user.CustomStatus, user.Language, user.DMPrivacy, user.ID,
+		user.Username, user.DisplayName, user.AvatarURL, user.CustomStatus, user.Language, user.DMPrivacy,
+		user.AvatarAnimatedURL, user.BannerURL, user.Bio, user.Pronouns, user.AccentColor, user.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)

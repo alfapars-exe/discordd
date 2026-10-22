@@ -42,6 +42,39 @@ func TestRepairOrphanedServerData_PurgesEveryOrphanedTable(t *testing.T) {
 			VALUES ('ghost-user-2', 'orphan-channel')`,
 		`INSERT INTO channel_permissions (channel_id, role_id, allow, deny)
 			VALUES ('orphan-channel', 'orphan-role', 0, 0)`,
+		// Inbox row scoped to the ghost server (migration 082) — plus one
+		// with NULL server_id (a friend_request) that must NOT be purged.
+		`INSERT INTO notifications (id, user_id, kind, server_id, channel_id, message_id)
+			VALUES ('orphan-notif', 'ghost-user-2', 'mention', 'ghost-server', 'orphan-channel', 'orphan-message')`,
+		`INSERT INTO notifications (id, user_id, kind)
+			VALUES ('global-notif', 'ghost-user-2', 'friend_request')`,
+		// A row whose SERVER still exists but whose channel is gone — the
+		// shape a pre-fix single-channel delete leaves behind.
+		`INSERT INTO servers (id, name, owner_id) VALUES ('live-server', 'Live', 'live-owner')`,
+		`INSERT INTO channels (id, name, type, server_id) VALUES ('live-channel', 'genel', 'text', 'live-server')`,
+		`INSERT INTO notifications (id, user_id, kind, server_id, channel_id)
+			VALUES ('channel-orphan-notif', 'ghost-user-2', 'mention', 'live-server', 'deleted-channel')`,
+		`INSERT INTO notifications (id, user_id, kind, server_id, channel_id)
+			VALUES ('live-notif', 'ghost-user-2', 'reply', 'live-server', 'live-channel')`,
+		// saved_messages (migration 083): one bookmark of the orphaned
+		// message (goes with it), one pointing at a message that no longer
+		// exists at all, one at a vanished DM message — and one live row on
+		// each side that must survive.
+		`INSERT INTO saved_messages (id, user_id, message_id)
+			VALUES ('saved-orphan-msg', 'ghost-user-2', 'orphan-message')`,
+		`INSERT INTO saved_messages (id, user_id, message_id)
+			VALUES ('saved-gone-msg', 'ghost-user-2', 'never-existed')`,
+		`INSERT INTO saved_messages (id, user_id, dm_message_id)
+			VALUES ('saved-gone-dm', 'ghost-user-2', 'never-existed-dm')`,
+		`INSERT INTO messages (id, channel_id, user_id, content)
+			VALUES ('live-message', 'live-channel', 'ghost-user-2', 'still here')`,
+		`INSERT INTO saved_messages (id, user_id, message_id)
+			VALUES ('saved-live-msg', 'ghost-user-2', 'live-message')`,
+		`INSERT INTO dm_channels (id, user1_id, user2_id) VALUES ('live-dm', 'ghost-user-2', 'ghost-user-3')`,
+		`INSERT INTO dm_messages (id, dm_channel_id, user_id, content)
+			VALUES ('live-dm-message', 'live-dm', 'ghost-user-2', 'still here too')`,
+		`INSERT INTO saved_messages (id, user_id, dm_message_id)
+			VALUES ('saved-live-dm', 'ghost-user-2', 'live-dm-message')`,
 	)
 
 	repairOrphanedServerData(db)
@@ -62,6 +95,10 @@ func TestRepairOrphanedServerData_PurgesEveryOrphanedTable(t *testing.T) {
 		{"pinned_messages", `SELECT COUNT(*) FROM pinned_messages WHERE message_id = 'orphan-message'`},
 		{"channel_reads", `SELECT COUNT(*) FROM channel_reads WHERE channel_id = 'orphan-channel'`},
 		{"channel_permissions", `SELECT COUNT(*) FROM channel_permissions WHERE channel_id = 'orphan-channel'`},
+		{"notifications", `SELECT COUNT(*) FROM notifications WHERE server_id = 'ghost-server'`},
+		{"saved_messages (orphaned channel message)", `SELECT COUNT(*) FROM saved_messages WHERE id = 'saved-orphan-msg'`},
+		{"saved_messages (vanished message)", `SELECT COUNT(*) FROM saved_messages WHERE id = 'saved-gone-msg'`},
+		{"saved_messages (vanished dm message)", `SELECT COUNT(*) FROM saved_messages WHERE id = 'saved-gone-dm'`},
 	}
 	for _, tc := range tables {
 		var n int
@@ -72,6 +109,73 @@ func TestRepairOrphanedServerData_PurgesEveryOrphanedTable(t *testing.T) {
 			t.Errorf("%s: %d orphaned row(s) survived repairOrphanedServerData, want 0", tc.name, n)
 		}
 	}
+
+	var global int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM notifications WHERE id = 'global-notif'`).Scan(&global); err != nil {
+		t.Fatalf("count global notification: %v", err)
+	}
+	if global != 1 {
+		t.Errorf("server-less notification was purged by the orphan repair (got %d, want 1)", global)
+	}
+
+	var channelOrphan, live int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM notifications WHERE id = 'channel-orphan-notif'`).Scan(&channelOrphan); err != nil {
+		t.Fatalf("count channel-orphan notification: %v", err)
+	}
+	if channelOrphan != 0 {
+		t.Error("notification on a deleted channel (live server) survived the orphan repair")
+	}
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM notifications WHERE id = 'live-notif'`).Scan(&live); err != nil {
+		t.Fatalf("count live notification: %v", err)
+	}
+	if live != 1 {
+		t.Errorf("notification on a live channel was purged (got %d, want 1)", live)
+	}
+
+	var liveSaved int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM saved_messages WHERE id IN ('saved-live-msg', 'saved-live-dm')`).Scan(&liveSaved); err != nil {
+		t.Fatalf("count live saved rows: %v", err)
+	}
+	if liveSaved != 2 {
+		t.Errorf("bookmarks of live messages were purged (got %d, want 2)", liveSaved)
+	}
+}
+
+// TestPurgeExpiredNotifications pins the 90-day retention: a row older than
+// the cutoff goes, a recent one stays, and the comparison works on the
+// 'YYYY-MM-DD HH:MM:SS' text the table stores.
+func TestPurgeExpiredNotifications(t *testing.T) {
+	db, path := newCensusDB(t)
+	seedOrphans(t, path,
+		`INSERT INTO notifications (id, user_id, kind, created_at)
+			VALUES ('old', 'u1', 'mention', datetime('now', '-91 days'))`,
+		`INSERT INTO notifications (id, user_id, kind, created_at)
+			VALUES ('fresh', 'u1', 'mention', datetime('now', '-1 days'))`,
+	)
+
+	purgeExpiredNotifications(db)
+
+	var n int
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM notifications WHERE id = 'old'`).Scan(&n); err != nil {
+		t.Fatalf("count old: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("91-day-old notification survived the purge")
+	}
+	if err := db.Conn.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM notifications WHERE id = 'fresh'`).Scan(&n); err != nil {
+		t.Fatalf("count fresh: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("1-day-old notification was purged (got %d, want 1)", n)
+	}
+
+	purgeExpiredNotifications(db) // second run on a clean table must be a silent no-op
 }
 
 // TestRepairOrphanedServerData_IsIdempotent proves a second run on an
