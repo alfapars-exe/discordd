@@ -19,7 +19,7 @@
   "devDependencies": {
     "concurrently": "^10",
     "electron": "^43",
-    "electron-builder": "26.15.3",
+    "electron-builder": "26.18.0",
     "rcedit": "^5.0.2",
     "typescript": "~7.0.2"
   },
