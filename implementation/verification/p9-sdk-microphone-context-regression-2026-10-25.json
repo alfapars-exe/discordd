@@ -21,5 +21,12 @@
     "Never publish unprocessed enabled raw capture as a fallback; preserve current auth, call and encryption admission fences.",
     "Preserve concurrent audio-startup hotfix changes and test both processor initialization and SDK publication context adoption with real classes.",
     "After correction, repeat frozen two-client tests and require decoded duration/energy or audible evidence; packet bytes alone do not satisfy acceptance."
-  ]
+  ],
+  "frozen_runtime_after_fix": {
+    "build": "qa-dist4: frozen9f plus only committed processor/pipeline startup fixes and bounded diagnostics; SFU1.9.12",
+    "both_clients": "Connected, GCM enabled, localEncrypted true; pipeline registered and ready, 48000Hz, gate available/open, underlying tracks live/enabled/unmuted.",
+    "observed_signal": "First client approximately input-15.62dB/output-13.71dB; second input-20.34dB/output-22.73dB. Numeric meters only; no raw audio stored.",
+    "packets": "Sender counters1001 and479; byte counters84k and65k cross-match remote receipt. Previous graph-unavailable/initial-packets-only behavior is corrected in this run.",
+    "remaining": "Receiver totalSamplesDuration and totalAudioEnergy remain0; audible output/decryption acceptance is NOT proved. Investigate receiver processing separately without weakening encryption."
+  }
 }
