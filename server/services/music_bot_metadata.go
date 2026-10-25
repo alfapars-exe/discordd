@@ -26,7 +26,7 @@ const maxMusicMetadataDiagnosticRunes = 1280
 
 var youtubeVideoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 var errMusicMetadataTooLarge = errors.New("music metadata exceeds size limit")
-var musicDiagnosticANSI = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+var musicDiagnosticANSI = regexp.MustCompile(`\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]`)
 var musicDiagnosticURL = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s"'<>]+`)
 var musicDiagnosticSecret = regexp.MustCompile(`(?i)\b(?:authorization|proxy-authorization|cookie|set-cookie|password|passphrase|secret|(?:api[-_]?|auth[-_]?)?token|api[-_]?key|ticket)\b\s*["']?\s*[:=].*$`)
 var musicDiagnosticVideo = regexp.MustCompile(`(\[youtube[^\]]*\]\s+)[A-Za-z0-9_-]{11}:`)
@@ -118,15 +118,10 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	stderr := newTailBuffer(ytDlpStderrTailBytes)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.WaitDelay = subprocessWaitDelay
-	runStart := time.Now()
-	runErr := cmd.Run()
-	runDuration := time.Since(runStart)
+	runDuration, runErr := runMusicMetadataCommand(ctx, cmd, "extraction", validationDuration, stderr)
 	// A cancelled request must not enqueue partially extracted tracks after
 	// the caller has left. Keep deadlines classifiable as network failures.
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			logMusicMetadataFailure("extraction", validationDuration, runDuration, ctx.Err(), stderr.String())
-		}
 		return nil, musicMetadataInterruptedError("extraction", ctx.Err())
 	}
 	if stdout.overflow {
@@ -162,6 +157,16 @@ func musicMetadataInterruptedError(operation string, cause error) error {
 		return &trackPlaybackError{Reason: reasonNetwork, err: err}
 	}
 	return err
+}
+
+func runMusicMetadataCommand(ctx context.Context, cmd *exec.Cmd, operation string, validationDuration time.Duration, stderr *tailBuffer) (time.Duration, error) {
+	started := time.Now()
+	err := cmd.Run()
+	duration := time.Since(started)
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		logMusicMetadataFailure(operation, validationDuration, duration, ctx.Err(), stderr.String())
+	}
+	return duration, err
 }
 
 // Only provider warnings/errors belong in diagnostics. Never log command
@@ -270,13 +275,8 @@ func SearchMusicTracks(parent context.Context, query string) ([]models.MusicTrac
 	stderr := newTailBuffer(ytDlpStderrTailBytes)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.WaitDelay = subprocessWaitDelay
-	runStart := time.Now()
-	runErr := cmd.Run()
-	runDuration := time.Since(runStart)
+	runDuration, runErr := runMusicMetadataCommand(ctx, cmd, "search", validationDuration, stderr)
 	if ctx.Err() != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			logMusicMetadataFailure("search", validationDuration, runDuration, ctx.Err(), stderr.String())
-		}
 		return nil, musicMetadataInterruptedError("search", ctx.Err())
 	}
 	if stdout.overflow {
