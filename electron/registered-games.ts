@@ -153,6 +153,14 @@ function safeDisplayName(filename: string): string {
   return cleaned || "Game";
 }
 
+/** User-provided title only; never accepts a path or silently truncates input. */
+export function validateGameDisplayName(value: unknown): string {
+  if (typeof value !== "string" || value.length > 80 || /[\u0000-\u001f\u007f/\\]/.test(value) || !value.trim()) {
+    throw new TypeError("A game name of 1 to 80 characters without control characters or path separators is required.");
+  }
+  return value.trim();
+}
+
 function normalizeRecord(value: unknown): RegisteredGameRecord | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Partial<RegisteredGameRecord>;
@@ -166,7 +174,7 @@ function normalizeRecord(value: unknown): RegisteredGameRecord | null {
   return {
     id: row.id,
     executablePath,
-    displayName: typeof row.displayName === "string" ? safeDisplayName(row.displayName).slice(0, 80) : safeDisplayName(filename),
+    displayName: (() => { try { return validateGameDisplayName(row.displayName); } catch { return safeDisplayName(filename); } })(),
     shareAllowed: row.shareAllowed === true,
     overlayAllowed: row.overlayAllowed === true,
     lastSeenAt,
@@ -507,6 +515,21 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       clearBackgroundActivity();
     },
     addExecutable,
+    async setDisplayName(id: string, value: unknown): Promise<boolean> {
+      const displayName = validateGameDisplayName(value);
+      if (disposed || platform !== "win32") return false;
+      return serialize(async () => {
+        const games = await load();
+        const game = games.find((row) => row.id === id);
+        if (!game) return false;
+        if (game.displayName === displayName) return true;
+        const previous = cloneRecords(games);
+        game.displayName = displayName;
+        try { await persist(); } catch (error) { records = previous; throw error; }
+        clearBackgroundActivity();
+        return true;
+      });
+    },
     async remove(id: string): Promise<boolean> {
       return serialize(async () => {
         const games = await load();

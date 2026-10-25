@@ -6,6 +6,7 @@ import { formatDateTime } from "../../utils/dateFormat";
 import FeedbackCreateForm from "./FeedbackCreateForm";
 
 type Game = ElectronRegisteredGame;
+const invalidName = (name: string) => !name.trim() || name.length > 80 || [...name].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127 || char === "/" || char === "\\");
 type Detection = ElectronRegisteredGamesSnapshot["detection"] | "web";
 
 function RegisteredGamesSettings() {
@@ -18,6 +19,7 @@ function RegisteredGamesSettings() {
   const [registryLoaded, setRegistryLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
   const [reportingIssue, setReportingIssue] = useState(false);
   const mounted = useRef(false);
   const busyRef = useRef(false);
@@ -160,14 +162,39 @@ function RegisteredGamesSettings() {
     }
   }
 
+  async function saveName() {
+    const draft = editing;
+    const name = draft?.name.trim();
+    const api = window.electronAPI;
+    if (!draft || !name || invalidName(draft.name) || !api?.setRegisteredGameName || !beginMutation()) return;
+    try {
+      if (!await api.setRegisteredGameName(draft.id, name)) throw new Error("game name update rejected");
+      if (!mounted.current) return;
+      setGames(current => current.map(game => game.id === draft.id ? { ...game, displayName: name } : game));
+      setEditing(null);
+    } catch {
+      if (mounted.current) setError(t("registeredGamesSaveError"));
+    } finally { finishMutation(); }
+  }
+
   const currentGames = games.filter((game) => game.availability === "available" && game.running === true);
-  const recentGames = games.filter((game) => game.availability !== "available" || game.running !== true);
+  const inactiveGames = games.filter((game) => game.availability !== "available" || game.running !== true);
+  const recentGames = inactiveGames.filter(game => game.lastSeenAt && Number.isFinite(Date.parse(game.lastSeenAt)))
+    .sort((left, right) => Date.parse(right.lastSeenAt!) - Date.parse(left.lastSeenAt!) || left.id.localeCompare(right.id));
+  const addedGames = inactiveGames.filter(game => !game.lastSeenAt || !Number.isFinite(Date.parse(game.lastSeenAt)));
 
   function renderGame(game: Game) {
     return (
       <section className="general-setting-row" key={game.id} aria-label={game.displayName}>
         <div className="general-setting-info">
           <strong className="general-setting-label">{game.displayName}</strong>
+          {window.electronAPI?.setRegisteredGameName && (editing?.id === game.id ? <div>
+            <label>{t("registeredGamesName")}<input maxLength={80} value={editing.name} disabled={busy} aria-invalid={invalidName(editing.name)} aria-describedby={invalidName(editing.name) ? `game-name-error-${game.id}` : undefined}
+              onChange={event => setEditing({ id: game.id, name: event.target.value })} /></label>
+            {invalidName(editing.name) && <small id={`game-name-error-${game.id}`}>{t("registeredGamesNameInvalid")}</small>}
+            <button type="button" disabled={busy || invalidName(editing.name)} onClick={() => void saveName()}>{t("registeredGamesNameSave")}</button>
+            <button type="button" disabled={busy} onClick={() => setEditing(null)}>{t("registeredGamesNameCancel")}</button>
+          </div> : <button type="button" disabled={busy} onClick={() => setEditing({ id: game.id, name: game.displayName })}>{t("registeredGamesRename")}</button>)}
           <span className="general-setting-desc">{game.executableName}</span>
           <span className="general-setting-desc">
             {game.availability === "missing"
@@ -269,6 +296,10 @@ function RegisteredGamesSettings() {
             <div id="registered-games-recent" data-settings-section="registered-games-recent">
               <h3 className="settings-section-subtitle">{t("registeredGamesRecent")}</h3>
               {recentGames.map(renderGame)}
+            </div>
+            <div>
+              <h3 className="settings-section-subtitle">{t("registeredGamesAddedUnseen")}</h3>
+              {addedGames.map(renderGame)}
             </div>
           </div>
         </>

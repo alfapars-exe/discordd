@@ -171,6 +171,7 @@ interface ElectronAPI {
   addRegisteredGame?: () => Promise<ElectronRegisteredGame | null>;
   removeRegisteredGame?: (id: string) => Promise<boolean>;
   /** Local consent groundwork only; game activity upload is not implemented. */
+  setRegisteredGameName?: (id: string, name: string) => Promise<boolean>;
   setRegisteredGameSharing?: (id: string, allowed: boolean) => Promise<boolean>;
   /** Local foreground-window voice-overlay opt-in; unrelated to activity sharing. */
   setRegisteredGameOverlay?: (id: string, allowed: boolean) => Promise<boolean>;

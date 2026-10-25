@@ -1,3 +1,4 @@
+import { registerGameNameIPC } from "./registered-game-name-ipc";
 import {registerSystemAudioLeaseIPC}from "./system-audio-ipc";
 import {registerPTTLeaseHandlers}from "./ptt-ipc";
 /**
@@ -228,6 +229,8 @@ export function registerIpcHandlers(): void {
     if (removed) overlayLayouts.remove(`game:${id}`);
     return removed;
   });
+  registerGameNameIPC(ipcMain, assertTrustedMainWindowSender, registeredGames);
+
   ipcMain.handle("set-registered-game-sharing", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);
     assertString(id, "game id", 64);

@@ -115,6 +115,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("add-registered-game"),
   removeRegisteredGame: (id: string): Promise<boolean> =>
     ipcRenderer.invoke("remove-registered-game", id),
+  setRegisteredGameName: (id: string, name: string): Promise<boolean> =>
+    ipcRenderer.invoke("set-registered-game-name", id, name),
   setRegisteredGameSharing: (id: string, allowed: boolean): Promise<boolean> =>
     ipcRenderer.invoke("set-registered-game-sharing", id, allowed),
   setRegisteredGameOverlay: (id: string, allowed: boolean): Promise<boolean> =>
