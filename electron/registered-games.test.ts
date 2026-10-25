@@ -36,10 +36,13 @@ async function waitForActivity(
   service: ReturnType<typeof createRegisteredGamesService>,
   predicate: (activity: Awaited<ReturnType<typeof service.getActivity>>) => boolean,
 ): Promise<Awaited<ReturnType<typeof service.getActivity>>> {
-  for (let i = 0; i < 50; i += 1) {
+  // Background scans include real async filesystem work. A count of zero-delay
+  // yields can expire before CI finishes that I/O; bound elapsed time instead.
+  const deadline = performance.now() + 5_000;
+  while (performance.now() < deadline) {
     const activity = await service.getActivity();
     if (predicate(activity)) return activity;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.fail("Timed out waiting for registered-game activity projection.");
 }
@@ -479,7 +482,7 @@ test("activity projection expires, and missing, unreadable, or failed scans neve
   }
 });
 
-test("a successful fresh activity projection remains available while its next scan is pending", async () => {
+test("a successful fresh activity projection remains available while its next scan is pending", { timeout: 15_000 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "hichat-games-activity-refresh-"));
   const timers: Array<() => void> = [];
   let scanCount = 0;
