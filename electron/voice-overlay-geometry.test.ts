@@ -213,3 +213,19 @@ test("opt-in media-only HUD reserves passive bounded space without participant/a
  }
  const off=calculateVoiceOverlayGeometry({...source,voiceOverlayVideo:false},{x:0,y:0,width:1200,height:800})!;assert.equal(off.mediaHeight,0);assert.equal(off.shouldShow,false);
 });
+
+
+
+test("transient game notices use only spare room without shrinking voice or media", () => {
+  const notices = Array.from({ length: 3 }, (_, i) => ({ noticeId: `12345678-1234-4234-8234-${String(i).padStart(12, "0")}`, label: "Friend", gameName: "CS2", kind: "game_activity" as const, expiresAt: Date.now() + 10000 }));
+  const source = snapshot({ participants: snapshot().participants.slice(0, 5), voiceOverlayMode: "game", voiceOverlayVideo: true });
+  for (const height of [140, 300, 500, 720, 1080]) {
+    const area = { x: 0, y: 0, width: 1280, height };
+    const before = calculateVoiceOverlayGeometry(source, area)!;
+    const after = calculateVoiceOverlayGeometry({ ...source, voiceOverlayGameActivityNotifications: true, gameActivityNotices: notices }, area)!;
+    assert.equal(after.visibleParticipants, before.visibleParticipants); assert.equal(after.mediaHeight, before.mediaHeight);
+    assert.ok(after.gameActivityNoticeRows >= 0 && after.gameActivityNoticeRows <= 3); assert.ok(after.height <= area.height);
+  }
+  const noticesOnly = calculateVoiceOverlayGeometry(snapshot({ participants: [], voiceOverlayMaxParticipants: 0, voiceOverlayGameActivityNotifications: true, gameActivityNotices: notices }), { x: 0, y: 0, width: 600, height: 500 })!;
+  assert.equal(noticesOnly.gameActivityNoticeRows, 3); assert.equal(noticesOnly.shouldShow, true);
+});

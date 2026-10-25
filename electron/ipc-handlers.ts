@@ -87,7 +87,9 @@ import { getMainWindow } from "./window";
 import { getVoiceOverlayMediaWindow, subscribeVoiceOverlayMediaLifecycle, updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
 import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
-import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { clearVoiceOverlayGameNotices } from "./voice-overlay";
+import { registerOverlayGameNoticeClearIPC } from "./overlay-game-notice-ipc";
 import { copyFile, writeFile } from "fs/promises";
 import { buildUploadBytes, bundleBaseName, newestCrashDumpFullPath } from "./diagnostic-bundle";
 import { getLogsDir, setVerbose } from "./diagnostic-log";
@@ -167,7 +169,7 @@ export function registerIpcHandlers(): void {
     if (binding === null) lockVoiceOverlay();
     return accepted;
   });
-  let overlayMediaPolicy: {enabled:boolean;voiceOverlayVideo?:boolean;voiceOverlayStreams?:boolean}|null = null;
+  let overlayMediaPolicy: VoiceOverlaySnapshot | null = null;
   const overlayMedia = createOverlayMediaBroker({main:getMainWindow,overlay:getVoiceOverlayMediaWindow,policy:()=>overlayMediaPolicy});
   const stopOverlayMediaLifecycle = subscribeVoiceOverlayMediaLifecycle(revoke => { if(revoke)overlayMedia.revoke();else overlayMedia.refresh(); });
   ipcMain.handle("open-overlay-media-lease", (event, raw:unknown) => overlayMedia.open(event,raw));
@@ -266,6 +268,13 @@ export function registerIpcHandlers(): void {
     });
   ipcMain.on("voice-overlay-snapshot", applyOverlaySnapshot);
   ipcMain.handle("voice-overlay-snapshot", applyOverlaySnapshot);
+  registerOverlayGameNoticeClearIPC(ipcMain, assertTrustedMainWindowSender, () => {
+    clearVoiceOverlayGameNotices(overlayMediaPolicy?.gameActivityNotices ?? []);
+    if (overlayMediaPolicy) {
+      overlayMediaPolicy = { ...overlayMediaPolicy, gameActivityNotices: [] };
+      gameOverlay?.setSnapshot(overlayMediaPolicy);
+    }
+  });
   ipcMain.handle("set-registered-game-overlay", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);
     assertString(id, "game id", 64);

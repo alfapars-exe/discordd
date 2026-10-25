@@ -355,6 +355,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => { ipcRenderer.removeListener("voice-overlay-update", listener); };
   },
   sendVoiceOverlaySnapshot: (snapshot: unknown): Promise<boolean> => ipcRenderer.invoke("voice-overlay-snapshot", snapshot),
+  clearOverlayGameNotices: (): Promise<void> => ipcRenderer.invoke("clear-overlay-game-notices"),
   openOverlayMediaLease: (lease: unknown): Promise<boolean> => ipcRenderer.invoke("open-overlay-media-lease", lease),
   sendOverlayMedia: (envelope: unknown): Promise<boolean> => ipcRenderer.invoke("send-overlay-media", envelope),
   sendOverlayMediaViewport: (viewport: unknown): Promise<boolean> => ipcRenderer.invoke("send-overlay-media-viewport", viewport),

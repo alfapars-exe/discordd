@@ -1,7 +1,8 @@
 import { app, BrowserWindow, screen } from "electron";
 import { OverlayWelcomeLifecycle } from "./overlay-welcome";
+import { OverlayGameNoticeLifecycle } from "./overlay-game-notices";
 import path from "node:path";
-import { isTrustedVoiceOverlaySender, VoiceOverlayLifecycle, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { isTrustedVoiceOverlaySender, VoiceOverlayLifecycle, type VoiceOverlaySnapshot, type OverlayGameActivityNotice } from "./voice-overlay-contract";
 import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH, overlayActionAt, overlayNotificationActionAt, overlayNotificationReplyRowAt, type OverlayAction as OverlayVoiceAction } from "./overlay-action-regions";
 import { calculateVoiceOverlayGeometry, constrainOverlayPosition, normalizeOverlayPosition, restoreOverlayPosition, type VoiceOverlayWorkArea } from "./voice-overlay-geometry";
 import type { createOverlayLayoutStore, OverlayLayoutContext, OverlayLayoutPoint } from "./overlay-layout-store";
@@ -22,6 +23,24 @@ const goLiveLifecycle = new OverlayWelcomeLifecycle();
 let goLiveTimer: ReturnType<typeof setTimeout> | null = null;
 let goLiveNoticeSession: string | null = null;
 let welcomeTimer: ReturnType<typeof setTimeout> | null = null;
+const gameNoticeLifecycle = new OverlayGameNoticeLifecycle();
+let gameNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleGameNoticeExpiry(): void {
+  if (gameNoticeTimer) clearTimeout(gameNoticeTimer);
+  gameNoticeTimer = null;
+  const notices = latest ? gameNoticeLifecycle.current(latest) : [];
+  if (!notices.length) return;
+  gameNoticeTimer = setTimeout(() => {
+    gameNoticeTimer = null;
+    if (latest) updateVoiceOverlay({ ...latest, gameActivityNotices: gameNoticeLifecycle.current(latest) }, latestArea ?? undefined, layoutContext);
+  }, Math.max(1, Math.min(...notices.map(notice => notice.expiresAt)) - Date.now()));
+  gameNoticeTimer.unref?.();
+}
+/** A main-only clear narrows current content; it never replaces another overlay capability. */
+export function clearVoiceOverlayGameNotices(additional: OverlayGameActivityNotice[] = []): void {
+  gameNoticeLifecycle.revoke([...(latest?.gameActivityNotices ?? []), ...additional]);
+  if (latest) updateVoiceOverlay({ ...latest, gameActivityNotices: [] }, latestArea ?? undefined, layoutContext);
+}
 function clearWelcome(): void {
   goLiveLifecycle.hide();
   goLiveNoticeSession = null;
@@ -90,6 +109,8 @@ function voiceOverlayPayload() {
   if (!latest) return null;
   const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
   return { ...latest, mediaHeight: geometry?.mediaHeight ?? 0, goLiveHeight: geometry?.goLiveHeight ?? 0,
+    gameActivityNotices: gameNoticeLifecycle.current(latest).slice(0, geometry?.gameActivityNoticeRows ?? 0),
+    gameActivityNoticeHeight: geometry?.gameActivityNoticeHeight ?? 0,
     goLive: geometry?.goLiveHeight && latest.voiceOverlayGoLive && latest.goLiveEligible && latest.goLiveSession === goLiveNoticeSession ? goLiveLifecycle.current(Date.now()) : null,
     welcomeHeight: geometry?.welcomeHeight ?? 0,
     welcome: geometry?.welcomeHeight && latest.voiceOverlayWelcome ? welcomeLifecycle.current(Date.now()) : null,
@@ -687,6 +708,8 @@ function ensureOverlay(): BrowserWindow {
       lifecycle.close();
       clearWelcome();
       latest = null;
+      if (gameNoticeTimer) clearTimeout(gameNoticeTimer);
+      gameNoticeTimer = null;
       unlocked = false;
       layoutPoint = null;
       if (actionWindow && !actionWindow.isDestroyed()) actionWindow.close();
@@ -710,6 +733,7 @@ function ensureOverlay(): BrowserWindow {
 }
 
 export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceOverlayWorkArea, context?: string): void {
+  snapshot = { ...snapshot, gameActivityNotices: gameNoticeLifecycle.current(snapshot) };
   // Compatibility is a real passive native policy, not a renderer-only preference.
   const compatibility = snapshot.voiceOverlayCompatibility === true;
   const compatibilityChanged = compatibility !== (latest?.voiceOverlayCompatibility === true);
@@ -756,6 +780,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
       || snapshot.voiceOverlayChatCompose !== true || snapshot.chatStatus !== "ready"
       || !snapshot.chatComposeSession || snapshot.chatComposeSession !== chatComposeSessionScope)) closeChatComposerWindow();
   latest = snapshot;
+  scheduleGameNoticeExpiry();
   notifyMediaLifecycle(contextChanged);
   latestArea = area ?? null;
   if (chatComposerWindow && !chatComposerWindow.isDestroyed()) {
@@ -836,6 +861,8 @@ export function closeVoiceOverlay(): void {
   lifecycle.close();
   clearWelcome();
   latest = null;
+  if (gameNoticeTimer) clearTimeout(gameNoticeTimer);
+  gameNoticeTimer = null;
   latestArea = null;
   if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.close();
   overlayWindow = null;

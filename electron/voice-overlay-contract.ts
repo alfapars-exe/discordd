@@ -4,6 +4,7 @@ export type VoiceOverlayNameDisplay = "always" | "speaking" | "never";
 export type VoiceOverlayNotificationCategory = "mention" | "reply" | "friend_request" | "dm_request" | "system" | "message";
 export type VoiceOverlayNotificationStatus = "loading" | "ready" | "unavailable";
 export type VoiceOverlayChatStatus = "ready" | "unavailable";
+export type OverlayGameActivityNotice = { noticeId: string; label: string; gameName: string; kind: "game_activity" | "now_playing"; expiresAt: number };
 
 export type VoiceOverlayParticipant = {
   id: string;
@@ -24,6 +25,9 @@ export type VoiceOverlaySnapshot = {
   voiceOverlayVideo?: boolean;
   voiceOverlayStreams?: boolean;
   voiceOverlayActivity?: boolean;
+  voiceOverlayGameActivityNotifications?: boolean;
+  voiceOverlayNowPlayingNotifications?: boolean;
+  gameActivityNotices?: OverlayGameActivityNotice[];
   voiceOverlayWelcome?: boolean;
   voiceOverlayGoLive?: boolean;
   goLiveEligible?: boolean;
@@ -72,6 +76,30 @@ const POSITIONS = new Set<VoiceOverlayPosition>(["top-left", "bottom-left", "top
 const AVATAR_SIZES = new Set<VoiceOverlayAvatarSize>(["small", "large"]);
 const NAME_DISPLAY_MODES = new Set<VoiceOverlayNameDisplay>(["always", "speaking", "never"]);
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+const NOTICE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** No identifiers or navigation capabilities cross this display-only boundary. */
+export function parseOverlayGameActivityNotices(value: unknown, now = Date.now()): OverlayGameActivityNotice[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 3) return null;
+  const notices: OverlayGameActivityNotice[] = [], seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry) || (Object.getPrototypeOf(entry) !== Object.prototype && Object.getPrototypeOf(entry) !== null)
+      || Reflect.ownKeys(entry).length !== 5 || Reflect.ownKeys(entry).some(key => typeof key !== "string" || !["noticeId", "label", "gameName", "kind", "expiresAt"].includes(key))
+      || typeof entry.noticeId !== "string" || !NOTICE_UUID.test(entry.noticeId) || seen.has(entry.noticeId)
+      || !isBoundedText(entry.label, 80) || !isBoundedText(entry.gameName, 80)
+      || (entry.kind !== "game_activity" && entry.kind !== "now_playing")
+      || typeof entry.expiresAt !== "number" || !Number.isSafeInteger(entry.expiresAt) || entry.expiresAt > now + 20_000) return null;
+    seen.add(entry.noticeId);
+    if (entry.expiresAt > now) notices.push({ noticeId: entry.noticeId, label: entry.label, gameName: entry.gameName, kind: entry.kind, expiresAt: entry.expiresAt });
+  }
+  return notices;
+}
+
+export function visibleOverlayGameActivityNotices(snapshot: Pick<VoiceOverlaySnapshot, "voiceOverlayGameActivityNotifications" | "voiceOverlayNowPlayingNotifications" | "gameActivityNotices">, now = Date.now()): OverlayGameActivityNotice[] {
+  return (parseOverlayGameActivityNotices(snapshot.gameActivityNotices, now) ?? []).filter(notice => notice.kind === "game_activity"
+    ? snapshot.voiceOverlayGameActivityNotifications === true : snapshot.voiceOverlayNowPlayingNotifications === true);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -110,7 +138,10 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
   if (typeof raw.enabled !== "boolean" || typeof raw.speakingOnly !== "boolean") return null;
   if (raw.voiceOverlayMode !== undefined && raw.voiceOverlayMode !== "desktop" && raw.voiceOverlayMode !== "game") return null;
   if (raw.voiceOverlayPinned !== undefined && typeof raw.voiceOverlayPinned !== "boolean") return null;
-  for (const key of ["voiceOverlayQuickActions", "voiceOverlayClickableActions", "voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive", "goLiveEligible", "voiceOverlayNotifications", "voiceOverlayNotificationActions", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "selfMuted", "selfDeafened"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") return null;
+  for (const key of ["voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications", "voiceOverlayQuickActions", "voiceOverlayClickableActions", "voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive", "goLiveEligible", "voiceOverlayNotifications", "voiceOverlayNotificationActions", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "selfMuted", "selfDeafened"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") return null;
+  const parsedGameNotices = parseOverlayGameActivityNotices(raw.gameActivityNotices);
+  if (!parsedGameNotices) return null;
+  const gameActivityNotices = parsedGameNotices.filter(notice => notice.kind === "game_activity" ? raw.voiceOverlayGameActivityNotifications === true : raw.voiceOverlayNowPlayingNotifications === true);
   if (raw.goLiveSession !== undefined && !isBoundedText(raw.goLiveSession, 256)) return null;
   if (raw.goLiveEligible === true && (raw.voiceOverlayGoLive !== true || !isBoundedText(raw.goLiveSession, 256))) return null;
   if (raw.notificationStatus !== undefined && (typeof raw.notificationStatus !== "string" || !NOTIFICATION_STATUSES.has(raw.notificationStatus as VoiceOverlayNotificationStatus))) return null;
@@ -208,6 +239,9 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
     ...(raw.goLiveEligible !== undefined ? { goLiveEligible: raw.goLiveEligible as boolean } : {}),
     ...(raw.voiceOverlayWelcome !== undefined ? { voiceOverlayWelcome: raw.voiceOverlayWelcome as boolean } : {}),
     ...(raw.voiceOverlayActivity !== undefined ? { voiceOverlayActivity: raw.voiceOverlayActivity as boolean } : {}),
+    ...(raw.voiceOverlayGameActivityNotifications !== undefined ? { voiceOverlayGameActivityNotifications: raw.voiceOverlayGameActivityNotifications as boolean } : {}),
+    ...(raw.voiceOverlayNowPlayingNotifications !== undefined ? { voiceOverlayNowPlayingNotifications: raw.voiceOverlayNowPlayingNotifications as boolean } : {}),
+    ...(raw.gameActivityNotices !== undefined ? { gameActivityNotices } : {}),
     ...(raw.activities !== undefined ? { activities } : {}),
     ...(raw.voiceOverlayNotifications !== undefined ? { voiceOverlayNotifications: raw.voiceOverlayNotifications as boolean } : {}),
     ...(raw.voiceOverlayNotificationActions !== undefined ? { voiceOverlayNotificationActions: raw.voiceOverlayNotificationActions as boolean } : {}),
@@ -270,6 +304,7 @@ export function hasVoiceOverlayContent(snapshot: VoiceOverlaySnapshot): boolean 
   return snapshot.enabled && ((snapshot.voiceOverlayMaxParticipants > 0 && snapshot.participants.length > 0)
     || (snapshot.voiceOverlayQuickActions === true && !!snapshot.voiceActionSession)
     || snapshot.voiceOverlayActivity === true
+    || visibleOverlayGameActivityNotices(snapshot).length > 0
     || snapshot.voiceOverlayNotifications === true
     || snapshot.voiceOverlayChat === true || snapshot.voiceOverlayVideo === true || snapshot.voiceOverlayStreams === true);
 }

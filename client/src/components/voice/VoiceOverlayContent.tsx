@@ -1,4 +1,6 @@
 import OverlayMediaPanel from "./media/OverlayMediaPanel";
+import GameActivityNotices from "./GameActivityNotices";
+import { visibleOverlayGameActivityNotices, type OverlayGameActivityNotice } from "../../../../electron/voice-overlay-contract";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +12,10 @@ export type VoiceOverlaySnapshot = {
   voiceOverlayClickableActions?: boolean;
   voiceOverlayNotificationActions?: boolean;
   voiceOverlayActivity?: boolean;
+  voiceOverlayGameActivityNotifications?: boolean;
+  voiceOverlayNowPlayingNotifications?: boolean;
+  gameActivityNotices?: OverlayGameActivityNotice[];
+  gameActivityNoticeHeight?: number;
   voiceOverlayVideo?: boolean;
   voiceOverlayStreams?: boolean;
   mediaHeight?: number;
@@ -254,6 +260,9 @@ export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly 
   const showActivity = snapshot.voiceOverlayActivity === true;
   const showNotifications = snapshot.voiceOverlayNotifications === true;
   const showChat = snapshot.voiceOverlayChat === true;
+  const gameActivityNoticeHeight = Number.isInteger(snapshot.gameActivityNoticeHeight) && (snapshot.gameActivityNoticeHeight ?? 0) >= 0 && (snapshot.gameActivityNoticeHeight ?? 0) <= 144
+    ? snapshot.gameActivityNoticeHeight ?? 0 : 0;
+  const showGameNotices = gameActivityNoticeHeight >= 48 && visibleOverlayGameActivityNotices(snapshot).length > 0;
   const canOpenInbox = showNotifications && snapshot.voiceOverlayNotificationActions === true
     && snapshot.notificationStatus === "ready" && (snapshot.notifications?.length ?? 0) > 0
     && typeof snapshot.notificationActionSession === "string" && snapshot.notificationActionsUnavailable !== true;
@@ -275,7 +284,7 @@ export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly 
     if (!openSession && !composeSession) return null;
     return <ChatActionSurface key={`${openSession ?? ""}:${composeSession ?? ""}`} openSession={openSession} composeSession={composeSession} />;
   }
-  if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat)) return null;
+  if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat && !showGameNotices)) return null;
   const participants = snapshot.participants.filter((participant) => !snapshot.speakingOnly || participant.speaking)
     .slice(0, Math.max(0, Math.min(25, Math.floor(snapshot.voiceOverlayMaxParticipants))));
   const transformOrigin = `${snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
@@ -308,8 +317,11 @@ export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly 
   const chatHasRows = snapshot.chatStatus === "ready" && chatMessages.length > 0;
   const chatHeight = showChat ? CHAT_HEADER_HEIGHT + (chatHasRows ? chatMessages.length : 1) * CHAT_ROW_MAX_HEIGHT : 0;
   return <div className="voice-overlay-root" data-position={snapshot.position} data-unlocked={snapshot.unlocked === true} data-actions={showActions}
-    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight }}>
+    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight + (showGameNotices ? gameActivityNoticeHeight : 0) }}>
     {toolbar}
+    {showGameNotices && <GameActivityNotices gameActivityNotices={snapshot.gameActivityNotices} voiceOverlayGameActivityNotifications={snapshot.voiceOverlayGameActivityNotifications}
+      voiceOverlayNowPlayingNotifications={snapshot.voiceOverlayNowPlayingNotifications} height={gameActivityNoticeHeight}
+      bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight} />}
     {snapshot.enabled&&mediaHeight>0&&<OverlayMediaPanel video={snapshot.voiceOverlayVideo===true} streams={snapshot.voiceOverlayStreams===true} height={mediaHeight} bottom={8+actionHeight+activityHeight+notificationHeight+welcomeHeight+goLiveHeight}/>}
     {goLive && <OverlayWelcomeNotice key={`go-live:${goLive.id}`} notice={goLive} bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight} height={64} textKey="overlayGoLiveGuidance" />}
     {welcome && <OverlayWelcomeNotice key={welcome.id} notice={welcome} bottom={8 + actionHeight + activityHeight + notificationHeight} />}

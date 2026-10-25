@@ -280,6 +280,7 @@ interface ElectronAPI {
   setAppSetting: (key: string, value: boolean) => Promise<void>;
   onVoiceOverlayUpdate?: (cb: (snapshot: unknown) => void) => (() => void);
   sendVoiceOverlaySnapshot?: (snapshot: unknown) => Promise<boolean>;
+  clearOverlayGameNotices?: () => Promise<void>;
   openOverlayMediaLease?: (lease: {session:string;revision:number;tiles:{tileId:string;kind:"camera"|"screen";label?:string}[]}) => Promise<boolean>;
   sendOverlayMedia?: (envelope: unknown) => Promise<boolean>;
   sendOverlayMediaViewport?: (viewport: {session:string;revision:number;tileId:string;visible:boolean;width:number;height:number;fps:number}) => Promise<boolean>;

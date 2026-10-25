@@ -1,4 +1,4 @@
-import type { VoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { visibleOverlayGameActivityNotices, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
 
 export interface VoiceOverlayWorkArea {
   x: number;
@@ -23,6 +23,8 @@ export interface VoiceOverlayWindowGeometry extends VoiceOverlayWorkArea {
   welcomeHeight: number;
   goLiveHeight: number;
   mediaHeight: number;
+  gameActivityNoticeRows: number;
+  gameActivityNoticeHeight: number;
 }
 
 const WINDOW_MARGIN = 24;
@@ -116,9 +118,14 @@ export function calculateVoiceOverlayGeometry(
     : (visibleParticipants * rowHeight + (visibleParticipants - 1) * ROW_GAP) * scale;
   const activityRows = activityMinimum > 0 ? Math.max(1, Math.min(Math.max(1, snapshot.activities?.length ?? 0), Math.floor((contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - chatHeight - contentHeight - 20) / 40))) : 0;
   const activityHeight = activityRows > 0 ? 20 + activityRows * 40 : 0;
+  // Transient notices use only space left after voice, video and existing widgets.
+  const baseHeight = contentHeight + ROOT_PADDING * 2 + actionsHeight + notificationHeight + activityHeight + chatHeight + welcomeHeight + goLiveHeight + mediaHeight;
+  const noticeCapacity = maxWidth >= 196 ? Math.max(0, Math.floor((maxHeight - baseHeight) / 48)) : 0;
+  const gameActivityNoticeRows = Math.min(visibleOverlayGameActivityNotices(snapshot).length, noticeCapacity);
+  const gameActivityNoticeHeight = gameActivityNoticeRows * 48;
   const widgetWidth = Math.max(WIDGET_MIN_WIDTH, ROW_MAX_WIDTH) * scale;
   const desiredWidth = Math.ceil(widgetWidth + ROOT_PADDING * 2);
-  const desiredHeight = Math.ceil(contentHeight + ROOT_PADDING * 2 + actionsHeight + notificationHeight + activityHeight + chatHeight + welcomeHeight + goLiveHeight + mediaHeight);
+  const desiredHeight = Math.ceil(baseHeight + gameActivityNoticeHeight);
   const width = clamp(desiredWidth, 1, maxWidth);
   const height = clamp(desiredHeight, 1, maxHeight);
 
@@ -138,7 +145,7 @@ export function calculateVoiceOverlayGeometry(
     y: Math.round(clamp(requestedY, minY, maxY)),
     width,
     height,
-    shouldShow: snapshot.enabled && (visibleParticipants > 0 || actionsHeight > 0 || activityHeight > 0 || notificationHeight > 0 || chatHeight > 0 || mediaHeight > 0),
+    shouldShow: snapshot.enabled && (visibleParticipants > 0 || actionsHeight > 0 || activityHeight > 0 || notificationHeight > 0 || chatHeight > 0 || mediaHeight > 0 || gameActivityNoticeRows > 0),
     visibleParticipants,
     effectiveMaxParticipants,
     activityVisible: activityHeight > 0,
@@ -153,5 +160,7 @@ export function calculateVoiceOverlayGeometry(
     welcomeHeight,
     goLiveHeight,
     mediaHeight,
+    gameActivityNoticeRows,
+    gameActivityNoticeHeight,
   };
 }
