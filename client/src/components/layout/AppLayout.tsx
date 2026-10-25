@@ -52,6 +52,7 @@ const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
 import GroupCallProvider from "../dm/GroupCallProvider";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useGameActivity } from "../../hooks/useGameActivity";
+import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useVoice } from "../../hooks/useVoice";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
 import { useVoiceActivityReporter } from "../../hooks/useVoiceActivityReporter";
@@ -354,6 +355,11 @@ function AppLayout() {
       useVoiceStore.getState().registerWsSend(null);
     };
   }, [sendWS]);
+
+  useEffect(() => {
+    useGameJoinStore.getState().register(connectionStatus === "connected" ? sendWS : null);
+    return () => useGameJoinStore.getState().register(null);
+  }, [sendWS, connectionStatus, overlayRenderOwner, overlayRenderGeneration]);
 
   // Voice channel change -> close stale voice tabs + refetch channel list
   // (hidden channels may become visible via voice-connected override, or vice versa)

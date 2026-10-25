@@ -110,6 +110,13 @@ export default function ActivityPrivacySettings() {
     </fieldset>
     <p className="settings-hint">{t("activityPrivacyLocalNotice")}</p>
     <p className="settings-hint">{t("activityPrivacySelfReportedNotice")}</p>
+    <h3 className="settings-section-subtitle" id="game-joining" data-settings-section="game-joining">{t("gameJoinPrivacyTitle")}</h3>
+    <p className="settings-hint">{t("gameJoinPrivacyHint")}</p>
+    {(["allowFriendsToJoinGame", "allowVoiceParticipantsToJoinGame"] as const).map((key) => <label className="settings-toggle-row" key={key}>
+      <span>{t(key)}</span>
+      <span className="vs-switch"><input type="checkbox" role="switch" aria-label={t(key)} checked={privacy[key] === true} disabled={!enabled}
+        onChange={(event) => write({ [key]: event.currentTarget.checked })} /><span className="vs-switch-slider" aria-hidden="true" /></span>
+    </label>)}
     <h3 className="settings-section-subtitle" id="activity-servers" data-settings-section="activity-servers">{t("activityPrivacyServers")}</h3>
     <p className="settings-hint">{t("activityPrivacyServerHint")}</p>
     <div className="settings-field">

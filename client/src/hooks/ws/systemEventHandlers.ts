@@ -4,6 +4,7 @@
  */
 
 import { useChannelStore } from "../../stores/channelStore";
+import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useMemberStore } from "../../stores/memberStore";
 import { useRoleStore } from "../../stores/roleStore";
@@ -190,6 +191,10 @@ export async function handleSystemEvent(
       return true;
     }
 
+    case "game_join_offer_state": {
+      useGameJoinStore.getState().acknowledge(msg.d);
+      return true;
+    }
     case "game_activity_update": {
       useGameActivityStore.getState().apply(msg.d);
       return true;

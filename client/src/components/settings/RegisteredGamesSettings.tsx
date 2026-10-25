@@ -4,6 +4,8 @@ import type { ElectronRegisteredGame, ElectronRegisteredGamesSnapshot } from "..
 import { useConfirm } from "../../hooks/useConfirm";
 import { formatDateTime } from "../../utils/dateFormat";
 import FeedbackCreateForm from "./FeedbackCreateForm";
+import CS2JoinOfferPanel from "./CS2JoinOfferPanel";
+import { beginGameActivityMutation } from "../../utils/gameActivityMutation";
 
 type Game = ElectronRegisteredGame;
 const invalidName = (name: string) => !name.trim() || name.length > 80 || [...name].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127 || char === "/" || char === "\\");
@@ -105,6 +107,7 @@ function RegisteredGamesSettings() {
     if (!api?.removeRegisteredGame || busyRef.current) return;
     const accepted = await confirm({ message: t("registeredGamesRemoveConfirm"), danger: true });
     if (!accepted || !beginMutation()) return;
+    const endMutation = beginGameActivityMutation(game.id);
     try {
       const removed = await api.removeRegisteredGame(game.id);
       if (!mounted.current) return;
@@ -113,6 +116,7 @@ function RegisteredGamesSettings() {
     } catch {
       if (mounted.current) setError(t("registeredGamesSaveError"));
     } finally {
+      endMutation();
       finishMutation();
     }
   }
@@ -120,6 +124,7 @@ function RegisteredGamesSettings() {
   async function setSharing(game: Game, allowed: boolean) {
     const api = window.electronAPI;
     if (!api?.setRegisteredGameSharing || !beginMutation()) return;
+    const endMutation = beginGameActivityMutation(game.id);
     try {
       const updated = await api.setRegisteredGameSharing(game.id, allowed);
       if (!mounted.current) return;
@@ -128,8 +133,20 @@ function RegisteredGamesSettings() {
     } catch {
       if (mounted.current) setError(t("registeredGamesSaveError"));
     } finally {
+      endMutation();
       finishMutation();
     }
+  }
+
+  async function setJoinAdapter(game: Game, adapter: "none" | "cs2-steam") {
+    const api = window.electronAPI;
+    if (!api?.setRegisteredGameJoinAdapter || !beginMutation()) return;
+    const endMutation = beginGameActivityMutation(game.id);
+    try {
+      if (!await api.setRegisteredGameJoinAdapter(game.id, adapter)) throw new Error("adapter update rejected");
+      if (mounted.current) setGames(current => current.map(item => item.id === game.id ? { ...item, joinAdapter: adapter } : item));
+    } catch { if (mounted.current) setError(t("registeredGamesSaveError")); }
+    finally { endMutation(); finishMutation(); }
   }
 
   async function setGameOverlay(game: Game, allowed: boolean) {
@@ -150,6 +167,7 @@ function RegisteredGamesSettings() {
   async function setBackgroundDetection(enabled: boolean) {
     const api = window.electronAPI;
     if (!api?.setRegisteredGamesBackgroundDetection || !beginMutation()) return;
+    const endMutations = enabled ? [] : games.map(game => beginGameActivityMutation(game.id));
     try {
       const updated = await api.setRegisteredGamesBackgroundDetection(enabled);
       if (!mounted.current) return;
@@ -158,6 +176,7 @@ function RegisteredGamesSettings() {
     } catch {
       if (mounted.current) setError(t("registeredGamesSaveError"));
     } finally {
+      for (const endMutation of endMutations) endMutation();
       finishMutation();
     }
   }
@@ -218,6 +237,12 @@ function RegisteredGamesSettings() {
             />
             {t("registeredGamesShare")}
           </label>
+          {window.electronAPI?.setRegisteredGameJoinAdapter && <label>{t("cs2JoinAdapter")}
+            <select value={game.joinAdapter ?? "none"} disabled={busy} onChange={event => void setJoinAdapter(game, event.currentTarget.value as "none" | "cs2-steam")}>
+              <option value="none">{t("cs2JoinAdapterNone")}</option><option value="cs2-steam">Counter-Strike 2 · Steam</option>
+            </select>
+          </label>}
+          {game.joinAdapter === "cs2-steam" && <CS2JoinOfferPanel gameId={game.id} eligible={game.running === true && game.availability === "available" && game.shareAllowed} />}
           {window.electronAPI?.setRegisteredGameOverlay && (
             <>
               <label>
