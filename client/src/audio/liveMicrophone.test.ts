@@ -7,11 +7,12 @@ import type { MicrophoneSettings } from "./microphoneSettings";
 import { liveMicrophone, releaseLiveMicrophone } from "./liveMicrophone";
 
 const mock = vi.hoisted(() => ({
-  storeListeners:new Set<()=>void>(),sources: [] as EventTarget[], createTrack: vi.fn(), getState: vi.fn(), processors: [] as Array<{
+  sound:vi.fn(), storeListeners:new Set<()=>void>(),sources: [] as EventTarget[], createTrack: vi.fn(), getState: vi.fn(), processors: [] as Array<{
     processedTrack: { enabled: boolean }; update: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn>; activate: ReturnType<typeof vi.fn>;
   }>,
 }));
+vi.mock("../utils/sounds",()=>({playVoiceEventSound:mock.sound}));
 vi.mock("./captureOwnedMicrophone",()=>({captureOwnedMicrophone:async(settings:{micProfile:string},current:()=>boolean)=>{
  const music=settings.micProfile==="muzik";const track=await mock.createTrack({echoCancellation:!music,autoGainControl:!music,noiseSuppression:!music,channelCount:music?2:1});
  if(!current()){track.stop();throw new DOMException("Obsolete capture","AbortError");}
@@ -242,4 +243,8 @@ it("re-registering an exact participant lease retires old pending raw before ope
  const h=harness();const ready=deferred();mock.createTrack.mockImplementationOnce(async()=>({setProcessor:vi.fn(()=>ready.promise),stop:vi.fn(),mute:vi.fn(async()=>{}),unmute:vi.fn(async()=>{})}));
  const pending=h.controller.setEnabled(true);await flush();const raw=mock.sources[0]as EventTarget&{stop:ReturnType<typeof vi.fn>};const next=registerCaptureAdmission(h.sdkParticipant,()=>true);expect(raw.stop).toHaveBeenCalledOnce();next.open();
  const replacement=liveMicrophone(h.sdkParticipant);await replacement.setEnabled(true);h.admission.close();h.admission.retire();expect(h.participant.unpublishTrack).not.toHaveBeenCalled();ready.resolve();await pending;expect(h.participant.publishTrack).toHaveBeenCalledOnce();await releaseLiveMicrophone(h.sdkParticipant,replacement);
+});
+
+it("emits only current successful manual controller commits, not failed unmute",async()=>{
+ const h=harness();await h.controller.setEnabled(true);expect(mock.sound).not.toHaveBeenCalled();h.state.isMuted=true;await h.controller.setEnabled(false);expect(mock.sound).toHaveBeenLastCalledWith("mute");h.state.isMuted=false;h.tracks[0].unmute.mockRejectedValueOnce(new Error("SDKunmute failed"));await expect(h.controller.setEnabled(true)).rejects.toThrow();expect(mock.sound.mock.calls).toEqual([["mute"]]);await releaseLiveMicrophone(h.sdkParticipant);
 });

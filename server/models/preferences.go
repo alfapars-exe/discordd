@@ -155,6 +155,7 @@ var preferenceNamespaces = map[string]preferenceValidator{
 		"soundPack":    preferenceEnum("classic", "soft", "minimal"),
 		"messageSound": preferenceBool, "currentChannelSound": preferenceBool,
 		"incomingCallSound": preferenceBool, "muteAllSounds": preferenceBool,
+		"voiceJoinSound": preferenceBool, "voiceLeaveSound": preferenceBool, "voiceWatchStartSound": preferenceBool, "voiceWatchStopSound": preferenceBool, "voiceMuteSound": preferenceBool, "voiceUnmuteSound": preferenceBool, "voiceDeafenSound": preferenceBool, "voiceUndeafenSound": preferenceBool,
 		"notifyWhenFocused": preferenceBool, "streamNotifications": preferenceBool,
 		"desktopDelaySeconds":       preferenceNumbers(0, 3, 5, 10),
 		"onlineFriendNotifications": preferenceBool, "friendAnniversaryNotifications": preferenceBool,

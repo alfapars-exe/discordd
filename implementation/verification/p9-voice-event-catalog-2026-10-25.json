@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 supported voice-event catalog, account preferences, actual manual-state commit cues",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "client/src/utils/sounds.ts",
+    "client/src/utils/sounds.test.ts",
+    "client/src/utils/voiceEventSounds.ts",
+    "client/src/utils/voiceEventSounds.test.ts",
+    "client/src/audio/liveMicrophone.ts",
+    "client/src/audio/liveMicrophone.test.ts",
+    "client/src/webrtc/p2pMicrophone.ts",
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/stores/p2pCallStore.audio.test.ts",
+    "client/src/components/dm/GroupDMCallAudio.tsx",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx",
+    "client/src/hooks/useMicSync.ts",
+    "client/src/stores/slices/voiceScreenShareSlice.ts",
+    "client/src/utils/notificationPreferences.ts",
+    "client/src/stores/preferencesStore.ts",
+    "client/src/stores/preferencesStore.test.ts",
+    "client/src/components/settings/NotificationSettings.tsx",
+    "client/src/components/settings/NotificationSettings.test.tsx",
+    "client/src/hooks/ws/voiceEventHandlers.ts",
+    "client/src/hooks/ws/voiceEventHandlers.test.ts",
+    "server/models/preferences.go",
+    "server/models/preferences_test.go",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json"
+  ],
+  "source_hashes": {
+    "client/src/utils/sounds.ts": "35544e74e459ab0672928d6f533bd5a03076cdede849b047ed27b56bca00f195",
+    "client/src/utils/sounds.test.ts": "6484737dbb1907783c7f7e2e8c1b0acb601482fa4622274a2c6ba00fb4546782",
+    "client/src/utils/voiceEventSounds.ts": "d1c98c3815f2c4bb274e19174ebebf1dcc93db58bbc4eb7aa1756b85960df5e7",
+    "client/src/utils/voiceEventSounds.test.ts": "e38e122adc0f796054478100b131ff7e8e9a6f783f560e48d017c108fcac2eb1",
+    "client/src/audio/liveMicrophone.ts": "e945d0e4917c50ac4ea2e4cadf60f5f57f53368de7af0717448feaa34394e05b",
+    "client/src/audio/liveMicrophone.test.ts": "9c38cb855a3910be160193d252cc37ec7e2de78e2d32452536929f14db1b0180",
+    "client/src/webrtc/p2pMicrophone.ts": "8b45fb68146ef6d48ce80482599e0428af19d778ce3c498d2f87580045c7f873",
+    "client/src/stores/p2pCallStore.ts": "5039f6f2d1b700ad6621fb5d32f282e8a6e903a00459a57b8bf528fb38122c77",
+    "client/src/stores/p2pCallStore.audio.test.ts": "d5a52bbf4a7e1d90329f2aaa4c4ffc80dfd7bea38f501f853cb7108f269a7ddb",
+    "client/src/components/dm/GroupDMCallAudio.tsx": "bdd4b4ae34b81db01737994b7aa569446545e6fdd97c5f5e819a33e11d2de729",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx": "ab81772dcc4e96c1db24557088c2ee302312c70f6d5cb15a853e476aec9b088c",
+    "client/src/hooks/useMicSync.ts": "5ccb267f46d6f661d1b8425cbc2e9deea32e14d610716e0e454e9a1eb7a64349",
+    "client/src/stores/slices/voiceScreenShareSlice.ts": "6959188da01b94a7406d9b349a4afc12d1af144a1c7e78b73a9056e174b49c1e",
+    "client/src/utils/notificationPreferences.ts": "db1e7ece5dd15ff04fe23f770db72ef57ae9c456a28dced9aaaa4edc71ee4866",
+    "client/src/stores/preferencesStore.ts": "433fa7b0febe64268a69bb5fb8e03a3915cc5a1e1c4a7f64151625bb48802998",
+    "client/src/stores/preferencesStore.test.ts": "47ed85b22cf8b537a3d71bfdea5d56a0d323372268d48e99cc7d338003ac3f43",
+    "client/src/components/settings/NotificationSettings.tsx": "48a756c2ae88452d5e549f9072e8986e04f5c77318b4ee3e15d785ad0ffb9e25",
+    "client/src/components/settings/NotificationSettings.test.tsx": "4ace56ff889ff6dd0cf8cf0b2379e305174a0e772aac05432ffcb2fa889ede5f",
+    "client/src/hooks/ws/voiceEventHandlers.ts": "96f8b1136a176bc6251088deafdea056e0006c1012fbd5b4d23e138a943f44de",
+    "client/src/hooks/ws/voiceEventHandlers.test.ts": "7d36978eff753843ac9394655d6b417d9c9158e370f2424f79142418b4287d71",
+    "server/models/preferences.go": "3473ff59aa785730e7336215640223f63d7868d4bf7f2664369513a8a6754f2f",
+    "server/models/preferences_test.go": "3c585ae76b67bf4c5a97f69f848596f5d0a114c07d1d143e2d409aec7a86de89",
+    "client/src/i18n/locales/en/settings.json": "5f8b42b22c8cdae9392c0305fecf0a1897165797a62c5dd812cf1394a2be11bc",
+    "client/src/i18n/locales/tr/settings.json": "5ff176c05b851d9cc7de6d0675baae127360cbcfa92c738e7596215e273613a1"
+  },
+  "events": [
+    "join",
+    "leave",
+    "watchStart",
+    "watchStop",
+    "mute",
+    "unmute",
+    "deafen",
+    "undeafen"
+  ],
+  "notification_boolean_keys": [
+    "voiceJoinSound",
+    "voiceLeaveSound",
+    "voiceWatchStartSound",
+    "voiceWatchStopSound",
+    "voiceMuteSound",
+    "voiceUnmuteSound",
+    "voiceDeafenSound",
+    "voiceUndeafenSound"
+  ],
+  "semantics": [
+    "Existing join/leave and watch effects use current per-event preference plus global silence, output/master/deaf fences; all defaults true. Dedicated watch path used for local watch state and accepted local-streamer viewer events.",
+    "ManualVoiceSoundTracker per exact call/controller emits only successful manual commits, initial baseline silent; failed/obsolete commits, capture loss, pure PTT and device/server-mute changes do not create cues. Uncommitted disabled unmute is rejected so later PTT cannot replay it.",
+    "Deafen ON deliberately silent under existing all-effects-zero invariant. Manual changes while deaf cannot emit; committed undeafen emits only undeafen, not automatic unmute.",
+    "Guild live controller, P2P raw-controller and group acknowledged setEnabled are integrated; private intent remains separate from unrelated guild moderation.",
+    "Explicit settings previews play the same event tones, ignore DND, honor event/global preferences and selected output/master/deaf. No preference/native compatibility store contract changes.",
+    "Voice per-event revocation fences delayed second watch note across disable/restore."
+  ],
+  "checks": {
+    "scoped": "34files469tests PASS8.68s (all audio plus catalog/controller/group/P2P/preferences/UI/voice handler/entrance suites); final typed viewer-count fixture followup2files34PASS1.86s",
+    "typescript": "npx tsc -b exit0 final source",
+    "lint": "20 owned client TS/TSX paths ESLint exit0; last handler fixture separately exit0",
+    "models": "go test ./models -count=1 PASS0.688s",
+    "build": "npx vite build PASS1708modules1.36s current worktree includes other tasks; no immutable-release claim",
+    "diff_check": "owned paths exit0"
+  },
+  "shared_locale_scope": {
+    "owned_nested_notification_keys": [
+      "notifications.voiceEffectsDesc",
+      "notifications.voiceEffectPreview",
+      "notifications.voiceEffects (join/leave/watchStart/watchStop/mute/unmute/deafen/undeafen)"
+    ],
+    "qualification": "Full locale hashes include foreign logging keys; stage only own nested notifications hunk. Compatibility keys belong to other agent. No locale wholefile staging authorized."
+  },
+  "remaining": [
+    "Real Windows/web audible event/output/preview acceptance and full-client immutable regression remain open.",
+    "Native mobile voice bridge has no success acknowledgement; no physical/native hardware acknowledgement is claimed.",
+    "No production/browser/staging/commit operations; no coverage acceptance upgrade."
+  ]
+}

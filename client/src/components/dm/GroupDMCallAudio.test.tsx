@@ -1,6 +1,7 @@
 import {act,fireEvent,render,screen,waitFor}from "@testing-library/react";
 import {afterEach,beforeEach,describe,expect,it,vi}from "vitest";
-const h=vi.hoisted(()=>({controller:{subscribe:vi.fn(()=>()=>{}),getStatus:vi.fn(()=>({phase:"idle"})),setEnabled:vi.fn(async()=>{}),refresh:vi.fn(async()=>{})},release:vi.fn(),playback:vi.fn(()=>vi.fn())}));
+const h=vi.hoisted(()=>({sound:vi.fn(),controller:{subscribe:vi.fn(()=>()=>{}),getStatus:vi.fn(()=>({phase:"idle"})),setEnabled:vi.fn(async(enabled:boolean)=>{void enabled;}),refresh:vi.fn(async()=>{})},release:vi.fn(),playback:vi.fn(()=>vi.fn())}));
+vi.mock("../../utils/sounds",()=>({playVoiceEventSound:h.sound}));
 vi.mock("../../audio/liveMicrophone",()=>({liveMicrophone:()=>h.controller,releaseLiveMicrophone:h.release}));
 vi.mock("../../audio/privateRoomPlayback",()=>({privateRoomPlayback:h.playback}));
 vi.mock("react-i18next",async(importOriginal)=>({...await importOriginal<typeof import("react-i18next")>(),useTranslation:()=>({t:(key:string)=>key})}));
@@ -79,4 +80,12 @@ describe("private group microphone controls",()=>{
   fireEvent.click(screen.getByRole("button",{name:"p2pAudioRetry"}));await act(async()=>{});expect(acquire).toHaveBeenCalledTimes(2);expect(screen.queryByText("backgroundPTTUnavailable")).toBeNull();act(()=>{for(const listener of listeners)listener({leaseId:"recovered",pressed:true});});expect(h.controller.setEnabled).toHaveBeenLastCalledWith(true);view.unmount();
  });
 
+});
+
+it("group manual cues wait for successful current controller commits and ignore late/failed changes",async()=>{
+ const change=vi.fn();h.controller.getStatus.mockReturnValue({phase:"ready"});const view=render(<GroupDMCallAudio room={room} microphoneEnabled onMicrophoneChange={change} conflict={false}/>);await waitFor(()=>expect(h.controller.setEnabled).toHaveBeenCalled());expect(h.sound).not.toHaveBeenCalled();h.controller.getStatus.mockReturnValue({phase:"idle"});view.rerender(<GroupDMCallAudio room={room} microphoneEnabled={false} onMicrophoneChange={change} conflict={false}/>);await waitFor(()=>expect(h.sound).toHaveBeenLastCalledWith("mute"));h.controller.setEnabled.mockImplementation(async(enabled:boolean)=>{if(enabled)throw new Error("capture")});view.rerender(<GroupDMCallAudio room={room} microphoneEnabled onMicrophoneChange={change} conflict={false}/>);await waitFor(()=>expect(screen.getByText("microphoneCaptureStopped")).toBeInTheDocument());expect(h.sound.mock.calls).toEqual([["mute"]]);view.unmount();
+});
+
+it("failed group controller status is not a successful mute acknowledgement",async()=>{
+ const change=vi.fn();h.controller.setEnabled.mockResolvedValue(undefined);h.controller.getStatus.mockReturnValue({phase:"failed"});const view=render(<GroupDMCallAudio room={room} microphoneEnabled onMicrophoneChange={change} conflict={false}/>);await waitFor(()=>expect(h.controller.setEnabled).toHaveBeenCalled());view.rerender(<GroupDMCallAudio room={room} microphoneEnabled={false} onMicrophoneChange={change} conflict={false}/>);await waitFor(()=>expect(h.controller.setEnabled).toHaveBeenLastCalledWith(false));expect(h.sound).not.toHaveBeenCalled();view.unmount();
 });

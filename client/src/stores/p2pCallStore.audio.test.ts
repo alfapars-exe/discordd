@@ -9,9 +9,10 @@ import { useP2PCallStore } from "./p2pCallStore";
 import { P2PMicrophoneSession } from "../webrtc/p2pMicrophone";
 
 const mocks = vi.hoisted(() => ({
-  settings: {} as Record<string, unknown>, listeners: new Set<() => void>(),
+  sound:vi.fn(), settings: {} as Record<string, unknown>, listeners: new Set<() => void>(),
   capture: vi.fn(), createPipeline: vi.fn(), register: vi.fn(), createPeer: vi.fn(), ws: vi.fn(),
 }));
+vi.mock("../utils/sounds",()=>({playVoiceEventSound:mocks.sound}));
 vi.mock("./voiceStore", () => ({ useVoiceStore: {
   getState: () => mocks.settings,
   subscribe: (listener: () => void) => { mocks.listeners.add(listener); return () => mocks.listeners.delete(listener); },
@@ -440,4 +441,8 @@ it("commits separate SDP-bound microphone/screen streams into the store and clea
 });
 it("rejects invalid SDP source claims before requesting local capture",async()=>{
  await useP2PCallStore.getState().handleSignal({call_id:"call",type:"offer",sdp:"v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=mid:0\r\n",media_protocol:1,description_id:"00000000-0000-4000-8000-000000000001",description_revision:1,sources:[{mid:"0",source:"camera"}]});expect(mocks.capture).not.toHaveBeenCalled();expect(mocks.createPeer).not.toHaveBeenCalled();
+});
+
+it("manual P2P microphone commit cues are separate from deaf/PTT and stop after retirement",async()=>{
+ const raw=track("manual-raw"),output=track("manual-out");mocks.capture.mockResolvedValue(new Stream([raw]));mocks.createPipeline.mockResolvedValue(pipeline(output));let muted=false,current=true;const session=new P2PMicrophoneSession({isCurrent:()=>current,isMuted:()=>muted||!!mocks.settings.isDeafened,manualMuted:()=>muted,replaceTrack:vi.fn(),onError:vi.fn()});await session.start(false);session.connect();expect(mocks.sound).not.toHaveBeenCalled();muted=true;session.syncMute();expect(output.enabled).toBe(false);expect(mocks.sound).toHaveBeenLastCalledWith("mute");changeSettings({isDeafened:true});muted=false;session.syncMute();changeSettings({isDeafened:false});expect(mocks.sound.mock.calls).toEqual([["mute"],["undeafen"]]);current=false;muted=true;session.syncMute();expect(mocks.sound).toHaveBeenCalledTimes(2);session.dispose();
 });

@@ -165,6 +165,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
       isCurrent: () => microphone === session && current(),
       subscribeScope: retire=>useP2PCallStore.subscribe(state=>{if(state.activeCall!==call)retire();}),
       isMuted: () => get().isMuted || useVoiceStore.getState().isDeafened,
+      manualMuted: () => get().isMuted,
       replaceTrack: async (previous, next, candidateCurrent=()=>true) => {
         const { peerConnection, localStream } = get();
         if (microphone !== session || !current() || !candidateCurrent() || !peerConnection || !localStream) return false;

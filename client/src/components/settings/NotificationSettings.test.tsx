@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: { count?: number }) => key === "notifications.delaySeconds" ? `${options?.count}s` : key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 vi.mock("../../utils/notifications", () => ({ ensureNotificationPermission: vi.fn(async () => "granted") }));
-vi.mock("../../utils/sounds", () => ({ previewIncomingCallSound: vi.fn() }));
+vi.mock("../../utils/sounds", async original=>({...await original<typeof import("../../utils/sounds")>(), previewIncomingCallSound: vi.fn(), playVoiceEventSound: vi.fn()}));
 
 import NotificationSettings from "./NotificationSettings";
 import { usePreferencesStore } from "../../stores/preferencesStore";
@@ -42,4 +42,12 @@ describe("NotificationSettings advanced controls", () => {
     expect(screen.getByText("acc.ttsPreview")).toBeInTheDocument();
     expect(screen.getByText("notifications.backgroundLimits")).toBeInTheDocument();
   });
+});
+
+it("syncs each voice event toggle and previews exactly that event with global silence honored",async()=>{
+ usePreferencesStore.getState().reset();usePreferencesStore.getState().bindAccount("alice");usePreferencesStore.setState({data:{notifications:{}},accountId:"alice"});const {playVoiceEventSound}=await import("../../utils/sounds");render(<NotificationSettings/>);const labels=["join","leave","watchStart","watchStop","mute","unmute","deafen","undeafen"] as const;const keys=["voiceJoinSound","voiceLeaveSound","voiceWatchStartSound","voiceWatchStopSound","voiceMuteSound","voiceUnmuteSound","voiceDeafenSound","voiceUndeafenSound"];
+ for(let i=0;i<labels.length;i++){const checkbox=screen.getByRole("checkbox",{name:`notifications.voiceEffects.${labels[i]}`});expect(checkbox).toBeChecked();fireEvent.click(checkbox);expect(usePreferencesStore.getState().data.notifications).toMatchObject({[keys[i]]:false});fireEvent.click(checkbox)}
+ // mock translation has one label for all preview buttons, preserving source order.
+ const previews=screen.getAllByRole("button",{name:"notifications.voiceEffectPreview"});for(let i=0;i<labels.length;i++){fireEvent.click(previews[i]);expect(playVoiceEventSound).toHaveBeenLastCalledWith(labels[i])}
+ fireEvent.click(screen.getByRole("checkbox",{name:"notifications.muteAll"}));for(const button of previews)expect(button).toBeDisabled();
 });

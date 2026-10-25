@@ -1,3 +1,4 @@
+import {ManualVoiceSoundTracker} from "../../utils/voiceEventSounds";
 import {bindNativePTT,nativePTTAvailable}from "../../audio/nativePTT";
 import { useLayoutEffect, useState, useRef } from "react";
 import type { Room } from "livekit-client";
@@ -22,6 +23,8 @@ export default function GroupDMCallAudio({room,microphoneEnabled,onMicrophoneCha
  const sessionCheck=useRef(isCurrentSession);useLayoutEffect(()=>{sessionCheck.current=isCurrentSession;});
  const inputMode=useVoiceStore(state=>state.inputMode);
  const deafened=useVoiceStore(state=>state.isDeafened);
+ const soundCurrent=useRef<()=>boolean>(()=>false);
+ const soundTracker=useRef<ManualVoiceSoundTracker|null>(null);
  const [nativeUnavailable,setNativeUnavailable]=useState(false);
  const [failure,setFailure]=useState(false),[outputStatus,setOutputStatus]=useState("ready"),[retry,setRetry]=useState(0);
  useLayoutEffect(()=>{
@@ -31,12 +34,22 @@ export default function GroupDMCallAudio({room,microphoneEnabled,onMicrophoneCha
   const auth=JSON.stringify(getAuthSessionSnapshot());let active=true,pressed=false,conflictLatched=privateCaptureConflict();
   let nativeStop=()=>{},nativeConfig="",nativeWorks=false;
   const current=()=>active&&sessionCheck.current?.()!==false&&JSON.stringify(getAuthSessionSnapshot())===auth;
+  soundCurrent.current=current;
+  if(soundTracker.current===null)soundTracker.current=new ManualVoiceSoundTracker({manualMuted:!microphoneEnabled,deafened:useVoiceStore.getState().isDeafened},()=>soundCurrent.current());
   const apply=()=>{
    if(!current())return;
    const state=useVoiceStore.getState();
    if(privateCaptureConflict())conflictLatched=true;
    const enabled=microphoneEnabled&&!captureFailure&&!conflictLatched&&!privateCaptureConflict()&&!state.isDeafened&&(state.inputMode!=="push_to_talk"||pressed);
-   void controller.setEnabled(enabled).catch(()=>{if(current())setFailure(true);});
+   const manual={manualMuted:!microphoneEnabled,deafened:state.isDeafened};
+   soundTracker.current?.observe(manual);
+   void controller.setEnabled(enabled).then(()=>{
+    if(current()&&!captureFailure&&!conflictLatched&&!privateCaptureConflict()){
+      const phase=controller.getStatus().phase;
+      if(phase==="ready"||phase==="idle")soundTracker.current?.commit(manual,phase==="ready");
+      else if(phase==="failed")soundTracker.current?.reject();
+    }
+   }).catch(()=>{if(current()){soundTracker.current?.reject();setFailure(true);}});
   };
   const refreshNative=()=>{
    const state=useVoiceStore.getState(),desired=current()&&captureAdmissionCurrent(participant)&&nativePTTAvailable()&&state.inputMode==="push_to_talk"&&!useShortcutCaptureStore.getState().active&&!captureFailure&&!conflictLatched&&!privateCaptureConflict()&&!state.isDeafened&&microphoneEnabled;

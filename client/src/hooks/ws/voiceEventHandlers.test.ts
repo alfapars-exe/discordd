@@ -13,6 +13,8 @@ vi.mock("../../api/voice", () => ({}));
 vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn() }));
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
+  playWatchStartSound: vi.fn(),
+  playWatchStopSound: vi.fn(),
   playLeaveSound: vi.fn(),
   closeAudioContext: vi.fn(),
 }));
@@ -552,4 +554,9 @@ describe("handleVoiceEvent — music_bot_error", () => {
     expect(message).toContain("music:botStoppedAfterFailures");
     expect(message).toContain(`"count":3`);
   });
+});
+
+it("watcher cues require applied current events owned by the local streamer and use the dedicated catalog",async()=>{
+ const sounds=await import("../../utils/sounds");vi.mocked(sounds.playWatchStartSound).mockClear();vi.mocked(sounds.playWatchStopSound).mockClear();vi.mocked(sounds.playJoinSound).mockClear();const applied=vi.spyOn(useVoiceStore.getState(),"handleScreenShareViewerUpdate").mockReturnValue(true);
+ const data={streamer_user_id:"other",viewer_user_id:"viewer",viewer_count:1,action:"join" as const,channel_id:"ch1"};await handleVoiceEvent({op:"screen_share_viewer_update",d:data},ctx);expect(sounds.playWatchStartSound).not.toHaveBeenCalled();applied.mockReturnValueOnce(false);await handleVoiceEvent({op:"screen_share_viewer_update",d:{...data,streamer_user_id:"me"}},ctx);expect(sounds.playWatchStartSound).not.toHaveBeenCalled();await handleVoiceEvent({op:"screen_share_viewer_update",d:{...data,streamer_user_id:"me"}},ctx);expect(sounds.playWatchStartSound).toHaveBeenCalledOnce();await handleVoiceEvent({op:"screen_share_viewer_update",d:{...data,streamer_user_id:"me",action:"leave"}},ctx);expect(sounds.playWatchStopSound).toHaveBeenCalledOnce();expect(sounds.playJoinSound).not.toHaveBeenCalled();applied.mockRestore();
 });
