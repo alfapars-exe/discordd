@@ -4,7 +4,7 @@
  * Register and login happen in auth.setup.ts (see the rate-limit rationale
  * there); this spec picks up authenticated and covers:
  *
- *   create server → open the #general text channel → send a message →
+ *   provision a test server → open the #general text channel → send a message →
  *   upload a PNG → assert the attachment actually decoded.
  *
  * The final assertion is the reason this test exists. /api/uploads/* is
@@ -24,9 +24,9 @@ import {
 } from "./helpers";
 
 test.describe("golden path", () => {
-  test("create server → open channel → send message → upload PNG renders", async ({ page }) => {
-    // Logs in, creates a server through the real wizard, and leaves its
-    // (empty) #general channel open with the composer ready.
+  test("provision server → open channel → send message → upload PNG renders", async ({ page }) => {
+    // Logs in, provisions a self-hosted test server, and opens its empty
+    // #general channel through the current single-server shell.
     await openFreshChannel(page);
 
     const stream = messageList(page);

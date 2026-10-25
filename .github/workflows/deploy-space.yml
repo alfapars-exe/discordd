@@ -47,3 +47,42 @@ jobs:
           ARGS=(--expected-head "$EXPECTED_HEAD")
           if [ "$PUBLISH" = true ]; then ARGS+=(--publish --reviewed-plan-sha256 "$REVIEWED_PLAN"); fi
           python scripts/publish-hf-space.py "${ARGS[@]}"
+      - name: Verify deployed revision and readiness
+        if: inputs.publish
+        env:
+          HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          from urllib.request import urlopen
+          from huggingface_hub import HfApi
+          api = HfApi()
+          repo = 'infinayazilim/discord'
+          expected = api.space_info(repo).sha
+          previous = None
+          for attempt in range(60):
+              info = api.space_info(repo)
+              if info.sha != expected:
+                  raise SystemExit('Space changed during deployment verification')
+              runtime = info.runtime
+              state = (runtime.stage, runtime.raw.get('sha')) if runtime else ('PENDING', None)
+              if state != previous:
+                  print(json.dumps({'stage': state[0], 'runtime_commit': state[1], 'expected_commit': expected}), flush=True)
+                  previous = state
+              if state[1] == expected and state[0] == 'RUNNING':
+                  try:
+                      with urlopen('https://infinayazilim-discord.hf.space/api/ready', timeout=10) as response:
+                          ready = json.load(response)
+                      if ready.get('status') == 'ready':
+                          print(json.dumps({'verified_runtime_commit': expected, 'readiness': 'ready'}))
+                          break
+                  except (OSError, ValueError):
+                      pass
+              if state[1] == expected and state[0] in ('BUILD_ERROR', 'RUNTIME_ERROR', 'CONFIG_ERROR'):
+                  raise SystemExit('New Space revision failed to start')
+              time.sleep(20)
+          else:
+              raise SystemExit('New Space revision did not become ready within 20 minutes')
+          PY

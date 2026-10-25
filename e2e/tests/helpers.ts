@@ -5,8 +5,9 @@
  * invented. No production file was modified to make these tests runnable.
  *
  *   RegisterPage.tsx / LoginPage.tsx  → <label htmlFor> pairs, so getByLabel.
- *   AddServerModal.tsx                → button text + the server-name
- *                                       placeholder "My Awesome Server".
+ *   ServerRail.tsx                    → the navigation landmark is labelled
+ *                                       "Servers"; each server is an
+ *                                       accessible button named for the server.
  *   ChannelItem.tsx                   → <button> whose label span holds the
  *                                       channel name.
  *   MessageInput.tsx                  → textarea placeholder "Message #general",
@@ -110,27 +111,37 @@ export function writeOversizeFixture(filename = "too-big.bin"): string {
  * user, so this only has work to do on the very first authenticated render of
  * a run. It is written to be a no-op afterwards.
  *
- * Order matters: the download overlay stacks above the welcome one and would
- * otherwise swallow the click meant for "Got it!".
+ * Order matters: the download prompt becomes eligible only after welcome is
+ * dismissed. Wait for hydrated profile state before checking either overlay.
  */
 export async function dismissOnboardingOverlays(page: Page): Promise<void> {
-  const downloadDismiss = page.getByRole("button", { name: /Maybe later/i });
-  if (await downloadDismiss.isVisible().catch(() => false)) {
-    await downloadDismiss.click();
-    await page
-      .locator(".download-prompt-overlay")
-      .waitFor({ state: "detached", timeout: 5_000 })
-      .catch(() => {});
+  // User Profile is hydrated from /users/me in the same auth-store update that
+  // supplies the flags controlling these first-run overlays.
+  await expect(page.getByRole("button", { name: "User Profile", exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const welcomeOverlay = page.locator(".welcome-overlay");
+  if (await welcomeOverlay.isVisible().catch(() => false)) {
+    // Use the component's stable class because its translated label can vary.
+    await page.locator(".welcome-btn").click();
+    await expect(welcomeOverlay).toBeHidden({ timeout: 5_000 });
   }
 
-  const welcomeBtn = page.getByRole("button", { name: /Got it!/i });
-  if (await welcomeBtn.isVisible().catch(() => false)) {
-    await welcomeBtn.click();
-    await page
-      .locator(".welcome-overlay")
-      .waitFor({ state: "detached", timeout: 5_000 })
-      .catch(() => {});
+  // DownloadPromptModal is gated on has_seen_welcome, so it mounts only after
+  // the welcome dismissal updates the auth store.
+  const downloadOverlay = page.locator(".download-prompt-overlay");
+  if (await downloadOverlay.isVisible().catch(() => false)) {
+    await page.locator(".download-prompt-btn-dismiss").click();
+    await expect(downloadOverlay).toBeHidden({ timeout: 5_000 });
   }
+}
+
+/** Assert the signed-in shell currently exposed by the single-server UI. */
+export async function expectSignedInShell(page: Page): Promise<void> {
+  const serverRail = page.getByRole("navigation", { name: "Servers", exact: true });
+  await expect(serverRail).toBeVisible({ timeout: 20_000 });
+  await expect(serverRail.getByRole("button", { name: "Friends", exact: true })).toBeVisible();
 }
 
 export type TestAccount = { username: string; password: string };
@@ -166,9 +177,7 @@ export async function loginAsTestUser(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^Log In$/ }).click();
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
-  await expect(page.getByRole("button", { name: /Add Server/i })).toBeVisible({
-    timeout: 20_000,
-  });
+  await expectSignedInShell(page);
   await dismissOnboardingOverlays(page);
 }
 
@@ -196,7 +205,7 @@ export function composer(page: Page) {
  */
 export async function openFreshChannel(page: Page): Promise<void> {
   await loginAsTestUser(page);
-  await createServer(page, `E2E Server ${Date.now()}`);
+  await provisionServerForE2E(page, `E2E Server ${Date.now()}`);
 
   const general = page.locator("button.ch-tree-item", { hasText: "general" }).first();
   await expect(general).toBeVisible({ timeout: 15_000 });
@@ -209,29 +218,60 @@ export async function openFreshChannel(page: Page): Promise<void> {
 }
 
 /**
- * Drives AddServerModal's create wizard.
- *
- * Two steps for the default "HiChat! Hosted" host type: name, then host type.
- * The footer's primary button reads "Next" on every step except the last,
- * where it becomes "Create" (t("createButton")).
+ * Provisions an isolated server through the real API, then opens it through
+ * the current ServerRail UI. The single-server deployment deliberately hides
+ * the create-server button; API provisioning keeps message/upload E2E tests
+ * isolated without changing that product setting. A self-hosted fixture avoids
+ * the one-hosted-server-per-user limit and uses inert, test-only credentials.
  */
-export async function createServer(page: Page, name: string): Promise<void> {
-  await page.getByRole("button", { name: /Add Server/i }).click();
+export async function provisionServerForE2E(page: Page, name: string): Promise<void> {
+  // The access token intentionally lives only in the app module's memory, so
+  // Playwright's separate APIRequestContext cannot authenticate directly.
+  // Refresh and create within the page origin; keep the token in-page and out
+  // of test logs, then reload so the app adopts the rotated refresh cookie.
+  const result = await page.evaluate(async (serverName) => {
+    const refresh = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-HiChat-Client": "web" },
+      credentials: "include",
+      body: JSON.stringify({}),
+    });
+    if (!refresh.ok) return { status: refresh.status, server: null };
+    const refreshed = await refresh.json();
+    const token = refreshed?.data?.access_token;
+    if (!token) return { status: refresh.status, server: null };
 
-  // Choice view → the "Create Server" card.
-  await page.locator("button.add-server-choice-btn", { hasText: "Create Server" }).click();
+    const response = await fetch("/api/servers", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-HiChat-Client": "web",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        name: serverName,
+        host_type: "self_hosted",
+        livekit_url: "https://example.invalid",
+        livekit_key: "e2e-test-only-key",
+        livekit_secret: "e2e-test-only-secret",
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    return { status: response.status, server: body?.data ?? body };
+  }, name);
+  expect(result.status).toBe(201);
+  const server = result.server as { id: string; name: string };
+  expect(server.id).toBeTruthy();
+  expect(server.name).toBe(name);
 
-  // Step 1 — name.
-  await page.getByPlaceholder("My Awesome Server").fill(name);
-  await page.getByRole("button", { name: /^Next$/ }).click();
-
-  // Step 2 — host type; "HiChat! Hosted" is preselected.
-  await page.getByRole("button", { name: /^Create$/ }).click();
-
-  // Toast confirms the create round-trip landed before we look for channels.
-  // role is "status", not "alert": Toast.tsx reserves the assertive "alert"
-  // role for error/warning toasts and announces success politely via "status".
-  await expect(page.getByRole("status").filter({ hasText: /Server created successfully/i })).toBeVisible({
+  // Refresh hydrates the Zustand server list from the isolated E2E database.
+  await page.reload();
+  const serverButton = page.getByRole("button", { name, exact: true });
+  await expect(serverButton).toBeVisible({ timeout: 15_000 });
+  await dismissOnboardingOverlays(page);
+  await serverButton.click();
+  await expect(page.getByRole("main").getByRole("region", { name, exact: true })).toBeVisible({
     timeout: 15_000,
   });
 }

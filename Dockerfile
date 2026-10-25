@@ -42,12 +42,10 @@ RUN npm run build
 # etc.). Those symbols don't exist on Alpine/musl, so the link step fails
 # with "undefined reference to readdir64" if we stay on Alpine.
 # server/go.mod declares `go 1.26` (dependabot 0067570); pinning the exact
-# builder tag keeps the build hermetic instead of relying on GOTOOLCHAIN=auto
-# to fetch a newer toolchain over the network mid-build. 1.26.5 also still
-# satisfies the >=1.25.12 stdlib fixes CI's govulncheck cares about:
-# GO-2026-5856 (crypto/tls), GO-2026-5037 (crypto/x509), GO-2026-5039
-# (net/textproto) — matches the go-version pin in server-ci.yml.
-FROM golang:1.27.2-bookworm AS backend
+# builder tag avoids a moving GOTOOLCHAIN=auto download during the build.
+# 1.27.3 includes the crypto/x509 fix for GO-2026-6809/CVE-2026-111943;
+# CI also checks the supported Go 1.26 line at its patched 1.26.10 release.
+FROM golang:1.27.3-bookworm AS backend
 WORKDIR /app
 
 # Module cache layer: download what's already in go.sum. We don't run

@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.10" # Patched crypto/x509: GO-2026-6809 / CVE-2026-111943.
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -87,7 +87,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.10" # Patched crypto/x509: GO-2026-6809 / CVE-2026-111943.
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -138,7 +138,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.10" # Patched crypto/x509: GO-2026-6809 / CVE-2026-111943.
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -169,6 +169,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -216,10 +218,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.8" # go.mod requires go 1.26 (dependabot 0067570); still satisfies >=1.25.12: GO-2026-5856 crypto/tls (plus 5037/5039)
+          go-version: "1.26.10" # Patched crypto/x509: GO-2026-6809 / CVE-2026-111943.
           cache: true
           cache-dependency-path: server/go.sum
 
@@ -300,6 +304,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1

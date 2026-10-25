@@ -5,9 +5,9 @@
 # self-host path: pure-Go SQLite only, no libsql. Music tools match the
 # production image so enabling a voice channel works in both deployments.
 #
-# Why 1.26-bookworm not 1.26-alpine?
+# Why bookworm rather than alpine?
 # go.mod requires `go 1.26`. Alpine's Go toolchain is fine, but matching
-# the root Dockerfile (debian:bookworm-slim runtime + golang:1.26.5-bookworm
+# the root Dockerfile (debian:bookworm-slim runtime + golang:1.27.3-bookworm
 # builder) keeps the two images on the same glibc baseline so behaviour
 # debugging in one transfers to the other.
 #
@@ -25,7 +25,7 @@
 # could not be built at all until that tag was corrected.
 
 # ─── Builder Stage ───
-FROM golang:1.27.2-bookworm AS builder
+FROM golang:1.27.3-bookworm AS builder
 
 WORKDIR /build
 COPY go.mod go.sum ./

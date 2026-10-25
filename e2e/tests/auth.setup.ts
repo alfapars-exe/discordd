@@ -19,6 +19,7 @@
 import { test as setup, expect } from "@playwright/test";
 import {
   dismissOnboardingOverlays,
+  expectSignedInShell,
   forceEnglish,
   generateTestPassword,
   uniqueUsername,
@@ -50,9 +51,7 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   await page.getByRole("button", { name: /^Continue$/ }).click();
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
-  await expect(page.getByRole("button", { name: /Add Server/i })).toBeVisible({
-    timeout: 20_000,
-  });
+  await expectSignedInShell(page);
 
   // Clear the one-time overlays. Both dismissals persist server-side
   // (has_seen_welcome / has_seen_download_prompt), so no later test sees them.
@@ -72,9 +71,7 @@ setup("register a fresh account, then log back in", async ({ page }) => {
   await page.getByRole("button", { name: /^Log In$/ }).click();
 
   await expect(page).toHaveURL(/\/channels/, { timeout: 20_000 });
-  await expect(page.getByRole("button", { name: /Add Server/i })).toBeVisible({
-    timeout: 20_000,
-  });
+  await expectSignedInShell(page);
 
   writeTestAccount({ username, password });
 });

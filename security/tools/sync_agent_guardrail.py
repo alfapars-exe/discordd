@@ -153,10 +153,29 @@ CALL_RE = re.compile(
     """,
     re.VERBOSE,
 )
+REVIEWED_CALL_RE = re.compile(
+    r"""^\s*blok_reviewed_(?P<reviewed_lang>js|go)\s+
+        (?P<lq>["'])(?P<label>.*?)(?P=lq)\s+
+        (?P<rq>["'])(?P<rule_id>[A-Za-z0-9_.-]+)(?P=rq)\s+
+        (?P<pq>["'])(?P<pat>.*)(?P=pq)\s*$
+    """,
+    re.VERBOSE,
+)
 LANG = {"blok": "js", "incele": "js", "blok_go": "go", "incele_go": "go", "incele_ci": "ci",
-        "blok_sh": "sh", "incele_sh": "sh"}
+        "blok_sh": "sh", "incele_sh": "sh", "blok_reviewed_js": "js", "blok_reviewed_go": "go"}
 KLASS = {"blok": "BLOK", "blok_go": "BLOK", "incele": "İNCELEME", "incele_go": "İNCELEME", "incele_ci": "İNCELEME",
-         "blok_sh": "BLOK", "incele_sh": "İNCELEME"}
+         "blok_sh": "BLOK", "incele_sh": "İNCELEME", "blok_reviewed_js": "BLOK", "blok_reviewed_go": "BLOK"}
+
+# Reviewed-hit calls still represent live BLOCK patterns. Keep the id-to-label
+# mapping explicit so malformed IDs or accidental label/rule drift fails the
+# generator rather than silently removing an editor-time protection.
+REVIEWED_RULES = {
+    "js.innerhtml-assignment": ("innerHTML/outerHTML ataması", "js"),
+    "js.webstorage-sensitive-key": ("Web storage'da hassas veri", "js"),
+    "go.sql-sprintf": ("SQL Sprintf ile kuruluyor", "go"),
+    "go.sql-concat": ("SQL string concat", "go"),
+    "go.weak-hash": ("zayıf hash (md5/sha1)", "go"),
+}
 
 # İki aşamalı kontroller doğrudan grep ile yazıldığından fonksiyon çağrısı
 # olarak görünmez; birinci aşama desenleri burada elle eşlenir (etiket, sınıf,
@@ -252,17 +271,36 @@ def parse_self_scan(path):
     rules, seen = [], set()
     with open(path, encoding="utf-8") as f:
         for line in f:
-            m = CALL_RE.match(line)
-            if not m:
-                continue
-            fn, label, pat = m.group(1), m.group("label"), m.group("pat")
+            reviewed = REVIEWED_CALL_RE.match(line)
+            if reviewed:
+                fn = f"blok_reviewed_{reviewed.group('reviewed_lang')}"
+                label, pat = reviewed.group("label"), reviewed.group("pat")
+                rule_id = reviewed.group("rule_id")
+                if rule_id not in REVIEWED_RULES:
+                    raise ValueError(f"reviewed self-scan rule id not mapped: {rule_id!r}")
+                if REVIEWED_RULES[rule_id] != (label, LANG[fn]):
+                    raise ValueError(
+                        f"reviewed self-scan rule id/label/language mismatch: "
+                        f"{rule_id!r} -> {(label, LANG[fn])!r}"
+                    )
+            else:
+                if re.match(r"^\s*blok_reviewed_[A-Za-z0-9_]+\s+", line):
+                    raise ValueError(f"malformed reviewed self-scan blocker call: {line.strip()!r}")
+                m = CALL_RE.match(line)
+                if not m:
+                    continue
+                fn, label, pat = m.group(1), m.group("label"), m.group("pat")
+                rule_id = None
             # Shell tek-tırnak kaçışı: '\'' → '
             pat = pat.replace("'\\''", "'")
             key = (label, pat)
             if key in seen:
                 continue
             seen.add(key)
-            rules.append({"label": label, "klass": KLASS[fn], "lang": LANG[fn], "regex": pat})
+            rule = {"label": label, "klass": KLASS[fn], "lang": LANG[fn], "regex": pat}
+            if rule_id is not None:
+                rule["reviewed_rule_id"] = rule_id
+            rules.append(rule)
     for label, klass, lang, pat in TWO_STAGE:
         if (label, pat) in seen:
             continue

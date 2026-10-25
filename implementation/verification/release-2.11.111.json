@@ -7,19 +7,30 @@
     "Client final local regression: 337 files, 3249 passed, zero failed/pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-release-2.11.111-final.json.",
     "Complete client ESLint passed with zero errors and five existing warnings after correcting animation-state reset and clip filename purity errors.",
     "Electron TypeScript and 162 desktop tests: 161 passed, one pre-existing symlink-permission skip, zero failures.",
-    "Both Windows native helpers compiled with hardening checks. Local NSIS candidate and updater metadata were built and matched size/SHA512. Later clean-dependency fixes require rebuilding the final candidate before publication.",
+    "Both Windows native helpers compiled with hardening checks. The final clean-dependency NSIS candidate and updater metadata were rebuilt and matched size/SHA512; this local candidate has not been published.",
     "A separate coordinated task verified production WS first ready, heartbeat, reconnect and existing TAYFA server visibility after HF hotfix b8a626fb9d1a0e1c3531494b46f1c3be8cc4e8ab; no second release will be published by that task.",
     "Fresh merged-dependency client npm ci/build and complete Vitest337files/3249tests passed; isolated Linux node22 Electron tests passed162/162 headlessly after lazy native import correction.",
     "Go1.26.8 complete test/vet/build, tidy-diff and golangci-lint2.12.2 passed with zero lint issues. Live disposable PostgreSQL18.6 group-pin tests passed twice and database PostgreSQL tests passed; import coverage now compares all source schema tables instead of an obsolete fixed76-table expectation.",
     "Exact-source static-check false-positive correction: full self-scan passed with0BLOK,334review rows including34 source+line-hash-locked reviewed shapes; six regressions retain blocking for unexpected sensitive storage, SQL and weak-hash usage.",
     "Final-dependency local NSIS candidate: release/qa-2.11.111-final-deps-20261025/hichat-setup.exe; Electron45.0.0,165870107bytes,SHA2562bfcab7c2db2ba01ef8db44e9735166b0bea4f6fe7226d3948bb47eb37b67d2a. Manifest SHA512 matches and both helpers plus Windows uiohook binding are included. This is a local candidate, not proof of published CI artifact identity.",
     "HF source preview at fb73dc0e confirmed1399updates and only three managed deletions: legacy SmartScreen screenshots/component. Final publication requires a new preview for the final commit and its exact reviewed plan digest. Five publisher safety tests passed.",
-    "Canonical local Docker build could not download a Go module because Docker's IPv6 network route was unavailable. Fresh frontend Docker target passed; complete image build must be confirmed by the GitHub runner before production publication."
+    "Canonical local Docker build could not download a Go module because Docker's IPv6 network route was unavailable. Fresh frontend Docker target passed; complete image build must be confirmed by the GitHub runner before production publication.",
+    "GitHub desktop smoke workflow40156363083 at b4fdf1ff passed both Windows x64 NSIS and Linux x64 AppImage builds without publication. Tag release remains gated on final CI and live HF readiness."
   ],
   "release_gates": [
     "Existing main CI40152688980 failures were remediated locally: fresh Sentry types, Docker shared-contract context, module/lint issues, headless desktop import, required-email E2E fixture and reviewed static-policy false positives. New remote CI must pass before tagging/publication; local success is not represented as clean CI success.",
     "HF Space deployment uses tracked application sources only, a reviewed preview plan digest and expected-parent compare-and-swap. Space secrets/environment and persistent PG/Bucket volumes are not changed by the source publisher.",
     "Installed2.11.110 clients still use the legacy GitHub feed. Publish the Windows bridge artifacts to GitHub as well as the configured generic HF Dataset feed.",
-    "Installer Authenticode is NotSigned. Real physical audio/device, clean installed update/rollback and remaining P0-P11 acceptance are not complete. No claim of error-free behavior follows from unit tests."
-  ]
+    "Installer Authenticode is NotSigned. Real physical audio/device, clean installed update/rollback and remaining P0-P11 acceptance are not complete. No claim of error-free behavior follows from unit tests.",
+    "Remote CI40156165408 exposed stale guardrail-generator parsing, absent LFS materialization in client/image checkouts, and an old Add Server E2E selector. Correct these causes and rerun; do not disable assertions or publish from failed CI.",
+    "Production image CI built successfully but Trivy blocked CVE-2026-111943 in Go1.27.2. Both Docker builder pins move to patched Go1.27.3; CI uses patched Go1.26.10. Require the rebuilt image and vulnerability checks to pass."
+  ],
+  "production_before_release": {
+    "space_commit": "b8a626fb9d1a0e1c3531494b46f1c3be8cc4e8ab",
+    "readiness": "ready",
+    "database": true,
+    "livekit_reachable": true,
+    "checked_at": "2026-10-25T03:02:59Z"
+  },
+  "rollback_boundary": "Preserve PostgreSQL and Bucket data and additive schema. If the new source revision fails, restore previously running Space application sources in a new reviewed compare-and-swap commit; never reset/delete persistent data or silently reverse applied migrations. A published desktop version is immutable: publish a higher corrective version instead of moving its tag."
 }
