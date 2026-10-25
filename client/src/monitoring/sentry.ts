@@ -248,7 +248,7 @@ export function initSentry(): void {
 
   const environment = (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) || import.meta.env.MODE;
 
-  Sentry.init({
+  const options = {
     dsn,
     release: __APP_VERSION__,
     environment,
@@ -266,7 +266,12 @@ export function initSentry(): void {
     beforeSend: (event) => scrubErrorEvent(event),
     beforeSendTransaction: (event) => scrubTransactionEvent(event),
     beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
-  });
+  } satisfies Parameters<typeof Sentry.init>[0] & { sendDefaultPii: false };
+
+  // Sentry 11 removed this option from BrowserOptions, but still accepts it
+  // at runtime. Keep the explicit opt-out alongside the request scrubbing
+  // below so a future SDK type change cannot silently enable default PII.
+  Sentry.init(options);
 
   Sentry.setTag("platform", detectPlatform());
 }

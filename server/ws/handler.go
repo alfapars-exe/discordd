@@ -394,18 +394,6 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 	return h.resolveLegacyTokenAuth(w, r)
 }
 
-// resolveTicketAuth exchanges a presented `?ticket=` for the userID and
-// token_version it was minted with (same values, same order the inline code
-// in resolveConnectionAuth used to compute). Returns ok=true with an empty
-// userID when no ticket consumer is wired or no ticket was presented at all
-// — the caller then falls back to resolveLegacyTokenAuth. On an invalid
-// ticket it writes the same reject response and audit log the inline code
-// did and returns ok=false.
-func (h *Handler) resolveTicketAuth(w http.ResponseWriter, r *http.Request) (userID string, tokenVersion int, ok bool) {
-	userID, tokenVersion, _, ok = h.resolveTicketSessionAuth(w, r)
-	return
-}
-
 func (h *Handler) resolveTicketSessionAuth(w http.ResponseWriter, r *http.Request) (string, int, string, bool) {
 	if h.ticketConsumer == nil {
 		return "", 0, "", true
@@ -624,8 +612,8 @@ func (h *Handler) checkServerBan(w http.ResponseWriter, r *http.Request, userID 
 // lookup failure must never fall back to the unfiltered provider snapshot.
 func (h *Handler) sendVoiceStatesSync(parent context.Context, client *Client, serverIDs []string) {
 	if h.voiceStatesProvider != nil {
-		states := []models.VoiceState{}
-		viewersByStreamer := map[string][]string{}
+		var states []models.VoiceState
+		var viewersByStreamer map[string][]string
 		voiceEpoch := ""
 		var voiceRevision uint64
 		if snapshotProvider, ok := h.voiceStatesProvider.(VoiceStateRevisionSnapshotProvider); ok {

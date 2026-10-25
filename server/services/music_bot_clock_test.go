@@ -38,7 +38,10 @@ func TestMusicPumpSkipsHeadersAndRejectsEmptyAudio(t *testing.T) {
 		t.Fatal("header-only stream must fail")
 	}
 	audio := []byte{0xf8, 0xff, 0xfe}
-	stream := append(header, oggAudioPage(2, audio)...)
+	page := oggAudioPage(2, audio)
+	stream := make([]byte, len(header), len(header)+len(page))
+	copy(stream, header)
+	stream = append(stream, page...)
 	if err := pumpOggToTrack(bytes.NewReader(stream), r, nil); err != nil {
 		t.Fatal(err)
 	}

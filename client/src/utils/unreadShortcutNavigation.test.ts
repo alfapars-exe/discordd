@@ -57,7 +57,8 @@ it.each(["account", "destination"])("discards stale responses after %s changes",
   expect(state.navigate).not.toHaveBeenCalled(); expect(state.toast).not.toHaveBeenCalled();
 });
 it("does not navigate while a modal owns focus", async () => {
-  document.body.innerHTML = "<dialog open></dialog>";
+  const dialog = document.createElement("dialog"); dialog.open = true;
+  document.body.append(dialog);
   await navigateUnreadChannel(1);
   expect(state.counts).not.toHaveBeenCalled();
 });

@@ -32,7 +32,11 @@ func OpenPostgres(ctx context.Context, dsn string) (*sql.DB, error) {
 		if err != nil {
 			return nil, errors.New("cannot prepare PostgreSQL TLS files")
 		}
-		defer os.RemoveAll(dir)
+		defer func() {
+			if cleanupErr := os.RemoveAll(dir); cleanupErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not remove temporary PostgreSQL TLS files: %v\n", cleanupErr)
+			}
+		}()
 		for name, value := range map[string]string{"sslrootcert": ca, "sslcert": cert, "sslkey": key} {
 			path := filepath.Join(dir, name+".pem")
 			if err := os.WriteFile(path, []byte(value), 0600); err != nil {

@@ -101,7 +101,7 @@ func TestGameActivityMembershipSnapshotSerializesSmallAudienceBoundary(t *testin
 				if err != nil {
 					return err
 				}
-				allowed = count+1 <= 200
+				allowed = count < 200
 				return r.Server.(interface {
 					AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
 				}).AddMemberWithGameActivityAudience(ctx, server.ID, userID, allowed)
@@ -190,7 +190,7 @@ func TestGameActivityMembershipSnapshotSerializesMixedAudienceBoundary(t *testin
 					return err
 				}
 				if audience == "small" {
-					allowed = count+1 <= 200
+					allowed = count < 200
 				}
 				return r.Server.(interface {
 					AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
@@ -209,7 +209,7 @@ func TestGameActivityMembershipSnapshotSerializesMixedAudienceBoundary(t *testin
 		}
 		if result.audience == "small" {
 			smallSeen = true
-			if result.allowed != (result.count+1 <= 200) {
+			if result.allowed != (result.count < 200) {
 				t.Fatalf("small join observed count=%d, allowed=%t", result.count, result.allowed)
 			}
 			if result.count != 199 && result.count != 200 {

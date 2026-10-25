@@ -45,7 +45,7 @@ func ParsePCMWav(b []byte) (pcm []byte, channels, sampleRate, durationMs int, er
 		dataLen           int64
 	)
 	off := int64(12)
-	for chunks := 0; !(haveFmt && haveData); chunks++ {
+	for chunks := 0; !haveFmt || !haveData; chunks++ {
 		if chunks >= wavMaxChunks || off+8 > total {
 			return nil, 0, 0, 0, models.ErrEntranceInvalidAudio
 		}

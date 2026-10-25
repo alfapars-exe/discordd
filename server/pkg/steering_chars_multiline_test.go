@@ -14,7 +14,7 @@ func TestContainsSteeringCharsMultiline(t *testing.T) {
 		{"non-ascii passes", "Zeynep 🎉 Зейнеп\nikinci satır", false},
 		{"carriage return is still rejected", "a\r\nb", true},
 		{"bidi override is rejected", "safe\u202eevil", true},
-		{"zero width space is rejected", "zero​width", true},
+		{"zero width space is rejected", "zero\u200bwidth", true},
 		{"other C0 control is rejected", "bell\x07", true},
 		{"line separator is rejected", "a b", true},
 		{"empty", "", false},

@@ -162,6 +162,7 @@ describe("scrubTransactionEvent", () => {
           span_id: "span1",
           start_timestamp: 0,
           trace_id: "trace1",
+          status: "ok",
         },
       ],
       contexts: {
@@ -197,6 +198,7 @@ describe("scrubTransactionEvent", () => {
           span_id: "span1",
           start_timestamp: 0,
           trace_id: "trace1",
+          status: "ok",
         },
       ],
     };

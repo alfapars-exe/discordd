@@ -26,7 +26,6 @@ type fakeBotService struct {
 	revokeErr       error
 	transferRequest *models.ApplicationTransferRequest
 	transferCalls   int
-	resolvedAccept  bool
 	resolvedToken   string
 }
 

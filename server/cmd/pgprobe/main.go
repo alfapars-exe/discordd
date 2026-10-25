@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -12,20 +13,30 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() (runErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	db, err := database.OpenPostgres(ctx, os.Getenv("HICHAT_POSTGRES_URL"))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("close PostgreSQL probe connection: %w", closeErr))
+		}
+	}()
 	var tls bool
 	var protocol, clientDN string
 	err = db.QueryRowContext(ctx, "SELECT ssl, version, client_dn FROM pg_stat_ssl WHERE pid = pg_backend_pid()").Scan(&tls, &protocol, &clientDN)
 	if err != nil || !tls || clientDN == "" {
-		fmt.Fprintln(os.Stderr, "client certificate TLS acceptance failed")
-		os.Exit(1)
+		return errors.New("client certificate TLS acceptance failed")
 	}
 	fmt.Printf("PostgreSQL 18 SQL connection verified; TLS=%s; client certificate accepted\n", protocol)
+	return nil
 }

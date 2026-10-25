@@ -512,26 +512,6 @@ func TestOrphanSweep_EvictsMainAndScreenShare(t *testing.T) {
 // state construction for why a stream never carries across a channel
 // change).
 
-// findScreenShareLeaveBroadcast looks for a screen-share "leave" broadcast
-// for (streamerUserID, channelID, viewerCount 0) among captured events.
-func findScreenShareLeaveBroadcast(t *testing.T, broadcasts []ws.Event, streamerUserID, channelID string) bool {
-	t.Helper()
-	for _, ev := range broadcasts {
-		if ev.Op != ws.OpScreenShareViewerUpdate {
-			continue
-		}
-		data, ok := ev.Data.(ws.ScreenShareViewerUpdateData)
-		if !ok {
-			t.Fatalf("OpScreenShareViewerUpdate broadcast had unexpected Data type %T", ev.Data)
-		}
-		if data.StreamerUserID == streamerUserID && data.ChannelID == channelID &&
-			data.Action == "leave" && data.ViewerCount == 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // TestMoveUser_ClosesOutScreenShare pins that moving a streaming user (a)
 // clears their viewer set, (b) broadcasts a screen-share leave for the
 // SOURCE channel, and (c) resets IsStreaming to false on the moved state.

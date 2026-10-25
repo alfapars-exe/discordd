@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/argeinfina/hichat/pkg"
@@ -57,7 +59,10 @@ func (h *DataExportHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="hichat-data-%s.json"`, id[:12]))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(payload)
+	if _, err := io.Copy(w, bytes.NewReader(payload)); err != nil {
+		return // the client disconnected while receiving the attachment
+	}
 }

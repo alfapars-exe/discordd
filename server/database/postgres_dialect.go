@@ -34,7 +34,15 @@ type pgRows struct{ driver.Rows }
 type pgStmt struct{ driver.Stmt }
 
 func (s pgStmt) Query(args []driver.Value) (driver.Rows, error) {
-	rows, err := s.Stmt.Query(args)
+	queryer, ok := s.Stmt.(driver.StmtQueryContext)
+	if !ok {
+		return nil, fmt.Errorf("PostgreSQL driver statement does not support contextual queries")
+	}
+	namedArgs := make([]driver.NamedValue, len(args))
+	for i, arg := range args {
+		namedArgs[i] = driver.NamedValue{Ordinal: i + 1, Value: arg}
+	}
+	rows, err := queryer.QueryContext(context.Background(), namedArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -126,11 +134,12 @@ func (c *pgConn) CheckNamedValue(v *driver.NamedValue) error {
 			v.Value = int64(0)
 		}
 	case *bool:
-		if value == nil {
+		switch {
+		case value == nil:
 			v.Value = nil
-		} else if *value {
+		case *value:
 			v.Value = int64(1)
-		} else {
+		default:
 			v.Value = int64(0)
 		}
 	}

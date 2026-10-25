@@ -16,6 +16,11 @@ spec.loader.exec_module(release)
 
 
 class PublishSafetyTests(unittest.TestCase):
+    def test_only_the_frontend_contract_is_managed_from_electron(self):
+        self.assertTrue(release.managed("electron/voice-overlay-contract.ts"))
+        self.assertFalse(release.managed("electron/main.ts"))
+        self.assertFalse(release.managed("data/uploads/user.png"))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

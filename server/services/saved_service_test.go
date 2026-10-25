@@ -377,7 +377,7 @@ func TestSavedService_UpdateNoteAndDelete_NotFound(t *testing.T) {
 		t.Errorf("UpdateNote(mine) = (%+v, %v)", saved, err)
 	}
 	empty := ""
-	var clearedTo *string = &note
+	var clearedTo = &note
 	f.saved.UpdateNoteFn = func(_ context.Context, _, _ string, n *string) (bool, error) {
 		clearedTo = n
 		return true, nil

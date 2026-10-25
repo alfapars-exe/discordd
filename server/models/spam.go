@@ -16,7 +16,7 @@ func (e *SpamInboxEntry) Validate(record bool) error {
 		return fmt.Errorf("invalid spam source")
 	}
 	for _, id := range []string{e.ChannelID, e.MessageID} {
-		if len(id) == 0 || len(id) > 128 || strings.TrimSpace(id) != id {
+		if id == "" || len(id) > 128 || strings.TrimSpace(id) != id {
 			return fmt.Errorf("invalid spam reference")
 		}
 	}

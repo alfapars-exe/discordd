@@ -76,7 +76,7 @@ func TestUserNoteHandler_GetAndSet(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.Set(rec, noteRequest(http.MethodPut, "/api/users/bob/note", `{"note":"a​b"}`))
+	h.Set(rec, noteRequest(http.MethodPut, "/api/users/bob/note", `{"note":"a\u200bb"}`))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("Set(steering char) = %d, want 400", rec.Code)
 	}

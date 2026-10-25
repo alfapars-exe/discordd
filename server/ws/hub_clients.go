@@ -136,7 +136,7 @@ func (h *Hub) RequestGameActivitySnapshot(userID string) {
 
 func (h *Hub) QueueGameActivityUpdate(client *Client, sequence uint64, game *GameActivityClientGame) {
 	h.mu.Lock()
-	if h.shuttingDown || h.clients[client.userID][client] != true || h.onGameActivityUpdate == nil {
+	if h.shuttingDown || !h.clients[client.userID][client] || h.onGameActivityUpdate == nil {
 		h.mu.Unlock()
 		return
 	}

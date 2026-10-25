@@ -607,12 +607,3 @@ func (s *GameActivityService) selectedLocked(userID string, now time.Time) (*ws.
 	}
 	return &ws.GameActivityGame{ID: selected.game.ID, Name: selected.game.Name, StartedAt: selected.changedAt.Format(time.RFC3339Nano)}, selected.changedAt, true
 }
-
-func (s *GameActivityService) deliverLocked(viewerID, targetID, serverID string, game *ws.GameActivityGame) {
-	if s.hub == nil {
-		return
-	}
-	revision := s.revisions[targetID] + 1
-	s.revisions[targetID] = revision
-	s.hub.BroadcastToUsers([]string{viewerID}, ws.Event{Op: ws.OpGameActivityUpdate, Data: ws.GameActivityData{UserID: targetID, ServerID: serverID, Game: game, Revision: revision, Epoch: s.epoch}})
-}

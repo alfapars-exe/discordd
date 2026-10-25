@@ -17,7 +17,7 @@ type recordingVoiceChannelDeletionHandler struct {
 	calledAfterDB  bool
 }
 
-func (h *recordingVoiceChannelDeletionHandler) DeleteVoiceChannel(serverID, channelID string) {
+func (h *recordingVoiceChannelDeletionHandler) DeleteVoiceChannel(_ context.Context, serverID, channelID string) {
 	h.called++
 	h.serverID = serverID
 	h.channelID = channelID

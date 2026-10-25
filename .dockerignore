@@ -67,7 +67,12 @@ server/data
 **/*.log
 
 # ─── Shells and harnesses none of the three stages build ───
+# Keep only the shared, pure TypeScript contract used by frontend typechecks;
+# the rest of Electron sources and their native runtime dependencies stay out.
 electron
+!electron/
+electron/*
+!electron/voice-overlay-contract.ts
 native
 icons
 bots

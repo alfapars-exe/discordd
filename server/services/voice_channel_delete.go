@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"sync"
 
 	"github.com/argeinfina/hichat/models"
@@ -10,7 +11,7 @@ import (
 // VoiceChannelDeletionHandler is the narrow hook ChannelService invokes only
 // after the channel row has been deleted successfully.
 type VoiceChannelDeletionHandler interface {
-	DeleteVoiceChannel(serverID, channelID string)
+	DeleteVoiceChannel(ctx context.Context, serverID, channelID string)
 }
 
 type deletedVoiceSession struct {
@@ -25,7 +26,7 @@ type deletedVoiceSession struct {
 // final state mutation, so a join which fetched the row just before deletion
 // cannot resurrect state after this cleanup. The epoch is global to keep the
 // guard bounded; a simultaneous join to another server may need a retry.
-func (s *voiceService) DeleteVoiceChannel(serverID, channelID string) {
+func (s *voiceService) DeleteVoiceChannel(ctx context.Context, serverID, channelID string) {
 	if serverID == "" || channelID == "" {
 		return
 	}
@@ -102,8 +103,8 @@ func (s *voiceService) DeleteVoiceChannel(serverID, channelID string) {
 			logx.Go("voice-channel-delete-eviction", func() {
 				defer wg.Done()
 				for session := range tasks {
-					s.removeDeletedChannelParticipant(session.serverID, session.channelID, session.userID)
-					s.removeDeletedChannelParticipant(session.serverID, session.channelID, session.userID+"_ss")
+					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID)
+					s.removeDeletedChannelParticipant(ctx, session.serverID, session.channelID, session.userID+"_ss")
 					s.creditUsage(session.state.LiveKitInstanceID, session.state.LiveKitIsCloud, session.state.JoinedAt)
 				}
 			})

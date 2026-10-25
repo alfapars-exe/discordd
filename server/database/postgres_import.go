@@ -115,7 +115,7 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 	}
 	for table := range seedTables {
 		if known[table] {
-			if _, err = tx.ExecContext(ctx, "DELETE FROM "+importQuote(table)); err != nil {
+			if _, err = tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s", importQuote(table))); err != nil {
 				return nil, err
 			}
 		}
@@ -140,7 +140,7 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 				sourceNames[i] = "rowid"
 			}
 		}
-		read, err := snapshot.QueryContext(ctx, "SELECT "+strings.Join(sourceNames, ",")+" FROM "+importQuote(table))
+		read, err := snapshot.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s", strings.Join(sourceNames, ","), importQuote(table)))
 		if err != nil {
 			return nil, fmt.Errorf("source table %s does not match current migrations: %w", table, err)
 		}
@@ -187,7 +187,7 @@ func ImportSQLiteSnapshot(ctx context.Context, source, target *sql.DB) ([]Import
 		if err = flush(); err != nil {
 			return nil, fmt.Errorf("insert into %s failed (row data withheld): %s", table, importErrorCode(err))
 		}
-		actual, err := tx.QueryContext(ctx, "SELECT "+strings.Join(names, ",")+" FROM "+importQuote(table))
+		actual, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s", strings.Join(names, ","), importQuote(table)))
 		if err != nil {
 			return nil, err
 		}

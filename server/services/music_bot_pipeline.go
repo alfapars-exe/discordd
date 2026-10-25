@@ -536,7 +536,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		}
 		return fmt.Errorf("%w: ffmpeg not available: %w", errToolMissing, err)
 	}
-	ff := exec.CommandContext(ctx, ffBin, playTrackFFmpegArgs()...)
+	ff := exec.CommandContext(ctx, ffBin, playTrackFFmpegArgs()...) // #nosec G204 -- fixed argv; ffBin is an absolute path resolved once by ffmpegPath (see music_bot_metadata.go).
 
 	// stderr goes into bounded tail buffers: yt-dlp prints the reason a
 	// track failed (HTTP 403, bot check, ...) there and nowhere else. The

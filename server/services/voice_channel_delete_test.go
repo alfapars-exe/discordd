@@ -95,7 +95,7 @@ func TestDeleteVoiceChannelClearsStateAndRejectsLateJoin(t *testing.T) {
 		t.Fatal("JoinChannel did not reach permission resolution")
 	}
 
-	svc.DeleteVoiceChannel("server-1", "voice-1")
+	svc.DeleteVoiceChannel(context.Background(), "server-1", "voice-1")
 	close(continuePermission)
 	if err := <-joinResult; !errors.Is(err, pkg.ErrNotFound) {
 		t.Fatalf("late JoinChannel error = %v, want ErrNotFound", err)

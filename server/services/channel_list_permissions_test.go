@@ -44,13 +44,13 @@ func TestChannelListPermissionsAreRecipientScoped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !(*writer[0].Channels[0].EffectivePermissions).Has(models.PermSendMessages) {
+	if !writer[0].Channels[0].EffectivePermissions.Has(models.PermSendMessages) {
 		t.Fatal("writer lost send permission")
 	}
-	if (*reader[0].Channels[0].EffectivePermissions).Has(models.PermSendMessages) {
+	if reader[0].Channels[0].EffectivePermissions.Has(models.PermSendMessages) {
 		t.Fatal("writer permission leaked to reader")
 	}
-	if (*writer[0].Channels[1].EffectivePermissions).Has(models.PermSendMessages) {
+	if writer[0].Channels[1].EffectivePermissions.Has(models.PermSendMessages) {
 		t.Fatal("channel override ignored")
 	}
 	if writer[0].Channels[2].EffectivePermissions != nil {

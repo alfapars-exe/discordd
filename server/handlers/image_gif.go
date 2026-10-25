@@ -415,8 +415,10 @@ func quantizeFrame(img *image.RGBA, src color.Palette) *image.Paletted {
 	if len(opaque) == 0 {
 		opaque = append(opaque, color.Black)
 	}
-	transparent := uint8(len(opaque))
-	pal := append(opaque, color.RGBA{})
+	transparent := uint8(len(opaque) % 256)
+	pal := make(color.Palette, len(opaque)+1)
+	copy(pal, opaque)
+	pal[len(opaque)] = color.RGBA{}
 
 	b := img.Bounds()
 	mask := make([]bool, b.Dx()*b.Dy())
@@ -429,9 +431,9 @@ func quantizeFrame(img *image.RGBA, src color.Palette) *image.Paletted {
 			}
 			if c.A != 0xff { // un-premultiply to an opaque colour
 				c = color.RGBA{
-					R: uint8(uint32(c.R) * 0xff / uint32(c.A)),
-					G: uint8(uint32(c.G) * 0xff / uint32(c.A)),
-					B: uint8(uint32(c.B) * 0xff / uint32(c.A)),
+					R: unpremultiplyRGBA(c.R, c.A),
+					G: unpremultiplyRGBA(c.G, c.A),
+					B: unpremultiplyRGBA(c.B, c.A),
 					A: 0xff,
 				}
 				img.SetRGBA(x, y, c)
@@ -451,4 +453,15 @@ func quantizeFrame(img *image.RGBA, src color.Palette) *image.Paletted {
 		}
 	}
 	return dst
+}
+
+func unpremultiplyRGBA(component, alpha uint8) uint8 {
+	if alpha == 0 {
+		return 0
+	}
+	if component > alpha {
+		component = alpha
+	}
+	value := uint16(component) * 0xff / uint16(alpha)
+	return uint8(value & 0xff)
 }

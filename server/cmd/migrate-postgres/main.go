@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -23,7 +24,7 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run() error {
+func run() (runErr error) {
 	input := flag.String("snapshot", "", "offline SQLite snapshot; the original is never migrated")
 	flag.Parse()
 	if *input == "" {
@@ -51,7 +52,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(work)
+	defer func() {
+		if cleanupErr := os.RemoveAll(work); cleanupErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("remove temporary import directory: %w", cleanupErr))
+		}
+	}()
 	copyPath := filepath.Join(work, "snapshot.db")
 	// VACUUM INTO gives a consistent local copy, including any committed WAL.
 	if _, err = original.ExecContext(ctx, `VACUUM INTO ?`, copyPath); err != nil {
@@ -65,7 +70,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("copy migration failed: %w", err)
 	}
-	defer source.Close()
+	defer func() {
+		if closeErr := source.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("close SQLite import snapshot: %w", closeErr))
+		}
+	}()
 	var integrity string
 	if err = source.Conn.QueryRowContext(ctx, `PRAGMA integrity_check`).Scan(&integrity); err != nil || integrity != "ok" {
 		return fmt.Errorf("SQLite copy integrity check failed")

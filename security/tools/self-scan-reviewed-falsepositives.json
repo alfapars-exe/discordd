@@ -1,0 +1,277 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "rule": "go.sql-concat",
+      "path": "server/database/postgres_import.go",
+      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "line_sha256": "cb03e402039c6d4ee5383d25d325e12adbc40d9d1b9aaee38d4ae6c9d5bd62d8",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/database/postgres_import_test.go",
+      "file_sha256": "9b9f05612e3e8791d1d9691eaa40750aa3ef15481a156801b0c7728fe9d1ddec",
+      "line_sha256": "fb9879437de4b36ace22b67076b4aba070f0d691abc561263c44310bda9993da",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/postgres_testdb_test.go",
+      "file_sha256": "afb73fd09ba3c548ff87dfc045fcfd26cafed7a951ab82853ec60eac0bf89184",
+      "line_sha256": "11c1a8f059dc896554f0c17cc47ee457ef8833dcc548581189e37d7c552d5471",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_account_anonymization.go",
+      "file_sha256": "f1174396458923ebcf2b4e747d157640aad7d86d3eef89b28f85d5d5e332d349",
+      "line_sha256": "d2e9044224e8e7f5a8f01f8a9f4b1290be8d6ba35155739655b714e2fd42231a",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_account_asset_cleanup.go",
+      "file_sha256": "c91f0193b441454b04566d25e6380206192cd5953141662c893d814c43d17893",
+      "line_sha256": "39f381ef0dbebbef2d4a1333e4987bfb6e8d183442cd24d9a7060266d22b30fe",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_account_lifecycle.go",
+      "file_sha256": "a653f1f94b5b29a858b3a34ceaaf6583d5e8b3b8679b49edbfc16ac01f0aaa97",
+      "line_sha256": "19b3b0d541b3f002ae09660111ed2f0fb1927b144524487d74f19dd9f3321620",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_account_lifecycle.go",
+      "file_sha256": "a653f1f94b5b29a858b3a34ceaaf6583d5e8b3b8679b49edbfc16ac01f0aaa97",
+      "line_sha256": "9875b48e990417f6dfa3d7b2842fd2a57583edaebd09e0dc747d99e2b6c00b94",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_account_lifecycle.go",
+      "file_sha256": "a653f1f94b5b29a858b3a34ceaaf6583d5e8b3b8679b49edbfc16ac01f0aaa97",
+      "line_sha256": "ff62796a34c1f225113f9fac581cb00c324f78abd8782c648b564c09c02281ed",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_auth_session.go",
+      "file_sha256": "2025bd1e9b20bd9e0fa2a43633299b01ed218714521cf7aa681d8b501401a848",
+      "line_sha256": "084f89fcb73671f90d708ed0d7dfac820a648e55f33f02f5cac24ca3bed24cb7",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_auth_session.go",
+      "file_sha256": "2025bd1e9b20bd9e0fa2a43633299b01ed218714521cf7aa681d8b501401a848",
+      "line_sha256": "560d984e1e155ada2babc6ee5f1ea805062d3b692747ce6061c63879272aeb83",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_auth_session.go",
+      "file_sha256": "2025bd1e9b20bd9e0fa2a43633299b01ed218714521cf7aa681d8b501401a848",
+      "line_sha256": "5986cc9cc02107f8e6f1b1b11c481bdf2ca88558a717ffadd1c1c42fc877a655",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_auth_session_test.go",
+      "file_sha256": "ac1cb9fe6e72a02ac1470e1783e272adc3563f9f93869d3cd5c960f015041bbf",
+      "line_sha256": "d9bba06d9634d9398f2f5c870b5f771b18266a4064efc704605a3faafc8febf0",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_email_campaign.go",
+      "file_sha256": "d4c2ed042bb6ea51249764332f116304b81f8bc82bc1c4033b96c2605897e377",
+      "line_sha256": "bc1231e6726bfa3ec4d8925889647dc3544e02c4e464d4ec3c77867643c5b8dd",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_email_delivery.go",
+      "file_sha256": "84bccaccf4ef53249e70da3a497dd9256e22e4322dd9828c134fd9b5b2c2cd4a",
+      "line_sha256": "79ae9d75ef66081b9b31d49bdbe8a7092c8900985d138fe491db8b5d1efa7c93",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_group_dm.go",
+      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
+      "line_sha256": "25ad92c8bc78e4f80288f59d28effd54533c8b2fa29e73ae741124d8854a813b",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_group_dm.go",
+      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
+      "line_sha256": "57a20885ea64b1f4ce49371bf4cb95fd97cc2c532aa81d3a84b924d76e1df5d9",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_group_dm.go",
+      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
+      "line_sha256": "7c8f35c7ab1143e7ce941b75912d6549057a6489e5b5ff88fc5186b31a600746",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_group_dm.go",
+      "file_sha256": "fa6d24879ff2ea103714320db0e7172003de471d7a2a38115cabca15a7101d74",
+      "line_sha256": "947be30c7ec80d463d9bb7a1f6be1fa6fc2a38536edecc2adfb58ec5006e5fe0",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_profile_showcase.go",
+      "file_sha256": "60a1e3991b93f38817fb25ad8c94075649c3170a71c48f8686d12683c897bb46",
+      "line_sha256": "a95829a5d52740d7e97b9106133c7a87d6b9611ec6849afa4cb369d085d6fcb7",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_reminder.go",
+      "file_sha256": "ccc5553d20147d5c013bdc4fd68310c5c4a52acab91b516a3870bd2a84e339a9",
+      "line_sha256": "42295064db8c6b35c7ec953a1fb519d0217d79955f2af32881f5dda1a0c33b31",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_reminder.go",
+      "file_sha256": "ccc5553d20147d5c013bdc4fd68310c5c4a52acab91b516a3870bd2a84e339a9",
+      "line_sha256": "5dee87546cbaa838c47219cd9e6a2f82e61f2d720b7f48ec048b503af77e3a01",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_reminder.go",
+      "file_sha256": "ccc5553d20147d5c013bdc4fd68310c5c4a52acab91b516a3870bd2a84e339a9",
+      "line_sha256": "840dacc0d5db1993811f5eebd28482872b2e71521424dd14a1c0bfcd5adb4be5",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_server_event.go",
+      "file_sha256": "834310a504b8e89df61663bb6a1f35dfdee321d7857466904d5ef522b34f316e",
+      "line_sha256": "52cc9bc269ae099ef19566a05105b574e7e40c957675e7f9307ba8e50cbb2159",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_server_event.go",
+      "file_sha256": "834310a504b8e89df61663bb6a1f35dfdee321d7857466904d5ef522b34f316e",
+      "line_sha256": "73c75599a5816e36a8fab86b02a2a39fa42e06f518087bf6561ad0526f6b2804",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_server_event.go",
+      "file_sha256": "834310a504b8e89df61663bb6a1f35dfdee321d7857466904d5ef522b34f316e",
+      "line_sha256": "77ee46062785d93c9aa959cd964380ead387d61de1ac051348101352a1134e8e",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_server_event_delivery.go",
+      "file_sha256": "8130ae86d795e52f319466c5dd366e0d12294e875836787f63c7318433293bf7",
+      "line_sha256": "687c15e217b3cff9066a873df298a17637f77a2d93e2390fe3fc32276792edd2",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_server_event_delivery_test.go",
+      "file_sha256": "4a6012c907e1c8b085f27d841325f068f58e74ad249c729ef1b5034ec726f183",
+      "line_sha256": "2b5ef9c316b094bad74c370c978134961ec25fc3085e43f07f52e05e85b7f517",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-concat",
+      "path": "server/repository/sqlite_server_event_delivery_test.go",
+      "file_sha256": "4a6012c907e1c8b085f27d841325f068f58e74ad249c729ef1b5034ec726f183",
+      "line_sha256": "69f576c3a8341aadc0224e86881ef8076805b6802ef6924400b93b52eab8394b",
+      "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
+      "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
+    },
+    {
+      "rule": "go.sql-sprintf",
+      "path": "server/database/postgres_import.go",
+      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "line_sha256": "2c2e6ec94ef6a617bbb5c617d66f58fef056233b0af207b0cd077262fa8d74b0",
+      "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
+      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+    },
+    {
+      "rule": "go.sql-sprintf",
+      "path": "server/database/postgres_import.go",
+      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "line_sha256": "c51c6db83e52d23399cc118e3b7dd183b50a79b7e45683d8afd98927ea1c0900",
+      "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
+      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+    },
+    {
+      "rule": "go.sql-sprintf",
+      "path": "server/database/postgres_import.go",
+      "file_sha256": "e082836bd5e8bbcc428012b647093086b2bafd9860ae8e6c63f67e02c58a6e5d",
+      "line_sha256": "ed507a732f31e71d68131ccbd9280584b694766f6e0dd3715413f5a9562f9fb4",
+      "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
+      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+    },
+    {
+      "rule": "go.sql-sprintf",
+      "path": "server/repository/sqlite_group_dm_unread_anchor_test.go",
+      "file_sha256": "87db692329fa047f8bde200fcb1eb5e1d25da89af24a9cef3337b521ca3f4111",
+      "line_sha256": "724b956aa2243197beda5c91d82a6e44cccf347d47e4078d2d767a55e0b020af",
+      "reason": "The matched formatting does not interpolate attacker-controlled SQL: repository snapshot identifiers are schema-derived, allowlisted/quoted, and row values stay bound; test timestamp formatting is passed only to a placeholder.",
+      "proof_ref": "server/database/postgres_import.go:23-30,37-78,239-249;server/database/postgres_import_test.go;server/repository/sqlite_group_dm_unread_anchor_test.go:80-87"
+    },
+    {
+      "rule": "go.weak-hash",
+      "path": "server/pkg/crypto/totp.go",
+      "file_sha256": "0c95e6766b13eb62646192c312fec5b810ddc63ca68ea4e6b95713482caabe79",
+      "line_sha256": "59428f31d037c5e4534a525df5f854dfc4daead4813929965315b2312fbdb2c7",
+      "reason": "RFC 6238 TOTP compatibility requires the HMAC-SHA1 profile; this is HMAC, not password or data hashing.",
+      "proof_ref": "server/pkg/crypto/totp.go:13-25;server/pkg/crypto/totp_test.go::TestTOTPRFC6238SHA1Vectors"
+    },
+    {
+      "rule": "js.webstorage-sensitive-key",
+      "path": "client/src/stores/authStore.ts",
+      "file_sha256": "6b196f27fd5138fa5094dca2227a3f5d64986c3ac1626c52c6141b8f78c53e8f",
+      "line_sha256": "ef4b375aa03bc2946ff120d1dfaeaf1ad16a23916ef4990be4e95214a72213d7",
+      "reason": "This exact call persists only a validated UserStatus enum as a UI preference under a per-user key; no session, token, credential, or user object is stored.",
+      "proof_ref": "client/src/stores/authStore.test.ts:132-138;client/src/stores/authStore.ts:31-50"
+    }
+  ]
+}

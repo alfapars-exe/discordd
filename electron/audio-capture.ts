@@ -11,8 +11,8 @@ import { spawn as nodeSpawn, type ChildProcess } from "child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { getMainWindow } from "./window";
-import { appendDiagnostic } from "./diagnostic-log";
+import type { getMainWindow } from "./window";
+import type { appendDiagnostic } from "./diagnostic-log";
 
 type Header = { sampleRate: number; channels: number; bitsPerSample: number; formatTag: number };
 type CaptureProcess = Pick<ChildProcess, "stdout" | "stderr" | "kill" | "on" | "removeAllListeners">;
@@ -344,7 +344,12 @@ function helperPath(): string {
 const worker = createAudioCaptureWorker({
   platform: process.platform, processId: process.pid, exePath: helperPath,
   exists: existsSync, spawn: nodeSpawn as WorkerDependencies["spawn"],
-  getWindow: getMainWindow, log: appendDiagnostic,
+  // Keep the native hotkey/window graph out of module initialization. In
+  // particular, importing window.ts loads uiohook-napi, which needs an X11
+  // display and otherwise prevents the platform-independent worker tests
+  // from running on headless Linux CI.
+  getWindow: () => require("./window").getMainWindow(),
+  log: (entry) => require("./diagnostic-log").appendDiagnostic(entry),
   startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS, shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
   setTimeout, clearTimeout, setInterval, clearInterval,
 });

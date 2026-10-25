@@ -98,8 +98,7 @@ func NewAccountAssetCleanup(repo repository.AccountAssetCleanupRepository, uploa
 
 // RunOnce is intentionally bounded. No directory sweep or recursive deletion.
 // The production scheduler reports only aggregate health, never queued paths.
-func (s *AccountAssetCleanup) RunOnce(ctx context.Context, now time.Time) (AssetCleanupResult, error) {
-	var result AssetCleanupResult
+func (s *AccountAssetCleanup) RunOnce(ctx context.Context, now time.Time) (result AssetCleanupResult, runErr error) {
 	if s.uploadDir == "" {
 		return result, fmt.Errorf("upload cleanup is not configured")
 	}
@@ -114,7 +113,11 @@ func (s *AccountAssetCleanup) RunOnce(ctx context.Context, now time.Time) (Asset
 	if err != nil {
 		return result, err
 	}
-	defer root.Close()
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("close upload root: %w", closeErr))
+		}
+	}()
 	urls, err := s.repo.Due(ctx, now.Unix(), 25)
 	if err != nil {
 		return result, err

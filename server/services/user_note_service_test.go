@@ -97,7 +97,7 @@ func TestUserNoteService_Set(t *testing.T) {
 
 	t.Run("invalid note is a bad request", func(t *testing.T) {
 		_, _, svc := newUserNoteFixture()
-		for _, bad := range []string{"a​b", strings.Repeat("x", models.NoteMaxRunes+1)} {
+		for _, bad := range []string{"a\u200bb", strings.Repeat("x", models.NoteMaxRunes+1)} {
 			if _, err := svc.Set(context.Background(), "alice", "bob", bad); !errors.Is(err, pkg.ErrBadRequest) {
 				t.Errorf("Set(%q) err = %v, want ErrBadRequest", bad[:4], err)
 			}

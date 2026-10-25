@@ -29,7 +29,10 @@ it("uses custom bindings without sending repeated destructive actions", () => {
 });
 it("focuses only the current conversation composer, including from hidden rows", () => {
   const area = document.createElement("div"); area.className = "chat-area";
-  area.innerHTML = '<article tabindex="0"></article><div class="input-area"><textarea></textarea></div>';
+  const article = document.createElement("article"); article.tabIndex = 0;
+  const inputArea = document.createElement("div"); inputArea.className = "input-area";
+  inputArea.append(document.createElement("textarea"));
+  area.append(article, inputArea);
   document.body.append(area);
   const row = area.querySelector("article")!;
   const event = new KeyboardEvent("keydown", { code: "Escape", cancelable: true });

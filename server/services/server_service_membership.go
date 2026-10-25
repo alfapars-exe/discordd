@@ -37,7 +37,7 @@ func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defa
 				return fmt.Errorf("failed to lock server for game activity audience snapshot: %w", err)
 			}
 			if audience == gameActivityAudienceSmall {
-				gameActivityAllowed = count >= 0 && count+1 <= smallProfileAudienceServerMax
+				gameActivityAllowed = count >= 0 && count < smallProfileAudienceServerMax
 			}
 		}
 		var addErr error

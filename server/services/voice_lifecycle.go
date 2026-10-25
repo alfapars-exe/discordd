@@ -266,8 +266,8 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 // removeParticipantFromLiveKit. The channel row is already gone, so its
 // server ID must come from the pre-delete state snapshot instead of a channel
 // repository lookup.
-func (s *voiceService) removeDeletedChannelParticipant(serverID, channelID, identity string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (s *voiceService) removeDeletedChannelParticipant(parent context.Context, serverID, channelID, identity string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 10*time.Second)
 	defer cancel()
 	s.removeParticipantFromLiveKitInServer(ctx, serverID, channelID, identity)
 }
@@ -676,8 +676,8 @@ func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, ch
 		if err != nil || channel == nil || channel.ServerID != serverID || channel.Type != models.ChannelTypeVoice {
 			voiceLogger.Warn("EnforceModerationOnJoin: evicting participant from missing or mismatched voice channel",
 				"server_id", serverID, "channel_id", channelID, "user_id", userID, "err", pkg.ErrText(err))
-			go s.removeDeletedChannelParticipant(serverID, channelID, userID)
-			go s.removeDeletedChannelParticipant(serverID, channelID, userID+"_ss")
+			go s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID)
+			go s.removeDeletedChannelParticipant(ctx, serverID, channelID, userID+"_ss")
 			return
 		}
 	}

@@ -392,7 +392,7 @@ func (s *channelService) Delete(ctx context.Context, serverID, actorID, id strin
 	// before clients receive the channel-delete notification. Never run this
 	// on a failed repository delete.
 	if existing.Type == models.ChannelTypeVoice && s.voiceDeletionHandler != nil {
-		s.voiceDeletionHandler.DeleteVoiceChannel(serverID, id)
+		s.voiceDeletionHandler.DeleteVoiceChannel(ctx, serverID, id)
 	}
 
 	// Best-effort: mention/reply inbox rows scoped to this channel would
@@ -413,15 +413,13 @@ func (s *channelService) Delete(ctx context.Context, serverID, actorID, id strin
 
 	// Use the existing pre-delete snapshot for audit metadata — the row is
 	// already gone from the DB, so re-fetching would fail.
-	if existing != nil {
-		actor := actorID
-		s.audit(models.AuditLog{
-			ServerID:    existing.ServerID,
-			ActorUserID: &actor,
-			EventType:   models.AuditEventChannelDelete,
-			Metadata:    fmt.Sprintf(`{"channel_name":%q}`, existing.Name),
-		})
-	}
+	actor := actorID
+	s.audit(models.AuditLog{
+		ServerID:    existing.ServerID,
+		ActorUserID: &actor,
+		EventType:   models.AuditEventChannelDelete,
+		Metadata:    fmt.Sprintf(`{"channel_name":%q}`, existing.Name),
+	})
 
 	return nil
 }

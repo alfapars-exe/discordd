@@ -90,9 +90,9 @@ func TestValidEntranceName(t *testing.T) {
 		strings.Repeat("ğ", 32): true,
 		strings.Repeat("a", 33): false,
 		"":                      false,
-		"evil\u202eeman":             false,
+		"evil\u202eeman":        false,
 		"tab\tname":             false,
-		"zero​width":            false,
+		"zero\u200bwidth":       false,
 	}
 	for name, want := range cases {
 		if got := ValidEntranceName(name); got != want {

@@ -20,6 +20,21 @@ FAIL=0
 SRC="${1:-.}"
 OUT="${2:-self-scan-inceleme.txt}"
 : > "$OUT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REVIEWED_FP_HELPER="$SCRIPT_DIR/self_scan_reviewed_fp.py"
+REVIEWED_FP_MANIFEST="$SCRIPT_DIR/self-scan-reviewed-falsepositives.json"
+# Ubuntu runners provide python3 before setup-python runs. Git Bash on Windows
+# can set SELF_SCAN_PYTHON to its Python executable; PYTHONPATH remains the
+# standard Python module-search variable and is not used as an executable.
+SELF_SCAN_PYTHON="${SELF_SCAN_PYTHON:-python3}"
+
+if ! command -v "$SELF_SCAN_PYTHON" >/dev/null 2>&1; then
+  echo "❌ BLOK: reviewed-hit helper Python executable unavailable ($SELF_SCAN_PYTHON)"
+  FAIL=1
+elif ! "$SELF_SCAN_PYTHON" "$REVIEWED_FP_HELPER" validate --root "$SRC" --manifest "$REVIEWED_FP_MANIFEST"; then
+  echo "❌ BLOK: reviewed self-scan false-positive manifest invalid or stale"
+  FAIL=1
+fi
 
 INC='--include=*.ts --include=*.tsx --include=*.js --include=*.jsx'
 INC_GO='--include=*.go'
@@ -46,6 +61,23 @@ incele() { local d="$1" p="$2"
 blok_go() { local d="$1" p="$2"
   if grep -RInE $INC_GO $EXC -e "$p" "$SRC"; then
     echo "❌ BLOK: $d"; FAIL=1; fi; }
+blok_reviewed_js() { local d="$1" rule="$2" p="$3"
+  if grep -RInE $INC $EXC -e "$p" "$SRC" | reviewed_filter "$rule"; then
+    :
+  else
+    echo "❌ BLOK: $d"; FAIL=1
+  fi; }
+blok_reviewed_go() { local d="$1" rule="$2" p="$3"
+  if grep -RInE $INC_GO $EXC -e "$p" "$SRC" | reviewed_filter "$rule"; then
+    :
+  else
+    echo "❌ BLOK: $d"; FAIL=1
+  fi; }
+reviewed_filter() { local rule="$1"
+  "$SELF_SCAN_PYTHON" "$REVIEWED_FP_HELPER" filter --root "$SRC" --manifest "$REVIEWED_FP_MANIFEST" --rule "$rule" | tee -a "$OUT"
+  local -a statuses=("${PIPESTATUS[@]}")
+  return "${statuses[0]:-1}"
+}
 incele_go() { local d="$1" p="$2"
   grep -RInE $INC_GO $EXC -e "$p" "$SRC" | sed "s|^|🔎 İNCELEME [$d]: |" | tee -a "$OUT" || true; }
 
@@ -90,7 +122,10 @@ if grep -RInE $INC $EXC -e 'res\.cookie\(' "$SRC" | grep -v httpOnly; then
 # deseni: document.body.innerHTML = ""). İki aşama, çünkü güvenli biçim
 # ("" ataması) deseni üretiyor.
 if grep -RInE $INC $EXC -e '\.(innerHTML|outerHTML)\s*=' "$SRC" \
-     | grep -vE '\.(innerHTML|outerHTML)\s*=\s*(""|'\'''\'')\s*;?\s*$'; then
+     | grep -vE '\.(innerHTML|outerHTML)\s*=\s*(""|'\'''\'')\s*;?\s*$' \
+     | reviewed_filter "js.innerhtml-assignment"; then
+  :
+else
   echo "❌ BLOK: innerHTML/outerHTML ataması"; FAIL=1; fi
 
 # noopener'sız target=_blank — DOSYA BAZINDA sayım.
@@ -111,7 +146,10 @@ done
 # (draftStorage.test.ts "auth-store" korunuyor mu testi). Üretim kodunda BLOK,
 # test kodunda İNCELEME — §0.5 gereği testler kapsam dışı bırakılmaz, görünür kalır.
 if grep -RInE $INC $EXC -e '(localStorage|sessionStorage)\.setItem\([^)]*(session|token|user|auth|password)' "$SRC" \
-     | grep -vE '\.(test|spec)\.(ts|tsx|js|jsx):'; then
+     | grep -vE '\.(test|spec)\.(ts|tsx|js|jsx):' \
+     | reviewed_filter "js.webstorage-sensitive-key"; then
+  :
+else
   echo "❌ BLOK: Web storage'da hassas veri"; FAIL=1; fi
 grep -RInE $INC $EXC -e '(localStorage|sessionStorage)\.setItem\([^)]*(session|token|user|auth|password)' "$SRC" \
   | grep -E '\.(test|spec)\.(ts|tsx|js|jsx):' \
@@ -142,9 +180,9 @@ incele "client açık yönlendirme"    'location\.(href|assign|replace)\s*(=|\()
 # Standardın §0.10 tablosu JS/TS + Python + CI/YAML kapsıyordu; Go seti
 # "stack'e girince eklenir" hükmüyle boş bırakılmıştı. Aşağıdaki desenler,
 # scan 1000882'de doğan bulgu ailelerinin Go tarafındaki birebir karşılığıdır.
-# BLOK sınıfı yalnız güvenli biçimin deseni ÜRETEMEYECEĞİ yerlerde:
-# pkg.ErrText(err) hiçbir zaman ".Error()" içermez, bind'li sorgu hiçbir zaman
-# Sprintf/concat içermez.
+# Go regex'leri aday SQL Sprintf/concat biçimlerini BLOK'a taşır. Kaynağı tam
+# dosya + satır hash'iyle doğrulanmış dar istisnalar yalnız inceleme kuyruğuna
+# alınır; manifest dışındaki veya değişmiş her eşleşme BLOK kalır.
 # ============================================================
 
 # --- Secret/Privacy Leak in Logs + Error Messages (CWE-209/532) ---
@@ -159,8 +197,8 @@ grep -RInE $INC_GO $EXC -e '[A-Za-z_]*[Ee]rr\.Error\(\)' "$SRC" \
   | sed 's|^|🔎 İNCELEME [Go ham .Error() kullanımı]: |' | tee -a "$OUT" || true
 
 # --- Injection (§6) ---
-blok_go "SQL Sprintf ile kuruluyor"      '\.(Query|QueryRow|Exec)(Context)?\([^)]*fmt\.Sprintf'
-blok_go "SQL string concat"              '\.(Query|QueryRow|Exec)(Context)?\([^)]*[A-Za-z_]+\s*\+'
+blok_reviewed_go "SQL Sprintf ile kuruluyor" "go.sql-sprintf" '\.(Query|QueryRow|Exec)(Context)?\([^)]*fmt\.Sprintf'
+blok_reviewed_go "SQL string concat" "go.sql-concat" '\.(Query|QueryRow|Exec)(Context)?\([^)]*[A-Za-z_]+\s*\+'
 blok_go "shell -c ile komut"             'exec\.Command(Context)?\([^)]*"(sh|bash|cmd|powershell)"'
 blok_go "HTTP yanıtında text/template"   '"text/template"'
 
@@ -174,7 +212,7 @@ if grep -RInE $INC_GO $EXC -e 'SigningMethodNone|UnsafeAllowNoneSignatureType' "
 grep -RInE $INC_GO $EXC -e 'SigningMethodNone|UnsafeAllowNoneSignatureType' "$SRC" \
   | grep '_test\.go:' \
   | sed 's|^|🔎 İNCELEME [negatif test: alg=none reddi]: |' | tee -a "$OUT" || true
-blok_go "zayıf hash (md5/sha1)"          '"crypto/(md5|sha1)"'
+blok_reviewed_go "zayıf hash (md5/sha1)" "go.weak-hash" '"crypto/(md5|sha1)"'
 blok_go "AES ECB / IV'siz mod"           'NewECBEncrypter|NewECBDecrypter'
 incele_go "math/rand kullanımı"          '"math/rand"'
 incele_go "jwt.Parse (keyfunc alg kontrolü doğrulanmalı)" 'jwt\.Parse(WithClaims)?\('

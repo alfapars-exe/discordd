@@ -84,8 +84,36 @@ func TestPostgresImportPreservesDataAndRejectsReuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report) != 76 {
-		t.Fatalf("unexpected table count %d", len(report))
+	// Assert coverage against the actual source schema, not an obsolete count
+	// that stops the acceptance test whenever an additive migration is added.
+	expectedRows, err := source.Conn.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'messages_fts%' AND name NOT LIKE 'dm_messages_fts%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedTables := map[string]bool{}
+	for expectedRows.Next() {
+		var name string
+		if err = expectedRows.Scan(&name); err != nil {
+			expectedRows.Close()
+			t.Fatal(err)
+		}
+		expectedTables[name] = true
+	}
+	if err = expectedRows.Err(); err != nil {
+		expectedRows.Close()
+		t.Fatal(err)
+	}
+	if err = expectedRows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if len(report) != len(expectedTables) || !expectedTables["group_dm_pins"] || !expectedTables["users"] {
+		t.Fatalf("incomplete schema report: got %d tables, expected %d", len(report), len(expectedTables))
+	}
+	for _, table := range report {
+		if !expectedTables[table.Table] || len(table.SHA256) != 64 {
+			t.Fatalf("unexpected, duplicate or unhashed table in import report: %s", table.Table)
+		}
+		delete(expectedTables, table.Table)
 	}
 	var hash, ciphertext, url string
 	if err = target.QueryRow(`SELECT u.password_hash,m.content,a.file_url FROM users u JOIN messages m ON m.user_id=u.id JOIN attachments a ON a.message_id=m.id WHERE m.id='import-message'`).Scan(&hash, &ciphertext, &url); err != nil {

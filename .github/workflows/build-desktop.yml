@@ -241,16 +241,54 @@ jobs:
         run: |
           test -n "$HF_RELEASE_TOKEN" || { echo "HF_RELEASE_TOKEN is required for release artifact publishing"; exit 1; }
           python -m pip install --disable-pip-version-check --no-input "huggingface_hub==1.26.0"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from huggingface_hub import HfApi
+          outputs = list(Path('release').glob('hichat-setup.*'))
+          manifests = list(Path('release').glob('latest*.yml'))
+          if not outputs or not manifests:
+              raise SystemExit('Installer outputs and updater metadata are required')
+          # One commit publishes matching artifact bytes and metadata together.
+          HfApi(token=os.environ['HF_RELEASE_TOKEN']).upload_folder(
+              repo_id='infinayazilim/hichat-releases', repo_type='dataset',
+              folder_path='release', path_in_repo='',
+              allow_patterns=['hichat-setup.*', 'latest*.yml'],
+              commit_message='Publish ' + os.environ['GITHUB_REF_NAME'])
+          PY
+
+      # Existing installations up to 2.11.110 still check the GitHub provider.
+      # A draft collects both platforms; only the final job makes it visible.
+      - name: Stage legacy updater bridge
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+              --title "HiChat! ${GITHUB_REF_NAME}" \
+              --notes "HiChat desktop update: audio output controls, connection recovery and compatibility fixes." \
+              || gh release view "$GITHUB_REF_NAME" >/dev/null
+          fi
+          test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true \
+            || { echo 'Refusing to replace files of an already published release'; exit 1; }
           shopt -s nullglob
           FILES=(release/hichat-setup.* release/latest*.yml)
-          if [ ${#FILES[@]} -eq 0 ]; then
-            echo "ERROR: no build outputs matched release/hichat-setup.* — check artifactName"
-            exit 1
-          fi
-          for FILE in "${FILES[@]}"; do
-            hf upload infinayazilim/hichat-releases "$FILE" "$(basename "$FILE")" \
-              --repo-type dataset --token "$HF_RELEASE_TOKEN" --commit-message "Publish ${GITHUB_REF_NAME} $(basename "$FILE")"
-          done
+          test ${#FILES[@]} -gt 0
+          gh release upload "$GITHUB_REF_NAME" "${FILES[@]}" --clobber
+
+  publish-legacy-bridge:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish complete compatibility release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
 
   # ─── Self-host server: multi-arch Docker image to GHCR ───
   # Replaced the previous CGO_ENABLED=0 cross-compile that was marked
@@ -302,5 +340,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Release artifacts are published directly by each platform matrix leg to
-  # the public HF Dataset; no private GitHub release is required by clients.
+  # New clients use the HF Dataset; the public GitHub bridge also serves
+  # older installations until they have installed a generic-feed version.
