@@ -229,7 +229,7 @@ function AppearanceSettings() {
             <div className="acc-preview-avatar" />
             <div className="acc-preview-body">
               <div className="acc-preview-head">
-                <span className="acc-preview-author">{user?.display_name ?? user?.username ?? "ALFAP4RS"}</span>
+                <span className="acc-preview-author">{user?.display_name?.trim() || user?.username?.trim() || t("acc.previewIdentity")}</span>
                 <span className="acc-preview-time">21:38</span>
               </div>
               <div className="acc-preview-text">{t("acc.previewMsg1")}</div>
@@ -245,7 +245,7 @@ function AppearanceSettings() {
               <div className="acc-preview-text">
                 {t("acc.previewMsg2")}{" "}
                 <a href="#" onClick={(e) => e.preventDefault()}>
-                  https://tayfa.app/themes
+                  https://example.com/themes
                 </a>
               </div>
               <button type="button" className="acc-preview-button">

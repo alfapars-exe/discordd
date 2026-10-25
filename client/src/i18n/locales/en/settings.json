@@ -366,6 +366,7 @@
   "appearance": "Appearance",
   "accessibility": "Accessibility",
   "acc.preview": "Preview",
+  "acc.previewIdentity": "HiChat User",
   "acc.previewPresence": "Online, idle, and do not disturb presence preview",
   "acc.previewMsg1": "what happened to the beans?",
   "acc.previewMsg2": "you can use this link",
