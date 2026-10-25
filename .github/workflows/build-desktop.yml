@@ -108,6 +108,10 @@ jobs:
       - name: Install client dependencies
         run: npm ci --prefix client
 
+      - name: Verify packaged microphone worklet remains CSP-compatible
+        run: node --test scripts/audio-build-csp.test.mjs
+        working-directory: client
+
       # ─── Build client (Vite) ───
       - name: Build client
         run: npx vite build --outDir dist
@@ -217,7 +221,7 @@ jobs:
       - name: Verify Windows install and upgrade
         if: matrix.platform == 'windows-latest'
         shell: pwsh
-        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.110"
+        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.113"
 
       # macOS: DMG with code signing + notarization
       # electron-builder reads CSC_LINK/CSC_KEY_PASSWORD for signing.
