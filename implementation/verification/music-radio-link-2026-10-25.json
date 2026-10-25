@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-25",
+  "scope": "Backend video links containing YouTube radio/playlist parameters",
+  "input": "https://www.youtube.com/watch?v=0KbRhUtFwkc&list=RD0KbRhUtFwkc&start_radio=1",
+  "finding": "Metadata extraction inherited yt-dlp's playlist preference. The exact watch URL expanded to 201 radio tracks before the bot connection was attempted. Production logs independently confirm that the user's exact radio URL timed out during extraction before the bot could join.",
+  "production_evidence": {
+    "source": "Authenticated read-only Hugging Face Space runtime log stream for infinayazilim/discord",
+    "initial_space_revision": "d28cd45557cb105f2d08395b79ffb29dd15b48fb",
+    "request_started_utc": "2026-10-25T12:20:02.508Z",
+    "failure_utc": "2026-10-25T12:20:32.824Z",
+    "extract_duration_ms": 30003,
+    "http_status": 500,
+    "request_duration_ms": 30894,
+    "error": "yt-dlp extraction failed: music extraction interrupted: context deadline exceeded",
+    "interpretation": "The installed client's command reached Enqueue for the active voice channel. It failed before LiveKit connection; this incident was not a protocol-2 rejection.",
+    "concurrent_rollout": "An unrelated deployment queued revision efcf15b at 12:29:19 UTC and restarted the Space at 12:31:40 UTC. A canonical single-video command attempted during this rollout did not show a joined bot; it is inconclusive because the backend was restarting. The new container later showed Running and /api/ready 200 at 12:32:21 UTC. This task did not deploy or restart it."
+  },
+  "installed_client": {
+    "version": "2.11.112-rc.1",
+    "observation": "Read-only inspection of the installed ASAR shows legacy music requests containing only url. It lacks control-session and protocol-2 metadata. This is a future deployment compatibility constraint, not the cause shown in the original production log."
+  },
+  "change": "Pass --no-playlist during metadata extraction. A link identifying both a video and playlist selects that video; explicit playlist URLs continue to expand. Extraction/search deadlines now return MUSIC_NETWORK while preserving errors.Is(context.DeadlineExceeded); caller cancellation stays distinct. Existing URL/network guards, extractor restrictions and subprocess/output bounds remain in force.",
+  "checks": [
+    {
+      "command": "go test ./services -run 'MusicMetadata|MusicErrorCode|ClassifyPlaybackFailure|ExtractTracks|ParseMusicMetadata' -count=1",
+      "cwd": "server",
+      "result": "Passed in 2.730 seconds after the final deadline-classification change. Tests preserve wrapped error causes and distinguish caller cancellation from a provider deadline."
+    },
+    {
+      "command": "npx vitest run src/hooks/useMusicSlashCommand.test.ts src/api/musicProtocol.test.ts src/api/music.test.ts src/components/chat/MessageInput.test.tsx",
+      "cwd": "client",
+      "result": "4 files, 73 tests passed. Added coverage for the supplied radio URL, pasted NBSP whitespace, active voice target and first playback in an empty protocol-2 channel."
+    },
+    {
+      "case": "Pre-fix exact extraction argv with playlist-end 201 in existing runtime image",
+      "result": "Exit 0; 201 entries in 10.35 seconds. This reproduced unintended radio expansion, not a complete failure to join in the local environment."
+    },
+    {
+      "case": "Post-fix exact input with --no-playlist",
+      "result": "Exit 0; one track, 0KbRhUtFwkc (Ouz - BENDE), in 5.94 seconds."
+    },
+    {
+      "case": "Explicit public playlist regression using yt-dlp's own fixture https://www.youtube.com/playlist?list=PLwP_SiAcdui0KVebT0mU9Apz359a4ubsC",
+      "result": "Exit 0; 96 entries in 3.70 seconds with --no-playlist, confirming explicit playlist expansion remains supported. Metadata only; no playlist audio downloaded."
+    },
+    {
+      "command": "go test ./services -run 'Music|Ytdlp|ExtractTracks|PlayTrack|PlayLoop|StallWatchdog|Enqueue|FlatPlaylist|ParseMusicMetadata' -count=1",
+      "cwd": "server",
+      "result": "Passed in 25.226 seconds; opt-in external cases skipped in this offline run."
+    },
+    {
+      "case": "TestMusicYouTubeLiveKitSmoke with the unmodified input URL, current Linux services test binary, hichat-server-music-acceptance:local runtime and disposable loopback LiveKit v1.8.4",
+      "result": "Passed in 31.70 seconds. Metadata returned one track in 4.431 seconds, the bot joined and published GCM-encrypted audio, and an independent listener received 437 decrypted packets with decoded peak 0.2753. Key rotation received 337 frames with decoded peak 0.4156. Pause/resume, duplicate enqueue, queue, skip and stop passed."
+    },
+    {
+      "command": "git diff --check -- server/services/music_bot_metadata.go server/services/music_bot_metadata_test.go MUSIC_BOT.md",
+      "result": "Passed."
+    }
+  ],
+  "cleanup": "The task-specific disposable LiveKit container was stopped and auto-removed. Existing QA services were preserved.",
+  "limits": [
+    "Local media tests verify exact-URL extraction/join/audio. Production evidence confirms the original request reached extraction and hit its deadline; corrected source has not been deployed by this task.",
+    "Media tests used no production credentials or YouTube account cookies. Existing browser authentication was used only to read Space status and runtime logs. No commit, push, deployment or installer publication was performed by this task.",
+    "Audible output through the installed Windows client remains unverified. The concurrent deployment and installed-client protocol compatibility must be considered before a wider rollout."
+  ]
+}
