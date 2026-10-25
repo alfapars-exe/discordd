@@ -1,15 +1,92 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 )
+
+func TestMusicMetadataDiagnostic_RedactsSensitiveDetails(t *testing.T) {
+	tail := "[debug] Proxy map: password=debug-secret\n" +
+		"partial token=partial-secret\n" +
+		"\x1b[33mWARNING:\x1b[0m [youtube] 0KbRhUtFwkc: timed out fetching https://www.youtube.com/watch?v=0KbRhUtFwkc&token=url-secret\n" +
+		"ERROR: proxy socks5://user:proxy-secret@proxy.example:1080 failed\n" +
+		"WARNING: Authorization: Bearer bearer-secret\n" +
+		"ERROR: Cookie: session=cookie-secret\n" +
+		"WARNING: api_key=key-secret\n" +
+		"ERROR: {\"token\":\"json-secret\"}\n" +
+		"WARNING: password=two word secret\n" +
+		"WARNING: read timed out (retrying 1/1)"
+	got := musicMetadataDiagnostic(tail)
+	for _, sensitive := range []string{"debug-secret", "partial-secret", "0KbRhUtFwkc", "youtube.com", "url-secret", "proxy-secret", "proxy.example", "bearer-secret", "cookie-secret", "key-secret", "json-secret", "two word secret", "\x1b", "\n"} {
+		if strings.Contains(got, sensitive) {
+			t.Errorf("diagnostic leaked %q: %q", sensitive, got)
+		}
+	}
+	for _, diagnostic := range []string{"timed out fetching [url]", "proxy [url] failed", "read timed out (retrying 1/1)"} {
+		if !strings.Contains(got, diagnostic) {
+			t.Errorf("lost useful provider warning %q: %q", diagnostic, got)
+		}
+	}
+}
+
+func TestMusicMetadataDiagnostic_BoundedAndKeepsLastWarning(t *testing.T) {
+	got := musicMetadataDiagnostic("WARNING: " + strings.Repeat("Ğ", 3000) + "\nERROR: final provider failure")
+	if !utf8.ValidString(got) || utf8.RuneCountInString(got) != maxMusicMetadataDiagnosticRunes {
+		t.Fatalf("diagnostic is not valid bounded text: %d bytes, %d runes", len(got), utf8.RuneCountInString(got))
+	}
+	if !strings.HasSuffix(got, "ERROR: final provider failure") {
+		t.Fatalf("latest provider error was lost: %q", got)
+	}
+	if got := musicMetadataDiagnostic("[debug] token=hidden\ntruncated warning continuation"); got != "" {
+		t.Fatalf("non-warning output was logged: %q", got)
+	}
+}
+
+func TestLogMusicMetadataFailure_EmitsSafeTimingsWithoutChangingError(t *testing.T) {
+	var output bytes.Buffer
+	originalLogger := musicBotLogger
+	musicBotLogger = slog.New(slog.NewJSONHandler(&output, nil))
+	t.Cleanup(func() { musicBotLogger = originalLogger })
+	err := musicMetadataInterruptedError("extraction", context.DeadlineExceeded)
+	logMusicMetadataFailure("extraction", 7*time.Millisecond, 30000*time.Millisecond, err,
+		"WARNING: read timed out fetching https://example.com/?token=secret")
+	var record map[string]any
+	if decodeErr := json.Unmarshal(output.Bytes(), &record); decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	if record["validation_ms"] != float64(7) || record["subprocess_ms"] != float64(30000) || record["deadline"] != true || record["reason"] != "network" {
+		t.Fatalf("missing phase/failure evidence: %v", record)
+	}
+	if record["stderr_tail"] != "WARNING: read timed out fetching [url]" || strings.Contains(output.String(), "secret") {
+		t.Fatalf("log output was not sanitized: %s", output.String())
+	}
+	if !errors.Is(err, context.DeadlineExceeded) || MusicErrorCode(err) != "MUSIC_NETWORK" {
+		t.Fatalf("logging changed outward error semantics: %v", err)
+	}
+}
+
+func TestMusicMetadataArgs_RetainWarningsWithoutVerboseOutput(t *testing.T) {
+	for _, args := range [][]string{extractTracksArgs("https://www.youtube.com/watch?v=0KbRhUtFwkc"), searchMusicArgs("song")} {
+		for _, forbidden := range []string{"--no-warnings", "--verbose", "--print-traffic", "--dump-pages"} {
+			if slices.Contains(args, forbidden) {
+				t.Errorf("metadata diagnostics use forbidden flag %q", forbidden)
+			}
+		}
+		assertHasAdjacentPair(t, args, "--socket-timeout", "10")
+		assertHasAdjacentPair(t, args, "--extractor-retries", "1")
+	}
+}
 
 func TestMusicMetadataInterruptedError_PreservesCauseAndClassifiesDeadline(t *testing.T) {
 	for _, operation := range []string{"extraction", "search"} {
