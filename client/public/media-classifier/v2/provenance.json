@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "model": {
+    "repository": "OwenElliott/image-safety-classifier-xs",
+    "revision": "54f4560bd9c5ee92d45dc30418a8f8680e80de6d",
+    "source_path": "onnx/image-safety-classifier-xs.onnx",
+    "local_path": "model.onnx",
+    "bytes": 13137569,
+    "sha256": "8c28c49d9075f3ad15ebdc2961f02d5b3f99be944815b848b49c9f0e6f3fb689",
+    "declared_license": "MIT",
+    "model_card": "MODEL_CARD.md",
+    "base_license": "SWIFTFORMER-LICENSE"
+  },
+  "runtime": {
+    "package": "onnxruntime-web",
+    "version": "1.30.0",
+    "license": "ONNX-RUNTIME-LICENSE",
+    "third_party_notices": "ONNX-ThirdPartyNotices.txt",
+    "assets": [
+      { "path": "ort.wasm.min.mjs", "bytes": 50126, "sha256": "219e6a1fc8a9938268d18efca3c91d310bd2f4a59bbd13744df5b2b7fc6cee3b" },
+      { "path": "ort-wasm-simd-threaded.mjs", "bytes": 24381, "sha256": "e13f7f94fc51b4ca72b12faeb1ee95f4ace6dfbc8939bc718aabdc0a27c4299b" },
+      { "path": "ort-wasm-simd-threaded.wasm", "bytes": 14239897, "sha256": "3398c10d07d229bd91b364548e130e0e51a8e5704b88c7c083ebbeb78842dee2" }
+    ]
+  },
+  "preprocessing": { "reference": "Pillow 13.0.0", "license": "PILLOW-LICENSE" },
+  "verification": "node scripts/verify-vendored-disturbing-runtime.mjs",
+  "limitations": "Pinned local artifacts and declared upstream licenses, not a completed legal, model-quality, browser or Windows acceptance review. Provisional thresholds; unsupported or failed analysis remains unknown."
+}

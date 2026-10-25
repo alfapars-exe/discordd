@@ -11,6 +11,7 @@ func (d *routeDeps) registerServerRoutes() {
 	d.mux.Handle("GET /api/servers/{serverId}", d.authServer(d.h.Server.GetServer))
 	d.mux.Handle("PATCH /api/servers/{serverId}", d.authServerPerm(models.PermAdmin, d.h.Server.UpdateServer))
 	d.mux.Handle("DELETE /api/servers/{serverId}", d.authServer(d.h.Server.DeleteServer))
+	d.mux.Handle("POST /api/servers/{serverId}/transfer-ownership", d.authServer(d.h.Auth.TransferServerOwnership))
 	d.mux.Handle("POST /api/servers/{serverId}/leave", d.authServer(d.h.Server.LeaveServer))
 	d.mux.Handle("POST /api/servers/{serverId}/icon", d.authServerPerm(models.PermAdmin, d.h.Avatar.UploadServerIcon))
 
@@ -29,6 +30,21 @@ func (d *routeDeps) registerServerRoutes() {
 	// itself enforces audit-view perms (Admin or Kick/Ban/Mute/Deafen), so
 	// authServer is sufficient here (no per-route perm gate).
 	d.mux.Handle("GET /api/servers/{serverId}/audit", d.authServer(d.h.AuditLog.ListServerAudit))
+
+	// Installed applications are server-level grants. They intentionally use a
+	// dedicated permission instead of full administrator access.
+	d.mux.Handle("GET /api/servers/{serverId}/applications", d.authServerPerm(models.PermManageApplications, d.botHandler.ListInstallations))
+	d.mux.Handle("PUT /api/servers/{serverId}/applications/{botID}", d.authServerPerm(models.PermManageApplications, d.botHandler.Install))
+	d.mux.Handle("DELETE /api/servers/{serverId}/applications/{botID}", d.authServerPerm(models.PermManageApplications, d.botHandler.RevokeInstallation))
+	d.mux.Handle("GET /api/servers/{serverId}/application-actions", d.authServer(d.botHandler.ListAvailableActions))
+
+	// Server events: reads and RSVPs are member-scoped; mutations require ManageEvents.
+	d.mux.Handle("GET /api/servers/{serverId}/events", d.authServer(d.h.ServerEvent.List))
+	d.mux.Handle("GET /api/servers/{serverId}/events/{eventId}", d.authServer(d.h.ServerEvent.Get))
+	d.mux.Handle("POST /api/servers/{serverId}/events", d.authServerPerm(models.PermManageEvents, d.h.ServerEvent.Create))
+	d.mux.Handle("PATCH /api/servers/{serverId}/events/{eventId}", d.authServerPerm(models.PermManageEvents, d.h.ServerEvent.Update))
+	d.mux.Handle("POST /api/servers/{serverId}/events/{eventId}/cancel", d.authServerPerm(models.PermManageEvents, d.h.ServerEvent.Cancel))
+	d.mux.Handle("PUT /api/servers/{serverId}/events/{eventId}/rsvp", d.authServer(d.h.ServerEvent.RSVP))
 }
 
 func (d *routeDeps) registerChannelRoutes() {
@@ -38,6 +54,11 @@ func (d *routeDeps) registerChannelRoutes() {
 	d.mux.Handle("PATCH /api/servers/{serverId}/channels/reorder", d.authServerPerm(models.PermManageChannels, d.h.Channel.Reorder))
 	d.mux.Handle("PATCH /api/servers/{serverId}/channels/{id}", d.authServerPerm(models.PermManageChannels, d.h.Channel.Update))
 	d.mux.Handle("DELETE /api/servers/{serverId}/channels/{id}", d.authServerPerm(models.PermManageChannels, d.h.Channel.Delete))
+	// Threads inherit visibility/send authorization from their parent channel.
+	d.mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/threads", d.authServer(d.h.Thread.List))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/threads", d.authServer(d.h.Thread.Create))
+	d.mux.Handle("GET /api/servers/{serverId}/threads/{threadId}", d.authServer(d.h.Thread.Get))
+	d.mux.Handle("PATCH /api/servers/{serverId}/threads/{threadId}", d.authServer(d.h.Thread.SetArchived))
 
 	// Categories
 	d.mux.Handle("GET /api/servers/{serverId}/categories", d.authServer(d.h.Category.List))
@@ -56,6 +77,7 @@ func (d *routeDeps) registerMessageRoutes() {
 
 	// Reactions
 	d.mux.Handle("POST /api/servers/{serverId}/messages/{messageId}/reactions", d.authServer(d.h.Reaction.Toggle))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/application-actions/{actionId}", d.authServer(d.botHandler.InvokeAction))
 
 	// Pins
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{id}/pins", d.authServer(d.h.Pin.ListPins))
@@ -66,6 +88,7 @@ func (d *routeDeps) registerMessageRoutes() {
 	d.mux.Handle("POST /api/servers/{serverId}/channels/read-all", d.authServer(d.h.ReadState.MarkAllRead))
 	d.mux.Handle("GET /api/servers/{serverId}/channels/unread", d.authServer(d.h.ReadState.GetUnreads))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{id}/read", d.authServer(d.h.ReadState.MarkRead))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{id}/unread", d.authServer(d.h.ReadState.MarkUnread))
 }
 
 func (d *routeDeps) registerMemberRoutes() {
@@ -137,15 +160,25 @@ func (d *routeDeps) registerVoiceMusicRoutes() {
 	d.mux.Handle("POST /api/servers/{serverId}/voice/token", d.authServer(d.h.Voice.Token))
 	d.mux.Handle("POST /api/servers/{serverId}/voice/screen-token", d.authServer(d.h.Voice.ScreenShareToken))
 	d.mux.Handle("GET /api/servers/{serverId}/voice/states", d.authServer(d.h.Voice.VoiceStates))
+	d.mux.Handle("GET /api/servers/{serverId}/voice/clips/consent", d.authServer(d.h.ClipRecording.Consent))
+	d.mux.Handle("POST /api/servers/{serverId}/voice/clips/start", d.authServer(d.h.ClipRecording.Start))
+	d.mux.Handle("POST /api/servers/{serverId}/voice/clips/{recordingId}/stop", d.authServer(d.h.ClipRecording.Stop))
 
 	// Music bot — per-channel YouTube → LiveKit. Permission gating happens
 	// inside the handler (PermSpeak for play/skip/pause/resume,
 	// PermManageChannels for stop) since this lives "below" the channel.
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/play", d.authServer(d.h.Music.Play))
+	d.mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/music/search", d.authServer(d.h.Music.Search))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/skip", d.authServer(d.h.Music.Skip))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/pause", d.authServer(d.h.Music.Pause))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/resume", d.authServer(d.h.Music.Resume))
 	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/stop", d.authServer(d.h.Music.Stop))
+	d.mux.Handle("DELETE /api/servers/{serverId}/channels/{channelId}/music/queue/{queueItemId}", d.authServer(d.h.Music.RemoveQueueItem))
+	d.mux.Handle("PUT /api/servers/{serverId}/channels/{channelId}/music/queue", d.authServer(d.h.Music.ReorderQueue))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/shuffle", d.authServer(d.h.Music.ShuffleQueue))
+	d.mux.Handle("PUT /api/servers/{serverId}/channels/{channelId}/music/repeat", d.authServer(d.h.Music.SetRepeatMode))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/seek", d.authServer(d.h.Music.Seek))
+	d.mux.Handle("POST /api/servers/{serverId}/channels/{channelId}/music/restore", d.authServer(d.h.Music.Restore))
 	d.mux.Handle("GET /api/servers/{serverId}/channels/{channelId}/music/state", d.authServer(d.h.Music.State))
 }
 

@@ -63,4 +63,16 @@ describe("ProfileHero", () => {
     expect(second.container.querySelector(".mc-avatar-ring img")?.getAttribute("src")).toBe("https://cdn.test/poster.png");
     useAccessibilityStore.setState({ reduceMotion: false });
   });
+
+  it("uses the animated banner only when animation is enabled and reduced motion is off", () => {
+    const props = { name: "alice", bannerUrl: "https://cdn.test/banner.jpg", animatedBannerUrl: "https://cdn.test/banner.gif", animate: true };
+    useAccessibilityStore.setState({ reduceMotion: false });
+    const first = render(<ProfileHero {...props} />);
+    expect(first.container.querySelector(".mc-hero-banner")?.getAttribute("src")).toBe("https://cdn.test/banner.gif");
+    first.unmount();
+    useAccessibilityStore.setState({ reduceMotion: true });
+    const second = render(<ProfileHero {...props} />);
+    expect(second.container.querySelector(".mc-hero-banner")?.getAttribute("src")).toBe("https://cdn.test/banner.jpg");
+    useAccessibilityStore.setState({ reduceMotion: false });
+  });
 });

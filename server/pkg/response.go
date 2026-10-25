@@ -199,6 +199,8 @@ func mapErrorToStatus(err error) int {
 		return http.StatusForbidden
 	case errors.Is(err, ErrAlreadyExists):
 		return http.StatusConflict
+	case errors.Is(err, ErrConflict):
+		return http.StatusConflict
 	case errors.Is(err, ErrBadRequest):
 		return http.StatusBadRequest
 	case errors.Is(err, ErrDeviceNotFound):
@@ -232,6 +234,8 @@ func errorCode(err error) string {
 		return "FORBIDDEN"
 	case errors.Is(err, ErrAlreadyExists):
 		return "ALREADY_EXISTS"
+	case errors.Is(err, ErrConflict):
+		return "CONFLICT"
 	case errors.Is(err, ErrBadRequest):
 		return "BAD_REQUEST"
 	case errors.Is(err, ErrDeviceNotFound):

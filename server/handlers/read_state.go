@@ -47,6 +47,27 @@ func (h *ReadStateHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "marked as read"})
 }
 
+// MarkUnread rewinds a channel's read cursor to immediately before a message.
+func (h *ReadStateHandler) MarkUnread(w http.ResponseWriter, r *http.Request) {
+	channelID := r.PathValue("id")
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	var req markReadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	count, err := h.readStateService.MarkUnreadFrom(r.Context(), user.ID, channelID, req.MessageID)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]int{"unread_count": count})
+}
+
 // MarkAllRead marks all channels in the server as read.
 // POST /api/servers/{serverId}/channels/read-all
 func (h *ReadStateHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {

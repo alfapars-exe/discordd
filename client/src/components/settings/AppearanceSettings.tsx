@@ -11,7 +11,8 @@
  *      stronger active ring so the selected one is impossible to miss.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSettingsDraft } from "./settingsWorkspaceContext";
 import { useTranslation } from "react-i18next";
 import {
   useSettingsStore,
@@ -70,6 +71,14 @@ function AppearanceSettings() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  useSettingsDraft(pendingFile !== null || isUploading);
+  const previewToRelease = useRef<string | null>(null);
+  useEffect(() => () => {
+    if (previewToRelease.current) {
+      URL.revokeObjectURL(previewToRelease.current);
+      setPendingWallpaperPreviewUrl(null);
+    }
+  }, [setPendingWallpaperPreviewUrl]);
   // UI-scale slider — LIVE synchronous scaling without flicker. The slider sits
   // INSIDE the zoomed UI, so reading the value back from the (reflowing) native
   // <input type=range> track during a live zoom oscillates between adjacent
@@ -138,6 +147,7 @@ function AppearanceSettings() {
   function acceptFile(file: File) {
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
     const blobUrl = URL.createObjectURL(file);
+    previewToRelease.current = blobUrl;
     setPendingFile(file);
     setPendingPreviewUrl(blobUrl);
     setPendingWallpaperPreviewUrl(blobUrl);
@@ -164,6 +174,7 @@ function AppearanceSettings() {
 
   function handleCancelPending() {
     if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    previewToRelease.current = null;
     setPendingFile(null);
     setPendingPreviewUrl(null);
     setPendingWallpaperPreviewUrl(null);
@@ -181,6 +192,7 @@ function AppearanceSettings() {
       updateUser({ wallpaper_url: res.data.wallpaper_url });
       setPendingWallpaperPreviewUrl(null);
       if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+      previewToRelease.current = null;
       setPendingFile(null);
       setPendingPreviewUrl(null);
       addToast("success", t("wallpaperUpdated"));
@@ -245,7 +257,7 @@ function AppearanceSettings() {
       </div>
 
       {/* ─── Theme picker ──────────────────────────────────────────── */}
-      <h2 className="settings-section-title">{t("themeTitle")}</h2>
+      <h2 className="settings-section-title" data-settings-section="theme">{t("themeTitle")}</h2>
       <p className="theme-section-desc">{t("themeDescription")}</p>
 
       <div className="theme-grid">
@@ -281,7 +293,7 @@ function AppearanceSettings() {
       </div>
 
       {/* ─── App / UI scale — whole-interface zoom (Appearance request) ─── */}
-      <h2 className="settings-section-title" style={{ marginTop: 28 }}>
+      <h2 className="settings-section-title" data-settings-section="scale" style={{ marginTop: 28 }}>
         {t("uiScaleTitle", { defaultValue: "Uygulama olcegi" })}
       </h2>
       <p className="theme-section-desc">
@@ -330,7 +342,7 @@ function AppearanceSettings() {
       )}
 
       {/* ─── Animated avatars — hover-only (default) or always ─────── */}
-      <h2 className="settings-section-title" style={{ marginTop: 28 }}>{t("avatarAnimationMode")}</h2>
+      <h2 className="settings-section-title" data-settings-section="avatars" style={{ marginTop: 28 }}>{t("avatarAnimationMode")}</h2>
       <div className="settings-field">
         <select
           className="settings-input"
@@ -349,8 +361,9 @@ function AppearanceSettings() {
       )}
 
       {/* ─── Wallpaper — drag-drop zone ─────────────────────────────── */}
-      <h2 className="settings-section-title" style={{ marginTop: 28 }}>{t("wallpaperTitle")}</h2>
+      <h2 className="settings-section-title" data-settings-section="wallpaper" style={{ marginTop: 28 }}>{t("wallpaperTitle")}</h2>
       <p className="theme-section-desc">{t("wallpaperDescription")}</p>
+      {transparentBackground && <p className="theme-section-desc">{t("wallpaperTransparencyOverride")}</p>}
 
       <label className="settings-toggle-row">
         <span>{t("wallpaperEnable")}</span>
@@ -434,7 +447,7 @@ function AppearanceSettings() {
       </div>
 
       {/* ─── Overlay effects — blur + transparent grouped ───────────── */}
-      <h2 className="settings-section-title" style={{ marginTop: 28 }}>
+      <h2 className="settings-section-title" data-settings-section="effects" style={{ marginTop: 28 }}>
         {t("overlayEffects", { defaultValue: "Görsel Efektler" })}
       </h2>
       <p className="theme-section-desc">{t("blurDescription")}</p>

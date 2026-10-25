@@ -45,6 +45,7 @@ export type MemberWithRoles = {
   /** Profile fields (Faz F) — same semantics as on User. */
   avatar_animated_url?: string | null;
   banner_url?: string | null;
+  banner_animated_url?: string | null;
   bio?: string | null;
   pronouns?: string | null;
   accent_color?: string | null;

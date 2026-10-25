@@ -1,29 +1,37 @@
 /**
- * Notification Store — persisted activity feed (mentions, replies, friend
- * and DM requests). Backed by GET /users/me/notifications; kept live via
- * the `notification_create` / `notification_read` WS ops.
+ * Notification Store — account-scoped persisted activity feed.
  *
- * `unreadCount` is server-authoritative: seeded by fetchCount() on `ready`,
- * bumped locally on create / read, and overwritten by `notification_read`
- * syncs from other devices.
- *
- * Stable empty refs (EMPTY_*) prevent infinite re-renders in selectors.
+ * Every async result and websocket mutation is fenced by the authenticated
+ * owner plus API auth generation. This keeps stale requests and events from
+ * contaminating the next account or same-account reauthentication.
  */
 
 import { create } from "zustand";
+import { getAuthGeneration } from "../api/client";
 import * as notificationsApi from "../api/notifications";
 import type { AppNotification } from "../types";
+import { useAuthStore } from "./authStore";
+import { getAuthSessionOwner, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../api/authSessionEvents";
 
 const EMPTY_ITEMS: AppNotification[] = [];
 const PAGE_SIZE = 20;
+
+type Session = { ownerId: string; authGeneration: number };
 
 type NotificationState = {
   items: AppNotification[];
   unreadCount: number;
   hasMore: boolean;
   isLoading: boolean;
+  /** Latest account-scoped initial list request completed successfully. */
+  hasLoaded: boolean;
+  /** Latest account-scoped initial list request failed or returned no data. */
+  fetchError: boolean;
   /** Filter for list fetches; flipping it refetches from the top. */
   unreadOnly: boolean;
+  /** Account and login-session that own this feed snapshot. */
+  ownerId: string | null;
+  authGeneration: number;
 
   // ─── Actions ───
   fetchInitial: () => Promise<void>;
@@ -38,130 +46,286 @@ type NotificationState = {
   handleReadSync: (data: { ids: string[]; all: boolean; unread_count: number }) => void;
 };
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
-  items: EMPTY_ITEMS,
-  unreadCount: 0,
-  hasMore: false,
-  isLoading: false,
-  unreadOnly: false,
+let listIntent = 0;
+let countIntent = 0;
+let unreadRevision = 0;
+let readRevision = 0;
+const pendingReadRevisions = new Map<string, number>();
 
-  // ─── Actions ───
+function currentSession(): Session | null {
+  const ownerId = useAuthStore.getState().user?.id;
+  const authGeneration = getAuthGeneration();
+  return ownerId ? { ownerId, authGeneration } : null;
+}
 
-  fetchInitial: async () => {
-    set({ isLoading: true });
-    try {
-      const res = await notificationsApi.listNotifications({
-        unreadOnly: get().unreadOnly,
-        limit: PAGE_SIZE,
+function isSessionCurrent(session: Session): boolean {
+  const auth = useAuthStore.getState();
+  const store = useNotificationStore.getState();
+  return auth.user?.id === session.ownerId && getAuthGeneration() === session.authGeneration
+    && store.ownerId === session.ownerId && store.authGeneration === session.authGeneration;
+}
+
+function clearForOwner(ownerId: string | null, authGeneration: number): void {
+  listIntent += 1;
+  countIntent += 1;
+  unreadRevision += 1;
+  readRevision += 1;
+  pendingReadRevisions.clear();
+  useNotificationStore.setState((state) => ({
+    items: EMPTY_ITEMS,
+    unreadCount: 0,
+    hasMore: false,
+    isLoading: false,
+    hasLoaded: false,
+    fetchError: false,
+    ownerId,
+    authGeneration,
+    // The display filter is a UI choice, not notification data.
+    unreadOnly: state.unreadOnly,
+  }));
+}
+
+export const useNotificationStore = create<NotificationState>((set, get) => {
+  function adoptCurrentOwner(): Session | null {
+    const session = currentSession();
+    const state = get();
+    if (state.ownerId !== (session?.ownerId ?? null) || state.authGeneration !== getAuthGeneration()) {
+      listIntent += 1;
+      countIntent += 1;
+      unreadRevision += 1;
+      readRevision += 1;
+      pendingReadRevisions.clear();
+      set({
+        items: EMPTY_ITEMS,
+        unreadCount: 0,
+        hasMore: false,
+        isLoading: false,
+        hasLoaded: false,
+        fetchError: false,
+        ownerId: session?.ownerId ?? null,
+        authGeneration: getAuthGeneration(),
       });
-      if (res.success && res.data) {
-        set({
-          items: res.data.notifications ?? EMPTY_ITEMS,
-          hasMore: res.data.has_more,
-        });
+    }
+    return session;
+  }
+
+  function currentOwnedSession(): Session | null {
+    const session = currentSession();
+    if (!session) return null;
+    const state = get();
+    return state.ownerId === session.ownerId && state.authGeneration === session.authGeneration ? session : null;
+  }
+
+  return {
+    items: EMPTY_ITEMS,
+    unreadCount: 0,
+    hasMore: false,
+    isLoading: false,
+    hasLoaded: false,
+    fetchError: false,
+    unreadOnly: false,
+    ownerId: null,
+    authGeneration: -1,
+
+    fetchInitial: async () => {
+      const session = adoptCurrentOwner();
+      if (!session) return;
+      const state = get();
+      const unreadOnly = state.unreadOnly;
+      const itemsByIdAtRequestStart = new Map(state.items.map((item) => [item.id, item]));
+      const request = ++listIntent;
+      set({ isLoading: true });
+      set({ hasLoaded: false, fetchError: false });
+      try {
+        const res = await notificationsApi.listNotifications({ unreadOnly, limit: PAGE_SIZE });
+        if (!isSessionCurrent(session) || request !== listIntent || get().unreadOnly !== unreadOnly) return;
+        if (res.success && res.data) {
+          const currentItems = get().items;
+          const remote = Array.isArray(res.data.notifications)
+            ? res.data.notifications.filter((item) => item.user_id === session.ownerId)
+            : EMPTY_ITEMS;
+          const remoteIds = new Set(remote.map((item) => item.id));
+          const currentById = new Map(currentItems.map((item) => [item.id, item]));
+          const refreshed = remote
+            .filter((item) => !unreadOnly || !item.read_at)
+            .map((item) => {
+              const current = currentById.get(item.id);
+              // Only a post-start local mutation wins over the authoritative
+              // server row (unchanged cached read state may be stale).
+              return current && current !== itemsByIdAtRequestStart.get(item.id)
+                ? { ...item, read_at: current.read_at } : item;
+            });
+          // Retain only genuinely new WS arrivals from after the request began.
+          // Old cached rows omitted by the authoritative list must disappear.
+          const arrivedDuringRequest = currentItems.filter((item) =>
+            !itemsByIdAtRequestStart.has(item.id) && !remoteIds.has(item.id) && (!unreadOnly || !item.read_at));
+          set({
+            items: [...arrivedDuringRequest, ...refreshed],
+            hasMore: res.data.has_more,
+            hasLoaded: true,
+            fetchError: false,
+          });
+        } else {
+          set({ fetchError: true });
+        }
+      } catch {
+        if (isSessionCurrent(session) && request === listIntent && get().unreadOnly === unreadOnly) set({ fetchError: true });
+      } finally {
+        if (isSessionCurrent(session) && request === listIntent) set({ isLoading: false });
       }
-    } finally {
-      set({ isLoading: false });
-    }
-  },
+    },
 
-  fetchMore: async () => {
-    const { items, hasMore, isLoading, unreadOnly } = get();
-    if (!hasMore || isLoading || items.length === 0) return;
-    set({ isLoading: true });
-    try {
-      const res = await notificationsApi.listNotifications({
-        before: items[items.length - 1].id,
-        unreadOnly,
-        limit: PAGE_SIZE,
-      });
-      if (res.success && res.data) {
-        const seen = new Set(get().items.map((n) => n.id));
-        const fresh = (res.data.notifications ?? []).filter((n) => !seen.has(n.id));
-        set((s) => ({
-          items: [...s.items, ...fresh],
-          hasMore: res.data!.has_more,
-        }));
+    fetchMore: async () => {
+      const session = adoptCurrentOwner();
+      if (!session) return;
+      const { items, hasMore, isLoading, unreadOnly } = get();
+      if (!hasMore || isLoading || items.length === 0) return;
+      const before = items[items.length - 1].id;
+      const request = ++listIntent;
+      set({ isLoading: true });
+      try {
+        const res = await notificationsApi.listNotifications({ before, unreadOnly, limit: PAGE_SIZE });
+        if (!isSessionCurrent(session) || request !== listIntent || get().unreadOnly !== unreadOnly) return;
+        if (res.success && res.data) {
+          set((state) => {
+            const seen = new Set(state.items.map((item) => item.id));
+            const fresh = (Array.isArray(res.data!.notifications) ? res.data!.notifications : EMPTY_ITEMS)
+              .filter((item) => item.user_id === session.ownerId && !seen.has(item.id) && (!unreadOnly || !item.read_at));
+            return { items: [...state.items, ...fresh], hasMore: res.data!.has_more };
+          });
+        }
+      } catch {
+        // Keep the last confirmed page on network failure.
+      } finally {
+        if (isSessionCurrent(session) && request === listIntent) set({ isLoading: false });
       }
-    } finally {
-      set({ isLoading: false });
-    }
-  },
+    },
 
-  fetchCount: async () => {
-    const res = await notificationsApi.getNotificationCount();
-    if (res.success && res.data) {
-      set({ unreadCount: Math.max(0, res.data.unread_count) });
-    }
-  },
+    fetchCount: async () => {
+      const session = adoptCurrentOwner();
+      if (!session) return;
+      const request = ++countIntent;
+      const revision = unreadRevision;
+      try {
+        const res = await notificationsApi.getNotificationCount();
+        if (isSessionCurrent(session) && request === countIntent && revision === unreadRevision && res.success && res.data) {
+          set({ unreadCount: Math.max(0, res.data.unread_count) });
+        }
+      } catch {
+        // Keep the last confirmed count on network failure.
+      }
+    },
 
-  markRead: async (id) => {
-    const target = get().items.find((n) => n.id === id);
-    // Already read (or unknown locally) — nothing to flip; the server call is
-    // idempotent but skipping it avoids a pointless round-trip per click.
-    if (target && target.read_at) return;
+    markRead: async (id) => {
+      const session = adoptCurrentOwner();
+      if (!session) return;
+      const target = get().items.find((item) => item.id === id);
+      if (target?.read_at) return;
 
-    const readAt = new Date().toISOString();
-    set((s) => ({
-      items: s.items.map((n) => (n.id === id ? { ...n, read_at: readAt } : n)),
-      unreadCount: Math.max(0, s.unreadCount - 1),
-    }));
-    const res = await notificationsApi.markNotificationRead(id);
-    if (!res.success) {
-      // Roll back the optimistic flip; the count is re-pulled from the server
-      // rather than guessed, since another device may have moved it meanwhile.
-      set((s) => ({
-        items: s.items.map((n) =>
-          n.id === id ? { ...n, read_at: target?.read_at ?? null } : n
-        ),
+      const readAt = new Date().toISOString();
+      const revision = ++readRevision;
+      pendingReadRevisions.set(id, revision);
+      unreadRevision += 1;
+      set((state) => ({
+        items: state.items.map((item) => (item.id === id ? { ...item, read_at: readAt } : item)),
+        unreadCount: Math.max(0, state.unreadCount - 1),
       }));
-      get().fetchCount();
-    }
-  },
 
-  markAllRead: async () => {
-    const readAt = new Date().toISOString();
-    set((s) => ({
-      items: s.items.map((n) => (n.read_at ? n : { ...n, read_at: readAt })),
-      unreadCount: 0,
-    }));
-    const res = await notificationsApi.markAllNotificationsRead();
-    if (!res.success) {
-      get().fetchCount();
-    }
-  },
+      let succeeded: boolean;
+      try {
+        const res = await notificationsApi.markNotificationRead(id);
+        succeeded = res.success;
+      } catch {
+        succeeded = false;
+      }
+      if (!isSessionCurrent(session)) return;
+      const stillLatest = pendingReadRevisions.get(id) === revision;
+      if (pendingReadRevisions.has(id)) pendingReadRevisions.delete(id);
+      if (!succeeded) {
+        if (stillLatest && get().items.some((item) => item.id === id && item.read_at === readAt)) {
+          // Only this still-current optimistic value may be rolled back. A
+          // newer WS read or read mutation has a different revision/value.
+          set((state) => ({ items: state.items.map((item) =>
+            item.id === id && item.read_at === readAt ? { ...item, read_at: target?.read_at ?? null } : item) }));
+        }
+        void get().fetchCount();
+      }
+    },
 
-  setUnreadOnly: (unreadOnly) => {
-    if (get().unreadOnly === unreadOnly) return;
-    set({ unreadOnly, items: EMPTY_ITEMS, hasMore: false });
-    get().fetchInitial();
-  },
+    markAllRead: async () => {
+      const session = adoptCurrentOwner();
+      if (!session) return;
+      unreadRevision += 1;
+      const readAt = new Date().toISOString();
+      pendingReadRevisions.clear();
+      set((state) => ({
+        items: state.items.map((item) => (item.read_at ? item : { ...item, read_at: readAt })),
+        unreadCount: 0,
+      }));
+      try {
+        const res = await notificationsApi.markAllNotificationsRead();
+        if (!isSessionCurrent(session)) return;
+        if (!res.success) void get().fetchCount();
+      } catch {
+        if (isSessionCurrent(session)) void get().fetchCount();
+      }
+    },
 
-  // ─── WS Event Handlers ───
+    setUnreadOnly: (unreadOnly) => {
+      if (get().unreadOnly === unreadOnly) return;
+      listIntent += 1;
+      set({ unreadOnly, items: EMPTY_ITEMS, hasMore: false, isLoading: false, hasLoaded: false, fetchError: false });
+      void get().fetchInitial();
+    },
 
-  handleCreate: (n) => {
-    set((s) => {
-      if (s.items.some((existing) => existing.id === n.id)) return s;
-      // Under the unread-only filter an already-read create is not listed,
-      // but it still cannot bump the unread count.
-      const listed = !s.unreadOnly || !n.read_at;
-      return {
-        items: listed ? [n, ...s.items] : s.items,
-        unreadCount: n.read_at ? s.unreadCount : s.unreadCount + 1,
-      };
-    });
-  },
+    handleCreate: (notification) => {
+      const session = currentOwnedSession();
+      if (!session || notification.user_id !== session.ownerId) return;
+      set((state) => {
+        if (state.ownerId !== session.ownerId || state.authGeneration !== session.authGeneration
+          || state.items.some((existing) => existing.id === notification.id)) return state;
+        const listed = !state.unreadOnly || !notification.read_at;
+        if (!notification.read_at) unreadRevision += 1;
+        return {
+          items: listed ? [notification, ...state.items] : state.items,
+          unreadCount: notification.read_at ? state.unreadCount : state.unreadCount + 1,
+        };
+      });
+    },
 
-  handleReadSync: (data) => {
-    const readAt = new Date().toISOString();
-    const ids = new Set(data.ids);
-    set((s) => ({
-      items: s.items.map((n) => {
-        if (n.read_at) return n;
-        if (data.all || ids.has(n.id)) return { ...n, read_at: readAt };
-        return n;
-      }),
-      unreadCount: Math.max(0, data.unread_count),
-    }));
-  },
-}));
+    handleReadSync: (data) => {
+      const session = currentOwnedSession();
+      if (!session || !data || !Array.isArray(data.ids) || typeof data.all !== "boolean"
+        || !Number.isFinite(data.unread_count)) return;
+      const ids = new Set(data.ids);
+      for (const id of pendingReadRevisions.keys()) {
+        if (data.all || ids.has(id)) pendingReadRevisions.delete(id);
+      }
+      unreadRevision += 1;
+      set((state) => {
+        if (state.ownerId !== session.ownerId || state.authGeneration !== session.authGeneration) return state;
+        const readAt = new Date().toISOString();
+        return {
+          items: state.items.map((item) => {
+            if (item.read_at) return item;
+            if (data.all || ids.has(item.id)) return { ...item, read_at: readAt };
+            return item;
+          }),
+          unreadCount: Math.max(0, data.unread_count),
+        };
+      });
+    },
+  };
+});
+
+// Auth changes synchronously clear account-owned feed data. Generation also
+// changes for same-account reauthentication, so stale same-user requests die.
+function synchronizeAuthOwner(ownerId: string | null, authGeneration: number): void {
+  const state = useNotificationStore.getState();
+  if (state.ownerId === ownerId && state.authGeneration === authGeneration) return;
+  clearForOwner(ownerId, authGeneration);
+}
+
+synchronizeAuthOwner(getAuthSessionOwner(), getAuthGeneration());
+subscribeAuthOwnerChanges((owner) => synchronizeAuthOwner(owner, getAuthGeneration()));
+subscribeAuthGenerationChanges((generation) => clearForOwner(null, generation));

@@ -10,16 +10,19 @@ function DownloadPromptModal() {
   const { t } = useTranslation("auth");
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedUserId, setDismissedUserId] = useState<string | null>(null);
 
-  if (!user || user.has_seen_download_prompt || dismissed || !shouldShowDownloadPrompt()) {
+  // Welcome is the first-run prompt; wait for its persisted optimistic flag
+  // before opening this overlay so the two modals cannot compete for focus.
+  if (!user || !user.has_seen_welcome || user.has_seen_download_prompt || dismissedUserId === user.id || !shouldShowDownloadPrompt()) {
     return null;
   }
 
   const { url, i18nKey } = detectOS();
 
   function handleDismiss() {
-    setDismissed(true);
+    if (!user) return;
+    setDismissedUserId(user.id);
     updateUser({ has_seen_download_prompt: true });
     dismissDownloadPrompt();
   }

@@ -2,83 +2,79 @@
  * useMusicSlashCommand — Discord-style slash commands for the music bot.
  *
  * Handles `/play <url>`, `/skip`, `/pause`, `/resume`, `/stop` typed in any
- * channel's chat input. Returns true if the input matched a known music
- * command (regardless of API success/failure) — caller skips the normal
- * "send as chat message" flow when true.
+ * channel's chat input. Recognized commands never become chat messages.
+ * The outcome lets the composer retain rejected commands for correction.
  *
  * Permissions are enforced server-side; here we just translate text →
  * HTTP call and toast the outcome.
  *
- * Defensive contract: this function never throws. Any unexpected error
- * from the API client is caught here and surfaced as an error toast,
- * because callers (MessageInput.handleSend) treat a thrown promise as
- * "silent failure" — the user sees nothing happen and assumes the
- * client froze. console.warn at command-parse time + console.error in
- * the catch path leave a paper trail for the next debug pass.
+ * Unexpected failures are surfaced with localized copy, never provider text.
  */
 
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../stores/voiceStore";
-import { useServerStore } from "../stores/serverStore";
 import { useToastStore } from "../stores/toastStore";
-import { showApiError } from "../utils/apiError";
-import { playMusic, skipMusic, pauseMusic, resumeMusic, stopMusic } from "../api/music";
+import { showMusicRequestError } from "../utils/musicRequestError";
+import { playMusic, searchMusic, skipMusic, pauseMusic, resumeMusic, stopMusic } from "../api/music";
 
 const MUSIC_COMMANDS = new Set(["play", "skip", "pause", "resume", "stop"]);
+
+export type MusicCommandResult =
+  | { handled: false }
+  | { handled: true; outcome: "success" | "failed" | "pending" };
 
 export function useMusicSlashCommand() {
   const { t } = useTranslation("music");
   const addToast = useToastStore((s) => s.addToast);
 
   return useCallback(
-    async (text: string): Promise<boolean> => {
-      const trimmed = text.trim();
-      if (!trimmed.startsWith("/")) return false;
+    async (text: string): Promise<MusicCommandResult> => {
+      // Pasted commands can separate their arguments with a tab or newline.
+      const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim());
+      const cmd = match?.[1]?.toLowerCase();
+      if (!cmd || !MUSIC_COMMANDS.has(cmd)) return { handled: false };
+      const arg = match?.[2]?.trim() ?? "";
 
-      const space = trimmed.indexOf(" ");
-      const cmd = (space === -1 ? trimmed.slice(1) : trimmed.slice(1, space)).toLowerCase();
-      const arg = space === -1 ? "" : trimmed.slice(space + 1).trim();
-
-      if (!MUSIC_COMMANDS.has(cmd)) return false;
-
-      // Lifecycle log: persists into devtools history so the next user
-      // bug report ("/play does nothing") can be triaged in seconds.
-      console.warn("[music] slash command:", cmd, "argLen:", arg.length);
-
-      const voiceChannelId = useVoiceStore.getState().currentVoiceChannelId;
-      const serverId = useServerStore.getState().activeServerId;
+      const { currentVoiceChannelId: voiceChannelId, currentVoiceServerId: serverId } = useVoiceStore.getState();
       if (!serverId || !voiceChannelId) {
         addToast("error", t("notInVoice"));
-        return true;
+        return { handled: true, outcome: "failed" };
       }
 
       try {
         if (cmd === "play") {
           if (!arg) {
             addToast("error", t("invalidYouTubeUrl"));
-            return true;
+            return { handled: true, outcome: "failed" };
           }
           // Resolution + queue insert can take 30+ s for playlists on
           // cpu-basic HF tier; keep the user informed.
           addToast("info", t("addingTrack"));
-          const res = await playMusic(serverId, voiceChannelId, arg);
-          // Log full response so silent failures (network glitch, server
-          // panic, success:false with empty error) leave a paper trail.
-          console.warn("[music] playMusic response:", res);
-          if (res.success && res.data) {
-            const count = res.data.added_tracks.length;
-            addToast("success", t("addedToQueue", { count }));
-          } else if (res.isTimeout) {
-            // Our 50 s client timeout fired, not a server rejection: the
-            // server may still finish and queue the track, so "playError"
-            // ("Could not start playback") would be wrong. showApiError
-            // has no timeout branch of its own.
-            addToast("info", t("playTimeout"));
-          } else {
-            showApiError(res, { fallbackKey: "music:playError" });
+          let target = arg;
+          if (!/^https?:\/\//i.test(arg)) {
+            const search = await searchMusic(serverId, voiceChannelId, arg);
+            const first = search.data?.results?.[0];
+            if (!search.success || !first) {
+              showMusicRequestError(search, "play");
+              return { handled: true, outcome: search.isTimeout ? "pending" : "failed" };
+            }
+            target = first.url;
           }
-          return true;
+          const res = await playMusic(serverId, voiceChannelId, target);
+          if (res.success) {
+            const tracks = res.data?.added_tracks;
+            if (!Array.isArray(tracks) || tracks.length === 0) {
+              addToast("error", t("playError"));
+              return { handled: true, outcome: "failed" };
+            }
+            addToast("success", t("addedToQueue", { count: tracks.length }));
+            return { handled: true, outcome: "success" };
+          }
+          showMusicRequestError(res, "play");
+          // A timed-out POST may have succeeded. Preserve the draft without
+          // automatic retry; the toast asks users to check the queue first.
+          return { handled: true, outcome: res.isTimeout ? "pending" : "failed" };
         }
 
         const fn =
@@ -88,17 +84,20 @@ export function useMusicSlashCommand() {
           stopMusic;
         const res = await fn(serverId, voiceChannelId);
         if (!res.success) {
-          showApiError(res, { fallbackKey: "music:controlError" });
+          showMusicRequestError(res, "control");
+          return { handled: true, outcome: res.isTimeout ? "pending" : "failed" };
         }
-        return true;
-      } catch (err) {
-        // Network failure, JSON parse error, anything below the apiClient
-        // contract. Log + toast so the user always gets feedback even
-        // when something blows up unexpectedly.
-        console.error("[music] slash command failed:", cmd, err);
-        const message = err instanceof Error ? err.message : t("controlError");
-        addToast("error", message);
-        return true;
+        const successKey =
+          cmd === "skip" ? "commandSkipped" :
+          cmd === "pause" ? "commandPaused" :
+          cmd === "resume" ? "commandResumed" :
+          "commandStopped";
+        addToast("success", t(successKey));
+        return { handled: true, outcome: "success" };
+      } catch {
+        // Unexpected errors can contain internal provider text; never render it.
+        addToast("error", t(cmd === "play" ? "playError" : "controlError"));
+        return { handled: true, outcome: "failed" };
       }
     },
     [addToast, t],

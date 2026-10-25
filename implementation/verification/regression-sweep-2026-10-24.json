@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "client": {
+    "full_vitest": { "result": "passed", "files": 206, "tests": 1972, "scope": "latest full rerun after spam/report integration" },
+    "dm_spam_attention_followup": { "result": "passed", "tests": 11, "coverage": "Decrypted incoming spam is retained but not spoken, notified, flashed or sounded; disabled filtering restores cues." }
+  },
+  "server": {
+    "command": "go test ./...",
+    "result": "failed",
+    "passed_packages": ["database", "middleware", "models", "repository", "services", "pkg and reported pkg subpackages"],
+    "application_control_blocked": ["handlers.test.exe", "ws.test.exe"],
+    "root_failure": "Route permission declarations were missing for seven thread/read/clip routes. Existing service checks were inspected and their exact gates documented in route_permissions_test.go.",
+    "root_rerun": "passed: go test . -count=1"
+  },
+  "linux_followup": {
+    "runtime": "Docker golang:1.26.8-bookworm, CGO_ENABLED=0; source mounted read-only; module/build caches isolated in named QA volumes",
+    "targeted": "passed for Spam, Preferences, ReactionNotification, PrivateReaction, GroupReaction, RoutePermissions, SQLiteDataExportOwnershipExpiryAndSecretExclusion and SQLiteAccountAnonymization tests",
+    "first_full_run": "failed only on TestInitRoutesGolden: five newly authorized spam routes missing from expected fixture; other reported packages passed",
+    "fix": "Added the five registered spam paths to testdata/routes.golden; standalone root-package rerun passed",
+    "full_rerun": "passed: docker Linux Go 1.26.8 CGO_ENABLED=0 go test ./... -timeout=15m; exit code 0, including root, handlers, database, repository, services and ws"
+  },
+  "acceptance": "Incomplete. Windows Application Control blocked binaries were not executed on Windows. Linux pure-Go test evidence is recorded separately and does not establish PostgreSQL, CGO/libSQL, visual or real-device acceptance; no release gate is satisfied by this sweep."
+}

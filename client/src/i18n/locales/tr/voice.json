@@ -1,4 +1,12 @@
 {
+  "voiceTextView": "Metin sohbetini aç",
+  "voiceRoomView": "Ses görünümüne dön",
+  "clipRecordingStart": "Klip kaydet",
+  "clipRecordingStop": "Kaydı durdur",
+  "clipRecordingActive": "Yerel kayıt sürüyor · rıza vermeyen {{count}} katılımcı hariç",
+  "clipRecordingDownload": "Klibi indir",
+  "clipRecordingStartFailed": "Rızaya bağlı kayıt başlatılamadı.",
+  "returnToCall": "Aramaya dön",
   "joinVoice": "Sese Katıl",
   "leaveVoice": "Bağlantıyı Kes",
   "mute": "Sessiz",

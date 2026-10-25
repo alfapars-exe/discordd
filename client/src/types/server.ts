@@ -20,6 +20,8 @@ export type ServerListItem = {
   id: string;
   name: string;
   icon_url: string | null;
+  /** Current user's persisted join-time audience, not another member's preference. */
+  game_activity_audience?: boolean;
 };
 
 /**

@@ -13,6 +13,7 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import { resolveAssetUrl } from "../../utils/constants";
 import { STICKER_ID, stickerAnimatedUrl, stickerStaticUrl } from "../../utils/stickerTokens";
 import "../../styles/expressions.css";
@@ -31,6 +32,7 @@ type StickerImageProps = {
 function StickerImage({ id, name, animated, still = false, size = "message" }: StickerImageProps) {
   const { t } = useTranslation("expressions");
   const reducedMotion = useReducedMotion();
+  const animationMode = useAccessibilityStore((state) => state.stickerAnimation);
   const [failed, setFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
 
@@ -38,8 +40,9 @@ function StickerImage({ id, name, animated, still = false, size = "message" }: S
     return <span className="msg-sticker-fallback">{t("stickerFallback", { name })}</span>;
   }
 
-  const hoverToPlay = animated && !still && reducedMotion;
-  const playing = animated && !still && (!reducedMotion || hovered);
+  const interactionOnly = animationMode === "interaction" || reducedMotion;
+  const hoverToPlay = animated && !still && animationMode !== "never" && interactionOnly;
+  const playing = animated && !still && animationMode !== "never" && (!interactionOnly || hovered);
   const src = resolveAssetUrl(playing ? stickerAnimatedUrl(id) : stickerStaticUrl(id));
 
   return (
@@ -54,6 +57,9 @@ function StickerImage({ id, name, animated, still = false, size = "message" }: S
       onError={() => setFailed(true)}
       onMouseEnter={hoverToPlay ? () => setHovered(true) : undefined}
       onMouseLeave={hoverToPlay ? () => setHovered(false) : undefined}
+      onFocus={hoverToPlay ? () => setHovered(true) : undefined}
+      onBlur={hoverToPlay ? () => setHovered(false) : undefined}
+      tabIndex={hoverToPlay ? 0 : undefined}
     />
   );
 }

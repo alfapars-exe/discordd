@@ -21,13 +21,25 @@ export function useOutputDeviceSync(room: Room): void {
   const outputDevice = useVoiceStore((s) => s.outputDevice);
 
   useEffect(() => {
-    if (!outputDevice) return;
-
     async function applyOutputDevice() {
       try {
-        await room.switchActiveDevice("audiooutput", outputDevice);
+        // The empty preference means the system default, not "leave the
+        // previously selected speaker active".
+        await room.switchActiveDevice("audiooutput", outputDevice || "default");
       } catch (err) {
-        console.error("[useOutputDeviceSync] Failed to switch output device:", err);
+        // A persisted USB/Bluetooth device can disappear between sessions.
+        // Restore the browser/system default so a stale sink never prevents
+        // the call from continuing with audio.
+        if (outputDevice && outputDevice !== "default") {
+          try {
+            await room.switchActiveDevice("audiooutput", "default");
+            return;
+          } catch {
+            // The browser may have no routable output at all; keep the call
+            // alive and let LiveKit use its normal fallback.
+          }
+        }
+        console.warn("[useOutputDeviceSync] Output device unavailable; using browser default.", err);
       }
     }
 

@@ -1,0 +1,120 @@
+{
+  "renderThreadStatus": "blocked: minimal Blob/static AudioWorklet addModule timed out after 10000ms on localhost, 127.0.0.1 and 127.0.0.2 despite a running 48kHz AudioContext whose clock advanced. User's full application quit destroyed TaskSpace13; fresh TaskSpace6 still reproduced before loading any DFN code. Fresh HTML document, oscillator connected before registration, and page-scoped CDP autoAttach=false/directRuntime.evaluate also failed. No worklet debugger targets were available. This is not evidence DFN caused the browser failure; this report does not claim complete DFN bridge or transport success.",
+  "priorRenderSmoke": {
+    "rnnoise": { "passed": true, "rms": 0.71775, "errors": 0 },
+    "gtcrn": { "passed": true, "rms": 0.02071, "errors": 0 },
+    "speex": { "passed": true, "rms": 0.38564, "errors": 0 },
+    "note": "Synthetic smoke before the renderer stopped registering any AudioWorklet. These are liveness checks, not speech quality scores."
+  },
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+  "lifecycle": {
+    "state": "complete",
+    "result": {
+      "cycles": 20,
+      "passed": true,
+      "results": [
+        {
+          "cycle": 0,
+          "elapsedMs": 571.0999999940395,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 1,
+          "elapsedMs": 554.5,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 2,
+          "elapsedMs": 563.1000000014901,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 3,
+          "elapsedMs": 581.1999999955297,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 4,
+          "elapsedMs": 559.7999999970198,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 5,
+          "elapsedMs": 544.3999999985099,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 6,
+          "elapsedMs": 556.7000000029802,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 7,
+          "elapsedMs": 533.1999999955297,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 8,
+          "elapsedMs": 549.6999999955297,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 9,
+          "elapsedMs": 566.6000000014901,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 10,
+          "elapsedMs": 549.5,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 11,
+          "elapsedMs": 555.5,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 12,
+          "elapsedMs": 559,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 13,
+          "elapsedMs": 560.3999999985099,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 14,
+          "elapsedMs": 554,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 15,
+          "elapsedMs": 567.1999999955297,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 16,
+          "elapsedMs": 564.2000000029802,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 17,
+          "elapsedMs": 570.2999999970198,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 18,
+          "elapsedMs": 561.6999999955297,
+          "power": 0.000013463102308693436
+        },
+        {
+          "cycle": 19,
+          "elapsedMs": 602.2999999970198,
+          "power": 0.000013463102308693436
+        }
+      ]
+    }
+  },
+  "remainingProbeWorkers": []
+}

@@ -9,8 +9,17 @@
  */
 
 import { create } from "zustand";
+import type { ChatMessage } from "../hooks/useChatContext";
 
-export type LightboxItem =
+export type LightboxMetadata = {
+  authorName?: string;
+  authorAvatarUrl?: string | null;
+  createdAt?: string;
+  messageId?: string;
+  message?: ChatMessage;
+};
+
+export type LightboxItem = LightboxMetadata & (
   | {
       kind: "remote";
       /** Current <img> src (may already carry the tile's cache-bust param). */
@@ -33,19 +42,43 @@ export type LightboxItem =
        */
       file: File;
       filename: string;
-    };
+    });
 
 type LightboxState = {
   /** Active item — null means closed */
   item: LightboxItem | null;
+  items: LightboxItem[];
+  index: number;
   open: (item: LightboxItem) => void;
+  openGallery: (items: LightboxItem[], index?: number) => void;
+  next: () => void;
+  previous: () => void;
   close: () => void;
 };
 
 export const useLightboxStore = create<LightboxState>((set) => ({
   item: null,
-  open: (item) => set({ item }),
-  close: () => set({ item: null }),
+  items: [],
+  index: 0,
+  open: (item) => set({ item, items: [item], index: 0 }),
+  openGallery: (items, requestedIndex = 0) => {
+    if (items.length === 0) return;
+    const index = Math.max(0, Math.min(requestedIndex, items.length - 1));
+    set({ items, index, item: items[index] });
+  },
+  next: () =>
+    set((state) => {
+      if (state.items.length < 2) return state;
+      const index = (state.index + 1) % state.items.length;
+      return { index, item: state.items[index] };
+    }),
+  previous: () =>
+    set((state) => {
+      if (state.items.length < 2) return state;
+      const index = (state.index - 1 + state.items.length) % state.items.length;
+      return { index, item: state.items[index] };
+    }),
+  close: () => set({ item: null, items: [], index: 0 }),
 }));
 
 /**

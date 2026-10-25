@@ -1,0 +1,9 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Invite lookup/send error recovery and image viewer gestures/focus",
+  "invite": "Rejected lookup paths handled, bulk/copy locks released, thrown DM errors become retryable recipient failures; zero successes does not produce a success toast. Account/context/mounted checks before post-lookup UI and DM send; these are not a full server-side account-affinity acceptance claim.",
+  "viewer": "Swipe and pinch gestures, 100-percent zoom pan reset, gesture reset on gallery change, nested forward Escape handling, mount-scoped scroll/focus lifetime and original opener restoration.",
+  "verification": "Five targeted files / 43 tests passed in main integration run. Agent targeted checks: invite 6 tests and viewer 18 tests, ESLint clean. Viewer follow-up focus regression waits two animation frames. Existing React act warnings remain.",
+  "remaining": ["Real browser and touch-device acceptance", "Two-client encrypted invite delivery and account-switch races", "Full integrated regression after all parallel edits"],
+  "release": "No publication or production mutation"
+}

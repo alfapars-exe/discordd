@@ -46,6 +46,7 @@ type DMService interface {
 	// to (messageID nil keeps the stored watermark) and echoes dm_read to
 	// the caller's own sessions.
 	MarkRead(ctx context.Context, userID, channelID string, messageID *string) error
+	MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error)
 
 	AcceptRequest(ctx context.Context, userID, channelID string) error
 	DeclineRequest(ctx context.Context, userID, channelID string) error
@@ -61,21 +62,38 @@ type DMService interface {
 	SetEmojiResolver(r EmojiResolver)
 }
 
+// Optional extension preserves existing DMService implementations and callers.
+type DMDeletionReceiptService interface {
+	DeleteMessageWithReceipt(ctx context.Context, userID, messageID string) (*models.DMMessageDeleteReceipt, error)
+}
+
+// ScheduledEmailEnqueuer is an optional event-notice extension. The delivery
+// repository uses DMMessageID solely to recheck current unread eligibility.
+type ScheduledEmailEnqueuer interface {
+	EnqueueWithOptions(ctx context.Context, userID, category, dedupeKey, subject, body string, options EmailEnqueueOptions) (bool, error)
+}
+
+type DMCommunicationEmailConfigurer interface {
+	SetCommunicationEmailEnqueuer(ScheduledEmailEnqueuer)
+}
+
 // FriendshipChecker is a minimal ISP interface for friend checks (used by dmService).
 type FriendshipChecker interface {
 	AreFriends(ctx context.Context, userA, userB string) (bool, error)
 }
 
 type dmService struct {
-	dmRepo           repository.DMRepository
-	userRepo         repository.UserRepository
-	dmReadRepo       repository.DMReadRepository
-	notificationRepo repository.NotificationRepository
-	txRunner         repository.DMMessageTxRunner
-	hub              ws.Broadcaster
-	blockChecker     BlockChecker
-	friendChecker    FriendshipChecker
-	unhider          DMSettingsUnhider
+	dmRepo              repository.DMRepository
+	userRepo            repository.UserRepository
+	dmReadRepo          repository.DMReadRepository
+	notificationRepo    repository.NotificationRepository
+	txRunner            repository.DMMessageTxRunner
+	hub                 ws.Broadcaster
+	blockChecker        BlockChecker
+	friendChecker       FriendshipChecker
+	unhider             DMSettingsUnhider
+	serverDMPolicy      ServerDMPolicy
+	reactionPreferences profilePreferenceReader
 	// uploadDir enables best-effort disk cleanup on message/channel delete
 	// (see upload_cleanup.go). Blank disables cleanup — set via
 	// SetUploadDir, wired in init_services.go so the constructor signature
@@ -83,7 +101,12 @@ type dmService struct {
 	uploadDir string
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
 	// nil rejects every custom emoji. Set via SetEmojiResolver.
-	emojiResolver EmojiResolver
+	emojiResolver              EmojiResolver
+	communicationEmailEnqueuer ScheduledEmailEnqueuer
+}
+
+func (s *dmService) SetCommunicationEmailEnqueuer(enqueuer ScheduledEmailEnqueuer) {
+	s.communicationEmailEnqueuer = enqueuer
 }
 
 func NewDMService(
@@ -112,6 +135,12 @@ func NewDMService(
 
 func (s *dmService) SetUploadDir(dir string) {
 	s.uploadDir = dir
+}
+
+func (s *dmService) SetServerDMPolicy(policy ServerDMPolicy) { s.serverDMPolicy = policy }
+
+func (s *dmService) SetReactionPreferences(prefs repository.PreferencesRepository) {
+	s.reactionPreferences = prefs
 }
 
 // ─── Shared Helpers ───

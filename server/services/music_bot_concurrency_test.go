@@ -838,3 +838,29 @@ func TestIdleTimer_SkipsWhenWorkArrived(t *testing.T) {
 		}
 	})
 }
+
+func TestEnqueueSaveFailureRearmsIdleLeave(t *testing.T) {
+	log := &eventLog{}
+	svc := newConcurrencyTestService(t, log, func(*botInstance, *models.MusicTrack) error { return nil })
+	svc.sessions = &memoryMusicSessions{items: make(map[string]models.MusicSession), failNext: 1}
+	svc.idleLeaveOverride = time.Second
+	bot := seedIdleBot(svc)
+	bot.mu.Lock()
+	svc.scheduleIdleLeaveLocked(bot)
+	armed := bot.idleTimer != nil
+	bot.mu.Unlock()
+	if !armed {
+		t.Fatal("test bot did not start with an idle timer")
+	}
+
+	if _, err := svc.Enqueue(context.Background(), "user", concTestChannel, concTestURL); err == nil {
+		t.Fatal("enqueue succeeded despite injected persistence failure")
+	}
+	bot.mu.Lock()
+	rearmed := bot.idleTimer != nil
+	queueEmpty := len(bot.queue) == 0 && !bot.loopRunning
+	bot.mu.Unlock()
+	if !rearmed || !queueEmpty {
+		t.Fatalf("failed enqueue left idle state inconsistent: timer=%v empty=%v", rearmed, queueEmpty)
+	}
+}

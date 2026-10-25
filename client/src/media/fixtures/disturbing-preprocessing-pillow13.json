@@ -1,0 +1,21 @@
+{
+  "reference": "Pillow",
+  "version": "13.0.0",
+  "generator": "scripts/reference-disturbing-preprocessing.py",
+  "cases": [
+    {"width":1,"height":1,"seed":1,"rgb_sha256":"21d1a1a8a3ffffbcda22e16cf6839628d6cbb8ca95bb4d6b98d073e6f743e5f9","nchw_sha256":"dd4e126cec65c92102d5189f02abe26bbd63c809b963b781a8fe57f6631555ad"},
+    {"width":1,"height":9,"seed":2,"rgb_sha256":"cfa02fec2a4658893a4c88fed308a10ec6b53962c89fcb37b4d4b57e557710b6","nchw_sha256":"cca7461c7f32a367dd37d82f2ba9ce610371010ccfd8c9cf9dea9973fa98d16a"},
+    {"width":9,"height":1,"seed":3,"rgb_sha256":"e0498d0884f30b1478319ce2fb710c206a18e63801a29d922fc980ea5bd11530","nchw_sha256":"c0a64b29704dc0e00b1464f398616f204cd0389a87415f541e14d7fc6e84b22a"},
+    {"width":17,"height":13,"seed":4,"rgb_sha256":"7243da15297fa33ffdec1df75f993e337302cb18882551f2844106e73376f582","nchw_sha256":"b69d16c786c3f9a288f3af1ed99a351f892385a9b1375369b5a8ae77e751975f"},
+    {"width":224,"height":224,"seed":5,"rgb_sha256":"8e21f8067dac2897b49bbf131cd0dcc13fa053deaeaff97426efa385a8aaf839","nchw_sha256":"7615b880c399f0faeb4d8d0ec495e5c6d2de0a9e62c6abc80a3ce3165e4aa111"},
+    {"width":223,"height":225,"seed":6,"rgb_sha256":"aeff77ba804fbae82595ef407b9db336e1165a19632db6e4026d4ced2b4e6b9c","nchw_sha256":"18cd7a6598a5efab958a034d6c5285d13b60504cdcc11f64b753952cda8deb3b"},
+    {"width":225,"height":223,"seed":7,"rgb_sha256":"8b46c8ce59c1a38927c3340671f896cb93060eefdba3e2373f395d71cc1be03e","nchw_sha256":"7083db8c1f87b8c30b214e9a973d889e69bb9cd9587c980f65b9d4f51364582b"},
+    {"width":449,"height":17,"seed":8,"rgb_sha256":"1b4a894df29df1513934c149a158cb4a4eebd08a730ff8c59e936d834b858203","nchw_sha256":"5a60ff19a99a5b8673dd33b04bba713f9aa3cd33a9d28b82d6407240e295a8d1"},
+    {"width":17,"height":449,"seed":9,"rgb_sha256":"155b331586b0ca6d7d8a0b97af0a7035cf26d0cf974c03493232b4ab6b461345","nchw_sha256":"b70aca1aa23eea950ccdd9a1eaf3e3da4cdb674bfa765c88b99a48e8d523d8de"},
+    {"width":321,"height":517,"seed":10,"rgb_sha256":"316498b1ded512cd078040e58327f4c3302bf4c538cea109ecbed24f92f30f5f","nchw_sha256":"fc0551e46be87322045b141738342afa5bfbb3d2478b35539036b979493077b3"},
+    {"width":640,"height":480,"seed":11,"rgb_sha256":"76448bfcf998c911d1893afb2f0b3ef84ba74f2f00b1a3c4a8a2c5e45351d463","nchw_sha256":"e019c4b8c311e85666548fc076c8bb2c1f00535180337039b855993e70ec1d15"},
+    {"width":2001,"height":1,"seed":12,"rgb_sha256":"64b920253dfaec095f1991bf0971b7d5901d44ce714986327d1b3e85483fa0ba","nchw_sha256":"2ea44178626055425444988f1e8fcb212c8363543d000a8337c13ffaf27e05c5"},
+    {"width":1,"height":2001,"seed":13,"rgb_sha256":"3a0aaa81ff81b8d4169af74256622a376dba6af8db96a9fc93b053461b1dd1cb","nchw_sha256":"9ee90ea042f372396e564534fd3e5dd4055ade7e19d24e8f419122a1a72d679d"},
+    {"width":2048,"height":1024,"seed":14,"rgb_sha256":"43b79c76a906da92b204f5d51364f7417f0e078338cce6749c43d0308a7efcea","nchw_sha256":"9cbc17017c34e3a102864f47a87034e4721dcc4d59c617d37bad3a55d51752d3"}
+  ]
+}

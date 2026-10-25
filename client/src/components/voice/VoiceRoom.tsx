@@ -16,6 +16,7 @@ import VoiceParticipantGrid from "./VoiceParticipantGrid";
 import VoiceConnectionStatus from "./VoiceConnectionStatus";
 import ScreenShareView from "./ScreenShareView";
 import CameraView from "./CameraView";
+import ConsentClipRecorder from "./ConsentClipRecorder";
 
 function VoiceRoom() {
   const { t } = useTranslation("voice");
@@ -40,6 +41,7 @@ function VoiceRoom() {
   return (
     <div className="voice-room">
       <VoiceConnectionStatus />
+      <ConsentClipRecorder />
       <ScreenShareView />
       <CameraView />
       <VoiceParticipantGrid />

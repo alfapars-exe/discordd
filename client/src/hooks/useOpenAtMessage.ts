@@ -20,6 +20,7 @@ import { useDMStore } from "../stores/dmStore";
 import { useAuthStore } from "../stores/authStore";
 import { useMobileStore } from "../stores/mobileStore";
 import { useToastStore } from "../stores/toastStore";
+import { UI_SHELL_V2 } from "../utils/uiShell";
 
 export type OpenAtMessage = (
   serverId: string,
@@ -72,13 +73,17 @@ export function useOpenAtMessage(): {
 
       if (targetServerId === activeServerId) selectChannel(channelId);
       openTab(channelId, "text", label, serverInfo);
+      const navigationRevision = useUIStore.getState().navigationRevision;
 
       const found = await fetchAroundMessage(targetServerId, channelId, messageId);
+      const current = useUIStore.getState();
+      if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "text" || current.destination.channelId !== channelId)) return found;
       if (!found) {
         addToast("info", t("messageGone"));
         closeAllDrawers();
         return false;
       }
+      // A slow search/jump response must not scroll the next conversation.
       setScrollToMessageId(messageId);
       closeAllDrawers();
       return true;
@@ -101,8 +106,11 @@ export function useOpenAtMessage(): {
 
       selectDM(dmChannelId);
       openTab(dmChannelId, "dm", label);
+      const navigationRevision = useUIStore.getState().navigationRevision;
 
       const found = await fetchMessagesAround(dmChannelId, messageId);
+      const current = useUIStore.getState();
+      if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "dm" || current.destination.channelId !== dmChannelId)) return found;
       if (!found) {
         addToast("info", t("messageGone"));
         closeAllDrawers();

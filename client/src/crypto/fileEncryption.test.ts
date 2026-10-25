@@ -19,6 +19,8 @@ import {
 } from "./fileEncryption";
 // Real base64 encoder — the same one encryptFile uses to serialize the key.
 import { toBase64 } from "./signalProtocol";
+import { groupAttachmentKey } from "../utils/groupAttachmentKeys";
+import type { GroupDMAttachment } from "../types/groupDM";
 
 const DOWNLOAD_URL = "https://cdn.example.test/encrypted-blob";
 
@@ -46,6 +48,37 @@ describe("fileEncryption — file encrypt/decrypt round-trip and guards", () => 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+  it("bounds classifier downloads while preserving real AES-GCM verification and cancellation",async()=>{
+    const file=new File([new Uint8Array([255,216,255])],"image.jpg",{type:"image/jpeg"});
+    const {encryptedBlob,meta}=await encryptFile(file);
+    const controller=new AbortController();
+    stubFetch(await encryptedBlob.arrayBuffer());
+    const opened=await decryptFile(DOWNLOAD_URL,meta,{signal:controller.signal,maxBytes:32});
+    expect(new Uint8Array(await opened.arrayBuffer())).toEqual(new Uint8Array([255,216,255]));
+    expect(fetch).toHaveBeenCalledWith(DOWNLOAD_URL,{credentials:"include",redirect:"error",signal:controller.signal});
+    stubFetch(await encryptedBlob.arrayBuffer());
+    await expect(decryptFile(DOWNLOAD_URL,meta,{maxBytes:8})).rejects.toThrow("media_too_large");
+    controller.abort();stubFetch(await encryptedBlob.arrayBuffer());
+    await expect(decryptFile(DOWNLOAD_URL,meta,{signal:controller.signal,maxBytes:32})).rejects.toThrow("media_analysis_cancelled");
+  });
+  it("opens the correct remaining file after a failed first upload and rotates keys on retry",async()=>{
+    const first=new File(["first private file"],"first.txt"),second=new File(["second private file"],"second.txt");
+    const encrypted=[await encryptFile(first),await encryptFile(second)];
+    const attachment={filename:"encrypted_1.bin",file_key_index:1} as GroupDMAttachment;
+    const key=groupAttachmentKey(encrypted.map(item=>item.meta),attachment,0)!;
+    stubFetch(await encrypted[1].encryptedBlob.arrayBuffer());
+    const opened=await decryptFile(DOWNLOAD_URL,key);
+    expect(new TextDecoder().decode(await opened.arrayBuffer())).toBe("second private file");
+    stubFetch(await encrypted[1].encryptedBlob.arrayBuffer());
+    await expect(decryptFile(DOWNLOAD_URL,encrypted[0].meta)).rejects.toThrow();
+    const retry=await encryptFile(first);
+    expect(retry.meta.key).not.toBe(encrypted[0].meta.key);expect(retry.meta.iv).not.toBe(encrypted[0].meta.iv);
+    stubFetch(await retry.encryptedBlob.arrayBuffer());
+    const retried=await decryptFile(DOWNLOAD_URL,retry.meta);
+    expect(new TextDecoder().decode(await retried.arrayBuffer())).toBe("first private file");
+    stubFetch(await retry.encryptedBlob.arrayBuffer());
+    await expect(decryptFile(DOWNLOAD_URL,encrypted[0].meta)).rejects.toThrow();
   });
 
   it("round-trips a file: bytes, filename, mimeType, and digest are preserved", async () => {

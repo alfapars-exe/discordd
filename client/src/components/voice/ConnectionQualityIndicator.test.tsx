@@ -15,7 +15,7 @@ import ConnectionQualityIndicator from "./ConnectionQualityIndicator";
 import { useVoiceStore } from "../../stores/voiceStore";
 
 vi.mock("../../api/voice", () => ({ getVoiceToken: vi.fn() }));
-vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn() }));
+vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: () => 1 }));
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),

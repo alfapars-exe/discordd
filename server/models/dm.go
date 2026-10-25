@@ -20,6 +20,14 @@ type DMChannel struct {
 	LastMessageAt *time.Time `json:"last_message_at"`
 }
 
+// DMMessageDeleteReceipt identifies the already committed deletion only.
+// It deliberately contains no message body, encryption material or member list.
+type DMMessageDeleteReceipt struct {
+	ID          string `json:"id"`
+	DMChannelID string `json:"dm_channel_id"`
+	Message     string `json:"message"`
+}
+
 const (
 	DMStatusAccepted = "accepted"
 	DMStatusPending  = "pending"
@@ -40,17 +48,20 @@ type DMLastMessage struct {
 // UnreadCount comes from dm_reads (0 when the caller has no row yet) and
 // LastMessage is nil for a channel with no messages.
 type DMChannelWithUser struct {
-	ID            string         `json:"id"`
-	OtherUser     *PublicUser    `json:"other_user"`
-	E2EEEnabled   bool           `json:"e2ee_enabled"`
-	Status        string         `json:"status"`
-	InitiatedBy   *string        `json:"initiated_by"`
-	CreatedAt     time.Time      `json:"created_at"`
-	LastMessageAt *time.Time     `json:"last_message_at"`
-	IsPinned      bool           `json:"is_pinned"`
-	IsMuted       bool           `json:"is_muted"`
-	UnreadCount   int            `json:"unread_count"`
-	LastMessage   *DMLastMessage `json:"last_message"`
+	ID            string      `json:"id"`
+	OtherUser     *PublicUser `json:"other_user"`
+	E2EEEnabled   bool        `json:"e2ee_enabled"`
+	Status        string      `json:"status"`
+	InitiatedBy   *string     `json:"initiated_by"`
+	CreatedAt     time.Time   `json:"created_at"`
+	LastMessageAt *time.Time  `json:"last_message_at"`
+	IsPinned      bool        `json:"is_pinned"`
+	IsMuted       bool        `json:"is_muted"`
+	UnreadCount   int         `json:"unread_count"`
+	// OldestUnreadMessageID is the reader-authorized anchor for jumping into
+	// unread history. It is nil when no incoming message is unread.
+	OldestUnreadMessageID *string        `json:"oldest_unread_message_id,omitempty"`
+	LastMessage           *DMLastMessage `json:"last_message"`
 }
 
 // MarkDMReadRequest is the (optional) body of POST /api/dms/{channelId}/read.
@@ -71,7 +82,7 @@ type DMMessage struct {
 	IsPinned    bool       `json:"is_pinned"`
 
 	// E2EE — same pattern as Message: Content is nil, payload in Ciphertext
-	EncryptionVersion int     `json:"encryption_version"`         // 0=plaintext, 1=E2EE
+	EncryptionVersion int     `json:"encryption_version"` // 0=plaintext, 1=E2EE
 	Ciphertext        *string `json:"ciphertext,omitempty"`
 	SenderDeviceID    *string `json:"sender_device_id,omitempty"`
 	E2EEMetadata      *string `json:"e2ee_metadata,omitempty"`

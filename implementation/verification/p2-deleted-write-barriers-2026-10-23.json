@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Database write barriers and administrative cascade protection for unexposed self-deletion foundation, not complete deletion acceptance.",
+  "implemented": [
+    "Additive migration 097 rejects new private/security state, membership/role grants, owner transfers, messages/reactions and application ownership involving a deleted account. Explicit triggers do not depend on foreign-key enforcement.",
+    "New friendships and key-envelope deliveries involving deleted participants are rejected; preexisting recipient ciphertext/envelopes remain unchanged for surviving users.",
+    "A deleted author row cannot be DELETE-cascaded. Administrative hard deletion rejects retained identities before executing cleanup statements, with the database trigger as a second gate. Existing ordinary administrative deletion remains available for non-tombstone accounts.",
+    "No production route or UI for self deletion is exposed yet. No migration in this turn deletes an existing account or filesystem asset."
+  ],
+  "focused_checks": [
+    {"command": "go test ./repository -run TestSQLiteAccountAnonymization -count=1", "result": "passed with migration 097; foreign keys on/off, stale profile/preferences/membership/message/owner writes and retained-row deletion rejected"},
+    {"command": "go test ./repository -run 'Test(SQLiteAccountAnonymization|.*HardDelete)' -count=1", "result": "passed after administrative preflight and application/friend/envelope guards"},
+    {"command": "go test ./repository ./services ./database -json", "result": "all three packages passed with final test assertions; optional real FFmpeg/YouTube/LiveKit checks remain skipped without configured dependencies"}
+  ],
+  "remaining": [
+    "Complete reference-aware durable asset worker with canonical path/symlink checks, failure/retry and actual-file tests.",
+    "Wire recent-password/MFA, confirmation, owner handoff UI, runtime session/voice/cache invalidation and stale-response handling before exposing deletion.",
+    "Audit late authorized edits to existing shared messages and cross-account moderation fields separately; new-state triggers are not a claim that every existing operation is transactional with deletion.",
+    "Installed Windows and independent-client history/media acceptance, backup/retention operations and all remaining P0-P11 requirements. No release, push or update sent."
+  ]
+}

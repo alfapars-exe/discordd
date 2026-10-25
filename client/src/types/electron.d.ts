@@ -38,6 +38,33 @@ interface ElectronCaptureAudioHeader {
   formatTag: number; // 1=PCM, 3=IEEE_FLOAT
 }
 
+export interface ElectronRegisteredGame {
+  id: string;
+  displayName: string;
+  executableName: string;
+  shareAllowed: boolean;
+  /** Local opt-in for a voice overlay over this game's foreground window. */
+  overlayAllowed: boolean;
+  availability: "available" | "missing" | "unreadable";
+  /** null when process detection is unavailable; never interpreted as stopped. */
+  running: boolean | null;
+  lastSeenAt: string | null;
+}
+
+export interface ElectronRegisteredGamesSnapshot {
+  detection: "available" | "unsupported" | "unavailable";
+  /** Helper presence only; available does not imply runtime compatibility. */
+  overlaySupport?: "available" | "unavailable" | "unsupported";
+  backgroundDetectionEnabled: boolean;
+  games: ElectronRegisteredGame[];
+}
+
+/** Path-free local activity projection; process detection is never triggered by its getter. */
+export interface ElectronRegisteredGameActivity {
+  enabled: boolean;
+  game: { id: string; name: string } | null;
+}
+
 /**
  * Crash record persisted by electron/crash-reporter.ts on render-process-gone
  * or child-process-gone events. Drained by `consumeLastCrash()` on the next
@@ -90,6 +117,8 @@ interface ElectronAPI {
   getDiagnosticVerbose: () => Promise<boolean>;
   /** Enable/disable verbose diagnostic logging (persisted). */
   setDiagnosticVerbose: (value: boolean) => Promise<void>;
+  capturePerformanceTrace: () => Promise<{ saved: boolean; cancelled: boolean; path?: string }>;
+  cancelPerformanceTrace: () => Promise<boolean>;
 
   /** Whether update check was already performed at splash */
   wasUpdateChecked: () => Promise<boolean>;
@@ -115,6 +144,33 @@ interface ElectronAPI {
     scaleFactor: number;
     monitorCount: number;
   }>;
+  /** Reset the native voice-widget window layout; returns false when unavailable. */
+  resetOverlayLayout?: () => Promise<boolean>;
+  sendOverlayVoiceAction?: (action: "toggle-mute" | "toggle-deafen", session: string) => Promise<boolean>;
+  onOverlayVoiceAction?: (callback: (value: { action: "toggle-mute" | "toggle-deafen"; session: string }) => void) => (() => void);
+  sendOverlayOpenInbox?: (session: string) => Promise<boolean>;
+  confirmOverlayOpenInbox?: (session: string) => Promise<boolean>;
+  onOverlayOpenInbox?: (callback: (value: { session: string }) => void) => (() => void);
+  sendOverlayOpenChat?: (session: string) => Promise<boolean>;
+  confirmOverlayOpenChat?: (session: string) => Promise<boolean>;
+  sendOverlayOpenChatComposer?: (session: string) => Promise<boolean>;
+  sendOverlayChatMessage?: (request: { session: string; requestId: string; text: string }) => Promise<"sent" | "failed" | "unavailable">;
+  closeOverlayChatComposer?: (session: string) => Promise<boolean>;
+  onOverlayChatSend?: (callback: (value: { session: string; requestId: string; text: string }) => void) => () => void;
+  onOverlayChatComposerClosed?: (callback: (value: { session: string }) => void) => () => void;
+  resolveOverlayChatSend?: (value: { session: string; requestId: string; result: "sent" | "failed" | "unavailable" }) => void;
+  onOverlayOpenChat?: (callback: (value: { session: string }) => void) => (() => void);
+  /** Read local Windows registered-game state; no executable paths are exposed. */
+  getRegisteredGames?: () => Promise<ElectronRegisteredGamesSnapshot>;
+  getRegisteredGameActivity?: () => Promise<ElectronRegisteredGameActivity>;
+  setRegisteredGamesBackgroundDetection?: (enabled: boolean) => Promise<boolean>;
+  /** Ask the main process to select and register a local .exe; paths never cross IPC. */
+  addRegisteredGame?: () => Promise<ElectronRegisteredGame | null>;
+  removeRegisteredGame?: (id: string) => Promise<boolean>;
+  /** Local consent groundwork only; game activity upload is not implemented. */
+  setRegisteredGameSharing?: (id: string, allowed: boolean) => Promise<boolean>;
+  /** Local foreground-window voice-overlay opt-in; unrelated to activity sharing. */
+  setRegisteredGameOverlay?: (id: string, allowed: boolean) => Promise<boolean>;
   /** Main process requests screen picker — delivers sources */
   onShowScreenPicker: (cb: (sources: ElectronDesktopSource[]) => void) => void;
   /**
@@ -146,6 +202,16 @@ interface ElectronAPI {
   /** Start process-exclusive system audio capture (excludes our own audio) */
   startSystemCapture: () => Promise<void>;
   stopSystemCapture: () => Promise<void>;
+  /** Read bundled helper lifecycle without receiving capture data. */
+  getSystemCaptureStatus?: () => Promise<{
+    state: "unavailable" | "stopped" | "starting" | "running" | "error";
+    reason?: "unsupported_platform" | "helper_missing" | "permission_denied" | "spawn_failed" | "startup_timeout" | "invalid_audio_format" | "exited_before_ready" | "runtime_error";
+    owner?: "screen_share" | "diagnostic";
+  }>;
+  /** Opt-in, discarded-output run; resolves to a token used for owned stop. */
+  startSystemCaptureDiagnostic?: () => Promise<string>;
+  /** Stops only the matching diagnostic owner. */
+  stopSystemCaptureDiagnostic?: (token: string) => Promise<boolean>;
   /** Remove all capture-related IPC listeners to prevent accumulation */
   removeCaptureListeners: () => void;
   onCaptureAudioHeader: (cb: (header: ElectronCaptureAudioHeader) => void) => void;
@@ -195,8 +261,11 @@ interface ElectronAPI {
   clearCredentials: () => Promise<void>;
 
   /** Read all app settings */
-  getAppSettings: () => Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean }>;
+  getAppSettings: () => Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean; hardwareAcceleration: boolean }>;
   setAppSetting: (key: string, value: boolean) => Promise<void>;
+  onVoiceOverlayUpdate?: (cb: (snapshot: unknown) => void) => (() => void);
+  sendVoiceOverlaySnapshot?: (snapshot: unknown) => void;
+  setOverlayShortcut?: (binding: { code: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean } | null) => Promise<boolean>;
 
   /** Custom titlebar window controls */
   minimizeWindow: () => Promise<void>;

@@ -15,6 +15,7 @@ export function isMusicBotIdentity(identity: string): boolean {
 }
 
 export type MusicTrack = {
+  queue_item_id?: string;
   video_id: string;
   title: string;
   artist?: string;
@@ -34,11 +35,17 @@ export type MusicBotChannelState = {
   is_paused: boolean;
   /** RFC3339 timestamp when the current track started — clients compute elapsed locally. */
   started_at?: string | null;
+  /** Server playback position excludes paused time; absent on older servers. */
+  elapsed_seconds?: number;
+  revision?: number;
+  repeat_mode?: "off" | "one" | "all";
 };
 
 export type PlayMusicResponse = {
   added_tracks: MusicTrack[];
 };
+
+export type SearchMusicResponse = { results: MusicTrack[] };
 
 /**
  * Reason codes the server attaches to a `music_bot_error` event. Mirrors the

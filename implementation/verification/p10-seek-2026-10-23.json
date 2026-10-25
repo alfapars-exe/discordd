@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 bounded seeking for finite YouTube tracks.",
+  "implemented": [
+    "The authenticated PermSpeak-gated seek endpoint validates whole-second positions against the current track duration.",
+    "Live streams and unknown-duration tracks reject seeking with a client error.",
+    "Seeking cancels only the current media pipeline, preserves the stable queue entry, and replays that same item using a bounded yt-dlp download section.",
+    "Elapsed state begins at the selected offset and the accessible client range control exposes formatted position text.",
+    "The YouTube URL remains isolated after the option terminator and user input is never interpreted as a subprocess flag."
+  ],
+  "checks": [
+    { "command": "go test ./services -run 'TestSeek|TestPlayLoopSeek|TestPlayTrackYtdlpArgsSeek' -count=1", "cwd": "server", "result": "passed" },
+    { "command": "go test ./handlers ./services", "cwd": "server", "result": "passed" },
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/api/music.test.ts src/components/voice/MusicBotPanel.test.tsx", "cwd": "client", "result": "passed", "tests": 24 }
+  ],
+  "environment_observation": "A later full go test ./... run executed and passed every emitted package except the root and repository test executables, which Windows Application Control blocked before execution. This is not recorded as a full-suite pass.",
+  "remaining": [
+    "Real YouTube playback must verify audible seeking and timing accuracy against a running LiveKit room.",
+    "Packaged Windows keyboard and pointer interaction remains an acceptance gate."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

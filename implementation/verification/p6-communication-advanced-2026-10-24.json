@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Server-owned unanswered-call expiry, privacy-preserving unread-DM email producers and supported advanced desktop notification controls.",
+  "implementation": [
+    "The server owns the 30-second ringing deadline and reserves both participants. Terminal transitions cancel timers; no_answer reaches both participants. Only the receiver receives a generic missed-call queue item. Client no longer races an independent caller timer, and stale end events cannot close a different call.",
+    "Accepted nonself DM messages enqueue generic email after 10 minutes, expiring after 24 hours, deduplicated by message ID. Delivery rechecks exact-message existence, accepted membership, unread watermark/count, directional blocks, verified address and current category consent. No message body, ciphertext or sender identity is included in email.",
+    "Advanced settings expose 0/3/5/10-second desktop delay, existing duration/volume/TTS controls and truthful running-app/OS limitations. Pending notifications coalesce by tag and recheck current account, authorization, visibility, focus and DND before delivery. Sounds and calls are not delayed.",
+    "Browser-discovered settings navigation overflow was fixed by using innermost heading text instead of the entire section body."
+  ],
+  "schema": ["server/database/migrations/131_communication_email_context.sql", "server/database/postgres_migrations/033_communication_email_context.sql"],
+  "verification": [
+    "Full Go suite passed: root 8.453s, repository 69.369s, services 27.293s; handlers, models, migrations and WS passed.",
+    "Docker CGO race-selected call/communication checks passed: services 3.030s, repository 4.658s.",
+    "Actual disposable PostgreSQL 18.6 campaign/communication repository tests passed in 2.593s; disposable container stopped and removed afterward.",
+    "Full client snapshot passed: 296 files, 2753 tests, zero failures. Report: C:/Users/PARS/AppData/Local/Temp/hichat-p6-p3-final-20261024.json. TypeScript and Vite build passed; existing chunk/import warnings remain.",
+    "Ego Lite 0.6.0.20 retained without upgrade. Existing local test account: delay set to 3 seconds, saved, reloaded and observed as 3; restored to original zero and saved. Updated local QA backend resolved old-server preference rejection. Failure preserved pending changes and retry succeeded.",
+    "Real browser confirmed four concise notification subsection labels after navigation fix. Screenshot: C:/Users/PARS/AppData/Local/Temp/hichat-notifications-fixed-20261024.png. HiChat result tab retained; unrelated user tab untouched."
+  ],
+  "open": ["Actual configured-provider email delivery and unsubscribe acceptance", "Privacy-preserving conversation digests beyond generic event notices", "Actual OS notification delivery with browser permission and Windows background behavior", "Two-client missed-call flow and full accessibility/device/release acceptance"],
+  "release": "No actual email sent, browser upgrade, commit, push, merge or production publication."
+}

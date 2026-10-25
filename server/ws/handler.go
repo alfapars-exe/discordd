@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -35,6 +36,19 @@ type BanChecker interface {
 type VoiceStatesProvider interface {
 	GetAllVoiceStates() []models.VoiceState
 	GetAllScreenShareViewers() map[string][]string
+}
+
+// VoiceStateRevisionSnapshotProvider returns one consistent snapshot of the
+// state and its domain revision. Older providers remain supported, but the
+// production voice service implements this to reconcile delayed deltas.
+type VoiceStateRevisionSnapshotProvider interface {
+	GetVoiceStateSnapshot() (states []models.VoiceState, viewers map[string][]string, epoch string, revision uint64)
+}
+
+// VoiceStateSnapshotFilter applies viewer-specific channel visibility before
+// ready snapshots are sent. It is injected to keep ws independent of services.
+type VoiceStateSnapshotFilter interface {
+	FilterVisibleVoiceStates(ctx context.Context, viewerID string, serverIDs []string, states []models.VoiceState) ([]models.VoiceState, error)
 }
 
 // UserInfoProvider fetches user profile from DB for Hub cache.
@@ -125,6 +139,7 @@ type Handler struct {
 	ticketConsumer      TicketConsumer
 	banChecker          BanChecker
 	voiceStatesProvider VoiceStatesProvider
+	voiceStateFilter    VoiceStateSnapshotFilter
 	userInfoProvider    UserInfoProvider
 	serverListProvider  ServerListProvider
 	muteChecker         MuteChecker
@@ -143,8 +158,9 @@ func NewHandler(
 	muteChecker MuteChecker,
 	channelMuteChecker ChannelMuteChecker,
 	botValidator BotTokenValidator,
+	voiceStateFilters ...VoiceStateSnapshotFilter,
 ) *Handler {
-	return &Handler{
+	h := &Handler{
 		hub:                 hub,
 		tokenValidator:      tokenValidator,
 		ticketConsumer:      ticketConsumer,
@@ -156,6 +172,10 @@ func NewHandler(
 		channelMuteChecker:  channelMuteChecker,
 		botValidator:        botValidator,
 	}
+	if len(voiceStateFilters) > 0 {
+		h.voiceStateFilter = voiceStateFilters[0]
+	}
+	return h
 }
 
 // wsTokenRevoked reports whether a WS connection must be rejected because
@@ -210,6 +230,15 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	validator, sessionBound := h.tokenValidator.(interface {
+		ValidateSession(context.Context, string, string) error
+	})
+	if sessionBound {
+		if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
+			http.Error(w, "session revoked or expired", http.StatusUnauthorized)
+			return
+		}
+	}
 
 	displayName, avatarURL, dbPrefStatus, ok := h.authorizeUser(w, r, claims)
 	if !ok {
@@ -235,14 +264,13 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		send:       make(chan []byte, sendBufferSize),
 		done:       make(chan struct{}),
 		prefStatus: prefStatus,
+		sessionID:  claims.SessionID,
+		registered: make(chan struct{}),
+	}
+	if sessionBound {
+		client.validateSession = validator.ValidateSession
 	}
 	h.hub.SetUserInfo(claims.UserID, claims.Username, displayName, avatarURL)
-
-	// Set invisible BEFORE register so GetVisibleOnlineUserIDs is correct in the ready event.
-	isInvisible := prefStatus == "offline"
-	if isInvisible {
-		h.hub.SetInvisible(claims.UserID, true)
-	}
 
 	// Load user's server list for ready event + BroadcastToServer filtering
 	var readyServers []ReadyServerItem
@@ -290,20 +318,43 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.hub.register <- client
+	if sessionBound {
+		select {
+		case <-client.registered:
+		case <-r.Context().Done():
+			_ = conn.Close()
+			h.hub.unregister <- client
+			return
+		}
+		// Close the authorization/registration race: if revoke ran before
+		// the client became visible to the hub, this second check catches it.
+		if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
+			_ = conn.Close()
+			h.hub.unregister <- client
+			return
+		}
+	}
 
 	// Send ready event with online users, servers, mute state, and persisted pref_status
+	voiceEpoch := ""
+	if provider, ok := h.voiceStatesProvider.(interface{ GetVoiceEpoch() string }); ok {
+		voiceEpoch = provider.GetVoiceEpoch()
+	}
 	client.sendEvent(Event{
 		Op: OpReady,
 		Data: ReadyData{
-			OnlineUserIDs:   h.hub.GetVisibleOnlineUserIDs(),
-			Servers:         readyServers,
-			MutedServerIDs:  mutedServerIDs,
-			MutedChannelIDs: mutedChannelIDs,
-			PrefStatus:      prefStatus,
+			OnlineUserIDs:     h.hub.GetVisibleOnlineUserIDs(),
+			Servers:           readyServers,
+			MutedServerIDs:    mutedServerIDs,
+			MutedChannelIDs:   mutedChannelIDs,
+			PrefStatus:        prefStatus,
+			VoiceEpoch:        voiceEpoch,
+			GameActivityEpoch: h.hub.GameActivityEpoch(),
 		},
 	})
+	h.hub.RequestGameActivitySnapshot(claims.UserID)
 
-	h.sendVoiceStatesSync(client, serverIDs)
+	h.sendVoiceStatesSync(r.Context(), client, serverIDs)
 
 	// Start pumps — WritePump in goroutine, ReadPump blocks until disconnect.
 	// WritePump fans out every hub broadcast to this one connection; wrapped
@@ -324,7 +375,7 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 // inline code did and returns ok=false; on success it returns the claims
 // with ok=true.
 func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) (claims *models.TokenClaims, ok bool) {
-	userIDFromTicket, ticketTokenVersion, ok := h.resolveTicketAuth(w, r)
+	userIDFromTicket, ticketTokenVersion, sessionID, ok := h.resolveTicketSessionAuth(w, r)
 	if !ok {
 		return nil, false
 	}
@@ -336,7 +387,7 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 		// userInfoProvider, the same way the JWT path does it.
 		// TokenVersion carries the mint-time stamp so authorizeUser's
 		// wsTokenRevoked check applies uniformly to both paths.
-		claims = &models.TokenClaims{UserID: userIDFromTicket, TokenVersion: ticketTokenVersion}
+		claims = &models.TokenClaims{UserID: userIDFromTicket, TokenVersion: ticketTokenVersion, SessionID: sessionID}
 		return claims, true
 	}
 
@@ -351,22 +402,36 @@ func (h *Handler) resolveConnectionAuth(w http.ResponseWriter, r *http.Request) 
 // ticket it writes the same reject response and audit log the inline code
 // did and returns ok=false.
 func (h *Handler) resolveTicketAuth(w http.ResponseWriter, r *http.Request) (userID string, tokenVersion int, ok bool) {
+	userID, tokenVersion, _, ok = h.resolveTicketSessionAuth(w, r)
+	return
+}
+
+func (h *Handler) resolveTicketSessionAuth(w http.ResponseWriter, r *http.Request) (string, int, string, bool) {
 	if h.ticketConsumer == nil {
-		return "", 0, true
+		return "", 0, "", true
 	}
 	t := r.URL.Query().Get("ticket")
 	if t == "" {
-		return "", 0, true
+		return "", 0, "", true
 	}
-	uid, tv, err := h.ticketConsumer.Consume(t)
+	var uid, sid string
+	var tv int
+	var err error
+	if consumer, ok := h.ticketConsumer.(interface {
+		ConsumeSession(string) (string, int, string, error)
+	}); ok {
+		uid, tv, sid, err = consumer.ConsumeSession(t)
+	} else {
+		uid, tv, err = h.ticketConsumer.Consume(t)
+	}
 	if err != nil {
 		h.hub.logEvent(models.LogLevelWarn, models.LogCategoryAuth, nil, "WS connect: invalid ticket", map[string]string{
 			"error": pkg.ErrText(err),
 		})
 		http.Error(w, "invalid ticket", http.StatusUnauthorized)
-		return "", 0, false
+		return "", 0, "", false
 	}
-	return uid, tv, true
+	return uid, tv, sid, true
 }
 
 // resolveLegacyTokenAuth resolves the caller's identity from the legacy
@@ -554,26 +619,38 @@ func (h *Handler) checkServerBan(w http.ResponseWriter, r *http.Request, userID 
 }
 
 // sendVoiceStatesSync sends the initial voice-states snapshot so the frontend
-// can initialize voiceStore. States are filtered to servers the user belongs
-// to — voice events are server-scoped, so leaking states from foreign servers
-// would be inconsistent with runtime broadcasts.
-func (h *Handler) sendVoiceStatesSync(client *Client, serverIDs []string) {
+// can initialize voiceStore. States are filtered to the viewer's server
+// memberships and per-channel ViewChannel permissions. A missing filter or a
+// lookup failure must never fall back to the unfiltered provider snapshot.
+func (h *Handler) sendVoiceStatesSync(parent context.Context, client *Client, serverIDs []string) {
 	if h.voiceStatesProvider != nil {
-		userServers := make(map[string]bool, len(serverIDs))
-		for _, id := range serverIDs {
-			userServers[id] = true
+		states := []models.VoiceState{}
+		viewersByStreamer := map[string][]string{}
+		voiceEpoch := ""
+		var voiceRevision uint64
+		if snapshotProvider, ok := h.voiceStatesProvider.(VoiceStateRevisionSnapshotProvider); ok {
+			states, viewersByStreamer, voiceEpoch, voiceRevision = snapshotProvider.GetVoiceStateSnapshot()
+		} else {
+			states = h.voiceStatesProvider.GetAllVoiceStates()
+			viewersByStreamer = h.voiceStatesProvider.GetAllScreenShareViewers()
 		}
-
-		allStates := h.voiceStatesProvider.GetAllVoiceStates()
-		// Snapshot the viewer map once — broadcasters only, others omit it.
-		// One map lookup per streamer keeps the wire shape stable for callers
-		// that don't care about screen share at all.
-		viewersByStreamer := h.voiceStatesProvider.GetAllScreenShareViewers()
-		items := make([]VoiceStateItem, 0, len(allStates))
-		for _, s := range allStates {
-			if !userServers[s.ServerID] {
-				continue
+		if h.voiceStateFilter != nil {
+			ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+			filtered, err := h.voiceStateFilter.FilterVisibleVoiceStates(ctx, client.userID, serverIDs, states)
+			cancel()
+			if err != nil {
+				handlerLogger.Error("voice state snapshot visibility filtering failed", "user_id", client.userID, "err", pkg.ErrText(err))
 			}
+			states = filtered
+		} else {
+			// Never fall back to a provider's raw in-memory snapshot: without
+			// viewer-specific authorization no voice identities are safe to send.
+			states = []models.VoiceState{}
+		}
+		// Snapshot the viewer map with the state/revision when supported. One
+		// map lookup per streamer keeps the wire shape stable for older callers.
+		items := make([]VoiceStateItem, 0, len(states))
+		for _, s := range states {
 			item := VoiceStateItem{
 				UserID:           s.UserID,
 				ChannelID:        s.ChannelID,
@@ -596,7 +673,7 @@ func (h *Handler) sendVoiceStatesSync(client *Client, serverIDs []string) {
 		}
 		client.sendEvent(Event{
 			Op:   OpVoiceStatesSync,
-			Data: VoiceStatesSyncData{States: items},
+			Data: VoiceStatesSyncData{States: items, VoiceEpoch: voiceEpoch, VoiceRevision: voiceRevision},
 		})
 	}
 }

@@ -12,8 +12,9 @@ import (
 type ChannelType string
 
 const (
-	ChannelTypeText  ChannelType = "text"
-	ChannelTypeVoice ChannelType = "voice"
+	ChannelTypeText   ChannelType = "text"
+	ChannelTypeVoice  ChannelType = "voice"
+	ChannelTypeThread ChannelType = "thread"
 	// ChannelTypeAudit — server-wide moderation event feed. Exactly one per
 	// server, auto-created in server_service.CreateServer. Read-only from the
 	// client's perspective (no message composer); content is rendered from
@@ -22,16 +23,38 @@ const (
 )
 
 type Channel struct {
-	ID         string      `json:"id"`
-	ServerID   string      `json:"server_id"`
-	Name       string      `json:"name"`
-	Type       ChannelType `json:"type"`
-	CategoryID *string     `json:"category_id"`
-	Topic      *string     `json:"topic"`
-	Position   int         `json:"position"`
-	UserLimit  int         `json:"user_limit"` // 0 = unlimited (voice only)
-	Bitrate    int         `json:"bitrate"`    // voice only
-	CreatedAt  time.Time   `json:"created_at"`
+	ID               string      `json:"id"`
+	ServerID         string      `json:"server_id"`
+	Name             string      `json:"name"`
+	Type             ChannelType `json:"type"`
+	CategoryID       *string     `json:"category_id"`
+	Topic            *string     `json:"topic"`
+	Position         int         `json:"position"`
+	UserLimit        int         `json:"user_limit"` // 0 = unlimited (voice only)
+	Bitrate          int         `json:"bitrate"`    // voice only
+	CreatedAt        time.Time   `json:"created_at"`
+	ParentChannelID  *string     `json:"parent_channel_id,omitempty"`
+	StarterMessageID *string     `json:"starter_message_id,omitempty"`
+	ArchivedAt       *time.Time  `json:"archived_at,omitempty"`
+	ReplyCount       int         `json:"reply_count,omitempty"`
+	// Request-scoped list metadata; never persisted or broadcast as shared state.
+	EffectivePermissions *Permission `json:"effective_permissions,omitempty"`
+}
+
+type CreateThreadRequest struct {
+	Name      string `json:"name"`
+	MessageID string `json:"message_id"`
+}
+
+func (r *CreateThreadRequest) Validate() error {
+	r.Name = strings.TrimSpace(r.Name)
+	if n := utf8.RuneCountInString(r.Name); n < 1 || n > 100 {
+		return fmt.Errorf("thread name must be between 1 and 100 characters")
+	}
+	if pkg.ContainsSteeringChars(r.Name) || strings.TrimSpace(r.MessageID) == "" {
+		return fmt.Errorf("invalid thread request")
+	}
+	return nil
 }
 
 type Category struct {

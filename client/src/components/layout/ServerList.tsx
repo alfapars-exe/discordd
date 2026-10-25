@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useSidebarStore } from "../../stores/sidebarStore";
 import { useServerStore } from "../../stores/serverStore";
@@ -12,11 +12,16 @@ import { resolveAssetUrl } from "../../utils/constants";
 import ContextMenu from "../shared/ContextMenu";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import { useConfirm } from "../../hooks/useConfirm";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
+import { getSettingsGroups } from "../settings/settingsNavigation";
+import { getAuthGeneration } from "../../api/client";
+import { useKeyboardReorder } from "./keyboardReorder";
 
 type ServerListProps = {
   onAddServer: () => void;
   onCreateChannel: () => void;
   onInviteServer: (serverId: string, serverName: string) => void;
+  onOpenEvents: (serverId: string, serverName: string) => void;
   onMuteServer: (serverId: string, x: number, y: number) => void;
   /** Renders categories + channels for the active expanded server. */
   renderServerBody: (serverId: string) => ReactNode;
@@ -38,6 +43,7 @@ function ServerList({
   onAddServer,
   onCreateChannel,
   onInviteServer,
+  onOpenEvents,
   onMuteServer,
   renderServerBody,
 }: ServerListProps) {
@@ -92,6 +98,12 @@ function ServerList({
     serverId: string;
     position: "above" | "below";
   } | null>(null);
+  const serverReorderItems = useMemo(() => servers.map((server) => ({ id: server.id, label: server.name })), [servers]);
+  const commitServerKeyboardOrder = useCallback(async (ids: string[]) => {
+    const items = ids.map((id, position) => ({ id, position }));
+    return reorderServers(items);
+  }, [reorderServers]);
+  const keyboardReorder = useKeyboardReorder(serverReorderItems, true, commitServerKeyboardOrder, `${currentUser?.id ?? ""}:${getAuthGeneration()}`);
 
   function handleServerDragStart(e: React.DragEvent, serverId: string) {
     e.stopPropagation();
@@ -169,13 +181,15 @@ function ServerList({
     const isMuted = mutedServerIds.has(serverId);
     const isOwner = activeServer?.owner_id === currentUser?.id && activeServer?.id === serverId;
     const canInvite = serverId !== activeServerId || canManageInvites;
-    const canAccessSettings = serverId === activeServerId && currentMember
-      ? hasPermission(currentMember.effective_permissions, Permissions.Admin)
-      : false;
+    const firstSettingsTab = serverId === activeServerId && currentMember
+      ? UI_SHELL_V2
+        ? getSettingsGroups(currentMember.effective_permissions, false, false, "server")[0]?.items[0]?.id
+        : hasPermission(currentMember.effective_permissions, Permissions.Admin) ? "server-general" : undefined
+      : undefined;
 
     const items: ContextMenuItem[] = [
-      ...(canAccessSettings
-        ? [{ label: tServers("serverSettings"), onClick: () => openSettings("server-general") }]
+      ...(firstSettingsTab
+        ? [{ label: tServers("serverSettings"), onClick: () => openSettings(firstSettingsTab) }]
         : []),
       {
         label: tServers("markAllAsRead"),
@@ -186,6 +200,9 @@ function ServerList({
       },
       ...(canInvite
         ? [{ label: tServers("inviteFriends"), onClick: () => onInviteServer(serverId, serverName) }]
+        : []),
+      ...(serverId === activeServerId
+        ? [{ label: tServers("serverEvents"), onClick: () => onOpenEvents(serverId, serverName) }]
         : []),
       ...(isOwner
         ? [{
@@ -239,6 +256,22 @@ function ServerList({
     openMenu(e, items);
   }
 
+  if (UI_SHELL_V2) {
+    const server = servers.find((item) => item.id === activeServerId);
+    return <>
+      {server && <section className="server-context" aria-label={server.name}>
+        <div className="server-context-header">
+          <button onClick={(event) => handleServerContextMenu(event, server.id, server.name)} aria-haspopup="menu">
+            <span>{server.name}</span><span aria-hidden="true">⌄</span>
+          </button>
+          {canManageChannels && <button className="server-context-create" onClick={onCreateChannel} title={tCh("createChannelOrCategory")} aria-label={tCh("createChannelOrCategory")}>+</button>}
+        </div>
+        {renderServerBody(server.id)}
+      </section>}
+      <ContextMenu state={menuState} onClose={closeMenu} />
+    </>;
+  }
+
   return (
     <>
       <div className="ch-tree-section">
@@ -260,14 +293,17 @@ function ServerList({
               <span className="ch-tree-label">{tServers("addServer")}</span>
             </button>
 
-            {servers.map((srv) => {
-              const srvKey = `srv:${srv.id}`;
-              const isActive = srv.id === activeServerId;
+            {keyboardReorder.orderedItems.flatMap(({ id }) => {
+              const srv = servers.find((serverItem) => serverItem.id === id);
+              if (!srv) return [];
+              const serverId = srv.id;
+              const srvKey = `srv:${serverId}`;
+              const isActive = serverId === activeServerId;
               const srvExpanded = isSectionExpanded(srvKey);
 
               function handleSrvHeaderClick() {
                 if (!isActive) {
-                  handleServerClick(srv.id);
+                  handleServerClick(serverId);
                   expandSection(srvKey);
                 } else {
                   toggleSection(srvKey);
@@ -291,6 +327,12 @@ function ServerList({
                   <div className="ch-tree-server-header-row">
                     <button
                       className={`ch-tree-server-header${isActive ? " active" : ""}${mutedServerIds.has(srv.id) ? " muted" : ""}`}
+                      data-keyboard-reorder-id={srv.id}
+                      aria-posinset={keyboardReorder.positionOf(srv.id)}
+                      aria-setsize={servers.length}
+                      aria-keyshortcuts="Control+D"
+                      aria-grabbed={keyboardReorder.activeItemId === srv.id}
+                      onKeyDown={(event) => keyboardReorder.onKeyDown(event, srv.id)}
                       onClick={handleSrvHeaderClick}
                       onContextMenu={(e) => handleServerContextMenu(e, srv.id, srv.name)}
                     >
@@ -334,6 +376,7 @@ function ServerList({
                 </div>
               );
             })}
+            {keyboardReorder.liveRegion}
           </div>
         )}
       </div>

@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Encrypted send/edit requests capture a local receipt boundary before POST/PATCH. Their matching HTTP response may claim a cache-write guard only when no newer different source or deletion has been observed. A matching WS echo shares its existing token, so pending echo publication is not cancelled by its own HTTP response.",
+    "Receipt source identity includes conversation, message, author, device, ciphertext and metadata. HTTP source validation now checks sender_device_id as well as the previously checked prepared source fields. A later accepted receipt/event invalidates previous write guards across asynchronous hash/storage preparation.",
+    "Superseded/deleted send/edit receipts discard only their exact local pending payload. A successfully committed HTTP operation remains successful even if a subsequent edit/delete prevents caching its old text. No automatic POST retry or encryption downgrade added."
+  ],
+  "verification": [
+    "Focused API-consumer, WS, version and cache suites passed: 4 files / 88 tests. Added live edit/delete/matching-echo send receipts, abandoned edit receipts, device mismatch, token sharing, generation/conversation scope, overlapping receipt guards, and real SHA-256 async cache-write races.",
+    "Final tsc -b and targeted ESLint passed.",
+    "Full client suite passed: 232 files / 2293 tests in 47.60s. Vite production build passed in 714ms with existing build warnings. Targeted diff whitespace and coverage validation passed: 33 references / 261 behaviors; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Ordering is local to the current JS process and composer/account generation. Cross-tab IDB transaction arbitration, persisted server revisions, reconnect reconciliation and actual two-client acceptance remain open.",
+    "A server can persist concurrent edits in a different order from client operation initiation or deliver earlier events after an HTTP receipt; authoritative server revision reconciliation is still needed. This change does not assert end-to-end global ordering.",
+    "Existing cache rows for deleted messages are not purged by this receipt guard; cache/search retention and deletion cleanup need separate verification. Initial unloaded-window live-event recovery remains open.",
+    "Overall P0-P11 remains incomplete. No commit, push, merge, Windows packaging or production release performed."
+  ]
+}

@@ -38,7 +38,7 @@
   "terminationDesc": "We may suspend or terminate your account at our discretion for violation of these terms. You may delete your account at any time through the app settings. Upon termination, your right to use the service ceases immediately. Provisions that by their nature should survive termination will remain in effect.",
 
   "copyrightTitle": "Copyright & Takedowns",
-  "copyrightDesc": "If you believe content on HiChat! infringes your copyright, please open an issue on our GitHub repository with the relevant details. We will review and take appropriate action.",
+  "copyrightDesc": "If you believe content on HiChat! infringes your copyright, please contact us through the in-app feedback feature with the relevant details.",
 
   "selfHostTitle": "Self-Hosted Instances",
   "selfHostDesc": "The HiChat! software is available for self-hosting under its open-source license. These Terms of Service apply exclusively to the official infinayazilim-discord.hf.space instance. We bear no responsibility for self-hosted instances operated by third parties, including their data handling, availability, or compliance with applicable laws.",
@@ -53,7 +53,7 @@
   "lawDesc": "These terms are governed by the laws of the Republic of Turkey. Any disputes arising from these terms shall be subject to the exclusive jurisdiction of the courts in Turkey.",
 
   "contactTitle": "Contact",
-  "contactDesc": "For questions about these terms, open an issue on our GitHub repository or reach out via the app.",
+  "contactDesc": "For questions about these terms, reach out through the in-app feedback feature.",
 
-  "footerCopy": "© 2026 HiChat! — Open source, free communication."
+  "footerCopy": "© 2026 HiChat! — Private communication."
 }

@@ -48,7 +48,7 @@ import {
   type Room,
 } from "livekit-client";
 
-import { logToServer } from "../api/clientLog";
+import { logOptionalTelemetry } from "../api/clientLog";
 import { useVoiceStore } from "../stores/voiceStore";
 import { resolveUserId } from "../utils/constants";
 import type { ScreenShareQualityGrade } from "../stores/slices/voiceScreenShareSlice";
@@ -317,7 +317,7 @@ export function useScreenShareReceiverStats(room: Room): void {
         kbps,
       });
 
-      logToServer("info", "screen_share_receiver_stats", {
+      logOptionalTelemetry("screen_share_receiver_stats", {
         publisherId: participant.identity,
         publisherName: participant.name || participant.identity,
         trackSid: publication.trackSid,

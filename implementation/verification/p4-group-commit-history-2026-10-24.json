@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Group send resolves required public author data before CreateMessage. A profile lookup failure no longer occurs after the message has already committed, avoiding one concrete false-failure/duplicate-resend path. Commit failures remain failures.",
+    "Group history uses the same (created_at,id) total order for the cursor predicate and descending page order. Messages sharing the anchor timestamp are no longer silently skipped. The anchor must belong to the requested group; unknown or foreign anchors return no history. Existing service chronological reversal is preserved."
+  ],
+  "verification": [
+    "Focused Linux Go service/repository tests passed: profile lookup failure performs no write, commit failure propagates, successful send has one lookup before one write, and existing post-commit read-broadcast failure regression remains passing.",
+    "History test paginates five equal-timestamp rows in pages of two without gaps or duplicates, and rejects missing/foreign anchors. Passed SQLite and PostgreSQL 18 (fresh isolated test schema; PostgreSQL run 1.001s). Temporary no-host-port PostgreSQL container stopped and automatically removed.",
+    "Targeted git diff --check passed. Full Linux Go regression go test ./... -timeout=15m exited 0; repository 32.992s and services 21.009s. Native Windows and full PostgreSQL acceptance are not implied."
+  ],
+  "remaining": [
+    "This does not implement persistent operation identity, commit-outcome lookup or safe manual retry. Connection loss during commit remains ambiguous.",
+    "Real two-client history/reconnect, PostgreSQL full regression, Windows build and production rollout acceptance remain open. No migration or deployment was performed."
+  ]
+}

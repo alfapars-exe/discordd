@@ -6,17 +6,27 @@ import (
 	"fmt"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/ws"
 )
 
-// PreferencesService manages user preferences (opaque JSON blob).
+// PreferencesService validates and synchronizes account-scoped preferences.
 type PreferencesService interface {
 	Get(ctx context.Context, userID string) (*models.UserPreferences, error)
 	Update(ctx context.Context, userID string, partial json.RawMessage) (*models.UserPreferences, error)
 }
 
 type preferencesService struct {
-	repo repository.PreferencesRepository
+	repo         repository.PreferencesRepository
+	gameActivity GameActivityPolicyInvalidator
+	hub          ws.Broadcaster
+}
+
+type GameActivityPolicyInvalidator interface{ PolicyChanged(context.Context, string) }
+
+func (s *preferencesService) SetGameActivitySync(policy GameActivityPolicyInvalidator, hub ws.Broadcaster) {
+	s.gameActivity, s.hub = policy, hub
 }
 
 // NewPreferencesService creates a new PreferencesService.
@@ -29,13 +39,40 @@ func (s *preferencesService) Get(ctx context.Context, userID string) (*models.Us
 	if err != nil {
 		return nil, fmt.Errorf("get preferences: %w", err)
 	}
-	return prefs, nil
+	return normalizePreferences(prefs)
 }
 
 func (s *preferencesService) Update(ctx context.Context, userID string, partial json.RawMessage) (*models.UserPreferences, error) {
-	prefs, err := s.repo.Upsert(ctx, userID, partial)
+	if err := (&models.UpdatePreferencesRequest{Data: partial}).Validate(); err != nil {
+		return nil, fmt.Errorf("invalid preferences data: %w", pkg.ErrBadRequest)
+	}
+	filtered, err := models.FilterDeviceLocalPreferences(partial)
+	if err != nil {
+		return nil, fmt.Errorf("filter preferences: %w", err)
+	}
+	prefs, err := s.repo.Upsert(ctx, userID, filtered)
 	if err != nil {
 		return nil, fmt.Errorf("update preferences: %w", err)
 	}
-	return prefs, nil
+	if s.gameActivity != nil {
+		s.gameActivity.PolicyChanged(ctx, userID)
+	}
+	if s.hub != nil {
+		s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpPreferencesChanged, Data: map[string]string{"user_id": userID}})
+	}
+	return normalizePreferences(prefs)
+}
+
+func normalizePreferences(prefs *models.UserPreferences) (*models.UserPreferences, error) {
+	if prefs == nil {
+		return nil, fmt.Errorf("preferences repository returned no result")
+	}
+	filtered, err := models.FilterDeviceLocalPreferences(prefs.Data)
+	if err != nil {
+		return nil, fmt.Errorf("read preferences: %w", err)
+	}
+	result := *prefs
+	result.SchemaVersion = models.PreferencesSchemaVersion
+	result.Data = filtered
+	return &result, nil
 }

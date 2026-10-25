@@ -44,3 +44,19 @@ type CreateBotRequest struct {
 	Username    string `json:"username"` // 3-32 chars, same charset as humans
 	DisplayName string `json:"display_name"`
 }
+
+type ApplicationTransferRequest struct {
+	ID          string    `json:"id"`
+	BotUserID   string    `json:"application_id"`
+	BotUsername string    `json:"application_username"`
+	BotName     string    `json:"application_name"`
+	FromUserID  string    `json:"from_user_id"`
+	FromName    string    `json:"from_name"`
+	ToUserID    string    `json:"to_user_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+type CreateApplicationTransferRequest struct {
+	RecipientUsername string `json:"recipient_username"`
+}

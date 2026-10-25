@@ -3,11 +3,16 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatContext } from "../../hooks/useChatContext";
+import { useConversationCommand } from "../../hooks/useConversationCommand";
+import { useFocusComposerOnTyping } from "../../hooks/useFocusComposerOnTyping";
 import { useMusicSlashCommand } from "../../hooks/useMusicSlashCommand";
 import { useAttachmentRejectionToast } from "../../hooks/useAttachmentRejectionToast";
 import { useIsTouch } from "../../hooks/useMediaQuery";
 import { useNowTick } from "../../hooks/useNowTick";
 import { useToastStore } from "../../stores/toastStore";
+import { useAuthStore } from "../../stores/authStore";
+import { useAccessibilityStore } from "../../stores/accessibilityStore";
+import { composerKey, EMPTY_DRAFT, useComposerDraftStore } from "../../stores/composerDraftStore";
 import { validateFiles } from "../../utils/fileValidation";
 import { MAX_MESSAGE_LENGTH, MAX_FILES } from "../../utils/constants";
 import { convertMentionTokens } from "../../utils/mention";
@@ -30,6 +35,7 @@ function MessageInput() {
   const { t, i18n } = useTranslation("chat");
   const reportRejections = useAttachmentRejectionToast();
   const addToast = useToastStore((s) => s.addToast);
+  const legacyComposer = useAccessibilityStore((s) => s.legacyComposer);
   // On a touch device, calling textarea.focus() summons the soft keyboard
   // uninvited (channel switch, reply, post-send restore). Gate every
   // programmatic focus below on !isTouch so mobile users decide when the
@@ -52,16 +58,24 @@ function MessageInput() {
   // shared-ticker pattern as MemberList's offline "last seen" labels.
   const nowTick = useNowTick(30_000);
 
-  const [content, setContent] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [isSending, setIsSending] = useState(false);
-  // Synchronous mirror of isSending — read inside handleSend BEFORE React
-  // has flushed setIsSending(true). Without this, hammering Enter (or a
-  // user double-tap on the send button) fires handleSend twice in the same
-  // tick because both invocations see the stale state-level isSending=false
-  // and pass the guard, posting the same message to the API twice.
-  // The state is still kept for `disabled={isSending}` / button styling.
-  const isSendingRef = useRef(false);
+  const accountId = useAuthStore((s) => s.user?.id);
+  const draftKey = composerKey(accountId, mode, channelId, serverId);
+  const draft = useComposerDraftStore((s) => s.drafts[draftKey] ?? EMPTY_DRAFT);
+  const { content, files } = draft;
+  const isSending = draft.sending !== null;
+  const setContent = useCallback((value: string) => {
+    useComposerDraftStore.getState().patch(draftKey, { content: value });
+  }, [draftKey]);
+  const setFiles = useCallback((update: File[] | ((previous: File[]) => File[])) => {
+    const store = useComposerDraftStore.getState();
+    const previous = store.drafts[draftKey]?.files ?? [];
+    store.patch(draftKey, { files: typeof update === "function" ? update(previous) : update });
+  }, [draftKey]);
+  const activeDraftKey = useRef<string | null>(null);
+  useEffect(() => {
+    activeDraftKey.current = draftKey;
+    return () => { activeDraftKey.current = null; };
+  }, [draftKey]);
 
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -76,8 +90,6 @@ function MessageInput() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   /** Character index where the @ trigger starts */
   const mentionStartRef = useRef<number>(-1);
-  /** Tracked mention selections for token conversion on send */
-  const mentionSelectionsRef = useRef<MentionSelection[]>([]);
   /**
    * Synchronous mirror of "mention popup is actively visible" — read by the
    * Enter handler. mentionQuery (state) lags one render behind the actual
@@ -98,11 +110,52 @@ function MessageInput() {
   /** Character index of the `:` that opened the emoji popup */
   const emojiStartRef = useRef<number>(-1);
   const emojiActiveRef = useRef(false);
-  /** Emojis picked via picker/autocomplete — resolved first on send */
-  const emojiSelectionsRef = useRef<CustomEmojiRef[]>([]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useFocusComposerOnTyping(
+    mode === "dm" ? { kind: "dm", id: channelId } : { kind: "channel", id: channelId, serverId: serverId ?? "" },
+    textareaRef,
+    (key) => {
+      const input = textareaRef.current;
+      if (!input || activeDraftKey.current !== draftKey) return false;
+      const store = useComposerDraftStore.getState();
+      const current = store.drafts[draftKey] ?? EMPTY_DRAFT;
+      if (current.sending) return false;
+      const start = Math.min(input.selectionStart, current.content.length);
+      const end = Math.min(input.selectionEnd, current.content.length);
+      const next = current.content.slice(0, start) + key + current.content.slice(end);
+      if (next.length > MAX_MESSAGE_LENGTH) return false;
+      store.patch(draftKey, { content: next });
+      const generation = store.generation;
+      const insertedRevision = useComposerDraftStore.getState().drafts[draftKey]?.revision;
+      requestAnimationFrame(() => {
+        const latest = useComposerDraftStore.getState().drafts[draftKey];
+        if (textareaRef.current === input && input.isConnected && activeDraftKey.current === draftKey &&
+            useComposerDraftStore.getState().generation === generation && useAuthStore.getState().user?.id === accountId &&
+            latest?.revision === insertedRevision && latest.content === next) {
+          input.setSelectionRange(start + key.length, start + key.length);
+        }
+      });
+      return true;
+    },
+    !isTouch && !isSending && !selfTimeoutExpiresAt,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const togglePicker = (kind: "emoji" | "gif" | "sticker") => {
+    if (!canSend || isSending) return false;
+    if (kind !== "emoji") setShowEmojiPicker(false);
+    if (kind !== "gif") setShowGifPicker(false);
+    if (kind !== "sticker") setShowStickerPicker(false);
+    if (kind === "emoji") setShowEmojiPicker((value) => !value);
+    else if (kind === "gif") setShowGifPicker((value) => !value);
+    else setShowStickerPicker((value) => !value);
+    return true;
+  };
+  useConversationCommand({kind:mode === "dm" ? "dm" : "channel",id:channelId,serverId:mode === "dm" ? undefined : serverId}, (command) => {
+    if (command === "emoji" || command === "gif" || command === "sticker") return togglePicker(command);
+    if (command === "upload" && canSend && !isSending && fileInputRef.current) { fileInputRef.current.click(); return true; }
+    return false;
+  });
 
   /**
    * Appends newly-selected files while enforcing MAX_FILES (server:
@@ -126,7 +179,7 @@ function MessageInput() {
         return [...prev, ...newFiles.slice(0, remaining)];
       });
     },
-    [addToast, t]
+    [addToast, t, setFiles]
   );
 
   // Register callback for drag-drop file forwarding from ChatArea/DMChat
@@ -152,47 +205,39 @@ function MessageInput() {
   /** Send message, passing replyToId if replying */
   const runMusicCommand = useMusicSlashCommand();
 
-  // Single source of truth for "send succeeded — wipe the composer". Both
-  // the slash-command path and the regular-message path call this so future
-  // additions (new state, draft persistence, etc.) only need one update.
-  const resetInputAfterSend = useCallback(() => {
-    setContent("");
-    setFiles([]);
-    setReplyingTo(null);
-    mentionSelectionsRef.current = [];
-    emojiSelectionsRef.current = [];
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-  }, [setReplyingTo]);
-
   const handleSend = useCallback(async () => {
     if (!channelId) return;
-    if (!content.trim() && files.length === 0) return;
+    const store = useComposerDraftStore.getState();
+    const snapshot = store.drafts[draftKey] ?? EMPTY_DRAFT;
+    if (!snapshot.content.trim() && snapshot.files.length === 0) return;
     // Timed-out users can't send anything — including slash commands.
     // Checked before runMusicCommand below so /play etc. can't be used to
     // bypass the composer gate while muted.
     if (selfTimeoutExpiresAt) return;
-    // Ref-based guard runs BEFORE React batches the state update — closes
-    // the same-tick double-fire race that the previous `isSending` state
-    // guard could not (state hadn't propagated by the second handleSend).
-    if (isSendingRef.current) return;
-    isSendingRef.current = true;
-
-    setIsSending(true);
+    // The synchronous store guard survives navigation/unmount, unlike a component ref.
+    const ticket = store.beginSend(draftKey);
+    if (!ticket) return;
+    let success = false;
+    let sendKind: "message" | "command" = "message";
 
     // try/catch/finally bracket the send so a thrown promise — slash-command
     // network failure, sendMessage exception, anything — never leaves the
     // textarea locked or the user without feedback.
     try {
+      const tokenized = convertEmojiShortcodes(
+        convertMentionTokens(snapshot.content.trim(), snapshot.mentions),
+        snapshot.emojis, getMemberEmojiCatalog(), serverId,
+      );
       // Slash-commands short-circuit before mention tokenization + chat send.
       // /play /skip /pause /resume /stop never reach the message stream — they
-      // hit the music bot HTTP API and clear the input.
-      const wasMusicCommand = await runMusicCommand(content);
-      if (wasMusicCommand) {
-        resetInputAfterSend();
+      // hit the music bot HTTP API. Only a confirmed success consumes text.
+      const musicCommand = await runMusicCommand(snapshot.content);
+      if (musicCommand.handled) {
+        sendKind = "command";
+        success = musicCommand.outcome === "success";
         return;
       }
+      if (useComposerDraftStore.getState().generation !== ticket.generation) return;
 
       // Regular message send is gated on canSend (text-channel send perm).
       // Slash commands intentionally bypass this gate above — they target
@@ -201,30 +246,24 @@ function MessageInput() {
         return;
       }
 
-      const replyToId = replyingTo?.id;
-      const tokenized = convertEmojiShortcodes(
-        convertMentionTokens(content.trim(), mentionSelectionsRef.current),
-        emojiSelectionsRef.current,
-        getMemberEmojiCatalog(),
-        serverId,
-      );
-      const success = await sendMessage(tokenized, files, replyToId);
-      if (success) {
-        resetInputAfterSend();
-      }
+      success = await sendMessage(tokenized, snapshot.files, snapshot.replyingTo?.id);
     } catch (err) {
       console.error("[MessageInput] send failed:", err);
     } finally {
-      isSendingRef.current = false;
-      setIsSending(false);
+      const cleared = useComposerDraftStore.getState().finishSend(draftKey, ticket, success, sendKind);
+      if (cleared && activeDraftKey.current === draftKey && textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
       // Restore focus after send. With readOnly={isSending} the textarea keeps
       // focus during the round-trip, but tapping the send button on desktop
       // still shifts focus to the button — restore it there. On touch we
       // skip: the mobile IME would either already be up (fine) or the user
       // dismissed it deliberately, and forcing focus would reopen it.
-      if (!isTouch) requestAnimationFrame(() => textareaRef.current?.focus());
+      if (!isTouch) requestAnimationFrame(() => {
+        if (activeDraftKey.current === draftKey) textareaRef.current?.focus();
+      });
     }
-  }, [channelId, content, files, sendMessage, replyingTo, runMusicCommand, canSend, resetInputAfterSend, isTouch, selfTimeoutExpiresAt, serverId]);
+  }, [channelId, draftKey, sendMessage, runMusicCommand, canSend, isTouch, selfTimeoutExpiresAt, serverId]);
 
   /** Keyboard event handler */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -323,7 +362,7 @@ function MessageInput() {
     const start = mentionStartRef.current;
     if (start < 0) return;
 
-    mentionSelectionsRef.current.push(mention);
+    useComposerDraftStore.getState().patch(draftKey, { mentions: [...draft.mentions, mention] });
 
     const cursorPos = textareaRef.current?.selectionStart ?? content.length;
     const before = content.slice(0, start);
@@ -358,7 +397,7 @@ function MessageInput() {
     (emoji: CustomEmojiRef) => {
       const start = emojiStartRef.current;
       if (start < 0) return;
-      emojiSelectionsRef.current.push(emoji);
+      useComposerDraftStore.getState().patch(draftKey, { emojis: [...draft.emojis, emoji] });
 
       const cursorPos = textareaRef.current?.selectionStart ?? content.length;
       const insert = `:${emoji.name}: `;
@@ -376,7 +415,7 @@ function MessageInput() {
         }
       });
     },
-    [content],
+    [content, draft.emojis, draftKey, setContent],
   );
 
   const handleEmojiAutocompleteClose = useCallback(() => {
@@ -388,7 +427,7 @@ function MessageInput() {
   /** Insert emoji at cursor position (custom picks insert `:name:`) */
   function handleEmojiSelect(picked: string) {
     const custom = parseCustomEmojiToken(picked);
-    if (custom) emojiSelectionsRef.current.push(custom);
+    if (custom) useComposerDraftStore.getState().patch(draftKey, { emojis: [...draft.emojis, custom] });
     const emoji = custom ? `:${custom.name}:` : picked;
     const cursorPos = textareaRef.current?.selectionStart ?? content.length;
     const newContent = content.slice(0, cursorPos) + emoji + content.slice(cursorPos);
@@ -410,26 +449,19 @@ function MessageInput() {
    * content immediately. Shared by the GIF and sticker pickers.
    */
   async function sendInstant(text: string) {
-    if (!channelId) return;
-    // Same ref-based guard as handleSend — a fast double-click on a GIF
-    // tile used to fire two API requests because the state-based check
-    // only saw isSending=false until React flushed the next render.
-    if (isSendingRef.current) return;
-    isSendingRef.current = true;
-    setIsSending(true);
+    if (!channelId || !canSend || selfTimeoutExpiresAt) return;
+    const ticket = useComposerDraftStore.getState().beginSend(draftKey);
+    if (!ticket) return;
     try {
-      const success = await sendMessage(text, [], undefined);
-      if (success) {
-        setContent("");
-        setFiles([]);
-        setReplyingTo(null);
-      }
+      await sendMessage(text, [], undefined);
+    } catch (err) {
+      console.error("[MessageInput] picker send failed:", err);
     } finally {
-      isSendingRef.current = false;
-      setIsSending(false);
+      // A picker result is independent of the text/files waiting in the composer.
+      useComposerDraftStore.getState().finishSend(draftKey, ticket, false);
       // Skip focus restore on touch — see handleSend for rationale.
       if (!isTouch) requestAnimationFrame(() => {
-        textareaRef.current?.focus();
+        if (activeDraftKey.current === draftKey) textareaRef.current?.focus();
       });
     }
   }
@@ -500,7 +532,7 @@ function MessageInput() {
   return (
     <div className="input-area">
       {/* Mention autocomplete popup — shown above textarea */}
-      {mentionQuery !== null && mode === "channel" && (
+      {!legacyComposer && mentionQuery !== null && mode === "channel" && (
         <MentionAutocomplete
           query={mentionQuery}
           serverId={serverId}
@@ -510,7 +542,7 @@ function MessageInput() {
       )}
 
       {/* Custom emoji `:shortcode` autocomplete — channel and DM */}
-      {emojiQuery !== null && (
+      {!legacyComposer && emojiQuery !== null && (
         <EmojiAutocomplete
           query={emojiQuery}
           serverId={serverId}
@@ -544,10 +576,11 @@ function MessageInput() {
         </div>
       )}
 
-      <div className="input-box">
+      <div className={`input-box${legacyComposer ? " legacy-composer" : ""}`}>
         {/* File upload button */}
         <button
           className="input-action-btn"
+          disabled={!canSend || isSending}
           onClick={() => fileInputRef.current?.click()}
           title={t("attachFile")}
         >
@@ -581,7 +614,7 @@ function MessageInput() {
              during the send round-trip — disabled drops focus and collapses
              the IME, which is jarring when sending back-to-back messages.
              Edits are still blocked; handleSend also short-circuits on the
-             isSendingRef guard so no submission slips through. */
+             conversation send lock so no submission slips through. */
           readOnly={isSending}
         />
 
@@ -590,11 +623,8 @@ function MessageInput() {
           <button
             className="input-action-btn"
             title={t("emoji")}
-            onClick={() => {
-              setShowGifPicker(false);
-              setShowStickerPicker(false);
-              setShowEmojiPicker((prev) => !prev);
-            }}
+            disabled={!canSend || isSending}
+            onClick={() => togglePicker("emoji")}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
@@ -619,11 +649,8 @@ function MessageInput() {
           <button
             className="input-action-btn input-gif-btn"
             title={t("gif")}
-            onClick={() => {
-              setShowEmojiPicker(false);
-              setShowStickerPicker(false);
-              setShowGifPicker((prev) => !prev);
-            }}
+            disabled={!canSend || isSending}
+            onClick={() => togglePicker("gif")}
           >
             GIF
           </button>
@@ -643,11 +670,8 @@ function MessageInput() {
             className="input-action-btn"
             title={t("expressions:stickerButton")}
             aria-label={t("expressions:stickerButton")}
-            onClick={() => {
-              setShowEmojiPicker(false);
-              setShowGifPicker(false);
-              setShowStickerPicker((prev) => !prev);
-            }}
+            disabled={!canSend || isSending}
+            onClick={() => togglePicker("sticker")}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9.5L21 14.5V5a2 2 0 0 0-2-2h-3.5" />
@@ -676,7 +700,7 @@ function MessageInput() {
             timed out (full send block — even slash commands). */}
         <button
           className="input-action-btn input-send-btn"
-          title={t("sendMessage")}
+          title={t("common:sendMessage")}
           onClick={handleSend}
           disabled={
             isSending ||
@@ -686,7 +710,7 @@ function MessageInput() {
             (!canSend && !isSlashCommand) ||
             !!selfTimeoutExpiresAt
           }
-          aria-label={t("sendMessage")}
+          aria-label={t("common:sendMessage")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" />

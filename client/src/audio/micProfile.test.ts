@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import type { MicrophoneSettings } from "./microphoneSettings";
 
 import {
   MIC_PROFILES,
@@ -17,18 +18,23 @@ import {
   shouldRunNoiseProcessor,
 } from "./micProfile";
 
+const settings: MicrophoneSettings = {
+  micProfile: "konusma", inputDevice: "", noiseReduction: true, noiseReductionEngine: "rnnoise",
+  noiseSuppressionLevel: "medium", micSensitivity: 50, inputVolume: 100, deepfilterSuppression: 70,
+};
+
 describe("micCaptureFor", () => {
-  it("konusma captures mono with the full voice DSP chain on", () => {
-    expect(micCaptureFor("konusma", "")).toEqual({
+  it("konusma captures mono with echo cancellation and gain control, without double suppression", () => {
+    expect(micCaptureFor(settings)).toEqual({
       echoCancellation: true,
-      noiseSuppression: true,
+      noiseSuppression: false,
       autoGainControl: true,
       channelCount: 1,
     });
   });
 
   it("muzik captures stereo with every voice DSP stage off", () => {
-    expect(micCaptureFor("muzik", "")).toEqual({
+    expect(micCaptureFor({ ...settings, micProfile: "muzik" })).toEqual({
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
@@ -37,15 +43,25 @@ describe("micCaptureFor", () => {
   });
 
   it("threads the selected input device through both profiles", () => {
-    expect(micCaptureFor("konusma", "mic-a")).toMatchObject({ deviceId: "mic-a" });
-    expect(micCaptureFor("muzik", "mic-a")).toMatchObject({ deviceId: "mic-a" });
+    expect(micCaptureFor({ ...settings, inputDevice: "mic-a" })).toMatchObject({ deviceId: { exact: "mic-a" } });
+    expect(micCaptureFor({ ...settings, micProfile: "muzik", inputDevice: "mic-a" })).toMatchObject({ deviceId: { exact: "mic-a" } });
   });
 
   it("omits deviceId entirely when no device is pinned", () => {
     // `deviceId: ""` is not the same as "browser default" — an empty exact
     // constraint makes getUserMedia throw OverconstrainedError on some builds.
-    expect(micCaptureFor("konusma", "")).not.toHaveProperty("deviceId");
-    expect(micCaptureFor("muzik", "")).not.toHaveProperty("deviceId");
+    expect(micCaptureFor(settings)).not.toHaveProperty("deviceId");
+    expect(micCaptureFor({ ...settings, micProfile: "muzik" })).not.toHaveProperty("deviceId");
+  });
+
+  it.each(["rnnoise", "deepfilter", "gtcrn", "dtln", "speex", "krisp"] as const)("disables browser suppression for %s", (noiseReductionEngine) => {
+    expect(micCaptureFor({ ...settings, noiseReductionEngine }).noiseSuppression).toBe(false);
+  });
+
+  it("enables browser suppression only for enabled WebRTC in the speech profile", () => {
+    expect(micCaptureFor({ ...settings, noiseReductionEngine: "webrtc" }).noiseSuppression).toBe(true);
+    expect(micCaptureFor({ ...settings, noiseReductionEngine: "webrtc", noiseReduction: false }).noiseSuppression).toBe(false);
+    expect(micCaptureFor({ ...settings, noiseReductionEngine: "webrtc", micProfile: "muzik" })).toMatchObject({ noiseSuppression: false, echoCancellation: false, autoGainControl: false, channelCount: 2 });
   });
 });
 

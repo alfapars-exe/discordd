@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 listener-local music-bot volume.",
+  "implemented": [
+    "The music panel stores volume against the channel-specific LiveKit identity __music_bot__:<channelId> rather than changing publisher or server state.",
+    "The existing per-participant playout synchronizer applies that value only to the bot microphone source, multiplied by the listener's master volume and deafen state.",
+    "The 0-200% accessible slider uses the existing account-preference-backed per-user volume store and does not alter unrelated participants."
+  ],
+  "checks": [
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/components/voice/MusicBotPanel.test.tsx", "cwd": "client", "result": "passed", "tests": 14 }
+  ],
+  "remaining": [
+    "Two independent listeners must verify different audible bot levels with unrelated voice audio unchanged."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Group sends now create a cryptographically random UUID client_request_id and retain the exact encrypted payload, encrypted File objects, original files/metas and original text in account/group/device-scoped session memory. A synchronous preparation lock prevents duplicate encryption/transmission while the first request is being built.",
+    "Ambiguous errors retain a pending send. The explicit result-check action first queries the authenticated operation; completed outcomes resolve locally, committed outcomes explicitly request reconciliation, and missing/prepared operations replay the same payload/files without re-encryption or an unkeyed fallback. Failed authorization/network/rate-limit lookups are not followed by another POST.",
+    "202 stays pending, not success. Outcome group/request/message IDs, phase, file-count/index bounds and unique failure positions are checked; deleted outcomes are not reposted. Differing new caller content cannot silently substitute the old operation. Current client opts into the new server contract; older servers are not silently downgraded to unkeyed writes.",
+    "Pending UI blocks another send/Enter while preserving editable newer drafts and exposes a check/retry button with EN/TR status and session-only retention warning. Busy retries are locked. Unchanged original composer content is cleared only after a resolved retry; newer revisions/text/files survive.",
+    "Exact ciphertext results may use the original plaintext/file keys; edited replay ciphertext is decrypted instead, never stamped with original content. Newer live edit/delete versions fence older HTTP responses. Own-message WebSocket echoes arriving before HTTP can use the still-pending matching plaintext/key material without duplicating the message.",
+    "Account and membership deletion clear pending references. Device changes reject resumption; completed old-epoch requests can still be resolved after a group rekey without encrypting again. Failed-files recovery keeps its original source entry until an uncertain retry is resolved, then removes that source rather than inviting another duplicate retry."
+  ],
+  "verification": [
+    "Full client suite passed before final helper/race tests: 223 files / 2124 tests in 45.44s. Final affected suite passed afterward: 4 files / 67 tests in 4.21s, including lookup policy, exact request/file identity, single encryption, partial normalization, malformed/scope rejection, pending reconciliation, retry lock, deleted outcome, newer draft preservation, edited replay, live edit/delete race, own WS-before-HTTP, device/account/member cleanup and completed rekey resolution.",
+    "Final tsc -b and targeted ESLint passed after the added store tests. Local Vite web production build passed: 1648 modules, 687ms. Existing config-loader/chunk/dynamic-import warnings remain unsuppressed.",
+    "Targeted git diff --check passed. Browser automation was not used because the prior Ego test area remains handed to the user; no visual/real-device acceptance was claimed."
+  ],
+  "remaining": [
+    "Pending requests/files currently live only in session memory, with an explicit keep-open warning. Encrypted durable pending-operation storage, restart discovery/recovery and close/reload safeguards remain required; do not claim restart-safe delivery.",
+    "A prepared request with a stale membership epoch or changed local device may remain blocked rather than being unsafely re-encrypted/reposted. Safe server-side cancellation/fencing and an explicit terminal-state recovery UI still need implementation. Unsupported older servers do not get an unsafe unkeyed fallback.",
+    "Known final-failure classification, persisted outbox/WebSocket recovery, malformed success attachment reconciliation and all partial-retry/account/draft races still need broader integration acceptance. No claim of globally duplicate-free channel/DM/group messaging is made.",
+    "Actual two-client encrypted upload/replay/reconnect, application restart, Windows/native packaging, 390px/200% layout, touch/screen-reader and full PostgreSQL API acceptance remain unperformed. No commit, push, production migration or release performed."
+  ]
+}

@@ -1,6 +1,7 @@
 /** LanguageSelector — Language selection dropdown. */
 
 import { useTranslation } from "react-i18next";
+import { useTimeFormatStore, type TimeFormat } from "../../stores/timeFormatStore";
 
 type LanguageSelectorProps = {
   currentLanguage: string;
@@ -14,6 +15,8 @@ const LANGUAGES = [
 
 function LanguageSelector({ currentLanguage, onChange }: LanguageSelectorProps) {
   const { t } = useTranslation("settings");
+  const timeFormat = useTimeFormatStore((state) => state.timeFormat);
+  const setTimeFormat = useTimeFormatStore((state) => state.setTimeFormat);
 
   return (
     <div className="settings-field">
@@ -29,6 +32,12 @@ function LanguageSelector({ currentLanguage, onChange }: LanguageSelectorProps) 
             {t(lang.labelKey)}
           </option>
         ))}
+      </select>
+      <label className="settings-label" htmlFor="time-format">{t("timeFormat")}</label>
+      <select id="time-format" value={timeFormat} onChange={(event) => setTimeFormat(event.target.value as TimeFormat)} className="settings-select">
+        <option value="auto">{t("timeFormatAuto")}</option>
+        <option value="12">{t("timeFormat12")}</option>
+        <option value="24">{t("timeFormat24")}</option>
       </select>
     </div>
   );

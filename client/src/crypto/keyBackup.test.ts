@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { StoredSenderKey } from "./types";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 
 /**
  * Stand-in for the `metadata` object store.
@@ -88,8 +89,11 @@ import * as dmEncryptionMock from "./dmEncryption";
 
 // The metadata double is module state, so it outlives a single test the way a
 // real IndexedDB store would. Reset it before every test in the file.
+let authGeneration = 15000;
 beforeEach(() => {
   metadataStore.clear();
+  publishAuthOwnerChange("test-user");
+  publishAuthGenerationChange(++authGeneration);
 });
 
 describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
@@ -108,9 +112,14 @@ describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
 
   it("round-trip: new backup created with 2M iter restores successfully", async () => {
     const password = "round-trip-test-password";
+    const cached={messageId:"group-version",channelId:"",dmChannelId:"group:g",content:"private",timestamp:1,encryptedSourceTag:"group-v1:hash",fileKeys:[{key:"key",iv:"iv",filename:"photo.png",mimeType:"image/png",originalSize:1,digest:"digest"}]};
+    // The restore starts with an empty cache, so retaining these fields must
+    // come from the encrypted backup rather than the existing-cache priority.
+    vi.mocked(keyStorageMock.getAllCachedMessages).mockResolvedValueOnce([cached]).mockResolvedValueOnce([]);
     const backup = await createBackup(password);
     const ok = await restoreFromBackup(backup, password);
     expect(ok).toBe(true);
+    expect(keyStorageMock.cacheDecryptedMessages).toHaveBeenCalledWith([cached]);
   });
 
   it("round-trip: wrong password fails restore (returns false, no throw)", async () => {
@@ -193,6 +202,8 @@ describe("keyBackup — PBKDF2 iteration agility (audit 2026-05-27)", () => {
       // No `algorithm` field — restore must default to 1M iter
     };
 
+    publishAuthOwnerChange("legacy-user");
+    publishAuthGenerationChange(++authGeneration);
     const ok = await restoreFromBackup(legacyBackup, password);
     expect(ok).toBe(true);
   });
@@ -434,6 +445,43 @@ describe("keyBackup — the sender-key replay window survives a backup round-tri
   });
 });
 
+describe("keyBackup account-scope fencing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a backup collection when the owner changes during a read", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof keyStorageMock.getIdentityKeyPair>>) => void;
+    vi.mocked(keyStorageMock.getIdentityKeyPair).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const creating = createBackup("scope-test-password");
+    await vi.waitFor(() => expect(keyStorageMock.getIdentityKeyPair).toHaveBeenCalledOnce());
+    publishAuthOwnerChange("other-account");
+    publishAuthGenerationChange(++authGeneration);
+    resolve({ publicKey: new Uint8Array(32).fill(1), privateKey: new Uint8Array(32).fill(2) });
+    await expect(creating).rejects.toThrow("e2ee_account_scope_changed");
+    expect(keyStorageMock.getSigningKeyPair).not.toHaveBeenCalled();
+  });
+
+  it("does not import a decrypted backup after auth changes during reset preparation", async () => {
+    const backup = await createBackup("scope-test-password");
+    vi.clearAllMocks();
+    vi.mocked(dmEncryptionMock.markSelfFanoutNeedsReset).mockImplementationOnce(async () => {
+      publishAuthOwnerChange("other-account");
+      publishAuthGenerationChange(++authGeneration);
+    });
+    expect(await restoreFromBackup(backup, "scope-test-password")).toBe(false);
+    expect(keyStorageMock.clearAllE2EEData).not.toHaveBeenCalled();
+  });
+
+  it("rejects a backup whose embedded registration belongs to another account", async () => {
+    const backup = await createBackup("scope-test-password");
+    publishAuthOwnerChange("other-account");
+    publishAuthGenerationChange(++authGeneration);
+    expect(await restoreFromBackup(backup, "scope-test-password")).toBe(false);
+    expect(keyStorageMock.clearAllE2EEData).not.toHaveBeenCalled();
+  });
+});
+
 // ──────────────────────────────────
 // Rollback restores the metadata store — security scan 2026-07-31, N-22
 // ──────────────────────────────────
@@ -513,6 +561,17 @@ describe("keyBackup — a failed restore rolls the metadata store back", () => {
     expect(await keyStorageMock.getMetadata<string>("deviceId")).toBe(
       "device-before-restore"
     );
+  });
+  it("preserves non-exportable pending-send keys and sealed records during failed restore rollback",async()=>{
+    const backup=await seedDeviceThenFailRestore();
+    const key=await crypto.subtle.generateKey({name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+    const iv=crypto.getRandomValues(new Uint8Array(12));const ciphertext=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode("pending content"));
+    const keyName=`group_pending_key:v1:${JSON.stringify(["owner","device"])}`,recordName=`group_pending:v1:${JSON.stringify(["owner","device"])}:${JSON.stringify(["group","request-00000001"])}`;
+    metadataStore.set(keyName,key);metadataStore.set(recordName,{iv,ciphertext});
+    expect(await restoreFromBackup(backup,"pw")).toBe(false);
+    const restoredKey=await keyStorageMock.getMetadata<CryptoKey>(keyName),record=await keyStorageMock.getMetadata<{iv:Uint8Array<ArrayBuffer>;ciphertext:ArrayBuffer}>(recordName);
+    expect(restoredKey?.extractable).toBe(false);expect(record).toBeTruthy();
+    expect(new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:record!.iv},restoredKey!,record!.ciphertext))).toBe("pending content");
   });
 
   it("restores the rest of the metadata key space too, not just deviceId", async () => {

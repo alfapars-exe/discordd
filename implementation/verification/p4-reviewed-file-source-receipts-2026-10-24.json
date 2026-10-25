@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Known-index upload recoveries moved into the composer now bind original File identities to account/group/lifetime-scoped source positions. File names or sizes are not treated as identity. New sends persist this mapping inside their encrypted local manifest before POST.",
+    "A confirmed unchanged-ciphertext message outcome produces source acknowledgements only for successful attachment positions. Receipts are awaited before child-record cleanup; storage failure retains the committed child for result lookup rather than retransmission. Invalid, overlapping or incomplete attachment/failure partitions do not produce receipts.",
+    "Restart planning orders a reviewed child before every distinct local source, deduplicates origin/source edges and detects dependency cycles. Queued source snapshots receive newly persisted acknowledgement indices. Existing direct retry origin semantics are retained."
+  ],
+  "verification": [
+    "Real IndexedDB/WebCrypto integration verifies partial source upload, review-to-composer, encrypted source mapping present before the next POST, successful child attachment acknowledgement and retention of the acknowledged original source record.",
+    "Added authenticated source-mapping validation and multiple-parent/cycle planning tests. An initial self-reference test fixture used a different request ID and incorrectly expected rejection; corrected the fixture to test an actual self-reference.",
+    "Focused suites passed: 3 files / 24 tests. Full client regression passed: 228 files / 2177 tests in 46.33s. tsc -b and affected ESLint passed. Web production build passed in 698ms; existing warning categories remain unsuppressed.",
+    "Final attachment-partition guard was added while the full suite was running; the focused suites and typecheck were rerun afterward. No server changes or real two-client/device acceptance are implied."
+  ],
+  "remaining": [
+    "Transitive receipts for repeated partial-failure/manual-review chains still need integration. Unknown-index recovery cannot safely infer source provenance. Missing source records, cross-tab interference, process restart and storage failures need broader end-to-end coverage and recovery UX.",
+    "The manual review happy path is connected, but this is not a claim that all duplicate-recovery paths or all P4 requirements are complete. Overall P0-P11 and Windows release acceptance remain incomplete.",
+    "No commit, push, merge, production migration or release performed."
+  ]
+}

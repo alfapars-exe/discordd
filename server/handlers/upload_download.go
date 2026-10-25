@@ -30,6 +30,7 @@
 package handlers
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"os"
@@ -115,6 +116,13 @@ func (h *UploadDownloadHandler) authUserID(r *http.Request) (string, bool) {
 	}
 	if claims.Scope != "" && claims.Scope != models.TokenScopeMedia {
 		return "", false
+	}
+	if validator, ok := h.tokenValidator.(interface {
+		ValidateSession(context.Context, string, string) error
+	}); ok {
+		if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
+			return "", false
+		}
 	}
 	return claims.UserID, true
 }

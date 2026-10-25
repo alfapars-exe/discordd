@@ -9,6 +9,7 @@ import { useToastStore } from "../../stores/toastStore";
 import { isNativeApp } from "../../utils/constants";
 import { detectOS, shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { localizeAuthError } from "../../utils/authErrors";
+import { newPasswordError } from "../../utils/passwordPolicy";
 import { sanitizeReturnUrl, matchInviteReturnUrl } from "../../utils/returnUrl";
 import { useServerWakeUp } from "../../hooks/useServerWakeUp";
 import * as serversApi from "../../api/servers";
@@ -203,8 +204,9 @@ function RegisterPage() {
       return;
     }
 
-    if (password.length < 8) {
-      setLocalError(t("passwordTooShort"));
+    const policyError = newPasswordError(password);
+    if (policyError) {
+      setLocalError(t(policyError));
       return;
     }
 
@@ -316,7 +318,7 @@ function RegisterPage() {
 
           <div className="auth-field">
             <label htmlFor="email" className="auth-label">
-              {t("emailOptional")}
+              {t("email")}
             </label>
             <input
               id="email"
@@ -327,12 +329,9 @@ function RegisterPage() {
                 handleInputChange();
               }}
               placeholder={t("emailPlaceholder")}
+              required
               className="auth-input"
             />
-            {/* Warn if no email — password reset won't work */}
-            {!email.trim() && (
-              <p className="auth-email-warning">{t("emailWarning")}</p>
-            )}
           </div>
 
           <div className="auth-field">

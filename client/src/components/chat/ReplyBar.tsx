@@ -1,6 +1,9 @@
 /** ReplyBar — Reply preview bar shown above input. */
 
 import { useTranslation } from "react-i18next";
+import { useContext } from "react";
+import { ChatContext } from "../../hooks/useChatContext";
+import SpamPreview from "./SpamPreview";
 import type { ChatMessage } from "../../hooks/useChatContext";
 
 type ReplyBarProps = {
@@ -10,6 +13,7 @@ type ReplyBarProps = {
 
 function ReplyBar({ message, onCancel }: ReplyBarProps) {
   const { t } = useTranslation("chat");
+  const chat = useContext(ChatContext);
 
   const authorName =
     message.author?.display_name ?? message.author?.username ?? t("unknownUser");
@@ -34,7 +38,7 @@ function ReplyBar({ message, onCancel }: ReplyBarProps) {
         {t("replyingTo", { user: authorName })}
       </span>
 
-      <span className="reply-bar-text">{previewText}</span>
+      <span className="reply-bar-text"><SpamPreview kind={chat?.mode === "dm" ? "dm" : "channel"} message={message}>{previewText}</SpamPreview></span>
 
       {/* Cancel button */}
       <button className="reply-bar-close" onClick={onCancel} title="Escape">

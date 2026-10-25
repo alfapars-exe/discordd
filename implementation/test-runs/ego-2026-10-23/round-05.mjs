@@ -1,0 +1,12 @@
+const task = await taskSpace(15);
+const page = task.page("p1");
+await page.fill("@25", "ego_accept_2310");
+await page.fill("@26", "Ego Acceptance");
+await page.fill("@27", "ego.acceptance.2310@example.invalid");
+await page.fill("@28", "LocalOnly!Test2310");
+await page.fill("@30", "LocalOnly!Test2310");
+await page.click("@32", { label: "accept test terms" });
+await page.click("@35", { label: "create local account" });
+await page.waitForTimeout(1500);
+console.log({ url: await page.url() });
+console.log(await page.snapshot());

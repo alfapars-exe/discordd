@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -426,11 +425,11 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 	if seedErr != nil {
 		encKey, encErr := crypto.Encrypt(cfg.LiveKit.APIKey, encryptionKey)
 		if encErr != nil {
-			log.Fatalf("[main] failed to encrypt platform livekit key: %v", encErr)
+			logx.Fatal("startup", "failed to encrypt platform livekit key", encErr)
 		}
 		encSecret, encErr := crypto.Encrypt(cfg.LiveKit.APISecret, encryptionKey)
 		if encErr != nil {
-			log.Fatalf("[main] failed to encrypt platform livekit secret: %v", encErr)
+			logx.Fatal("startup", "failed to encrypt platform livekit secret", encErr)
 		}
 
 		platformInstance = &models.LiveKitInstance{
@@ -441,7 +440,7 @@ func seedPlatformLiveKit(db *database.DB, repos *Repositories, cfg *config.Confi
 			ServerCount:       0,
 		}
 		if createErr := repos.LiveKit.Create(ctx, platformInstance); createErr != nil {
-			log.Fatalf("[main] failed to seed platform livekit instance: %v", createErr)
+			logx.Fatal("startup", "failed to seed platform livekit instance", createErr)
 		}
 		startupLogger.Info("seeded platform LiveKit instance", "url", cfg.LiveKit.URL, "livekit_instance_id", platformInstance.ID)
 	} else {

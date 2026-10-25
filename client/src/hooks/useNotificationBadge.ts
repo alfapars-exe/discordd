@@ -13,12 +13,23 @@ import { useReadStateStore } from "../stores/readStateStore";
 import { useDMStore } from "../stores/dmStore";
 import { useServerStore } from "../stores/serverStore";
 import { useNotificationStore } from "../stores/notificationStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 
 const BADGE_COLOR = "#ED4245";
 const BADGE_TEXT_COLOR = "#FFFFFF";
 const OVERLAY_ICON_SIZE = 16;
 const FAVICON_SIZE = 32;
 const BASE_TITLE = "HiChat!";
+
+/**
+ * Keep notification badges compact and consistent across the web favicon,
+ * Electron taskbar overlay, and document title. The product badge contract is
+ * `1+` through `9+`; larger totals remain `9+`.
+ */
+export function formatNotificationBadge(count: number): string {
+  const normalized = Math.max(0, Math.floor(count));
+  return `${Math.min(normalized, 9)}+`;
+}
 
 // ─── Electron Overlay Badge ───
 
@@ -42,7 +53,7 @@ function renderOverlayIcon(count: number): string {
   );
   ctx.fill();
 
-  const label = count > 99 ? "99+" : String(count);
+  const label = formatNotificationBadge(count);
   const fontSize = label.length > 2 ? 7 : label.length > 1 ? 9 : 11;
   ctx.fillStyle = BADGE_TEXT_COLOR;
   ctx.font = `bold ${fontSize}px sans-serif`;
@@ -69,7 +80,7 @@ function renderFaviconWithBadge(
 
   ctx.drawImage(originalImg, 0, 0, FAVICON_SIZE, FAVICON_SIZE);
 
-  const label = count > 99 ? "99+" : String(count);
+  const label = formatNotificationBadge(count);
   const badgeRadius = 8;
   const badgeCenterX = FAVICON_SIZE - badgeRadius;
   const badgeCenterY = badgeRadius;
@@ -128,6 +139,10 @@ export function useNotificationBadge(): void {
   const dmUnreads = useDMStore((s) => s.dmUnreadCounts);
   const dmChannels = useDMStore((s) => s.channels);
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
+  const badgeEnabled = usePreferencesStore((s) => {
+    const value = s.data.notifications;
+    return !value || typeof value !== "object" || Array.isArray(value) || (value as Record<string, unknown>).unreadBadge !== false;
+  });
   const activeServerId = useServerStore((s) => s.activeServerId);
   const mutedServerIds = useServerStore((s) => s.mutedServerIds);
 
@@ -164,9 +179,11 @@ export function useNotificationBadge(): void {
       const ch = dmChannels.find((d) => d.id === chId);
       return ch?.is_muted ? sum : sum + c;
     }, 0);
-    const total = channelTotal + dmTotal + notificationUnread;
+    const total = badgeEnabled ? channelTotal + dmTotal + notificationUnread : 0;
 
-    document.title = total > 0 ? `(${total}) ${BASE_TITLE}` : BASE_TITLE;
+    document.title = total > 0
+      ? `(${formatNotificationBadge(total)}) ${BASE_TITLE}`
+      : BASE_TITLE;
 
     // ─── Electron: Taskbar Overlay Icon ───
     if (window.electronAPI) {
@@ -192,5 +209,5 @@ export function useNotificationBadge(): void {
         }
       }
     }
-  }, [channelUnreads, dmUnreads, dmChannels, notificationUnread, activeServerId, mutedServerIds]);
+  }, [channelUnreads, dmUnreads, dmChannels, notificationUnread, activeServerId, mutedServerIds, badgeEnabled]);
 }

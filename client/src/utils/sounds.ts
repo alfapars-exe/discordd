@@ -26,6 +26,7 @@
 import { useVoiceStore } from "../stores/voiceStore";
 import { useAuthStore } from "../stores/authStore";
 import { useAccessibilityStore } from "../stores/accessibilityStore";
+import { getNotificationPreferences } from "./notificationPreferences";
 
 /** Lazily initialized — created on first sound play, resumed if suspended. */
 let audioCtx: AudioContext | null = null;
@@ -142,6 +143,8 @@ export function playWatchStopSound(): void {
 
 /** Notification sound — skipped in DND and invisible mode. */
 export function playNotificationSound(): void {
+  const notificationPrefs = getNotificationPreferences();
+  if (notificationPrefs.muteAllSounds || !notificationPrefs.messageSound) return;
   const manualStatus = useAuthStore.getState().manualStatus;
   if (manualStatus === "dnd" || manualStatus === "offline") return;
 
@@ -151,6 +154,21 @@ export function playNotificationSound(): void {
   const pct = useAccessibilityStore.getState().notificationSoundVolume;
   const volume = (Math.max(0, Math.min(100, pct)) / 100) * 0.6;
   if (volume <= 0) return;
-  playToneAt(800, 900, 0.06, volume);
-  setTimeout(() => playToneAt(900, 1000, 0.06, volume), 70);
+  const pack = notificationPrefs.soundPack;
+  const first = pack === "soft" ? 620 : pack === "minimal" ? 760 : 800;
+  const second = pack === "soft" ? 720 : pack === "minimal" ? 760 : 1000;
+  const duration = pack === "minimal" ? 0.05 : 0.06;
+  playToneAt(first, pack === "minimal" ? first : first + 100, duration, volume, pack === "soft" ? "triangle" : "sine");
+  if (pack !== "minimal") setTimeout(() => playToneAt(first + 100, second, duration, volume, pack === "soft" ? "triangle" : "sine"), 70);
+}
+
+/** Short, non-looping incoming-call preview used by notification settings. */
+export function previewIncomingCallSound(): void {
+  const notificationPrefs = getNotificationPreferences();
+  if (notificationPrefs.muteAllSounds || !notificationPrefs.incomingCallSound) return;
+  const pct = useAccessibilityStore.getState().notificationSoundVolume;
+  const volume = Math.max(0, Math.min(100, pct)) / 100;
+  if (volume <= 0) return;
+  playToneAt(440, 440, 0.45, volume, "sine");
+  playToneAt(554, 554, 0.45, volume, "sine");
 }

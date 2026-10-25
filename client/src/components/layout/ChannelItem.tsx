@@ -14,6 +14,10 @@ type ChannelItemProps = {
   isDragging: boolean;
   dropPos: "above" | "below" | null;
   onClick: () => void;
+  onReorderKeyDown?: (e: React.KeyboardEvent<HTMLElement>) => void;
+  reorderPosition?: number;
+  reorderSize?: number;
+  isKeyboardDragging?: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
@@ -42,6 +46,10 @@ function ChannelItem({
   isDragging,
   dropPos,
   onClick,
+  onReorderKeyDown,
+  reorderPosition,
+  reorderSize,
+  isKeyboardDragging,
   onContextMenu,
   onDragStart,
   onDragOver,
@@ -80,7 +88,14 @@ function ChannelItem({
     >
       <button
         className={`ch-tree-item${isActive ? " active" : ""}${isVoice ? " voice" : ""}${isVoiceLocked ? " locked" : ""}${unread > 0 && !isEffectivelyMuted ? " has-unread" : ""}${voiceDropTarget ? " voice-drop-target" : ""}${mutedClass}`}
+        data-keyboard-reorder-id={channel.id}
+        aria-posinset={reorderPosition}
+        aria-setsize={reorderSize}
+        aria-keyshortcuts={canManageChannels ? "Control+D" : undefined}
+        aria-grabbed={Boolean(isKeyboardDragging)}
+        onKeyDown={onReorderKeyDown}
         onClick={onClick}
+        aria-current={isActive ? "page" : undefined}
         onContextMenu={onContextMenu}
         title={
           isVoiceLocked

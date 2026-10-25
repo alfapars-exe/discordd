@@ -11,6 +11,7 @@ import (
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type sqliteUserRepo struct {
@@ -90,6 +91,10 @@ func (r *sqliteUserRepo) Delete(ctx context.Context, id string) error {
 }
 
 func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
 	return err != nil && !errors.Is(err, sql.ErrNoRows) &&
 		(containsString(err.Error(), "UNIQUE constraint failed"))
 }

@@ -1,0 +1,12 @@
+{
+  "status": "implemented_unverified",
+  "phase": "P1",
+  "change": "Manual presence cache is scoped by authenticated account ID; legacy global key is ignored, valid server pref_status wins, storage failures are tolerated and logout resets active status.",
+  "verification": [
+    "Auth store, websocket system-event and idle-detection tests: 3 files / 32 tests passed.",
+    "Final full client suite: 269 files, 2536 tests passed (56.88s).",
+    "tsc -b and targeted ESLint passed; Vite production build passed (1.92s).",
+    "Invite registration fixtures were updated for current required-email contract; product registration changes were preserved."
+  ],
+  "remaining": ["Live multi-account switching and cross-device acceptance."]
+}

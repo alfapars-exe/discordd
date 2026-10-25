@@ -1,0 +1,23 @@
+{
+  "dataset": "google/fleurs",
+  "dataset_url": "https://huggingface.co/datasets/google/fleurs",
+  "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+  "license": "CC-BY-4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "source_archive_url": "https://huggingface.co/datasets/google/fleurs/resolve/70bb2e84b976b7e960aa89f1c648e09c59f894dd/data/tr_tr/audio/test.tar.gz",
+  "source_archive_member": "test/10000377651956138413.wav",
+  "source_filename": "10000377651956138413.wav",
+  "source_sha256": "e2efd9f3ce2fcc9e191126dcded8e674233a9ce83a9c2132541700e8f1bd57c3",
+  "source_bytes": 906298,
+  "archive_compressed_bytes_read": 747520,
+  "config": "tr_tr",
+  "split": "test",
+  "id": 2004,
+  "raw_transcription": "Aynı ay, başka bir yolcu uçağı Meşhed'deki bir pisti aşarak bir duvara çarptı ve on yedi kişinin ölümüne neden oldu.",
+  "transcription": "aynı ay başka bir yolcu uçağı meşhed'deki bir pisti aşarak bir duvara çarptı ve on yedi kişinin ölümüne neden oldu",
+  "num_samples": 226560,
+  "speaker_gender": "MALE",
+  "retrieved_utc": "2026-10-23",
+  "attribution": "FLEURS (2022), Alexis Conneau, Min Ma, Simran Khanuja, Yu Zhang, Vera Axelrod, Siddharth Dalmia, Jason Riesa, Clara Rivera, and Ankur Bapna; Google and dataset contributors.",
+  "paper_url": "https://arxiv.org/abs/2205.12446"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Production cleanup scheduling and aggregate health wiring, verified on isolated local API; not production deployment or complete deletion acceptance.",
+  "implemented": [
+    "Repositories initialize anonymization/cleanup repositories; services initialize the cleanup worker with configured upload root. Main starts the worker immediately and every minute, and stops it during graceful shutdown before database teardown.",
+    "A second Start shares the existing loop rather than creating another worker. Cancellation, idempotent stop and restart are supported. Each batch uses a thirty-second database context and at most 25 records; local OS filesystem calls themselves are not claimed to be forcibly cancellable.",
+    "Mutex-protected aggregate status includes running state, actual last check/success, consecutive incomplete batches and last result. Failed removals or database/root errors report incomplete status without exposing queued URLs or raw local-path errors.",
+    "GET /api/health remains HTTP 200 for liveness while reporting degraded cleanup when stopped, unpolled, stale for more than three minutes or failing. No request-time filesystem/database cleanup is performed by health reads."
+  ],
+  "checks": [
+    {"command": "go test . ./services -run 'Test(HealthHandlerAccountCleanup|AccountAssetScheduler)' -count=1", "result": "passed failure/recovery, stop/restart, duplicate start and truthful healthy/degraded snapshots"},
+    {"command": "go test ./... -json", "result": "all Go packages passed; external media prerequisites and Windows symlink privilege acceptance remain open"},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-cleanup.exe .", "result": "passed"}
+  ],
+  "local_runtime": {
+    "environment": "Restarted only own isolated API 9191 with server-cleanup.exe and existing throwaway database/key. Preexisting 9090/3030 services untouched.",
+    "migration": "096, 097 and 098 applied successfully on isolated startup. No account deleted or real file queued by this inspection.",
+    "health_read": "Actual HTTP health response reported running=true, last_checked_at and last_success_at at 2026-10-23T03:47:19.7354346+03:00, consecutive_failures=0 and zero work counts.",
+    "limits": "This runtime probe proves the startup pass and wiring, not a full-minute real periodic tick, distributed process behavior or installed Windows deletion. Short-interval scheduler tests cover repeated scheduling separately."
+  },
+  "remaining": [
+    "Production auth option/route and client consent wiring, authoritative ownership handoff discovery and remaining in-flight edit barriers.",
+    "Real deletion with retained history/media on independent clients, live WebSocket/SFU/cache checks, symlink-enabled host, remote libSQL and backup/retention drills.",
+    "No commit/push/merge, installer/update or production rollout occurred; complete P0-P11 acceptance remains open."
+  ]
+}

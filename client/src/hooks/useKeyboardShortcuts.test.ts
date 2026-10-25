@@ -11,9 +11,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+import { beginShortcutCapture } from "../stores/shortcutCaptureStore";
+import { useShortcutBindingsStore } from "../stores/shortcutBindingsStore";
 
 const store = vi.hoisted(() => ({
   state: {
@@ -66,6 +68,283 @@ function renderShortcuts() {
   const utils = renderHook(() => useKeyboardShortcuts({ toggleMute, toggleDeafen }));
   return { ...utils, toggleMute, toggleDeafen };
 }
+
+it("opens and closes the shared shortcut help with Ctrl+/", () => {
+  const { result } = renderShortcuts();
+  expect(result.current.shortcutHelpOpen).toBe(false);
+  act(() => { dispatchOn(document, { code: "Slash", key: "/", ctrlKey: true }); });
+  expect(result.current.shortcutHelpOpen).toBe(true);
+  act(() => { result.current.closeShortcutHelp(); });
+  expect(result.current.shortcutHelpOpen).toBe(false);
+});
+
+it.each(["aria", "menu", "add-server"])("does not dispatch background chat or navigation behind a %s surface", (surface) => {
+  const conversation = vi.fn();
+  const navigate = vi.fn();
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), conversation, navigate }));
+  const overlay = document.createElement("div");
+  if (surface === "aria") overlay.setAttribute("aria-modal", "true");
+  if (surface === "menu") overlay.setAttribute("role", "menu");
+  if (surface === "add-server") overlay.className = "add-server-overlay";
+  document.body.append(overlay);
+  try {
+    for (const init of [
+      { code: "KeyP", key: "p", ctrlKey: true },
+      { code: "KeyE", key: "e", ctrlKey: true },
+      { code: "KeyI", key: "i", ctrlKey: true },
+      { code: "Escape", key: "Escape", shiftKey: true },
+      { code: "ArrowDown", key: "ArrowDown", altKey: true },
+    ]) expect(dispatchOn(overlay, init).defaultPrevented).toBe(false);
+    expect(conversation).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  } finally { overlay.remove(); }
+});
+
+it("opens help with Ctrl+Shift+H and permits only that help dialog to toggle closed", () => {
+  const { result } = renderShortcuts();
+  act(() => { dispatchOn(document, { code: "KeyH", key: "h", ctrlKey: true, shiftKey: true }); });
+  expect(result.current.shortcutHelpOpen).toBe(true);
+  const dialog = document.createElement("dialog");
+  dialog.setAttribute("open", "");
+  const heading = document.createElement("h2");
+  heading.id = "shortcut-help-title";
+  dialog.append(heading);
+  document.body.append(dialog);
+  act(() => { dispatchOn(document, { code: "KeyH", key: "h", ctrlKey: true, shiftKey: true }); });
+  expect(result.current.shortcutHelpOpen).toBe(false);
+  dialog.remove();
+});
+
+it("suppresses defaults and local mute while recording another shortcut", () => {
+  const { toggleMute, result } = renderShortcuts();
+  let stop!: () => void;
+  act(() => { stop = beginShortcutCapture(); });
+  dispatchOn(document, { code: "KeyM", key: "M", ctrlKey: true, shiftKey: true });
+  dispatchOn(document, { code: "KeyL" });
+  act(() => { dispatchOn(document, { code: "Slash", ctrlKey: true }); });
+  expect(toggleMute).not.toHaveBeenCalled();
+  expect(result.current.shortcutHelpOpen).toBe(false);
+  act(() => stop());
+  dispatchOn(document, { code: "KeyM", key: "M", ctrlKey: true, shiftKey: true });
+  expect(toggleMute).toHaveBeenCalledOnce();
+});
+
+it("gives a newly changed PTT key priority over a persisted custom command", () => {
+  useShortcutBindingsStore.setState({ bindings: { "toggle-mute": { code: "F8", key: "F8", ctrl: false, shift: false, alt: false, meta: false } } });
+  store.state.inputMode = "push_to_talk"; store.state.pttKey = "F8";
+  const { toggleMute } = renderShortcuts();
+  dispatchOn(document, { code: "F8", key: "F8" });
+  expect(toggleMute).not.toHaveBeenCalled();
+  useShortcutBindingsStore.setState({ bindings: {} });
+  resetStoreState();
+});
+
+it("dispatches navigation shortcuts while a composer has focus", () => {
+  const navigate = vi.fn();
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), navigate }));
+  const composer = document.createElement("textarea"); document.body.append(composer);
+  dispatchOn(composer, { code: "ArrowDown", key: "ArrowDown", altKey: true, ctrlKey: true });
+  expect(navigate).toHaveBeenLastCalledWith("next-server");
+  dispatchOn(composer, { code: "ArrowUp", key: "ArrowUp", altKey: true });
+  expect(navigate).toHaveBeenLastCalledWith("previous-channel");
+  composer.remove();
+});
+
+it("routes history, call, add-server, inbox and group shortcuts through real callbacks", () => {
+  const navigate = vi.fn();
+  const conversation = vi.fn();
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), navigate, conversation }));
+  dispatchOn(document, { code: "ArrowLeft", key: "ArrowLeft", altKey: true });
+  dispatchOn(document, { code: "ArrowRight", key: "ArrowRight", altKey: true });
+  dispatchOn(document, { code: "KeyV", key: "v", ctrlKey: true, shiftKey: true, altKey: true });
+  dispatchOn(document, { code: "KeyN", key: "n", ctrlKey: true, shiftKey: true });
+  expect(navigate.mock.calls.map(([command]) => command)).toEqual(["history-back", "history-forward", "return-to-call", "add-server"]);
+  dispatchOn(document, { code: "KeyI", key: "i", ctrlKey: true });
+  dispatchOn(document, { code: "KeyT", key: "t", ctrlKey: true, shiftKey: true });
+  expect(conversation.mock.calls.map(([command]) => command)).toEqual(["chat-open-inbox", "chat-create-group"]);
+});
+
+it("offers scoped voice shortcuts first and only consumes them when handled", () => {
+  const conversation = vi.fn();
+  const voice = vi.fn((command: string) => command === "incoming-call-reject");
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), conversation, voice }));
+  const handled = dispatchOn(document, { code: "Escape", key: "Escape" });
+  expect(voice).toHaveBeenLastCalledWith("incoming-call-reject", expect.any(KeyboardEvent));
+  expect(handled.defaultPrevented).toBe(true);
+  expect(conversation).not.toHaveBeenCalled();
+  voice.mockReturnValue(false);
+  const unhandled = dispatchOn(document, { code: "Quote", key: "'", ctrlKey: true });
+  expect(unhandled.defaultPrevented).toBe(false);
+});
+
+it("offers inbox-scoped read-top only to an inbox executor that accepts it", () => {
+  const inbox = vi.fn((command: string) => command === "inbox-read-top");
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), inbox }));
+  const key = dispatchOn(document, { code: "KeyE", key: "e", ctrlKey: true, shiftKey: true });
+  expect(inbox).toHaveBeenCalledWith("inbox-read-top", expect.any(KeyboardEvent));
+  expect(key.defaultPrevented).toBe(true);
+  inbox.mockReturnValue(false);
+  const inactive = dispatchOn(document, { code: "KeyE", key: "e", ctrlKey: true, shiftKey: true });
+  expect(inactive.defaultPrevented).toBe(false);
+});
+
+it("routes Shift+F10 through the focused element menu and respects modal boundaries", () => {
+  const navigate = vi.fn();
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), navigate }));
+  const button = document.createElement("button");
+  document.body.append(button);
+  button.focus();
+  const contextMenu = vi.fn((event: Event) => event.preventDefault());
+  button.addEventListener("contextmenu", contextMenu);
+  const menuKey = dispatchOn(button, { code: "F10", key: "F10", shiftKey: true });
+  expect(contextMenu).toHaveBeenCalledOnce();
+  expect(menuKey.defaultPrevented).toBe(true);
+
+  const overlay = document.createElement("div");
+  overlay.className = "add-server-overlay";
+  document.body.append(overlay);
+  const navigationKey = dispatchOn(button, { code: "KeyN", key: "n", ctrlKey: true, shiftKey: true });
+  expect(navigate).not.toHaveBeenCalledWith("add-server");
+  expect(navigationKey.defaultPrevented).toBe(false);
+  overlay.remove(); button.remove();
+});
+
+it("routes read and channel-link commands, but preserves message Escape and typing", () => {
+  const conversation = vi.fn();
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), conversation }));
+  const plain = dispatchOn(document, { code: "Escape", key: "Escape" });
+  expect(conversation).toHaveBeenLastCalledWith("chat-mark-channel-read");
+  expect(plain.defaultPrevented).toBe(true);
+  const server = dispatchOn(document, { code: "Escape", key: "Escape", shiftKey: true });
+  expect(conversation).toHaveBeenLastCalledWith("chat-mark-server-read");
+  expect(server.defaultPrevented).toBe(true);
+  dispatchOn(document, { code: "KeyL", key: "l", ctrlKey: true, shiftKey: true });
+  expect(conversation).toHaveBeenLastCalledWith("chat-copy-channel-link");
+
+  conversation.mockClear();
+  const row = document.createElement("div"); row.setAttribute("role", "article");
+  document.body.append(row);
+  dispatchOn(row, { code: "Escape", key: "Escape" });
+  const composer = document.createElement("textarea"); document.body.append(composer);
+  dispatchOn(composer, { code: "Escape", key: "Escape" });
+  const dialog = document.createElement("dialog"); dialog.setAttribute("open", "");
+  document.body.append(dialog);
+  dispatchOn(document, { code: "Escape", key: "Escape", shiftKey: true });
+  expect(conversation).not.toHaveBeenCalled();
+  dialog.remove();
+  row.remove(); composer.remove();
+});
+
+it("routes Shift+PageUp to oldest unread only without selection, editable focus, or overlays", () => {
+  const conversation = vi.fn();
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), conversation }));
+
+  const accepted = dispatchOn(document, { code: "PageUp", key: "PageUp", shiftKey: true });
+  expect(conversation).toHaveBeenCalledWith("chat-oldest-unread");
+  expect(accepted.defaultPrevented).toBe(true);
+  conversation.mockClear();
+
+  const input = document.createElement("textarea");
+  document.body.append(input);
+  input.focus();
+  const typing = dispatchOn(input, { code: "PageUp", key: "PageUp", shiftKey: true });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(typing.defaultPrevented).toBe(false);
+  input.remove();
+
+  const selectedText = document.createElement("span");
+  selectedText.textContent = "selected text";
+  document.body.append(selectedText);
+  const range = document.createRange();
+  range.selectNodeContents(selectedText);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  const selectionKey = dispatchOn(document, { code: "PageUp", key: "PageUp", shiftKey: true });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(selectionKey.defaultPrevented).toBe(false);
+  window.getSelection()?.removeAllRanges();
+  selectedText.remove();
+
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  document.body.append(menu);
+  const menuKey = dispatchOn(document, { code: "PageUp", key: "PageUp", shiftKey: true });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(menuKey.defaultPrevented).toBe(false);
+  menu.remove();
+});
+
+it("only consumes chat PageUp/PageDown when the active surface confirms a scroll", () => {
+  const conversation = vi.fn((_command: string, _event?: KeyboardEvent) => true);
+  renderHook(() => useKeyboardShortcuts({ toggleMute: vi.fn(), toggleDeafen: vi.fn(), conversation }));
+
+  const up = dispatchOn(document, { code: "PageUp", key: "PageUp" });
+  expect(conversation).toHaveBeenLastCalledWith("chat-page-up", expect.any(KeyboardEvent));
+  expect(up.defaultPrevented).toBe(true);
+  const down = dispatchOn(document, { code: "PageDown", key: "PageDown" });
+  expect(conversation).toHaveBeenLastCalledWith("chat-page-down", expect.any(KeyboardEvent));
+  expect(down.defaultPrevented).toBe(true);
+
+  conversation.mockReturnValue(false);
+  const atBoundary = dispatchOn(document, { code: "PageDown", key: "PageDown" });
+  expect(atBoundary.defaultPrevented).toBe(false);
+
+  conversation.mockClear();
+  const input = document.createElement("textarea");
+  document.body.append(input);
+  input.focus();
+  const typing = dispatchOn(input, { code: "PageDown", key: "PageDown" });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(typing.defaultPrevented).toBe(false);
+  input.remove();
+
+  const editor = document.createElement("div");
+  Object.defineProperty(editor, "isContentEditable", { value: true, configurable: true });
+  document.body.append(editor);
+  editor.focus();
+  const editing = dispatchOn(editor, { code: "PageUp", key: "PageUp" });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(editing.defaultPrevented).toBe(false);
+  editor.remove();
+
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  document.body.append(menu);
+  const menuKey = dispatchOn(document, { code: "PageUp", key: "PageUp" });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(menuKey.defaultPrevented).toBe(false);
+  menu.remove();
+
+  const modal = document.createElement("div");
+  modal.setAttribute("aria-modal", "true");
+  document.body.append(modal);
+  const modalKey = dispatchOn(document, { code: "PageDown", key: "PageDown" });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(modalKey.defaultPrevented).toBe(false);
+  modal.remove();
+
+  const text = document.createElement("span");
+  text.textContent = "selected";
+  document.body.append(text);
+  const range = document.createRange(); range.selectNodeContents(text);
+  window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range);
+  const selectionKey = dispatchOn(document, { code: "PageUp", key: "PageUp" });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(selectionKey.defaultPrevented).toBe(false);
+  window.getSelection()?.removeAllRanges(); text.remove();
+
+  let stop!: () => void;
+  act(() => { stop = beginShortcutCapture(); });
+  const captureKey = dispatchOn(document, { code: "PageDown", key: "PageDown" });
+  expect(conversation).not.toHaveBeenCalled();
+  expect(captureKey.defaultPrevented).toBe(false);
+  act(() => stop());
+
+  const composing = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, code: "PageUp", key: "PageUp", isComposing: true });
+  document.dispatchEvent(composing);
+  expect(conversation).not.toHaveBeenCalled();
+  expect(composing.defaultPrevented).toBe(false);
+});
 
 type MuteHotkeyApiStub = {
   registerMuteHotkeyShortcut: ReturnType<typeof vi.fn>;

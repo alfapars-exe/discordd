@@ -69,6 +69,9 @@ export const useSoundboardStore = create<SoundboardState>((set, get) => ({
 
     set({ isLoading: true });
     const res = await soundboardApi.getSounds(serverId);
+    // A response from the previously browsed server must not replace the
+    // newly opened voice server's soundboard after returning to a call.
+    if (useServerStore.getState().activeServerId !== serverId) return;
     if (res.success && res.data) {
       set({ sounds: res.data, isLoading: false });
     } else {

@@ -503,6 +503,31 @@ func effectiveChannelPermission(base, allow, deny models.Permission) models.Perm
 	return (base &^ deny) | allow
 }
 
+// permissionChannel resolves the channel whose overrides govern channelID.
+// Threads reuse channel message/history machinery, but always inherit the
+// parent channel's visibility and write permissions. Only one parent hop is
+// valid because nested threads are not supported.
+func (s *channelPermService) permissionChannel(ctx context.Context, channelID string) (*models.Channel, string, error) {
+	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, "", err
+	}
+	if channel.Type != models.ChannelTypeThread {
+		return channel, channelID, nil
+	}
+	if channel.ParentChannelID == nil || *channel.ParentChannelID == "" {
+		return nil, "", fmt.Errorf("thread channel %s has no parent", channelID)
+	}
+	parent, err := s.channelGetter.GetByID(ctx, *channel.ParentChannelID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get parent channel: %w", err)
+	}
+	if parent.Type == models.ChannelTypeThread || parent.ServerID != channel.ServerID {
+		return nil, "", fmt.Errorf("thread channel %s has invalid parent", channelID)
+	}
+	return parent, parent.ID, nil
+}
+
 // ResolveChannelPermissions computes effective permissions for userID in
 // channelID directly from the database — no caching here (see the
 // channelPermService doc comment). Callers normally reach this indirectly
@@ -511,7 +536,7 @@ func effectiveChannelPermission(base, allow, deny models.Permission) models.Perm
 // SetOverride) always sees a fresh result for the actor's own permission,
 // not a cache entry that could be stale mid-mutation.
 func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
-	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	channel, permissionChannelID, err := s.permissionChannel(ctx, channelID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get channel for permission resolution: %w", err)
 	}
@@ -533,7 +558,7 @@ func (s *channelPermService) ResolveChannelPermissions(ctx context.Context, user
 		return models.PermAll, nil
 	}
 
-	overrides, err := s.permRepo.GetByChannelAndRoles(ctx, channelID, roleIDs)
+	overrides, err := s.permRepo.GetByChannelAndRoles(ctx, permissionChannelID, roleIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get channel overrides for roles: %w", err)
 	}
@@ -583,7 +608,7 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 		unique = append(unique, userID)
 	}
 
-	channel, err := s.channelGetter.GetByID(ctx, channelID)
+	channel, permissionChannelID, err := s.permissionChannel(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channel for bulk permission resolution: %w", err)
 	}
@@ -597,7 +622,7 @@ func (s *channelPermService) ResolveChannelPermissionsBulk(ctx context.Context, 
 	// the database to filter by role id; here we fetch the channel's full
 	// (small — one row per role with an override) set and filter in memory,
 	// which is what turns N queries into one.
-	overrides, err := s.permRepo.GetByChannel(ctx, channelID)
+	overrides, err := s.permRepo.GetByChannel(ctx, permissionChannelID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get channel overrides for bulk resolution: %w", err)
 	}

@@ -36,6 +36,7 @@ export type DMChannelWithUser = {
   is_muted: boolean;
   /** Server-side unread count (per-user read cursor). */
   unread_count: number;
+  oldest_unread_message_id?: string;
   last_message: DMLastMessage | null;
 };
 

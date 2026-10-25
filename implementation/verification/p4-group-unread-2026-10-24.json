@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "New authenticated POST /api/group-dms/{groupId}/unread validates current membership and a group-owned anchor. SQL transaction rewinds to the preceding timestamp/id message and counts subsequent non-own messages, including the target.",
+    "Existing mark-read now preserves messages after an explicit old anchor; null/omitted anchor selects the latest message rather than storing a null watermark with a zero count. HTTP response is now a JSON read-state envelope (old clients already parse API envelopes); legacy 204 server behavior is supported only for unrevisioned client group data.",
+    "Additive SQLite migration 117 and PostgreSQL migration 019 add reader-owned revision. Send, read, rewind and delete advance revisions. Group summaries, HTTP and own-session group_dm_read WS carry count/revision; stale, duplicate and malformed states cannot overwrite newer client counts. Group refreshes preserve newer read state.",
+    "Before taking the count snapshot, the read transaction obtains the reader row write lock via a no-op update. Concurrent sends are visible to the count or increment after commit rather than being overwritten by an older snapshot.",
+    "Deleting a group read anchor now moves it to its predecessor before the FK can null it; deleting an unread message decrements once. All affected reader states advance revision and are broadcast after commit.",
+    "Pointer and Alt+Enter group actions share mark-unread. A manual rewind suppresses a pending initial fetch/read callback. HTTP calls have 15-second lifetimes and account/membership/request affinity guards; no optimistic success mutation occurs on failure.",
+    "Unread writes use the existing group-action rate limiter. Group JSON decoding rejects unknown fields and trailing JSON; mark-read also decodes chunked request bodies. Post-commit read-broadcast failures are logged instead of reporting a committed message/delete as failed."
+  ],
+  "verification": [
+    "Full server Linux Docker CGO_ENABLED=0 go test ./... -timeout=15m passed before the final post-commit logging/chunked-body follow-up (repository 53.603s, services 23.244s). Final affected repository/service/handler targeted tests passed afterward, including the new concurrent-send test.",
+    "PostgreSQL 18 affected repository/service/handler tests passed in disposable schemas (4.690s / 0.242s / 0.243s), including 20 concurrent sends and 20 reads with final count 20 and revision 42. No host ports were exposed; temporary container was stopped after tests.",
+    "SQL tests cover explicit old read anchors, rewind-to-first boundary, own-message exclusion, same-timestamp ID ordering, foreign/missing anchors, nonmember reads, revision preservation on failure and deletion updates.",
+    "Service tests verify nonmember rejection, blank IDs, owner-only read broadcasts, no success broadcast on failed rewind, and no false committed-message failure when read-state publication fails.",
+    "HTTP tests verify 200 envelope/count/revision, 400 malformed/unknown/trailing JSON, 401, 403, 404 and chunked mark-read decoding.",
+    "Full client regression before the final race-test/localized-error follow-up: 220 files / 2056 tests passed in 46.26s. Final tsc -b and targeted ESLint passed; 4 focused files / 38 tests then passed (3.76s), including late read response vs newer unread/WS state and existing DM event regressions.",
+    "OpenAPI parses with 220 paths and the explicit GroupReadStateOK response. Route golden includes the new unread route; route tests passed in the full server run."
+  ],
+  "remaining": [
+    "Real two-client live WS/reconnect and Windows/web pointer/keyboard acceptance remains unperformed; Ego Lite space is still handed to the user.",
+    "Full PostgreSQL regression, production data backup/upgrade/rollback rehearsal and deployment remain separate incomplete gates. Only isolated test databases applied these migrations.",
+    "Other group features and broad account-affinity hardening outside the read-state flow remain incomplete. This does not close P4/P8 or overall acceptance."
+  ]
+}

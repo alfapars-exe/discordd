@@ -30,6 +30,9 @@ function resolveAppVersion(): string {
   return "0.0.0";
 }
 const APP_VERSION = resolveAppVersion();
+// Isolated local acceptance backends must not reuse an existing developer DB.
+// This variable only configures the dev proxy; it is not exposed to the client.
+const DEV_API_TARGET = process.env.HICHAT_DEV_API_TARGET || "http://localhost:9090";
 
 // https://vite.dev/config/
 // command: "serve" → dev server (vite dev), "build" → production build (vite build)
@@ -57,11 +60,11 @@ export default defineConfig(({ command }) => ({
     // Backend API proxy — routes /api/* and /ws/* to the Go backend in development.
     proxy: {
       "/api": {
-        target: "http://localhost:9090",
+        target: DEV_API_TARGET,
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://localhost:9090",
+        target: DEV_API_TARGET.replace(/^http/, "ws"),
         ws: true,
       },
     },
@@ -124,6 +127,7 @@ export default defineConfig(({ command }) => ({
           return undefined;
         },
       },
+      input: { index: resolve(__dirname, "index.html"), overlay: resolve(__dirname, "overlay.html") },
       onwarn(warning, defaultHandler) {
         // Suppress the "dynamic import will not move module into another
         // chunk" warning for our intentional circular-dep-avoidance pattern

@@ -34,8 +34,16 @@ import (
 // industry standard (Discord, Slack, GitHub, Google all do this). The minor
 // UX friction is worth the defense-in-depth.
 func (s *authService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
-	if len(newPassword) < 8 {
-		return fmt.Errorf("%w: password must be at least 8 characters", pkg.ErrBadRequest)
+	// Share the durable per-account security budget with MFA and session
+	// revocation. An attacker holding a session token must not get unlimited
+	// password guesses by switching between sensitive endpoints or instances.
+	if s.mfa != nil {
+		if err := s.mfa.attempt(ctx, userID); err != nil {
+			return err
+		}
+	}
+	if err := models.ValidateNewPassword(newPassword); err != nil {
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err)
 	}
 	if currentPassword == "" {
 		return fmt.Errorf("%w: current password is required", pkg.ErrBadRequest)
@@ -56,10 +64,18 @@ func (s *authService) ChangePassword(ctx context.Context, userID, currentPasswor
 		return fmt.Errorf("failed to hash new password: %w", err)
 	}
 
+	if s.authSessions != nil {
+		if err := s.authSessions.UpdatePasswordAndRevoke(ctx, userID, user.PasswordHash, "", string(newHash), time.Now().Unix()); err != nil {
+			return err
+		}
+		s.afterBoundSessionRevocation(userID)
+		return nil
+	}
 	if err := s.userRepo.UpdatePassword(ctx, userID, string(newHash)); err != nil {
 		return err
 	}
 
+	// Legacy constructors only (production returned through the atomic path).
 	// Revoke every session and outstanding access token for this user (see
 	// revokeAllSessions in auth_service.go). A password change is the
 	// strongest signal the user wants to lock out all current sessions —
@@ -69,18 +85,19 @@ func (s *authService) ChangePassword(ctx context.Context, userID, currentPasswor
 	// the password is still changed (caller's primary intent) — failures
 	// are logged inside revokeAllSessions, not surfaced here.
 	//
-	// Design note: this drops the CALLER's own session as well. The
-	// server has no way to identify "this" session as distinct from any
-	// other — the refresh cookie is scoped Path=/api/auth (see
-	// setRefreshCookie in handlers/auth.go) and is never sent on this
-	// endpoint, so there is no session identifier available to spare. A
-	// user who just changed their password simply logs back in.
+	// Policy: password changes also end the caller's own session. Session-aware
+	// production can identify it, but deliberately requires a fresh login.
 	s.revokeAllSessions(ctx, userID)
 
 	return nil
 }
 
 func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmail string) error {
+	if s.mfa != nil {
+		if err := s.mfa.attempt(ctx, userID); err != nil {
+			return err
+		}
+	}
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return err
@@ -91,10 +108,7 @@ func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmai
 	}
 
 	if strings.TrimSpace(newEmail) == "" {
-		if user.Email == nil {
-			return fmt.Errorf("%w: no email to remove", pkg.ErrBadRequest)
-		}
-		return s.userRepo.UpdateEmail(ctx, userID, nil)
+		return fmt.Errorf("%w: email cannot be removed", pkg.ErrBadRequest)
 	}
 
 	newEmail = strings.TrimSpace(newEmail)
@@ -111,18 +125,26 @@ func (s *authService) ChangeEmail(ctx context.Context, userID, password, newEmai
 
 // ForgotPassword sends a reset email. Token stored as SHA256 hash in DB.
 // Email enumeration protection: returns success even if email not found.
-func (s *authService) ForgotPassword(ctx context.Context, emailAddr string) (int, error) {
+func (s *authService) ForgotPassword(ctx context.Context, identifier string) (int, error) {
 	if s.emailSender == nil || s.resetRepo == nil {
 		return 0, fmt.Errorf("%w: password reset is not configured on this server", pkg.ErrBadRequest)
 	}
 
-	user, err := s.userRepo.GetByEmail(ctx, emailAddr)
+	identifier = strings.TrimSpace(identifier)
+	user, err := s.userRepo.GetByEmail(ctx, identifier)
+	if errors.Is(err, pkg.ErrNotFound) || user == nil {
+		user, err = s.userRepo.GetByUsername(ctx, identifier)
+	}
 	if err != nil {
 		if errors.Is(err, pkg.ErrNotFound) {
 			return 0, nil
 		}
 		return 0, fmt.Errorf("failed to look up user: %w", err)
 	}
+	if user.Email == nil || strings.TrimSpace(*user.Email) == "" {
+		return 0, nil
+	}
+	emailAddr := strings.TrimSpace(*user.Email)
 
 	// Cooldown check
 	lastToken, err := s.resetRepo.GetLatestByUserID(ctx, user.ID)
@@ -182,8 +204,8 @@ func (s *authService) ResetPassword(ctx context.Context, token, newPassword stri
 		return fmt.Errorf("%w: password reset is not configured on this server", pkg.ErrBadRequest)
 	}
 
-	if len(newPassword) < 8 {
-		return fmt.Errorf("%w: password must be at least 8 characters", pkg.ErrBadRequest)
+	if err := models.ValidateNewPassword(newPassword); err != nil {
+		return fmt.Errorf("%w: %s", pkg.ErrBadRequest, err)
 	}
 
 	hashBytes := sha256.Sum256([]byte(token))
@@ -209,10 +231,18 @@ func (s *authService) ResetPassword(ctx context.Context, token, newPassword stri
 		return fmt.Errorf("failed to hash new password: %w", err)
 	}
 
+	if s.authSessions != nil {
+		if err := s.authSessions.UpdatePasswordAndRevoke(ctx, resetToken.UserID, "", tokenHash, string(newHash), time.Now().Unix()); err != nil {
+			return err
+		}
+		s.afterBoundSessionRevocation(resetToken.UserID)
+		return nil
+	}
 	if err := s.userRepo.UpdatePassword(ctx, resetToken.UserID, string(newHash)); err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
+	// Legacy constructors only (production returned through the atomic path).
 	// Revoke every session and outstanding access token for this user (see
 	// revokeAllSessions in auth_service.go). ResetPassword is
 	// unauthenticated account recovery, so — unlike ChangePassword —

@@ -6,6 +6,11 @@
  */
 
 import { contextBridge, ipcRenderer } from "electron";
+import type {
+  PublicRegisteredGame as ElectronRegisteredGame,
+  RegisteredGameActivity as ElectronRegisteredGameActivity,
+  RegisteredGamesSnapshot as ElectronRegisteredGamesSnapshot,
+} from "./registered-games";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   // ─── Invoke-style IPC (renderer → main → response) ───
@@ -64,6 +69,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setDiagnosticVerbose: (value: boolean): Promise<void> =>
     ipcRenderer.invoke("set-diagnostic-verbose", value),
 
+  capturePerformanceTrace: (): Promise<{ saved: boolean; cancelled: boolean; path?: string }> =>
+    ipcRenderer.invoke("capture-performance-trace"),
+  cancelPerformanceTrace: (): Promise<boolean> => ipcRenderer.invoke("cancel-performance-trace"),
+
   /** Whether pre-launch update check ran — prevents duplicate checks in renderer */
   wasUpdateChecked: (): Promise<boolean> => ipcRenderer.invoke("was-update-checked"),
 
@@ -94,6 +103,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     scaleFactor: number;
     monitorCount: number;
   }> => ipcRenderer.invoke("get-display-info"),
+
+  /** Local Windows game registry; executable paths stay in the main process. */
+  getRegisteredGames: (): Promise<ElectronRegisteredGamesSnapshot> =>
+    ipcRenderer.invoke("get-registered-games"),
+  getRegisteredGameActivity: (): Promise<ElectronRegisteredGameActivity> =>
+    ipcRenderer.invoke("get-registered-game-activity"),
+  setRegisteredGamesBackgroundDetection: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke("set-registered-games-background-detection", enabled),
+  addRegisteredGame: (): Promise<ElectronRegisteredGame | null> =>
+    ipcRenderer.invoke("add-registered-game"),
+  removeRegisteredGame: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke("remove-registered-game", id),
+  setRegisteredGameSharing: (id: string, allowed: boolean): Promise<boolean> =>
+    ipcRenderer.invoke("set-registered-game-sharing", id, allowed),
+  setRegisteredGameOverlay: (id: string, allowed: boolean): Promise<boolean> =>
+    ipcRenderer.invoke("set-registered-game-overlay", id, allowed),
 
   // ─── Screen Picker IPC ───
 
@@ -172,6 +197,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   /** Stop system audio capture */
   stopSystemCapture: (): Promise<void> => ipcRenderer.invoke("stop-system-capture"),
+
+  /** Read lifecycle state without subscribing to or receiving PCM data. */
+  getSystemCaptureStatus: (): Promise<{ state: "unavailable" | "stopped" | "starting" | "running" | "error"; reason?: string; owner?: "screen_share" | "diagnostic" }> =>
+    ipcRenderer.invoke("get-system-capture-status"),
+
+  /** Opt-in diagnostics run only while screen-share capture is idle; returns its stop token. */
+  startSystemCaptureDiagnostic: (): Promise<string> => ipcRenderer.invoke("start-system-capture-diagnostic"),
+
+  /** Stops only the diagnostic capture run created by this renderer. */
+  stopSystemCaptureDiagnostic: (token: string): Promise<boolean> => ipcRenderer.invoke("stop-system-capture-diagnostic", token),
 
   /**
    * Remove all capture-related IPC listeners.
@@ -286,12 +321,56 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ─── App Settings (General / Windows Settings) ───
 
   /** Read all app settings */
-  getAppSettings: (): Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean }> =>
+  getAppSettings: (): Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean; hardwareAcceleration: boolean }> =>
     ipcRenderer.invoke("get-app-settings"),
 
   /** Update a single app setting */
   setAppSetting: (key: string, value: boolean): Promise<void> =>
     ipcRenderer.invoke("set-app-setting", key, value),
+  onVoiceOverlayUpdate: (cb: (snapshot: unknown) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: unknown) => cb(snapshot);
+    ipcRenderer.on("voice-overlay-update", listener);
+    return () => { ipcRenderer.removeListener("voice-overlay-update", listener); };
+  },
+  sendVoiceOverlaySnapshot: (snapshot: unknown): void => {
+    ipcRenderer.send("voice-overlay-snapshot", snapshot);
+  },
+  setOverlayShortcut: (binding: unknown): Promise<boolean> => ipcRenderer.invoke("set-overlay-shortcut", binding),
+  resetOverlayLayout: (): Promise<boolean> => ipcRenderer.invoke("reset-overlay-layout"),
+  sendOverlayVoiceAction: (action: unknown, session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-voice-action", action, session),
+  sendOverlayOpenInbox: (session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-open-inbox", session),
+  confirmOverlayOpenInbox: (session: unknown): Promise<boolean> => ipcRenderer.invoke("confirm-overlay-open-inbox", session),
+  onOverlayOpenInbox: (callback: (value: { session: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { session: string }) => callback(value);
+    ipcRenderer.on("overlay-open-inbox", listener);
+    return () => ipcRenderer.removeListener("overlay-open-inbox", listener);
+  },
+  sendOverlayOpenChat: (session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-open-chat", session),
+  confirmOverlayOpenChat: (session: unknown): Promise<boolean> => ipcRenderer.invoke("confirm-overlay-open-chat", session),
+  onOverlayOpenChat: (callback: (value: { session: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { session: string }) => callback(value);
+    ipcRenderer.on("overlay-open-chat", listener);
+    return () => ipcRenderer.removeListener("overlay-open-chat", listener);
+  },
+  sendOverlayOpenChatComposer: (session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-open-chat-composer", session),
+  sendOverlayChatMessage: (request: unknown): Promise<"sent" | "failed" | "unavailable"> => ipcRenderer.invoke("overlay-chat-send", request),
+  closeOverlayChatComposer: (session: unknown): Promise<boolean> => ipcRenderer.invoke("close-overlay-chat-composer", session),
+  onOverlayChatSend: (callback: (value: { session: string; requestId: string; text: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { session: string; requestId: string; text: string }) => callback(value);
+    ipcRenderer.on("overlay-chat-send", listener);
+    return () => ipcRenderer.removeListener("overlay-chat-send", listener);
+  },
+  resolveOverlayChatSend: (request: unknown): Promise<boolean> => ipcRenderer.invoke("resolve-overlay-chat-send", request),
+  onOverlayChatComposerClosed: (callback: (value: { session: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { session: string }) => callback(value);
+    ipcRenderer.on("overlay-chat-composer-closed", listener);
+    return () => ipcRenderer.removeListener("overlay-chat-composer-closed", listener);
+  },
+  onOverlayVoiceAction: (callback: (value: { action: "toggle-mute" | "toggle-deafen"; session: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { action: "toggle-mute" | "toggle-deafen"; session: string }) => callback(value);
+    ipcRenderer.on("overlay-voice-action", listener);
+    return () => ipcRenderer.removeListener("overlay-voice-action", listener);
+  },
 
   // ─── Window Controls (Custom Titlebar) ───
 

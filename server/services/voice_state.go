@@ -14,14 +14,39 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
-// broadcastToServer publishes a voice-related event to all members of serverID.
+// broadcastToServer queues a voice event for current members who can view its channel.
 // No-op on empty serverID (e.g. channel lookup failed) so malformed state can't
 // leak broadcasts to the wrong audience.
 func (s *voiceService) broadcastToServer(serverID string, event ws.Event) {
-	if serverID == "" {
+	if serverID == "" || s.voiceFanout == nil {
 		return
 	}
-	s.hub.BroadcastToServer(serverID, event)
+	s.voiceFanout.submit(serverID, event)
+}
+
+// bumpVoiceRevisionLocked advances the revision that is captured together
+// with voice snapshots. Call only while holding s.mu for writing.
+func (s *voiceService) bumpVoiceRevisionLocked() uint64 {
+	s.voiceRevision++
+	return s.voiceRevision
+}
+
+// broadcastToServerLocked binds an event to the mutation currently protected
+// by s.mu. The fanout worker may deliver it later; its mutation revision lets
+// clients discard it if a newer atomic snapshot already includes that change.
+func (s *voiceService) broadcastToServerLocked(serverID string, event ws.Event) {
+	event.VoiceEpoch = s.voiceEpoch
+	event.VoiceRevision = s.bumpVoiceRevisionLocked()
+	s.broadcastToServer(serverID, event)
+}
+
+// broadcastToServerAtRevision is for call sites that must dispatch after
+// releasing s.mu. The revision was captured while the underlying mutation
+// was still locked.
+func (s *voiceService) broadcastToServerAtRevision(serverID string, event ws.Event, revision uint64) {
+	event.VoiceEpoch = s.voiceEpoch
+	event.VoiceRevision = revision
+	s.broadcastToServer(serverID, event)
 }
 
 // authorizeJoin gates JoinChannel (N-01): the caller must be an active
@@ -131,6 +156,10 @@ func (s *voiceService) hasForceMoveGrant(userID, channelID string) bool {
 }
 
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
+	s.mu.RLock()
+	deleteEpoch := s.channelDeleteEpoch
+	s.mu.RUnlock()
+
 	// Resolve channel's parent server before locking — all voice broadcasts are server-scoped.
 	ctx := context.Background()
 	channel, err := s.channelGetter.GetByID(ctx, channelID)
@@ -264,6 +293,9 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.channelDeleteEpoch != deleteEpoch {
+		return fmt.Errorf("%w: channel changed during voice join", pkg.ErrNotFound)
+	}
 
 	// Leave current channel if in one
 	if existing, ok := s.states[userID]; ok {
@@ -307,13 +339,16 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 			existing.DisplayName = displayName
 			existing.AvatarURL = avatarURL
 			existing.LastActivity = time.Now()
+			// This snapshot-visible metadata refresh is intentionally silent,
+			// but it must supersede older queued deltas.
+			s.bumpVoiceRevisionLocked()
 			voiceLogger.Info("same-channel rejoin (no broadcast)", "user_id", userID, "channel_id", channelID)
 			return nil
 		}
 
 		delete(s.states, userID)
 
-		s.broadcastToServer(oldServerID, ws.Event{
+		s.broadcastToServerLocked(oldServerID, ws.Event{
 			Op: ws.OpVoiceStateUpdate,
 			Data: ws.VoiceStateUpdateBroadcast{
 				UserID:           userID,
@@ -412,7 +447,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// moderation-sanction badges render correctly for everyone else in the
 	// target channel immediately, not just after their next own state
 	// change (see the carry-over decision above the state construction).
-	s.broadcastToServer(serverID, ws.Event{
+	s.broadcastToServerLocked(serverID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
 		Data: ws.VoiceStateUpdateBroadcast{
 			UserID:           userID,
@@ -525,7 +560,7 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	leaveIsCloud := state.LiveKitIsCloud
 	delete(s.states, userID)
 
-	s.broadcastToServer(serverID, ws.Event{
+	s.broadcastToServerLocked(serverID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
 		Data: ws.VoiceStateUpdateBroadcast{
 			UserID:      userID,
@@ -611,7 +646,7 @@ func (s *voiceService) UpdateState(userID string, isMuted, isDeafened, isStreami
 		state.IsStreaming = *isStreaming
 	}
 
-	s.broadcastToServer(state.ServerID, ws.Event{
+	s.broadcastToServerLocked(state.ServerID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
 		Data: ws.VoiceStateUpdateBroadcast{
 			UserID:           state.UserID,
@@ -631,7 +666,7 @@ func (s *voiceService) UpdateState(userID string, isMuted, isDeafened, isStreami
 	// Streamer stopped streaming — clean up viewer tracking and broadcast final update
 	if wasStreaming && !state.IsStreaming {
 		delete(s.screenShareViewers, userID)
-		s.broadcastToServer(state.ServerID, ws.Event{
+		s.broadcastToServerLocked(state.ServerID, ws.Event{
 			Op: ws.OpScreenShareViewerUpdate,
 			Data: ws.ScreenShareViewerUpdateData{
 				StreamerUserID: userID,
@@ -639,6 +674,7 @@ func (s *voiceService) UpdateState(userID string, isMuted, isDeafened, isStreami
 				ViewerCount:    0,
 				ViewerUserID:   "",
 				Action:         "leave",
+				ViewerUserIDs:  []string{},
 			},
 		})
 	}
@@ -681,6 +717,36 @@ func (s *voiceService) GetAllVoiceStates() []models.VoiceState {
 		states = append(states, *state)
 	}
 	return states
+}
+
+// GetVoiceStateSnapshot returns all client-visible voice state with a domain
+// revision captured under the same read lock. The handler may filter this
+// snapshot after unlocking; subsequent mutations then carry a larger revision.
+func (s *voiceService) GetVoiceStateSnapshot() ([]models.VoiceState, map[string][]string, string, uint64) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	states := make([]models.VoiceState, 0, len(s.states))
+	for _, state := range s.states {
+		states = append(states, *state)
+	}
+	viewers := make(map[string][]string, len(s.screenShareViewers))
+	for streamerID, viewerSet := range s.screenShareViewers {
+		ids := make([]string, 0, len(viewerSet))
+		for viewerID := range viewerSet {
+			ids = append(ids, viewerID)
+		}
+		viewers[streamerID] = ids
+	}
+	return states, viewers, s.voiceEpoch, s.voiceRevision
+}
+
+// GetVoiceEpoch identifies this in-memory voice-state incarnation. It is
+// included in ready so clients can accept new-epoch deltas before sync arrives.
+func (s *voiceService) GetVoiceEpoch() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.voiceEpoch
 }
 
 func (s *voiceService) DisconnectUser(userID string) {

@@ -10,6 +10,7 @@ import { useMessageStore } from "../../stores/messageStore";
 import type { SearchResult } from "../../api/search";
 import type { Message } from "../../types";
 import Avatar from "../shared/Avatar";
+import SpamPreview from "./SpamPreview";
 
 /** Debounce delay (ms) */
 const DEBOUNCE_MS = 300;
@@ -279,7 +280,7 @@ function SearchPanel({ channelId, onClose, onSelectResult }: SearchPanelProps) {
                     <span className="search-result-time">{formatDate(msg.created_at)}</span>
                   </div>
                   <div className="search-result-content">
-                    {msg.content ?? ""}
+                    <SpamPreview kind="channel" message={msg} />
                   </div>
                 </div>
               );

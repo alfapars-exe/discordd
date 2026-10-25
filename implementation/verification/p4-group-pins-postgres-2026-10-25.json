@@ -1,0 +1,32 @@
+{
+  "phase": "P4",
+  "status": "implemented_unverified",
+  "scope": "Real local PostgreSQL group-message pin persistence, membership, limit and concurrent-writer verification; not full product acceptance.",
+  "environment": {
+    "database": "PostgreSQL 18.6, x86_64-pc-linux-musl",
+    "image": "postgres:18-alpine",
+    "image_id": "sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5",
+    "container": "hichat-group-pins-pg-20261025",
+    "isolation": "New disposable --rm container, tmpfs database storage, generated test-only credential, loopback-only 127.0.0.1:15432 binding, no host data mount or user database.",
+    "migration_path": "The existing newPostgresTestDB helper creates a separate local hichat_test_* schema per test and runs the embedded PostgreSQL migration set, including 037_group_dm_pins.sql."
+  },
+  "verification": {
+    "command": "go test ./repository -run '^TestGroupPins' -count=5 -v",
+    "result": "PASS",
+    "elapsed_seconds": 17.739,
+    "tests": [
+      "TestGroupPinsCapAtomicIdempotenceAndUnpin: five passes; eight concurrent writers compete for the final slot, exactly one succeeds; fifty-pin limit, idempotence at cap, unpin/free-slot reuse and non-truncation of legacy fifty-one-pin records.",
+      "TestGroupPinsPersistAndRequireCurrentMembership: five passes; durable ciphertext-preserving list, outsider and cross-group denial, revoked-member list/unpin denial, idempotent unpin and deleted-message removal."
+    ]
+  },
+  "cleanup": {
+    "container_removed": true,
+    "port_15432_listening_after_cleanup": false,
+    "details": "The command's finally block restored its process-local test DSN and stopped only the named disposable container. Docker --rm removed it; a separate docker ps -a name check returned no row. No persistent test volume was created."
+  },
+  "remaining": [
+    "Real two-client encrypted group pin/expression UI acceptance and Windows/web device/visual acceptance remain pending.",
+    "No claim is made about the full repository suite on PostgreSQL, other P0-P11 requirements, deployment or release readiness."
+  ],
+  "release": "No commit, push, merge, production migration, deployment or publication."
+}

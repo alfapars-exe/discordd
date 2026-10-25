@@ -43,8 +43,19 @@ function AddServerModal({ onClose }: AddServerModalProps) {
   const [joinError, setJoinError] = useState<string | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const inviteInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const origin = document.activeElement;
+    const dialog = dialogRef.current;
+    dialog?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    return () => {
+      if (origin instanceof HTMLElement && origin.isConnected &&
+          (document.activeElement === document.body || dialog?.contains(document.activeElement))) origin.focus();
+    };
+  }, []);
 
   // Auto-focus input on view change
   useEffect(() => {
@@ -64,7 +75,7 @@ function AddServerModal({ onClose }: AddServerModalProps) {
   // Close on Escape
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -169,15 +180,24 @@ function AddServerModal({ onClose }: AddServerModalProps) {
 
   return createPortal(
     <div className="add-server-overlay" ref={overlayRef} onClick={handleOverlayClick}>
-      <div className="add-server-modal">
+      <div className="add-server-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="add-server-dialog-title"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); return; }
+          if (event.key !== "Tab") return;
+          const controls = dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)");
+          if (!controls?.length) return;
+          const first = controls[0], last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }}>
         {/* Header */}
         <div className="add-server-header">
-          <h2 className="add-server-title">
+          <h2 id="add-server-dialog-title" className="add-server-title">
             {view === "choice" && t("addServer")}
             {view === "create" && t("createServer")}
             {view === "join" && t("joinServer")}
           </h2>
-          <button className="add-server-close" onClick={onClose}>
+          <button className="add-server-close" onClick={onClose} aria-label={tCommon("close")}>
             &#x2715;
           </button>
         </div>

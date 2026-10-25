@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const motion = { reduced: false };
+const accessibility = { disableAnimatedEmoji: false };
 
 vi.mock("../../hooks/useReducedMotion", () => ({
   useReducedMotion: () => motion.reduced,
+}));
+
+vi.mock("../../stores/accessibilityStore", () => ({
+  useAccessibilityStore: (selector: (state: typeof accessibility) => unknown) => selector(accessibility),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -22,6 +27,7 @@ const ID = "0123456789abcdef";
 
 beforeEach(() => {
   motion.reduced = false;
+  accessibility.disableAnimatedEmoji = false;
 });
 
 describe("CustomEmoji", () => {
@@ -52,6 +58,15 @@ describe("CustomEmoji", () => {
 
   it("`still` always shows the PNG", () => {
     render(<CustomEmoji id={ID} name="kedi" animated still />);
+    expect(screen.getByRole("img").getAttribute("src")).toContain(`${ID}.png`);
+  });
+
+  it("never plays or fetches the GIF when animated emoji are disabled", () => {
+    accessibility.disableAnimatedEmoji = true;
+    render(<CustomEmoji id={ID} name="kedi" animated />);
+    const img = screen.getByRole("img");
+    expect(img.getAttribute("src")).toContain(`${ID}.png`);
+    fireEvent.mouseEnter(img);
     expect(screen.getByRole("img").getAttribute("src")).toContain(`${ID}.png`);
   });
 

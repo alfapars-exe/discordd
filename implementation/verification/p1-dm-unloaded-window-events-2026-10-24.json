@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Tail and around-message history readers now lease a temporary per-conversation event buffer. Completed WS creates/edits are retained even when no message window exists yet; deletes remove buffered records. Reader-specific release prevents an obsolete request from clearing a replacement reader's events.",
+    "History merges eligible newer buffered content after stale response filtering. Around-message windows only retain buffered IDs belonging to the requested raw window; unrelated new tail messages do not appear in a historical jump. Failed reads release their leases; existing account/cache invalidation clears buffers.",
+    "Eligible source-bound HTTP send/edit receipts also feed the buffer before the optional cache await, preserving known plaintext/file keys while their WS echo is still pending. Buffered confirmed/live content takes precedence over unchanged loaded records. This does not perform a global optimistic insert or send a second message.",
+    "Edits to live messages held outside a jumped-to window update that held record, so reaching the tail no longer restores its pre-edit text."
+  ],
+  "verification": [
+    "Final targeted dmStore suite passed: 64 tests. Added initial-window live create/edit, deletion, unloaded around-target edit, historical-window isolation, overlapping reader leases, failed-reader cleanup, HTTP send before echo, HTTP edit versus stale loaded target and detached-message edit regressions.",
+    "Final TypeScript tsc -b and targeted ESLint passed.",
+    "Full client suite passed: 232 files / 2301 tests in 47.42s. Vite production build passed in 697ms with existing warnings. Targeted diff whitespace and coverage validation passed: 33 references / 261 behaviors; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Two-client browser acceptance, reconnect/server revision reconciliation and cross-tab cache ordering remain open. Reactions/pins and other independent message metadata need equivalent race verification.",
+    "Buffers are transient and request-scoped, not a durable delivery log. Failed reads rely on a later authoritative refetch. High-traffic/hung-decryption buffer memory and timeout behavior require performance testing.",
+    "Overall P0-P11 remains incomplete. No GitHub changes, Windows packaging or production release performed."
+  ]
+}

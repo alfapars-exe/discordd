@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -49,6 +50,43 @@ func (r *sqliteNotificationRepo) Create(ctx context.Context, n *models.Notificat
 		n.CreatedAt = dbTextToRFC3339(createdAt)
 	}
 	return nil
+}
+
+// CreateReactionIfAbsent persists at most one inbox row for the same actor,
+// message and emoji. Removing/re-adding a reaction therefore cannot create
+// notification noise, including after a process restart.
+func (r *sqliteNotificationRepo) CreateReactionIfAbsent(ctx context.Context, n *models.Notification, emoji string) (bool, error) {
+	if n == nil || n.ActorID == nil || n.MessageID == nil {
+		return false, fmt.Errorf("reaction notification requires actor and message")
+	}
+	if emoji == "" {
+		return false, fmt.Errorf("reaction notification requires emoji")
+	}
+	// A stable primary key makes concurrent retries atomic on SQLite and
+	// PostgreSQL, without relying on process-local locks or JSON SQL functions.
+	identity, _ := json.Marshal([]string{n.UserID, *n.ActorID, *n.MessageID, emoji})
+	n.ID = fmt.Sprintf("reaction-%x", sha256.Sum256(identity))
+	if len(n.Payload) == 0 {
+		n.Payload = json.RawMessage(`{}`)
+	}
+	payload := string(n.Payload)
+	result, err := r.db.ExecContext(ctx, `INSERT INTO notifications(id,user_id,kind,actor_id,server_id,channel_id,message_id,dm_channel_id,payload)
+		SELECT ?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (
+			SELECT 1 FROM notifications WHERE user_id=? AND kind=? AND actor_id=? AND message_id=? AND payload=?
+		) ON CONFLICT(id) DO NOTHING`, n.ID, n.UserID, n.Kind, n.ActorID, n.ServerID, n.ChannelID, n.MessageID, n.DMChannelID, payload,
+		n.UserID, n.Kind, n.ActorID, n.MessageID, payload)
+	if err != nil {
+		return false, fmt.Errorf("notification create reaction: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil || rows == 0 {
+		return false, err
+	}
+	var createdAt string
+	if err := r.db.QueryRowContext(ctx, "SELECT created_at FROM notifications WHERE id = ?", n.ID).Scan(&createdAt); err == nil {
+		n.CreatedAt = dbTextToRFC3339(createdAt)
+	}
+	return true, nil
 }
 
 // dbTextToRFC3339 converts the table's 'YYYY-MM-DD HH:MM:SS' UTC text into

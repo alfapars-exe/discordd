@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/argeinfina/hichat/models"
@@ -19,15 +20,26 @@ type ReactionService interface {
 }
 
 type reactionService struct {
-	reactionRepo   repository.ReactionRepository
-	messageRepo    repository.MessageRepository
-	channelRepo    repository.ChannelRepository
-	hub            ws.BroadcastAndOnline
-	permResolver   ChannelPermResolver
-	timeoutChecker MemberTimeoutChecker
+	reactionRepo     repository.ReactionRepository
+	messageRepo      repository.MessageRepository
+	channelRepo      repository.ChannelRepository
+	userRepo         repository.UserRepository
+	hub              ws.BroadcastAndOnline
+	permResolver     ChannelPermResolver
+	timeoutChecker   MemberTimeoutChecker
+	notificationRepo repository.NotificationRepository
+	preferenceRepo   profilePreferenceReader
 	// emojiResolver validates custom-emoji reactions (reaction_emoji.go);
 	// nil rejects every custom emoji. Set via SetEmojiResolver.
 	emojiResolver EmojiResolver
+}
+
+type reactionNotificationCreator interface {
+	CreateReactionIfAbsent(context.Context, *models.Notification, string) (bool, error)
+}
+
+func (s *reactionService) SetNotificationDelivery(repo repository.NotificationRepository, prefs profilePreferenceReader, users repository.UserRepository) {
+	s.notificationRepo, s.preferenceRepo, s.userRepo = repo, prefs, users
 }
 
 func NewReactionService(
@@ -37,7 +49,7 @@ func NewReactionService(
 	hub ws.BroadcastAndOnline,
 	permResolver ChannelPermResolver,
 	timeoutChecker MemberTimeoutChecker,
-) ReactionService {
+) *reactionService {
 	return &reactionService{
 		reactionRepo:   reactionRepo,
 		messageRepo:    messageRepo,
@@ -148,5 +160,71 @@ func (s *reactionService) ToggleReaction(ctx context.Context, serverID, messageI
 	}
 	s.hub.BroadcastToUsers(allowed, event)
 
+	if added && userID != message.UserID {
+		s.createReactionNotification(ctx, serverID, message, userID, emoji)
+	}
+
 	return nil
+}
+
+func (s *reactionService) createReactionNotification(ctx context.Context, serverID string, message *models.Message, actorID, emoji string) {
+	creator, ok := s.notificationRepo.(reactionNotificationCreator)
+	if !ok || s.preferenceRepo == nil {
+		return
+	}
+	// The author may have lost channel access since writing the message.
+	perms, err := s.permResolver.ResolveChannelPermissions(ctx, message.UserID, message.ChannelID)
+	if err != nil || !models.PermCanReadChannel(perms) {
+		return
+	}
+	n := &models.Notification{UserID: message.UserID, Kind: models.NotificationKindSystem, ActorID: &actorID, ServerID: &serverID, ChannelID: &message.ChannelID, MessageID: &message.ID}
+	deliverReactionNotification(ctx, creator, s.preferenceRepo, s.userRepo, s.hub, n, emoji, false)
+}
+
+// Limited delivery means private conversations; all also includes server channels.
+func deliverReactionNotification(ctx context.Context, creator reactionNotificationCreator, prefs profilePreferenceReader, users repository.UserRepository, hub ws.Broadcaster, n *models.Notification, emoji string, direct bool) {
+	if prefs == nil {
+		return
+	}
+	stored, err := prefs.Get(ctx, n.UserID)
+	if err != nil {
+		reactionLogger.Warn("reaction preference lookup failed", "err", pkg.ErrText(err))
+		return
+	}
+	mode := "direct"
+	var root struct {
+		Notifications struct {
+			ReactionMode string `json:"reactionMode"`
+		} `json:"notifications"`
+	}
+	if stored != nil && len(stored.Data) > 0 && json.Unmarshal(stored.Data, &root) == nil && root.Notifications.ReactionMode != "" {
+		mode = root.Notifications.ReactionMode
+	}
+	if mode == "none" || (mode != "all" && !direct) {
+		return
+	}
+	type reactionPayload struct {
+		GroupID string `json:"group_id,omitempty"`
+		Subtype string `json:"subtype"`
+		Emoji   string `json:"emoji"`
+		Title   string `json:"title"`
+		Body    string `json:"body"`
+	}
+	var origin reactionPayload
+	_ = json.Unmarshal(n.Payload, &origin)
+	n.Payload, _ = json.Marshal(reactionPayload{GroupID: origin.GroupID, Subtype: "reaction", Emoji: emoji, Title: "New reaction", Body: "Someone reacted to your message"})
+	created, err := creator.CreateReactionIfAbsent(ctx, n, emoji)
+	if err != nil {
+		reactionLogger.Warn("reaction notification create failed", "err", pkg.ErrText(err))
+		return
+	}
+	if !created {
+		return
+	}
+	if users != nil && n.ActorID != nil {
+		if actor, actorErr := users.GetByID(ctx, *n.ActorID); actorErr == nil {
+			n.Actor = models.ToPublicUser(actor)
+		}
+	}
+	broadcastNotificationCreate(hub, n)
 }

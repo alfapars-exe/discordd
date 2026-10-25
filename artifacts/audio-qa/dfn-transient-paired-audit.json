@@ -1,0 +1,236 @@
+{
+  "createdAt": "2026-10-23T02:18:35.643261+00:00",
+  "sampleRate": 44100,
+  "channels": [
+    "local-processed",
+    "remote-received"
+  ],
+  "frames": 909696,
+  "durationSeconds": 20.628027210884355,
+  "finite": true,
+  "samplesAtOrAboveFullScale": [
+    0,
+    0
+  ],
+  "peakAbsolute": [
+    0.16149717569351196,
+    0.1680697500705719
+  ],
+  "methods": {
+    "searchMs": [
+      0,
+      1000
+    ],
+    "envelope": "Pearson correlation of non-overlapping 10 ms RMS envelopes",
+    "waveform": "Normalized, locally mean-centered waveform cross-correlation; FFT numerator with per-lag energy denominator",
+    "onsetWindowSeconds": [
+      3.06,
+      3.4
+    ],
+    "speechStartsInFixtureSeconds": 3,
+    "note": "Window bounds refer to the paired capture clock, not raw fixture timestamps."
+  },
+  "envelopeAlignment": [
+    {
+      "windowSeconds": [
+        3,
+        17.5
+      ],
+      "offsetMs": 50,
+      "correlation": 0.9428588203035685
+    },
+    {
+      "windowSeconds": [
+        3,
+        10
+      ],
+      "offsetMs": 50,
+      "correlation": 0.8907008635945174
+    },
+    {
+      "windowSeconds": [
+        10,
+        17.5
+      ],
+      "offsetMs": 50,
+      "correlation": 0.9937563141716913
+    },
+    {
+      "windowSeconds": [
+        2.8,
+        3.6
+      ],
+      "offsetMs": 90,
+      "correlation": 0.9172418630314231
+    },
+    {
+      "windowSeconds": [
+        3,
+        4.3
+      ],
+      "offsetMs": 90,
+      "correlation": 0.9211190978223217
+    }
+  ],
+  "waveformAlignment": [
+    {
+      "windowSeconds": [
+        0.5,
+        1.2
+      ],
+      "offsetSamples": 10660,
+      "offsetMs": 241.7233560090703,
+      "normalizedWaveformCorrelation": 0.6309544575549263
+    },
+    {
+      "windowSeconds": [
+        3.06,
+        3.4
+      ],
+      "offsetSamples": 3829,
+      "offsetMs": 86.82539682539682,
+      "normalizedWaveformCorrelation": 0.9461975353079757
+    },
+    {
+      "windowSeconds": [
+        3.06,
+        4.3
+      ],
+      "offsetSamples": 3829,
+      "offsetMs": 86.82539682539682,
+      "normalizedWaveformCorrelation": 0.9454579399274053
+    },
+    {
+      "windowSeconds": [
+        3.5,
+        5
+      ],
+      "offsetSamples": 2295,
+      "offsetMs": 52.04081632653061,
+      "normalizedWaveformCorrelation": 0.8260425059564376
+    },
+    {
+      "windowSeconds": [
+        5,
+        7
+      ],
+      "offsetSamples": 2294,
+      "offsetMs": 52.018140589569164,
+      "normalizedWaveformCorrelation": 0.9854562163904415
+    },
+    {
+      "windowSeconds": [
+        8,
+        10
+      ],
+      "offsetSamples": 2292,
+      "offsetMs": 51.97278911564626,
+      "normalizedWaveformCorrelation": 0.9584312580455067
+    },
+    {
+      "windowSeconds": [
+        10,
+        12
+      ],
+      "offsetSamples": 2292,
+      "offsetMs": 51.97278911564626,
+      "normalizedWaveformCorrelation": 0.9759434837707579
+    },
+    {
+      "windowSeconds": [
+        12,
+        14
+      ],
+      "offsetSamples": 2293,
+      "offsetMs": 51.99546485260771,
+      "normalizedWaveformCorrelation": 0.9975436626679213
+    },
+    {
+      "windowSeconds": [
+        14,
+        17
+      ],
+      "offsetSamples": 2295,
+      "offsetMs": 52.04081632653061,
+      "normalizedWaveformCorrelation": 0.9324757467472926
+    }
+  ],
+  "onsetGapScans": {
+    "wholeRecordingEnvelopeOffsetAppliedToOnset": {
+      "windowSeconds": [
+        3,
+        4.3
+      ],
+      "appliedOffsetSamples": 2205,
+      "appliedOffsetMs": 50.0,
+      "frameMs": 10.0,
+      "localActiveThresholdDbfs": -45,
+      "remoteThreshold": "All samples exactly zero",
+      "expectedActiveFrames": 19,
+      "strictZeroFrames": 3,
+      "strictZeroDurationMs": 30.0,
+      "localFrameStartsMs": [
+        3110.0,
+        3120.0,
+        3130.0
+      ]
+    },
+    "onsetEnvelopeOffset": {
+      "windowSeconds": [
+        3,
+        4.3
+      ],
+      "appliedOffsetSamples": 3969,
+      "appliedOffsetMs": 90.0,
+      "frameMs": 10.0,
+      "localActiveThresholdDbfs": -45,
+      "remoteThreshold": "All samples exactly zero",
+      "expectedActiveFrames": 19,
+      "strictZeroFrames": 0,
+      "strictZeroDurationMs": 0.0,
+      "localFrameStartsMs": []
+    },
+    "onsetWaveformOffset": {
+      "windowSeconds": [
+        3,
+        4.3
+      ],
+      "appliedOffsetSamples": 3829,
+      "appliedOffsetMs": 86.82539682539682,
+      "frameMs": 10.0,
+      "localActiveThresholdDbfs": -45,
+      "remoteThreshold": "All samples exactly zero",
+      "expectedActiveFrames": 19,
+      "strictZeroFrames": 0,
+      "strictZeroDurationMs": 0.0,
+      "localFrameStartsMs": []
+    }
+  },
+  "interpretation": [
+    "The new same-clock capture contains the first local processed speech waveform in the received channel: onset-specific waveform correlation is high and the strict-zero onset candidate disappears with onset-specific alignment.",
+    "One fixed offset is unsuitable for this capture: the onset waveform offset differs from the later speech offset. Applying the whole-recording RMS-envelope offset to the onset produces a false silence candidate. Receiver playout/clock adjustment is a plausible explanation; these observations do not isolate the responsible WebRTC/codec mechanism.",
+    "The original 20 ms candidate compared an independently initialized offline model WAV with a separately started MediaRecorder file. This reproduction does not establish that the original run had no dropout, but it does not reproduce evidence of missing onset samples and does not justify a production change.",
+    "Offsets include capture routing, resampling, codec and browser playout behavior. A common recorder clock removes independent recorder origins; it does not make these values network latency, device latency or a quality score.",
+    "A zero strict-silence candidate count cannot rule out nonzero distortion, concealment, time compression or losses elsewhere. One loopback run with generated 44.1 kHz source, simulated capture constraints, gate disabled and controlled dtx=false/red=false publication does not establish microphone or real-network quality.",
+    "RTP values are cumulative end snapshots. LiveKit receive packetsLost is not exposed by this SDK snapshot; sender feedback is only the publisher-to-server hop. No packet-loss conclusion is inferred from unavailable counters."
+  ],
+  "rtp": {
+    "livekitReceiverPacketsLost": null,
+    "livekitReceiverConcealedSamples": 0,
+    "livekitReceiverConcealmentEvents": 0,
+    "publisherToServerFeedbackPacketsLost": 0
+  },
+  "environment": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "numpy": "2.3.5",
+    "scipy": "1.15.3",
+    "scipyLocation": "artifacts/audio-qa/python-deps (isolated QA dependency)"
+  },
+  "provenance": {
+    "pairedWavSha256": "5b7173171130d32b667e9e365ed59258ea779a60bc3c9953309d010b9f8cda9d",
+    "browserReportSha256": "fb4f06c429fa9e8fa0a7dea33a2c170754b28f57374c6f4944e3e70f3a4eab94",
+    "inputWavSha256": "acb16a3c6db5e9aaf29529d384553b535b47e52a30d0201167e5443863e9ea56",
+    "originalReceiverAuditSha256": "0033b9e96b4fbe9fc51642d5a6e4a406519e86c972d625c6f8b7c556615d2c78",
+    "scriptSha256": "56a057ac891b0afe2dd74a0d18d92c801d7c2e6e850621e56ffbd2b898238f0b"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-24",
+  "scope": "Local text spam classification and reversible message visibility",
+  "implemented": [
+    "Decrypted text is inspected locally for URL user-info destination disguise, repeated-link bursts and mass mentions with multiple links.",
+    "All/nonfriends/off modes and self-message exemption control shared channel/DM message visibility.",
+    "Flagged content, link previews, attachments and reaction rows are hidden with localized reasons and explicit restore. The underlying message is not deleted or modified.",
+    "Restore uses validated account preferences containing only message IDs and revision timestamps, never plaintext or content hashes. Edited messages are rechecked; unavailable plaintext remains unknown.",
+    "A bounded 1024-entry restore map uses existing preference persistence/retry infrastructure. Beyond that bound, reveal remains session-local; dedicated spam decision storage is still needed.",
+    "Incoming channel and DM spam skips TTS, desktop toast, notification sound and normal unread cue generation after retaining the message in its owning store."
+  ],
+  "verification": [
+    { "command": "vitest run useSpamVisibility spamClassification", "result": "passed", "tests": 6 },
+    { "command": "targeted ESLint", "result": "passed" },
+    { "command": "TypeScript project build", "result": "passed" },
+    { "command": "vitest run useSpamVisibility spamClassification preferencesStore", "result": "passed", "tests": 48 },
+    { "command": "go test ./models -run TestPreferences -count=1", "result": "passed" },
+    { "command": "full client vitest run before final incoming-cue integration", "result": "passed", "tests": 1959, "files": 202 },
+    { "command": "vitest run dmEventHandlers channelNavigation spamClassification after incoming-cue integration", "result": "passed", "tests": 17 }
+  ],
+  "remaining": [
+    "Persistent spam inbox, restore/delete/report actions and cross-device synchronization.",
+    "Server-side policy enforcement for supported metadata and plaintext flows.",
+    "Search, quote, group-DM and sidebar preview filtering; focused integration tests for blocked spam attention cues.",
+    "Classifier evaluation against representative labeled samples and real-client acceptance."
+  ],
+  "acceptance": "Partial foundation only; p3.spam and p3.classifier remain missing."
+}

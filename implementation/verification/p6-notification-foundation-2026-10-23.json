@@ -1,0 +1,26 @@
+{
+  "recorded_at": "2026-10-23",
+  "scope": "P6 notification preferences, runtime consumers, profile-update recipient filtering, and verified-email delivery foundation",
+  "status": "implemented_unverified",
+  "checks": [
+    { "name": "client_typecheck", "result": "passed", "command": "tsc --noEmit" },
+    { "name": "client_notification_tests", "result": "passed", "detail": "3 files, 46 tests" },
+    { "name": "go_preferences_and_repository_tests", "result": "passed" },
+    { "name": "go_main_compile", "result": "passed" },
+    { "name": "go_services_runtime", "result": "blocked", "detail": "Windows Application Control blocked the newly linked test executable after compilation" }
+  ],
+  "implemented": [
+    "Versioned server-validated account preferences for desktop notification, taskbar attention, unread badge, reaction selection, sound choices, friend activity choices, and optional email categories.",
+    "OS notification display, Electron taskbar flash, taskbar/title/favicon unread badge, message sound pack, and focused-channel sound consume the saved preferences.",
+    "Profile updates require both the actor share preference and each recipient profile-update preference.",
+    "Durable verified-address email jobs support category consent, claiming, bounded retry/backoff, terminal cancellation, and confirmed delivery.",
+    "Security and account-protection email interfaces remain outside optional category consent."
+  ],
+  "open_acceptance": [
+    "Independent installed-Windows and browser permission/notification acceptance.",
+    "Real incoming-call ringtone lifecycle and sound preview.",
+    "Event producers for stream, online-friend, anniversary, and category email events.",
+    "Email delivery-time consent recheck, deduplication keys, and unsubscribe-link endpoint.",
+    "Server event CRUD, RSVP, and scheduling."
+  ]
+}

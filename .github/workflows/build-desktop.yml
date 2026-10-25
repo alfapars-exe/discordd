@@ -43,7 +43,7 @@ jobs:
           node-version: 22
 
       # node-gyp requires distutils (removed in Python 3.12+)
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
 
@@ -125,6 +125,31 @@ jobs:
         run: cl.exe /EHsc /O2 /W3 /GS /sdl /guard:cf native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib /link /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF
         shell: cmd
 
+      # Standalone foreground-window query helper. It reads only the current
+      # foreground HWND/PID/path/bounds; it does not enumerate or inject.
+      - name: Compile game-window.exe
+        if: matrix.platform == 'windows-latest'
+        run: cl.exe /nologo /std:c++17 /EHsc /O2 /W3 /WX /GS /sdl /guard:cf /DUNICODE /D_UNICODE native\game-window.cpp /Fe:native\game-window.exe user32.lib /link /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF
+        shell: cmd
+
+      - name: Verify game-window.exe hardening flags
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $out = (dumpbin.exe /headers /loadconfig native/game-window.exe) -join "`n"
+          $required = [ordered]@{
+            'NX compatible (DEP)'           = 'NX compatible'
+            'Dynamic base (ASLR)'           = 'Dynamic base'
+            'High Entropy VA (64-bit ASLR)' = 'High Entropy Virtual Addresses'
+            'Control Flow Guard (CFG)'      = 'Control Flow Guard|CF Instrumented'
+          }
+          $missing = @($required.GetEnumerator() | Where-Object { $out -notmatch $_.Value } | ForEach-Object { $_.Key })
+          if ($missing.Count) {
+            Write-Host "::error::game-window.exe is missing hardening flags: $($missing -join ', ')"
+            exit 1
+          }
+          Write-Host "All hardening flags present: $($required.Keys -join ', ')"
+
       # Fail the build if any P0-EN-01 hardening flag is missing from the
       # produced binary. /loadconfig is included because CFG reports as
       # "CF Instrumented" there ("Control Flow Guard" in newer dumpbin
@@ -177,10 +202,8 @@ jobs:
         if: matrix.platform == 'windows-latest'
         run: |
           @"
-          provider: github
-          owner: alfapars-exe
-          repo: discordd
-          updaterCacheDirName: hichat-desktop-updater
+          provider: generic
+          url: https://huggingface.co/datasets/infinayazilim/hichat-releases/resolve/main/
           "@ | Set-Content -Path "release/win-unpacked/resources/app-update.yml" -Encoding UTF8
         shell: pwsh
 
@@ -207,33 +230,27 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: npx electron-builder --linux --publish never
 
-      # ─── Publish build outputs directly to the GitHub release ───
-      # Replaced actions/upload-artifact + a separate release job: installers
-      # only passed through Actions artifact storage to be re-downloaded one
-      # job later, and once enough ~120MB installers accumulated the account
-      # artifact quota hard-failed the whole pipeline ("Artifact storage
-      # quota has been hit", v2.11.101 attempt). Release assets do NOT count
-      # against Actions artifact storage, so each matrix leg uploads its own
-      # files straight to the release. Both legs race on `gh release create`;
-      # the loser falls through to upload (file sets are disjoint:
-      # latest.yml vs latest-linux.yml).
-      - name: Publish artifacts to release
+      # ─── Publish build outputs to the public HF Dataset ───
+      # The source repository may remain private. Only the installer files
+      # and electron-updater metadata are public release artifacts.
+      - name: Publish artifacts to Hugging Face
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          HF_RELEASE_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          NOTES=$(git tag -l --format='%(contents)' "$TAG")
-          [ -z "$NOTES" ] && NOTES="Release $TAG"
-          gh release create "$TAG" --title "$TAG" --notes "$NOTES" || echo "release exists; uploading assets"
+          test -n "$HF_RELEASE_TOKEN" || { echo "HF_RELEASE_TOKEN is required for release artifact publishing"; exit 1; }
+          python -m pip install --disable-pip-version-check --no-input "huggingface_hub==1.26.0"
           shopt -s nullglob
           FILES=(release/hichat-setup.* release/latest*.yml)
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "ERROR: no build outputs matched release/hichat-setup.* — check artifactName"
             exit 1
           fi
-          gh release upload "$TAG" "${FILES[@]}" --clobber
+          for FILE in "${FILES[@]}"; do
+            hf upload infinayazilim/hichat-releases "$FILE" "$(basename "$FILE")" \
+              --repo-type dataset --token "$HF_RELEASE_TOKEN" --commit-message "Publish ${GITHUB_REF_NAME} $(basename "$FILE")"
+          done
 
   # ─── Self-host server: multi-arch Docker image to GHCR ───
   # Replaced the previous CGO_ENABLED=0 cross-compile that was marked
@@ -285,6 +302,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # The former `release` job (download-artifact → gh release create) was
-  # removed: build legs publish directly to the release above, so nothing
-  # passes through Actions artifact storage anymore.
+  # Release artifacts are published directly by each platform matrix leg to
+  # the public HF Dataset; no private GitHub release is required by clients.

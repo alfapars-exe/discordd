@@ -1,0 +1,28 @@
+{
+  "package": "P4",
+  "behaviors": ["p4.menu", "p4.forward", "p4.forward-e2ee"],
+  "automated": {
+    "command": "vitest run src/components/chat/messageActionRegistry.test.ts src/components/chat/ForwardMessageModal.test.tsx && tsc -b tsconfig.json",
+    "result": "passed",
+    "tests": 5
+  },
+  "live_local": {
+    "url": "http://127.0.0.1:15173/channels",
+    "result": "passed",
+    "observed": [
+      "Desktop context menu exposes the shared Forward action",
+      "Forward dialog lists the currently permitted text channel",
+      "Dialog explains destination permission checks and destination re-encryption"
+    ]
+  },
+  "security": {
+    "attribution": "Forwarded content is explicitly attributed to prevent sender impersonation",
+    "authorization": "Destination send uses the normal channel or DM send path and its server-side authorization",
+    "e2ee": "Encrypted attachments are decrypted locally and all content is passed through the destination send path for fresh destination encryption"
+  },
+  "remaining_acceptance": [
+    "Two-account cross-destination forwarding",
+    "Encrypted attachment round-trip between distinct encrypted conversations",
+    "Mobile physical-device long-press acceptance"
+  ]
+}

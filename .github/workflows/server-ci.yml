@@ -130,7 +130,7 @@ jobs:
       # is the fix — never hand-edit the .claude/ copies.
       # Python is pinned like every other toolchain here — a hard gate must
       # not depend on whatever `python` alias the runner image ships.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       - name: Guardrail drift check (SECURE-CODING §0.12.3)
@@ -310,8 +310,20 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
+          tags: hichat:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan production image with Trivy
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: hichat:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
 
   # ─── Migration filename hygiene ───
   # Migrations apply in lexicographic filename order (database.go sort.Strings).

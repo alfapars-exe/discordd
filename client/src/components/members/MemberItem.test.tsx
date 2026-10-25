@@ -105,6 +105,7 @@ vi.mock("../../stores/memberStore", () => ({
 
 import MemberItem from "./MemberItem";
 import { useToastStore } from "../../stores/toastStore";
+import { useDeveloperSettingsStore } from "../../stores/developerSettingsStore";
 
 function makeMember(overrides: Partial<MemberWithRoles> = {}): MemberWithRoles {
   return {
@@ -151,9 +152,27 @@ beforeEach(() => {
   mockActiveMembers = [];
   mockTimeout = undefined;
   useToastStore.setState({ toasts: [] });
+  useDeveloperSettingsStore.setState({ developerMode: false });
 });
 
 describe("MemberItem — context menu timeout parity", () => {
+  it("hides object ID actions until developer mode is enabled", () => {
+    mockActiveMembers = [actingMember(0)];
+    render(<MemberItem member={makeMember()} isOnline />);
+
+    openContextMenu();
+    expect(screen.queryByText("copyUserId")).not.toBeInTheDocument();
+  });
+
+  it("shows object ID actions when developer mode is enabled", () => {
+    useDeveloperSettingsStore.setState({ developerMode: true });
+    mockActiveMembers = [actingMember(0)];
+    render(<MemberItem member={makeMember()} isOnline />);
+
+    openContextMenu();
+    expect(screen.getByText("copyUserId")).toBeInTheDocument();
+  });
+
   it("shows a Timeout entry when the viewer has TimeoutMembers", () => {
     mockActiveMembers = [actingMember(Permissions.TimeoutMembers)];
     const member = makeMember();

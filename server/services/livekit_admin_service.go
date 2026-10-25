@@ -65,8 +65,9 @@ type livekitAdminService struct {
 	encryptionKey []byte
 	httpClient    *http.Client
 
-	hetznerClient *hcloud.Client // optional (nil = disabled)
-	vcpuCache     map[int64]int
+	hetznerClient         *hcloud.Client // optional (nil = disabled)
+	vcpuCache             map[int64]int
+	allowInstanceCreation bool
 }
 
 func NewLiveKitAdminService(
@@ -77,15 +78,17 @@ func NewLiveKitAdminService(
 	voiceProvider ActiveVoiceProvider,
 	encryptionKey []byte,
 	hetznerToken string,
+	allowInstanceCreation bool,
 ) LiveKitAdminService {
 	svc := &livekitAdminService{
-		livekitRepo:   livekitRepo,
-		serverRepo:    serverRepo,
-		userRepo:      userRepo,
-		channelRepo:   channelRepo,
-		voiceProvider: voiceProvider,
-		encryptionKey: encryptionKey,
-		vcpuCache:     make(map[int64]int),
+		livekitRepo:           livekitRepo,
+		serverRepo:            serverRepo,
+		userRepo:              userRepo,
+		channelRepo:           channelRepo,
+		voiceProvider:         voiceProvider,
+		encryptionKey:         encryptionKey,
+		vcpuCache:             make(map[int64]int),
+		allowInstanceCreation: allowInstanceCreation,
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 			// TLS verification is ON by default. The historical "skip for
@@ -130,6 +133,9 @@ func (s *livekitAdminService) GetInstance(ctx context.Context, instanceID string
 }
 
 func (s *livekitAdminService) CreateInstance(ctx context.Context, req *models.CreateLiveKitInstanceRequest) (*models.LiveKitInstanceAdminView, error) {
+	if !s.allowInstanceCreation {
+		return nil, fmt.Errorf("%w: creating additional LiveKit instances is disabled by deployment policy", pkg.ErrForbidden)
+	}
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("%w: %s", pkg.ErrBadRequest, pkg.ErrText(err))
 	}

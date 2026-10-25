@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFriendStore } from "../../stores/friendStore";
 import { sendIntroMessage, INTRO_MAX_LENGTH } from "./sendIntroMessage";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 
 function FriendRequestForm() {
   const { t } = useTranslation("common");
@@ -13,6 +14,7 @@ function FriendRequestForm() {
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const sendRequest = useFriendStore((s) => s.sendRequest);
+  const allowPersonalizedMessage = usePreferencesStore((s) => s.get<{ personalizedFriendMessages?: boolean }>("privacy")?.personalizedFriendMessages !== false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +24,7 @@ function FriendRequestForm() {
     setIsSubmitting(true);
     setResult(null);
 
-    const introTrimmed = intro.trim();
+    const introTrimmed = allowPersonalizedMessage ? intro.trim() : "";
     const res = await sendRequest(trimmed);
 
     if (res.success) {
@@ -57,7 +59,7 @@ function FriendRequestForm() {
           disabled={isSubmitting}
           autoFocus
         />
-        <textarea
+        {allowPersonalizedMessage && <textarea
           className="frf-input frf-intro"
           maxLength={INTRO_MAX_LENGTH}
           rows={2}
@@ -65,8 +67,8 @@ function FriendRequestForm() {
           value={intro}
           onChange={(e) => setIntro(e.target.value)}
           disabled={isSubmitting}
-        />
-        <span className="frf-desc">{intro.length}/{INTRO_MAX_LENGTH}</span>
+        />}
+        {allowPersonalizedMessage && <span className="frf-desc">{intro.length}/{INTRO_MAX_LENGTH}</span>}
         <button
           className="frf-btn"
           type="submit"

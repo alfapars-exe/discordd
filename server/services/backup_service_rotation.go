@@ -240,9 +240,9 @@ func (b *BackupService) removeDailySnapshot(ctx context.Context, date string) er
 	return nil
 }
 
-// hfSyncDir mirrors a local directory tree to the bucket at the given
-// subpath. `--delete` propagates deletions so the backup reflects the
-// live state exactly. Xet deduplication minimises re-uploads.
+// hfSyncDir copies a local directory tree to the backup prefix without
+// deleting remote objects. An empty or incomplete mount must never erase
+// the recovery copy. Explicit asset retirement owns deletion separately.
 func (b *BackupService) hfSyncDir(srcDir, destSubpath string) error {
 	// Sanity: skip if the source doesn't exist — common on a fresh
 	// deploy where no uploads have happened yet.
@@ -255,7 +255,7 @@ func (b *BackupService) hfSyncDir(srcDir, destSubpath string) error {
 	defer cancel()
 
 	dest := fmt.Sprintf("hf://buckets/%s/latest/%s", b.cfg.HFBucket, destSubpath)
-	out, err := b.runCmd(ctx, b.hfEnv(), "hf", "sync", srcDir, dest, "--delete")
+	out, err := b.runCmd(ctx, b.hfEnv(), "hf", "sync", srcDir, dest)
 	if err != nil {
 		return fmt.Errorf("hf sync: %w (output: %s)", err, truncate(string(out), 1024))
 	}

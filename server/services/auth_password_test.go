@@ -76,26 +76,15 @@ func TestChangeEmail(t *testing.T) {
 		}
 	})
 
-	t.Run("empty email removes an existing address", func(t *testing.T) {
-		removed := false
+	t.Run("empty email is rejected even when an address exists", func(t *testing.T) {
 		ur := &testutil.MockUserRepo{
 			GetByIDFn: func(context.Context, string) (*models.User, error) {
 				return &models.User{ID: "u1", PasswordHash: hash, Email: strptr("old@example.com")}, nil
 			},
-			UpdateEmailFn: func(_ context.Context, _ string, email *string) error {
-				if email != nil {
-					t.Errorf("expected nil email for removal, got %v", *email)
-				}
-				removed = true
-				return nil
-			},
 		}
 		svc := newAuthServiceForReset(ur, &testutil.MockResetRepo{}, &testutil.MockEmailSender{})
-		if err := svc.ChangeEmail(ctx, "u1", pw, "  "); err != nil {
-			t.Fatalf("ChangeEmail: %v", err)
-		}
-		if !removed {
-			t.Error("expected UpdateEmail(nil) to be called")
+		if err := svc.ChangeEmail(ctx, "u1", pw, "  "); !errors.Is(err, pkg.ErrBadRequest) {
+			t.Fatalf("err = %v, want ErrBadRequest", err)
 		}
 	})
 

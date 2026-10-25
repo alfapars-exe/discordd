@@ -19,6 +19,7 @@ function profile(id: string, bio: string): UserProfile {
     avatar_url: null,
     avatar_animated_url: null,
     banner_url: null,
+    banner_animated_url: null,
     bio,
     pronouns: null,
     accent_color: null,

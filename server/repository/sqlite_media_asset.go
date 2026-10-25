@@ -39,14 +39,14 @@ func NewSQLiteMediaAssetRepo(db database.TxQuerier) MediaAssetRepository {
 // element cannot send a Bearer token, and there is no "entrance/" prefix rule.
 func (r *sqliteMediaAssetRepo) IsPublicAsset(ctx context.Context, fileURL string) (bool, error) {
 	query := `
-		SELECT EXISTS(SELECT 1 FROM users WHERE avatar_url = ? OR wallpaper_url = ? OR avatar_animated_url = ? OR banner_url = ?)
+		SELECT EXISTS(SELECT 1 FROM users WHERE avatar_url = ? OR wallpaper_url = ? OR avatar_animated_url = ? OR banner_url = ? OR banner_animated_url = ?)
 			OR EXISTS(SELECT 1 FROM servers WHERE icon_url = ? OR banner_url = ?)
 			OR EXISTS(SELECT 1 FROM server_emojis WHERE file_url = ? OR animated_url = ?)
 			OR EXISTS(SELECT 1 FROM server_stickers WHERE file_url = ? OR animated_url = ?)
 			OR EXISTS(SELECT 1 FROM user_entrance_sounds WHERE file_url = ?)`
 
 	var exists bool
-	if err := r.db.QueryRowContext(ctx, query, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL).Scan(&exists); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL, fileURL).Scan(&exists); err != nil {
 		return false, fmt.Errorf("failed to check public asset: %w", err)
 	}
 	return exists, nil

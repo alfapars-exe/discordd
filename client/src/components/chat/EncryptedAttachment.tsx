@@ -10,7 +10,8 @@ import { decryptFile, isRenderableImageMime } from "../../crypto/fileEncryption"
 import { resolveAssetUrl } from "../../utils/constants";
 import { useLightboxStore, isPlainLeftClick } from "../../stores/lightboxStore";
 import type { EncryptedFileMeta } from "../../crypto/fileEncryption";
-import type { ChatAttachment } from "../../hooks/useChatContext";
+import type { ChatAttachment, ChatMessage } from "../../hooks/useChatContext";
+import AccessibleAnimatedImage from "../shared/AccessibleAnimatedImage";
 
 type DecryptState = "idle" | "loading" | "ready" | "error";
 
@@ -18,9 +19,22 @@ type EncryptedAttachmentProps = {
   attachment: ChatAttachment;
   /** Matching file_keys entry (by index order) */
   fileMeta: EncryptedFileMeta;
+  authorName?: string;
+  authorAvatarUrl?: string | null;
+  createdAt?: string;
+  messageId?: string;
+  message?: ChatMessage;
 };
 
-function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps) {
+function EncryptedAttachment({
+  attachment,
+  fileMeta,
+  authorName,
+  authorAvatarUrl,
+  createdAt,
+  messageId,
+  message,
+}: EncryptedAttachmentProps) {
   const { t } = useTranslation("e2ee");
   const [state, setState] = useState<DecryptState>("idle");
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -127,13 +141,19 @@ function EncryptedAttachment({ attachment, fileMeta }: EncryptedAttachmentProps)
             kind: "blob",
             file: fileRef.current,
             filename: fileMeta.filename,
+            authorName,
+            authorAvatarUrl,
+            createdAt,
+            messageId,
+              message,
           });
         }}
       >
-        <img
+        <AccessibleAnimatedImage
           src={objectUrl!}
           alt={fileMeta.filename}
           className="msg-attachment-img"
+          animated={fileMeta.mimeType.toLowerCase() === "image/gif"}
           loading="lazy"
         />
       </a>

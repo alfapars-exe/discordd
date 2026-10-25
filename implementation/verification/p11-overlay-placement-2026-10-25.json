@@ -1,0 +1,27 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Voice-widget pin is a validated device-local preference, excluded from account synchronization/cache import and preserved across account reset. It blocks native movement unlock and re-locks an already unlocked widget; a pin indicator reflects the state.",
+    "Main-only overlay placement uses normalized offsets relative to the desktop/game rectangle. Contexts are desktop or opaque registered game UUIDs, not paths/titles/process inventories. Different games cannot inherit another game's offset. Position adapts to DPI-converted workarea changes and remains bounded; resize scale remains in existing device-local voice preferences.",
+    "The versioned dedicated overlay-layout.json store bounds input to 16 KiB plus one overflow-detection byte, validates at most 33 contexts and finite normalized points, rejects symlink/non-regular targets, and uses exclusive same-directory temporary files plus atomic rename with cache rollback on failure. No new server model or account data flow was added.",
+    "Lock/hide/window teardown preserve current manual placement. Explicit corner selection clears only that context's offset. Removing a registered game attempts cleanup of its obsolete layout context. Save failure is visibly surfaced rather than claiming persistence.",
+    "Trusted-main-frame reset IPC clears only dedicated overlay placements. Renderer resets position to bottom-left and scale to 100 only after true acknowledgment; audio devices, gain, visibility and pin choices remain unchanged. Failed reset preserves current preferences; newer edits beat late responses and successful device updates survive settings-view unmount.",
+    "Settings navigation additionally preserves explicitly marked leaf labels without reintroducing whole-section help text as sidebar headings."
+  ],
+  "verification": [
+    "Electron TypeScript compilation and full native suite: 139 passed, zero failed, one skipped actual symlink-creation test because this Windows host lacks permission. Deterministic fake-filesystem symlink refusal and growth-after-fstat bounded-read tests passed.",
+    "Native-window adapter tests passed for pin blocking, write-failure signaling, failed-reset preservation, successful reset, restored placement after window recreation, exact-game isolation, bounds-change relock and normalized resize geometry. These are mocked-window tests, not actual game acceptance.",
+    "Agent focused UI/store tests: 73 passed, including native reset success/failure/unsupported states, delayed edits, unmount acknowledgment, duplicate-call prevention and device-only pin persistence/filtering. Parent focused navigation/overlay tests: 25 passed.",
+    "Final full client suite passed: 309 files, 2872 tests, zero failures. Report C:/Users/PARS/AppData/Local/Temp/hichat-overlay-placement-20261025.json. Client TypeScript and scoped ESLint passed. Vite production build passed with existing ineffective-dynamic-import warnings.",
+    "Independent final review found and fixed misleading pin/topmost wording and a context-switch path that immediately cleared a failed-save indicator. Pin now explicitly means movement lock. Native suite re-passed after adding the context-switch failure regression; an unsuccessful old-game save remains visible in the next context until a successful save/reset.",
+    "Coverage structure VALID, all 32 validator regressions passed. Current ledger: 42 missing, 174 implemented_unverified, 32 existing, 2 accepted and 11 excluded. Acceptance remains explicitly incomplete."
+  ],
+  "open": [
+    "Actual Windows game dragging/pin/restart/resize, multi-monitor and focus/click-through acceptance",
+    "Physical filesystem symlink creation/refusal on a host permitting symlink creation; the deterministic rejection branch is covered",
+    "Non-voice widgets, opt-in clickable action regions, compatibility profile and remaining P0-P11 acceptance",
+    "Clean Windows installation, packaged helper/signing/update validation and release approval"
+  ],
+  "release": "No commit, push, merge, Windows publication or production deployment. The overall goal is not complete."
+}

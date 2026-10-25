@@ -68,11 +68,18 @@ type channelService struct {
 	// upload_cleanup.go). Blank disables cleanup — set via SetUploadDir,
 	// wired in init_services.go so the constructor signature below stays
 	// unchanged.
-	uploadDir string
+	uploadDir            string
+	voiceDeletionHandler VoiceChannelDeletionHandler
 }
 
 func (s *channelService) SetUploadDir(dir string) {
 	s.uploadDir = dir
+}
+
+// SetVoiceChannelDeletionHandler wires post-commit cleanup without widening
+// ChannelService's public interface or changing its constructor contract.
+func (s *channelService) SetVoiceChannelDeletionHandler(handler VoiceChannelDeletionHandler) {
+	s.voiceDeletionHandler = handler
 }
 
 // audit emits an audit log event if an audit logger is wired. Nil-safe.
@@ -123,6 +130,15 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 	if err != nil {
 		return nil, fmt.Errorf("failed to build visibility filter: %w", err)
 	}
+	var permissions *UserChannelPermissions
+	if resolver, ok := s.visChecker.(interface {
+		ResolveUserChannelPermissions(context.Context, string, string) (*UserChannelPermissions, error)
+	}); ok {
+		permissions, err = resolver.ResolveUserChannelPermissions(ctx, userID, serverID)
+		if err != nil || permissions == nil {
+			return nil, fmt.Errorf("failed to resolve listed channel permissions: %v", err)
+		}
+	}
 
 	// Force-include the user's active voice channel even without ViewChannel
 	voiceChannelID := ""
@@ -132,6 +148,13 @@ func (s *channelService) GetAllGrouped(ctx context.Context, serverID, userID str
 
 	channelsByCategory := make(map[string][]models.Channel)
 	for _, ch := range channels {
+		// Copy per-recipient permissions onto this response value only. Clear any
+		// inherited metadata so a repository/cache value cannot leak another user.
+		ch.EffectivePermissions = nil
+		if permissions != nil && ch.Type == models.ChannelTypeText {
+			effective := permissions.Effective(ch.ID)
+			ch.EffectivePermissions = &effective
+		}
 		if !filter.CanSee(ch.ID) && ch.ID != voiceChannelID {
 			continue
 		}
@@ -364,6 +387,12 @@ func (s *channelService) Delete(ctx context.Context, serverID, actorID, id strin
 
 	if err := s.channelRepo.Delete(ctx, id); err != nil {
 		return err
+	}
+	// The row is now gone. Clear active voice state and evict participants
+	// before clients receive the channel-delete notification. Never run this
+	// on a failed repository delete.
+	if existing.Type == models.ChannelTypeVoice && s.voiceDeletionHandler != nil {
+		s.voiceDeletionHandler.DeleteVoiceChannel(serverID, id)
 	}
 
 	// Best-effort: mention/reply inbox rows scoped to this channel would

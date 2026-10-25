@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P2 email verification implementation, not full account-fields acceptance or real provider delivery.",
+  "implemented": [
+    "Migration 095 adds per-address generations and verification time. An email-update database trigger invalidates old proofs including remove/re-add ABA; existing addresses are unverified by default.",
+    "Authenticated owner-bound status/request endpoints use fresh private status and generation CAS. Bots and disabled/banned owners cannot reserve new proofs. Sixty-second durable cooldown and twenty-minute expiry; 32 random bytes with only SHA-256 proof stored.",
+    "Public rate-limited confirmation consumes a proof once transactionally and never creates sessions/cookies, restores a disabled account or changes the signed-in identity. Concurrent consumers have one winner and failures roll back.",
+    "Configured HTTPS application link uses a fragment, not query parameters. The public client removes the fragment with replacement navigation, requires explicit confirmation instead of GET consumption, and can render while unrelated auth bootstrap is pending.",
+    "Resend's existing sender implements a narrow verification capability. Successful acknowledgement requires a nonempty provider message ID. Uncertain failures are not reported as accepted and retain the hashed proof until expiry in case provider delivery succeeded.",
+    "TR/EN settings include current address/status, request, cooldown, refresh, capability gating, recoverable errors and stale-account response guards. No provider configuration means explicit unavailable state, never fake delivery."
+  ],
+  "automated_checks": [
+    {"command": "go test ./...", "result": "all packages except root passed initially; root failed only the explicit public-route declaration inventory"},
+    {"command": "go test .", "result": "passed after adding the reasoned verify-email public token gate to route_permissions_test.go; no production source changed after the full-package run"},
+    {"command": "go test ./handlers ./repository ./services ./pkg/email . -run 'Test(EmailVerification|SQLiteEmailVerification|VerificationLink|InitRoutes)' -count=1", "result": "passed"},
+    {"command": "go test ./pkg/email -run TestVerification -count=1", "result": "passed; SDK serialization/recipient/link tested against local httptest provider, not Resend delivery"},
+    {"command": "npm test -- --reporter=dot", "result": "passed", "files": 164, "tests": 1749},
+    {"command": "npm run build", "result": "passed", "modules": 1587, "note": "TypeScript and web production build. Existing config-loader, dependency eval and dynamic import warnings remain."},
+    {"command": "focused ESLint on verification API/components/tests and App", "result": "passed", "errors": 0},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-email-verification.exe .", "result": "passed"}
+  ],
+  "local_runtime": {
+    "environment": "Own Ego space 10, isolated API 9191 and web 3131; only throwaway p1_acceptance modified. Migration 095 applied on restart. Real mail and LiveKit deliberately disabled.",
+    "observations": [
+      "Actual email form saved verification-fixture@example.invalid using the fixture password and cleared secret inputs.",
+      "Fresh settings showed the new address as unverified and the unconfigured-delivery explanation; request button disabled. No external message sent.",
+      "Desktop and mobile screenshots visually inspected. Mobile viewport/document width both 390. Fixture's existing teal preferences preserved; this is not reference visual-fidelity acceptance.",
+      "Public page removed the invalid fixture fragment before confirmation. Explicit confirmation returned the invalid/expired/used/replaced error, with no success message or login side effect."
+    ],
+    "screenshots": ["implementation/verification/p2-email-1440.png", "implementation/verification/p2-email-390.png"]
+  },
+  "operations": {
+    "migration": "Back up before applying 095; all writers of email must retain the generation-invalidating trigger. Do not roll back to verification-unaware code that advertises verified delivery without these checks.",
+    "configuration": "RESEND_API_KEY, verified sender configuration and trusted APP_URL are deployment prerequisites. HTTPS required except loopback development. Configured does not prove delivery; provider acceptance does not prove inbox delivery.",
+    "privacy": "No raw proof in database or server URL; fragment removed client-side. Existing telemetry token scrubbing remains. Verification is separate from marketing consent and account restoration.",
+    "queue": "P2 sends synchronously with explicit uncertain-failure handling. This is not P6's durable email delivery queue or category subscription infrastructure."
+  },
+  "remaining_acceptance": [
+    "Actual provider delivery to an authorized test inbox, resend/expiry and cross-device confirmation, provider failure/recovery and deployed URL/sender configuration.",
+    "Installed Windows, full viewport/zoom and assistive technology acceptance, remote libSQL races and operational backup/restore.",
+    "Verified-only category mail, durable email queue and P6 preferences remain missing. P2 account-fields remains missing because its complete contract is not accepted.",
+    "No commit, push, merge, Windows installer/update or production deployment occurred. Full P0-P11 goal remains incomplete."
+  ]
+}

@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,36 @@ type sentEvent struct {
 // stubDMAcceptor records AcceptPendingChannels calls as "a|b" pairs.
 type stubDMAcceptor struct {
 	calls []string
+}
+
+type stubFriendRequestPolicy struct {
+	allowed bool
+	calls   [][2]string
+}
+
+func (s *stubFriendRequestPolicy) CanSend(_ context.Context, senderID, targetID string) (bool, error) {
+	s.calls = append(s.calls, [2]string{senderID, targetID})
+	return s.allowed, nil
+}
+
+type emailEnqueueCall struct {
+	userID, category, dedupeKey, subject, body string
+	options                                    EmailEnqueueOptions
+}
+
+type stubEmailEnqueuer struct {
+	calls []emailEnqueueCall
+	err   error
+}
+
+func (s *stubEmailEnqueuer) Enqueue(_ context.Context, userID, category, dedupeKey, subject, body string) (bool, error) {
+	s.calls = append(s.calls, emailEnqueueCall{userID: userID, category: category, dedupeKey: dedupeKey, subject: subject, body: body})
+	return true, s.err
+}
+
+func (s *stubEmailEnqueuer) EnqueueWithOptions(_ context.Context, userID, category, dedupeKey, subject, body string, options EmailEnqueueOptions) (bool, error) {
+	s.calls = append(s.calls, emailEnqueueCall{userID: userID, category: category, dedupeKey: dedupeKey, subject: subject, body: body, options: options})
+	return true, s.err
 }
 
 func (s *stubDMAcceptor) AcceptPendingChannels(_ context.Context, userA, userB string) error {
@@ -125,6 +156,28 @@ func sendReq(username string) *models.SendFriendRequestRequest {
 // ─── SendRequest ───
 
 func TestFriendshipSendRequest_Rejections(t *testing.T) {
+	t.Run("target policy rejects direct API request", func(t *testing.T) {
+		f := newFriendSvcFixture(t)
+		enqueuer := &stubEmailEnqueuer{}
+		f.svc.SetEmailEnqueuer(enqueuer)
+		policy := &stubFriendRequestPolicy{allowed: false}
+		f.svc = NewFriendshipService(f.friends, f.users, f.notif, f.hub, policy)
+		f.svc.SetEmailEnqueuer(enqueuer)
+		_, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
+		if !errors.Is(err, pkg.ErrForbidden) {
+			t.Fatalf("err = %v, want ErrForbidden", err)
+		}
+		if len(policy.calls) != 1 || policy.calls[0] != [2]string{"alice", "bob"} {
+			t.Fatalf("policy calls = %#v", policy.calls)
+		}
+		if len(f.events) != 0 {
+			t.Fatalf("denied request broadcast %d events", len(f.events))
+		}
+		if len(enqueuer.calls) != 0 {
+			t.Fatalf("denied request enqueued %d emails", len(enqueuer.calls))
+		}
+	})
+
 	t.Run("empty username → bad request, no lookup", func(t *testing.T) {
 		f := newFriendSvcFixture(t)
 		f.users.GetByUsernameFn = func(_ context.Context, _ string) (*models.User, error) {
@@ -166,10 +219,15 @@ func TestFriendshipSendRequest_Rejections(t *testing.T) {
 
 	t.Run("pending same direction → already exists", func(t *testing.T) {
 		f := newFriendSvcFixture(t)
+		enqueuer := &stubEmailEnqueuer{}
+		f.svc.SetEmailEnqueuer(enqueuer)
 		f.setPair(pendingFriendship("alice", "bob"))
 		_, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
 		if !errors.Is(err, pkg.ErrAlreadyExists) {
 			t.Fatalf("err = %v, want ErrAlreadyExists", err)
+		}
+		if len(enqueuer.calls) != 0 {
+			t.Fatalf("duplicate request enqueued %d emails", len(enqueuer.calls))
 		}
 	})
 
@@ -201,6 +259,9 @@ func TestFriendshipSendRequest_Rejections(t *testing.T) {
 func TestFriendshipSendRequest_HappyPath(t *testing.T) {
 	f := newFriendSvcFixture(t)
 	var created *models.Friendship
+	// Capture the persisted row so the email's dedupe key can be tied to it.
+	enqueuer := &stubEmailEnqueuer{}
+	f.svc.SetEmailEnqueuer(enqueuer)
 	f.friends.CreateFn = func(_ context.Context, fr *models.Friendship) error {
 		cp := *fr
 		created = &cp
@@ -219,6 +280,16 @@ func TestFriendshipSendRequest_HappyPath(t *testing.T) {
 
 	if created == nil {
 		t.Fatal("friendRepo.Create was not called")
+	}
+	if len(enqueuer.calls) != 1 {
+		t.Fatalf("email enqueue calls = %d, want exactly one", len(enqueuer.calls))
+	}
+	mail := enqueuer.calls[0]
+	if mail.userID != "bob" || mail.category != models.EmailCategorySocial || mail.dedupeKey != "friend-request:"+created.ID || mail.subject != "New friend request" || mail.options.FriendshipID != created.ID || mail.options.FriendshipEvent != "request" {
+		t.Errorf("email enqueue = %+v, want target bob, social category, friendship dedupe key, generic subject", mail)
+	}
+	if strings.Contains(mail.subject+mail.body, "alice") || strings.Contains(mail.subject+mail.body, "bob") || strings.Contains(mail.subject+mail.body, created.ID) || strings.Contains(mail.body, "private") {
+		t.Errorf("email contains identity or private content: %q %q", mail.subject, mail.body)
 	}
 	if created.UserID != "alice" || created.FriendID != "bob" || created.Status != models.FriendshipStatusPending || created.ID == "" {
 		t.Errorf("created = %+v, want pending alice→bob with an id", created)
@@ -270,6 +341,64 @@ func TestFriendshipSendRequest_HappyPath(t *testing.T) {
 	}
 }
 
+func TestFriendshipSendRequest_EmailBestEffortAndOmitsDisplayName(t *testing.T) {
+	f := newFriendSvcFixture(t)
+	name := `<Alice & Co>`
+	f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		if id != "alice" {
+			return nil, pkg.ErrNotFound
+		}
+		return &models.User{ID: "alice", Username: "alice", DisplayName: &name}, nil
+	}
+	enqueuer := &stubEmailEnqueuer{err: errors.New("sensitive transport details")}
+	f.svc.SetEmailEnqueuer(enqueuer)
+	res, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob"))
+	if err != nil {
+		t.Fatalf("email failure must not fail persisted friend request: %v", err)
+	}
+	if res == nil || res.Status != models.FriendshipStatusPending || len(enqueuer.calls) != 1 {
+		t.Fatalf("result=%+v email calls=%d; want pending result and one attempt", res, len(enqueuer.calls))
+	}
+	body := enqueuer.calls[0].body
+	if strings.Contains(body, name) || strings.Contains(body, "Alice") || strings.Contains(body, "alice") {
+		t.Errorf("identity-rich body was queued: %q", body)
+	}
+}
+
+func TestFriendshipSendRequest_EmailFallbackAndCreateFailure(t *testing.T) {
+	t.Run("blank display name does not add username to generic body", func(t *testing.T) {
+		f := newFriendSvcFixture(t)
+		blank := "   "
+		f.users.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+			if id != "alice" {
+				return nil, pkg.ErrNotFound
+			}
+			return &models.User{ID: "alice", Username: "alice", DisplayName: &blank}, nil
+		}
+		enqueuer := &stubEmailEnqueuer{}
+		f.svc.SetEmailEnqueuer(enqueuer)
+		if _, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob")); err != nil {
+			t.Fatal(err)
+		}
+		if len(enqueuer.calls) != 1 || strings.Contains(enqueuer.calls[0].body, "alice") {
+			t.Fatalf("email calls = %+v, want generic body without username", enqueuer.calls)
+		}
+	})
+
+	t.Run("failed friendship create does not enqueue", func(t *testing.T) {
+		f := newFriendSvcFixture(t)
+		enqueuer := &stubEmailEnqueuer{}
+		f.svc.SetEmailEnqueuer(enqueuer)
+		f.friends.CreateFn = func(_ context.Context, _ *models.Friendship) error { return errors.New("create failed") }
+		if _, err := f.svc.SendRequest(context.Background(), "alice", sendReq("bob")); err == nil {
+			t.Fatal("expected create error")
+		}
+		if len(enqueuer.calls) != 0 {
+			t.Fatalf("email calls = %d, want zero", len(enqueuer.calls))
+		}
+	})
+}
+
 // The inbox write is best-effort: the request already persisted and was
 // pushed, so a notifications failure must neither fail the call nor push a
 // notification_create.
@@ -296,6 +425,8 @@ func TestFriendshipSendRequest_NotificationWriteIsBestEffort(t *testing.T) {
 // bob auto-accepts the existing row instead of creating a second one.
 func TestFriendshipSendRequest_MutualAutoAccepts(t *testing.T) {
 	f := newFriendSvcFixture(t)
+	enqueuer := &stubEmailEnqueuer{}
+	f.svc.SetEmailEnqueuer(enqueuer)
 	existing := pendingFriendship("bob", "alice") // bob → alice
 	f.setPair(existing)
 	f.friends.CreateFn = func(_ context.Context, _ *models.Friendship) error {
@@ -343,6 +474,13 @@ func TestFriendshipSendRequest_MutualAutoAccepts(t *testing.T) {
 	if len(f.acceptor.calls) != 1 || f.acceptor.calls[0] != "bob|alice" {
 		t.Errorf("AcceptPendingChannels calls = %v, want [bob|alice] (existing.UserID, acceptor)", f.acceptor.calls)
 	}
+	if len(enqueuer.calls) != 1 {
+		t.Fatalf("mutual auto-accept enqueued %d emails, want accepted event", len(enqueuer.calls))
+	}
+	mail := enqueuer.calls[0]
+	if mail.userID != "bob" || mail.dedupeKey != "friend-accepted:fr-1" || mail.options.FriendshipID != "fr-1" || mail.options.FriendshipEvent != "accepted" || strings.Contains(mail.subject+mail.body, "alice") {
+		t.Errorf("mutual accepted email=%+v", mail)
+	}
 	// The acceptor's own result carries the ORIGINAL SENDER's profile.
 	if res.ID != "fr-1" || res.Status != models.FriendshipStatusAccepted || res.UserID != "bob" || res.Username != "bob" {
 		t.Errorf("result = %+v, want fr-1 accepted sender=bob", res)
@@ -370,8 +508,24 @@ func TestFriendshipAcceptRequest(t *testing.T) {
 		}
 	})
 
+	t.Run("failed persistence does not enqueue accepted event", func(t *testing.T) {
+		f := newFriendSvcFixture(t)
+		f.setByID(pendingFriendship("alice", "bob"))
+		enqueuer := &stubEmailEnqueuer{}
+		f.svc.SetEmailEnqueuer(enqueuer)
+		f.friends.UpdateStatusFn = func(_ context.Context, _ string, _ models.FriendshipStatus) error { return errors.New("write failed") }
+		if _, err := f.svc.AcceptRequest(context.Background(), "bob", "fr-1"); err == nil {
+			t.Fatal("expected status write failure")
+		}
+		if len(enqueuer.calls) != 0 {
+			t.Fatalf("failed acceptance enqueued email: %+v", enqueuer.calls)
+		}
+	})
+
 	t.Run("happy path", func(t *testing.T) {
 		f := newFriendSvcFixture(t)
+		enqueuer := &stubEmailEnqueuer{}
+		f.svc.SetEmailEnqueuer(enqueuer)
 		f.setByID(pendingFriendship("alice", "bob"))
 		var updated []string
 		f.friends.UpdateStatusFn = func(_ context.Context, id string, status models.FriendshipStatus) error {
@@ -401,6 +555,9 @@ func TestFriendshipAcceptRequest(t *testing.T) {
 		}
 		if len(f.acceptor.calls) != 1 || f.acceptor.calls[0] != "alice|bob" {
 			t.Errorf("AcceptPendingChannels calls = %v, want [alice|bob]", f.acceptor.calls)
+		}
+		if len(enqueuer.calls) != 1 || enqueuer.calls[0].userID != "alice" || enqueuer.calls[0].dedupeKey != "friend-accepted:fr-1" || enqueuer.calls[0].options.FriendshipEvent != "accepted" {
+			t.Errorf("accepted email=%+v, want generic notification to original requester", enqueuer.calls)
 		}
 		if len(marked) != 1 || marked[0] != "bob<-alice" {
 			t.Errorf("MarkFriendRequestRead calls = %v, want [bob<-alice]", marked)

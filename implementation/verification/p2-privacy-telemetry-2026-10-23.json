@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P2 essential-service data explanation and account-synced optional improvement telemetry consent.",
+  "implemented": [
+    "Security settings explain required account, security, routing and abuse-prevention processing without presenting a fake disable switch.",
+    "The explanation points users to the real session, disable-account and delete-account controls on the same page.",
+    "Optional improvement telemetry is off unless the signed-in account explicitly opts in.",
+    "The preference is server-validated, account-synced and retained by the client preference cache/retry pipeline.",
+    "Screen-share sender and receiver performance events use the consent gate; operational security and failure diagnostics remain separate.",
+    "Permitted optional events carry an explicit optional-improvement classification."
+  ],
+  "checks": [
+    { "command": "go test ./models ./services -run 'Test.*Preferences' -count=1", "cwd": "server", "result": "passed" },
+    { "command": "tsc -b client/tsconfig.json --pretty false", "cwd": ".", "result": "passed" },
+    { "command": "npm test --prefix client -- --run src/api/clientLog.test.ts src/components/settings/SecuritySettings.test.tsx src/stores/preferencesStore.test.ts", "cwd": ".", "result": "passed: 3 files, 48 tests" }
+  ],
+  "remaining": [
+    "Verify persistence and cross-device behavior with two independent signed-in clients.",
+    "Review every future product-improvement event to ensure it uses the optional gate rather than the operational logger.",
+    "Installed Windows visual and interaction acceptance remains open."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

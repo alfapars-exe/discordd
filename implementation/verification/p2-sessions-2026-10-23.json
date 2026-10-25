@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P2 session infrastructure and account settings. Not complete P2, P0-P11 or release acceptance.",
+  "implemented": [
+    "Stable logical sign-in IDs bind rotating refresh credentials, access JWTs, media credentials and WebSocket tickets. Production validates durable revocation and token versions without a positive session cache.",
+    "Migration 092 adds logical sign-ins and refresh token-version stamps. Migration 093 backfills active legacy refresh credentials without inventing device metadata.",
+    "Owner-only actual session list with current marker, client-reported type/user agent, creation, activity and expiry. Metadata is not a verified physical device identity.",
+    "Password and enabled-MFA authenticated selective, current and other-session revocation; shared durable attempt budget, explicit UI approval, retry/error and draft handling.",
+    "Refresh rotation is transactional with one CAS winner and stable logical identity. Immediate duplicate refreshes return a superseded conflict rather than issuing twice or ending every session.",
+    "Global bound-session revocation commits token-version increment, logical tombstones and refresh deletion in one transaction. Failed writes roll back rather than report success.",
+    "Revocation uses the authenticated header session, never an unrelated shared cookie. Bound logout/revoke responses do not clear cookies that may belong to a replacement login.",
+    "Selected local-process sockets close with session_revoked. Periodic durable checks bound other-process sockets to a 30-second check interval; database outages do not masquerade as explicit revocation.",
+    "TR/EN settings with account-generation and list-revision guards. A late initial list cannot overwrite a newer manual refresh, and a late revocation result cannot log out a newer login.",
+    "Production password changes and recovery now atomically update the password, increment token version, tombstone logical sign-ins, delete refresh credentials and consume all account reset tokens. Hash compare-and-swap rejects a stale current-password proof; recovery proof is rechecked for owner, expiry and single use inside the transaction."
+  ],
+  "automated_checks": [
+    {"command": "go test ./...", "cwd": "server", "result": "passed", "note": "All Go packages passed after production session integration and atomic global-revoke implementation. Optional external integration tests are not claimed."},
+    {"command": "go test ./repository -run TestSQLiteAuthSession -count=1", "cwd": "server", "result": "passed", "note": "Subsequent new tests also passed: revoked actor rejection, account isolation, global token-version boundary, and trigger-induced write failure rollback."},
+    {"command": "npm test -- --reporter=dot", "cwd": "client", "result": "passed", "files": 160, "tests": 1731, "note": "Before final initial-list revision guard; the focused regression below covers that final edit. Existing act/navigation and deliberate failure-probe console messages remain."},
+    {"command": "npx vitest run src/components/settings/SessionSettings.test.tsx", "cwd": "client", "result": "passed", "files": 1, "tests": 5},
+    {"command": "npx eslint src/api/sessions.ts src/components/settings/SessionSettings.tsx src/components/settings/SessionSettings.test.tsx src/hooks/useWebSocket.ts", "cwd": "client", "result": "passed", "errors": 0},
+    {"command": "go test ./database -run TestMigration093 -count=1", "cwd": "server", "result": "passed", "note": "Pre-092 schema fixture verifies backfill eligibility, timestamps, unknown metadata, token-version stamps and no tombstone revival on raw backfill re-execution."},
+    {"command": "go test ./services -run TestAuthSessionsCredentialWritesRevokeAtomically -count=1", "cwd": "server", "result": "passed", "note": "Real SQLite password-change and recovery services reject injected deletion failure without a partial credential write, allow retry after rollback, reject old login and reset proof reuse, and revoke the old logical sign-in."},
+    {"command": "VITE_UI_SHELL_V2=true npm run build", "cwd": "client", "result": "passed", "modules": 1580, "note": "Production web build and TypeScript check passed after the final list guard. Existing dependency eval, chunk/import and config-loader warnings remain; not a Windows installer."},
+    {"command": "npm run check:coverage && npm run test:coverage", "cwd": ".", "result": "passed", "tests": 32, "note": "Ledger structure valid; acceptance intentionally remains incomplete."},
+    {"command": "git diff --check", "cwd": ".", "result": "passed", "note": "Line-ending conversion warnings remain."},
+    {"command": "go test ./...", "cwd": "server", "result": "passed", "note": "Subsequent final run also passed after atomic password/recovery writes and added migration/service rollback tests."},
+    {"command": "npm test -- --reporter=dot", "cwd": "client", "result": "passed", "files": 161, "tests": 1735, "note": "Final run includes account-status and corrected section labels/IDs, plus the session list race regression."}
+  ],
+  "local_runtime": {
+    "environment": "Own Ego task space 10; isolated API 9191 and web 3131 with throwaway accounts. Independent protocol clients on the same computer are not two physical-device acceptance.",
+    "observations": [
+      "Browser listed an independently signed-in fixture session and approved ending it. Its connected WebSocket closed code 4001/session_revoked; its bearer and refresh credential both returned 401. Browser session remained signed in.",
+      "End other sessions removed the other local fixtures, including backfilled legacy sign-ins, while keeping the browser current session.",
+      "Ending the browser current session returned it to login. A separate fixture still received HTTP 200 and a WebSocket heartbeat acknowledgement. That fixture was then explicitly logged out; no Set-Cookie was returned.",
+      "The browser fixture signed in again after the checks. No production accounts, preexisting services, releases or reference-image personal data were changed.",
+      "1440 and 390 pixel screenshots were visually inspected. Mobile document width was 390 with no secret fields populated."
+    ],
+    "screenshots_visually_inspected": [
+      "implementation/verification/p2-sessions-1440.png",
+      "implementation/verification/p2-sessions-390.png"
+    ],
+    "execution_notes": [
+      "An own minimized browser window caused one screenshot failure after the other-session action had already succeeded. The action was not repeated; the existing own window was restored before screenshots and later checks.",
+      "Runtime browser probes preceded the final atomic global-revoke and revoked-actor SQL refinements. Those refinements were verified by repository and full Go tests, not a repeated browser action."
+    ]
+  },
+  "operations": {
+    "rollout": "Back up database and preserve the existing encryption key. Apply additive migrations 092 then 093 before session-aware binaries. Legacy access tokens without sid receive 401 and can upgrade through their valid refresh credential.",
+    "rollback": "Do not run or roll back to session-unaware/MFA-unaware server binaries against enabled account security. A restore requires matching compatible application and database backup; that procedure has not yet been acceptance-tested.",
+    "session_validation": "Production initialization must always pass WithAuthSessions. Optional legacy constructors exist only for old isolated service tests and must not become a production bypass.",
+    "metadata": "User agent is client-reported, control-stripped and length-limited. No local process lists, device paths, IP-geolocation or verified device-identity claim is added.",
+    "known_limits": "Direct previously issued LiveKit JWTs remain valid until their existing TTL unless the media server independently revokes them. Local hub disconnect is immediate; other API processes use periodic database validation. These are not claimed as complete multi-instance media revocation."
+  },
+  "remaining_acceptance": [
+    "Installed Windows behavior, genuinely independent devices, remote libSQL transactions and distributed WebSocket revocation timing.",
+    "Backup/restore drills and rolling-version compatibility are not approved; local legacy backfill has automated coverage.",
+    "Real private-media download revocation and existing LiveKit/SFU credential lifecycle.",
+    "Live browser password change/recovery failure probes after the final atomic credential patch, real delivery of recovery email and remote libSQL failure injection remain unverified. Legacy constructors without session binding retain their old test compatibility path and must not be used in production.",
+    "Full P2 account lifecycle, moderation status, consent/export/privacy and all remaining P3-P11 scope.",
+    "No GitHub commit/push/merge, Windows installer update, production deployment or completed-goal claim."
+  ]
+}

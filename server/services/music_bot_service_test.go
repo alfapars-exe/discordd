@@ -67,6 +67,111 @@ func newTestMusicBotService(channelID, serverID string) *musicBotService {
 	return svc
 }
 
+func TestMusicQueueItemsHaveDistinctStableIDs(t *testing.T) {
+	svc := newTestMusicBotService("ch-1", "srv-1")
+	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
+		return []models.MusicTrack{{VideoID: "same-video"}, {VideoID: "same-video"}}, nil
+	}
+	tracks, err := svc.Enqueue(context.Background(), "user", "ch-1", "https://youtu.be/abcdefghijk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tracks[0].QueueItemID == "" || tracks[1].QueueItemID == "" || tracks[0].QueueItemID == tracks[1].QueueItemID {
+		t.Fatalf("queue IDs are not distinct: %#v", tracks)
+	}
+	state := svc.GetState("ch-1")
+	if state.Revision != 1 || state.Queue[0].QueueItemID != tracks[0].QueueItemID {
+		t.Fatalf("state=%#v", state)
+	}
+}
+
+func TestMusicQueueRemoveAndReorderRequireCurrentRevision(t *testing.T) {
+	svc := newTestMusicBotService("ch-1", "srv-1")
+	bot := svc.bots["ch-1"]
+	a, b, c := "00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000003"
+	bot.queue = []models.MusicTrack{{QueueItemID: a}, {QueueItemID: b}, {QueueItemID: c}}
+	bot.revision = 7
+	if err := svc.RemoveQueueItem("ch-1", b, 6); !errors.Is(err, pkg.ErrConflict) {
+		t.Fatalf("stale remove=%v", err)
+	}
+	if err := svc.RemoveQueueItem("ch-1", b, 7); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ReorderQueue("ch-1", []string{c, a}, 8); err != nil {
+		t.Fatal(err)
+	}
+	state := svc.GetState("ch-1")
+	if state.Revision != 9 || state.Queue[0].QueueItemID != c || state.Queue[1].QueueItemID != a {
+		t.Fatalf("state=%#v", state)
+	}
+	if err := svc.ReorderQueue("ch-1", []string{a, a}, 9); !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("duplicate reorder=%v", err)
+	}
+}
+
+func TestMusicQueueShuffleAndRepeatModes(t *testing.T) {
+	svc := newTestMusicBotService("ch-1", "srv-1")
+	bot := svc.bots["ch-1"]
+	a, b, c := "00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000003"
+	bot.queue = []models.MusicTrack{{QueueItemID: a}, {QueueItemID: b}, {QueueItemID: c}}
+	bot.revision = 3
+	if err := svc.ShuffleQueue("ch-1", 2); !errors.Is(err, pkg.ErrConflict) {
+		t.Fatalf("stale shuffle=%v", err)
+	}
+	if err := svc.ShuffleQueue("ch-1", 3); err != nil {
+		t.Fatal(err)
+	}
+	state := svc.GetState("ch-1")
+	seen := map[string]bool{}
+	for _, track := range state.Queue {
+		seen[track.QueueItemID] = true
+	}
+	if state.Revision != 4 || len(seen) != 3 || !seen[a] || !seen[b] || !seen[c] {
+		t.Fatalf("shuffle lost queue entries: %#v", state)
+	}
+	if err := svc.SetRepeatMode("ch-1", "forever"); !errors.Is(err, pkg.ErrBadRequest) {
+		t.Fatalf("invalid repeat=%v", err)
+	}
+	if err := svc.SetRepeatMode("ch-1", "all"); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.GetState("ch-1"); got.RepeatMode != "all" || got.Revision != 5 {
+		t.Fatalf("repeat state=%#v", got)
+	}
+}
+
+func TestRepeatCompletedTrackSkipsSkippedAndFailedTracks(t *testing.T) {
+	svc := newTestMusicBotService("ch-1", "srv-1")
+	bot := svc.bots["ch-1"]
+	bot.repeatMode = "all"
+	track := models.MusicTrack{QueueItemID: "00000000-0000-4000-8000-000000000001"}
+	svc.repeatCompletedTrack(bot, track)
+	if len(bot.queue) != 1 || bot.queue[0].QueueItemID != track.QueueItemID {
+		t.Fatalf("successful track was not repeated: %#v", bot.queue)
+	}
+	bot.queue = nil
+	bot.skipFlag = true
+	svc.repeatCompletedTrack(bot, track)
+	if len(bot.queue) != 0 {
+		t.Fatalf("skipped track was repeated: %#v", bot.queue)
+	}
+	// playLoop only invokes repeatCompletedTrack on nil playback errors, so
+	// failed tracks cannot reach this helper at all.
+}
+
+func TestEnqueue_FullQueueReturnsError(t *testing.T) {
+	svc := newTestMusicBotService("ch-1", "srv-1")
+	bot := svc.bots["ch-1"]
+	bot.queue = make([]models.MusicTrack, maxQueueLen)
+	svc.extractTracksFn = func(context.Context, string, string, string) ([]models.MusicTrack, error) {
+		return []models.MusicTrack{{VideoID: "new"}}, nil
+	}
+	tracks, err := svc.Enqueue(context.Background(), "user", "ch-1", "https://www.youtube.com/watch?v=YE7VzlLtp-4")
+	if !errors.Is(err, pkg.ErrBadRequest) || len(tracks) != 0 || len(bot.queue) != maxQueueLen {
+		t.Fatalf("full queue must reject, got %v / %v / %d", tracks, err, len(bot.queue))
+	}
+}
+
 // TestEnqueue_ExtractionConcurrencyBounded -- N parallel Enqueue calls against
 // a blocking extractTracksFn: at most maxConcurrentMusicExtractions may run
 // concurrently, the rest must fail fast with a pkg.ErrBadRequest "busy"

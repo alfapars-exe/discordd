@@ -51,6 +51,12 @@ export type ReportAttachment = {
 };
 
 export type AdminReportListItem = {
+  source_kind?: "channel" | "dm" | "group";
+  source_server_id?: string;
+  source_channel_id?: string;
+  source_message_id?: string;
+  evidence_shared?: boolean;
+  evidence_content?: string;
   id: string;
   reporter_id: string;
   reported_user_id: string;

@@ -14,8 +14,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { useContext } from "react";
+import { act, render, screen } from "@testing-library/react";
+import { useContext, useEffect } from "react";
 
 vi.mock("../../api/members", () => ({
   getMembers: vi.fn(async () => ({ success: true, data: [] })),
@@ -38,7 +38,7 @@ vi.mock("../../stores/serverStore", async () => {
 vi.mock("../../stores/channelPermissionStore", async () => {
   const { create } = await import("zustand");
   return {
-    useChannelPermissionStore: create(() => ({ getOverrides: () => [] })),
+    useChannelPermissionStore: create(() => ({ overridesByChannel: {}, getOverrides: () => [] })),
   };
 });
 
@@ -76,8 +76,12 @@ vi.mock("../../stores/pinStore", async () => {
 });
 
 import ChannelChatProvider from "./ChannelChatProvider";
-import { ChatContext } from "../../hooks/useChatContext";
+import { ChatContext, type ChatContextValue, type ChatMessage } from "../../hooks/useChatContext";
+import { useComposerDraftStore } from "../../stores/composerDraftStore";
 import { useMemberStore } from "../../stores/memberStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useMessageStore } from "../../stores/messageStore";
+import { usePinStore } from "../../stores/pinStore";
 import { Permissions } from "../../utils/permissions";
 import type { MemberWithRoles } from "../../types";
 
@@ -120,6 +124,9 @@ function renderProvider() {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  useServerStore.setState({ activeServerId: "srv-1" });
+  useComposerDraftStore.getState().reset();
   useMemberStore.setState({
     membersByServer: {},
     onlineUserIds: new Set<string>(),
@@ -129,6 +136,66 @@ beforeEach(() => {
 });
 
 describe("ChannelChatProvider — canSend", () => {
+  it("keeps pending action callbacks scoped to their origin server after switching", async () => {
+    let context: ChatContextValue | null = null;
+    function ActionProbe() {
+      const value = useContext(ChatContext);
+      useEffect(() => { context = value; }, [value]);
+      return null;
+    }
+    const view = render(
+      <ChannelChatProvider channelId="ch-1" channelName="general" sendTyping={vi.fn()}>
+        <ActionProbe />
+      </ChannelChatProvider>
+    );
+    const origin = context!;
+    view.unmount();
+    useServerStore.setState({ activeServerId: "srv-2" });
+    await origin.sendMessage("captured content", [], "reply-1");
+    await origin.editMessage("message-1", "edited");
+    await origin.deleteMessage("message-1");
+    await origin.fetchMessages();
+    await origin.fetchOlderMessages();
+    await origin.fetchNewerMessages();
+    await origin.jumpToPresent();
+    await origin.toggleReaction("message-1", "👍");
+    await origin.pinMessage("message-1");
+    await origin.unpinMessage("message-1");
+    const messages = useMessageStore.getState();
+    expect(messages.sendMessage).toHaveBeenCalledWith("ch-1", "captured content", [], "reply-1", "srv-1");
+    expect(messages.editMessage).toHaveBeenCalledWith("message-1", "edited", "srv-1");
+    expect(messages.deleteMessage).toHaveBeenCalledWith("message-1", "srv-1");
+    expect(messages.fetchMessages).toHaveBeenCalledWith("ch-1", "srv-1");
+    expect(messages.fetchOlderMessages).toHaveBeenCalledWith("ch-1", "srv-1");
+    expect(messages.fetchNewerMessages).toHaveBeenCalledWith("ch-1", "srv-1");
+    expect(messages.jumpToPresent).toHaveBeenCalledWith("ch-1", "srv-1");
+    expect(messages.toggleReaction).toHaveBeenCalledWith("message-1", "ch-1", "👍", "srv-1");
+    expect(usePinStore.getState().pin).toHaveBeenCalledWith("ch-1", "message-1", "srv-1");
+    expect(usePinStore.getState().unpin).toHaveBeenCalledWith("ch-1", "message-1", "srv-1");
+  });
+
+  it("scopes reply targets by conversation and restores them after navigation", () => {
+    let context: ChatContextValue | null = null;
+    function ReplyProbe() {
+      const value = useContext(ChatContext);
+      useEffect(() => { context = value; }, [value]);
+      return <span data-testid="reply">{value?.replyingTo?.id ?? "none"}</span>;
+    }
+    const makeView = (channelId: string) => (
+      <ChannelChatProvider channelId={channelId} channelName={channelId} serverId="srv-1" sendTyping={vi.fn()}>
+        <ReplyProbe />
+      </ChannelChatProvider>
+    );
+    const view = render(makeView("ch-1"));
+    act(() => context!.setReplyingTo({ id: "reply-A" } as ChatMessage));
+    expect(screen.getByTestId("reply")).toHaveTextContent("reply-A");
+    view.rerender(makeView("ch-2"));
+    expect(screen.getByTestId("reply")).toHaveTextContent("none");
+    act(() => context!.setReplyingTo({ id: "reply-B" } as ChatMessage));
+    view.rerender(makeView("ch-1"));
+    expect(screen.getByTestId("reply")).toHaveTextContent("reply-A");
+  });
+
   it("is true while the member list is still loading (never eat the first Enter)", () => {
     useMemberStore.setState({ loadingServers: new Set(["srv-1"]) });
 
@@ -152,6 +219,17 @@ describe("ChannelChatProvider — canSend", () => {
       membersByServer: { "srv-1": [makeMember(Permissions.SendMessages)] },
     });
 
+    expect(renderProvider()).toBe("true");
+  });
+
+  it("evaluates explicit origin permissions instead of the currently selected server", () => {
+    useServerStore.setState({ activeServerId: "srv-2" });
+    useMemberStore.setState({
+      membersByServer: {
+        "srv-1": [makeMember(Permissions.SendMessages)],
+        "srv-2": [makeMember(Permissions.ReadMessages)],
+      },
+    });
     expect(renderProvider()).toBe("true");
   });
 });

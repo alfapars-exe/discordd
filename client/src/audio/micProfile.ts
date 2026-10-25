@@ -4,9 +4,9 @@
  *
  * Two profiles, deliberately opposite:
  *
- *   "konusma" (speech, default) — the historical HiChat behaviour. Mono
- *     capture with the browser's full voice DSP chain (AEC / NS / AGC) on,
- *     the RNNoise-family processor attached on top, and the Opus speech
+ *   "konusma" (speech, default) — mono capture with browser AEC / AGC on.
+ *     Browser noise suppression runs only for the WebRTC engine; software
+ *     denoisers receive audio without a second suppression layer. Opus speech
  *     features (DTX + RED) enabled. Optimised for intelligibility over a
  *     lossy link, which is what a voice channel is 95 % of the time.
  *
@@ -26,13 +26,13 @@
  * the same "voice DSP is destroying media audio" problem for stream audio —
  * with one deliberate difference, documented on MUSIC_MIC_PUBLISH below.
  *
- * Kept dependency-free (type-only imports) so it stays cheap to unit test:
- * livekit-client is a runtime SDK, so the option objects themselves are the
- * only thing worth asserting on.
+ * Capture policy is shared with the call and microphone-test pipelines.
+ * The LiveKit SDK is imported only for its option types.
  */
 
 import type { AudioCaptureOptions, AudioPreset } from "livekit-client";
 import type { MicProfile } from "../stores/slices/voiceSettingsSlice";
+import { captureConstraints, type MicrophoneSettings } from "./microphoneSettings";
 
 /** Every declared profile, so tests and UI can enumerate exhaustively. */
 export const MIC_PROFILES = ["konusma", "muzik"] as const;
@@ -122,39 +122,16 @@ const MUSIC_MIC_PUBLISH: MicPublishOptions = {
 };
 
 /**
- * Capture constraints for a profile. `deviceId` is threaded through rather
- * than baked in because the device picker is orthogonal to the profile.
+ * LiveKit capture defaults use the same profile, engine and device policy as
+ * the shared microphone pipeline. RNNoise is the default software denoiser,
+ * so browser noise suppression must stay off unless WebRTC is selected.
  *
  * An empty `inputDevice` means "browser default" and must omit the key
  * entirely — `deviceId: ""` is a real (unsatisfiable) constraint on some
  * builds and makes getUserMedia throw OverconstrainedError.
  */
-export function micCaptureFor(
-  profile: MicProfile,
-  inputDevice: string,
-): AudioCaptureOptions {
-  const device = inputDevice ? { deviceId: inputDevice } : {};
-
-  if (profile === "muzik") {
-    return {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-      channelCount: 2,
-      ...device,
-    };
-  }
-
-  return {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-    // Mono capture on the speech path. Some USB / virtual mics expose two
-    // channels with one silent; without this the silent channel feeds half
-    // the playback graph on remotes and shows up as "audio only in one ear".
-    channelCount: 1,
-    ...device,
-  };
+export function micCaptureFor(settings: MicrophoneSettings): AudioCaptureOptions {
+  return captureConstraints(settings);
 }
 
 /** Publish options for a profile — the 3rd arg of setMicrophoneEnabled. */

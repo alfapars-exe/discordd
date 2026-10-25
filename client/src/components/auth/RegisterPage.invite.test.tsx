@@ -14,13 +14,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import type { Server } from "../../types";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 vi.mock("../../api/servers", () => ({
   joinServer: vi.fn(),
@@ -91,8 +89,11 @@ function renderRegisterPage(initialPath: string) {
   );
 }
 
-function fillAndSubmit() {
+async function fillAndSubmit() {
   fireEvent.change(screen.getByLabelText(/username/i), { target: { value: "alice123" } });
+  fireEvent.change(document.getElementById("email") as HTMLInputElement, {
+    target: { value: "alice@example.test" },
+  });
   fireEvent.change(document.getElementById("password") as HTMLInputElement, {
     target: { value: "password123" },
   });
@@ -100,7 +101,9 @@ function fillAndSubmit() {
     target: { value: "password123" },
   });
   fireEvent.click(screen.getByRole("checkbox"));
-  fireEvent.click(screen.getByRole("button", { name: "register" }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "register" }));
+  });
 }
 
 beforeEach(() => {

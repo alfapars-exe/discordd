@@ -5,15 +5,15 @@ import { ConnectionState } from "livekit-client";
 import { useTranslation } from "react-i18next";
 import { isNativeVoice } from "../../utils/nativePlugins";
 
-function VoiceConnectionStatus() {
+function VoiceConnectionStatus({ showConnected = false }: { showConnected?: boolean }) {
   const { t } = useTranslation("voice");
   const connectionState = useConnectionState();
 
   // iOS native voice: connection is handled natively, JS SDK isn't connected — hide status
-  if (isNativeVoice()) return null;
+  if (isNativeVoice()) return showConnected ? <span className="ub-voice-label">{t("voiceConnected")}</span> : null;
 
   if (connectionState === ConnectionState.Connected) {
-    return null;
+    return showConnected ? <span className="ub-voice-label" role="status">{t("voiceConnected")}</span> : null;
   }
 
   const statusConfig: Record<string, { message: string; dotClass: string; textClass: string }> = {
@@ -41,7 +41,7 @@ function VoiceConnectionStatus() {
   };
 
   return (
-    <div className="voice-connection-status">
+    <div className="voice-connection-status" role="status" aria-live="polite">
       <span className={config.dotClass} />
       <span className={config.textClass}>{config.message}</span>
     </div>

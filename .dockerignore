@@ -35,6 +35,11 @@ node_modules
 # ─── Build outputs — regenerated in-image ───
 client/dist
 server/static/dist
+# Locally linked server/QA binaries are not Linux image inputs.
+server/*.exe
+server/*.test
+server/mqvi
+server/mqvi-server
 build
 **/*.tsbuildinfo
 
@@ -51,6 +56,12 @@ build
 **/*.db
 **/*.db-wal
 **/*.db-shm
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite3-wal
+**/*.sqlite3-shm
 server/uploads
 server/data
 **/*.log

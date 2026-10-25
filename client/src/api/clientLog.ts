@@ -18,6 +18,7 @@
 import { apiClient } from "./client";
 import { isElectron, isCapacitor } from "../utils/constants";
 import { pushDiagnostic } from "./diagnosticBuffer";
+import { usePreferencesStore } from "../stores/preferencesStore";
 
 type LogLevel = "info" | "warn" | "error";
 
@@ -192,4 +193,15 @@ export async function logToServer(
   } catch {
     /* swallow — diagnostic logging must never break the caller */
   }
+}
+
+/**
+ * Emit non-essential product-improvement telemetry only after account-scoped
+ * opt-in. Operational errors continue to use logToServer so disabling
+ * analytics never suppresses security or reliability diagnostics.
+ */
+export async function logOptionalTelemetry(message: string, metadata: Metadata = {}): Promise<void> {
+  const privacy = usePreferencesStore.getState().get<{ improvementTelemetry?: boolean }>("privacy");
+  if (privacy?.improvementTelemetry !== true) return;
+  await logToServer("info", message, { ...metadata, telemetryClass: "optional-improvement" });
 }

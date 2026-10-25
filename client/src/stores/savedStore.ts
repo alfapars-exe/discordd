@@ -160,10 +160,19 @@ async function decryptSavedRows(rows: SavedMessage[]): Promise<SavedMessage[]> {
 
   const contentById = new Map<string, string | null>();
   if (channelRows.length > 0) {
-    const decrypted = await decryptChannelMessages(
-      channelRows.map((r) => toChannelMessage(r.message!))
-    );
-    for (const m of decrypted) contentById.set(`message:${m.id}`, m.content);
+    // Saved is account-wide and can mix servers, unlike a channel history page.
+    // Each key fetch must use the bookmarked message's origin, never selection.
+    const byServer = new Map<string, Message[]>();
+    for (const row of channelRows) {
+      const ref = row.message!;
+      const batch = byServer.get(ref.server_id) ?? [];
+      batch.push(toChannelMessage(ref));
+      byServer.set(ref.server_id, batch);
+    }
+    for (const [serverId, batch] of byServer) {
+      const decrypted = await decryptChannelMessages(batch, serverId);
+      for (const m of decrypted) contentById.set(`message:${m.id}`, m.content);
+    }
   }
   if (dmRows.length > 0) {
     const decrypted = await decryptDMMessages(dmRows.map((r) => toDMMessage(r.dm_message!)));

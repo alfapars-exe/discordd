@@ -1,0 +1,33 @@
+{
+  "phase": "P6",
+  "status": "implemented_unverified",
+  "implemented": [
+    "Signed track_published dispatch requires current instance-to-server binding and exact VIDEO/SCREEN_SHARE track. Windows/web primary publisher identity and native _ss identity are both supported; the earlier _ss-only implementation was insufficient for the requested desktop/web scope.",
+    "Verifier uses the real LiveKit SDK to query current main/share participants and exact publication SID, matching voice membership and current uncached actor ViewChannel/ConnectVoice/Stream permissions, timeout and ban status. Client is_streaming alone is not authority.",
+    "A bounded 15-second notification pass rechecks the provider before each recipient. Durable publication decisions are excluded from subsequent retry candidates so partial runs advance instead of starving later recipients.",
+    "SQLite/PostgreSQL delivery transaction rechecks explicit actor consent, recipient preference, active accounts/platform bans, accepted friendship, blocks, current membership, voice channel identity, actor ViewChannel/ConnectVoice/Stream and current server bans/timeouts, and recipient ViewChannel. Servers above 200 members are excluded both when listing and committing.",
+    "PostgreSQL delivery uses ordered per-account FOR SHARE NOWAIT row guards and SHARE MODE NOWAIT guards on nine authorization/lifecycle/moderation tables. Conflicting writes fail the attempt and roll back its decision so webhook retry can re-evaluate current eligibility, instead of waiting while holding partial table locks.",
+    "Fresh authorized publications not yet visible in the provider return a retryable error/503 without consuming a delivery decision. Signed creation time is bounded to two minutes old / 30 seconds future skew and independently checked throughout fanout; expired/invalid events are acknowledged without notification work.",
+    "Per-publication/recipient decisions prevent duplicate callbacks, opt-out replay and recreation after deleting a notice. Opaque notification IDs and payload action stream_start omit room/channel/track metadata.",
+    "Only committed notifications are broadcast. EN/TR inbox and desktop/sound/taskbar cues respect preference, DND/invisible, focus and duplicate delivery.",
+    "Account cleanup removes retained decision rows even without FK enforcement; personal export includes only the requester's recipient decision history, not other users' delivery decisions."
+  ],
+  "verification": [
+    "Root focused client tests passed 51 tests, TypeScript and scoped ESLint passed. Full client JSON report has success=true, 2576 passed tests, zero failures.",
+    "SDK HTTP/Twirp tests exercise real GetParticipant transport, exact track selection, fresh permission revocation, timeout/ban, stopped streams and signed webhook dispatch.",
+    "Root real SQLite notifier integration proves broadcast after commit and exactly one live notification across callback retries and notification deletion.",
+    "Root focused service/handler race tests count=5 passed (services 20.836s, handlers 3.060s).",
+    "Root PostgreSQL 18 StreamStart/DataExport/AccountAnonymization/HardDeleteUser selection passed count=2 (19.575s).",
+    "Earlier full Go test ./... passed (repository 65.223s, services 27.324s, handlers 3.75s); go vet ./... passed. Client production build passed in 1.07s with existing chunk/import warnings.",
+    "After primary/native publisher, visibility retry and authorization ordering fixes, focused service/handler race tests passed count=5 (services 22.373s, handlers 3.034s).",
+    "Final PostgreSQL 18 StreamStart/DataExport tests passed count=3 (21.467s), including actual Deliver NOWAIT SQLSTATE 55P03, rollback without a decision, release of prefix locks, actor Stream revocation and platform-ban/lifecycle changes, and all nine table guards. Test actors explicitly opted in so denial cannot pass merely because consent was missing.",
+    "Root SQLite notifier integration also verifies provider visibility failure leaves no decision/notification and a subsequent retry commits/broadcasts once. Real SDK transport tests cover primary-track success without a native lookup and native fallback.",
+    "Final full Go test ./... after all ordering/platform fixes passed (repository 62.504s, services 26.443s, handlers 3.793s); final go vet ./... passed."
+  ],
+  "open": [
+    "PostgreSQL guards are deliberately coarse and can briefly contend with unrelated authorization/lifecycle writes. NOWAIT is fail-closed/retryable rather than a throughput guarantee; load and cross-process operational acceptance remain open.",
+    "Provider state may change between the last current-track query and database commit; no atomic cross-system transaction exists. Real webhook timing, provider retry and two-client acceptance are required.",
+    "Provider propagation or retry delivery later than the two-minute publication window is intentionally not delivered. Actual provider retry behavior and outage recovery within that window still require live acceptance.",
+    "Real Windows/web notification permission and small/private server multi-user acceptance remain open. This is not a release acceptance or publication claim."
+  ]
+}

@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -208,8 +210,16 @@ func setMediaCookie(w http.ResponseWriter, mediaToken string) {
 // would turn a degraded-images problem into a can't-sign-in problem. The user
 // lands authenticated with a working API session; attachments fall back to
 // the client's authenticated-fetch path.
-func (h *AuthHandler) issueMediaCookie(w http.ResponseWriter, userID string) {
-	mediaToken, err := h.authService.GenerateMediaToken(userID)
+func (h *AuthHandler) issueMediaCookie(w http.ResponseWriter, userID string, sessionIDs ...string) {
+	var mediaToken string
+	var err error
+	if signer, ok := h.authService.(interface {
+		GenerateSessionMediaToken(string, string) (string, error)
+	}); ok && len(sessionIDs) > 0 && sessionIDs[0] != "" {
+		mediaToken, err = signer.GenerateSessionMediaToken(userID, sessionIDs[0])
+	} else {
+		mediaToken, err = h.authService.GenerateMediaToken(userID)
+	}
 	if err != nil {
 		authHandlerLogger.Error("media token generation failed", "user_id", userID, "err", pkg.ErrText(err))
 		return
@@ -267,6 +277,7 @@ func extractRefreshToken(r *http.Request, bodyToken string) string {
 }
 
 type AuthHandler struct {
+	mfa              *services.MFAService
 	authService      services.AuthService
 	wsTicketService  services.WSTicketService
 	loginLimiter     *ratelimit.LoginRateLimiter
@@ -356,7 +367,16 @@ func (h *AuthHandler) WSTicket(w http.ResponseWriter, r *http.Request) {
 	// higher. The handshake compares it against a fresh DB read, so
 	// staleness costs a spurious rejection at worst — it can never open a
 	// bypass window. That asymmetry is what makes this safe to stamp here.
-	ticket, err := h.wsTicketService.Issue(user.ID, user.TokenVersion)
+	var ticket string
+	var err error
+	if issuer, ok := h.wsTicketService.(interface {
+		IssueForSession(string, int, string) (string, error)
+	}); ok {
+		sessionID, _ := r.Context().Value(AuthSessionContextKey).(string)
+		ticket, err = issuer.IssueForSession(user.ID, user.TokenVersion, sessionID)
+	} else {
+		ticket, err = h.wsTicketService.Issue(user.ID, user.TokenVersion)
+	}
 	if err != nil {
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to issue ws ticket", err)
 		return
@@ -385,14 +405,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.authService.Register(r.Context(), &req)
+	tokens, err := h.authService.Register(services.WithSessionMetadata(r.Context(), r.Header.Get(clientHintHeader), r.UserAgent()), &req)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
 	setRefreshCookie(w, r, tokens.RefreshToken)
-	h.issueMediaCookie(w, tokens.User.ID)
+	h.issueMediaCookie(w, tokens.User.ID, tokens.SessionID)
 	pkg.JSON(w, http.StatusCreated, tokens)
 }
 
@@ -416,8 +436,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.authService.Login(r.Context(), &req)
+	tokens, err := h.authService.Login(services.WithSessionMetadata(r.Context(), r.Header.Get(clientHintHeader), r.UserAgent()), &req)
 	if err != nil {
+		if errors.Is(err, services.ErrAccountDisabled) {
+			pkg.ErrorWithCode(w, 403, "account is disabled; explicitly restore it to sign in", "ACCOUNT_DISABLED")
+			return
+		}
+		if writeMFAError(w, err) {
+			return
+		}
 		pkg.Error(w, err)
 		return
 	}
@@ -427,7 +454,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setRefreshCookie(w, r, tokens.RefreshToken)
-	h.issueMediaCookie(w, tokens.User.ID)
+	h.issueMediaCookie(w, tokens.User.ID, tokens.SessionID)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
 
@@ -441,7 +468,9 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxRefreshBody)
 
 	var req struct {
-		RefreshToken string `json:"refresh_token"`
+		RefreshToken      string `json:"refresh_token"`
+		ExpectedUserID    string `json:"expected_user_id,omitempty"`
+		ExpectedSessionID string `json:"expected_session_id,omitempty"`
 	}
 
 	// Body is optional now — cookie is the primary path.
@@ -453,8 +482,21 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.authService.RefreshToken(r.Context(), refreshToken)
+	refreshCtx := services.WithExpectedAuthSession(services.WithExpectedAuthAccount(r.Context(), req.ExpectedUserID), req.ExpectedSessionID)
+	tokens, err := h.authService.RefreshToken(services.WithSessionMetadata(refreshCtx, r.Header.Get(clientHintHeader), r.UserAgent()), refreshToken)
 	if err != nil {
+		if errors.Is(err, services.ErrRefreshSuperseded) {
+			pkg.ErrorWithCode(w, 409, "refresh superseded by another request; retry with the current cookie", "REFRESH_SUPERSEDED")
+			return
+		}
+		if errors.Is(err, services.ErrAuthSessionMismatch) {
+			pkg.ErrorWithCode(w, 409, "session changed; sign in again", "SESSION_MISMATCH")
+			return
+		}
+		if errors.Is(err, services.ErrAuthAccountMismatch) {
+			pkg.ErrorWithCode(w, http.StatusConflict, "account changed; sign in again", "ACCOUNT_MISMATCH")
+			return
+		}
 		pkg.Error(w, err)
 		return
 	}
@@ -462,7 +504,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	// Rotate the cookie with the new refresh token. Server-side rotation
 	// (old token invalidated) is handled by authService.RefreshToken.
 	setRefreshCookie(w, r, tokens.RefreshToken)
-	h.issueMediaCookie(w, tokens.User.ID)
+	h.issueMediaCookie(w, tokens.User.ID, tokens.SessionID)
 	pkg.JSON(w, http.StatusOK, tokens)
 }
 
@@ -470,18 +512,44 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // cookie or body, invalidates it server-side, and clears the cookie.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		RefreshToken string `json:"refresh_token"`
+		RefreshToken   string `json:"refresh_token"`
+		ExpectedUserID string `json:"expected_user_id,omitempty"`
 	}
 
 	// Body is optional — cookie is primary.
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	if ender, ok := h.authService.(interface {
+		EndSession(context.Context, string, string) error
+	}); ok {
+		user, _ := r.Context().Value(UserContextKey).(*models.User)
+		sid, _ := r.Context().Value(AuthSessionContextKey).(string)
+		if user != nil && sid != "" {
+			if req.ExpectedUserID != "" && req.ExpectedUserID != user.ID {
+				pkg.ErrorWithCode(w, 409, "account changed; sign in again", "ACCOUNT_MISMATCH")
+				return
+			}
+			if err := ender.EndSession(r.Context(), user.ID, sid); err != nil {
+				pkg.Error(w, err)
+				return
+			}
+			// Never clear a cookie that a concurrent tab may have replaced.
+			// The durable tombstone invalidates this session's credentials.
+			pkg.JSON(w, 200, map[string]bool{"session_ended": true})
+			return
+		}
+	}
 
 	refreshToken := extractRefreshToken(r, req.RefreshToken)
 	// Even with no token, clearing the cookie + returning 200 is the
 	// expected idempotent UX. The service call is only made when we have
 	// something to invalidate.
 	if refreshToken != "" {
-		if err := h.authService.Logout(r.Context(), refreshToken); err != nil {
+		if err := h.authService.Logout(services.WithExpectedAuthAccount(r.Context(), req.ExpectedUserID), refreshToken); err != nil {
+			if errors.Is(err, services.ErrAuthAccountMismatch) {
+				// Do not clear cookies: they belong to the other account.
+				pkg.ErrorWithCode(w, http.StatusConflict, "account changed; local session signed out", "ACCOUNT_MISMATCH")
+				return
+			}
 			clearRefreshCookie(w)
 			clearMediaCookie(w)
 			pkg.Error(w, err)
@@ -503,9 +571,38 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // they now reference a revoked session.
 func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
-	if !ok {
+	if !ok || user == nil {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
+	}
+	if verifier, ok := h.authService.(interface {
+		RevokeAllSessionsVerified(context.Context, string, string, string, string) error
+	}); ok {
+		sid, _ := r.Context().Value(AuthSessionContextKey).(string)
+		if sid != "" {
+			var req struct {
+				ExpectedUserID string `json:"expected_user_id"`
+				Password       string `json:"password"`
+				Code           string `json:"code"`
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, 8192)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				pkg.ErrorWithCode(w, 400, "password verification required", "VALIDATION_FAILED")
+				return
+			}
+			if req.ExpectedUserID != user.ID {
+				pkg.ErrorWithCode(w, 409, "account changed; sign in again", "ACCOUNT_MISMATCH")
+				return
+			}
+			if err := verifier.RevokeAllSessionsVerified(r.Context(), user.ID, sid, req.Password, req.Code); err != nil {
+				if !writeMFAError(w, err) {
+					pkg.Error(w, err)
+				}
+				return
+			}
+			pkg.JSON(w, 200, map[string]bool{"all_sessions_ended": true})
+			return
+		}
 	}
 
 	if err := h.authService.LogoutAllDevices(r.Context(), user.ID); err != nil {
@@ -538,12 +635,13 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // require this).
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
-	if !ok {
+	if !ok || user == nil {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
 
 	var req struct {
+		ExpectedUserID  string `json:"expected_user_id,omitempty"`
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
 	}
@@ -553,6 +651,10 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.ExpectedUserID != "" && req.ExpectedUserID != user.ID {
+		pkg.ErrorWithCode(w, http.StatusConflict, "account changed; sign in again before changing credentials", "ACCOUNT_MISMATCH")
+		return
+	}
 	if req.NewPassword == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "new_password is required")
 		return
@@ -564,7 +666,9 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.authService.ChangePassword(r.Context(), user.ID, req.CurrentPassword, req.NewPassword); err != nil {
-		pkg.Error(w, err)
+		if !writeMFAError(w, err) {
+			pkg.Error(w, err)
+		}
 		return
 	}
 
@@ -575,7 +679,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 // Requires current password. Empty new_email removes the email (sets NULL).
 func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
-	if !ok {
+	if !ok || user == nil {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
@@ -586,6 +690,10 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.ExpectedUserID != "" && req.ExpectedUserID != user.ID {
+		pkg.ErrorWithCode(w, http.StatusConflict, "account changed; sign in again before changing credentials", "ACCOUNT_MISMATCH")
+		return
+	}
 	if err := req.Validate(); err != nil {
 		// err.Error() never reaches the client here: models.Validate() returns
 		// a fixed, non-request-derived message (CWE-209 hardening), so the
@@ -596,7 +704,9 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.authService.ChangeEmail(r.Context(), user.ID, req.Password, req.NewEmail); err != nil {
-		pkg.Error(w, err)
+		if !writeMFAError(w, err) {
+			pkg.Error(w, err)
+		}
 		return
 	}
 
@@ -612,8 +722,8 @@ func (h *AuthHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 // ForgotPassword handles POST /api/auth/forgot-password
-// Returns same success response whether email exists or not (enumeration protection).
-// IP-based rate limiting + per-email 90s cooldown.
+// Returns same success response whether the identifier exists or not
+// (enumeration protection). IP-based rate limiting + per-identifier cooldown.
 func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	ip := ratelimit.ExtractIP(r)
 	if h.forgotPwdLimiter != nil && !h.forgotPwdLimiter.Allow(ip) {
@@ -637,7 +747,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		// a fixed, non-request-derived message (CWE-209 hardening), so the
 		// response carries a static literal + the VALIDATION_FAILED code
 		// instead of the raw error text.
-		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid email address", "VALIDATION_FAILED")
+		pkg.ErrorWithCode(w, http.StatusBadRequest, "invalid username or email", "VALIDATION_FAILED")
 		return
 	}
 
@@ -648,13 +758,13 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	// with two requests — account enumeration. Always return the same
 	// generic response regardless of whether the email exists or is cooling
 	// down.
-	if _, err := h.authService.ForgotPassword(r.Context(), req.Email); err != nil {
+	if _, err := h.authService.ForgotPassword(r.Context(), req.Identifier); err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
 	pkg.JSON(w, http.StatusOK, map[string]string{
-		"message": "if the email exists, a reset link has been sent",
+		"message": "if the account exists, a reset link has been sent",
 	})
 }
 
@@ -702,6 +812,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 type contextKey string
 
 const UserContextKey contextKey = "user"
+const AuthSessionContextKey contextKey = "auth_session"
 
 // ServerIDContextKey carries the active server ID, set by ServerMembershipMiddleware.
 const ServerIDContextKey contextKey = "server_id"

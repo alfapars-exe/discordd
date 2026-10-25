@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "DM channel-list refresh captures account ID, composer/session generation and monotonically increasing request ID. Stale results cannot overwrite channels/unread counts or clear a newer request's loading state. The GET receives the same context guard and a bounded timeout.",
+    "DM fetch-cache invalidation also fences pending metadata refreshes. Active thrown errors terminate loading and report false; anonymous callers do not fetch. Existing successful/failed refresh boolean behavior is preserved.",
+    "Corrected the P1 drafts coverage entry to identify memory-only drafts and actual source files rather than account-preference persistence. Its overall existing/unaccepted status is intentionally unchanged."
+  ],
+  "verification": [
+    "Six regressions cover account replacement, same-account generation reset, reverse-order concurrent success, stale failure versus active loading, thrown error/anonymous access, and cache invalidation. Tests assert channels and unread counts remain scoped.",
+    "Focused store/forwarding suites passed: 2 files / 31 tests. Final tsc -b and targeted ESLint passed. Full client suite passed: 229 files / 2216 tests in 46.23s. Vite production web build passed in 709ms. Targeted git diff --check passed; existing warning categories remain visible."
+  ],
+  "remaining": [
+    "This fixes DM list discovery, not every DM message fetch/send/edit/create race or session-cleanup surface. Live read-state events racing a fresh list and actual logout/relogin browser/device acceptance remain separate work.",
+    "Overall P0-P11 remains incomplete. No server migration, commit, push, merge, Windows packaging or production release performed."
+  ]
+}

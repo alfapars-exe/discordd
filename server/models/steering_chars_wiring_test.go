@@ -13,11 +13,11 @@ func strPtr(s string) *string { return &s }
 
 func TestValidate_RejectsSteeringChars(t *testing.T) {
 	t.Run("CreateUserRequest display_name", func(t *testing.T) {
-		r := &CreateUserRequest{Username: "validuser", Password: "longenough123", DisplayName: spoofed}
+		r := &CreateUserRequest{Username: "validuser", Password: "longenough123", DisplayName: spoofed, Email: "test@example.com"}
 		if err := r.Validate(); err == nil {
 			t.Fatal("spoofed display_name should be rejected")
 		}
-		clean := &CreateUserRequest{Username: "validuser", Password: "longenough123", DisplayName: "Ayşe"}
+		clean := &CreateUserRequest{Username: "validuser", Password: "longenough123", DisplayName: "Ayşe", Email: "test@example.com"}
 		if err := clean.Validate(); err != nil {
 			t.Fatalf("ordinary display_name must be accepted, got: %v", err)
 		}

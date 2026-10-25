@@ -78,6 +78,11 @@ type (
 		GetMessageByID(ctx context.Context, id string) (*models.DMMessage, error)
 		GetChannelByID(ctx context.Context, id string) (*models.DMChannel, error)
 	}
+	mediaGroupDMGetter interface {
+		GetAttachmentByFileURL(context.Context, string) (*models.GroupDMAttachment, error)
+		GetMessageByID(context.Context, string) (*models.GroupDMMessage, error)
+		IsMember(context.Context, string, string) (bool, error)
+	}
 	mediaReportGetter interface {
 		GetAttachmentByFileURL(ctx context.Context, fileURL string) (*models.ReportAttachment, error)
 		GetByID(ctx context.Context, id string) (*models.Report, error)
@@ -111,6 +116,7 @@ type mediaAccessService struct {
 	attachments  mediaAttachmentGetter
 	messages     mediaMessageGetter
 	dms          mediaDMGetter
+	groupDMs     mediaGroupDMGetter
 	permResolver ChannelPermResolver
 	reports      mediaReportGetter
 	feedback     mediaFeedbackGetter
@@ -127,8 +133,9 @@ func NewMediaAccessService(
 	feedback mediaFeedbackGetter,
 	users mediaUserGetter,
 	publicAssets mediaPublicAssetChecker,
+	groupDMs ...mediaGroupDMGetter,
 ) MediaAccessService {
-	return &mediaAccessService{
+	s := &mediaAccessService{
 		attachments:  attachments,
 		messages:     messages,
 		dms:          dms,
@@ -138,6 +145,10 @@ func NewMediaAccessService(
 		users:        users,
 		publicAssets: publicAssets,
 	}
+	if len(groupDMs) > 0 {
+		s.groupDMs = groupDMs[0]
+	}
+	return s
 }
 
 func (s *mediaAccessService) Authorize(ctx context.Context, fileURL string, resolveUser func() (string, bool)) (MediaDecision, error) {
@@ -164,6 +175,31 @@ func (s *mediaAccessService) Authorize(ctx context.Context, fileURL string, reso
 		return MediaAllowed, nil
 	} else if !errors.Is(err, pkg.ErrNotFound) {
 		return mediaDecisionUnset, err
+	}
+
+	// Group DM attachment: membership is checked at download time so removal
+	// immediately revokes access even when a stale URL is retained locally.
+	if s.groupDMs != nil {
+		if att, err := s.groupDMs.GetAttachmentByFileURL(ctx, fileURL); err == nil {
+			userID, ok := resolveUser()
+			if !ok {
+				return MediaRequiresAuth, nil
+			}
+			msg, err := s.groupDMs.GetMessageByID(ctx, att.GroupMessageID)
+			if err != nil {
+				return MediaNotFound, nil
+			}
+			member, err := s.groupDMs.IsMember(ctx, msg.GroupID, userID)
+			if err != nil {
+				return mediaDecisionUnset, err
+			}
+			if !member {
+				return MediaForbidden, nil
+			}
+			return MediaAllowed, nil
+		} else if !errors.Is(err, pkg.ErrNotFound) {
+			return mediaDecisionUnset, err
+		}
 	}
 
 	// DM attachment.

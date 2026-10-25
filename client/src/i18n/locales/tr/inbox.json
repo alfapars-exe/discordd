@@ -1,4 +1,17 @@
 {
+  "spam": "Spam kutusu",
+  "spamReport": "Spam bildir",
+  "spamAuthor": "Mesaj yazarı",
+  "spamLoading": "Spam kutusu yükleniyor…",
+  "spamRefresh": "Yenile",
+  "spamError": "Spam kutusu işlemi başarısız. Yenileyip tekrar dene.",
+  "spamEmpty": "Spam kaydı yok.",
+  "spamUnavailable": "Kaynak mesaj artık erişilebilir değil.",
+  "spamReference": "Yerel filtre tarafından işaretlenen mesaj",
+  "spamOpen": "Mesaja git",
+  "spamRestore": "Geri göster",
+  "spamDismiss": "Spam listesinden çıkar",
+  "spamGroup": "Grup sohbeti",
   "inbox": "Gelen Kutusu",
   "notifications": "Bildirimler",
   "viewAll": "Tümünü gör",
@@ -16,7 +29,13 @@
     "reply": "{{name}} #{{channel}} kanalında sana yanıt verdi",
     "friendRequest": "{{name}} sana arkadaşlık isteği gönderdi",
     "dmRequest": "{{name}} sana mesaj göndermek istiyor",
-    "system": "Sistem bildirimi"
+    "system": "Sistem bildirimi",
+    "reaction": "{{name}} mesajına {{emoji}} tepkisini verdi",
+    "profileUpdate": "{{name}} profilini güncelledi",
+    "streamStart": "{{name}} yayın yapmaya başladı",
+    "friendAnniversary": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!",
+    "friendAnniversary_one": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!",
+    "friendAnniversary_other": "{{name}} ile arkadaşlığınızın {{count}}. yıl dönümü!"
   },
   "friendRequestToast": "{{name}} sana arkadaşlık isteği gönderdi"
 }

@@ -13,12 +13,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import LandingPage from "./LandingPage";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
+vi.mock("react-i18next", () => ({ useTranslation: () => ({
     t: (key: string) => key,
     i18n: { language: "tr" },
-  }),
-}));
+  }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
@@ -42,8 +40,6 @@ vi.mock("./RevealOnScroll", () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("./SmartScreenGuide", () => ({ default: () => null }));
-
 vi.mock("./landingData", () => ({
   FEATURES: [],
   COMPARISON_ROWS: [],
@@ -64,6 +60,15 @@ function demoVideo(container: HTMLElement) {
 }
 
 describe("LandingPage missing assets", () => {
+  it("uses the public HF download and exposes no GitHub or SmartScreen CTA", () => {
+    const { container } = render(<LandingPage />);
+    const download = container.querySelector<HTMLAnchorElement>("a.lp-download-link");
+    expect(download?.href).toBe("https://example.test/setup.exe");
+    expect(container.querySelectorAll('a[href*="github.com"]').length).toBe(0);
+    expect(container.querySelectorAll(".ss-github-note, img[src*='smartscreen-']").length).toBe(0);
+    expect(container.textContent).not.toContain("GitHub");
+  });
+
   it("renders the video and all four screenshots when the assets load", () => {
     const { container } = render(<LandingPage />);
     expect(demoVideo(container)).not.toBeNull();

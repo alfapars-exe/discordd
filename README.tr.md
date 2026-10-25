@@ -144,7 +144,10 @@ mqvi.net hesabini normal kullan — sunucu olustur, arkadas ekle, sohbet et. Tek
 Sunucuna SSH ile baglan ve calistir:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/livekit-setup.sh | sudo bash
+git clone https://github.com/akinalpfdn/Mqvi.git
+cd Mqvi
+less deploy/livekit-setup.sh
+sudo bash deploy/livekit-setup.sh
 ```
 
 Script otomatik olarak:
@@ -161,7 +164,7 @@ Script otomatik olarak:
 **PowerShell'i Yonetici olarak** ac ve calistir:
 
 ```powershell
-irm https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/livekit-setup.ps1 | iex
+git clone https://github.com/akinalpfdn/Mqvi.git; cd Mqvi; Get-Content deploy/livekit-setup.ps1; .\deploy\livekit-setup.ps1
 ```
 
 Script otomatik olarak:
@@ -180,9 +183,9 @@ Script tamamlandiginda 3 deger goreceksin:
 
 | Deger | Ornek |
 |-------|-------|
-| **URL** | `ws://203.0.113.10:7880` |
-| **API Key** | `LiveKitKeyf3a1b2c4` |
-| **API Secret** | `aBcDeFgHiJkLmNoPqRsTuVwXyZ012345` |
+| **URL** | `wss://your-livekit-domain.example` |
+| **API Key** | Kurulum betiği tarafından üretilir |
+| **API Secret** | Kurulum betiği tarafından üretilir |
 
 mqvi'ye git, yeni sunucu olustur, **"Self-Hosted"** sec ve bu 3 degeri gir. Bu kadar.
 
@@ -212,7 +215,7 @@ mqvi platformunun tamamini kendi altyapinda calistir. mqvi.net'ten tamamen bagim
 Sunucuna SSH ile baglan ve calistir:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/install.sh | sudo bash
+git clone https://github.com/akinalpfdn/Mqvi.git && cd Mqvi && less deploy/install.sh && sudo bash deploy/install.sh
 ```
 
 Script sana mqvi'nin nasil yayinlanacagini sorar:
@@ -265,7 +268,7 @@ systemctl restart mqvi-server
 systemctl stop mqvi-server mqvi-livekit
 
 # Yeni bir surume guncelle
-curl -fsSL https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/install.sh | sudo bash
+git clone https://github.com/akinalpfdn/Mqvi.git && cd Mqvi && less deploy/install.sh && sudo bash deploy/install.sh
 systemctl restart mqvi-server
 ```
 
@@ -392,7 +395,7 @@ Ses ve video icin calisan bir [LiveKit](https://livekit.io) sunucusu gerekir. Li
 # Linux:
 sudo bash deploy/livekit-setup.sh
 # Windows (Yonetici olarak PowerShell):
-irm https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/livekit-setup.ps1 | iex
+git clone https://github.com/akinalpfdn/Mqvi.git; cd Mqvi; Get-Content deploy/livekit-setup.ps1; .\deploy\livekit-setup.ps1
 
 # Veya manuel kur: https://docs.livekit.io/home/self-hosting/local/
 livekit-server --config deploy/livekit.yaml --dev

@@ -6,6 +6,7 @@
  */
 
 import { create } from "zustand";
+import { useAccessibilityStore } from "./accessibilityStore";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
@@ -67,7 +68,11 @@ export const useToastStore = create<ToastState>((set, get) => ({
     // (after it) has no default of its own — a default before a
     // defaultless parameter forces every caller who wants `options` to
     // also pass `duration` explicitly.
-    const resolvedDuration = duration === undefined ? DEFAULT_DURATION : (duration ?? 0);
+    const requestedDuration = duration === undefined ? DEFAULT_DURATION : (duration ?? 0);
+    // Accessibility duration is a floor: it may extend ordinary notices but
+    // must never shorten a caller's longer or persistent safety notice.
+    const minimumDuration = useAccessibilityStore.getState().notificationDuration * 1000;
+    const resolvedDuration = requestedDuration > 0 ? Math.max(requestedDuration, minimumDuration) : 0;
 
     const toast: Toast = {
       id,

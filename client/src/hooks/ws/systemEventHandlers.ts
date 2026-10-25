@@ -20,12 +20,22 @@ import { useBadgeStore } from "../../stores/badgeStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useAuditStore } from "../../stores/auditStore";
 import { useUIStore } from "../../stores/uiStore";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 import { useNotificationStore } from "../../stores/notificationStore";
+import { useSpamDecisionStore } from "../../stores/spamDecisionStore";
+import { useGameActivityStore } from "../../stores/gameActivityStore";
+import { usePreferencesStore } from "../../stores/preferencesStore";
+import { invalidateMediaLabels, receiveMediaLabelChange } from "../../utils/mediaLabelSync";
 import { usePresenceStore } from "../../stores/presenceStore";
 import { useToastStore } from "../../stores/toastStore";
+import { useGroupDMStore } from "../../stores/groupDMStore";
 import i18n from "../../i18n";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
+import { getNotificationPreferences, shouldFlashTaskbar } from "../../utils/notificationPreferences";
+import { shouldCueReaction } from "../../utils/reactionNotifications";
+import { anniversaryYears, shouldCueAnniversary } from "../../utils/anniversaryNotifications";
+import { shouldCueStream } from "../../utils/streamNotifications";
 import {
   decryptChannelMessage,
   markAllChannelRecipientsStale,
@@ -45,6 +55,30 @@ import type { WSHandlerContext } from "./types";
  */
 let hadReadyBefore = false;
 
+function notificationTargetStillAvailable(n: { server_id: string | null; channel_id: string | null; dm_channel_id: string | null; payload: Record<string, unknown> }): boolean {
+  if (n.server_id) {
+    const servers = useServerStore.getState();
+    if (!servers.servers.some((server) => server.id === n.server_id) || servers.mutedServerIds.has(n.server_id)) return false;
+    if (n.channel_id) {
+      const groups = useChannelStore.getState().categoriesByServer[n.server_id];
+      if (groups && !groups.some((group) => group.channels.some((channel) => channel.id === n.channel_id))) return false;
+    }
+  }
+  if (n.dm_channel_id) {
+    const dm = useDMStore.getState().channels.find((channel) => channel.id === n.dm_channel_id);
+    if (!dm || dm.status !== "accepted" || dm.is_muted || useBlockStore.getState().isBlocked(dm.other_user.id)) return false;
+  }
+  const groupId = typeof n.payload.group_id === "string" ? n.payload.group_id : undefined;
+  if (groupId) {
+    const userId = useAuthStore.getState().user?.id;
+    const group = useGroupDMStore.getState().groups.find((item) => item.id === groupId);
+    // Group membership is an eligibility boundary, not just navigation state:
+    // fail closed while the list is absent/stale after account or membership changes.
+    if (!userId || !group?.members.some((member) => member.id === userId)) return false;
+  }
+  return true;
+}
+
 export async function handleSystemEvent(
   msg: WSMessage,
   ctx: WSHandlerContext,
@@ -56,7 +90,13 @@ export async function handleSystemEvent(
       return true;
 
     case "ready": {
+      useGameActivityStore.getState().start(msg.d.game_activity_epoch);
       const data = msg.d;
+
+      // Rebind the voice revision tracker before voice_states_sync is
+      // captured. This accepts new-incarnation deltas racing the snapshot
+      // while discarding delayed events from a retired server process.
+      useVoiceStore.getState().setVoiceEpoch(data.voice_epoch);
 
       if (data.servers) useServerStore.getState().setServersFromReady(data.servers);
       if (data.muted_server_ids) useServerStore.getState().setMutedServersFromReady(data.muted_server_ids);
@@ -68,10 +108,13 @@ export async function handleSystemEvent(
       useReadStateStore.getState().fetchAllUnreadCounts();
       useDMStore.getState().fetchChannels();
       useDMStore.getState().fetchDMSettings();
+      useGroupDMStore.getState().fetchGroups();
       useFriendStore.getState().fetchFriends();
       useFriendStore.getState().fetchRequests();
       useBlockStore.getState().fetchBlocked();
       useNotificationStore.getState().fetchCount();
+      void useSpamDecisionStore.getState().refresh();
+      invalidateMediaLabels(useAuthStore.getState().user?.id ?? "");
 
       // Roster/device changes missed while offline can't be caught by the
       // per-event member_join/leave/update marks below — bump the epoch so
@@ -98,15 +141,16 @@ export async function handleSystemEvent(
         // and would resolve cross-server tabs against the wrong server.
         // Background tabs heal lazily (their fetched-guard is disarmed).
         const healed = new Set<string>();
-        for (const panel of Object.values(useUIStore.getState().panels)) {
-          const tab = panel.tabs.find((t) => t.id === panel.activeTabId);
+        const ui = useUIStore.getState();
+        const visible = UI_SHELL_V2 ? [ui.destination] : Object.values(ui.panels).map((panel) => panel.tabs.find((tab) => tab.id === panel.activeTabId));
+        for (const tab of visible) {
           if (tab?.type === "text" && !healed.has(tab.channelId)) {
             healed.add(tab.channelId);
             useMessageStore.getState().fetchMessages(tab.channelId, tab.serverInfo?.serverId);
           }
         }
         const activeChannelId = useChannelStore.getState().selectedChannelId;
-        if (activeChannelId && !healed.has(activeChannelId)) {
+        if (!UI_SHELL_V2 && activeChannelId && !healed.has(activeChannelId)) {
           useMessageStore.getState().fetchMessages(activeChannelId);
         }
       }
@@ -146,12 +190,26 @@ export async function handleSystemEvent(
       return true;
     }
 
+    case "game_activity_update": {
+      useGameActivityStore.getState().apply(msg.d);
+      return true;
+    }
+    case "preferences_changed": {
+      if (msg.d.user_id === useAuthStore.getState().user?.id) void usePreferencesStore.getState().fetchAndApply();
+      return true;
+    }
     case "presence_update": {
+      // `is_auto` is newer than older server/client payloads, so only an
+      // explicit false marks a persisted manual preference update. Missing
+      // values must not turn an auto/legacy aggregate event into a preference.
       const data = msg.d;
       useMemberStore.getState().handlePresenceUpdate(data.user_id, data.status);
       usePresenceStore.getState().handlePresenceUpdate(data.user_id, data.status);
       const myId = useAuthStore.getState().user?.id;
       if (data.user_id === myId) {
+        if (data.is_auto === false) {
+          useAuthStore.getState().setManualStatus(data.status);
+        }
         useAuthStore.getState().updateUser({ status: data.status });
       }
       return true;
@@ -213,8 +271,8 @@ export async function handleSystemEvent(
       useMessageStore.getState().handleAuthorUpdate(updatedMember.id, authorPatch);
       useDMStore.getState().handleDMAuthorUpdate(updatedMember.id, authorPatch);
       const myUserId = useAuthStore.getState().user?.id;
-      if (updatedMember.id === myUserId) {
-        useChannelStore.getState().fetchChannels();
+      if (updatedMember.id === myUserId && serverId) {
+        useChannelStore.getState().fetchChannels(serverId);
       }
       return true;
     }
@@ -260,7 +318,7 @@ export async function handleSystemEvent(
       const role = msg.d;
       useMemberStore.getState().handleRoleUpdate(serverId, role);
       useRoleStore.getState().handleRoleUpdate(serverId, role);
-      useChannelStore.getState().fetchChannels();
+      useChannelStore.getState().fetchChannels(serverId);
       return true;
     }
     case "role_delete": {
@@ -269,7 +327,7 @@ export async function handleSystemEvent(
       const roleId = msg.d.id;
       useMemberStore.getState().handleRoleDelete(serverId, roleId);
       useRoleStore.getState().handleRoleDelete(serverId, roleId);
-      useChannelStore.getState().fetchChannels();
+      useChannelStore.getState().fetchChannels(serverId);
       return true;
     }
     case "roles_reorder": {
@@ -285,6 +343,9 @@ export async function handleSystemEvent(
     case "server_update": {
       const updatedServer = msg.d;
       useServerStore.getState().handleServerUpdate(updatedServer);
+      // Ownership moves the protected role in the same transaction. A fresh
+      // server-scoped list supersedes any pre-transfer response in flight.
+      void useMemberStore.getState().fetchMembers(updatedServer.id, true);
       // Trigger recovery password prompt if E2EE was just enabled
       if (updatedServer.e2ee_enabled) {
         useE2EEStore.getState().checkAndPromptRecovery();
@@ -296,9 +357,8 @@ export async function handleSystemEvent(
       return true;
     case "server_delete": {
       const deletedId = msg.d.id;
-      if (useVoiceStore.getState().currentVoiceChannelId) {
-        useVoiceStore.getState().handleForceDisconnect();
-      }
+      // The shared deletion/leave path owns voice cleanup and checks its
+      // server. Browsing or losing another server must not end this call.
       useServerStore.getState().handleServerDelete(deletedId);
       return true;
     }
@@ -314,10 +374,11 @@ export async function handleSystemEvent(
       // playNotificationSound() already stays silent in DND/invisible; keep the
       // in-app toast and window flash on the same rule so DND really is quiet.
       const manualStatus = useAuthStore.getState().manualStatus;
+      const ownerUserId = useAuthStore.getState().user?.id;
       const quiet = manualStatus === "dnd" || manualStatus === "offline";
       playNotificationSound();
       if (!quiet) {
-        void window.electronAPI?.flashFrame();
+        if (shouldFlashTaskbar()) void window.electronAPI?.flashFrame();
         useToastStore.getState().addToast("info", i18n.t("inbox:friendRequestToast", { name }));
       }
       showNotification({
@@ -325,6 +386,10 @@ export async function handleSystemEvent(
         body: i18n.t("inbox:kind.friendRequest", { name }),
         icon: request.avatar_url ?? null,
         tag: "friend-request",
+        isStillEligible: () => {
+          const latest = useFriendStore.getState().incoming.some((item) => item.id === request.id && !useBlockStore.getState().isBlocked(item.user_id));
+          return !quiet && latest && useAuthStore.getState().user?.id === ownerUserId;
+        },
       });
       return true;
     }
@@ -341,9 +406,57 @@ export async function handleSystemEvent(
     // ─── Notifications (persisted feed) ───
     // No cues here: the ping/flash/toast for a mention or request already
     // fires in the owning domain handler; this only keeps the feed in sync.
-    case "notification_create":
-      useNotificationStore.getState().handleCreate(msg.d);
+    case "media_label_changed":
+      receiveMediaLabelChange(msg.d);
       return true;
+    case "spam_decision":
+      if (msg.d.user_id === useAuthStore.getState().user?.id) useSpamDecisionStore.getState().apply(msg.d);
+      return true;
+    case "notification_create": {
+      const previous = useNotificationStore.getState().items.some((item) => item.id === msg.d.id);
+      useNotificationStore.getState().handleCreate(msg.d);
+      const ui = useUIStore.getState();
+      const panel = ui.panels[ui.activePanelId];
+      const destination = UI_SHELL_V2 ? ui.destination : panel?.tabs.find((tab) => tab.id === panel.activeTabId);
+      const auth = useAuthStore.getState();
+      if (!previous && shouldCueStream(msg.d, getNotificationPreferences(), auth.user?.id, auth.manualStatus, document.hasFocus() && !document.hidden)) {
+        playNotificationSound();
+        if (shouldFlashTaskbar()) void window.electronAPI?.flashFrame();
+        const name = msg.d.actor?.display_name || msg.d.actor?.username || i18n.t("common:directMessages");
+        showNotification({ title: "HiChat", body: i18n.t("inbox:kind.streamStart", { name }), icon: msg.d.actor?.avatar_url, tag: msg.d.id, isStillEligible: () => {
+          const latest = useNotificationStore.getState().items.find((item) => item.id === msg.d.id);
+          const currentAuth = useAuthStore.getState();
+          return !!latest && !latest.read_at && notificationTargetStillAvailable(latest) && !useBlockStore.getState().isBlocked(latest.actor_id ?? "")
+            && shouldCueStream(latest, getNotificationPreferences(), currentAuth.user?.id, currentAuth.manualStatus, document.hasFocus() && !document.hidden);
+        } });
+      }
+      if (!previous && shouldCueAnniversary(msg.d, getNotificationPreferences(), auth.user?.id, auth.manualStatus, document.hasFocus() && !document.hidden)) {
+        playNotificationSound();
+        if (shouldFlashTaskbar()) void window.electronAPI?.flashFrame();
+        const name = msg.d.actor?.display_name || msg.d.actor?.username || i18n.t("common:directMessages");
+        showNotification({ title: "HiChat", body: i18n.t("inbox:kind.friendAnniversary", { name, count: anniversaryYears(msg.d) }), icon: msg.d.actor?.avatar_url, tag: msg.d.id, isStillEligible: () => {
+          const latest = useNotificationStore.getState().items.find((item) => item.id === msg.d.id);
+          const currentAuth = useAuthStore.getState();
+          return !!latest && !latest.read_at && notificationTargetStillAvailable(latest) && !useBlockStore.getState().isBlocked(latest.actor_id ?? "")
+            && shouldCueAnniversary(latest, getNotificationPreferences(), currentAuth.user?.id, currentAuth.manualStatus, document.hasFocus() && !document.hidden);
+        } });
+      }
+      if (!previous && shouldCueReaction(msg.d, getNotificationPreferences(), auth.user?.id, auth.manualStatus, destination, document.hasFocus() && !document.hidden)) {
+        playNotificationSound();
+        if (shouldFlashTaskbar()) void window.electronAPI?.flashFrame();
+        const name = msg.d.actor?.display_name || msg.d.actor?.username || i18n.t("common:directMessages");
+        showNotification({ title: name, body: i18n.t("inbox:kind.reaction", { name, emoji: msg.d.payload.emoji }), icon: msg.d.actor?.avatar_url, tag: msg.d.id, isStillEligible: () => {
+          const latest = useNotificationStore.getState().items.find((item) => item.id === msg.d.id);
+          const currentAuth = useAuthStore.getState();
+          const ui = useUIStore.getState();
+          const panel = ui.panels[ui.activePanelId];
+          const currentDestination = UI_SHELL_V2 ? ui.destination : panel?.tabs.find((tab) => tab.id === panel.activeTabId);
+          return !!latest && !latest.read_at && notificationTargetStillAvailable(latest) && !useBlockStore.getState().isBlocked(latest.actor_id ?? "")
+            && shouldCueReaction(latest, getNotificationPreferences(), currentAuth.user?.id, currentAuth.manualStatus, currentDestination, document.hasFocus() && !document.hidden);
+        } });
+      }
+      return true;
+    }
     case "notification_read":
       useNotificationStore.getState().handleReadSync(msg.d);
       return true;
@@ -359,7 +472,7 @@ export async function handleSystemEvent(
     // ─── P2P Calls ───
     case "p2p_call_initiate":
       useP2PCallStore.getState().handleCallInitiate(msg.d);
-      window.electronAPI?.flashFrame();
+      if (getNotificationPreferences().incomingCallSound && shouldFlashTaskbar()) window.electronAPI?.flashFrame();
       return true;
     case "p2p_call_accept":
       useP2PCallStore.getState().handleCallAccept(msg.d);
@@ -413,7 +526,14 @@ export async function handleSystemEvent(
       // re-triggers it. If the channel is open, retry those now and clear
       // the channel's decryption-error banners for whatever comes back.
       const data = msg.d;
-      const isChannelOpen = Object.values(useUIStore.getState().panels).some((panel) => {
+      const ui = useUIStore.getState();
+      // This targeted event may omit the envelope server_id. Capture the
+      // owning visible conversation before any decryption awaits.
+      const openChannel = UI_SHELL_V2 ? ui.destination : Object.values(ui.panels)
+        .flatMap((panel) => panel.tabs.filter((tab) => tab.id === panel.activeTabId))
+        .find((tab) => tab.type === "text" && tab.channelId === data.channel_id);
+      const originServerId = msg.server_id ?? openChannel?.serverInfo?.serverId;
+      const isChannelOpen = UI_SHELL_V2 ? ui.destination.type === "text" && ui.destination.channelId === data.channel_id : Object.values(ui.panels).some((panel) => {
         const activeTab = panel.tabs.find((t) => t.id === panel.activeTabId);
         return activeTab?.type === "text" && activeTab.channelId === data.channel_id;
       });
@@ -427,7 +547,7 @@ export async function handleSystemEvent(
       for (const m of failedMessages) {
         if (!m.ciphertext || !m.sender_device_id) continue;
         try {
-          const payload = await decryptChannelMessage(m.user_id, m.channel_id, m.ciphertext, m.sender_device_id);
+          const payload = await decryptChannelMessage(m.user_id, m.channel_id, m.ciphertext, m.sender_device_id, originServerId ?? m.server_id);
           if (payload?.content) {
             useMessageStore.getState().handleMessageUpdate({
               ...m,

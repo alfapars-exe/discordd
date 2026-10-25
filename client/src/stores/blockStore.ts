@@ -9,11 +9,31 @@ import { useToastStore } from "./toastStore";
 import { useFriendStore } from "./friendStore";
 import { useAuthStore } from "./authStore";
 import type { FriendshipWithUser } from "../types";
+import {getAuthGeneration} from "../api/client";
+import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 
 /** Stable empty ref to prevent infinite re-renders in selectors */
 const EMPTY_BLOCKED: string[] = [];
+let listRequest=0;
+let blockRevision=0;
+const pendingMutations=new Map<string,Promise<boolean>>();
+function serializeBlockMutation(target:string,current:()=>boolean,operation:()=>Promise<boolean>):Promise<boolean>{
+  const key=JSON.stringify([useAuthStore.getState().user?.id,getAuthGeneration(),target]);
+  const previous=pendingMutations.get(key);
+  const pending=(previous?previous.then(()=>current()?operation():false):operation()).catch(()=>false);
+  pendingMutations.set(key,pending);
+  void pending.then(()=>{if(pendingMutations.get(key)===pending)pendingMutations.delete(key);});
+  return pending;
+}
+function sessionGuard(){
+  const owner=useAuthStore.getState().user?.id,generation=getAuthGeneration();
+  return ()=>Boolean(owner)&&owner===useAuthStore.getState().user?.id&&generation===getAuthGeneration();
+}
 
 type BlockState = {
+  ownerId: string | null;
+  authGeneration: number;
+  snapshotReady: boolean;
   blockedUserIds: string[];
   isLoading: boolean;
 
@@ -28,26 +48,37 @@ type BlockState = {
 };
 
 export const useBlockStore = create<BlockState>((set, get) => ({
+  ownerId: getAuthSessionSnapshot().ownerId,
+  authGeneration: getAuthSessionSnapshot().generation,
+  snapshotReady: false,
   blockedUserIds: EMPTY_BLOCKED,
   isLoading: false,
 
   fetchBlocked: async () => {
-    set({ isLoading: true });
+    const current=sessionGuard(),request=++listRequest,revision=blockRevision;
+    if(!current())return;
+    const snapshot = getAuthSessionSnapshot();
+    set({ isLoading: true, ownerId: snapshot.ownerId, authGeneration: snapshot.generation, snapshotReady: false });
     try {
-      const res = await blockApi.listBlocked();
-      if (res.success && res.data) {
-        set({ blockedUserIds: res.data.map((f: FriendshipWithUser) => f.user_id) });
+      const res = await blockApi.listBlocked({expectedUserId:useAuthStore.getState().user?.id,isCurrent:current});
+      if (current() && request===listRequest && revision===blockRevision && res.success && res.data) {
+        set({ blockedUserIds: res.data.map((f: FriendshipWithUser) => f.user_id), snapshotReady: true });
       }
     } finally {
-      set({ isLoading: false });
+      if(current()&&request===listRequest)set({ isLoading: false });
     }
   },
 
   blockUser: async (userId) => {
-    const res = await blockApi.blockUser(userId);
-    if (res.success) {
+    const current=sessionGuard();
+    if(!current())return false;
+    return serializeBlockMutation(userId,current,async()=>{
+    ++blockRevision;
+    const res = await blockApi.blockUser(userId,{expectedUserId:useAuthStore.getState().user?.id,isCurrent:current});
+    if (current() && res.success) {
+      ++blockRevision;
       set((s) => ({
-        blockedUserIds: [...s.blockedUserIds, userId],
+        blockedUserIds: s.blockedUserIds.includes(userId) ? s.blockedUserIds : [...s.blockedUserIds, userId],
       }));
       // Backend already removes friendship
       useFriendStore.getState().handleFriendRemove({ user_id: userId });
@@ -55,11 +86,17 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       return true;
     }
     return false;
+    });
   },
 
   unblockUser: async (userId) => {
-    const res = await blockApi.unblockUser(userId);
-    if (res.success) {
+    const current=sessionGuard();
+    if(!current())return false;
+    return serializeBlockMutation(userId,current,async()=>{
+    ++blockRevision;
+    const res = await blockApi.unblockUser(userId,{expectedUserId:useAuthStore.getState().user?.id,isCurrent:current});
+    if (current() && res.success) {
+      ++blockRevision;
       set((s) => ({
         blockedUserIds: s.blockedUserIds.filter((id) => id !== userId),
       }));
@@ -67,6 +104,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
       return true;
     }
     return false;
+    });
   },
 
   isBlocked: (userId) => {
@@ -84,6 +122,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     const myId = useAuthStore.getState().user?.id;
 
     if (data.user_id === myId) {
+      ++blockRevision;
       set((s) => {
         if (s.blockedUserIds.includes(data.blocked_user_id)) return s;
         return { blockedUserIds: [...s.blockedUserIds, data.blocked_user_id] };
@@ -98,6 +137,7 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     const myId = useAuthStore.getState().user?.id;
 
     if (data.user_id === myId) {
+      ++blockRevision;
       set((s) => {
         // Keep the same array reference when the id is already gone (e.g. the
         // optimistic unblock ran first) so subscribers don't refetch twice.
@@ -109,3 +149,12 @@ export const useBlockStore = create<BlockState>((set, get) => ({
     }
   },
 }));
+
+function resetBlockScope() {
+  ++listRequest;
+  ++blockRevision;
+  const snapshot = getAuthSessionSnapshot();
+  useBlockStore.setState({ ownerId: snapshot.ownerId, authGeneration: snapshot.generation, snapshotReady: false, blockedUserIds: EMPTY_BLOCKED, isLoading: false });
+}
+subscribeAuthOwnerChanges(resetBlockScope);
+subscribeAuthGenerationChanges(resetBlockScope);

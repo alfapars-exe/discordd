@@ -8,11 +8,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
+)
+
+const (
+	unreadDMEmailDelay = 10 * time.Minute
+	unreadDMEmailTTL   = 24 * time.Hour
 )
 
 func (s *dmService) GetMessages(ctx context.Context, userID, channelID string, beforeID string, limit int) (*models.DMMessagePage, error) {
@@ -240,6 +246,24 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 	}
 	msg.Author = models.ToPublicUser(author)
 
+	// Accepted DM messages can produce one delayed, generic notice. Pending
+	// message requests and self-DMs do not; no plaintext, sender identity, or
+	// message preview is put in the email. Delivery rechecks that this exact
+	// message still exists and remains unread.
+	if !isSelf && !becamePending && channel.Status == models.DMStatusAccepted && s.communicationEmailEnqueuer != nil {
+		now := time.Now().UTC()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, enqueueErr := s.communicationEmailEnqueuer.EnqueueWithOptions(
+			ctx, otherUserID, models.EmailCategoryCommunication, "unread-dm:"+msg.ID,
+			"You have an unread direct message", "<p>You have an unread direct message waiting in HiChat. Open HiChat to read it.</p>",
+			EmailEnqueueOptions{NotBefore: now.Add(unreadDMEmailDelay), ExpiresAt: now.Add(unreadDMEmailTTL), DMMessageID: msg.ID},
+		)
+		cancel()
+		if enqueueErr != nil {
+			dmLogger.Error("unread DM email enqueue failed", "category", models.EmailCategoryCommunication)
+		}
+	}
+
 	// Post-commit only — see broadcastNotificationCreate.
 	if requestNotif != nil {
 		requestNotif.Actor = msg.Author
@@ -338,13 +362,18 @@ func (s *dmService) EditMessage(ctx context.Context, userID, messageID string, r
 }
 
 func (s *dmService) DeleteMessage(ctx context.Context, userID, messageID string) error {
+	_, err := s.DeleteMessageWithReceipt(ctx, userID, messageID)
+	return err
+}
+
+func (s *dmService) DeleteMessageWithReceipt(ctx context.Context, userID, messageID string) (*models.DMMessageDeleteReceipt, error) {
 	msg, channel, err := s.verifyMessageAccess(ctx, userID, messageID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if msg.UserID != userID {
-		return fmt.Errorf("%w: you can only delete your own messages", pkg.ErrForbidden)
+		return nil, fmt.Errorf("%w: you can only delete your own messages", pkg.ErrForbidden)
 	}
 
 	// Pre-fetch attachment file_urls for the post-delete disk cleanup below.
@@ -356,7 +385,7 @@ func (s *dmService) DeleteMessage(ctx context.Context, userID, messageID string)
 	}
 
 	if err := s.dmRepo.DeleteMessage(ctx, messageID); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Only remove files once the DB delete has actually committed — see
@@ -384,7 +413,7 @@ func (s *dmService) DeleteMessage(ctx context.Context, userID, messageID string)
 		},
 	})
 
-	return nil
+	return &models.DMMessageDeleteReceipt{ID: messageID, DMChannelID: msg.DMChannelID, Message: "message deleted"}, nil
 }
 
 // MarkRead — membership is checked first (403 for outsiders, 404 for an
@@ -407,4 +436,19 @@ func (s *dmService) MarkRead(ctx context.Context, userID, channelID string, mess
 		},
 	})
 	return nil
+}
+
+func (s *dmService) MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error) {
+	if _, err := s.verifyChannelMembership(ctx, userID, channelID); err != nil {
+		return 0, err
+	}
+	count, err := s.dmReadRepo.MarkUnreadFrom(ctx, userID, channelID, messageID)
+	if err != nil {
+		return 0, err
+	}
+	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpDMRead, Data: map[string]any{
+		"dm_channel_id": channelID, "user_id": userID,
+		"last_read_message_id": messageID, "unread_count": count,
+	}})
+	return count, nil
 }

@@ -45,13 +45,25 @@ func (s *dmService) GetOrCreateChannel(ctx context.Context, userID, otherUserID 
 	// Platform admins bypass all DM privacy restrictions
 	sender, _ := s.userRepo.GetByID(ctx, userID)
 	isPlatformAdmin := sender != nil && sender.IsPlatformAdmin
-
-	if !isPlatformAdmin && otherUser.DMPrivacy == "friends_only" && s.friendChecker != nil {
-		friends, err := s.friendChecker.AreFriends(ctx, userID, otherUserID)
+	isFriend := false
+	if !isPlatformAdmin && s.friendChecker != nil {
+		isFriend, err = s.friendChecker.AreFriends(ctx, userID, otherUserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check friendship: %w", err)
 		}
-		if !friends {
+	}
+	if !isPlatformAdmin && !isFriend && s.serverDMPolicy != nil {
+		allowed, err := s.serverDMPolicy.CanCreate(ctx, userID, otherUserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check server DM policy: %w", err)
+		}
+		if !allowed {
+			return nil, fmt.Errorf("%w: this user disabled direct messages from shared servers", pkg.ErrForbidden)
+		}
+	}
+
+	if !isPlatformAdmin && otherUser.DMPrivacy == "friends_only" && s.friendChecker != nil {
+		if !isFriend {
 			return nil, fmt.Errorf("%w: this user only accepts messages from friends", pkg.ErrForbidden)
 		}
 	}

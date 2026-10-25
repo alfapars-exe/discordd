@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Revealed group messages expose a forwarding action through the existing message action descriptor and shared destination modal. Undecryptable content disables forwarding; quarantined/ignored content remains behind the existing gate.",
+    "The group source adapter passes only attributed plaintext, original attachment descriptors, file keys and common display identifiers, not source ciphertext as a destination payload. It tracks the selected source object in the current group; replacing/removing that source unmounts the modal and fences late preparation.",
+    "The common forwarding source type no longer requires channel/DM-only fields. Encrypted attachment materialization resolves explicit file_key_index or the existing encrypted_N.bin legacy index, preventing a retained attachment after partial upload from using a compacted-array key position. Invalid positions fail rather than guessing another key."
+  ],
+  "verification": [
+    "Group component tests cover opening forwarding from revealed content, source replacement closing it, quarantine hiding the action and undecryptable content disabling it. The modal is mocked in these group-source adapter tests.",
+    "Forward modal regressions verify explicit and legacy retained index 2 uses key 2 even when it is the only attachment, and an invalid explicit position invokes neither decryption nor destination send. Decryption is mocked; real two-client cryptographic acceptance remains separate.",
+    "Focused suites passed: 3 files / 47 tests. Final tsc -b and targeted ESLint passed. Full client suite passed: 229 files / 2210 tests in 45.97s. Vite production web build passed in 740ms. Targeted git diff --check passed; existing warning categories remain visible."
+  ],
+  "remaining": [
+    "The source guard intentionally closes on source-object replacement, including non-body updates; finer immutable-version continuity remains a usability improvement. Group source and destination paths still need actual two-client attachment/re-encryption and device acceptance.",
+    "Richer DM eligibility/block filtering, revoked-source races outside the group lifecycle and integrated P0-P11 acceptance remain open. No commit, push, merge, server migration, Windows packaging or production release performed."
+  ]
+}

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"slices"
 	"testing"
 )
@@ -18,11 +17,7 @@ func TestDeleteServerCascade_RemovesServerEmojis(t *testing.T) {
 	mustCreateEmoji(t, emojis, newEmoji("aaaaaaaaaaaaaaa1", emojiSrvA, "kedi", true, dmAlice))
 	mustCreateEmoji(t, emojis, newEmoji("aaaaaaaaaaaaaaa2", emojiSrvB, "kedi", false, dmAlice))
 
-	fkOff, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
-	if err != nil {
-		t.Fatalf("open fk-off conn: %v", err)
-	}
-	defer func() { _ = fkOff.Close() }()
+	fkOff := entranceFKOffConn(t, path)
 
 	if err := deleteServerCascade(context.Background(), fkOff, emojiSrvA); err != nil {
 		t.Fatalf("deleteServerCascade: %v", err)

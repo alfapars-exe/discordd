@@ -11,16 +11,20 @@ import * as readStateApi from "../api/readState";
 import { useServerStore } from "./serverStore";
 import { useChannelStore } from "./channelStore";
 
+const unreadFetchGeneration = new Map<string, number>();
+
 type ReadStateState = {
   /** channelId -> unread count (global, not per-server) */
   unreadCounts: Record<string, number>;
+  /** Local event revisions prevent an in-flight server snapshot overwriting newer WS deltas. */
+  unreadRevisions: Record<string, number>;
   /** channelId -> serverId mapping for per-server aggregation */
   channelServerMap: Record<string, string>;
   /** channelId -> set of mention message IDs the user has already seen */
   seenMentions: Record<string, Set<string>>;
 
   /** Fetch unread counts for a specific server and merge into global state */
-  fetchUnreadCounts: (serverId: string) => Promise<void>;
+  fetchUnreadCounts: (serverId: string, options?: { timeoutMs?: number; isCurrent?: () => boolean }) => Promise<void>;
   /** Fetch unread counts for ALL servers the user belongs to */
   fetchAllUnreadCounts: () => Promise<void>;
   markAsRead: (channelId: string, lastMessageId: string) => void;
@@ -44,12 +48,18 @@ type ReadStateState = {
 
 export const useReadStateStore = create<ReadStateState>((set, get) => ({
   unreadCounts: {},
+  unreadRevisions: {},
   channelServerMap: {},
   seenMentions: {},
 
-  fetchUnreadCounts: async (serverId: string) => {
-    const res = await readStateApi.getUnreadCounts(serverId);
-    if (res.success && res.data) {
+  fetchUnreadCounts: async (serverId: string, options) => {
+    const fetchGeneration = (unreadFetchGeneration.get(serverId) ?? 0) + 1;
+    unreadFetchGeneration.set(serverId, fetchGeneration);
+    const revisionsAtRequest = { ...get().unreadRevisions };
+    const res = await readStateApi.getUnreadCounts(serverId, options);
+    if (res.success && res.data &&
+      unreadFetchGeneration.get(serverId) === fetchGeneration &&
+      (!options?.isCurrent || options.isCurrent())) {
       const mutedChannelIds = useChannelStore.getState().mutedChannelIds;
       const mutedServerIds = useServerStore.getState().mutedServerIds;
       const isServerMuted = mutedServerIds.has(serverId);
@@ -61,7 +71,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
 
         // Remove stale entries for this server
         for (const [chId, sid] of Object.entries(state.channelServerMap)) {
-          if (sid === serverId) {
+          if (sid === serverId && (state.unreadRevisions[chId] ?? 0) === (revisionsAtRequest[chId] ?? 0)) {
             delete nextCounts[chId];
           }
         }
@@ -69,7 +79,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
         // Add fresh counts (skip muted)
         for (const info of res.data!) {
           nextMap[info.channel_id] = serverId;
-          if (!isServerMuted && !mutedChannelIds.has(info.channel_id)) {
+          if ((state.unreadRevisions[info.channel_id] ?? 0) === (revisionsAtRequest[info.channel_id] ?? 0) && !isServerMuted && !mutedChannelIds.has(info.channel_id)) {
             nextCounts[info.channel_id] = info.unread_count;
           }
         }
@@ -97,7 +107,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
       if (!state.unreadCounts[channelId]) return state;
       const next = { ...state.unreadCounts };
       delete next[channelId];
-      return { unreadCounts: next };
+      return { unreadCounts: next, unreadRevisions: { ...state.unreadRevisions, [channelId]: (state.unreadRevisions[channelId] ?? 0) + 1 } };
     });
 
     // Fire-and-forget to backend
@@ -110,6 +120,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
         ...state.unreadCounts,
         [channelId]: (state.unreadCounts[channelId] ?? 0) + 1,
       },
+      unreadRevisions: { ...state.unreadRevisions, [channelId]: (state.unreadRevisions[channelId] ?? 0) + 1 },
     }));
   },
 
@@ -121,7 +132,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
       if (current === 1) {
         const next = { ...state.unreadCounts };
         delete next[channelId];
-        return { unreadCounts: next };
+        return { unreadCounts: next, unreadRevisions: { ...state.unreadRevisions, [channelId]: (state.unreadRevisions[channelId] ?? 0) + 1 } };
       }
 
       return {
@@ -129,6 +140,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
           ...state.unreadCounts,
           [channelId]: current - 1,
         },
+        unreadRevisions: { ...state.unreadRevisions, [channelId]: (state.unreadRevisions[channelId] ?? 0) + 1 },
       };
     });
   },
@@ -138,7 +150,7 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
       if (!state.unreadCounts[channelId]) return state;
       const next = { ...state.unreadCounts };
       delete next[channelId];
-      return { unreadCounts: next };
+      return { unreadCounts: next, unreadRevisions: { ...state.unreadRevisions, [channelId]: (state.unreadRevisions[channelId] ?? 0) + 1 } };
     });
   },
 
@@ -186,12 +198,14 @@ export const useReadStateStore = create<ReadStateState>((set, get) => ({
     // Clear only this server's counts locally
     set((state) => {
       const nextCounts = { ...state.unreadCounts };
+      const nextRevisions = { ...state.unreadRevisions };
       for (const [chId, sid] of Object.entries(state.channelServerMap)) {
         if (sid === serverId) {
           delete nextCounts[chId];
+          if (state.unreadCounts[chId]) nextRevisions[chId] = (nextRevisions[chId] ?? 0) + 1;
         }
       }
-      return { unreadCounts: nextCounts };
+      return { unreadCounts: nextCounts, unreadRevisions: nextRevisions };
     });
 
     const res = await readStateApi.markAllRead(serverId);

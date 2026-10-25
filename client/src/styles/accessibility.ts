@@ -18,6 +18,9 @@
 
 export type Density = "compact" | "default" | "cozy";
 export type MessageStyle = "default" | "compact";
+export type StickerAnimationMode = "always" | "interaction" | "never";
+export type RoleColorMode = "names" | "dots" | "hidden";
+export type OfficialMessageStyle = "default" | "subtle" | "prominent";
 
 export type AccessibilityState = {
   // ─── Text Readability ────────────────────────────────────────────────
@@ -41,20 +44,34 @@ export type AccessibilityState = {
   saturation: number;
   /** Apply the saturation filter to custom role colors as well. */
   saturateCustomColors: boolean;
+  highContrast: boolean;
+  syncHighContrast: boolean;
+  showSwitchIndicators: boolean;
+  roleColorMode: RoleColorMode;
+  officialMessageStyle: OfficialMessageStyle;
 
   // ─── Reduced Motion ──────────────────────────────────────────────────
   /** Globally cuts transition + animation durations to 0ms. */
   reduceMotion: boolean;
+  /** Follow the operating-system prefers-reduced-motion setting. */
+  syncReducedMotion: boolean;
   /** Suppress animated server / message emoji (renders the static frame). */
   disableAnimatedEmoji: boolean;
   /** Autoplay attached GIF media. Off = play on hover/click only. */
   autoplayGifs: boolean;
+  stickerAnimation: StickerAnimationMode;
 
   // ─── Audio & Screen Reader ───────────────────────────────────────────
   /** New-message / mention notification sound master volume. 0-100. */
   notificationSoundVolume: number;
   /** Pipe incoming messages through SpeechSynthesis (best effort browser TTS). */
   ttsEnabled: boolean;
+  /** Browser speech synthesis rate (0.5-2.0). */
+  ttsRate: number;
+  /** Minimum lifetime for eligible app-created OS notifications. */
+  notificationDuration: 3 | 5 | 10 | 15 | 20;
+  showImageDescriptions: boolean;
+  legacyComposer: boolean;
 };
 
 export const DEFAULT_ACCESSIBILITY: AccessibilityState = {
@@ -66,11 +83,22 @@ export const DEFAULT_ACCESSIBILITY: AccessibilityState = {
   messageGroupGapPx: 16,
   saturation: 100,
   saturateCustomColors: false,
+  highContrast: false,
+  syncHighContrast: true,
+  showSwitchIndicators: false,
+  roleColorMode: "names",
+  officialMessageStyle: "default",
   reduceMotion: false,
+  syncReducedMotion: true,
   disableAnimatedEmoji: false,
   autoplayGifs: true,
+  stickerAnimation: "interaction",
   notificationSoundVolume: 80,
   ttsEnabled: false,
+  ttsRate: 1,
+  notificationDuration: 5,
+  showImageDescriptions: false,
+  legacyComposer: false,
 };
 
 /** Map the density radio onto a multiplier consumed by spacing CSS. */
@@ -100,13 +128,20 @@ export function applyAccessibility(s: AccessibilityState): void {
   root.style.setProperty("--density-scale", densityScale(s.density));
   root.style.setProperty("--msg-group-gap", `${s.messageGroupGapPx}px`);
   root.style.setProperty("--saturation", `${s.saturation}%`);
+  const osReduced = s.syncReducedMotion && typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const effectiveReducedMotion = s.reduceMotion || osReduced;
+  const osHighContrast = s.syncHighContrast && typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" && (
+      window.matchMedia("(prefers-contrast: more)").matches || window.matchMedia("(forced-colors: active)").matches
+    );
   root.style.setProperty(
     "--motion-duration",
-    s.reduceMotion ? "0ms" : "200ms",
+    effectiveReducedMotion ? "0ms" : "200ms",
   );
   // `--motion-scale` is consumed by transform-based hover effects so they
   // collapse to no movement instead of an animation that just runs faster.
-  root.style.setProperty("--motion-scale", s.reduceMotion ? "1" : "1.05");
+  root.style.setProperty("--motion-scale", effectiveReducedMotion ? "1" : "1.05");
 
   // ─── Body modifier classes (presence-based switches) ──────────────────
   const body = document.body;
@@ -117,5 +152,7 @@ export function applyAccessibility(s: AccessibilityState): void {
   body.classList.toggle("no-animated-emoji", s.disableAnimatedEmoji);
   body.classList.toggle("no-gif-autoplay", !s.autoplayGifs);
   body.classList.toggle("display-name-plain", !s.showDisplayNameStyles);
-  body.classList.toggle("reduce-motion", s.reduceMotion);
+  body.classList.toggle("reduce-motion", effectiveReducedMotion);
+  body.classList.toggle("high-contrast", s.highContrast || osHighContrast);
+  body.classList.toggle("switch-indicators", s.showSwitchIndicators);
 }

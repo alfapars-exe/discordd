@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Added a monotonic resultConfirmed receipt inside the encrypted pending-send manifest. Confirmation and file acknowledgement updates share guarded compare-and-swap logic, preserve one another under concurrent writes, reseal only the manifest and never recreate deleted records.",
+    "After a validated committed response, confirmation persistence precedes source receipt updates and local record cleanup. If persistence fails, the original record and live lookup-only fence are retained with a recovery error; server success is not reclassified as unsent.",
+    "Restoration loads a successfully persisted confirmation as resultConfirmed/lookupOnly. Later missing or prepared server outcomes cannot replay that restored operation. The marker is a local authenticated bookkeeping receipt, not a server signature or substitute for current membership/result authorization."
+  ],
+  "verification": [
+    "Storage integration verifies concurrent confirmation and file acknowledgements, unchanged sealed file bytes and wire payload, connection restart, idempotent repeated confirmation and no recreation after deletion.",
+    "Real IndexedDB/WebCrypto store integration sends once, injects cleanup failure, closes/reopens storage, restores the confirmation and verifies a missing lookup does not POST. A subsequent valid completed lookup finishes cleanup without another POST. Store regression verifies confirmation-write failure retains the record and live fence.",
+    "Initial TypeScript validation rejected incomplete test message fixtures; replaced them with complete typed message data. Focused suites then passed: 3 files / 73 tests before the final write-failure regression was added.",
+    "Final tsc -b and targeted ESLint passed. Full client regression passed: 228 files / 2187 tests in 46.46s. Vite production web build passed in 767ms. Existing test/build warning categories remain visible."
+  ],
+  "remaining": [
+    "A process crash or storage failure before the confirmation write commits still relies on the existing durable request ID and authorized idempotent outcome flow. This local test is not actual Electron/process, cross-tab or two-client acceptance.",
+    "Missing-source repair/discard UX, unknown-index provenance, large-file pressure and integrated P0-P11/Windows acceptance remain open. No commit, push, merge, production migration or release performed."
+  ]
+}

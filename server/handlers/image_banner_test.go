@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"image"
 	"image/color"
@@ -64,6 +65,31 @@ func TestResizeBannerBytes_AnimatedGIFUsesFirstFrame(t *testing.T) {
 	w, h, _ := bannerDims(t, src)
 	if w != 500 || h != 200 {
 		t.Errorf("dims = %dx%d, want 500x200", w, h)
+	}
+}
+
+func TestProcessBanner_AnimatedGIFReturnsPosterAndBoundedAnimation(t *testing.T) {
+	src := buildTestGIF(t, 3, 1000, 400, false, nil, 0)
+	result, err := ProcessBanner(context.Background(), bytes.NewReader(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Static) == 0 || len(result.Animated) == 0 {
+		t.Fatal("missing poster or animation")
+	}
+	poster, _, err := image.Decode(bytes.NewReader(result.Static))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if poster.Bounds().Dx() != 1000 || poster.Bounds().Dy() != 400 {
+		t.Fatalf("poster=%v", poster.Bounds())
+	}
+	animated, _, err := image.Decode(bytes.NewReader(result.Animated))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if animated.Bounds().Dx() != animatedBannerMaxW || animated.Bounds().Dy() != animatedBannerMaxW*bannerAspectH/bannerAspectW {
+		t.Fatalf("animation=%v", animated.Bounds())
 	}
 }
 

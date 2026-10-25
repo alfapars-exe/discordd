@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Tail, older-page, newer-page and around-message loads capture account, composer generation and local device before network work. Abandoned responses are rejected before decrypting; guards also reach asynchronous historical decryption and prevent stale publication.",
+    "Tail loads retain their abort controller throughout decryption. Older/newer pages reject a replaced history window instead of merging into a different window. Newer-page locks use request identities; invalidation releases old locks without allowing their eventual finally block to release a replacement request.",
+    "Fetch-cache invalidation clears newer-page requests and the message loading indicator as well as existing history/around-request state."
+  ],
+  "verification": [
+    "Targeted dmStore suite passed: 39 tests. Added account/generation/device response rejection, invalidation while decryption is pending, replaced older-page window and overlapping invalidated/replacement newer-page request regressions.",
+    "TypeScript tsc -b, targeted ESLint and targeted git diff --check passed.",
+    "Full client suite passed: 230 files / 2261 tests in 46.61s. Vite production build passed in 696ms with existing chunk/dynamic-import warnings."
+  ],
+  "remaining": [
+    "Per-message WS edit/delete versus historical response ordering and monotonic cache-write arbitration remain open. A versioned cache read cannot by itself prevent an older asynchronous write from replacing a newer cache entry.",
+    "Window replacement during pagination conservatively discards that page; retry usability and live multi-client behavior still need browser acceptance. Network error handling and cross-tab session/cache atomicity need further verification.",
+    "This is not full P1 or P4 acceptance. Real device/two-client tests, remaining P0-P11 work, packaging and release remain open. No GitHub or production mutation performed."
+  ]
+}

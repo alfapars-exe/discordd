@@ -1,0 +1,22 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Working presentation controls for the passive screen-positioned voice widget and its labeled sample preview; not game-window-aware overlay acceptance.",
+  "implementation": [
+    "Small/large avatars, always/speaking/hidden names, always/speaking participant filtering and a 0-Off through 25 participant cap affect the actual renderer and preview. AppLayout sends the exact validated native fields and at most 64 source participants; Off hides the widget without changing the master preference.",
+    "All nine overlay preferences are device-local in both sync directions. Historical account data is not deleted; cached pending overlay patches are filtered while unrelated audio preferences continue synchronizing. Local choices survive account reset and server hydration.",
+    "Malformed legacy local values and nonfinite numeric edits are repaired before they can stall the strict IPC contract. Defaults are small avatars, always-visible names and maximum 25 participants.",
+    "The shared stylesheet is explicitly loaded by the overlay entry. Rows use border-box 36/48px heights, bounded ellipsized names and transform-aware width limits. A pure native geometry helper sizes and positions the window before display and clamps to the primary display workarea, including negative origins; the effective row cap can fall below the configured maximum when physical space is insufficient."
+  ],
+  "verification": [
+    "Agent five focused client files passed 81 tests, TypeScript and scoped ESLint. Parent subsequent preference/legacy-repair/renderer subscription selection passed 56 tests.",
+    "Parent Electron compilation and complete native test suite passed 103 tests, including strict option defaults/bounds, IPC sender checks, loading lifecycle and geometry at 0/1/25 users, both avatar sizes, scales 75/100/150 and all corners.",
+    "Parent final complete client suite after all option, migration and legacy-repair changes passed: 307 files, 2849 tests, zero failures. Report C:/Users/PARS/AppData/Local/Temp/hichat-widget-controls-verified-20261025.json. Client TypeScript, scoped ESLint and Vite production build passed; existing chunk/dynamic-import warnings remain. Coverage structure and all 32 validator regressions passed, but acceptance is explicitly incomplete."
+  ],
+  "open": [
+    "Actual Windows overlay paint, workarea changes, multi-monitor and device acceptance",
+    "Real-browser visual acceptance at required breakpoints and zoom",
+    "Reachable overflow behavior when physical display space cannot show the configured count",
+    "Game-window detection, windowed/borderless attachment, game-specific controls, remaining widgets and full P11/release acceptance"
+  ],
+  "release": "No game process injection, game launch, commit, push, merge or production publication."
+}

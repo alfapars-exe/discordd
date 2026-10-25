@@ -1,0 +1,19 @@
+{
+  "item": "p2.persistent-call-identity",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "storage": "Per-user and per-device identity pins are stored in IndexedDB and included in encrypted, explicitly restored key backups.",
+    "verification": "The DM safety-number panel marks only an identity key already pinned on this device as manually verified.",
+    "key_change": "Both outbound prekey processing and inbound prekey-message processing compare the pinned identity key, emit an identity-change alert, and reset verified to false on a changed key.",
+    "visibility": "Identity changes are ingested by the E2EE store and surfaced in the DM trust warning and safety-number panel."
+  },
+  "automated_verification": [
+    {
+      "command": "vitest run src/crypto/signalProtocol.test.ts src/crypto/keyStorage.test.ts src/crypto/keyBackup.test.ts src/crypto/safetyNumber.test.ts src/stores/e2eeStore.test.ts",
+      "working_directory": "client",
+      "result": "5 files and 110 tests passed"
+    }
+  ],
+  "remaining_acceptance": "Verify identity persistence and the re-verification warning with two real clients across logout/login, permitted restore, and a regenerated peer identity."
+}

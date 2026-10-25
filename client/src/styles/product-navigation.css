@@ -1,0 +1,59 @@
+/* Focused navigation. Uses the existing theme tokens; no preference migration. */
+.home-welcome { flex-direction:column;gap:16px;text-align:center;padding:32px; }
+.home-welcome h1 { margin:0;color:var(--t0);font-size:clamp(24px,3vw,36px); }
+.home-welcome p { max-width:420px;margin:0;color:var(--t2);font-size:16px;line-height:1.6; }
+.home-welcome > span { color:var(--t3);font-size:13px; }
+.home-welcome-icon { display:grid;place-items:center;width:72px;height:72px;border-radius:24px;background:var(--bg-4);color:var(--primary);font-size:40px; }
+.home-welcome-actions { display:flex;gap:12px;flex-wrap:wrap;justify-content:center; }
+.ch-tree-section-heading { display:flex;align-items:center; }
+.ch-tree-section-heading .ch-tree-section-header { flex:1;min-width:0; }
+.ch-new-conversation { flex-shrink:0;width:36px;height:36px;margin-right:8px;border:0;border-radius:6px;background:transparent;color:var(--t2);font-size:22px;cursor:pointer; }
+.ch-new-conversation:hover { background:var(--bg-4);color:var(--t0); }
+.new-conversation-overlay { position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(0,0,0,.65);padding:16px; }
+.new-conversation { width:min(440px,100%);max-height:85dvh;overflow:auto;padding:24px;background:var(--bg-2);color:var(--t0);border:1px solid var(--b1);border-radius:14px;box-shadow:0 20px 60px #0006; }
+.new-conversation header { display:flex;align-items:center;justify-content:space-between;gap:16px; }
+.new-conversation h2 { margin:0;font-size:22px; }
+.new-conversation header button { width:36px;height:36px;border:0;background:transparent;color:var(--t2);font-size:24px;cursor:pointer; }
+.new-conversation p { color:var(--t2);font-size:14px;line-height:1.5;margin:12px 0; }
+.new-conversation-list { max-height:320px;overflow:auto;margin:12px 0; }
+.new-conversation-list > button { display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:8px;border:0;border-radius:8px;background:transparent;color:var(--t0);text-align:left;cursor:pointer; }
+.new-conversation-list > button:hover { background:var(--bg-4); }
+.new-conversation-list > button:disabled { opacity:.6;cursor:wait; }
+.new-conversation-list span { min-width:0;overflow-wrap:anywhere; }
+.new-conversation-list small { display:block;color:var(--t2);font-size:12px; }
+.new-conversation .new-conversation-error { color:var(--red); }
+.new-conversation button:focus-visible,.ch-new-conversation:focus-visible { outline:2px solid var(--primary);outline-offset:-2px; }
+.ch-navigation { display:flex;gap:4px;padding:4px 10px 10px;position:sticky;top:0;background:var(--bg-2);z-index:2; }
+.ch-navigation button { flex:1;min-height:36px;padding:7px;border:0;border-radius:7px;background:transparent;color:var(--t2);font:inherit;font-size:13px;cursor:pointer; }
+.ch-navigation button[aria-pressed="true"] { background:var(--bg-4);color:var(--t0);font-weight:600; }
+.ch-navigation button:hover { background:var(--bg-h); }
+.ch-navigation button:focus-visible,.settings-nav-item:focus-visible { outline:2px solid var(--primary);outline-offset:-2px; }
+.settings-nav--searchable { width:240px; }
+.settings-nav-search { display:flex;align-items:center;gap:4px;border:1px solid var(--input-border);border-radius:7px;background:var(--input-bg);margin:0 4px 8px;flex-shrink:0; }
+.settings-nav-search input { width:100%;min-width:0;height:40px;padding:0 10px;background:transparent;border:0;color:var(--t0);font:inherit;font-size:14px; }
+.settings-nav-search:focus-within { outline:2px solid var(--primary);outline-offset:2px; }
+.settings-nav-search input:focus { outline:none; }
+.settings-nav-search button { min-width:32px;min-height:36px;border:0;background:transparent;color:var(--t1);font-size:20px;cursor:pointer; }
+.settings-nav-empty { padding:12px;color:var(--t2);font-size:13px; }
+.settings-nav-group + .settings-nav-group { border-top:1px solid var(--b1);margin-top:12px;padding-top:4px; }
+.settings-nav-group .settings-nav-item { min-height:36px; }
+.settings-nav-select { min-height:44px;width:100%;border:1px solid var(--input-border);border-radius:7px;padding:8px;background:var(--input-bg);color:var(--t0);font:inherit; }
+.settings-nav-select option,.settings-nav-select optgroup { background:var(--bg-2);color:var(--t0); }
+.channel-bar .ch-search-trigger { width:auto;min-width:32px;gap:8px;padding:0 10px; }
+.ch-search-trigger span { font-size:13px; }
+.channel-bar { min-height:48px; }
+.channel-bar .ch-actions button { min-height:32px; }
+@media (min-width:769px) {
+  .settings-overlay { justify-content:center;padding:clamp(16px,4vh,48px) 24px;gap:0; }
+  .settings-nav--searchable { border-radius:12px 0 0 12px;box-shadow:none; }
+  .settings-content { border-radius:0 12px 12px 0;box-shadow:none;padding-top:48px; }
+}
+@media (max-width:768px) {
+  /* Replaces the old rule that hid all settings navigation on phones. */
+  .settings-nav.settings-nav--searchable { display:flex;flex-direction:column;width:100%;max-height:190px;overflow-y:auto;padding:8px;gap:4px; }
+  .settings-nav-search { margin:0; }
+  .settings-nav--searchable .settings-nav-logout { align-self:flex-start;margin:0;border:0;padding:4px 8px;min-height:36px; }
+  .settings-content-wrap { min-height:0; }
+  .ch-search-trigger span { display:none; }
+  .ch-navigation button { min-height:44px; }
+}

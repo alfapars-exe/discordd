@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../../stores/voiceStore";
 import { isElectron } from "../../../utils/constants";
 import { formatKeyCode } from "./keyCodeLabel";
+import { beginShortcutCapture } from "../../../stores/shortcutCaptureStore";
 
 /** Modifier-only key codes — not usable as a standalone hotkey binding. */
 const MODIFIER_ONLY_CODES = new Set([
@@ -56,6 +57,7 @@ function MuteHotkeySection() {
   // ─── Mute Hotkey Binding ───
   useEffect(() => {
     if (!isListeningKey) return;
+    const stopCapture = beginShortcutCapture();
 
     function handleKeyDown(e: KeyboardEvent) {
       e.preventDefault();
@@ -86,6 +88,7 @@ function MuteHotkeySection() {
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
+      stopCapture();
     };
   }, [isListeningKey, setMuteHotkey, inputMode, pttKey]);
 

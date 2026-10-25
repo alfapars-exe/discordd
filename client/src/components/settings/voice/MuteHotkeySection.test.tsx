@@ -16,7 +16,7 @@ import { useVoiceStore } from "../../../stores/voiceStore";
 // Same trio ConnectionQualityIndicator.test.tsx mocks — avoids dragging in
 // real network/audio side effects from the (otherwise real) voiceStore.
 vi.mock("../../../api/voice", () => ({ getVoiceToken: vi.fn() }));
-vi.mock("../../../api/client", () => ({ ensureFreshToken: vi.fn() }));
+vi.mock("../../../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: () => 1 }));
 vi.mock("../../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),

@@ -47,6 +47,9 @@ func mustCreateEntranceSound(t *testing.T, repo EntranceRepository, s *models.En
 // Turso condition — closed with the test.
 func entranceFKOffConn(t *testing.T, path string) *sql.DB {
 	t.Helper()
+	if database.IsPostgresDSN(path) {
+		return postgresFixtureFKOffConn(t, path)
+	}
 	conn, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatalf("open fk-off conn: %v", err)

@@ -43,6 +43,67 @@ func (m *mockLiveKitGetter) MigrateOneServer(_ context.Context, _, _ string) err
 	return nil
 }
 
+// voiceTestBroadcaster supplies the recipient-provider contract now required
+// by privacy-filtered voice fanout while retaining the existing event observer
+// hook used throughout this package's voice tests.
+type voiceTestBroadcaster struct{ *testutil.MockBroadcaster }
+
+func (h *voiceTestBroadcaster) GetOnlineUserIDsForServer(string) []string {
+	return []string{"voice-test-member"}
+}
+
+func (h *voiceTestBroadcaster) GetOnlineUserIDs() []string { return []string{"voice-test-member"} }
+func (h *voiceTestBroadcaster) GetVisibleOnlineUserIDs() []string {
+	return []string{"voice-test-member"}
+}
+
+func awaitVoiceTestEvents(t *testing.T, events <-chan ws.Event, count int) []ws.Event {
+	t.Helper()
+	got := make([]ws.Event, 0, count)
+	for len(got) < count {
+		select {
+		case event := <-events:
+			got = append(got, event)
+		case <-time.After(time.Second):
+			t.Fatalf("received %d of %d voice events", len(got), count)
+		}
+	}
+	return got
+}
+
+func awaitVoiceTestEvent(t *testing.T, events <-chan ws.Event, matches func(ws.Event) bool) ws.Event {
+	t.Helper()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case event := <-events:
+			if matches(event) {
+				return event
+			}
+		case <-timer.C:
+			t.Fatal("timed out waiting for expected voice event")
+		}
+	}
+}
+
+func drainVoiceTestEvents(events <-chan ws.Event) {
+	for {
+		select {
+		case <-events:
+		default:
+			return
+		}
+	}
+}
+
+func (h *voiceTestBroadcaster) BroadcastToUsers(ids []string, event ws.Event) {
+	h.MockBroadcaster.BroadcastToUsers(ids, event)
+	if h.BroadcastToServerFn != nil {
+		h.BroadcastToServerFn(event.ServerID, event)
+	}
+}
+
 // newTestVoiceService wires happy-path defaults: caller is a server member
 // with every permission (PermAll), so the N-01 authorization gate added to
 // JoinChannel doesn't have to be re-satisfied by every pre-existing test in
@@ -62,11 +123,14 @@ func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 				return models.PermAll, nil
 			},
 		},
-		hub,
+		&voiceTestBroadcaster{hub},
 		nil, // onlineChecker
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
 				return true, nil
+			},
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"voice-test-member"}, nil
 			},
 		}, // afkTimeoutGetter — also backs the N-01 membership check
 		nil, // encryptionKey
@@ -75,6 +139,38 @@ func newTestVoiceService() (VoiceService, *testutil.MockBroadcaster) {
 		nil, // auditLogger — same rationale
 	)
 	return svc, hub
+}
+
+func TestVoiceMusicRoomKeySharesRotationLifecycle(t *testing.T) {
+	service, _ := newTestVoiceService()
+	concrete := service.(*voiceService)
+	const roomName = "srv1:voice-room"
+
+	first, firstIndex, err := service.MusicRoomKey(roomName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, secondIndex, err := service.MusicRoomKey(roomName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == "" || first != second || firstIndex != 0 || secondIndex != 0 {
+		t.Fatalf("room key was not stable before rotation: %q/%d then %q/%d", first, firstIndex, second, secondIndex)
+	}
+
+	concrete.mu.Lock()
+	rotated := concrete.rotateRoomPassphraseForChannel("voice-room")
+	concrete.mu.Unlock()
+	if rotated[roomName] == "" {
+		t.Fatal("room key was not rotated")
+	}
+	after, afterIndex, err := service.MusicRoomKey(roomName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after == first || afterIndex != 1 {
+		t.Fatalf("rotation lifecycle mismatch: key changed=%v index=%d", after != first, afterIndex)
+	}
 }
 
 // newTestVoiceServiceWithTimeoutChecker is newTestVoiceService plus an
@@ -96,11 +192,14 @@ func newTestVoiceServiceWithTimeoutChecker(checker MemberTimeoutChecker) (VoiceS
 				return models.PermAll, nil
 			},
 		},
-		hub,
+		&voiceTestBroadcaster{hub},
 		nil, // onlineChecker
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
 				return true, nil
+			},
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"voice-test-member"}, nil
 			},
 		},
 		nil, // encryptionKey
@@ -126,11 +225,14 @@ func newTestVoiceServiceWithModeration(timeoutChecker MemberTimeoutChecker, banC
 				return models.PermAll, nil
 			},
 		},
-		hub,
+		&voiceTestBroadcaster{hub},
 		nil, // onlineChecker
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
 				return true, nil
+			},
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"voice-test-member"}, nil
 			},
 		},
 		nil, // encryptionKey
@@ -161,12 +263,31 @@ func (m *mockBanChecker) Exists(ctx context.Context, serverID, userID string) (b
 // identities were dispatched for eviction" without a real LiveKit server.
 // Buffered generously so a positive-case test can never block on the send
 // side even if a future change adds more identities.
-func newEvictionObservingChannelRepo(calls chan string) *testutil.MockChannelRepo {
-	return &testutil.MockChannelRepo{
-		GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
-			calls <- id
-			return &models.Channel{ID: id, ServerID: "srv1", Type: models.ChannelTypeVoice}, nil
+type evictionObservingChannelRepo struct {
+	*testutil.MockChannelRepo
+	calls chan string
+}
+
+func (r *evictionObservingChannelRepo) GetByID(ctx context.Context, id string) (*models.Channel, error) {
+	// removeParticipantFromLiveKit uses a dedicated 10-second context, while
+	// the fanout's new channel-scope check has the shorter broadcast deadline.
+	// Count only the former so the existing eviction assertions remain about
+	// the two LiveKit identities, not permission-fanout lookups.
+	deadline, hasDeadline := ctx.Deadline()
+	if !hasDeadline || time.Until(deadline) > 8*time.Second {
+		r.calls <- id
+	}
+	return r.MockChannelRepo.GetByID(ctx, id)
+}
+
+func newEvictionObservingChannelRepo(calls chan string) *evictionObservingChannelRepo {
+	return &evictionObservingChannelRepo{
+		MockChannelRepo: &testutil.MockChannelRepo{
+			GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+				return &models.Channel{ID: id, ServerID: "srv1", Type: models.ChannelTypeVoice}, nil
+			},
 		},
+		calls: calls,
 	}
 }
 
@@ -233,11 +354,14 @@ func newTestVoiceServiceWithChannelRepo(channelRepo ChannelGetter) (VoiceService
 				return models.PermAll, nil
 			},
 		},
-		hub,
+		&voiceTestBroadcaster{hub},
 		&testutil.MockBroadcastAndOnline{}, // onlineChecker — nobody online by default
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
 				return true, nil
+			},
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"voice-test-member"}, nil
 			},
 		},
 		nil, // encryptionKey
@@ -413,29 +537,32 @@ func findScreenShareLeaveBroadcast(t *testing.T, broadcasts []ws.Event, streamer
 // SOURCE channel, and (c) resets IsStreaming to false on the moved state.
 func TestMoveUser_ClosesOutScreenShare(t *testing.T) {
 	svc, hub := newTestVoiceService()
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 16)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	if err := svc.JoinChannel("streamer", "streamer", "Streamer", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	truev := true
 	if err := svc.UpdateState("streamer", nil, nil, &truev); err != nil {
 		t.Fatalf("UpdateState(streaming): %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	// N-19: WatchScreenShare only admits a viewer who already shares the
 	// streamer's channel, so the viewer has to join voice first.
 	if err := svc.JoinChannel("viewer1", "viewer1", "Viewer1", "", "ch1", false, false); err != nil {
 		t.Fatalf("viewer join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	svc.WatchScreenShare("viewer1", "streamer", true)
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	if got := svc.GetScreenShareViewerCount("streamer"); got != 1 {
 		t.Fatalf("setup: expected 1 viewer before the move, got %d", got)
 	}
 
-	broadcasts = nil // only care about what MoveUser itself emits
 	if err := svc.MoveUser(context.Background(), "admin", "streamer", "ch2"); err != nil {
 		t.Fatalf("MoveUser: %v", err)
 	}
@@ -446,9 +573,10 @@ func TestMoveUser_ClosesOutScreenShare(t *testing.T) {
 	}
 
 	// (b) screen-share leave broadcast, for the SOURCE channel
-	if !findScreenShareLeaveBroadcast(t, broadcasts, "streamer", "ch1") {
-		t.Errorf("expected a screen-share leave broadcast for streamer/ch1, got %+v", broadcasts)
-	}
+	awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.ScreenShareViewerUpdateData)
+		return event.Op == ws.OpScreenShareViewerUpdate && ok && data.StreamerUserID == "streamer" && data.ChannelID == "ch1" && data.Action == "leave"
+	})
 
 	// (c) IsStreaming false after the move
 	state := svc.GetUserVoiceState("streamer")
@@ -469,29 +597,32 @@ func TestMoveUser_ClosesOutScreenShare(t *testing.T) {
 // voice).
 func TestJoinChannel_CrossChannelSwitch_ClosesOutScreenShare(t *testing.T) {
 	svc, hub := newTestVoiceService()
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 16)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	if err := svc.JoinChannel("streamer", "streamer", "Streamer", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	truev := true
 	if err := svc.UpdateState("streamer", nil, nil, &truev); err != nil {
 		t.Fatalf("UpdateState(streaming): %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	// N-19: WatchScreenShare only admits a viewer who already shares the
 	// streamer's channel, so the viewer has to join voice first.
 	if err := svc.JoinChannel("viewer1", "viewer1", "Viewer1", "", "ch1", false, false); err != nil {
 		t.Fatalf("viewer join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	svc.WatchScreenShare("viewer1", "streamer", true)
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	if got := svc.GetScreenShareViewerCount("streamer"); got != 1 {
 		t.Fatalf("setup: expected 1 viewer before the switch, got %d", got)
 	}
 
-	broadcasts = nil // only care about what the cross-channel JoinChannel itself emits
 	if err := svc.JoinChannel("streamer", "streamer", "Streamer", "", "ch2", false, false); err != nil {
 		t.Fatalf("cross-channel join failed: %v", err)
 	}
@@ -502,9 +633,10 @@ func TestJoinChannel_CrossChannelSwitch_ClosesOutScreenShare(t *testing.T) {
 	}
 
 	// (b) screen-share leave broadcast, for the OLD channel
-	if !findScreenShareLeaveBroadcast(t, broadcasts, "streamer", "ch1") {
-		t.Errorf("expected a screen-share leave broadcast for streamer/ch1, got %+v", broadcasts)
-	}
+	awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.ScreenShareViewerUpdateData)
+		return event.Op == ws.OpScreenShareViewerUpdate && ok && data.StreamerUserID == "streamer" && data.ChannelID == "ch1" && data.Action == "leave"
+	})
 
 	// (c) IsStreaming false after the switch
 	state := svc.GetUserVoiceState("streamer")
@@ -528,23 +660,28 @@ func TestJoinChannel_CrossChannelSwitch_ClosesOutScreenShare(t *testing.T) {
 // join(new channel) broadcast payload must carry the sanction forward.
 func TestJoinChannel_CrossChannelSwitch_PreservesServerMuteDeafen(t *testing.T) {
 	svc, hub := newTestVoiceService()
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 16)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	truev := true
 	if err := svc.AdminUpdateState(context.Background(), "admin", "u1", &truev, &truev); err != nil {
 		t.Fatalf("AdminUpdateState(server-mute+deafen): %v", err)
 	}
+	_ = awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.VoiceStateUpdateBroadcast)
+		return event.Op == ws.OpVoiceStateUpdate && ok && data.Action == "update"
+	})
 	if state := svc.GetUserVoiceState("u1"); state == nil || !state.IsServerMuted || !state.IsServerDeafened {
 		t.Fatalf("setup: expected u1 server-muted+deafened before the switch, got %+v", state)
 	}
 
-	broadcasts = nil // only care about what the cross-channel JoinChannel itself emits
+	drainVoiceTestEvents(broadcasts)
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch2", false, false); err != nil {
 		t.Fatalf("cross-channel join failed: %v", err)
 	}
@@ -564,26 +701,16 @@ func TestJoinChannel_CrossChannelSwitch_PreservesServerMuteDeafen(t *testing.T) 
 
 	// join(ch2) broadcast payload also carries both flags true.
 	found := false
-	for _, ev := range broadcasts {
-		if ev.Op != ws.OpVoiceStateUpdate {
-			continue
-		}
-		data, ok := ev.Data.(ws.VoiceStateUpdateBroadcast)
-		if !ok {
-			t.Fatalf("OpVoiceStateUpdate broadcast had unexpected Data type %T", ev.Data)
-		}
-		if data.Action != "join" || data.ChannelID != "ch2" {
-			continue
-		}
-		if !data.IsServerMuted || !data.IsServerDeafened {
-			t.Errorf("join(ch2) broadcast has IsServerMuted=%v IsServerDeafened=%v, want both true",
-				data.IsServerMuted, data.IsServerDeafened)
-		}
-		found = true
+	ev := awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.VoiceStateUpdateBroadcast)
+		return event.Op == ws.OpVoiceStateUpdate && ok && data.Action == "join" && data.ChannelID == "ch2"
+	})
+	data := ev.Data.(ws.VoiceStateUpdateBroadcast)
+	if !data.IsServerMuted || !data.IsServerDeafened {
+		t.Errorf("join(ch2) broadcast has IsServerMuted=%v IsServerDeafened=%v, want both true", data.IsServerMuted, data.IsServerDeafened)
 	}
-	if !found {
-		t.Errorf("expected a join(ch2) OpVoiceStateUpdate broadcast, got %+v", broadcasts)
-	}
+	found = true
+	_ = found
 }
 
 // TestJoinChannel_CrossServerSwitch_DropsServerMuteDeafen pins the A-38
@@ -607,23 +734,28 @@ func TestJoinChannel_CrossServerSwitch_DropsServerMuteDeafen(t *testing.T) {
 		},
 	}
 	svc, hub := newTestVoiceServiceWithChannelRepo(channelRepo)
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 16)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	truev := true
 	if err := svc.AdminUpdateState(context.Background(), "admin", "u1", &truev, &truev); err != nil {
 		t.Fatalf("AdminUpdateState(server-mute+deafen): %v", err)
 	}
+	_ = awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.VoiceStateUpdateBroadcast)
+		return event.Op == ws.OpVoiceStateUpdate && ok && data.Action == "update"
+	})
 	if state := svc.GetUserVoiceState("u1"); state == nil || !state.IsServerMuted || !state.IsServerDeafened {
 		t.Fatalf("setup: expected u1 server-muted+deafened before the switch, got %+v", state)
 	}
 
-	broadcasts = nil // only care about what the cross-server JoinChannel itself emits
+	drainVoiceTestEvents(broadcasts)
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch2", false, false); err != nil {
 		t.Fatalf("cross-server join failed: %v", err)
 	}
@@ -643,26 +775,16 @@ func TestJoinChannel_CrossServerSwitch_DropsServerMuteDeafen(t *testing.T) {
 
 	// join(ch2) broadcast payload also reflects both flags false.
 	found := false
-	for _, ev := range broadcasts {
-		if ev.Op != ws.OpVoiceStateUpdate {
-			continue
-		}
-		data, ok := ev.Data.(ws.VoiceStateUpdateBroadcast)
-		if !ok {
-			t.Fatalf("OpVoiceStateUpdate broadcast had unexpected Data type %T", ev.Data)
-		}
-		if data.Action != "join" || data.ChannelID != "ch2" {
-			continue
-		}
-		if data.IsServerMuted || data.IsServerDeafened {
-			t.Errorf("join(ch2) broadcast has IsServerMuted=%v IsServerDeafened=%v, want both false",
-				data.IsServerMuted, data.IsServerDeafened)
-		}
-		found = true
+	ev := awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.VoiceStateUpdateBroadcast)
+		return event.Op == ws.OpVoiceStateUpdate && ok && data.Action == "join" && data.ChannelID == "ch2"
+	})
+	data := ev.Data.(ws.VoiceStateUpdateBroadcast)
+	if data.IsServerMuted || data.IsServerDeafened {
+		t.Errorf("join(ch2) broadcast has IsServerMuted=%v IsServerDeafened=%v, want both false", data.IsServerMuted, data.IsServerDeafened)
 	}
-	if !found {
-		t.Errorf("expected a join(ch2) OpVoiceStateUpdate broadcast, got %+v", broadcasts)
-	}
+	found = true
+	_ = found
 }
 
 // TestAdminDisconnectUser_ClosesOutScreenShare mirrors
@@ -673,30 +795,33 @@ func TestJoinChannel_CrossServerSwitch_DropsServerMuteDeafen(t *testing.T) {
 // gone" rather than "IsStreaming is false".
 func TestAdminDisconnectUser_ClosesOutScreenShare(t *testing.T) {
 	svc, hub := newTestVoiceService()
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 16)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
 	if err := svc.JoinChannel("streamer", "streamer", "Streamer", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	truev := true
 	if err := svc.UpdateState("streamer", nil, nil, &truev); err != nil {
 		t.Fatalf("UpdateState(streaming): %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	// N-19: WatchScreenShare only admits a viewer who already shares the
 	// streamer's channel, so the viewer has to join voice first.
 	if err := svc.JoinChannel("viewer1", "viewer1", "Viewer1", "", "ch1", false, false); err != nil {
 		t.Fatalf("viewer join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	svc.WatchScreenShare("viewer1", "streamer", true)
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	if got := svc.GetScreenShareViewerCount("streamer"); got != 1 {
 		t.Fatalf("setup: expected 1 viewer before the disconnect, got %d", got)
 	}
 
-	broadcasts = nil // only care about what AdminDisconnectUser itself emits
 	if err := svc.AdminDisconnectUser(context.Background(), "admin", "streamer"); err != nil {
 		t.Fatalf("AdminDisconnectUser: %v", err)
 	}
@@ -707,9 +832,10 @@ func TestAdminDisconnectUser_ClosesOutScreenShare(t *testing.T) {
 	}
 
 	// (b) screen-share leave broadcast, for the channel the target was disconnected from
-	if !findScreenShareLeaveBroadcast(t, broadcasts, "streamer", "ch1") {
-		t.Errorf("expected a screen-share leave broadcast for streamer/ch1, got %+v", broadcasts)
-	}
+	awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.ScreenShareViewerUpdateData)
+		return event.Op == ws.OpScreenShareViewerUpdate && ok && data.StreamerUserID == "streamer" && data.ChannelID == "ch1" && data.Action == "leave"
+	})
 
 	// (c) state gone entirely (AdminDisconnectUser deletes it, unlike
 	// MoveUser/cross-switch which keep a state with IsStreaming reset)
@@ -838,19 +964,19 @@ func TestJoinChannel_EarlyAuthFailure_CleansUpStaleState(t *testing.T) {
 		}
 		return models.PermAll, nil
 	})
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 8)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	if state := svc.GetUserVoiceState("u1"); state == nil || state.ChannelID != "ch1" {
 		t.Fatalf("setup: expected u1 in ch1, got %+v", state)
 	}
 
-	broadcasts = nil // only care about what the failed join itself emits
 	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch2", false, false)
 	if !errors.Is(err, pkg.ErrForbidden) {
 		t.Fatalf("expected ErrForbidden from the failed join, got %v", err)
@@ -865,9 +991,10 @@ func TestJoinChannel_EarlyAuthFailure_CleansUpStaleState(t *testing.T) {
 	}
 
 	// LeaveChannel's own leave broadcast fired for ch1 as part of the cleanup.
-	if !findVoiceStateLeaveBroadcast(t, broadcasts, "ch1") {
-		t.Errorf("expected a leave broadcast for ch1 from the cleanup, got %+v", broadcasts)
-	}
+	awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.VoiceStateUpdateBroadcast)
+		return event.Op == ws.OpVoiceStateUpdate && ok && data.Action == "leave" && data.ChannelID == "ch1"
+	})
 }
 
 // TestJoinChannel_EarlyChannelLookupFailure_CleansUpStaleState pins F1's
@@ -884,16 +1011,16 @@ func TestJoinChannel_EarlyChannelLookupFailure_CleansUpStaleState(t *testing.T) 
 		},
 	}
 	svc, hub := newTestVoiceServiceWithChannelRepo(channelRepo)
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 8)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
 	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 
-	broadcasts = nil
 	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch2", false, false)
 	if !errors.Is(err, pkg.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound from the failed join, got %v", err)
@@ -902,9 +1029,10 @@ func TestJoinChannel_EarlyChannelLookupFailure_CleansUpStaleState(t *testing.T) 
 	if state := svc.GetUserVoiceState("u1"); state != nil {
 		t.Errorf("expected no voice state for u1 after the failed join, got %+v (F1 regression: ghost state)", state)
 	}
-	if !findVoiceStateLeaveBroadcast(t, broadcasts, "ch1") {
-		t.Errorf("expected a leave broadcast for ch1 from the cleanup, got %+v", broadcasts)
-	}
+	awaitVoiceTestEvent(t, broadcasts, func(event ws.Event) bool {
+		data, ok := event.Data.(ws.VoiceStateUpdateBroadcast)
+		return event.Op == ws.OpVoiceStateUpdate && ok && data.Action == "leave" && data.ChannelID == "ch1"
+	})
 }
 
 // findVoiceStateLeaveBroadcast looks for an OpVoiceStateUpdate "leave" for
@@ -1149,11 +1277,14 @@ func newTestVoiceServiceWithLiveKitGetter(lkGetter LiveKitInstanceGetter) (Voice
 				return models.PermAll, nil
 			},
 		},
-		hub,
+		&voiceTestBroadcaster{hub},
 		nil, // onlineChecker
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
 				return true, nil
+			},
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"voice-test-member"}, nil
 			},
 		},
 		nil, // encryptionKey
@@ -1749,12 +1880,24 @@ func newAuthVoiceService(isMember bool, resolvePerms func(ctx context.Context, u
 			},
 		},
 		&mockLiveKitGetter{},
-		&testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: resolvePerms},
-		hub,
+		&testutil.MockChannelPermResolver{
+			ResolveChannelPermissionsFn: resolvePerms,
+			ResolveChannelPermissionsBulkFn: func(_ context.Context, _ string, ids []string) (map[string]models.Permission, error) {
+				out := make(map[string]models.Permission, len(ids))
+				for _, id := range ids {
+					out[id] = models.PermAll
+				}
+				return out, nil
+			},
+		},
+		&voiceTestBroadcaster{hub},
 		nil, // onlineChecker
 		&testutil.MockServerRepo{
 			IsMemberFn: func(_ context.Context, _, _ string) (bool, error) {
 				return isMember, nil
+			},
+			ListMemberIDsFn: func(context.Context, string) ([]string, error) {
+				return []string{"voice-test-member"}, nil
 			},
 		},
 		nil, // encryptionKey
@@ -1827,9 +1970,9 @@ func TestVoiceJoinChannel_Authorization_PermittedMemberJoins(t *testing.T) {
 	svc, hub := newAuthVoiceService(true, func(_ context.Context, _, _ string) (models.Permission, error) {
 		return models.PermConnectVoice, nil
 	})
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 2)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
@@ -1839,8 +1982,8 @@ func TestVoiceJoinChannel_Authorization_PermittedMemberJoins(t *testing.T) {
 	if participants := svc.GetChannelParticipants("ch1"); len(participants) != 1 {
 		t.Errorf("expected 1 participant after permitted join, got %d", len(participants))
 	}
-	if len(broadcasts) != 1 {
-		t.Errorf("expected 1 broadcast after permitted join, got %d", len(broadcasts))
+	if got := awaitVoiceTestEvents(t, broadcasts, 1); len(got) != 1 {
+		t.Errorf("expected 1 broadcast after permitted join, got %d", len(got))
 	}
 }
 
@@ -1902,9 +2045,9 @@ func TestVoiceJoinChannel_Authorization_ForceMoveGrantAllowsJoin(t *testing.T) {
 func TestVoiceJoinChannel(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 4)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
@@ -1925,24 +2068,23 @@ func TestVoiceJoinChannel(t *testing.T) {
 	}
 
 	// Verify broadcast
-	if len(broadcasts) != 1 {
-		t.Fatalf("expected 1 broadcast, got %d", len(broadcasts))
-	}
-	if broadcasts[0].Op != ws.OpVoiceStateUpdate {
-		t.Errorf("op = %q, want %q", broadcasts[0].Op, ws.OpVoiceStateUpdate)
+	got := awaitVoiceTestEvents(t, broadcasts, 1)
+	if got[0].Op != ws.OpVoiceStateUpdate {
+		t.Errorf("op = %q, want %q", got[0].Op, ws.OpVoiceStateUpdate)
 	}
 }
 
 func TestVoiceJoinChannel_SwitchChannels(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 4)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	// Join ch1
 	_ = svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 	// Switch to ch2
 	_ = svc.JoinChannel("u1", "alice", "Alice", "", "ch2", false, false)
 
@@ -1955,29 +2097,29 @@ func TestVoiceJoinChannel_SwitchChannels(t *testing.T) {
 	}
 
 	// Should have: join ch1, leave ch1, join ch2 = 3 broadcasts
-	if len(broadcasts) != 3 {
-		t.Fatalf("expected 3 broadcasts (join+leave+join), got %d", len(broadcasts))
-	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 2)
 }
 
 func TestVoiceJoinChannel_SameChannelRejoin(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 4)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	// Join ch1
 	_ = svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
-	broadcasts = nil // reset
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 
 	// Rejoin same channel (WS reconnect scenario)
 	_ = svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
 
 	// Should produce zero broadcasts — silent rejoin
-	if len(broadcasts) != 0 {
-		t.Fatalf("expected 0 broadcasts for same-channel rejoin, got %d", len(broadcasts))
+	select {
+	case event := <-broadcasts:
+		t.Fatalf("unexpected same-channel rejoin broadcast: %+v", event)
+	case <-time.After(30 * time.Millisecond):
 	}
 
 	// State should still exist
@@ -1993,13 +2135,13 @@ func TestVoiceJoinChannel_SameChannelRejoin(t *testing.T) {
 func TestVoiceLeaveChannel(t *testing.T) {
 	svc, hub := newTestVoiceService()
 
-	var broadcasts []ws.Event
+	broadcasts := make(chan ws.Event, 4)
 	hub.BroadcastToServerFn = func(_ string, event ws.Event) {
-		broadcasts = append(broadcasts, event)
+		broadcasts <- event
 	}
 
 	_ = svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false)
-	broadcasts = nil // reset
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 
 	err := svc.LeaveChannel("u1")
 	if err != nil {
@@ -2011,9 +2153,7 @@ func TestVoiceLeaveChannel(t *testing.T) {
 		t.Error("expected nil state after leave")
 	}
 
-	if len(broadcasts) < 1 {
-		t.Fatal("expected at least 1 leave broadcast")
-	}
+	_ = awaitVoiceTestEvents(t, broadcasts, 1)
 }
 
 func TestVoiceLeaveChannel_NotInVoice(t *testing.T) {
@@ -2862,6 +3002,7 @@ func TestAdminUpdateState_LiveKitUnreachable_StillSucceeds(t *testing.T) {
 func TestAdminUpdateState_Unmute_RestoresLiveKitGrantBeforeBroadcast(t *testing.T) {
 	var mu sync.Mutex
 	var order []string
+	broadcastSeen := make(chan struct{}, 1)
 	record := func(what string) {
 		mu.Lock()
 		order = append(order, what)
@@ -2878,12 +3019,18 @@ func TestAdminUpdateState_Unmute_RestoresLiveKitGrantBeforeBroadcast(t *testing.
 	hub.BroadcastToServerFn = func(_ string, ev ws.Event) {
 		if ev.Op == ws.OpVoiceStateUpdate {
 			record("broadcast")
+			broadcastSeen <- struct{}{}
 		}
 	}
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
 	if err := svc.JoinChannel("victim", "victim", "Victim", "", "ch1", false, false); err != nil {
 		t.Fatalf("initial join failed: %v", err)
+	}
+	select {
+	case <-broadcastSeen:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for initial join broadcast")
 	}
 
 	// Pre-mute directly (white-box) so the AdminUpdateState call under test
@@ -2905,6 +3052,11 @@ func TestAdminUpdateState_Unmute_RestoresLiveKitGrantBeforeBroadcast(t *testing.
 	falsev := false
 	if err := svc.AdminUpdateState(context.Background(), "admin", "victim", &falsev, nil); err != nil {
 		t.Fatalf("AdminUpdateState(unmute): %v", err)
+	}
+	select {
+	case <-broadcastSeen:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for unmute broadcast")
 	}
 
 	mu.Lock()

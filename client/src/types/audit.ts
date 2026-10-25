@@ -9,6 +9,7 @@
  */
 
 export type AuditEventType =
+  | "server_ownership_transfer"
   | "server_mute"
   | "server_unmute"
   | "server_deafen"

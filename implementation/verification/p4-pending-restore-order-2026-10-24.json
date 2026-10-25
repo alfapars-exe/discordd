@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "stage": "restore dependency planning and encrypted-read adapter; startup store hydration remains unwired",
+  "changes": [
+    "Added a pure, iterative child-before-source restore planner. It uses persisted request lineage rather than timestamps alone, so a failed-files retry precedes its original partial snapshot even when the system clock moved backward. Siblings are deterministically ordered and all children precede their shared source.",
+    "Unreadable, mismatched-owner/device, duplicate-request or cyclic records block the affected group rather than silently choosing/dropping records or processing a convenient subset. Unrelated valid groups remain plannable. Inaccessible groups return only routing identifiers, not message/file data; stored records are not deleted.",
+    "Missing/already-removed or other-device source records are allowed without inventing a local dependency. Null-prototype group maps prevent special group IDs from changing object prototypes. Planning does not mutate input snapshots, drafts, storage or the network.",
+    "Added a read/decrypt-to-plan adapter using the existing encrypted pending storage and a copied caller-provided authorization set plus context guards. The future startup caller must supply fresh group permissions and include account/device/membership invalidation in its guard; local records are not authorization evidence."
+  ],
+  "verification": [
+    "Six planner cases pass: shuffled child/source chain with backward timestamps, sibling ordering, cyclic-group blocking, owner/device and inaccessible-group isolation, duplicate/unreadable blocking, absent/other-device parents and unusual group IDs.",
+    "Real IndexedDB/WebCrypto store integration closes/reopens the connection, loads the authorized plan without another POST, omits inaccessible group content, aborts stale context and leaves its persistent record intact. This is a connection-level local test, not an actual app process restart.",
+    "Final affected suites: 2 files / 9 tests passed in 3.57s. tsc -b, targeted ESLint and targeted git diff --check passed. Coverage structure remains valid, 33/33 references and 261 behaviors; acceptance is not complete. No new whole-suite or Windows acceptance claim is made for this phase."
+  ],
+  "remaining": [
+    "Invoke restoration only after authenticated group loading and ready-device initialization; hydrate the store/UI queue, promote the next pending operation after resolution, and gate new sends until restoration is known. None of that startup integration is claimed by this planner.",
+    "Reconcile restored source/child chains, cancelled/completed cleanup and reviewed-file provenance without replaying already-resolved files. Corrupt/unreadable groups need actionable recovery UI while preserving their encrypted records.",
+    "Actual browser/Electron restart, two-client encrypted media, cross-tab and large-file pressure, Windows packaging and full integrated acceptance remain open. No commit, push, merge or live publication performed. Overall P0-P11 remains incomplete."
+  ]
+}

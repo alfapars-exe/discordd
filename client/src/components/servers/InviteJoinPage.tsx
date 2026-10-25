@@ -13,6 +13,7 @@ import { resolveAssetUrl, publicAsset } from "../../utils/constants";
 import { getInvitePreview, type InvitePreview } from "../../api/invites";
 import * as serversApi from "../../api/servers";
 import Avatar from "../shared/Avatar";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 
 function InviteJoinPage() {
   const { t } = useTranslation("servers");
@@ -61,9 +62,10 @@ function InviteJoinPage() {
           servers: [...state.servers, { id: server.id, name: server.name, icon_url: server.icon_url }],
         }));
       }
-      useServerStore.setState({ activeServerId: server.id, activeServer: server });
+      useServerStore.getState().setActiveServer(server.id);
+      useServerStore.setState({ activeServer: server });
       addToast("success", t("serverJoined"));
-      navigate("/channels", { replace: true });
+      navigate(UI_SHELL_V2 ? `/channels/server/${encodeURIComponent(server.id)}` : "/channels", { replace: true });
     } else {
       const err = res.error ?? "";
       if (err.includes("already a member")) {

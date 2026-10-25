@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 stable music queue identity, single-item removal and drag reorder.",
+  "implemented": [
+    "Every accepted enqueue receives a fresh UUID queue_item_id, including repeated copies of the same YouTube video.",
+    "Queue state carries a monotonic revision that changes on enqueue, dequeue, removal and reorder.",
+    "Removal addresses one queue UUID; reorder requires the complete UUID set and the current expected revision. Stale requests return a conflict instead of overwriting newer state.",
+    "The voice panel displays the complete queue, removes one identified item, and supports both native drag/drop and keyboard-operable ordering through the revisioned API."
+  ],
+  "checks": [
+    { "command": "go test ./services ./handlers ./pkg -run 'MusicQueue|MusicQueueItems|MusicQueueRemove|TestSearch' -count=1", "cwd": "server", "result": "passed" },
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/api/music.test.ts src/components/voice/MusicBotPanel.test.tsx", "cwd": "client", "result": "passed", "tests": 19 }
+  ],
+  "remaining": [
+    "Two-client browser and packaged-Windows acceptance must exercise concurrent reorder conflicts and pointer/keyboard interaction."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

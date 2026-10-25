@@ -22,10 +22,34 @@ import (
 // no default role) is not an error here — JoinServer resolves and logs
 // that failure itself before calling this; the membership row still gets
 // created, just without a role assignment, matching the pre-fix behavior.
-func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defaultRoleID string) error {
+func (s *serverService) joinServerTx(ctx context.Context, serverID, userID, defaultRoleID string, audience gameActivityAudience) error {
 	return s.membershipTxRunner.InTx(ctx, func(r *repository.ServerMembershipTxRepos) error {
-		if err := r.Server.AddMember(ctx, serverID, userID); err != nil {
-			return fmt.Errorf("failed to add member: %w", err)
+		gameActivityAllowed := audience == gameActivityAudienceAll
+		// All invite joins participate in this lock protocol so an `all` join
+		// cannot race past a concurrent `small` join's count decision. Count is
+		// only used for `small`; without the optional capability, ordinary
+		// `all`/`none` joins remain compatible while `small` fails closed.
+		if counter, ok := r.Server.(interface {
+			LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
+		}); ok {
+			count, err := counter.LockAndCountMembersForGameActivityJoin(ctx, serverID)
+			if err != nil {
+				return fmt.Errorf("failed to lock server for game activity audience snapshot: %w", err)
+			}
+			if audience == gameActivityAudienceSmall {
+				gameActivityAllowed = count >= 0 && count+1 <= smallProfileAudienceServerMax
+			}
+		}
+		var addErr error
+		if snapshotWriter, ok := r.Server.(interface {
+			AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
+		}); ok {
+			addErr = snapshotWriter.AddMemberWithGameActivityAudience(ctx, serverID, userID, gameActivityAllowed)
+		} else {
+			addErr = r.Server.AddMember(ctx, serverID, userID)
+		}
+		if addErr != nil {
+			return fmt.Errorf("failed to add member: %w", addErr)
 		}
 		if defaultRoleID != "" {
 			if err := r.Role.AssignToUser(ctx, userID, defaultRoleID, serverID); err != nil {
@@ -80,8 +104,15 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	// AddMember + AssignToUser now run atomically (server_service_crud.go's
 	// joinServerTx) — see its doc comment for why a partial join (member
 	// row with no role) was worth closing.
-	if err := s.joinServerTx(ctx, serverID, userID, defaultRoleID); err != nil {
+	audience := gameActivityAudienceNone
+	if configured, policyErr := gameActivityMembershipAudience(ctx, s.preferencesRepo, userID); policyErr == nil {
+		audience = configured
+	}
+	if err := s.joinServerTx(ctx, serverID, userID, defaultRoleID, audience); err != nil {
 		return nil, err
+	}
+	if s.gameActivity != nil {
+		s.gameActivity.MembershipAdded(ctx, serverID, userID)
 	}
 
 	// B3: burn the invite's use slot only once membership actually landed —
@@ -99,17 +130,27 @@ func (s *serverService) JoinServer(ctx context.Context, userID, inviteCode strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to get server: %w", err)
 	}
+	snapshotAllowedForJoin := false
+	if snapshotReader, ok := s.serverRepo.(interface {
+		GetMemberGameActivityAudience(context.Context, string, string) (*bool, error)
+	}); ok {
+		if snapshot, snapshotErr := snapshotReader.GetMemberGameActivityAudience(ctx, serverID, userID); snapshotErr == nil && snapshot != nil {
+			snapshotAllowedForJoin = *snapshot
+		}
+	}
 
 	// Add server to user's WS subscription list
 	s.hub.AddClientServerID(userID, serverID)
+	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpPreferencesChanged, Data: map[string]string{"user_id": userID}})
 
 	// Notify user: server added to their list
 	s.hub.BroadcastToUser(userID, ws.Event{
 		Op: ws.OpServerCreate,
 		Data: models.ServerListItem{
-			ID:      server.ID,
-			Name:    server.Name,
-			IconURL: server.IconURL,
+			ID:                   server.ID,
+			Name:                 server.Name,
+			IconURL:              server.IconURL,
+			GameActivityAudience: snapshotAllowedForJoin,
 		},
 	})
 
@@ -154,6 +195,9 @@ func (s *serverService) LeaveServer(ctx context.Context, serverID, userID string
 
 	if err := s.serverRepo.RemoveMember(ctx, serverID, userID); err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
+	}
+	if s.gameActivity != nil {
+		s.gameActivity.MembershipRemoved(ctx, serverID, userID)
 	}
 
 	// Notify server members (broadcast before removing subscription)

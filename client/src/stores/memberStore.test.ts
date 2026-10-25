@@ -25,8 +25,10 @@ vi.mock("../api/members", () => ({
 
 import { useMemberStore } from "./memberStore";
 import { useServerStore } from "./serverStore";
+import { getAuthGeneration, setTokens } from "../api/client";
+import { publishAuthOwnerChange } from "../api/authSessionEvents";
 import * as memberApi from "../api/members";
-import type { MemberWithRoles } from "../types";
+import type { MemberWithRoles, Role } from "../types";
 
 function makeMember(overrides: Partial<MemberWithRoles> = {}): MemberWithRoles {
   return {
@@ -44,7 +46,13 @@ function makeMember(overrides: Partial<MemberWithRoles> = {}): MemberWithRoles {
 }
 
 function resetStore() {
+  const ownerId = "member-test-owner";
+  publishAuthOwnerChange(ownerId);
+  setTokens("test-access", "test-refresh", ownerId);
   useMemberStore.setState({
+    ownerId,
+    authGeneration: getAuthGeneration(),
+    statusByServer: {},
     membersByServer: {},
     onlineUserIds: new Set<string>(),
     loadingServers: new Set<string>(),
@@ -55,10 +63,125 @@ function resetStore() {
   > as ReturnType<typeof useServerStore.getState>);
 }
 
+describe("memberStore — role payload contract", () => {
+  const everyone: Role = { id: "everyone", name: "everyone", color: "#999999", position: 1, permissions: 0, is_default: true, is_owner: false, mentionable: false };
+  const custom: Role = { ...everyone, id: "custom", name: "custom", position: 2, permissions: 8, is_default: false };
+  beforeEach(() => {
+    resetStore();
+    useMemberStore.setState({ membersByServer: { "srv-1": [makeMember({ roles: [everyone, custom], effective_permissions: 8 })] } });
+  });
+
+  it("applies last custom-role revocation when the protected default role remains", () => {
+    // ModifyRoles never removes IsDefault; its GetByID reload therefore
+    // publishes [everyone], including when the remaining permissions are 0.
+    useMemberStore.getState().handleMemberUpdate("srv-1", makeMember({ roles: [everyone], effective_permissions: 0 }));
+    const member = useMemberStore.getState().membersByServer["srv-1"]![0];
+    expect(member.roles).toEqual([everyone]);
+    expect(member.effective_permissions).toBe(0);
+  });
+
+  it("preserves roles for profile-only updates even when broadcast to a server", () => {
+    // UpdateProfile broadcasts ToMemberWithRoles(user, nil) to every server,
+    // so an empty array cannot be treated as a permission revocation.
+    useMemberStore.getState().handleMemberUpdate("srv-1", makeMember({ display_name: "Updated", roles: [], effective_permissions: 0 }));
+    const member = useMemberStore.getState().membersByServer["srv-1"]![0];
+    expect(member.display_name).toBe("Updated");
+    expect(member.roles).toEqual([everyone, custom]);
+    expect(member.effective_permissions).toBe(8);
+  });
+});
+
 describe("memberStore — timeout seeding from fetchMembers", () => {
   beforeEach(() => {
     resetStore();
     vi.mocked(memberApi.getMembers).mockReset();
+  });
+
+  it("a forced ownership refresh supersedes a pre-transfer role response", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const old = useMemberStore.getState().fetchMembers("srv-1");
+    vi.mocked(memberApi.getMembers).mockResolvedValueOnce({ success: true, data: [makeMember({ effective_permissions: 0 })] });
+    await useMemberStore.getState().fetchMembers("srv-1", true);
+    finish({ success: true, data: [makeMember({ effective_permissions: 512 })] });
+    await old;
+    expect(useMemberStore.getState().membersByServer["srv-1"]![0].effective_permissions).toBe(0);
+    expect(useMemberStore.getState().loadingServers.has("srv-1")).toBe(false);
+  });
+
+  it("does not resurrect members after leaving a server during a fetch", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const old = useMemberStore.getState().fetchMembers("srv-1");
+    useMemberStore.getState().clearServer("srv-1");
+    finish({ success: true, data: [makeMember()] });
+    await old;
+    expect(useMemberStore.getState().membersByServer["srv-1"]).toBeUndefined();
+  });
+
+  it("marks only a successful current-owner roster ready and reports failed refreshes explicitly", async () => {
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBeUndefined();
+    let finish!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = useMemberStore.getState().fetchMembers("srv-1");
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("loading");
+    finish({ success: true, data: [makeMember()] });
+    await pending;
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("ready");
+
+    vi.mocked(memberApi.getMembers).mockResolvedValueOnce({ success: false, error: "offline" });
+    await useMemberStore.getState().fetchMembers("srv-1", true);
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("error");
+    expect(useMemberStore.getState().membersByServer["srv-1"]).toHaveLength(1);
+  });
+
+  it("synchronously clears account-owned roster, timeout, loading and timer state on identity change", async () => {
+    vi.useFakeTimers();
+    const expires = new Date(Date.now() + 60_000).toISOString();
+    vi.mocked(memberApi.getMembers).mockResolvedValueOnce({ success: true, data: [makeMember({ timeout_expires_at: expires })] });
+    await useMemberStore.getState().fetchMembers("srv-1");
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("ready");
+
+    publishAuthOwnerChange("different-owner");
+    expect(useMemberStore.getState()).toMatchObject({ ownerId: "different-owner", statusByServer: {}, membersByServer: {}, timeoutsByServer: {} });
+    expect(useMemberStore.getState().loadingServers.size).toBe(0);
+    vi.advanceTimersByTime(120_000);
+    expect(useMemberStore.getState().timeoutsByServer["srv-1"]).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("invalidates an in-flight roster response when the account changes", async () => {
+    let finish!: (value: Awaited<ReturnType<typeof memberApi.getMembers>>) => void;
+    vi.mocked(memberApi.getMembers).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = useMemberStore.getState().fetchMembers("srv-1");
+    publishAuthOwnerChange("next-owner");
+    finish({ success: true, data: [makeMember({ id: "old-account-member", effective_permissions: 1024 })] });
+    await pending;
+    expect(useMemberStore.getState().ownerId).toBe("next-owner");
+    expect(useMemberStore.getState().membersByServer["srv-1"]).toBeUndefined();
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBeUndefined();
+    expect(useMemberStore.getState().loadingServers.has("srv-1")).toBe(false);
+  });
+
+  it("clears permission freshness on same-owner reauthentication", async () => {
+    const expires = new Date(Date.now() + 60_000).toISOString();
+    vi.mocked(memberApi.getMembers).mockResolvedValueOnce({ success: true, data: [makeMember({ timeout_expires_at: expires })] });
+    await useMemberStore.getState().fetchMembers("srv-1");
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBe("ready");
+
+    setTokens("reauth-access", "reauth-refresh", "member-test-owner");
+    expect(useMemberStore.getState().ownerId).toBe("member-test-owner");
+    expect(useMemberStore.getState().authGeneration).toBe(getAuthGeneration());
+    expect(useMemberStore.getState().statusByServer).toEqual({});
+    expect(useMemberStore.getState().membersByServer).toEqual({});
+    expect(useMemberStore.getState().timeoutsByServer).toEqual({});
+  });
+
+  it("does not issue anonymous member fetches", async () => {
+    publishAuthOwnerChange(null);
+    await useMemberStore.getState().fetchMembers("srv-1", true);
+    expect(memberApi.getMembers).not.toHaveBeenCalled();
+    expect(useMemberStore.getState().statusByServer["srv-1"]).toBeUndefined();
   });
 
   it("seeds timeoutsByServer from members carrying timeout_expires_at", async () => {

@@ -13,6 +13,8 @@ type ReadState struct {
 
 // UnreadInfo — unread count for a channel, used for sidebar badges.
 type UnreadInfo struct {
-	ChannelID   string `json:"channel_id"`
-	UnreadCount int    `json:"unread_count"`
+	ChannelID             string  `json:"channel_id"`
+	UnreadCount           int     `json:"unread_count"`
+	MentionCount          int     `json:"mention_count"`
+	OldestUnreadMessageID *string `json:"oldest_unread_message_id,omitempty"`
 }

@@ -4,11 +4,14 @@
 
 import { create } from "zustand";
 import * as serversApi from "../api/servers";
+import { getAuthGeneration } from "../api/client";
+import { useAuthStore } from "./authStore";
 import { useChannelStore } from "./channelStore";
 import { useReadStateStore } from "./readStateStore";
 import { useE2EEStore } from "./e2eeStore";
 import { useVoiceStore } from "./voiceStore";
 import { useUIStore } from "./uiStore";
+import { UI_SHELL_V2 } from "../utils/uiShell";
 import type { Server, ServerListItem, CreateServerRequest, APIResponse } from "../types";
 
 /** Persist last active server across page reloads */
@@ -92,6 +95,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   setActiveServer: (serverId) => {
+    if (get().activeServerId === serverId) return;
     // switchToServer snapshots the outgoing tree into the per-server cache
     // and paints the incoming server from cache (empty if never visited).
     // Called BEFORE the set() below so it reads the still-current
@@ -108,7 +112,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
     if (!serverId) return;
 
     const res = await serversApi.getServer(serverId);
-    if (res.success && res.data) {
+    if (res.success && res.data && get().activeServerId === serverId) {
       set({ activeServer: res.data });
     }
   },
@@ -117,6 +121,10 @@ export const useServerStore = create<ServerState>((set, get) => ({
     const res = await serversApi.createServer(req);
     if (res.success && res.data) {
       const server = res.data;
+      if (UI_SHELL_V2 && get().activeServerId !== server.id) {
+        useChannelStore.getState().switchToServer(server.id);
+        useReadStateStore.getState().clearForServerSwitch();
+      }
       // Add to list + set active (atomic). WS event will also come but we add here against race.
       set((state) => {
         const servers = state.servers.some((s) => s.id === server.id)
@@ -129,6 +137,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
         };
       });
       localStorage.setItem(LAST_SERVER_KEY, server.id);
+      if (UI_SHELL_V2) useUIStore.getState().openServer(server.id);
     }
     // Return the full response so callers can surface res.error in the UI
     // instead of a generic "something went wrong" toast.
@@ -139,6 +148,10 @@ export const useServerStore = create<ServerState>((set, get) => ({
     const res = await serversApi.joinServer(inviteCode);
     if (res.success && res.data) {
       const server = res.data;
+      if (UI_SHELL_V2 && get().activeServerId !== server.id) {
+        useChannelStore.getState().switchToServer(server.id);
+        useReadStateStore.getState().clearForServerSwitch();
+      }
       // Add to list + set active (WS event will also come)
       set((state) => {
         const servers = state.servers.some((s) => s.id === server.id)
@@ -151,6 +164,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
         };
       });
       localStorage.setItem(LAST_SERVER_KEY, server.id);
+      if (UI_SHELL_V2) useUIStore.getState().openServer(server.id);
       return server;
     }
     return null;
@@ -177,6 +191,12 @@ export const useServerStore = create<ServerState>((set, get) => ({
   },
 
   reorderServers: async (items) => {
+    const ownerId = useAuthStore.getState().user?.id ?? null;
+    const authGeneration = getAuthGeneration();
+    const isCurrentContext = () =>
+      getAuthGeneration() === authGeneration &&
+      (useAuthStore.getState().user?.id ?? null) === ownerId;
+
     // Save for rollback
     const prevServers = get().servers;
 
@@ -188,15 +208,17 @@ export const useServerStore = create<ServerState>((set, get) => ({
       return posA - posB;
     });
     set({ servers: sorted });
+    const optimisticServers = get().servers;
 
     const res = await serversApi.reorderServers(items);
-    if (!res.success) {
-      // Rollback
+    if (!res.success && isCurrentContext() && get().servers === optimisticServers) {
+      // Roll back only while this account still owns the optimistic state.
+      // A newer WS/store update or account switch must win over this response.
       set({ servers: prevServers });
       return false;
     }
 
-    return true;
+    return res.success;
   },
 
   // ─── WS Event Handlers ───
@@ -218,7 +240,11 @@ export const useServerStore = create<ServerState>((set, get) => ({
 
   handleServerCreate: (server) => {
     set((state) => {
-      if (state.servers.some((s) => s.id === server.id)) return state;
+      // HTTP join/create may have inserted the minimal sidebar item first.
+      // Preserve the authoritative own-membership projection from the WS event.
+      if (state.servers.some((s) => s.id === server.id)) return {
+        servers: state.servers.map((existing) => existing.id === server.id ? { ...existing, ...server } : existing),
+      };
       return { servers: [...state.servers, server] };
     });
   },
@@ -228,7 +254,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
     // Notify backend so other members see us drop out immediately — otherwise
     // orphan cleanup (35s grace) would leave a ghost participant in the sidebar.
     const voiceState = useVoiceStore.getState();
-    if (voiceState.currentVoiceServerId === serverId) {
+    if (voiceState.currentVoiceChannelId && voiceState.currentVoiceServerId === serverId) {
       voiceState._wsSend?.("voice_leave", {});
       voiceState.leaveVoiceChannel();
     }
@@ -254,7 +280,11 @@ export const useServerStore = create<ServerState>((set, get) => ({
           localStorage.removeItem(LAST_SERVER_KEY);
         }
       }
-      return { servers, activeServerId, activeServer: null };
+      return {
+        servers,
+        activeServerId,
+        activeServer: state.activeServerId === serverId ? null : state.activeServer,
+      };
     });
 
     // If we were viewing the deleted server, cascade-clear server-scoped stores

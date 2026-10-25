@@ -25,6 +25,14 @@ func NewFriendshipHandler(friendService services.FriendshipService, requestLimit
 	return &FriendshipHandler{friendService: friendService, requestLimiter: requestLimiter}
 }
 
+func friendshipAccountMatches(w http.ResponseWriter, r *http.Request, userID string) bool {
+	if expected := r.URL.Query().Get("expected_user_id"); expected != "" && expected != userID {
+		pkg.ErrorWithCode(w, http.StatusConflict, "friendship account changed", "FRIENDSHIP_ACCOUNT_MISMATCH")
+		return false
+	}
+	return true
+}
+
 // ListFriends handles GET /api/friends
 func (h *FriendshipHandler) ListFriends(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
@@ -33,6 +41,9 @@ func (h *FriendshipHandler) ListFriends(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !friendshipAccountMatches(w, r, user.ID) {
+		return
+	}
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
 		pkg.Error(w, err)
@@ -51,6 +62,9 @@ func (h *FriendshipHandler) ListRequests(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if !friendshipAccountMatches(w, r, user.ID) {
+		return
+	}
 	requests, err := h.friendService.ListRequests(r.Context(), user.ID)
 	if err != nil {
 		pkg.Error(w, err)
@@ -68,6 +82,9 @@ func (h *FriendshipHandler) SendRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !friendshipAccountMatches(w, r, user.ID) {
+		return
+	}
 	if h.requestLimiter != nil && !h.requestLimiter.Allow(user.ID) {
 		retryAfter := h.requestLimiter.CooldownSeconds(user.ID)
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
@@ -106,6 +123,9 @@ func (h *FriendshipHandler) AcceptRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !friendshipAccountMatches(w, r, user.ID) {
+		return
+	}
 	result, err := h.friendService.AcceptRequest(r.Context(), user.ID, requestID)
 	if err != nil {
 		pkg.Error(w, err)
@@ -130,6 +150,9 @@ func (h *FriendshipHandler) DeclineRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if !friendshipAccountMatches(w, r, user.ID) {
+		return
+	}
 	if err := h.friendService.DeclineRequest(r.Context(), user.ID, requestID); err != nil {
 		pkg.Error(w, err)
 		return
@@ -152,6 +175,9 @@ func (h *FriendshipHandler) RemoveFriend(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if !friendshipAccountMatches(w, r, user.ID) {
+		return
+	}
 	if err := h.friendService.RemoveFriend(r.Context(), user.ID, targetUserID); err != nil {
 		pkg.Error(w, err)
 		return

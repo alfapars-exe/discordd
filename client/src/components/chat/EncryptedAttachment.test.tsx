@@ -22,9 +22,7 @@ import { useLightboxStore } from "../../stores/lightboxStore";
 import type { EncryptedFileMeta } from "../../crypto/fileEncryption";
 import type { ChatAttachment } from "../../hooks/useChatContext";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
-}));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (k: string) => k }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 vi.mock("../../utils/constants", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("../../utils/constants");

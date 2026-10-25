@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // ─── UserRepository mock ───
@@ -16,6 +17,7 @@ type MockUserRepo struct {
 	GetAllFn                  func(ctx context.Context) ([]models.User, error)
 	UpdateFn                  func(ctx context.Context, user *models.User) error
 	UpdateStatusFn            func(ctx context.Context, userID string, status models.UserStatus) error
+	UpdateManualPresenceFn    func(ctx context.Context, userID string, status models.UserStatus) error
 	UpdatePasswordFn          func(ctx context.Context, userID string, newPasswordHash string) error
 	UpdateEmailFn             func(ctx context.Context, userID string, email *string) error
 	GetByEmailFn              func(ctx context.Context, email string) (*models.User, error)
@@ -49,7 +51,10 @@ func (m *MockUserRepo) GetByID(ctx context.Context, id string) (*models.User, er
 	return m.GetByIDFn(ctx, id)
 }
 func (m *MockUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
-	return m.GetByUsernameFn(ctx, username)
+	if m.GetByUsernameFn != nil {
+		return m.GetByUsernameFn(ctx, username)
+	}
+	return nil, pkg.ErrNotFound
 }
 func (m *MockUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	if m.GetAllFn != nil {
@@ -178,5 +183,14 @@ func (m *MockUserRepo) SetWelcomeSeen(_ context.Context, _ string) error {
 
 // UpdatePrefStatus — stub; preferred-status updates aren't asserted in tests.
 func (m *MockUserRepo) UpdatePrefStatus(_ context.Context, _ string, _ models.UserStatus) error {
+	return nil
+}
+
+// UpdateManualPresence keeps callback tests aligned with the atomic status
+// and preference persistence contract.
+func (m *MockUserRepo) UpdateManualPresence(ctx context.Context, userID string, status models.UserStatus) error {
+	if m.UpdateManualPresenceFn != nil {
+		return m.UpdateManualPresenceFn(ctx, userID, status)
+	}
 	return nil
 }

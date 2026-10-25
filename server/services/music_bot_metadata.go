@@ -1,16 +1,45 @@
 package services
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"math"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 )
+
+const maxMusicMetadataBytes = 4 << 20
+
+var youtubeVideoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+var errMusicMetadataTooLarge = errors.New("music metadata exceeds size limit")
+
+// A queue cap alone does not bound extraction: a playlist can emit thousands
+// of full JSON blobs before Enqueue truncates it. Bound both the subprocess's
+// requested entries and the bytes copied into memory.
+type musicMetadataBuffer struct {
+	buf      bytes.Buffer
+	overflow bool
+}
+
+func (b *musicMetadataBuffer) Write(p []byte) (int, error) {
+	if len(p) > maxMusicMetadataBytes-b.buf.Len() {
+		b.overflow = true
+		return 0, errMusicMetadataTooLarge
+	}
+	return b.buf.Write(p)
+}
 
 // ytDlpPath resolves the yt-dlp binary to an absolute path once, instead of
 // letting exec walk $PATH on every invocation.
@@ -24,9 +53,8 @@ import (
 //
 // The production image installs it at /usr/local/bin/yt-dlp, checksum-pinned;
 // LookPath is kept rather than hardcoding that so self-hosted and local dev
-// installs keep working. ffmpeg is still invoked by bare name in
-// music_bot_pipeline.go — giving both binaries a configured absolute path is a
-// separate, codebase-wide change.
+// installs keep working. ffmpegPath uses the same cached resolution for the
+// audio conversion pipeline.
 var ytDlpPath = sync.OnceValues(func() (string, error) {
 	return exec.LookPath("yt-dlp")
 })
@@ -42,7 +70,7 @@ var ytDlpPath = sync.OnceValues(func() (string, error) {
 // yt-dlp invocation:
 //
 //	--flat-playlist     emit one entry per video without descending into formats
-//	--dump-json         JSON-per-line output
+//	--print            only the metadata fields needed for each track
 //	--no-warnings       suppress noisy warnings on private/age-restricted videos
 //	--ignore-errors     tolerate single-video failures inside a playlist
 //	--use-extractors "Youtube.*"  restrict resolution to yt-dlp's dedicated
@@ -56,7 +84,8 @@ var ytDlpPath = sync.OnceValues(func() (string, error) {
 //	                    with "No suitable extractor found" and yt-dlp never
 //	                    makes a network request for it.
 //
-// 30s context timeout — playlist resolution can be slow but never minutes.
+// The subprocess sees at most maxQueueLen+1 entries; output is additionally
+// byte-bounded. 30s context timeout — playlist resolution never takes minutes.
 func extractTracks(parent context.Context, urlStr, requesterID, requesterName string) ([]models.MusicTrack, error) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
@@ -72,35 +101,59 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 	// closest to the actual subprocess.
 	bin, err := ytDlpPath()
 	if err != nil {
-		return nil, fmt.Errorf("yt-dlp not available: %w", err)
+		return nil, fmt.Errorf("%w: yt-dlp not available: %w", errToolMissing, err)
 	}
 	cmd := exec.CommandContext(ctx, bin, extractTracksArgs(urlStr)...) // #nosec G204 -- urlStr is user-supplied, but bin is an absolute path resolved once by ytDlpPath, exec.CommandContext never invokes a shell (no metacharacter-injection vector), validateMusicURLNetwork above enforces a host allow-list (SSRF's primary control here — see music_url_guard.go doc comment) plus a post-DNS private/reserved-IP check, and "--" in extractTracksArgs stops urlStr from being parsed as a yt-dlp flag
-	stdout, err := cmd.Output()
+	stdout := &musicMetadataBuffer{}
+	stderr := newTailBuffer(ytDlpStderrTailBytes)
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	cmd.WaitDelay = subprocessWaitDelay
+	runErr := cmd.Run()
+	// A cancelled request must not enqueue partially extracted tracks after
+	// the caller has left. Keep deadlines classifiable as network failures.
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("music extraction interrupted: %w", ctx.Err())
+	}
+	if stdout.overflow {
+		return nil, errMusicMetadataTooLarge
+	}
+	out, err := parseMusicMetadata(bytes.NewReader(stdout.buf.Bytes()), requesterID, requesterName)
 	if err != nil {
-		// yt-dlp returns non-zero on partial playlist failures even when
-		// some entries succeeded; keep going if we got any JSON lines.
-		if len(stdout) == 0 {
-			return nil, fmt.Errorf("yt-dlp exited %v", err)
+		return nil, err
+	}
+	// A playlist may contain unavailable entries. Keep valid entries on a
+	// partial exit, but preserve classified errors if nothing can play.
+	if len(out) == 0 && runErr != nil {
+		return nil, &trackPlaybackError{
+			Reason: classifyPlaybackFailure(runErr, stderr.String()),
+			err:    fmt.Errorf("yt-dlp metadata failed: %w", runErr),
 		}
 	}
+	if len(out) == 0 {
+		return nil, &trackPlaybackError{Reason: reasonUnavailable, err: errors.New("no playable YouTube videos found")}
+	}
+	return out, nil
+}
 
-	var out []models.MusicTrack
-	for _, line := range strings.Split(string(stdout), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+func parseMusicMetadata(r io.Reader, requesterID, requesterName string) ([]models.MusicTrack, error) {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 4096), 256<<10)
+	out := make([]models.MusicTrack, 0)
+	for scanner.Scan() {
 		var raw ytdlpEntry
-		if jerr := json.Unmarshal([]byte(line), &raw); jerr != nil {
+		if json.Unmarshal(scanner.Bytes(), &raw) != nil {
 			continue
 		}
-		track := raw.toTrack(urlStr, requesterID, requesterName)
+		track := raw.toTrack("", requesterID, requesterName)
 		if track.VideoID == "" {
 			continue
 		}
 		out = append(out, track)
+		if len(out) == maxQueueLen+1 {
+			break
+		}
 	}
-	return out, nil
+	return out, scanner.Err()
 }
 
 // extractTracksArgs builds extractTracks's yt-dlp argv. Factored out (rather
@@ -109,13 +162,70 @@ func extractTracks(parent context.Context, urlStr, requesterID, requesterName st
 // subprocess — see TestExtractTracksArgs_RestrictsToYoutubeExtractors.
 func extractTracksArgs(urlStr string) []string {
 	return []string{
+		"--ignore-config",
+		"--no-plugin-dirs",
+		"--no-remote-components",
 		"--flat-playlist",
-		"--dump-json",
+		"--lazy-playlist",
+		"--playlist-end", strconv.Itoa(maxQueueLen + 1),
+		"--skip-download",
+		"--print", "%(.{id,title,uploader,channel,duration,thumbnail})j",
 		"--no-warnings",
 		"--ignore-errors",
+		"--socket-timeout", "10",
+		"--extractor-retries", "1",
 		"--use-extractors", "Youtube.*",
 		"--",
 		urlStr,
+	}
+}
+
+// SearchMusicTracks resolves a bounded YouTube name search without accepting
+// a caller-controlled URL. The query remains one argv value after `--`; no
+// shell is involved and yt-dlp is restricted to YouTube extractors.
+func SearchMusicTracks(parent context.Context, query string) ([]models.MusicTrack, error) {
+	query = strings.TrimSpace(query)
+	if query == "" || len([]rune(query)) > 100 || strings.ContainsAny(query, "\x00\r\n") {
+		return nil, fmt.Errorf("%w: search query must be 1-100 characters", pkg.ErrBadRequest)
+	}
+	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
+	defer cancel()
+	bin, err := ytDlpPath()
+	if err != nil {
+		return nil, fmt.Errorf("%w: yt-dlp not available: %w", errToolMissing, err)
+	}
+	cmd := exec.CommandContext(ctx, bin, searchMusicArgs(query)...) // #nosec G204 -- fixed binary, no shell, bounded query is a single argv value after --
+	stdout := &musicMetadataBuffer{}
+	stderr := newTailBuffer(ytDlpStderrTailBytes)
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	cmd.WaitDelay = subprocessWaitDelay
+	runErr := cmd.Run()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("music search interrupted: %w", ctx.Err())
+	}
+	if stdout.overflow {
+		return nil, errMusicMetadataTooLarge
+	}
+	tracks, err := parseMusicMetadata(bytes.NewReader(stdout.buf.Bytes()), "", "")
+	if err != nil {
+		return nil, err
+	}
+	if len(tracks) > 5 {
+		tracks = tracks[:5]
+	}
+	if len(tracks) == 0 {
+		return nil, &trackPlaybackError{Reason: classifyPlaybackFailure(runErr, stderr.String()), err: errors.New("no YouTube search results")}
+	}
+	return tracks, nil
+}
+
+func searchMusicArgs(query string) []string {
+	return []string{
+		"--ignore-config", "--no-plugin-dirs", "--no-remote-components",
+		"--flat-playlist", "--playlist-end", "5", "--skip-download",
+		"--print", "%(.{id,title,uploader,channel,duration,thumbnail})j",
+		"--no-warnings", "--socket-timeout", "10", "--extractor-retries", "1",
+		"--use-extractors", "Youtube.*", "--", "ytsearch5:" + query,
 	}
 }
 
@@ -134,35 +244,31 @@ type ytdlpEntry struct {
 	URL         string  `json:"url"` // for flat-playlist entries
 }
 
-func (r ytdlpEntry) toTrack(originalUserURL, requesterID, requesterName string) models.MusicTrack {
+func (r ytdlpEntry) toTrack(_ string, requesterID, requesterName string) models.MusicTrack {
+	// Never feed a playlist, transient CDN URL, or arbitrary extractor output
+	// back into the download subprocess. A queue entry is exactly one video.
+	if !youtubeVideoID.MatchString(r.ID) {
+		return models.MusicTrack{}
+	}
 	artist := r.Uploader
 	if artist == "" {
 		artist = r.Channel
 	}
-	// Prefer a per-entry URL when this came from a playlist; fall back to
-	// the user's original URL for single-video inputs.
-	resolvedURL := r.WebpageURL
-	if resolvedURL == "" {
-		resolvedURL = r.OriginalURL
+	title := strings.TrimSpace(r.Title)
+	if title == "" {
+		title = r.ID
 	}
-	if resolvedURL == "" {
-		resolvedURL = r.URL
-	}
-	if resolvedURL == "" {
-		resolvedURL = originalUserURL
-	}
-	thumb := r.Thumbnail
-	if thumb == "" && r.ID != "" {
-		// Standard YouTube thumbnail fallback (always works for public videos).
-		thumb = "https://i.ytimg.com/vi/" + r.ID + "/hqdefault.jpg"
+	duration := 0
+	if r.Duration > 0 && r.Duration < float64(math.MaxInt) && !math.IsInf(r.Duration, 0) {
+		duration = int(r.Duration)
 	}
 	return models.MusicTrack{
 		VideoID:           r.ID,
-		Title:             r.Title,
-		Artist:            artist,
-		Thumbnail:         thumb,
-		DurationSeconds:   int(r.Duration),
-		URL:               resolvedURL,
+		Title:             truncateRunes(title, 300),
+		Artist:            truncateRunes(artist, 200),
+		Thumbnail:         "https://i.ytimg.com/vi/" + r.ID + "/hqdefault.jpg",
+		DurationSeconds:   duration,
+		URL:               "https://www.youtube.com/watch?v=" + r.ID,
 		RequestedByUserID: requesterID,
 		RequestedByName:   requesterName,
 	}

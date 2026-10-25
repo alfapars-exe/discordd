@@ -2,7 +2,8 @@ package ws
 
 import (
 	"github.com/argeinfina/hichat/models"
-	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/gorilla/websocket"
+	"time"
 )
 
 // Client connection lifecycle + server-membership index maintenance.
@@ -31,19 +32,48 @@ func (h *Hub) removeClientFromServerIndex(client *Client, serverID string) {
 // addClient registers a new client. Fires OnUserFirstConnect for the user's
 // first connection. For subsequent connections, recomputes aggregate status.
 func (h *Hub) addClient(client *Client) {
+	defer func() {
+		if client.registered != nil {
+			close(client.registered)
+		}
+	}()
 	h.mu.Lock()
-	defer h.mu.Unlock()
+	if h.shuttingDown {
+		h.mu.Unlock()
+		if client.done != nil {
+			client.closeDone()
+		}
+		if client.conn != nil {
+			_ = client.conn.Close()
+		}
+		return
+	}
 
 	isFirstConnection := len(h.clients[client.userID]) == 0
-
-	// Set per-connection status from prefStatus or default to "online"
-	switch {
-	case client.prefStatus != "" && client.prefStatus != "offline":
-		client.status = client.prefStatus
-	case client.prefStatus == "offline":
-		client.status = "offline"
-	default:
-		client.status = "online"
+	if !isFirstConnection {
+		for existing := range h.clients[client.userID] {
+			client.prefStatus = existing.prefStatus
+			break
+		}
+	}
+	// Empty remains the legacy representation of the default account
+	// preference. Use online for the live status without rewriting that value.
+	connectionStatus := client.prefStatus
+	if connectionStatus == "" {
+		connectionStatus = "online"
+	}
+	client.status = connectionStatus
+	client.connectionID = h.connectionSeq.Add(1)
+	if isFirstConnection {
+		if client.prefStatus == "offline" {
+			h.invisibleUsers[client.userID] = true
+		} else {
+			delete(h.invisibleUsers, client.userID)
+		}
+	} else if client.prefStatus == "offline" {
+		// A new tab inherits the account preference but must never clear a
+		// hidden flag established by another tab's manual update.
+		h.invisibleUsers[client.userID] = true
 	}
 
 	if _, ok := h.clients[client.userID]; !ok {
@@ -66,17 +96,55 @@ func (h *Hub) addClient(client *Client) {
 		"user_id", client.userID, "status", client.status,
 		"total_connections", len(h.clients[client.userID]))
 
-	// Callbacks below are dispatched via logx.Go (separate goroutines), not
-	// called synchronously, so holding h.mu through the dispatch (deferred
-	// Unlock above, rather than the manual Unlock() this used to have here)
-	// doesn't risk deadlocking the callback against this lock.
+	var ticket *presenceCallbackTicket
+	var activityConnectTicket *presenceCallbackTicket
+	activityConnectCallback := h.onGameActivityConnect
 	if isFirstConnection && h.onUserFirstConnect != nil {
-		userID := client.userID
-		prefStatus := client.prefStatus
-		logx.Go("ws.user_first_connect", func() { h.onUserFirstConnect(userID, prefStatus) })
+		ticket = h.presenceCallbacks.reserve(client.userID, "user_first_connect")
 	} else if !isFirstConnection && h.onPresenceManualUpdate != nil {
-		logx.Go("ws.presence_manual_update", func() { h.onPresenceManualUpdate(client.userID, aggregateForExisting, true) })
+		ticket = h.presenceCallbacks.reserve(client.userID, "presence_manual_update")
 	}
+	// Reservation and submission order must match for the same user.
+	// submit waits for the predecessor to be admitted; reserving activity
+	// first but submitting presence first deadlocks registration before ready.
+	if activityConnectCallback != nil {
+		activityConnectTicket = h.presenceCallbacks.reserve(client.userID, "game_activity_connect")
+	}
+	userID := client.userID
+	prefStatus := connectionStatus
+	presenceCallback := h.onPresenceManualUpdate
+	firstConnectCallback := h.onUserFirstConnect
+	h.mu.Unlock()
+	if isFirstConnection && firstConnectCallback != nil {
+		h.presenceCallbacks.submit(ticket, func() { firstConnectCallback(userID, prefStatus) })
+	} else if !isFirstConnection && presenceCallback != nil {
+		h.presenceCallbacks.submit(ticket, func() { presenceCallback(userID, aggregateForExisting, true) })
+	}
+	if activityConnectCallback != nil {
+		h.presenceCallbacks.submit(activityConnectTicket, func() { activityConnectCallback(userID, client.connectionID) })
+	}
+}
+
+// RequestGameActivitySnapshot is called after ready is queued so activity
+// snapshots cannot overtake the stream's initial synchronization marker.
+func (h *Hub) RequestGameActivitySnapshot(userID string) {
+	cb := h.onGameActivitySnapshot
+	if cb != nil {
+		go cb(userID)
+	}
+}
+
+func (h *Hub) QueueGameActivityUpdate(client *Client, sequence uint64, game *GameActivityClientGame) {
+	h.mu.Lock()
+	if h.shuttingDown || h.clients[client.userID][client] != true || h.onGameActivityUpdate == nil {
+		h.mu.Unlock()
+		return
+	}
+	cb := h.onGameActivityUpdate
+	ticket := h.presenceCallbacks.reserve(client.userID, "game_activity_update")
+	userID, connectionID := client.userID, client.connectionID
+	h.mu.Unlock()
+	h.presenceCallbacks.submit(ticket, func() { cb(userID, connectionID, sequence, game) })
 }
 
 // removeClient unregisters a client and signals its done channel (which stops
@@ -85,17 +153,22 @@ func (h *Hub) addClient(client *Client) {
 // Otherwise recomputes and broadcasts aggregate status.
 func (h *Hub) removeClient(client *Client) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 
 	var fullyDisconnected bool
 	var partialDisconnect bool
 	var userID string
 	var newAggregate string
+	var ticket *presenceCallbackTicket
+	var disconnectCallback UserConnectionCallback
+	var presenceCallback PresenceManualUpdateCallback
+	var activityDisconnectCallback GameActivityConnectionCallback
+	var activityDisconnectTicket *presenceCallbackTicket
 
 	if clients, ok := h.clients[client.userID]; ok {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
 			client.closeDone()
+			activityDisconnectCallback = h.onGameActivityDisconnect
 
 			// Remove this client from all server indexes it belonged to.
 			for _, sid := range client.serverIDs {
@@ -106,6 +179,7 @@ func (h *Hub) removeClient(client *Client) {
 				delete(h.clients, client.userID)
 				fullyDisconnected = true
 				userID = client.userID
+				delete(h.invisibleUsers, userID)
 				hubLogger.Info("user fully disconnected", "user_id", client.userID)
 				h.logEvent(models.LogLevelInfo, models.LogCategoryWS, &client.userID,
 					"user fully disconnected (all tabs closed)", nil)
@@ -118,6 +192,17 @@ func (h *Hub) removeClient(client *Client) {
 					"aggregate_status", newAggregate)
 			}
 		}
+	}
+	if fullyDisconnected && h.onUserFullyDisconnected != nil {
+		disconnectCallback = h.onUserFullyDisconnected
+		ticket = h.presenceCallbacks.reserve(userID, "user_fully_disconnected")
+	} else if partialDisconnect && h.onPresenceManualUpdate != nil {
+		presenceCallback = h.onPresenceManualUpdate
+		ticket = h.presenceCallbacks.reserve(userID, "presence_manual_update")
+	}
+	// Keep the same presence-before-activity order used by submit below.
+	if activityDisconnectCallback != nil {
+		activityDisconnectTicket = h.presenceCallbacks.reserve(client.userID, "game_activity_disconnect")
 	}
 
 	// h.mu is now held here too (deferred Unlock above, not the manual
@@ -133,10 +218,14 @@ func (h *Hub) removeClient(client *Client) {
 		h.evictUserInfo(userID)
 	}
 
-	if fullyDisconnected && h.onUserFullyDisconnected != nil {
-		logx.Go("ws.user_fully_disconnected", func() { h.onUserFullyDisconnected(userID, "") })
-	} else if partialDisconnect && h.onPresenceManualUpdate != nil {
-		logx.Go("ws.presence_manual_update", func() { h.onPresenceManualUpdate(userID, newAggregate, true) })
+	h.mu.Unlock()
+	if disconnectCallback != nil {
+		h.presenceCallbacks.submit(ticket, func() { disconnectCallback(userID, "") })
+	} else if presenceCallback != nil {
+		h.presenceCallbacks.submit(ticket, func() { presenceCallback(userID, newAggregate, true) })
+	}
+	if activityDisconnectCallback != nil {
+		h.presenceCallbacks.submit(activityDisconnectTicket, func() { activityDisconnectCallback(client.userID, client.connectionID) })
 	}
 }
 
@@ -152,6 +241,30 @@ func (h *Hub) DisconnectUser(userID string) {
 	h.mu.RUnlock()
 
 	for _, client := range clients {
+		if client.conn != nil {
+			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
+			_ = client.conn.Close()
+		}
+		h.unregister <- client
+	}
+}
+
+// DisconnectSession leaves the account's other signed-in sessions connected.
+// The durable tombstone is committed before the caller invokes this method.
+func (h *Hub) DisconnectSession(userID, sessionID string) {
+	h.mu.RLock()
+	var clients []*Client
+	for client := range h.clients[userID] {
+		if client.sessionID == sessionID {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
+		if client.conn != nil {
+			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
+			_ = client.conn.Close()
+		}
 		h.unregister <- client
 	}
 }
@@ -166,6 +279,45 @@ func (h *Hub) SetInvisible(userID string, invisible bool) {
 	} else {
 		delete(h.invisibleUsers, userID)
 	}
+}
+
+// CommitPresenceVisibility applies the visibility side effect of a persisted
+// manual presence update only while the user is still connected with that
+// account preference. A delayed DB callback for an older preference cannot
+// reveal or hide a newer state.
+func (h *Hub) CommitPresenceVisibility(userID, status string) bool {
+	switch status {
+	case "online", "idle", "dnd", "offline":
+	default:
+		return false
+	}
+	h.mu.Lock()
+	clients := h.clients[userID]
+	if len(clients) == 0 {
+		h.mu.Unlock()
+		return false
+	}
+	for client := range clients {
+		preference := client.prefStatus
+		if preference == "" {
+			preference = "online"
+		}
+		if preference != status {
+			h.mu.Unlock()
+			return false
+		}
+	}
+	if status == "offline" {
+		h.invisibleUsers[userID] = true
+	} else {
+		delete(h.invisibleUsers, userID)
+	}
+	cb := h.onGameActivityPresenceChange
+	h.mu.Unlock()
+	if cb != nil {
+		go cb(userID)
+	}
+	return true
 }
 
 // AddClientServerID adds a server ID to all connections of a user (on server join).

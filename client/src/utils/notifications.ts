@@ -36,7 +36,25 @@
  *     covers the gap.
  */
 
+import { getNotificationPreferences } from "./notificationPreferences";
+import { getAuthGeneration } from "../api/client";
+import { useAuthStore } from "../stores/authStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
+import { isCapacitor } from "./constants";
+
 let permissionAsked = false;
+type PendingNotification = {
+  timer: ReturnType<typeof setTimeout>;
+  tag?: string;
+  userId: string;
+  accountId: string;
+  authGeneration: number;
+  opts: ShowOptions;
+};
+const pendingByKey = new Map<string, PendingNotification>();
+let pendingSequence = 0;
+let pendingSubscriptions: Array<() => void> = [];
+const MAX_PENDING_NOTIFICATIONS = 200;
 
 /**
  * Returns true if the browser/Electron supports notifications AND
@@ -90,44 +108,116 @@ type ShowOptions = {
   tag?: string;
   /** Click handler — usually "focus the window + jump to channel". */
   onClick?: () => void;
+  /** Rechecked at delivery for events whose source may become stale while queued. */
+  isStillEligible?: () => boolean;
 };
+
+function cancelPendingNotifications(): void {
+  for (const pending of pendingByKey.values()) clearTimeout(pending.timer);
+  pendingByKey.clear();
+  for (const unsubscribe of pendingSubscriptions) unsubscribe();
+  pendingSubscriptions = [];
+}
+
+function observePendingNotifications(): void {
+  if (pendingSubscriptions.length > 0) return;
+  pendingSubscriptions.push(useAuthStore.subscribe((state, previous) => {
+    if (state.user?.id !== previous.user?.id || state.manualStatus === "dnd" || state.manualStatus === "offline"
+      || [...pendingByKey.values()].some((pending) => pending.authGeneration !== getAuthGeneration())) {
+      cancelPendingNotifications();
+    }
+  }));
+  pendingSubscriptions.push(usePreferencesStore.subscribe((state, previous) => {
+    const before = previous.data.notifications as Record<string, unknown> | undefined;
+    const after = state.data.notifications as Record<string, unknown> | undefined;
+    if (after?.desktopEnabled === false || state.accountId !== previous.accountId || before?.desktopDelaySeconds !== after?.desktopDelaySeconds) {
+      cancelPendingNotifications();
+    }
+  }));
+}
+
+function canDeliver(pending: PendingNotification): boolean {
+  const auth = useAuthStore.getState();
+  const preferences = usePreferencesStore.getState();
+  const prefs = getNotificationPreferences();
+  if (!auth.user?.id || auth.user.id !== pending.userId || preferences.accountId !== pending.accountId) return false;
+  if (getAuthGeneration() !== pending.authGeneration || !prefs.desktopEnabled || !notificationsEnabled()) return false;
+  if (auth.manualStatus === "dnd" || auth.manualStatus === "offline") return false;
+  if (!prefs.notifyWhenFocused && typeof document !== "undefined" && !document.hidden && document.hasFocus()) return false;
+  try { return pending.opts.isStillEligible?.() !== false; } catch { return false; }
+}
+
+function deliver(pending: PendingNotification): void {
+  if (!canDeliver(pending)) return;
+  try {
+    const n = new Notification(pending.opts.title, {
+      body: pending.opts.body,
+      icon: pending.opts.icon ?? undefined,
+      tag: pending.opts.tag,
+      silent: true,
+    });
+    if (pending.opts.onClick) {
+      n.onclick = () => {
+        try {
+          window.focus();
+          pending.opts.onClick?.();
+        } finally { n.close(); }
+      };
+    }
+  } catch (err) {
+    console.warn("[notifications] failed to show:", err);
+  }
+}
 
 /**
  * Fire an OS toast. Drops silently if:
  *  • Permission isn't granted (no prompt, no error)
  *  • The tab is currently visible AND focused (would duplicate in-app cue)
  *
- * Caller is responsible for higher-level gating: muted channels,
- * mentions-only mode, do-not-disturb, etc.
+ * Callers decide whether the source event is eligible. Delayed deliveries
+ * recheck that source, account/session, permission, DND, and foreground policy.
  */
 export function showNotification(opts: ShowOptions): void {
+  const prefs = getNotificationPreferences();
+  if (!prefs.desktopEnabled) return;
   if (!notificationsEnabled()) return;
   // Foreground gate — let the in-app cue handle visible+focused tabs.
-  if (typeof document !== "undefined" && !document.hidden && document.hasFocus()) {
+  if (!prefs.notifyWhenFocused && typeof document !== "undefined" && !document.hidden && document.hasFocus()) {
     return;
   }
-  try {
-    const n = new Notification(opts.title, {
-      body: opts.body,
-      icon: opts.icon ?? undefined,
-      tag: opts.tag,
-      // silent:false lets the OS pick its own toast sound — we already
-      // play playNotificationSound() inside the app, so leaving this
-      // silent avoids a double-beep.
-      silent: true,
-    });
-    if (opts.onClick) {
-      n.onclick = () => {
-        try {
-          window.focus();
-          opts.onClick?.();
-        } finally {
-          n.close();
-        }
-      };
-    }
-  } catch (err) {
-    // Some Linux desktops + niche WebViews throw on construct — non-fatal.
-    console.warn("[notifications] failed to show:", err);
+  const auth = useAuthStore.getState();
+  const preferences = usePreferencesStore.getState();
+  if (!auth.user?.id || !preferences.accountId || preferences.accountId !== auth.user.id) return;
+  const pending: PendingNotification = {
+    timer: 0 as unknown as ReturnType<typeof setTimeout>,
+    tag: opts.tag,
+    userId: auth.user.id,
+    accountId: preferences.accountId,
+    authGeneration: getAuthGeneration(),
+    opts,
+  };
+  // The preference is explicitly desktop-only; Capacitor keeps native timing.
+  const delayMs = (isCapacitor() ? 0 : prefs.desktopDelaySeconds) * 1000;
+  if (!delayMs) {
+    deliver(pending);
+    return;
   }
+  observePendingNotifications();
+  const key = opts.tag ? `tag:${opts.tag}` : `untagged:${++pendingSequence}`;
+  const old = pendingByKey.get(key);
+  if (old) clearTimeout(old.timer);
+  else if (pendingByKey.size >= MAX_PENDING_NOTIFICATIONS) return;
+  pending.timer = setTimeout(() => {
+    if (pendingByKey.get(key) !== pending) return;
+    pendingByKey.delete(key);
+    deliver(pending);
+    if (pendingByKey.size === 0) {
+      for (const unsubscribe of pendingSubscriptions) unsubscribe();
+      pendingSubscriptions = [];
+    }
+  }, delayMs);
+  pendingByKey.set(key, pending);
 }
+
+/** Explicit cancellation is useful on lifecycle transitions and deterministic tests. */
+export function cancelPendingDesktopNotifications(): void { cancelPendingNotifications(); }

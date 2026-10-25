@@ -30,6 +30,7 @@ type Props = {
   isBadgeAdmin: boolean;
   isFriend: boolean;
   isBlocked: boolean;
+  isIgnored: boolean;
   userId: string;
   username: string;
   handleSendMessage: () => void;
@@ -39,6 +40,7 @@ type Props = {
   getFriendLabel: () => string;
   blockUser: (userId: string) => Promise<boolean>;
   unblockUser: (userId: string) => Promise<boolean>;
+  toggleIgnored: () => void;
   confirm: ReturnType<typeof useConfirm>;
   setShowBadgeAssign: (open: boolean) => void;
   setShowReport: (open: boolean) => void;
@@ -49,6 +51,7 @@ function MemberCardActions({
   isBadgeAdmin,
   isFriend,
   isBlocked,
+  isIgnored,
   userId,
   username,
   handleSendMessage,
@@ -58,6 +61,7 @@ function MemberCardActions({
   getFriendLabel,
   blockUser,
   unblockUser,
+  toggleIgnored,
   confirm,
   setShowBadgeAssign,
   setShowReport,
@@ -108,6 +112,10 @@ function MemberCardActions({
                 <span>{t("assignBadge")}</span>
               </button>
             )}
+            <button className="mc-btn mc-btn-default" onClick={toggleIgnored}>
+              <span aria-hidden>{isIgnored ? "◉" : "◌"}</span>
+              <span>{t(isIgnored ? "unignore" : "ignore")}</span>
+            </button>
             <button
               className={`mc-btn${isBlocked ? " mc-btn-default" : " mc-btn-danger"}`}
               onClick={async () => {

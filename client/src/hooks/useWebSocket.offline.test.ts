@@ -31,6 +31,23 @@ import { act, renderHook } from "@testing-library/react";
 
 import type { ConnectionStatus } from "./useWebSocket";
 import { useWebSocket } from "./useWebSocket";
+import { handleChannelEvent } from "./ws/channelEventHandlers";
+import { handleDMEvent } from "./ws/dmEventHandlers";
+import { handleSystemEvent } from "./ws/systemEventHandlers";
+const revocation = vi.hoisted(() => ({
+  session: "session-a", owner: "u1" as string | null, generation: 1,
+  ownerListeners: new Set<(owner: string | null) => void>(),
+  generationListeners: new Set<(generation: number) => void>(),
+  logout: vi.fn(async () => {}),
+  ensureFreshToken: vi.fn(async () => "test-token"),
+  ticket: vi.fn(async () => ({ success: false })),
+}));
+vi.mock("../stores/authStore", () => ({ useAuthStore: { getState: () => ({ user: revocation.owner ? { id: revocation.owner } : null, logout: revocation.logout }) } }));
+vi.mock("../api/authSessionEvents", () => ({
+  getAuthSessionOwner: () => revocation.owner,
+  subscribeAuthOwnerChanges: (listener: (owner: string | null) => void) => { revocation.ownerListeners.add(listener); return () => revocation.ownerListeners.delete(listener); },
+  subscribeAuthGenerationChanges: (listener: (generation: number) => void) => { revocation.generationListeners.add(listener); return () => revocation.generationListeners.delete(listener); },
+}));
 
 // ─── Module stubs ───
 // The hook's connect effect is the unit under test; every collaborator it
@@ -38,11 +55,13 @@ import { useWebSocket } from "./useWebSocket";
 // the point where it constructs a socket and wires the window listeners.
 
 vi.mock("../api/client", () => ({
-  ensureFreshToken: vi.fn(async () => "test-token"),
+  ensureFreshToken: revocation.ensureFreshToken,
+  getAuthGeneration: () => revocation.generation,
+  getAccessSessionID: (token?: string) => token ? "session-a" : revocation.session,
   // success:false keeps the hook on the legacy `?token=` URL branch —
   // which URL it picks is irrelevant here, only that it gets to `new
   // WebSocket(...)` without a network call.
-  apiClient: vi.fn(async () => ({ success: false })),
+  apiClient: revocation.ticket,
 }));
 
 vi.mock("../api/clientLog", () => ({ logToServer: vi.fn() }));
@@ -161,6 +180,16 @@ async function mountHook() {
   return view;
 }
 
+function changeAuth(owner: string | null, generation = revocation.generation + 1) {
+  const previousOwner = revocation.owner;
+  revocation.generation = generation;
+  for (const listener of [...revocation.generationListeners]) listener(generation);
+  revocation.owner = owner;
+  if (owner !== previousOwner) {
+    for (const listener of [...revocation.ownerListeners]) listener(owner);
+  }
+}
+
 describe("ConnectionStatus type", () => {
   it("includes 'offline' as a distinct status", () => {
     // If this line ever fails to compile, someone dropped "offline"
@@ -186,6 +215,13 @@ describe("useWebSocket offline/online handling", () => {
   const realWebSocket = globalThis.WebSocket;
 
   beforeEach(() => {
+    revocation.session = "session-a"; revocation.owner = "u1"; revocation.generation = 1; revocation.logout.mockClear();
+    revocation.ownerListeners.clear(); revocation.generationListeners.clear();
+    revocation.ensureFreshToken.mockReset().mockResolvedValue("test-token");
+    revocation.ticket.mockReset().mockResolvedValue({ success: false });
+    vi.mocked(handleChannelEvent).mockClear();
+    vi.mocked(handleDMEvent).mockClear();
+    vi.mocked(handleSystemEvent).mockClear();
     FakeWebSocket.instances = [];
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
     listeners = spyOnWindowListeners();
@@ -202,6 +238,18 @@ describe("useWebSocket offline/online handling", () => {
 
     expect(liveHandlersFor("offline")).toHaveLength(1);
     expect(liveHandlersFor("online")).toHaveLength(1);
+  });
+
+  it("signs out only the revoked socket's current session", async () => {
+    await mountHook();
+    await act(async () => lastSocket().onclose?.({ code: 4001, reason: "session_revoked", wasClean: true } as CloseEvent));
+    expect(revocation.logout).toHaveBeenCalledWith({ localOnly: true, expectedUserId: "u1" });
+  });
+
+  it("does not sign out a replacement session when an old socket is revoked", async () => {
+    await mountHook(); revocation.session = "session-b";
+    await act(async () => lastSocket().onclose?.({ code: 4001, reason: "session_revoked", wasClean: true } as CloseEvent));
+    expect(revocation.logout).not.toHaveBeenCalled();
   });
 
   it("removes both listeners on unmount, by the same reference it added", async () => {
@@ -260,6 +308,93 @@ describe("useWebSocket offline/online handling", () => {
 
     expect(result.current.connectionStatus).toBe("connecting");
     expect(FakeWebSocket.instances.length).toBe(socketsAfterMount + 1);
+  });
+
+  it("retires old-socket callbacks and performs one reconnect for an account/session boundary", async () => {
+    await mountHook();
+    const oldSocket = lastSocket();
+
+    await act(async () => {
+      changeAuth("u2");
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(oldSocket.closeCount).toBe(1);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    await act(async () => {
+      oldSocket.onmessage?.({ data: JSON.stringify({ op: "message_create", d: {} }) } as MessageEvent);
+      oldSocket.onclose?.({ code: 1006, reason: "old", wasClean: false } as CloseEvent);
+      await Promise.resolve();
+    });
+    expect(handleChannelEvent).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it("does not route a pending old event to later handlers after an auth boundary", async () => {
+    await mountHook();
+    const socket = lastSocket();
+    let resolveChannel!: (handled: boolean) => void;
+    vi.mocked(handleChannelEvent).mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => { resolveChannel = resolve; }),
+    );
+
+    await act(async () => {
+      socket.onmessage?.({ data: JSON.stringify({ op: "message_create", d: {} }) } as MessageEvent);
+      await Promise.resolve();
+      expect(handleChannelEvent).toHaveBeenCalledOnce();
+
+      changeAuth("u2");
+      await Promise.resolve();
+      await Promise.resolve();
+      resolveChannel(false);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(handleDMEvent).not.toHaveBeenCalled();
+    expect(handleSystemEvent).not.toHaveBeenCalled();
+  });
+
+  it("discards a token completion captured before account change", async () => {
+    let resolveOld!: (token: string) => void;
+    revocation.ensureFreshToken.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    const view = renderHook(() => useWebSocket());
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      changeAuth("u2");
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    resolveOld("stale-token");
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(lastSocket().url).not.toContain("stale-token");
+    view.unmount();
+  });
+
+  it("discards a ticket completion captured before reauthentication", async () => {
+    let resolveOld!: (value: { success: boolean; data?: { ticket: string } }) => void;
+    revocation.ticket.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    const view = renderHook(() => useWebSocket());
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    await act(async () => {
+      changeAuth("u1");
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    resolveOld({ success: true, data: { ticket: "stale-ticket" } });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(lastSocket().url).not.toContain("stale-ticket");
+    view.unmount();
   });
 
   it("stops reacting to window events after unmount", async () => {

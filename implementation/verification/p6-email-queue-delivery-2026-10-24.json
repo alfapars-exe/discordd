@@ -1,0 +1,45 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Durable category email queue, fenced worker delivery, unsubscribe footer, and friend-request producer.",
+  "code": [
+    "server/models/email_delivery.go",
+    "server/repository/email_delivery_repository.go",
+    "server/repository/sqlite_email_delivery.go",
+    "server/repository/sqlite_email_delivery_test.go",
+    "server/database/migrations/115_email_delivery_queue.sql",
+    "server/database/migrations/126_email_delivery_leases.sql",
+    "server/services/email_delivery.go",
+    "server/services/email_delivery_test.go",
+    "server/services/friendship_service.go",
+    "server/services/friendship_service_test.go",
+    "server/init_services.go"
+  ],
+  "implemented": [
+    "Queue admission and delivery both enforce recipient/account/category eligibility; delivery rechecks eligibility immediately before sending.",
+    "Friend requests enqueue one social-category email to the target after pending persistence and sender lookup, keyed by friend-request:<friendship ID>. The body uses an escaped display name with username fallback, contains no private request text, and uses a generic subject. Mutual auto-accept, denied, duplicate, and failed-create paths do not enqueue. Enqueue failure does not roll back or fail the friendship request; its log excludes provider error/body/address data.",
+    "Leased claims carry random claim tokens; expired leases recover for retry within the attempt limit, and stale workers cannot mark or retry a job after a newer claim takes ownership.",
+    "Delivery uses bounded batch/send contexts and generic persisted/returned failure reasons. Unsubscribe proofs are issued against the queued address, escaped in a category footer, and are not stored in job payloads or logs.",
+    "Production service wiring attaches the email delivery service as the friendship email enqueuer and configures unsubscribe issuance."
+  ],
+  "verification": {
+    "status": "full Go/vet and targeted PostgreSQL checks passed; external acceptance remains open",
+    "passed": [
+      "Friendship producer focused tests passed once before concurrent email-delivery edits; they cover enqueue arguments, dedupe identity, HTML escaping, username fallback, best-effort errors, and no-email branches.",
+      "Queue repository and service tests cover enqueue eligibility, lease recovery, claim-token fencing, retries, deadlines, and unsubscribe footer behavior.",
+      "go test ./... -timeout=15m passed all packages; reported package durations: repository 43.691s, services 21.716s, root 5.609s.",
+      "go vet ./... passed.",
+      "go test ./repository -run '^TestEmailDelivery|^TestEmailUnsubscribe' -count=3 passed against PostgreSQL 18 in 18.933s after fixing a fractional CURRENT_TIMESTAMP fixture assumption in deterministic next_attempt_at setup; tests did not skip.",
+      "TestEmailDeliveryAndUnsubscribeSQLiteIntegration passed, exercising the real service/queue/unsubscribe flow on SQLite.",
+      "PostgreSQL validation used a temporary container with AutoRemove enabled and no host ports; it was stopped and removed afterward. No production data or settings were used."
+    ],
+    "historical_note": "The initial PostgreSQL attempt exposed a fractional CURRENT_TIMESTAMP precision assumption in a test fixture. The fixture now supplies deterministic next_attempt_at values; the three subsequent targeted runs passed."
+  },
+  "open_gates": [
+    "Real external SMTP/provider configuration, deliverability, and end-to-end acceptance are not verified.",
+    "Only friend-request social email is currently produced here; other notification/email categories remain unimplemented unless separately wired.",
+    "Database lease fencing cannot provide exactly-once behavior at the external provider boundary: if a provider accepts a message but the acknowledgment is lost or times out, a later retry may send a duplicate. Provider idempotency is not established.",
+    "Browser QA and two-client live acceptance have not been performed.",
+    "No production send, publication, or cutover has been performed."
+  ],
+  "release": "Not accepted; external SMTP/provider, browser, and two-client acceptance remain open."
+}

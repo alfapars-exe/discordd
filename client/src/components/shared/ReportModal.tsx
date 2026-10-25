@@ -15,6 +15,15 @@ type ReportModalProps = {
   userId: string;
   username: string;
   onClose: () => void;
+  initialReason?: ReportReason;
+  messageEvidence?: {
+    kind: "channel" | "dm" | "group";
+    serverId?: string;
+    channelId: string;
+    messageId: string;
+    content: string;
+    encrypted: boolean;
+  };
 };
 
 /** Max evidence files per report */
@@ -37,14 +46,15 @@ function filterImageFiles(files: File[]): File[] {
   return files.filter((f) => ALLOWED_IMAGE_TYPES.includes(f.type));
 }
 
-function ReportModal({ userId, username, onClose }: ReportModalProps) {
+function ReportModal({ userId, username, onClose, messageEvidence, initialReason }: ReportModalProps) {
   const { t } = useTranslation("dm");
   const addToast = useToastStore((s) => s.addToast);
 
-  const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
+  const [selectedReason, setSelectedReason] = useState<ReportReason | null>(initialReason ?? null);
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shareMessageContent, setShareMessageContent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isValid = selectedReason !== null && description.trim().length >= 10;
@@ -113,7 +123,18 @@ function ReportModal({ userId, username, onClose }: ReportModalProps) {
     try {
       const res = await reportUser(
         userId,
-        { reason: selectedReason, description: description.trim() },
+        {
+          reason: selectedReason,
+          description: description.trim(),
+          ...(messageEvidence ? {
+            source_kind: messageEvidence.kind,
+            source_server_id: messageEvidence.serverId,
+            source_channel_id: messageEvidence.channelId,
+            source_message_id: messageEvidence.messageId,
+            evidence_consent: shareMessageContent,
+            evidence_content: shareMessageContent ? messageEvidence.content : undefined,
+          } : {}),
+        },
         files.length > 0 ? files : undefined
       );
 
@@ -194,6 +215,24 @@ function ReportModal({ userId, username, onClose }: ReportModalProps) {
               maxLength={1000}
             />
           </div>
+
+          {/* Evidence — optional image attachments */}
+          {messageEvidence && (
+            <div className="report-field report-message-evidence">
+              <label className="report-label">{t("reportMessageContextLabel")}</label>
+              <p className="report-evidence-hint">
+                {t(messageEvidence.encrypted ? "reportEncryptedMessageHint" : "reportMessageHint")}
+              </p>
+              {messageEvidence.content.length > 0 && <label className="report-evidence-consent">
+                <input
+                  type="checkbox"
+                  checked={shareMessageContent}
+                  onChange={(event) => setShareMessageContent(event.target.checked)}
+                />
+                <span>{t("reportShareMessageContent")}</span>
+              </label>}
+            </div>
+          )}
 
           {/* Evidence — optional image attachments */}
           <div className="report-field">

@@ -1,0 +1,16 @@
+{
+  "status": "implemented_unverified",
+  "change": "Upcoming-event notification consent now fails closed when stored preference root is JSON null; absent rows/namespaces retain documented enabled default.",
+  "verification": [
+    "11-case preference parser regression covering missing/default/explicit/null/string/array/broken JSON.",
+    "Actual repository Deliver regression: JSON null produces no in-app notification; occurrence dedupe still records evaluation independently of email consent.",
+    "Docker Go repository TestServerEventNoticePreference and TestServerEventDelivery tests passed with count=3 (6.233s).",
+    "Docker go vet ./repository passed."
+  ],
+  "remaining": [
+    "Latest consent change not yet exercised against PostgreSQL runtime or live browser backend.",
+    "Upcoming-event email producer remains missing: enqueue must share event delivery transaction and send-time eligibility needs event revision, RSVP and membership context.",
+    "Streaming notification producer remains missing: extend existing authenticated LiveKit webhook with instance/room validation, avoid treating client-reported is_streaming as verified publication, and require recipient ViewChannel plus consent/friend/block checks.",
+    "Existing voice-state server-wide fanout requires separate private-channel visibility review and correction."
+  ]
+}

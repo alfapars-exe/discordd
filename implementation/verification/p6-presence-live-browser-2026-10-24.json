@@ -1,0 +1,35 @@
+{
+  "phase": "P6",
+  "status": "implemented_unverified",
+  "scope": "Bounded local browser presence acceptance, not whole-feature acceptance",
+  "environment": {
+    "server": "hichat-presence-qa, loopback 19192, current source",
+    "client": "Vite 15174",
+    "accounts": "Two synthetic QA accounts, isolated localhost and 127.0.0.1 cookie origins",
+    "browserTaskSpace": 9
+  },
+  "verified": [
+    "Manual invisible and DND selection synchronized between two tabs of the same account.",
+    "DND persisted through getMe and page reload.",
+    "Friend request sent and accepted through actual UI between independent accounts.",
+    "Observer All friends row displayed actor as DND.",
+    "Actor invisible selection changed observer row to offline and removed actor from Online friends.",
+    "Actor reload retained selected invisible preference; observer Online view still showed no online friends after reconnect.",
+    "Actor online selection restored observer friend row and online count to one."
+  ],
+  "evidence": {
+    "scripts": "C:/Users/PARS/ego/hichat-acceptance-20261024-resume/round-01.mjs through round-23.mjs",
+    "latestRounds": "20 profile DND; 21 observer offline; 22 online empty and invisible retained after reload; 23 observer still offline then online restored",
+    "screenshots": "Not verified: prior screenshot attempt failed because window was minimized. DOM snapshots and UI actions are functional evidence only."
+  },
+  "openFindings": [
+    "Welcome and download prompt appeared simultaneously; download prompt intercepted welcome confirmation until dismissed.",
+    "Escape did not close the self profile card in the observed interaction."
+  ],
+  "remaining": [
+    "Independent physical devices and long-lived network loss/reconnect acceptance.",
+    "Visual reference and viewport matrix acceptance.",
+    "Online friend notification consent and deduplication live acceptance.",
+    "No production deployment or release acceptance implied."
+  ]
+}

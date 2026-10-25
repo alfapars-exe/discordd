@@ -33,6 +33,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/pkg/cache"
@@ -68,11 +69,13 @@ type WSTicketService interface {
 // ticketRecord is the value stored per ticket: the userID it was minted for
 // and the token_version the user carried at mint time.
 type ticketRecord struct {
+	sessionID    string
 	userID       string
 	tokenVersion int
 }
 
 type wsTicketService struct {
+	mu    sync.Mutex
 	store *cache.TTLCache[string, ticketRecord]
 }
 
@@ -88,25 +91,36 @@ func NewWSTicketService() WSTicketService {
 }
 
 func (s *wsTicketService) Issue(userID string, tokenVersion int) (string, error) {
+	return s.IssueForSession(userID, tokenVersion, "")
+}
+
+func (s *wsTicketService) IssueForSession(userID string, tokenVersion int, sessionID string) (string, error) {
 	buf := make([]byte, wsTicketBytes)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
 	ticket := hex.EncodeToString(buf)
-	s.store.Set(ticket, ticketRecord{userID: userID, tokenVersion: tokenVersion})
+	s.store.Set(ticket, ticketRecord{userID: userID, tokenVersion: tokenVersion, sessionID: sessionID})
 	return ticket, nil
 }
 
 func (s *wsTicketService) Consume(ticket string) (string, int, error) {
+	uid, tv, _, err := s.ConsumeSession(ticket)
+	return uid, tv, err
+}
+
+func (s *wsTicketService) ConsumeSession(ticket string) (string, int, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if ticket == "" {
-		return "", 0, ErrTicketInvalid
+		return "", 0, "", ErrTicketInvalid
 	}
 	rec, ok := s.store.Get(ticket)
 	if !ok {
-		return "", 0, ErrTicketInvalid
+		return "", 0, "", ErrTicketInvalid
 	}
 	// One-shot: delete immediately so a captured ticket can't be
 	// replayed on a second handshake before the TTL fires.
 	s.store.Delete(ticket)
-	return rec.userID, rec.tokenVersion, nil
+	return rec.userID, rec.tokenVersion, rec.sessionID, nil
 }

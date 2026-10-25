@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-24",
+  "scope": "Genuine NSFL/gore classifier candidate qualification; not integrated or accepted",
+  "candidate": {
+    "repository": "OwenElliott/image-safety-classifier-xs",
+    "revision": "54f4560bd9c5ee92d45dc30418a8f8680e80de6d",
+    "source_file": "onnx/image-safety-classifier-xs.onnx",
+    "bytes": 13137569,
+    "sha256": "8c28c49d9075f3ad15ebdc2961f02d5b3f99be944815b848b49c9f0e6f3fb689",
+    "class_order": ["NSFL", "NSFW", "SFW"],
+    "declared_license": "Model card declares MIT; base SwiftFormer configuration declares Apache-2.0. Attribution/license packaging must be preserved before bundling.",
+    "limitations": "Author explicitly describes NSFL as underrepresented in training data. Reported aggregate accuracy is not HiChat acceptance evidence. Dataset is proprietary; no training/evaluation images were downloaded."
+  },
+  "verification": [
+    {"command": "Isolated npm install --ignore-scripts --save-exact onnxruntime-web@1.30.0", "result": "passed", "detail": "Installed eighteen packages into a newly created temporary directory, not the application. Existing client package.json/lock were not modified by the probe."},
+    {"command": "Real pinned ONNX inference with ONNX Runtime Web 1.30.0, WASM, numThreads=1", "result": "passed", "detail": "Input image: float32 [batch,3,224,224]. Output probabilities: float32 [batch,3]. Six actual inferences on synthetic constant RGB inputs returned finite normalized vectors. Repeated identical tensors produced identical probabilities."},
+    {"command": "Reproducible repository probe script", "result": "passed", "detail": "scripts/verify-disturbing-model-candidate.mjs verifies exact runtime version, model hash/size, input/output names and output probability validity before reporting measurements. Requires an explicit isolated runtime directory and candidate file."},
+    {"command": "node --test scripts/verify-disturbing-model-candidate.test.mjs", "result": "passed", "tests": 2, "detail": "Rejects malformed/non-finite/unnormalized vectors and keeps a low gore score uncertain when the sexual class dominates. The evaluation thresholds are provisional, not a deployed policy."},
+    {"command": "Coverage validator and git diff --check for new probe scripts", "result": "passed"}
+  ],
+  "observed_host_measurements": {
+    "environment": "Windows host, bundled Node process, WASM single-thread CPU; not a browser/device benchmark",
+    "load_ms": 211.6171,
+    "inference_ms": [73.3714, 53.5608, 51.6220, 53.7273, 55.6563, 52.8044],
+    "process_rss_bytes_near_end": 152993792,
+    "wasm_binary_bytes": 14239897,
+    "limits": "RSS includes the Node process and runtime, is not peak or model-only memory. Uniform tensors do not establish classification accuracy, image preprocessing parity or real browser performance."
+  },
+  "sources": [
+    "https://huggingface.co/OwenElliott/image-safety-classifier-xs",
+    "https://huggingface.co/OwenElliott/image-safety-classifier-xs/tree/main/onnx",
+    "https://raw.githubusercontent.com/Amshaker/SwiftFormer/main/LICENSE",
+    "https://onnxruntime.ai/docs/get-started/with-javascript/web.html"
+  ],
+  "next_required_work": [
+    "Integrate an exact-version ONNX Runtime Web dependency without unrelated lockfile changes; self-host/hash-check model and matching WASM/loader assets, retain licenses and validate packaging/CSP.",
+    "Implement and verify the ONNX-specific bilinear RGB resize/NCHW preprocessing against the reference. Do not blindly reuse NSFWJS alignCorners normalization; normalization and softmax are already embedded in this ONNX graph.",
+    "Integrate independent disturbing verdicts into worker protocol, privacy policy and UI, preserving unknown on failures and mixed/uncertain content.",
+    "Representative NSFL evaluation, threshold calibration, adversarial input tests, real browser/Windows memory/performance and two-client acceptance before declaring the feature complete."
+  ],
+  "acceptance": "Not accepted. Candidate compatibility is demonstrated, but the app still reports disturbing-content analysis as unknown. No application dependency, bundled model, production release or deployment was changed."
+}

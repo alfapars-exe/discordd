@@ -156,7 +156,7 @@ func serverFileURLs(ctx context.Context, q database.TxQuerier, serverID string) 
 func (r *sqliteServerRepo) GetUserServers(ctx context.Context, userID string) ([]models.ServerListItem, error) {
 	// Sorted by user's custom position, with joined_at as tiebreaker.
 	query := `
-		SELECT s.id, s.name, s.icon_url
+		SELECT s.id, s.name, s.icon_url, COALESCE(sm.game_activity_audience, 0)
 		FROM servers s
 		INNER JOIN server_members sm ON s.id = sm.server_id
 		WHERE sm.user_id = ?
@@ -168,7 +168,9 @@ func (r *sqliteServerRepo) GetUserServers(ctx context.Context, userID string) ([
 	}
 	return scanRows(rows, "server", func(rows *sql.Rows) (models.ServerListItem, error) {
 		var s models.ServerListItem
-		err := rows.Scan(&s.ID, &s.Name, &s.IconURL)
+		var gameActivityAudience int64
+		err := rows.Scan(&s.ID, &s.Name, &s.IconURL, &gameActivityAudience)
+		s.GameActivityAudience = gameActivityAudience == 1
 		return s, err
 	})
 }
@@ -185,6 +187,58 @@ func (r *sqliteServerRepo) AddMember(ctx context.Context, serverID, userID strin
 	}
 
 	return nil
+}
+
+// AddMemberWithGameActivityAudience snapshots the owner's default activity
+// audience at membership creation. Existing rows remain NULL and fail closed.
+func (r *sqliteServerRepo) AddMemberWithGameActivityAudience(ctx context.Context, serverID, userID string, allowed bool) error {
+	query := `INSERT OR IGNORE INTO server_members (server_id,user_id,position,game_activity_audience)
+		VALUES (?,?,COALESCE((SELECT MAX(position) FROM server_members WHERE user_id=?),-1)+1,?)`
+	if _, err := r.db.ExecContext(ctx, query, serverID, userID, userID, allowed); err != nil {
+		return fmt.Errorf("failed to add server member with activity snapshot: %w", err)
+	}
+	return nil
+}
+
+// LockAndCountMembersForGameActivityJoin locks the server row until the
+// surrounding membership transaction commits, then reads its current member
+// count. Every concurrent join using this method for the same server is
+// serialized before deciding the join-time audience snapshot. On repositories
+// backed by SQLite the UPDATE obtains the database write lock; on PostgreSQL
+// it obtains a row lock. Callers must fail closed if this method errors.
+func (r *sqliteServerRepo) LockAndCountMembersForGameActivityJoin(ctx context.Context, serverID string) (int, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE servers SET id=id WHERE id=?`, serverID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to lock server for membership audience snapshot: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return 0, fmt.Errorf("failed to confirm server lock for membership audience snapshot: %w", err)
+	} else if affected == 0 {
+		return 0, pkg.ErrNotFound
+	}
+	var count int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM server_members WHERE server_id=?`, serverID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count members for membership audience snapshot: %w", err)
+	}
+	return count, nil
+}
+
+// GetMemberGameActivityAudience returns the join-time snapshot; nil is the
+// legacy row representation and must be treated as denied.
+func (r *sqliteServerRepo) GetMemberGameActivityAudience(ctx context.Context, serverID, userID string) (*bool, error) {
+	var value sql.NullInt64
+	err := r.db.QueryRowContext(ctx, `SELECT game_activity_audience FROM server_members WHERE server_id=? AND user_id=?`, serverID, userID).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, pkg.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read member game activity snapshot: %w", err)
+	}
+	if !value.Valid {
+		return nil, nil
+	}
+	allowed := value.Int64 == 1
+	return &allowed, nil
 }
 
 // RemoveMember deletes the membership row and hard-deletes the user's role
@@ -409,12 +463,12 @@ func (r *sqliteServerRepo) ListAllWithStats(ctx context.Context) ([]models.Admin
 				 INNER JOIN channels c3 ON m2.channel_id = c3.id
 				 WHERE c3.server_id = s.id), 0
 			) / 1048576.0,
-			MAX(
-				COALESCE((SELECT MAX(m3.created_at) FROM messages m3
+			(SELECT MAX(val) FROM (
+				SELECT MAX(m3.created_at) AS val FROM messages m3
 				 INNER JOIN channels c4 ON m3.channel_id = c4.id
-				 WHERE c4.server_id = s.id), ''),
-				COALESCE(s.last_voice_activity, '')
-			)
+				 WHERE c4.server_id = s.id
+				 UNION ALL SELECT s.last_voice_activity
+			) activity WHERE val IS NOT NULL)
 		FROM servers s
 		LEFT JOIN users u ON s.owner_id = u.id
 		LEFT JOIN livekit_instances li ON s.livekit_instance_id = li.id
@@ -489,7 +543,7 @@ func (r *sqliteServerRepo) CountOwnedMqviHostedServers(ctx context.Context, owne
 	query := `
 		SELECT COUNT(*) FROM servers s
 		JOIN livekit_instances li ON s.livekit_instance_id = li.id
-		WHERE s.owner_id = ? AND li.is_platform_managed = true`
+		WHERE s.owner_id = ? AND li.is_platform_managed = 1`
 
 	var count int
 	if err := r.db.QueryRowContext(ctx, query, ownerID).Scan(&count); err != nil {

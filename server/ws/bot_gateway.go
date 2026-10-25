@@ -2,11 +2,15 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/gorilla/websocket"
 )
 
 // BotTokenValidator resolves a bot bearer token to a bot user id.
@@ -73,8 +77,40 @@ func (h *Handler) HandleBotConnection(w http.ResponseWriter, r *http.Request) {
 		prefStatus: "online",
 		serverIDs:  serverIDs,
 		isBot:      true,
+		registered: make(chan struct{}),
+	}
+	// Keep the connection bound to the exact credential used for admission.
+	// WritePump invokes this on every keepalive tick, limiting cross-process
+	// token revocation/removal exposure even when this process did not commit
+	// the change. The token is never logged or sent to the hub.
+	client.validateSession = func(ctx context.Context, expectedBotID, _ string) error {
+		currentBotID, validateErr := h.botValidator.ValidateBotToken(ctx, token)
+		if validateErr != nil || currentBotID != expectedBotID {
+			return pkg.ErrUnauthorized
+		}
+		return nil
 	}
 	h.hub.register <- client
+	select {
+	case <-client.registered:
+	case <-r.Context().Done():
+		_ = conn.Close()
+		h.hub.unregister <- client
+		return
+	}
+
+	// Close the token-validation/registration race. Application removal and
+	// token revocation disconnect already-visible clients; this second check
+	// catches a removal that committed after the first validation but before
+	// this client became visible to DisconnectUser.
+	if validateErr := client.validateSession(r.Context(), botUserID, ""); validateErr != nil {
+		if errors.Is(validateErr, pkg.ErrUnauthorized) {
+			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "credential_revoked"), time.Now().Add(writeWait))
+		}
+		_ = conn.Close()
+		h.hub.unregister <- client
+		return
+	}
 	logx.Go("ws.bot_write_pump", client.WritePump)
 	client.ReadPump()
 }

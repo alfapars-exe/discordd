@@ -1,0 +1,30 @@
+{
+  "recorded_at": "2026-10-23",
+  "scope": "P7 existing accessibility, appearance, language, and real consumer audit",
+  "status": "implemented_unverified",
+  "checks": [
+    { "name": "client_typecheck", "result": "passed" },
+    { "name": "accessibility_store_and_dom_tests", "result": "passed", "details": "7 files, 95 tests including TTS utility tests" },
+    { "name": "server_preference_model_tests", "result": "blocked", "details": "Fresh models.test.exe was blocked by Windows Application Control after compilation; an earlier model run in this work session passed before the policy changed." },
+    { "name": "sticker_accessibility_tests", "result": "passed", "details": "Keyboard focus, hover, always and never playback branches covered in the 4-file/63-test focused run." }
+  ],
+  "implemented": [
+    "Account-synced chat font size, link underline, display-name style, interface density, message layout/gap, UI zoom, UI-only saturation, reduced motion/OS sync, GIF playback, and animated emoji preferences.",
+    "Real channel and DM message selectors, member/server rows, profile names, navigation controls, and preview tokens consume the settings.",
+    "UI saturation no longer filters user-uploaded photos, video, attachments, or screen shares.",
+    "Turkish and English profile language selection is persisted through the profile API and applied after login.",
+    "TTS rate and preview use browser speech synthesis; incoming channel and DM plaintext is spoken only when enabled, while URLs are not read aloud.",
+    "The 3/5/10/15/20-second accessibility duration extends ordinary in-app toasts without shortening longer or persistent notices."
+    ,"Animated stickers support always, interaction-only, and never modes; interaction mode works with pointer hover and keyboard focus."
+    ,"High-contrast mode, live OS contrast synchronization, and non-color switch indicators are account-synced and applied at the shared DOM/CSS layer."
+    ,"Automatic, 12-hour, and 24-hour account time formats are applied by shared chat/admin date utilities and migrated remaining direct date-time surfaces."
+    ,"Attachment descriptions remain available to assistive technology and can be displayed visibly; legacy composer mode keeps the native textarea while suppressing rich picker popups and buttons."
+    ,"Role-color mode changes actual message author rendering between colored names, separate color dots, and hidden role color."
+    ,"Official-message styles are restricted to server-identified bot/application authors and never inferred from arbitrary message text."
+    ,"The live preview includes messages, reactions, links, a sample button, role-color modes, official-message styles, and presence indicators using the same shared preference tokens."
+  ],
+  "open_acceptance": [
+    "Installed Windows and independent-browser visual checks at every required viewport and 200 percent zoom.",
+    "Independent-browser and installed-Windows visual verification of every mode at required viewport/zoom combinations."
+  ]
+}

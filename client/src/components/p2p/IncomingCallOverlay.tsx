@@ -16,10 +16,15 @@ import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useAccessibilityStore } from "../../stores/accessibilityStore";
+import { getAuthGeneration } from "../../api/client";
+import { useVoiceShortcutAction } from "../../hooks/useVoiceShortcutAction";
 import Avatar from "../shared/Avatar";
+import { getNotificationPreferences } from "../../utils/notificationPreferences";
 
 /** DND / invisible, the "sounds off" switch and a zero volume silence the ringtone. */
 function shouldRing(): boolean {
+  const notificationPrefs = getNotificationPreferences();
+  if (notificationPrefs.muteAllSounds || !notificationPrefs.incomingCallSound) return false;
   const manualStatus = useAuthStore.getState().manualStatus;
   if (manualStatus === "dnd" || manualStatus === "offline") return false;
   if (useVoiceStore.getState().soundsEnabled === false) return false;
@@ -88,6 +93,46 @@ function IncomingCallOverlay() {
   const declineCall = useP2PCallStore((s) => s.declineCall);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const stopRingtoneRef = useRef<(() => void) | null>(null);
+  const pendingShortcutCallRef = useRef<string | null>(null);
+  const pendingShortcutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authGeneration = getAuthGeneration();
+
+  useEffect(() => {
+    pendingShortcutCallRef.current = null;
+    if (pendingShortcutTimerRef.current) clearTimeout(pendingShortcutTimerRef.current);
+    pendingShortcutTimerRef.current = null;
+    return () => {
+      if (pendingShortcutTimerRef.current) clearTimeout(pendingShortcutTimerRef.current);
+    };
+  }, [incomingCall?.id]);
+
+  function handleShortcutAction(action: "answer" | "reject"): boolean {
+    const currentUser = useAuthStore.getState().user?.id;
+    const currentCall = useP2PCallStore.getState().incomingCall;
+    if (!currentUserId || currentUser !== currentUserId || getAuthGeneration() !== authGeneration ||
+        !incomingCall || !currentCall || currentCall.id !== incomingCall.id || currentCall.receiver_id !== currentUser) return false;
+    if (pendingShortcutCallRef.current === currentCall.id) return false;
+    const { _sendWS } = useP2PCallStore.getState();
+    if (!_sendWS) return false;
+    pendingShortcutCallRef.current = currentCall.id;
+    pendingShortcutTimerRef.current = setTimeout(() => {
+      if (pendingShortcutCallRef.current === currentCall.id) pendingShortcutCallRef.current = null;
+      pendingShortcutTimerRef.current = null;
+    }, 3000);
+    try {
+      if (action === "answer") useP2PCallStore.getState().acceptCall(currentCall.id);
+      else useP2PCallStore.getState().declineCall(currentCall.id);
+    } catch {
+      if (pendingShortcutCallRef.current === currentCall.id) pendingShortcutCallRef.current = null;
+      if (pendingShortcutTimerRef.current) clearTimeout(pendingShortcutTimerRef.current);
+      pendingShortcutTimerRef.current = null;
+      return false;
+    }
+    return true;
+  }
+
+  useVoiceShortcutAction("incoming-call-answer", () => handleShortcutAction("answer"));
+  useVoiceShortcutAction("incoming-call-reject", () => handleShortcutAction("reject"));
 
   // Start/stop ringtone. Cancelled flag prevents stale promise from writing after unmount.
   useEffect(() => {

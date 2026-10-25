@@ -7,6 +7,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/argeinfina/hichat/models"
@@ -19,6 +20,32 @@ type BotService interface {
 	CreateBot(ctx context.Context, ownerID string, req models.CreateBotRequest) (*models.User, string, error)
 	ListBots(ctx context.Context, ownerID string) ([]models.User, error)
 	RevokeAllTokens(ctx context.Context, ownerID, botID string) error
+	RequestOwnershipTransfer(ctx context.Context, ownerID, botID, recipientUsername string) (*models.ApplicationTransferRequest, error)
+	ListIncomingOwnershipTransfers(ctx context.Context, recipientID string) ([]models.ApplicationTransferRequest, error)
+	ResolveOwnershipTransfer(ctx context.Context, recipientID, requestID string, accept bool) (string, error)
+	PutApplicationManifest(ctx context.Context, ownerID, botID, description string, testMode bool, actions []models.ApplicationAction) (*models.ApplicationManifest, error)
+	ListOwnedApplicationManifests(ctx context.Context, ownerID string) ([]models.ApplicationManifest, error)
+	InstallApplication(ctx context.Context, actorID, serverID, botID string, scopes []string) (*models.ApplicationInstallation, error)
+	ListApplicationInstallations(ctx context.Context, serverID string) ([]models.ApplicationInstallation, error)
+	ListAvailableApplicationActions(ctx context.Context, serverID string) ([]models.ApplicationAction, error)
+	RevokeApplicationInstallation(ctx context.Context, serverID, botID string) error
+	InvokeApplicationAction(ctx context.Context, actorID, serverID, channelID, messageID, actionID string) (*models.ApplicationInvocation, error)
+	InvokeApplicationTest(ctx context.Context, ownerID, botID, actionID string) (*models.ApplicationInvocation, error)
+	CompleteApplicationInvocation(ctx context.Context, botID, id, status string, resultText, errorCode *string) error
+	GetApplicationInvocation(ctx context.Context, actorID, id string) (*models.ApplicationInvocation, error)
+}
+
+func authenticatedHuman(w http.ResponseWriter, r *http.Request) (*models.User, bool) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return nil, false
+	}
+	if user.IsBot {
+		pkg.ErrorWithMessage(w, http.StatusForbidden, "bots cannot manage ownership transfers")
+		return nil, false
+	}
+	return user, true
 }
 
 // BotHandler serves owner-facing bot management routes.
@@ -44,7 +71,14 @@ func (h *BotHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.CreateBotRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -86,10 +120,83 @@ func (h *BotHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	botID := r.PathValue("botID")
+	if botID == "" {
+		pkg.Error(w, pkg.ErrBadRequest)
+		return
+	}
 	if err := h.svc.RevokeAllTokens(r.Context(), owner.ID, botID); err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BotHandler) RequestTransfer(w http.ResponseWriter, r *http.Request) {
+	owner, ok := authenticatedHuman(w, r)
+	if !ok {
+		return
+	}
+	var body models.CreateApplicationTransferRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&body) != nil {
+		pkg.Error(w, pkg.ErrBadRequest)
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		pkg.Error(w, pkg.ErrBadRequest)
+		return
+	}
+	request, err := h.svc.RequestOwnershipTransfer(r.Context(), owner.ID, r.PathValue("botID"), body.RecipientUsername)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusCreated, request)
+}
+
+func (h *BotHandler) ListIncomingTransfers(w http.ResponseWriter, r *http.Request) {
+	recipient, ok := authenticatedHuman(w, r)
+	if !ok {
+		return
+	}
+	requests, err := h.svc.ListIncomingOwnershipTransfers(r.Context(), recipient.ID)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]any{"requests": requests})
+}
+
+func (h *BotHandler) ResolveTransfer(w http.ResponseWriter, r *http.Request) {
+	recipient, ok := authenticatedHuman(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Accept bool `json:"accept"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&body) != nil {
+		pkg.Error(w, pkg.ErrBadRequest)
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		pkg.Error(w, pkg.ErrBadRequest)
+		return
+	}
+	token, err := h.svc.ResolveOwnershipTransfer(r.Context(), recipient.ID, r.PathValue("requestID"), body.Accept)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if body.Accept {
+		pkg.JSON(w, http.StatusOK, map[string]any{"accepted": true, "token": token})
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]any{"accepted": false})
 }

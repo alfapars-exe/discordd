@@ -3,48 +3,52 @@ package ws
 // Event is the WebSocket message format.
 // Seq is a monotonic counter for gap detection on the client side.
 type Event struct {
-	Op       string `json:"op"`
-	Data     any    `json:"d,omitempty"`
-	Seq      int64  `json:"seq,omitempty"`
-	ServerID string `json:"server_id,omitempty"`
+	Op            string `json:"op"`
+	Data          any    `json:"d,omitempty"`
+	Seq           int64  `json:"seq,omitempty"`
+	ServerID      string `json:"server_id,omitempty"`
+	VoiceEpoch    string `json:"voice_epoch,omitempty"`
+	VoiceRevision uint64 `json:"voice_revision,omitempty"`
 }
 
 // ─── Operation Constants ───
 
 // Client -> Server
 const (
-	OpHeartbeat      = "heartbeat"
-	OpTyping         = "typing"
-	OpPresenceUpdate = "presence_update"
+	OpHeartbeat          = "heartbeat"
+	OpTyping             = "typing"
+	OpPresenceUpdate     = "presence_update"
+	OpGameActivityUpdate = "game_activity_update"
+	OpPreferencesChanged = "preferences_changed"
 )
 
 // Server -> Client
 const (
-	OpReady          = "ready"
-	OpHeartbeatAck   = "heartbeat_ack"
-	OpMessageCreate  = "message_create"
-	OpMessageUpdate  = "message_update"
-	OpMessageDelete  = "message_delete"
-	OpChannelCreate  = "channel_create"
-	OpChannelUpdate  = "channel_update"
-	OpChannelDelete  = "channel_delete"
-	OpCategoryCreate = "category_create"
-	OpCategoryUpdate = "category_update"
-	OpCategoryDelete = "category_delete"
-	OpTypingStart    = "typing_start"
-	OpPresence       = "presence_update"
+	OpReady               = "ready"
+	OpHeartbeatAck        = "heartbeat_ack"
+	OpMessageCreate       = "message_create"
+	OpMessageUpdate       = "message_update"
+	OpMessageDelete       = "message_delete"
+	OpChannelCreate       = "channel_create"
+	OpChannelUpdate       = "channel_update"
+	OpChannelDelete       = "channel_delete"
+	OpCategoryCreate      = "category_create"
+	OpCategoryUpdate      = "category_update"
+	OpCategoryDelete      = "category_delete"
+	OpTypingStart         = "typing_start"
+	OpPresence            = "presence_update"
 	OpMemberJoin          = "member_join"
 	OpMemberLeave         = "member_leave"
 	OpMemberUpdate        = "member_update"
 	OpMemberTimeout       = "member_timeout"        // data: server_id, user_id, expires_at, reason
 	OpMemberTimeoutRemove = "member_timeout_remove" // data: server_id, user_id
-	OpRoleCreate     = "role_create"
-	OpRoleUpdate     = "role_update"
-	OpRoleDelete     = "role_delete"
-	OpRolesReorder   = "roles_reorder"
-	OpServerUpdate   = "server_update"
-	OpServerCreate   = "server_create"
-	OpServerDelete   = "server_delete"
+	OpRoleCreate          = "role_create"
+	OpRoleUpdate          = "role_update"
+	OpRoleDelete          = "role_delete"
+	OpRolesReorder        = "roles_reorder"
+	OpServerUpdate        = "server_update"
+	OpServerCreate        = "server_create"
+	OpServerDelete        = "server_delete"
 
 	OpMessagePin   = "message_pin"
 	OpMessageUnpin = "message_unpin"
@@ -71,8 +75,20 @@ const (
 	OpDMRequestDecline      = "dm_request_decline"
 	OpDMChannelStatusChange = "dm_channel_status_change"
 	// OpDMRead — sent to the reader only, after POST /api/dms/{id}/read.
-	// data: dm_channel_id, user_id, last_read_message_id (string|null)
+	// data: dm_channel_id, user_id, last_read_message_id (string|null), optional unread_count
 	OpDMRead = "dm_read"
+
+	OpGroupDMCreate         = "group_dm_create"
+	OpGroupDMUpdate         = "group_dm_update"
+	OpGroupDMDelete         = "group_dm_delete"
+	OpGroupDMRekey          = "group_dm_rekey"
+	OpGroupDMMessageUpdate  = "group_dm_message_update"
+	OpGroupDMMessageDelete  = "group_dm_message_delete"
+	OpGroupDMReactionUpdate = "group_dm_reaction_update"
+	OpGroupDMPinsUpdate     = "group_dm_pins_update"
+	OpGroupDMRead           = "group_dm_read"
+	OpGroupDMRefresh        = "group_dm_refresh"
+	OpGroupDMMessageCreate  = "group_dm_message_create"
 
 	// Inbox notification operations (notifications table, migration 082)
 	OpNotificationCreate = "notification_create" // data: models.Notification, sent to the target user
@@ -92,10 +108,11 @@ const (
 	OpAuditEvent = "audit_event"
 
 	// Friend operations
-	OpFriendRequestCreate  = "friend_request_create"
-	OpFriendRequestAccept  = "friend_request_accept"
-	OpFriendRequestDecline = "friend_request_decline"
-	OpFriendRemove         = "friend_remove"
+	OpFriendRequestCreate   = "friend_request_create"
+	OpFriendRequestAccept   = "friend_request_accept"
+	OpFriendRequestDecline  = "friend_request_decline"
+	OpFriendRemove          = "friend_remove"
+	OpApplicationInvocation = "application_action_invocation"
 )
 
 // Client -> Server voice operations
@@ -166,19 +183,20 @@ const (
 // withheld — bots have no use for them and broadcasting them widens the
 // exfiltration surface.
 var BotReadableOps = map[string]bool{
-	OpMessageCreate:  true,
-	OpMessageUpdate:  true,
-	OpMessageDelete:  true,
-	OpReactionUpdate: true,
-	OpMessagePin:     true,
-	OpMessageUnpin:   true,
-	OpMemberJoin:     true,
-	OpMemberLeave:    true,
-	OpMemberUpdate:   true,
-	OpTypingStart:    true,
-	OpChannelCreate:  true,
-	OpChannelUpdate:  true,
-	OpChannelDelete:  true,
+	OpMessageCreate:         true,
+	OpMessageUpdate:         true,
+	OpMessageDelete:         true,
+	OpReactionUpdate:        true,
+	OpMessagePin:            true,
+	OpMessageUnpin:          true,
+	OpMemberJoin:            true,
+	OpMemberLeave:           true,
+	OpMemberUpdate:          true,
+	OpTypingStart:           true,
+	OpChannelCreate:         true,
+	OpChannelUpdate:         true,
+	OpChannelDelete:         true,
+	OpApplicationInvocation: true,
 	// OpMemberTimeout / OpMemberTimeoutRemove are deliberately excluded: the
 	// timeout payload carries the moderator's free-text `reason`, which is
 	// not meant to be readable by bot integrations.
@@ -186,11 +204,13 @@ var BotReadableOps = map[string]bool{
 
 // ReadyData is the payload sent to a client on initial connection.
 type ReadyData struct {
-	OnlineUserIDs   []string          `json:"online_user_ids"`
-	Servers         []ReadyServerItem `json:"servers"`
-	MutedServerIDs  []string          `json:"muted_server_ids"`
-	MutedChannelIDs []string          `json:"muted_channel_ids"`
-	PrefStatus      string            `json:"pref_status"`
+	OnlineUserIDs     []string          `json:"online_user_ids"`
+	Servers           []ReadyServerItem `json:"servers"`
+	MutedServerIDs    []string          `json:"muted_server_ids"`
+	MutedChannelIDs   []string          `json:"muted_channel_ids"`
+	PrefStatus        string            `json:"pref_status"`
+	VoiceEpoch        string            `json:"voice_epoch,omitempty"`
+	GameActivityEpoch string            `json:"game_activity_epoch"`
 }
 
 // ReadyServerItem is a minimal server representation for the ready event.
@@ -204,7 +224,37 @@ type ReadyServerItem struct {
 type PresenceData struct {
 	UserID string `json:"user_id"`
 	Status string `json:"status"`
-	IsAuto bool   `json:"is_auto,omitempty"`
+	IsAuto bool   `json:"is_auto"`
+}
+
+// GameActivityClientUpdate is the client-to-server payload. The authenticated
+// connection supplies the owner; identity, timestamps, and revision are never
+// accepted from this payload.
+type GameActivityClientUpdate struct {
+	Game *GameActivityClientGame `json:"game"`
+}
+
+// GameActivityClientGame contains self-reported local display metadata only.
+// It is not a verified game identity or catalog attribution.
+type GameActivityClientGame struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GameActivityData is sent server-to-client. ServerID is empty for the global
+// accepted-friend view; game is null when this context is cleared.
+type GameActivityData struct {
+	UserID   string            `json:"user_id"`
+	ServerID string            `json:"server_id,omitempty"`
+	Game     *GameActivityGame `json:"game"`
+	Revision uint64            `json:"revision"`
+	Epoch    string            `json:"epoch"`
+}
+
+type GameActivityGame struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	StartedAt string `json:"started_at"`
 }
 
 type TypingData struct {
@@ -276,7 +326,9 @@ type VoiceStateUpdateBroadcast struct {
 
 // VoiceStatesSyncData — bulk voice state sync sent on connection.
 type VoiceStatesSyncData struct {
-	States []VoiceStateItem `json:"states"`
+	States        []VoiceStateItem `json:"states"`
+	VoiceEpoch    string           `json:"voice_epoch,omitempty"`
+	VoiceRevision uint64           `json:"voice_revision,omitempty"`
 }
 
 // VoiceStateItem mirrors models.VoiceState without creating a ws -> models dependency.
@@ -312,6 +364,9 @@ type ScreenShareViewerUpdateData struct {
 	ViewerCount    int    `json:"viewer_count"`
 	ViewerUserID   string `json:"viewer_user_id"` // who joined/left
 	Action         string `json:"action"`         // "join" or "leave"
+	// Full post-mutation set; unlike the single-user delta, this is safe to
+	// overlay on a snapshot when the corresponding earlier snapshot is late.
+	ViewerUserIDs []string `json:"viewer_user_ids"`
 }
 
 // VoiceAFKKickData — sent to user before AFK disconnect.

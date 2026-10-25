@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Existing memory-only ComposerDraftStore now owns explicit group-edit begin/cancel and group-edit completion semantics. Entering edit backs up unsent text, File objects, reply target and expression/mention fields without persisting them to disk or server.",
+    "Cancel or confirmed success of the submitted revision restores the pre-edit draft. A failed operation or newer typed edit keeps both current text and backup for retry/cancel. Session generation/send-ticket checks prevent late completions from restoring previous-account data.",
+    "Starting another edit while an unsent edit is active is rejected rather than silently discarding it. Starting an edit while any send is pending is disabled; cancellation is disabled only during the pending edit. Re-clicking the same edited message does not reset newer typing.",
+    "Group pointer and focused-row keyboard actions share disabled states. Entering edit focuses the composer; Escape cancels editing when not composing/sending. Cancelling a reply now removes only its target, not unsent text/files. Cancel buttons and group file input have localized accessible labels.",
+    "IME composition Enter/Escape are not interpreted as send/cancel. Group send tickets continue to preserve newer typing and conversation/account isolation."
+  ],
+  "verification": [
+    "Focused store/component tests passed (2 files / 28 tests) before the final additional failed-edit UI case. TypeScript tsc -b and targeted ESLint passed after that case was added.",
+    "Cases cover text/File/reply restoration on cancel and success, failure retention/retry, newer pending edit text, duplicate/different edit selection, send/cancel locking, account reset/stale tickets, focus, Escape, reply cancellation and IME Enter.",
+    "Final full client regression: 222 files / 2100 tests passed in 46.00s. Existing jsdom navigation warnings were not suppressed.",
+    "Local Vite production web build passed (1646 modules, 1.54s). Existing config-loader, large-chunk and ineffective-dynamic-import warnings remain; no warning suppression, Windows package or publication was performed."
+  ],
+  "remaining": [
+    "Actual Windows/web keyboard, IME, screen-reader, touch and navigation acceptance remains pending. Browser space is still handed to the user.",
+    "Local memory drafts deliberately do not survive process termination; account/session reset clears plaintext and backups. Disk persistence was not introduced.",
+    "Known partial file-upload handling was subsequently implemented (p4-group-partial-uploads-2026-10-24.json). Unknown network commit outcomes, complete search and cryptographic lifecycle validation remain open. No package or overall goal was accepted or released."
+  ]
+}

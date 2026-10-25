@@ -1,0 +1,33 @@
+{
+  "capability": "p2.personal-data-export",
+  "status": "implemented_unverified",
+  "date": "2026-10-23",
+  "automated": {
+    "repository_test": "PASS: owner scope, expiry, safe payload and secret exclusion",
+    "typescript": "PASS: tsc -b client/tsconfig.json",
+    "client_build": "PASS: Vite production build",
+    "docker_image": "PASS: hichat-data-export-qa:local",
+    "migration": "PASS: SQLite migration 105 applied on a clean container"
+  },
+  "browser": {
+    "task_space": 14,
+    "registration": "PASS",
+    "settings_surface": "PASS",
+    "export_creation": "PASS",
+    "download": "PASS",
+    "download_filename": "hichat-personal-data-6a1060d12e40.json",
+    "payload_format": "hichat-personal-data-v1",
+    "secret_checks": {
+      "password_hash": false,
+      "access_token": false,
+      "mfa_secret": false
+    },
+    "account_deletion": "PASS: returned to login",
+    "deleted_login_rejected": "PASS: invalid username or password"
+  },
+  "remaining_acceptance": [
+    "PostgreSQL runtime migration and owner-scope verification",
+    "large-account export performance and 50 MiB failure UX",
+    "two-client shared-history anonymization with authored messages"
+  ]
+}

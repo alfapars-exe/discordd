@@ -1,0 +1,16 @@
+{
+  "phase": "P6",
+  "status": "implemented_unverified",
+  "implemented": [
+    "Explicit actor privacy.shareStreamUpdates consent is separate from online-presence sharing and defaults off.",
+    "Privacy UI, EN/TR text, account preference cache allowlist and server boolean validation recognize the field."
+  ],
+  "verification": [
+    "Implementing agent reports 44 passing PrivacyConsentSettings/preferencesStore tests, focused ESLint and TestPreferencesValidate passing.",
+    "Root inspected the off-by-default UI expression, preference allowlist and server schema entry; TypeScript build passed after consent/UI changes."
+  ],
+  "open": [
+    "This consent prerequisite is not a working stream notification producer.",
+    "Webhook source-instance binding, verified track-start authority, persistent deduplication, recipient privacy checks and real-client acceptance remain required."
+  ]
+}

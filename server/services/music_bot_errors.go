@@ -73,6 +73,19 @@ type trackPlaybackError struct {
 func (e *trackPlaybackError) Error() string { return e.err.Error() }
 func (e *trackPlaybackError) Unwrap() error { return e.err }
 
+// MusicErrorCode exposes only classified media failures, never subprocess
+// stderr or arbitrary dependency errors. Shared by HTTP enqueue and WS play.
+func MusicErrorCode(err error) string {
+	if errors.Is(err, errToolMissing) {
+		return "MUSIC_TOOL_MISSING"
+	}
+	var playback *trackPlaybackError
+	if !errors.As(err, &playback) {
+		return ""
+	}
+	return "MUSIC_" + strings.ToUpper(string(playback.Reason))
+}
+
 // playbackReason returns the reason code for an error returned by playTrack
 // (or by a stubbed playTrackFn): a *trackPlaybackError's own reason, else
 // whatever classifyPlaybackFailure makes of the error text alone.

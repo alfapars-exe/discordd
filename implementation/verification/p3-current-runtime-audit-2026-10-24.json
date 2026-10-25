@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-24",
+  "scope": "Current local disturbing-media classifier implementation and remaining acceptance gaps",
+  "finding": "The pinned SwiftFormer ONNX model is vendored and integrated into the local media worker, category-specific policy, and UI flow. This is implemented but not fully accepted; it is not an absent-model finding.",
+  "assets": {
+    "model": "client/public/media-classifier/v2/model.onnx",
+    "repository": "OwenElliott/image-safety-classifier-xs",
+    "revision": "54f4560bd9c5ee92d45dc30418a8f8680e80de6d",
+    "bytes": 13137569,
+    "sha256": "8c28c49d9075f3ad15ebdc2961f02d5b3f99be944815b848b49c9f0e6f3fb689",
+    "runtime": "ONNX Runtime Web 1.30.0, locally vendored WASM assets under client/public/media-classifier/v2/",
+    "provenance_and_licenses": [
+      "client/public/media-classifier/v2/provenance.json",
+      "client/public/media-classifier/v2/MODEL_CARD.md",
+      "client/public/media-classifier/v2/NOTICE.md",
+      "client/public/media-classifier/v2/SWIFTFORMER-LICENSE"
+    ]
+  },
+  "implementation_paths": [
+    "client/src/media/disturbingModelRuntime.ts",
+    "client/src/media/disturbingModelContract.ts",
+    "client/src/media/disturbingPreprocessing.ts",
+    "client/src/media/mediaClassifier.worker.ts",
+    "client/src/media/mediaClassifierContract.ts",
+    "client/src/media/aggregateMediaAnalysis.ts",
+    "client/src/media/mediaClassifierClient.ts",
+    "client/src/hooks/useLocalMediaAnalysis.ts",
+    "client/src/utils/mediaVisibility.ts",
+    "client/src/components/chat/UnclassifiedMediaGate.tsx"
+  ],
+  "verification_evidence": [
+    {
+      "path": "implementation/verification/p3-vendored-disturbing-runtime-2026-10-24.json",
+      "summary": "Current runtime record: pinned assets and actual ONNX model execute through production adapter on synthetic RGB input; worker, contract, aggregation and UI integration tests; full client suite and production build. Node/synthetic and mocked-worker evidence only; not browser or device acceptance."
+    },
+    {
+      "path": "implementation/verification/p3-disturbing-preprocessing-2026-10-24.json",
+      "summary": "Current preprocessing record: production preprocessor matches Pillow 13 reference hashes and participates in a synthetic real-model inference chain."
+    },
+    {
+      "path": "implementation/verification/p3-local-media-chat-integration-2026-10-24.json",
+      "summary": "Local static-image analysis is connected to chat; unsupported animation/video and failures retain unknown-media policy."
+    }
+  ],
+  "historical_records": [
+    {
+      "path": "implementation/verification/p3-disturbing-model-candidate-2026-10-24.json",
+      "note": "Earlier candidate probe; its statement that the app still reports disturbing analysis as unknown predates integration and is not current implementation evidence."
+    },
+    {
+      "path": "implementation/verification/p3-disturbing-preprocessing-2026-10-24.json",
+      "note": "Contains earlier intermediate-state remaining/acceptance text; use its verified preprocessing evidence, not its pre-integration status statements, when describing current state."
+    }
+  ],
+  "remaining_gaps": [
+    "Representative NSFL/gore quality and false-negative evaluation; threshold calibration is provisional, and the model card notes NSFL is underrepresented in training data.",
+    "Real browser worker execution and encoded-image decoder parity, including orientation, transparency and color-profile behavior.",
+    "Animation/video multi-frame analysis; those inputs remain unsupported/unknown rather than being treated as safe from a single frame.",
+    "Packaged Windows asset/CSP acceptance, real-device performance and two-client acceptance.",
+    "Final redistribution and license review."
+  ],
+  "status_interpretation": "The disturbing classifier implementation exists and is integrated. Quality, unsupported formats, packaging and acceptance remain open; no full acceptance or release is claimed.",
+  "actions_performed": "Read-only audit; no coverage ledger changes, tests beyond JSON parsing, publication or deployment."
+}

@@ -19,6 +19,8 @@ function LoginPage() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const clearError = useAuthStore((s) => s.clearError);
+  const mfaRequired = useAuthStore((s) => s.mfaRequired);
+  const accountDisabled = useAuthStore((s) => s.accountDisabled);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -26,6 +28,8 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [mfaCode, setMFACode] = useState("");
+  const [reactivate, setReactivate] = useState(false);
 
   // Submit anındaki credentials'ı retry için sakla — kullanıcı bekleme
   // sırasında input'a dokunsa bile retry orijinal değerlerle yapılır.
@@ -83,7 +87,7 @@ function LoginPage() {
 
   // ─── Handlers ───
   async function attemptLogin(u: string, p: string) {
-    const success = await login(u, p);
+    const success = reactivate ? await login(u, p, mfaCode || undefined, true) : await login(u, p, mfaCode || undefined);
     if (success) {
       wakeUp.reset();
       // Electron: save or clear credentials
@@ -114,7 +118,8 @@ function LoginPage() {
   }
 
   function handleInputChange() {
-    if (error) clearError();
+    setReactivate(false);
+    if (error || mfaRequired || accountDisabled) clearError();
     // Kullanıcı tekrar etkileşim ediyorsa wake-up döngüsü sıfırlansın —
     // "failed" durumundaki banner'dan çıkıp normal akışa dönsün.
     if (wakeUp.state.phase !== "idle") wakeUp.reset();
@@ -151,6 +156,20 @@ function LoginPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
+          {mfaRequired && (
+            <div className="auth-field">
+              <label htmlFor="mfa-code" className="auth-label">{t("mfaCode")}</label>
+              <p className="auth-subtitle" role="status">{t("mfaRequired")}</p>
+              <input id="mfa-code" type="text" value={mfaCode} onChange={(e) => setMFACode(e.target.value)} autoComplete="one-time-code" maxLength={64} required autoFocus className="auth-input" />
+            </div>
+          )}
+          {(accountDisabled || reactivate) && <div className="auth-field">
+            <p role="status">{t("accountDisabled")}</p>
+            <label className="auth-remember">
+              <input id="restore-account" type="checkbox" checked={reactivate} onChange={event => setReactivate(event.target.checked)} disabled={isLoading} />
+              <span>{t("restoreAccountConsent")}</span>
+            </label>
+          </div>}
           <div className="auth-field">
             <label htmlFor="username" className="auth-label">
               {t("username")}
@@ -161,6 +180,7 @@ function LoginPage() {
               value={username}
               onChange={(e) => {
                 setUsername(e.target.value);
+                setMFACode("");
                 handleInputChange();
               }}
               required

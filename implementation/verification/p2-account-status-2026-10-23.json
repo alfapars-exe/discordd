@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P2 owner-only moderation status. Not complete account security, P0-P11, installed Windows or release acceptance.",
+  "implemented": [
+    "GET /api/users/me/account-status reads the authenticated owner's fresh platform-ban flag and active server bans/timeouts. No arbitrary user-ID selector, trust score, pending-report claim, moderator identity, private moderation notes or invented healthy badge is added.",
+    "One SQL statement provides an internally consistent snapshot. Expired restrictions are filtered using the existing enforcement timestamp contract. Removed membership does not hide an active ban from its target.",
+    "Reason, server name, applied/expiry times and permanent state are shown. Results paginate at 50 with one-row lookahead and deterministic ordering. Refresh replaces the list; more results append without duplicate identities.",
+    "Owner affinity is mandatory; bots are refused; sensitive responses use no-store. Database and network errors never manufacture an empty or healthy snapshot. Previously loaded data is explicitly described as potentially stale on failure.",
+    "TR/EN security subsection, retry, loading, real last-check timestamp and account-generation/request-revision guards. Moderation text is rendered as text rather than HTML.",
+    "Security subsection heading IDs now agree with workspace-generated IDs, preserving MFA/session/account-status region names after the heading collector runs."
+  ],
+  "automated_checks": [
+    {"command": "go test ./repository -run TestSQLiteAccountStatus -count=1", "cwd": "server", "result": "passed", "note": "Actual SQLite owner isolation, no-member ban visibility, permanent and expiring records, fresh platform ban/unban, unknown-owner rejection, 50+1 pagination and invalid offsets."},
+    {"command": "go test ./handlers . -run 'Test(AccountStatusHandler|InitRoutes)' -count=1", "cwd": "server", "result": "passed", "note": "Unauthenticated/nil users, bots, missing/mismatched owner, invalid offset, ignored foreign user query, database failure and no-store; route golden updated."},
+    {"command": "npx vitest run src/components/settings/AccountStatusSettings.test.tsx", "cwd": "client", "result": "passed", "files": 1, "tests": 3, "note": "Initial failure never displays a healthy result, retry, real text/escaping, page append and replaced-login response guard. The later refresh label and matching heading ID were included in the final regression run."},
+    {"command": "npx tsc -b", "cwd": "client", "result": "passed"},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-account-status.exe .", "cwd": "server", "result": "passed"},
+    {"command": "go test ./...", "cwd": "server", "result": "passed", "note": "Full packages passed after account-status integration, atomic credential writes and migration 093 regression tests. Optional external-service acceptance is not implied."},
+    {"command": "npm test -- --reporter=dot", "cwd": "client", "result": "passed", "files": 161, "tests": 1735, "note": "After final heading IDs, labels and all implementation edits. Existing act/navigation and intentional failure-probe console messages remain."},
+    {"command": "VITE_UI_SHELL_V2=true npm run build", "cwd": "client", "result": "passed", "modules": 1582, "note": "Web TypeScript/production build only. Existing config-loader, dependency eval and chunk/import warnings remain."},
+    {"command": "npx eslint src/components/settings/AccountStatusSettings.tsx src/components/settings/AccountStatusSettings.test.tsx src/api/accountStatus.ts src/components/settings/SessionSettings.tsx src/components/settings/MFASettings.tsx", "cwd": "client", "result": "passed", "errors": 0}
+  ],
+  "local_runtime": {
+    "environment": "Reused own Ego task space 10, browser 3131 and isolated API 9191. Only preexisting throwaway acceptance accounts and newly generated test servers were used; no screenshot personal accounts or production data was imported.",
+    "observations": [
+      "A separate local owner created a server/invite; the target fixture joined. A real API communication timeout appeared with its actual reason and end time in the target browser.",
+      "The owner then applied a real expiring ban. Refresh displayed both restriction rows and their real source data. This also demonstrated that membership removal does not hide the ban.",
+      "Owner unban and timeout removal followed by browser refresh produced the genuine empty state. Only the two new identified acceptance servers were removed; independent fixture login sessions were ended.",
+      "At 1440x900 and 390x844 the actual restriction rows were readable; mobile document width was 390. The browser confirmed every security section aria-labelledby resolved to an existing heading. Both screenshots were visually inspected."
+    ],
+    "screenshots_visually_inspected": [
+      "implementation/verification/p2-account-status-1440.png",
+      "implementation/verification/p2-account-status-390.png"
+    ],
+    "execution_notes": [
+      "An initial browser wait used a pre-collector heading ID and timed out. Inspection revealed the workspace assigns canonical IDs; component region IDs were aligned with those canonical IDs.",
+      "Joining a new fixture server through a second protocol client closed the browser settings workspace. The first attempt's own new server was removed in cleanup. A subsequent fresh fixture was created and settings were explicitly reopened after joining; actions were not blindly replayed on the old server.",
+      "The first lint run identified synchronous state setting through the initial effect. Initial fetching was separated from manual refresh state changes; later lint completed successfully."
+    ]
+  },
+  "remaining_acceptance": [
+    "Installed Windows UI, remote libSQL, remaining 768/1024/2560 viewports, 200 percent zoom, real screen-reader reading and overall visual-reference acceptance.",
+    "Live platform-ban notifications, recovery/appeal UX and account lifecycle. Existing platform-ban enforcement still denies login and authenticated APIs; this owner endpoint intentionally does not bypass that enforcement.",
+    "Reports are not penalties, and no strikes/history are synthesized from report counts. This view is limited explicitly to current platform status and the existing server ban/timeout enforcement records.",
+    "Overall implementation and release acceptance remain open. No commit/push/merge, production deployment or Windows update has been performed."
+  ]
+}

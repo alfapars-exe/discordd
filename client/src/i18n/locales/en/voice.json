@@ -1,4 +1,12 @@
 {
+  "voiceTextView": "Open text chat",
+  "voiceRoomView": "Return to voice",
+  "clipRecordingStart": "Record clip",
+  "clipRecordingStop": "Stop recording",
+  "clipRecordingActive": "Recording locally · {{count}} opted-out participant(s) excluded",
+  "clipRecordingDownload": "Download clip",
+  "clipRecordingStartFailed": "The consent-aware recording could not be started.",
+  "returnToCall": "Return to call",
   "joinVoice": "Join Voice",
   "leaveVoice": "Disconnect",
   "mute": "Mute",

@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "WS DM deletion now invalidates pending message work, updates the visible state immediately, and removes the exact 1:1 DM cache row. Matching requires both message ID and DM conversation with an empty server-channel scope; group/server/other-DM rows are not removed.",
+    "Cache scope read and deletion share one readwrite IndexedDB transaction. Captured account, composer generation, device and deletion token fence the work before database access, after record lookup and after deletion; context changes before commit abort the transaction.",
+    "Duplicate/unloaded deletions no longer guess that an unknown message belongs to a peer and decrement unread counts. Loaded peer deletion still decrements once; repeated delivery does not decrement again. Optional cache cleanup failure is logged without message content."
+  ],
+  "verification": [
+    "Targeted storage/WS suites passed: 2 files / 65 tests. Uses real IndexedDB transaction/index behavior through the existing fake-indexeddb harness, including indexed-search removal, scope mismatch preservation, no-op absence, rollback at each guard stage, captured-session invalidation and duplicate deletion unread behavior.",
+    "Final TypeScript tsc -b and targeted ESLint passed.",
+    "Full client suite passed: 232 files / 2313 tests in 47.58s. Vite production build passed in 706ms with existing warnings. Targeted diff whitespace and coverage validation passed: 33 references / 261 behaviors; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Missed deletion events after offline/reconnect still require authoritative reconciliation. Successful HTTP deletion without its WS event, group/server cache cleanup and cache/search retention policies remain open.",
+    "Cache deletion is best effort on storage failure; retry/UI recovery and actual browser/process tests remain required. The existing cache has no per-row account namespace and is not encrypted at rest. This guard is not a claim of complete multi-account or cross-tab cache isolation.",
+    "Overall P0-P11 is incomplete. No production data was deleted by this development/test run; no commit, push, merge, Windows packaging or production release performed."
+  ]
+}

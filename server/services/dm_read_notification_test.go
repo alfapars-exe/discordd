@@ -163,6 +163,35 @@ func TestDMMarkRead_RequiresMembershipAndEchoesDMRead(t *testing.T) {
 	}
 }
 
+func TestDMMarkUnreadFrom_RecomputesAndSynchronizes(t *testing.T) {
+	f := newDMFixture()
+	acceptedFriendsFixture(f)
+	f.dmRead.MarkUnreadFromFn = func(_ context.Context, userID, channelID, messageID string) (int, error) {
+		if userID != "alice" || channelID != "ch-1" || messageID != "m-2" {
+			t.Fatalf("unexpected args %s %s %s", userID, channelID, messageID)
+		}
+		return 3, nil
+	}
+	var target string
+	var event ws.Event
+	f.hub.BroadcastToUserFn = func(userID string, e ws.Event) { target, event = userID, e }
+	count, err := f.svc.MarkUnreadFrom(context.Background(), "alice", "ch-1", "m-2")
+	if err != nil || count != 3 {
+		t.Fatalf("MarkUnreadFrom=(%d,%v), want (3,nil)", count, err)
+	}
+	if target != "alice" || event.Op != ws.OpDMRead {
+		t.Fatalf("event target=%q event=%+v", target, event)
+	}
+	data := event.Data.(map[string]any)
+	if data["unread_count"] != 3 || data["last_read_message_id"] != "m-2" {
+		t.Fatalf("data=%v", data)
+	}
+
+	if _, err := f.svc.MarkUnreadFrom(context.Background(), "carol", "ch-1", "m-2"); !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("outsider err=%v want forbidden", err)
+	}
+}
+
 func TestDMDeleteMessage_CleansNotificationsBestEffort(t *testing.T) {
 	f := newDMFixture()
 	f.repo.GetMessageByIDFn = func(_ context.Context, id string) (*models.DMMessage, error) {

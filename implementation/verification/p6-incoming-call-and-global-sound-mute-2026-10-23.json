@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-23",
+  "scope": "P6 incoming call sound and global notification-sound mute",
+  "implemented": [
+    "Real incoming ringing now checks both the incoming-call preference and the global notification-sound mute before creating an AudioContext.",
+    "Accept, reject, remote end and overlay unmount remove the incoming-call state and stop/close ringtone playback.",
+    "Notification settings expose a short incoming-call preview that uses the selected notification volume and is disabled while the call sound or global sound switch is off.",
+    "Message notifications already use the same global mute without overwriting the individual sound selections, so restoring global sound resumes the saved individual choices."
+  ],
+  "verification": [
+    { "command": "client TypeScript project build", "result": "passed" },
+    { "command": "vitest run IncomingCallOverlay, notificationPreferences and accountPreferenceConsumers", "result": "passed", "tests": 46 }
+  ],
+  "remaining_acceptance": "Exercise incoming call accept, decline and remote cancellation with two real signed-in clients and an audible output device."
+}

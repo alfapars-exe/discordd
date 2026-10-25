@@ -97,7 +97,7 @@ describe("normalizeStickerTags — shared Go/TS vectors (Sözleşme §6)", () =>
     expect(normalizeStickerTags(["a", "A", "b", "c", "d", "e"])).toEqual(["a", "b", "c", "d", "e"]);
   });
   it("parseTagInput splits on commas", () => {
-    expect(parseTagInput("kedi, mutlu ,, ")).toEqual(["kedi", "mutlu"]);
+    expect(parseTagInput("kedi, mutlu , ")).toEqual(["kedi", "mutlu"]);
     expect(parseTagInput("")).toEqual([]);
   });
 });

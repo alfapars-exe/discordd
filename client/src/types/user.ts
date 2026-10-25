@@ -24,6 +24,7 @@ export type PublicUser = {
   status: UserStatus;
   custom_status: string | null;
   created_at: string;
+  is_bot?: boolean;
 };
 
 /** The authenticated user's OWN record (GET /api/users/me, auth responses). */
@@ -34,6 +35,7 @@ export type User = PublicUser & {
   avatar_animated_url?: string | null;
   /** Static profile banner (5:2, ≤1200×480). */
   banner_url?: string | null;
+  banner_animated_url?: string | null;
   bio?: string | null;
   pronouns?: string | null;
   /** `#rrggbb`, lower-case. Banner fallback colour on the profile card. */
@@ -59,6 +61,7 @@ export type UserProfile = {
   avatar_url: string | null;
   avatar_animated_url: string | null;
   banner_url: string | null;
+  banner_animated_url: string | null;
   bio: string | null;
   pronouns: string | null;
   accent_color: string | null;

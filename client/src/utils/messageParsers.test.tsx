@@ -18,6 +18,11 @@ vi.mock("../hooks/useReducedMotion", () => ({
   useReducedMotion: () => false,
 }));
 
+vi.mock("../stores/accessibilityStore", () => ({
+  useAccessibilityStore: (selector: (state: { stickerAnimation: string }) => unknown) =>
+    selector({ stickerAnimation: "always" }),
+}));
+
 import { getMessagePreviewUrls, renderMessageContent } from "./messageParsers";
 
 const ID = "0123456789abcdef";

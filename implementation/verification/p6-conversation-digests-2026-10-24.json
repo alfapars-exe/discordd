@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Privacy-preserving conversation summaries through the existing durable communication-email queue.",
+  "implementation": [
+    "Only the newest noncancelled notification for a conversation can send while its message remains unread. New pending messages supersede older ones even before their ten-minute delay elapses; delivered newer jobs also suppress older leases. Separate conversations remain independent.",
+    "Delivery reads the current unread-count metadata after permission, block, verified-address, consent and exact-message checks. The email contains only that count and a generic app invitation, not decrypted content, ciphertext, author identity or conversation identifier.",
+    "The existing address-bound unsubscribe footer is preserved. The count is transient and is not written into queue bodies or returned through JSON. Existing retry, expiry and claim fencing remain in force.",
+    "Checks run immediately before external send, but a relationship/consent change after that point cannot retract an already in-flight provider request."
+  ],
+  "verification": [
+    "Focused communication repository and delivery tests passed; actual SQLite service/repository/unsubscribe integration sent exactly one generic two-message summary through an in-memory sender and retained one cancelled older row.",
+    "Actual disposable PostgreSQL 18.6 communication tests passed in 0.706s, including conversation isolation, suppression after newer acknowledgement and read-state recheck. Container stopped and removed.",
+    "Focused race checks passed: services 7.043s, repository 8.668s.",
+    "Full Go snapshot passed: root 8.402s, database 24.577s, repository 71.759s, services 27.378s. This preceded the additional SQLite digest integration test and the removal of an unnecessary display-count cap; focused checks cover the added test."
+  ],
+  "open": ["Real configured-provider delivery/unsubscribe acceptance", "Two-client/read-during-send acceptance", "Operational rollback and complete Windows/web release gates"],
+  "release": "No real email sent, commit, push, merge or production publication."
+}

@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Added encrypted, monotonic source-file acknowledgements to durable group-send manifests. Updates reseal only the authenticated manifest with a fresh IV and retain original payload and sealed attachment bytes.",
+    "IndexedDB compare-and-swap updates merge concurrent receipts without overwriting another update, never recreate a deleted record, and retain recovery data after stale context, corruption or failed writes.",
+    "Startup restoration carries acknowledgements into partial-upload result handling. Already acknowledged source positions are excluded from recovery candidates; an entirely acknowledged partial outcome resolves without another message POST. Recovery entries preserve original source indices."
+  ],
+  "verification": [
+    "Storage tests cover idempotent acknowledgements, original-byte preservation, concurrent union, stale compare-and-swap, deletion fencing, invalid indices, quota failure and manifest tampering.",
+    "Real IndexedDB/WebCrypto store integration simulates a confirmed receipt, restores the source operation, resolves its original partial server outcome and verifies no extra POST or duplicate recovery candidate. Receipt production itself is explicitly simulated, not an end-to-end manual-review test.",
+    "Current rerun passed tsc -b and targeted ESLint on the five affected client files. Full client suite: 228 files / 2174 tests passed in 46.19s. Vite web build: 1651 modules, 678ms. Existing React act, mocked API, Vite config, chunk-size and dynamic-import warnings remain visible.",
+    "git diff --check passed. No server source/schema was changed in this step."
+  ],
+  "remaining": [
+    "No runtime producer calls acknowledgePendingGroupFiles yet. Manual reviewed-to-draft file provenance, per-file child/source mapping and confirmed-success receipt persistence before child cleanup still need integration. This step does not claim that the manual-review duplicate path is fixed.",
+    "Cross-tab browser acceptance, real process restart, large-file/quota pressure, two-client encrypted media and Windows installation/update acceptance remain open. Overall P0-P11 remains incomplete.",
+    "No commit, push, merge, production migration or release was performed."
+  ]
+}

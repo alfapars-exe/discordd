@@ -145,6 +145,9 @@ func (r *sqliteUserRepo) DeleteAllMessagesByUser(ctx context.Context, userID str
 //   - user_equipped / user_cosmetic_plain_servers / user_cosmetics.user_id:
 //     deleted; user_cosmetics.granted_by and cosmetic_items.created_by are
 //     cleared to NULL (grants to others and server items survive).
+//   - server_events.creator_id, server_event_rsvps.user_id, and
+//     server_event_deliveries.user_id: manually cascade authored events and
+//     their attendees, then remove this user's attendance from other events.
 //
 // Disk files are deliberately NOT touched here — this repo layer only owns
 // DB rows. Most orphaned files are unreachable (media_access fails closed
@@ -174,6 +177,28 @@ func (r *sqliteUserRepo) HardDeleteUser(ctx context.Context, userID, reassignToU
 // atomically: a crash partway through must never leave reports/feedback/
 // badges referencing a user row that no longer exists.
 func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQuerier, userID, reassignToUserID string) error {
+	// A self-deleted identity anchors other participants' retained history.
+	// Refuse before any cleanup; the database DELETE trigger is a second gate.
+	var retained bool
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=? AND deleted_at IS NOT NULL)`, userID).Scan(&retained); err != nil {
+		return err
+	}
+	if retained {
+		return pkg.ErrForbidden
+	}
+	// libSQL may not enforce foreign keys; delete MFA secrets explicitly.
+	if _, err := q.ExecContext(ctx, `DELETE FROM account_email_tokens WHERE user_id=?`, userID); err != nil {
+		return fmt.Errorf("failed to remove email verification data: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM email_unsubscribe_tokens WHERE user_id=?`, userID); err != nil {
+		return fmt.Errorf("failed to remove email unsubscribe tokens: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM account_lifecycle WHERE user_id=?`, userID); err != nil {
+		return fmt.Errorf("failed to remove account lifecycle: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM account_mfa WHERE user_id=?`, userID); err != nil {
+		return fmt.Errorf("failed to remove account security data: %w", err)
+	}
 	// bans has no FK — manual cleanup
 	if _, err := q.ExecContext(ctx, `DELETE FROM bans WHERE user_id = ?`, userID); err != nil {
 		return fmt.Errorf("failed to clean up bans for user: %w", err)
@@ -189,6 +214,31 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 		if err := deleteServerCascade(ctx, q, serverID); err != nil {
 			return fmt.Errorf("failed to delete owned server %s: %w", serverID, err)
 		}
+	}
+
+	// Event tables declare ON DELETE CASCADE to users/events, but those
+	// constraints are not enforced on the production libSQL/Turso path. First
+	// remove all descendants of events authored by this user, then the events,
+	// then this user's attendance/delivery rows on events owned by others.
+	if _, err := q.ExecContext(ctx, `DELETE FROM server_event_deliveries WHERE event_id IN (
+		SELECT id FROM server_events WHERE creator_id = ?)`, userID); err != nil {
+		return fmt.Errorf("failed to delete deliveries for authored server events: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM server_event_rsvps WHERE event_id IN (
+		SELECT id FROM server_events WHERE creator_id = ?)`, userID); err != nil {
+		return fmt.Errorf("failed to delete RSVPs for authored server events: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM server_events WHERE creator_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete server events created by user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM server_event_deliveries WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete server event deliveries for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM server_event_rsvps WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete server event RSVPs for user: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM stream_start_deliveries WHERE recipient_id=? OR actor_id=?`, userID, userID); err != nil {
+		return fmt.Errorf("failed to delete stream notification decisions for user: %w", err)
 	}
 
 	// reports: reporter_id / reported_user_id are NOT NULL FKs with no
@@ -247,6 +297,12 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 		return fmt.Errorf("failed to delete notifications for user: %w", err)
 	}
 	// saved_messages / user_notes (migrations 083/084): same unenforced
+	if _, err := q.ExecContext(ctx, `DELETE FROM private_media_labels WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete private media labels: %w", err)
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM spam_inbox WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("failed to delete spam decisions for user: %w", err)
+	}
 	// cascade to users. Notes are removed on both sides — the ones the user
 	// wrote and the ones others wrote about them.
 	if _, err := q.ExecContext(ctx, `DELETE FROM saved_messages WHERE user_id = ?`, userID); err != nil {
@@ -308,6 +364,12 @@ func (r *sqliteUserRepo) hardDeleteUserStmts(ctx context.Context, q database.TxQ
 	}
 
 	// Main delete — CASCADE handles all remaining related data.
+	if _, err := q.ExecContext(ctx, `DELETE FROM sessions WHERE user_id=?`, userID); err != nil {
+		return err
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM auth_sessions WHERE user_id=?`, userID); err != nil {
+		return err
+	}
 	result, err := q.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to hard delete user: %w", err)

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Application/bot retirement repository and credential/runtime service foundation; not a registered API or available UI action.",
+  "implemented": [
+    "One transaction requires actual human owner, matching password/MFA state, active generation-bound session and a live non-administrator bot. Generic platform administration does not substitute for ownership.",
+    "Retirement removes bot tokens, memberships, role grants and private state; detaches owner_user_id; strips identity to an immutable tombstone. Shared channel/DM ciphertext and attachment references remain byte-for-byte intact.",
+    "Human and bot identity stripping share a transaction helper. Personal assets enter the durable existing cleanup queue; shared attachments are never queued solely because their author is removed.",
+    "Legacy/corrupt bots owning servers or child applications are rejected rather than orphaning resources. Retiring an ordinary bot removes its human owner's account-deletion ownership blocker.",
+    "Migration 100 rejects new/reassigned tokens for retired, missing or non-bot principals. Token resolution independently rejects retired, non-bot, banned or disabled users even for legacy rows predating those guards.",
+    "Unexposed service requires fresh password/MFA, rechecks password and atomically binds proof at commit. After successful commit only the application's caches, sockets and voice are invalidated/disconnected; the human owner's session survives. Missing runtime dependencies fail closed."
+  ],
+  "checks": [
+    "Repository tests passed with FK enforcement on/off, twelve contenders with one retirement winner, rollback restoring tokens, preserved channel/DM history/attachment references, cleanup queue and owner-deletion unblocking.",
+    "Wrong owner, human target, platform-admin override, administrator bot, revoked/stale session, disabled/banned owner and bot-owned resource rejection tests passed.",
+    "Token insert/update guards and legacy-row validation tests passed, including explicit proof that lookup rejects corrupt rows without depending on the insert trigger.",
+    "Focused service tests passed for password/MFA, recovery replay, factor change after proof, failed writes without runtime effects, and bot-only disconnect/cache invalidation.",
+    "Full Go test ./... -json passed after the final service and token-guard additions. Existing symlink and external-media smoke test skips remain unverified, not accepted.",
+    "Targeted git diff --check passed; existing Windows line-ending warnings only."
+  ],
+  "migration": {
+    "file": "server/database/migrations/100_retired_application_tokens.sql",
+    "compatibility": "Additive triggers only; existing bot token rows are not rewritten. No local acceptance or production database was upgraded this turn.",
+    "rollback_schema": ["DROP TRIGGER retired_application_token_insert", "DROP TRIGGER retired_application_token_update"],
+    "data": "An explicitly retired identity is irreversible through the application. A production backup/restore rehearsal is still required; listing rollback statements is not verification."
+  },
+  "remaining": [
+    "Close bot gateway authentication/registration races, persistently validate active connections and prove real token/socket revocation before exposing retirement.",
+    "Wire repositories/services, owner/account/application-bound HTTP route, typed consent and real client form; broadcast membership/author updates as appropriate.",
+    "Application ownership transfer needs a recipient-accepted handoff and token rotation, not unsolicited assignment of another user's deletion blocker. No transfer implementation or acceptance is claimed here.",
+    "Actual browser/independent-client/Windows acceptance, distributed behavior and all remaining P0-P11/release gates remain active."
+  ],
+  "release": "Only source and disposable automated-test databases changed. No real application was removed, no new retirement endpoint was registered, no production deployment/commit/push/merge/Windows update occurred."
+}

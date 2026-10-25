@@ -1,0 +1,20 @@
+{
+  "item": "p3.blocked",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "records": "Blocks are directional persistent friendship records. The service removes prior friendship/request state, emits explicit blocker and target identities, and keeps blocked-state probing non-disclosing.",
+    "enforcement": "DM sends perform a bidirectional block check and friend-request creation detects block records server-side.",
+    "management": "The authenticated list returns real user rows. The client supports case-insensitive name/username search, pages twenty rows at a time with Show more, and removes one row after a successful unblock.",
+    "single_effect": "Only the blocker may unblock. After deletion, repeating the operation returns not-found instead of reporting a second success."
+  },
+  "automated_verification": [
+    {
+      "command": "tsc -b client/tsconfig.json",
+      "working_directory": ".",
+      "result": "pass"
+    }
+  ],
+  "blocked_verification": "Windows Application Control blocked the newly generated Go services and handlers test executables. This is recorded as missing runtime evidence, not a pass.",
+  "remaining_acceptance": "Use two browser clients to block, search, expand, unblock once and verify message, call and friend-request restrictions on both clients."
+}

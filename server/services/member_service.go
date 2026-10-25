@@ -68,10 +68,16 @@ type memberService struct {
 	voiceKick       VoiceDisconnecter
 	auditLogger     AuditWriter
 	permInvalidator PermissionInvalidator
+	profileUpdates  ProfileUpdateNotifier
+	gameActivity    GameActivityPrivacyInvalidator
 }
 
 func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
 	s.permInvalidator = inv
+}
+
+func (s *memberService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
+	s.gameActivity = invalidator
 }
 
 // invalidateUserPerms — nil-safe wrapper so call sites stay flat.
@@ -108,8 +114,9 @@ func NewMemberService(
 	hub ws.BroadcastAndManage,
 	voiceKick VoiceDisconnecter,
 	auditLogger AuditWriter,
+	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
-	return &memberService{
+	s := &memberService{
 		userRepo:    userRepo,
 		roleRepo:    roleRepo,
 		banRepo:     banRepo,
@@ -119,6 +126,10 @@ func NewMemberService(
 		voiceKick:   voiceKick,
 		auditLogger: auditLogger,
 	}
+	if len(profileUpdates) > 0 {
+		s.profileUpdates = profileUpdates[0]
+	}
+	return s
 }
 
 func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.MemberWithRoles, error) {
@@ -304,8 +315,10 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 	}
 	if req.ClearBanner {
 		user.BannerURL = nil
+		user.BannerAnimatedURL = nil
 	} else if req.BannerURL != nil {
 		user.BannerURL = req.BannerURL
+		user.BannerAnimatedURL = req.BannerAnimatedURL
 	}
 	user.Bio = applyClearableText(user.Bio, req.Bio)
 	user.Pronouns = applyClearableText(user.Pronouns, req.Pronouns)
@@ -353,8 +366,22 @@ func (s *memberService) UpdateProfile(ctx context.Context, userID string, req *m
 			})
 		}
 	}
+	if s.profileUpdates != nil && hasShareableProfileChange(req) {
+		if err := s.profileUpdates.NotifyProfileUpdated(ctx, userID); err != nil {
+			// Profile persistence already committed. Notification fan-out is a
+			// best-effort side effect and must not turn a saved edit into a false
+			// failure response.
+			memberLogger.Error("failed to notify profile update", "user_id", userID, "err", pkg.ErrText(err))
+		}
+	}
 
 	return &member, nil
+}
+
+func hasShareableProfileChange(req *models.UpdateProfileRequest) bool {
+	return req.Username != nil || req.DisplayName != nil || req.AvatarURL != nil ||
+		req.BannerURL != nil || req.BannerAnimatedURL != nil || req.ClearBanner || req.Bio != nil || req.Pronouns != nil ||
+		req.AccentColor != nil || req.CustomStatus != nil
 }
 
 // applyClearableText implements the PATCH semantics of the optional profile

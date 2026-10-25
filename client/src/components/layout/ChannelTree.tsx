@@ -3,8 +3,9 @@
  * Friends and DM sections are extracted into their own components.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getAuthGeneration } from "../../api/client";
 import { useSidebarStore } from "../../stores/sidebarStore";
 import { useChannelStore } from "../../stores/channelStore";
 import { useServerStore } from "../../stores/serverStore";
@@ -31,12 +32,29 @@ import { useChannelTreeDragDrop } from "../../hooks/useChannelTreeDragDrop";
 import { useChannelTreeMenus } from "../../hooks/useChannelTreeMenus";
 import * as channelApi from "../../api/channels";
 import type { Channel, PublicUser } from "../../types";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
+import HomeNavigation from "./HomeNavigation";
+import { useKeyboardReorder } from "./keyboardReorder";
 
 type ChannelTreeProps = {
   onJoinVoice: (channelId: string) => void;
 };
 
 function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
+  const { t: tCommon } = useTranslation("common");
+  const destinationServerId = useUIStore((s) => s.destination.serverInfo?.serverId);
+  const activeTabKey = useUIStore((s) => `${s.activePanelId}:${s.panels[s.activePanelId]?.activeTabId ?? ""}`);
+  const activeTabType = useUIStore((s) => {
+    const panel = s.panels[s.activePanelId];
+    return panel?.tabs.find((tab) => tab.id === panel.activeTabId)?.type;
+  });
+  const serverEventsTarget = useUIStore((s) => s.serverEventsTarget);
+  const closeServerEvents = useUIStore((s) => s.closeServerEvents);
+  const [navigation, setNavigation] = useState<{ key: string; mode: "messages" | "servers" | "all" } | null>(null);
+  // Follow the active panel when navigation changes elsewhere (tabs/search).
+  // A manual choice lasts for that tab; hidden sections remain mounted.
+  const navigationMode = navigation?.key === activeTabKey ? navigation.mode
+    : !activeTabType ? "all" : ["text", "voice", "screen", "audit"].includes(activeTabType) ? "servers" : "messages";
   const toggleSection = useSidebarStore((s) => s.toggleSection);
   const expandedSections = useSidebarStore((s) => s.expandedSections);
 
@@ -111,11 +129,40 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   const unmuteChannel = useChannelStore((s) => s.unmuteChannel);
   const { t: tCh } = useTranslation("channels");
 
+  const currentServerEventsTarget = serverEventsTarget && currentUser?.id === serverEventsTarget.expectedUserId &&
+    getAuthGeneration() === serverEventsTarget.authGeneration && servers.some((server) => server.id === serverEventsTarget.serverId)
+    ? { serverId: serverEventsTarget.serverId, serverName: serverEventsTarget.serverName, initialEventId: serverEventsTarget.eventId }
+    : null;
+
   // MANAGE_CHANNELS permission
   const currentMember = members.find((m) => m.id === currentUser?.id);
   const canManageChannels = currentMember
     ? hasPermission(currentMember.effective_permissions, Permissions.ManageChannels)
     : false;
+
+  const reorderCategories = useChannelStore((s) => s.reorderCategories);
+  const reorderChannels = useChannelStore((s) => s.reorderChannels);
+  const categoryReorderItems = useMemo(() => categories
+    .filter((entry) => entry.category.id !== "")
+    .map((entry) => ({ id: entry.category.id, label: entry.category.name })), [categories]);
+  const channelReorderItems = useMemo(() => categories.flatMap((entry) => entry.channels.map((channel) => ({
+    id: channel.id,
+    label: channel.name,
+    groupId: entry.category.id,
+  }))), [categories]);
+  const commitCategoryKeyboardOrder = useCallback(async (ids: string[]) => {
+    return reorderCategories(ids.map((id, position) => ({ id, position })));
+  }, [reorderCategories]);
+  const commitChannelKeyboardOrder = useCallback(async (ids: string[]) => {
+    const positionById = new Map(ids.map((id, position) => [id, position]));
+    const items = categories.flatMap((entry) => [...entry.channels]
+      .sort((a, b) => (positionById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positionById.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+      .map((channel, position) => ({ id: channel.id, position })));
+    return reorderChannels(items);
+  }, [categories, reorderChannels]);
+  const keyboardReorderScope = `${activeServerId ?? ""}:${currentUser?.id ?? ""}:${getAuthGeneration()}`;
+  const keyboardCategoryReorder = useKeyboardReorder(categoryReorderItems, canManageChannels, commitCategoryKeyboardOrder, keyboardReorderScope);
+  const keyboardChannelReorder = useKeyboardReorder(channelReorderItems, canManageChannels, commitChannelKeyboardOrder, keyboardReorderScope);
 
   // MOVE_MEMBERS permission (voice user drag & drop)
   const canMoveMembers = currentMember
@@ -228,7 +275,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   }
 
   function handleVoiceChannelClick(channelId: string, channelName: string) {
-    onJoinVoice(channelId);
+    if (currentVoiceChannelId !== channelId) onJoinVoice(channelId);
     openTab(channelId, "voice", channelName, getActiveServerInfo());
     closeAllDrawers();
   }
@@ -240,18 +287,34 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
 
   return (
     <div className="ch-tree">
-      <FriendsSection onShowUserCard={handleShowUserCard} />
+      {!UI_SHELL_V2 && <nav className="ch-navigation" aria-label={tCommon("navigation")}>
+        {(["messages", "servers", "all"] as const).map((mode) => (
+          <button key={mode} aria-pressed={navigationMode === mode}
+            onClick={() => setNavigation({ key: activeTabKey, mode })}>
+            {tCommon(mode === "all" ? "allSections" : mode)}
+          </button>
+        ))}
+      </nav>}
+      {(!UI_SHELL_V2 || !destinationServerId) && <div hidden={!UI_SHELL_V2 && navigationMode === "servers"}>
+      {UI_SHELL_V2 ? <HomeNavigation /> : <FriendsSection onShowUserCard={handleShowUserCard} />}
       <DMSection onShowUserCard={handleShowUserCard} />
-      <AdminSection />
+      {UI_SHELL_V2 && <AdminSection />}
+      </div>}
+      {(!UI_SHELL_V2 || destinationServerId) && <div hidden={!UI_SHELL_V2 && navigationMode === "messages"}>
+      {!UI_SHELL_V2 && <AdminSection />}
 
       <ServerList
-        onAddServer={() => setShowAddServer(true)}
+        onAddServer={() => undefined}
         onCreateChannel={() => {
           setCreateModalMode(undefined);
           setCreateModalCategoryId(undefined);
           setShowCreateModal(true);
         }}
         onInviteServer={(serverId, serverName) => setInviteTarget({ serverId, serverName })}
+        onOpenEvents={(serverId, serverName) => {
+          if (!currentUser?.id || !servers.some((server) => server.id === serverId)) return;
+          useUIStore.getState().openServerEvents({ serverId, serverName, expectedUserId: currentUser.id, authGeneration: getAuthGeneration() });
+        }}
         onMuteServer={(serverId, x, y) => setMutePicker({ serverId, x, y })}
         renderServerBody={(srvId) => (
           <>
@@ -264,7 +327,11 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
               />
             )}
 
-            {categories.map((cg) => {
+            {[...categories].sort((a, b) => {
+              if (a.category.id === "") return 1;
+              if (b.category.id === "") return -1;
+              return keyboardCategoryReorder.positionOf(a.category.id) - keyboardCategoryReorder.positionOf(b.category.id);
+            }).map((cg) => {
                     const isUncategorized = cg.category.id === "";
                     const catKey = isUncategorized ? "cat:__uncategorized__" : `cat:${cg.category.id}`;
                     const catExpanded = isUncategorized ? true : isSectionExpanded(catKey);
@@ -283,6 +350,10 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         canManageChannels={canManageChannels}
                         onToggle={() => toggleSection(catKey)}
                         onContextMenu={(e) => openCategoryMenu(e, catId, cg.category.name)}
+                        onReorderKeyDown={(e) => keyboardCategoryReorder.onKeyDown(e, catId)}
+                        reorderPosition={isUncategorized ? undefined : keyboardCategoryReorder.positionOf(catId)}
+                        reorderSize={isUncategorized ? undefined : categoryReorderItems.length}
+                        isKeyboardDragging={keyboardCategoryReorder.activeItemId === catId}
                         onCreateChannel={() => {
                           setCreateModalMode("channel");
                           setCreateModalCategoryId(catId);
@@ -305,7 +376,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         renameEmojiBtnRef={rename.renameEmojiBtnRef}
                         onOpenRenameEmoji={rename.toggleEmojiPicker}
                       >
-                        {cg.channels.map((ch) => {
+                        {[...cg.channels].sort((a, b) => keyboardChannelReorder.positionOf(a.id) - keyboardChannelReorder.positionOf(b.id)).map((ch) => {
                     // Chat-like = text OR audit; both render chat-style content
                     // and use `selectedChannelId` for active state. Only the
                     // literal "voice" type tracks `currentVoiceChannelId` and
@@ -349,6 +420,10 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                           }
                         }}
                         onContextMenu={(e) => openChannelMenu(e, ch)}
+                        onReorderKeyDown={(e) => keyboardChannelReorder.onKeyDown(e, ch.id)}
+                        reorderPosition={keyboardChannelReorder.positionOf(ch.id)}
+                        reorderSize={cg.channels.length}
+                        isKeyboardDragging={keyboardChannelReorder.activeItemId === ch.id}
                         onDragStart={() => handleChannelDragStart(ch.id, cg.category.id)}
                         onDragOver={(e) => handleChannelDragOver(e, ch.id, ch.type, cg.category.id)}
                         onDragLeave={handleChannelDragLeave}
@@ -383,10 +458,13 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                 </CategoryItem>
               );
             })}
+            {keyboardChannelReorder.liveRegion}
+            {keyboardCategoryReorder.liveRegion}
           </>
         )}
       />
 
+      </div>}
       <ChannelTreeOverlays
         showAddServer={showAddServer}
         setShowAddServer={setShowAddServer}
@@ -396,6 +474,11 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
         setMutePicker={setMutePicker}
         inviteTarget={inviteTarget}
         setInviteTarget={setInviteTarget}
+        eventsTarget={currentServerEventsTarget}
+        setEventsTarget={(target) => {
+          if (target === null) closeServerEvents();
+        }}
+        accountId={currentUser?.id ?? null}
         voiceCtxMenu={voiceCtxMenu}
         setVoiceCtxMenu={setVoiceCtxMenu}
         showCreateModal={showCreateModal}

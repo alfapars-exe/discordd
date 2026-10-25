@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Follow-up to the earlier dormant privacy policy: consent-filtered native cache, account controls, targeted WebSocket lifecycle and contextual client presentation are now connected in source. This supersedes earlier statements that the publisher is not wired, not their historical test results.",
+  "implementation": [
+    "Native cached projection exposes only enabled and game id/name, never paths or process inventory. Background detection, per-game permission and account permission must all allow publication; reads do not initiate scans. Expired, disabled or failed caches clear safely.",
+    "Authenticated per-connection sources use ordered lifecycle updates, leases, explicit selection timestamps and disconnect fallback. Targeted recipient policy checks blocking, visibility, friendship and server membership/overrides; server opt-out also applies to friends in server context. Old memberships default to no grant; new membership audience is persisted separately from future defaults.",
+    "Ready advertises the server epoch; updates require that epoch and increasing contextual revisions. Null tombstones, account-generation fences and legacy-server capability guards prevent stale grants and unsupported publication. User-supplied activity is not verified game ownership or execution.",
+    "Account-bound settings support actual membership search/sort, individual and bulk policies. Settings navigation collects short headings rather than field descriptions; controls use accessible names and responsive switches. Friend, member and profile surfaces consume only the exact authorized context.",
+    "Every invite join participates in the server lock protocol when supported; small-audience decisions use its transaction-bound count. Lock errors abort the join rather than bypass serialization; missing optional support leaves small denied. The own-membership sidebar projection exposes the persisted snapshot, and settings use explicit overrides first, then that snapshot; an enabled snapshot is no longer displayed as an unchecked control."
+  ],
+  "verification": [
+    "Client full Vitest after membership projection fix: 304 files, 2827 tests passed, zero failures. Report C:/Users/PARS/AppData/Local/Temp/hichat-activity-membership-final-20261024.json. TypeScript build, scoped ESLint and subsequent Vite production build passed; existing chunk/dynamic-import warnings remain.",
+    "Electron TypeScript compilation and all 90 native tests passed, including cache retention while scanning and disable/dispose generation guards.",
+    "Backend agent full uncached ws/services/models/repository/database tests passed; all-package compile-only check and targeted GameActivity race tests passed. Actual httptest WebSocket coverage includes epochs, two publisher devices, audience denial, opt-out and disconnect fallback.",
+    "Parent isolated PostgreSQL 18 membership snapshot test passed after correcting boolean adapter compatibility to nullable INTEGER with 0/1 constraint. After the follow-up transaction-lock fix, both membership tests passed again on PostgreSQL (1.770s), including 199 members plus two concurrent joins yielding exactly one allowed snapshot and 201 final members. Agent full repository/services tests also passed after the lock and projection changes. Disposable owned PostgreSQL fixtures and volumes were removed after testing.",
+    "Existing local HiChat test tab showed corrected section navigation, search and sorting. Screenshots at desktop and 390px were captured; visible mobile document/dialog widths were 390px. No persistent privacy setting was changed. The local QA server predates the new backend runtime, so this is not two-client game-sharing acceptance.",
+    "Final agent mixed-audience SQLite/PostgreSQL 18 tests passed (PG 4.998s), plus service cases for every audience, missing optional capability and lock errors. Targeted ws/services GameActivity and JoinServerTxLocksEveryAudience race tests passed. The agent removed its exact disposable PG fixture and volume."
+  ],
+  "open": [
+    "Real Windows game selection, restart, detection and two actual HiChat clients receiving and revoking activity.",
+    "Large-server reconciliation/load acceptance and full cross-device privacy acceptance.",
+    "Supported-game catalog, authorized join adapters, overlay and the remaining P0-P11 acceptance gates.",
+    "Windows packaging, reviewed GitHub integration and separately approved production distribution."
+  ],
+  "release": "No production publication, commit, push or merge. Local builds/tests do not establish release acceptance."
+}

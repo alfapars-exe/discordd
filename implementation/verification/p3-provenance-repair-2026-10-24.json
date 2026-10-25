@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "finding": "Current runtime audit referenced a missing v2/provenance.json. Added a factual artifact manifest from existing pinned runtime contract, model card and packaged notices; no accuracy or legal approval was inferred.",
+  "changes": ["client/public/media-classifier/v2/provenance.json", "scripts/verify-vendored-disturbing-runtime.mjs"],
+  "verification": "Actual verifier passed: all four model/runtime asset byte sizes and SHA-256 hashes, manifest/runtime contract, required nonempty packaged notices, and real ONNX WASM synthetic inference. Runtime 1.30.0; NSFL 0.02682359144091606, NSFW 0.05333210900425911, SFW 0.9198442697525024.",
+  "open": ["Representative quality/calibration and final redistribution license review", "Animation/video sampling", "Browser/Windows worker and performance acceptance"],
+  "release": "No publication or deployment. Synthetic inference is not classification-quality acceptance."
+}

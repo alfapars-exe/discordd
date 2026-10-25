@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Pending sent plaintext records carry their exact ciphertext/metadata source. Runtime WS own-device echoes pass that source and consume only a unique matching record, never the next unrelated FIFO entry. Missing or ambiguous matches consume nothing. Source-less compatibility calls cannot consume source-bound records.",
+    "Each encrypted DM send adds a fresh client_send_id inside the existing opaque e2ee_metadata string. This distinguishes local-only/self-DM sends whose envelope arrays can both be empty. It is a local matching identifier, not a server idempotency contract or sender-authentication assertion.",
+    "Exact-payload failure cleanup and device/session-generation fencing remain intact with the source-bound entry representation. No server schema or request DTO change is needed; the existing DM service carries the provided metadata string into its message model."
+  ],
+  "verification": [
+    "Crypto regressions cover reversed echo ordering, empty self-DM envelope arrays distinguished by metadata, unknown/ambiguous source rejection and no modern-entry consumption through legacy FIFO calls. Store regression verifies distinct per-send metadata is passed consistently into both API and local queue. WS handler regression verifies the source is supplied to queue lookup.",
+    "Focused crypto/store/WS suites passed: 3 files / 71 tests. Final tsc -b and targeted ESLint passed. Full client suite passed: 229 files / 2233 tests in 46.34s. Vite production web build passed in 706ms. Targeted git diff --check passed; existing warning categories remain visible."
+  ],
+  "remaining": [
+    "This fixes pending-send echo matching, not every cache/version source. Existing IndexedDB DM fallback, edits, attachment-key history, duplicate/reordered WS cache writes and receive-side session races still require source-bound cache integration.",
+    "No actual HTTP/server/WS round-trip or two-real-client acceptance was performed in this step. The metadata transport remains the existing opaque-string contract. No nonce is represented as authorization or automatic-retry safety.",
+    "Overall P0-P11 remains incomplete. No commit, push, merge, migration, Windows packaging or production release performed."
+  ]
+}

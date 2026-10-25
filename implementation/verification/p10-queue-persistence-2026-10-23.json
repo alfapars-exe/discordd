@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 durable music queues and explicit paused restoration after backend restart.",
+  "implemented": [
+    "Music queues are stored per voice channel with their stable queue item IDs, repeat mode and monotonic revision.",
+    "Queue changes, playback completion, shuffle, reorder, repeat changes and temporary bot shutdown persist a current snapshot.",
+    "A backend restart loads saved sessions into an inactive paused state without connecting to LiveKit or beginning playback.",
+    "An authorized explicit restore endpoint reconnects the publisher; the client exposes this action only for a saved paused queue.",
+    "An unexpected LiveKit publisher disconnect snapshots the interrupted track and pending queue into the same paused recovery state instead of silently discarding them or auto-playing.",
+    "Stopping playback intentionally removes the durable session while a graceful server shutdown preserves it.",
+    "Deleting the owning channel or server removes the session through foreign-key cascades."
+  ],
+  "checks": [
+    { "command": "go test ./...", "cwd": "server", "result": "passed" },
+    { "command": "go test ./services -run 'TestMusicSession|TestUnexpectedDisconnect' -count=1", "cwd": "server", "result": "passed" },
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/api/music.test.ts src/components/voice/MusicBotPanel.test.tsx", "cwd": "client", "result": "passed", "tests": 23 },
+    { "command": "UPDATE_ROUTES_GOLDEN=1 go test -run TestInitRoutesGolden .", "cwd": "server", "result": "passed" }
+  ],
+  "remaining": [
+    "Two real clients must verify audible restoration, concurrent queue mutations and reconnect behavior against LiveKit.",
+    "A packaged Windows build must verify that restart restoration remains paused and never auto-joins a voice channel."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

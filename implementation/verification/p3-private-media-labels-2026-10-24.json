@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-24",
+  "scope": "Account-private manual media annotation foundation; not automatic classification",
+  "implemented": [
+    "Additive SQLite 121 and PostgreSQL 023 migrations store authenticated-owner source references, revisions, SHA-256-shaped fingerprints and ordinary/sexual/disturbing/both labels. No media bytes or message plaintext are accepted.",
+    "GET/PUT/DELETE /api/users/me/media-label enforce non-bot authentication, strict bounded JSON, source read or conversation membership checks and current message revision for reads/writes. Removal of one's own annotation remains possible after losing source access.",
+    "Storage isolates owners, caps records at 5000 per account, permits existing-key updates and rejects deleted-owner writes. PostgreSQL serializes quota checks on the owner row.",
+    "Account anonymization and hard deletion remove owned annotations; personal data export includes only the requesting owner's annotation metadata. No annotation broadcasts are sent to other users.",
+    "Client API selects only reference fields and supports request cancellation/current-session guards. Policy helper treats explicit manual labels separately from unknown/error states; it does not claim AI analysis.",
+    "Channel/DM attachment groups, visual group attachments and link previews expose private manual labels with load, save, removal and retry controls. Media identity is hashed locally; URLs and plaintext are not included in the reference payload.",
+    "UI validates returned source/revision/fingerprint and label enum before applying a persisted choice. Owner, device, source and revision changes replace the annotation component; aborted or old-account/generation responses cannot apply. Writes commit visibility only after server success; errors revert to unknown-media preferences and revoke prior temporary reveals. Annotation mutations close detached media viewers."
+  ],
+  "ui_verification": {
+    "targeted": "Three Vitest files / twelve tests passed: lifecycle load/save/remove, hashed-only reference, response mismatch/retry, failed-write fallback, account switch, replaced-source abort, committed policy integration, edited-message isolation and temporary-reveal revocation.",
+    "final_full_snapshot": "236 files / 2347 tests passed after integration and thrown-load viewer revocation regression. No runtime source changes after this test run began.",
+    "build": "Final TypeScript project build and targeted ESLint passed; final Vite production build passed in 1.18s. Existing ineffective dynamic import warning remains.",
+    "limits": "Component tests with API test doubles, not live browser/API or two-client acceptance. No claim of automated media classification."
+  },
+  "verification": [
+    {"command": "Docker Linux Go 1.26.8 CGO_ENABLED=0 go test ./... -timeout=15m", "result": "passed", "detail": "Re-run after recovering lost process handles. Subsequently added HTTP round-trip test passed separately."},
+    {"command": "go test ./handlers -run MediaLabel -count=1", "result": "passed", "detail": "Real handler/service with private store test double: set/get/delete, authenticated owner binding, foreign-owner null result, no serialized user_id, no-store response, invalid bodies and authentication rejection."},
+    {"command": "Disposable PostgreSQL 18 selected media-label repository and account lifecycle tests", "result": "passed", "detail": "Ownership, revision, quota concurrency, deleted-owner writes, private export and anonymization tested in isolated container without host ports or production mounts. Not the full PostgreSQL suite."},
+    {"command": "Client full Vitest suite", "result": "passed", "files": 234, "tests": 2338},
+    {"command": "Docker Linux go vet ./...", "result": "passed"},
+    {"command": "Client tsc -b and Vite production build", "result": "passed", "detail": "Build completed in 691ms; existing ineffective dynamic import warning remains."},
+    {"command": "git diff --check and implementation coverage validator", "result": "passed", "detail": "33 references / 261 behaviors; acceptance incomplete. Git reports existing LF/CRLF normalization warnings."},
+    {"command": "Targeted media API/policy tests, TypeScript project build and targeted ESLint", "result": "passed", "detail": "Three test files / eleven tests; API avoids forwarding accidental media/content/owner properties."}
+  ],
+  "regressions_caught_and_fixed": [
+    "New authenticated routes required the route golden fixture to be updated.",
+    "The new account anonymization regression exposed missing soft-delete private cleanup; the cleanup transaction now removes owned labels."
+  ],
+  "remaining": [
+    "Verify manual annotation UI against the migrated live backend in a real browser; refine visual layout and complete cross-session synchronization and simultaneous annotation mutation conflicts.",
+    "Implement and evaluate genuine on-device media classification; manual labels are not classifier outputs.",
+    "Verify existing-database migration backup/rollback. Owner-session invalidation and reconnect recovery are implemented separately; see p3-media-label-session-sync-2026-10-24.json for limits and tests.",
+    "Perform browser, two-client and real-device acceptance. Previously built QA images and the running browser backend predate these migrations and APIs."
+  ],
+  "acceptance": "Not accepted. Manual backend and UI integration implemented with automated component coverage; real browser acceptance and automated classifier remain outstanding. P3 classifier remains missing."
+}

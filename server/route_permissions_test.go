@@ -68,6 +68,9 @@ var noRouteLevelGate = map[string]string{
 	"POST /api/auth/login":            "public login — no account exists yet to authenticate",
 	"POST /api/auth/forgot-password":  "public — initiates a reset flow via emailed token, not JWT auth",
 	"POST /api/auth/reset-password":   "public — authorizes via the emailed reset token itself, not JWT auth",
+	"POST /api/auth/verify-email":     "public — authorizes via a single-use, expiring hashed email proof; rate limited in EmailVerificationHandler.Verify and never creates a login session",
+	"GET /api/email/unsubscribe":      "public read-only confirmation using an opaque expiring category proof; handler rate limited; no identity disclosure or preference mutation",
+	"POST /api/email/unsubscribe":     "public category opt-out authorized by the opaque expiring email-generation-bound proof; handler rate limited; no login session is created",
 	"POST /api/livekit/webhook":       "authenticated by LiveKit's own webhook signature, not user auth",
 	"GET /api/stats":                  "explicitly public platform stats endpoint",
 	"GET /api/invites/{code}/preview": "public invite preview (social/crawler OG embeds)",
@@ -85,6 +88,15 @@ var noRouteLevelGate = map[string]string{
 // permission bit doesn't fit a check that's actually per-channel, or an
 // ownership comparison that isn't a role permission at all).
 var handlerInternalGates = map[string]string{
+	"GET /api/servers/{serverId}/channels/{channelId}/threads":    "threadService.List validates parent server/type and requires per-channel view plus read permission",
+	"POST /api/servers/{serverId}/channels/{channelId}/threads":   "threadService.Create validates parent server/type and starter-message scope; requires per-channel view, read and send permissions",
+	"GET /api/servers/{serverId}/threads/{threadId}":              "threadService.Get validates same-server thread and text-parent scope, then requires current parent-channel view/read permission; archived threads remain readable",
+	"PATCH /api/servers/{serverId}/threads/{threadId}":            "threadService.SetArchived validates server/thread scope and requires parent-channel ManageMessages or starter-message authorship",
+	"POST /api/servers/{serverId}/channels/{id}/unread":           "self-scoped read cursor; readStateService.MarkUnreadFrom requires per-channel view/read and repository validates message-channel scope",
+	"GET /api/servers/{serverId}/voice/clips/consent":             "clipActor rejects bots; clipRecordingService.Snapshot requires caller currently connected to the requested server and voice channel",
+	"POST /api/servers/{serverId}/voice/clips/start":              "clipActor rejects bots; clipRecordingService.Start uses Snapshot to validate actual voice membership and participant consent preferences",
+	"POST /api/servers/{serverId}/voice/clips/{recordingId}/stop": "clipRecordingService.Stop checks recording owner, server and channel, then validates current voice membership via Snapshot",
+	"POST /api/servers/{serverId}/transfer-ownership":             "fresh password/MFA and active session required by auth_server_ownership; sqlite_server_ownership atomically checks actual current owner, eligible member recipient and bound credential generation",
 	// ── Server ──
 	"GET /api/servers/{serverId}":        "read-only — membership is the intended view gate",
 	"DELETE /api/servers/{serverId}":     "ownership check inside the service: services/server_service_crud.go DeleteServer requires server.OwnerID == userID (server ownership isn't modeled as a role permission)",
@@ -100,15 +112,20 @@ var handlerInternalGates = map[string]string{
 	"GET /api/servers/{serverId}/audit": "service enforces audit-view perms (PermAdmin or Kick/Ban/Mute/Deafen) — see init_routes_server.go:28-30's doc comment",
 
 	// ── Channels / categories (read) ──
-	"GET /api/servers/{serverId}/channels":   "read-only — membership is the intended view gate (per-channel visibility filter applied inside channelService.GetAllGrouped)",
-	"GET /api/servers/{serverId}/categories": "read-only — membership is the intended view gate",
+	"GET /api/servers/{serverId}/channels":              "read-only — membership is the intended view gate (per-channel visibility filter applied inside channelService.GetAllGrouped)",
+	"GET /api/servers/{serverId}/categories":            "read-only — membership is the intended view gate",
+	"GET /api/servers/{serverId}/events":                "serverEventService requires membership; event descriptions are server-visible and private channel links are redacted",
+	"GET /api/servers/{serverId}/events/{eventId}":      "serverEventService requires membership; event descriptions are server-visible and private channel links are redacted",
+	"PUT /api/servers/{serverId}/events/{eventId}/rsvp": "serverEventService requires membership and the RSVP is scoped to the authenticated user",
 
 	// ── Messages / reactions / pins — per-channel, not server-wide ──
-	"GET /api/servers/{serverId}/channels/{id}/messages":          "per-channel PermViewChannel+PermReadMessages enforced inside messageService — can't be one server-wide authServerPerm bit",
-	"POST /api/servers/{serverId}/channels/{id}/messages":         "per-channel PermSendMessages enforced inside messageService",
-	"PATCH /api/servers/{serverId}/messages/{id}":                 "author-ownership (or moderator override) enforced inside messageService.Update, evaluated per-message",
-	"POST /api/servers/{serverId}/messages/{messageId}/reactions": "per-channel permission enforced inside reactionService",
-	"GET /api/servers/{serverId}/channels/{id}/pins":              "per-channel read permission enforced inside pinService",
+	"GET /api/servers/{serverId}/channels/{id}/messages":                                                    "per-channel PermViewChannel+PermReadMessages enforced inside messageService — can't be one server-wide authServerPerm bit",
+	"POST /api/servers/{serverId}/channels/{id}/messages":                                                   "per-channel PermSendMessages enforced inside messageService",
+	"PATCH /api/servers/{serverId}/messages/{id}":                                                           "author-ownership (or moderator override) enforced inside messageService.Update, evaluated per-message",
+	"POST /api/servers/{serverId}/messages/{messageId}/reactions":                                           "per-channel permission enforced inside reactionService",
+	"GET /api/servers/{serverId}/channels/{id}/pins":                                                        "per-channel read permission enforced inside pinService",
+	"GET /api/servers/{serverId}/application-actions":                                                       "read-only application action declarations; server membership is the intended discovery gate and revoked grants are filtered in the repository",
+	"POST /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/application-actions/{actionId}": "per-channel PermViewChannel+PermReadMessages and active scoped grant enforced inside BotService.InvokeApplicationAction",
 
 	// ── Read state (self-scoped) ──
 	"POST /api/servers/{serverId}/channels/read-all":  "self-scoped — marks the caller's own read state",
@@ -138,12 +155,19 @@ var handlerInternalGates = map[string]string{
 	"GET /api/servers/{serverId}/voice/states":        "read-only — membership is the intended view gate",
 
 	// ── Music bot — PermSpeak/PermManageChannels enforced in the handler ──
-	"POST /api/servers/{serverId}/channels/{channelId}/music/play":   "PermSpeak enforced inside the handler — handlers/music.go:89 (requirePerm at :181)",
-	"POST /api/servers/{serverId}/channels/{channelId}/music/skip":   "PermSpeak enforced inside the handler — handlers/music.go:119",
-	"POST /api/servers/{serverId}/channels/{channelId}/music/pause":  "PermSpeak enforced inside the handler — handlers/music.go:124",
-	"POST /api/servers/{serverId}/channels/{channelId}/music/resume": "PermSpeak enforced inside the handler — handlers/music.go:129",
-	"POST /api/servers/{serverId}/channels/{channelId}/music/stop":   "PermManageChannels enforced inside the handler — handlers/music.go:135",
-	"GET /api/servers/{serverId}/channels/{channelId}/music/state":   "read-only — membership is the intended view gate",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/play":                  "PermSpeak enforced inside the handler — handlers/music.go:89 (requirePerm at :181)",
+	"GET /api/servers/{serverId}/channels/{channelId}/music/search":                 "PermSpeak enforced inside the handler before external lookup",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/skip":                  "PermSpeak enforced inside the handler — handlers/music.go:119",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/pause":                 "PermSpeak enforced inside the handler — handlers/music.go:124",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/resume":                "PermSpeak enforced inside the handler — handlers/music.go:129",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/stop":                  "PermManageChannels enforced inside the handler — handlers/music.go:135",
+	"DELETE /api/servers/{serverId}/channels/{channelId}/music/queue/{queueItemId}": "PermSpeak and optimistic revision enforced inside the handler",
+	"PUT /api/servers/{serverId}/channels/{channelId}/music/queue":                  "PermSpeak and optimistic revision enforced inside the handler",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/shuffle":               "PermSpeak and optimistic revision enforced inside the handler",
+	"PUT /api/servers/{serverId}/channels/{channelId}/music/repeat":                 "PermSpeak enforced inside the handler",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/seek":                  "PermSpeak enforced inside the handler",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/restore":               "PermSpeak enforced inside the handler",
+	"GET /api/servers/{serverId}/channels/{channelId}/music/state":                  "read-only — membership is the intended view gate",
 
 	// ── Soundboard (read) ──
 	"GET /api/servers/{serverId}/soundboard/sounds": "read-only — membership is the intended view gate",

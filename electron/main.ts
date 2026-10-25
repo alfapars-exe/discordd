@@ -35,6 +35,7 @@ import { getSettings } from "./settings";
 import { shutdownGlobalHotkeys } from "./push-to-talk";
 import { createTray } from "./tray";
 import { createMainWindow, getMainWindow, setQuitting } from "./window";
+import { closeVoiceOverlay } from "./voice-overlay";
 
 // ─── Chromium feature switches ───
 //
@@ -90,6 +91,13 @@ if (process.platform === "win32") {
   // Match package.json build.appId so taskbar and Action Center associate
   // notifications with this app rather than the generic "Electron" host.
   app.setAppUserModelId("net.hichat.app");
+}
+
+// Chromium requires GPU acceleration to be disabled before the ready event.
+// The settings UI therefore persists this preference and clearly marks it as
+// restart-required instead of pretending the current process changed.
+if (!getSettings().hardwareAcceleration) {
+  app.disableHardwareAcceleration();
 }
 
 // ─── Custom app:// scheme registration ───
@@ -341,6 +349,7 @@ app.on("activate", () => {
 let shutdownStarted = false;
 app.on("before-quit", (e) => {
   setQuitting(true);
+  closeVoiceOverlay();
   shutdownGlobalHotkeys();
 
   // Force the cookie store to disk before we die.

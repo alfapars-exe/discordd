@@ -1,8 +1,11 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -40,11 +43,16 @@ var dispatchLogger = logx.Component("ws.dispatch")
 // Client represents a single WebSocket connection.
 // Each connection runs two goroutines: ReadPump (read) and WritePump (write).
 type Client struct {
-	hub    *Hub
-	conn   *websocket.Conn
-	userID string
-	send   chan []byte
-	mu     sync.Mutex // protects conn.WriteMessage
+	sessionID       string
+	registered      chan struct{}
+	validateSession func(context.Context, string, string) error
+	hub             *Hub
+	conn            *websocket.Conn
+	userID          string
+	connectionID    uint64 // unique physical connection identity (not the account session)
+	activitySeq     atomic.Uint64
+	send            chan []byte
+	mu              sync.Mutex // protects conn.WriteMessage
 
 	// done is closed exactly once (via closeDone) when the Hub removes this
 	// client — from removeClient (ban / disconnect) or Shutdown. The send
@@ -159,7 +167,11 @@ func (c *Client) logUnexpectedClose(err error) {
 // (h.mu already serializes them, but the Once makes single-close local and
 // self-evident rather than an invariant a future edit could break).
 func (c *Client) closeDone() {
-	c.closeOnce.Do(func() { close(c.done) })
+	c.closeOnce.Do(func() {
+		if c.done != nil {
+			close(c.done)
+		}
+	})
 }
 
 func (c *Client) sendEvent(event Event) {
@@ -199,6 +211,17 @@ func (c *Client) WritePump() {
 				return
 			}
 		case <-ticker.C:
+			if c.validateSession != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				err := c.validateSession(ctx, c.userID, c.sessionID)
+				cancel()
+				if err != nil {
+					if errors.Is(err, pkg.ErrUnauthorized) {
+						_ = c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
+					}
+					return
+				}
+			}
 			// Protocol keepalive — see the pingPeriod comment. A failed ping
 			// write means the peer is unreachable; exit and let ReadPump's
 			// deadline/close path unregister the client.

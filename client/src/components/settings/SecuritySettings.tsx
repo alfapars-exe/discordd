@@ -1,16 +1,39 @@
 /** SecuritySettings — Email change/remove (with password verification) and password change. */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../stores/toastStore";
 import { useAuthStore } from "../../stores/authStore";
 import * as authApi from "../../api/auth";
+import { useSettingsDraft } from "./settingsWorkspaceContext";
+import { newPasswordError } from "../../utils/passwordPolicy";
+import type { User } from "../../types";
+import MFASettings from "./MFASettings";
+import SessionSettings from "./SessionSettings";
+import AccountStatusSettings from "./AccountStatusSettings";
+import AccountLifecycleSettings from "./AccountLifecycleSettings";
+import AccountDeletionSettings from "./AccountDeletionSettings";
+import EmailVerificationSettings from "./EmailVerificationSettings";
+import PrivacyConsentSettings from "./PrivacyConsentSettings";
+import DataExportSettings from "./DataExportSettings";
 
 function SecuritySettings() {
+  const user = useAuthStore((s) => s.user);
+  // Private credential drafts must not survive an account switch.
+  return user ? <SecurityForm key={user.id} user={user} /> : null;
+}
+
+function SecurityForm({ user }: { user: User }) {
   const { t } = useTranslation("settings");
   const addToast = useToastStore((s) => s.addToast);
-  const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
+  const alive = useRef(true);
+  const requestPending = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+  const isCurrent = () => alive.current && useAuthStore.getState().user?.id === user.id;
 
   // ─── Email State ───
   const [newEmail, setNewEmail] = useState("");
@@ -25,23 +48,26 @@ function SecuritySettings() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  useSettingsDraft(!!(newEmail || emailPassword || currentPassword || newPassword || confirmPassword) || isSaving || isEmailSaving);
 
   // ─── Email Handlers ───
-  const canSubmitEmail = emailPassword.length > 0 && !isEmailSaving;
+  const canSubmitEmail = emailPassword.length > 0 && !isEmailSaving && !isSaving;
 
-  async function handleEmailSubmit() {
-    if (!canSubmitEmail) return;
+  async function handleEmailSubmit(targetEmail: string) {
+    if (!canSubmitEmail || requestPending.current) return;
 
     // Client-side: empty = remove, otherwise validate format
-    const trimmedEmail = newEmail.trim();
+    const trimmedEmail = targetEmail.trim();
     if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       addToast("error", t("emailInvalid"));
       return;
     }
 
+    requestPending.current = true;
     setIsEmailSaving(true);
     try {
-      const res = await authApi.changeEmail(emailPassword, trimmedEmail);
+      const res = await authApi.changeEmail(emailPassword, trimmedEmail, user.id);
+      if (!isCurrent()) return;
       if (res.success) {
         const resultEmail = res.data?.email ?? null;
         updateUser({ email: resultEmail });
@@ -50,7 +76,9 @@ function SecuritySettings() {
         setEmailPassword("");
       } else {
         const errMsg = res.error ?? "";
-        if (errMsg.includes("incorrect") || errMsg.includes("unauthorized")) {
+        if (res.code === "ACCOUNT_MISMATCH") {
+          addToast("error", t("securityAccountChanged"));
+        } else if (errMsg.includes("incorrect") || errMsg.includes("unauthorized")) {
           addToast("error", t("wrongCurrentPassword"));
         } else if (errMsg.includes("already in use") || errMsg.includes("already exists")) {
           addToast("error", t("emailAlreadyExists"));
@@ -62,8 +90,11 @@ function SecuritySettings() {
           addToast("error", t("emailChangeError"));
         }
       }
+    } catch {
+      if (isCurrent()) addToast("error", t("emailChangeError"));
     } finally {
-      setIsEmailSaving(false);
+      requestPending.current = false;
+      if (isCurrent()) setIsEmailSaving(false);
     }
   }
 
@@ -72,13 +103,14 @@ function SecuritySettings() {
     currentPassword.length > 0 &&
     newPassword.length > 0 &&
     confirmPassword.length > 0 &&
-    !isSaving;
+    !isSaving && !isEmailSaving;
 
   async function handlePasswordSubmit() {
-    if (!canSubmitPassword) return;
+    if (!canSubmitPassword || requestPending.current) return;
 
-    if (newPassword.length < 6) {
-      addToast("error", t("passwordTooShort"));
+    const policyError = newPasswordError(newPassword);
+    if (policyError) {
+      addToast("error", t(policyError));
       return;
     }
 
@@ -87,26 +119,38 @@ function SecuritySettings() {
       return;
     }
 
+    requestPending.current = true;
     setIsSaving(true);
     try {
-      const res = await authApi.changePassword(currentPassword, newPassword);
+      const res = await authApi.changePassword(currentPassword, newPassword, user.id);
+      if (!isCurrent()) return;
       if (res.success) {
         addToast("success", t("passwordChanged"));
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        // The server revokes every session, including this one. Clear only
+        // this account's local session; never revoke a shared cookie again.
+        void useAuthStore.getState().logout({ localOnly: true, expectedUserId: user.id });
       } else {
         const errMsg = res.error ?? "";
-        if (errMsg.includes("incorrect") || errMsg.includes("unauthorized")) {
+        if (res.code === "ACCOUNT_MISMATCH") {
+          addToast("error", t("securityAccountChanged"));
+        } else if (errMsg.includes("incorrect") || errMsg.includes("unauthorized")) {
           addToast("error", t("wrongCurrentPassword"));
-        } else if (errMsg.includes("at least 6")) {
+        } else if (errMsg.includes("at least 8")) {
           addToast("error", t("passwordTooShort"));
+        } else if (errMsg.includes("at most 72")) {
+          addToast("error", t("passwordTooLong"));
         } else {
           addToast("error", t("passwordChangeError"));
         }
       }
+    } catch {
+      if (isCurrent()) addToast("error", t("passwordChangeError"));
     } finally {
-      setIsSaving(false);
+      requestPending.current = false;
+      if (isCurrent()) setIsSaving(false);
     }
   }
 
@@ -115,7 +159,7 @@ function SecuritySettings() {
       <h2 className="settings-section-title">{t("security")}</h2>
 
       {/* ═══ Email Section ═══ */}
-      <h3 className="settings-section-subtitle">{t("emailSection")}</h3>
+      <h3 className="settings-section-subtitle" data-settings-section="email">{t("emailSection")}</h3>
 
       {/* Current email display */}
       <div className="settings-field">
@@ -165,31 +209,19 @@ function SecuritySettings() {
       {/* Email actions */}
       <div className="settings-btn-row">
         <button
-          onClick={handleEmailSubmit}
+          onClick={() => { void handleEmailSubmit(newEmail); }}
           disabled={!canSubmitEmail || !newEmail.trim()}
           className="settings-btn"
         >
           {isEmailSaving ? t("changeEmail") + "..." : t("changeEmail")}
         </button>
-        {user?.email && (
-          <button
-            onClick={() => {
-              setNewEmail("");
-              handleEmailSubmit();
-            }}
-            disabled={!canSubmitEmail}
-            className="settings-btn settings-btn-danger"
-          >
-            {t("removeEmail")}
-          </button>
-        )}
       </div>
 
       {/* ═══ Separator ═══ */}
       <div className="settings-divider" />
 
       {/* ═══ Password Section ═══ */}
-      <h3 className="settings-section-subtitle">{t("changePassword")}</h3>
+      <h3 className="settings-section-subtitle" data-settings-section="password">{t("changePassword")}</h3>
 
       {/* Current Password — required by the server to defend against a
           stolen JWT (see the comment on the state above). */}
@@ -252,6 +284,14 @@ function SecuritySettings() {
           {isSaving ? t("changePassword") + "..." : t("changePassword")}
         </button>
       </div>
+      <EmailVerificationSettings key={`${user.id}:${user.email ?? ""}`} userID={user.id} />
+      <MFASettings key={`mfa:${user.id}`} userID={user.id} />
+      <SessionSettings key={`sessions:${user.id}`} userID={user.id} />
+      <AccountStatusSettings key={`status:${user.id}`} userID={user.id} />
+      <AccountLifecycleSettings key={`lifecycle:${user.id}`} userID={user.id} />
+      <PrivacyConsentSettings />
+      <DataExportSettings key={`export:${user.id}`} userID={user.id} />
+      <AccountDeletionSettings key={`delete:${user.id}`} userID={user.id} />
     </div>
   );
 }

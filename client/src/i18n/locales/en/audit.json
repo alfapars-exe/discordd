@@ -7,6 +7,7 @@
   "unknownTarget": "unknown user",
 
   "events": {
+    "server_ownership_transfer": "{{actor}} transferred server ownership to {{target}}",
     "server_mute": "{{actor}} muted {{target}}",
     "server_unmute": "{{actor}} unmuted {{target}}",
     "server_deafen": "{{actor}} deafened {{target}}",

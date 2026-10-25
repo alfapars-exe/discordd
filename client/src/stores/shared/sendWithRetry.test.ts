@@ -23,6 +23,12 @@ function httpErr<T>(status: number, error: string): APIResponse<T> {
 }
 
 describe("sendWithRetryAndToast", () => {
+  it("does not dispatch or toast after its caller context is abandoned",async()=>{
+    const send=vi.fn().mockResolvedValue(ok());const result=await sendWithRetryAndToast(send,{isCurrent:()=>false});expect(result.success).toBe(false);expect(send).not.toHaveBeenCalled();expect(addToast).not.toHaveBeenCalled();
+  });
+  it("does not toast a late failure into a replacement context",async()=>{
+    let current=true,finish!:(value:APIResponse<unknown>)=>void;const sending=sendWithRetryAndToast(()=>new Promise<APIResponse<unknown>>(resolve=>{finish=resolve}),{isCurrent:()=>current});current=false;finish(netErr());expect((await sending).success).toBe(false);expect(addToast).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     addToast.mockReset();
     vi.useFakeTimers();
@@ -41,7 +47,7 @@ describe("sendWithRetryAndToast", () => {
     expect(addToast).not.toHaveBeenCalled();
   });
 
-  it("retries once on network error and returns success if the retry succeeds", async () => {
+  it("does not replay a network failure even if another attempt would succeed", async () => {
     const send = vi
       .fn<() => Promise<APIResponse<{ id: string }>>>()
       .mockResolvedValueOnce(netErr())
@@ -49,9 +55,9 @@ describe("sendWithRetryAndToast", () => {
     const promise = sendWithRetryAndToast(send);
     await vi.runAllTimersAsync();
     const res = await promise;
-    expect(res.success).toBe(true);
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(addToast).not.toHaveBeenCalled();
+    expect(res.success).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(addToast).toHaveBeenCalledWith("error", "chat:sendFailed");
   });
 
   it("does NOT retry on a deterministic 4xx", async () => {
@@ -86,17 +92,17 @@ describe("sendWithRetryAndToast", () => {
     expect(addToast).toHaveBeenCalledWith("warning", "chat:tooManyMessages");
   });
 
-  it("retries once on the HF cold-boot sentinel (502/503/504 → service_unavailable:)", async () => {
+  it.each([502,503,504])("does not replay an ambiguous gateway response %s", async (status) => {
     const send = vi
       .fn<() => Promise<APIResponse<{ id: string }>>>()
-      .mockResolvedValueOnce({ success: false, error: "service_unavailable: HTTP 503", status: 503 })
+      .mockResolvedValueOnce({ success: false, error: `service_unavailable: HTTP ${status}`, status })
       .mockResolvedValueOnce(ok({ id: "m-1" }));
     const promise = sendWithRetryAndToast(send);
     await vi.runAllTimersAsync();
     const res = await promise;
-    expect(res.success).toBe(true);
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(addToast).not.toHaveBeenCalled();
+    expect(res.success).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(addToast).toHaveBeenCalledWith("error", "chat:sendFailed");
   });
 
   it("does NOT retry a timed-out send (duplicate risk without idempotency keys)", async () => {
@@ -112,18 +118,18 @@ describe("sendWithRetryAndToast", () => {
     expect(addToast.mock.calls[0]![0]).toBe("error");
   });
 
-  it("shows a generic error toast when both attempts fail with network error", async () => {
+  it("shows a single error toast after a network failure", async () => {
     const send = vi.fn().mockResolvedValue(netErr());
     const promise = sendWithRetryAndToast(send);
     await vi.runAllTimersAsync();
     await promise;
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(addToast).toHaveBeenCalledTimes(1);
     expect(addToast.mock.calls[0]![0]).toBe("error");
     expect(addToast.mock.calls[0]![1]).toBe("chat:sendFailed");
   });
 
-  it("waits the retry delay between attempts (no back-to-back hammer)", async () => {
+  it("does not schedule a delayed duplicate after a network failure", async () => {
     const send = vi
       .fn<() => Promise<APIResponse<unknown>>>()
       .mockResolvedValueOnce(netErr())
@@ -134,14 +140,14 @@ describe("sendWithRetryAndToast", () => {
     await Promise.resolve();
     expect(send).toHaveBeenCalledTimes(1);
 
-    // Nothing yet — retry is scheduled for ~1.5s later.
+    // Advancing timers must not replay an ambiguous write.
     await vi.advanceTimersByTimeAsync(500);
     expect(send).toHaveBeenCalledTimes(1);
 
-    // Past the delay, retry fires.
+    // No delayed retry after the historical retry interval either.
     await vi.advanceTimersByTimeAsync(2000);
     await promise;
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it("suppresses toast when caller passes silent=true", async () => {

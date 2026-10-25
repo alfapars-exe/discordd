@@ -18,6 +18,7 @@
 import * as keyStorage from "./keyStorage";
 import { normalizeReplayWindow } from "./senderKeyProtocol";
 import { toBase64, fromBase64 } from "./signalProtocol";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 
 // ──────────────────────────────────
 // Constants
@@ -41,6 +42,32 @@ const BACKUP_ALGORITHM = `aes-256-gcm+pbkdf2-${PBKDF2_ITERATIONS_DEFAULT}`;
 
 /** Backup version */
 const BACKUP_VERSION = 1;
+
+type AuthScope = { ownerId: string; generation: number };
+
+function captureScope(): AuthScope {
+  const snapshot = getAuthSessionSnapshot();
+  if (!snapshot.ownerId || !snapshot.ownerId.trim() || snapshot.ownerId.length > 256) {
+    throw new Error("e2ee_account_scope_unavailable");
+  }
+  return { ownerId: snapshot.ownerId, generation: snapshot.generation };
+}
+
+function isCurrent(scope: AuthScope): boolean {
+  const snapshot = getAuthSessionSnapshot();
+  return snapshot.ownerId === scope.ownerId && snapshot.generation === scope.generation;
+}
+
+function assertCurrent(scope: AuthScope): void {
+  if (!isCurrent(scope)) throw new Error("e2ee_account_scope_changed");
+}
+
+async function awaitScoped<T>(scope: AuthScope, operation: () => Promise<T>): Promise<T> {
+  assertCurrent(scope);
+  const result = await operation();
+  assertCurrent(scope);
+  return result;
+}
 
 /**
  * Parse the `algorithm` string back to its components.
@@ -160,6 +187,8 @@ type BackupContents = {
     dmChannelId: string | null;
     content: string;
     timestamp: number;
+    encryptedSourceTag?:string;
+    fileKeys?:import("./fileEncryption").EncryptedFileMeta[];
   }>;
 };
 
@@ -196,19 +225,24 @@ export async function createBackup(recoveryPassword: string): Promise<{
   nonce: string;         // base64
   salt: string;          // base64
 }> {
+  const scope = captureScope();
   // 1. Collect all E2EE data
-  const contents = await collectBackupContents();
+  const contents = await awaitScoped(scope, () => collectBackupContents(scope));
+  if (contents.registration.userId !== scope.ownerId) {
+    throw new Error("E2EE registration does not match authenticated account");
+  }
 
   // 2. JSON serialize
   const plaintext = new TextEncoder().encode(JSON.stringify(contents));
 
   // 3. Derive key via PBKDF2 (2,000,000 iterations — 2025 OWASP recommendation)
   const salt = crypto.getRandomValues(new Uint8Array(32));
-  const derivedKey = await deriveKeyFromPassword(
+  const derivedKey = await awaitScoped(scope, () => deriveKeyFromPassword(
     recoveryPassword,
     salt,
-    PBKDF2_ITERATIONS_DEFAULT
-  );
+    PBKDF2_ITERATIONS_DEFAULT,
+    () => isCurrent(scope)
+  ));
 
   // 4. Encrypt with AES-256-GCM
   const nonce = crypto.getRandomValues(new Uint8Array(12));
@@ -219,13 +253,16 @@ export async function createBackup(recoveryPassword: string): Promise<{
     false,
     ["encrypt"]
   );
+  assertCurrent(scope);
 
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce },
     cryptoKey,
     plaintext as BufferSource
   );
+  assertCurrent(scope);
 
+  assertCurrent(scope);
   return {
     version: BACKUP_VERSION,
     algorithm: BACKUP_ALGORITHM,
@@ -254,12 +291,15 @@ export async function restoreFromBackup(
   },
   recoveryPassword: string
 ): Promise<boolean> {
+  let scope: AuthScope;
+  try { scope = captureScope(); }
+  catch { return false; }
   try {
     // 1. Derive key via PBKDF2 with the iteration count this backup was created with.
     //    Missing algorithm = pre-audit legacy backup (1M iterations).
     const { iterations } = parseAlgorithm(backup.algorithm ?? "aes-256-gcm");
     const salt = fromBase64(backup.salt);
-    const derivedKey = await deriveKeyFromPassword(recoveryPassword, salt, iterations);
+    const derivedKey = await awaitScoped(scope, () => deriveKeyFromPassword(recoveryPassword, salt, iterations, () => isCurrent(scope)));
 
     // 2. Decrypt with AES-256-GCM
     const nonce = fromBase64(backup.nonce);
@@ -272,17 +312,21 @@ export async function restoreFromBackup(
       false,
       ["decrypt"]
     );
+    assertCurrent(scope);
 
     const decrypted = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: nonce as BufferSource },
       cryptoKey,
       encryptedData as BufferSource
     );
+    assertCurrent(scope);
 
     // 3. JSON parse
     const contents: BackupContents = JSON.parse(
       new TextDecoder().decode(decrypted)
     );
+    assertCurrent(scope);
+    if (!contents.registration || contents.registration.userId !== scope.ownerId) return false;
 
     // Arm self-fanout reset BEFORE importing keys (P0-FE-03). After a restore
     // the per-self-device Double Ratchet sessions on our OTHER devices were
@@ -293,10 +337,11 @@ export async function restoreFromBackup(
     // that window would reuse a stale session and the other devices couldn't
     // decrypt it. (Lazy import avoids a circular crypto/ import at module load.)
     const { markSelfFanoutNeedsReset } = await import("./dmEncryption");
-    await markSelfFanoutNeedsReset();
+    await awaitScoped(scope, () => markSelfFanoutNeedsReset());
 
     // 4. Import to IndexedDB
-    await importBackupContents(contents);
+    await awaitScoped(scope, () => importBackupContents(contents, scope));
+    assertCurrent(scope);
 
     return true;
   } catch {
@@ -310,22 +355,24 @@ export async function restoreFromBackup(
 // ──────────────────────────────────
 
 /** Collect all E2EE data from IndexedDB. */
-async function collectBackupContents(): Promise<BackupContents> {
-  const identity = await keyStorage.getIdentityKeyPair();
-  const signing = await keyStorage.getSigningKeyPair();
-  const registration = await keyStorage.getRegistrationData();
+async function collectBackupContents(scope: AuthScope): Promise<BackupContents> {
+  const identity = await awaitScoped(scope, () => keyStorage.getIdentityKeyPair());
+  const signing = await awaitScoped(scope, () => keyStorage.getSigningKeyPair());
+  const registration = await awaitScoped(scope, () => keyStorage.getRegistrationData());
 
   if (!identity || !signing || !registration) {
     throw new Error("E2EE keys not initialized — cannot create backup");
   }
+  if (registration.userId !== scope.ownerId) throw new Error("E2EE registration does not match authenticated account");
 
-  const signedPreKeys = await keyStorage.getAllSignedPreKeys();
-  const preKeys = await keyStorage.getAllPreKeys();
-  const sessions = await keyStorage.getAllSessions();
-  const senderKeys = await keyStorage.getAllSenderKeys();
-  const trustedIdentities = await keyStorage.getAllTrustedIdentities();
-  const cachedMessages = await keyStorage.getAllCachedMessages();
-  const nextPrekeyId = await keyStorage.getMetadata<number>("nextPrekeyId");
+  const signedPreKeys = await awaitScoped(scope, () => keyStorage.getAllSignedPreKeys());
+  const preKeys = await awaitScoped(scope, () => keyStorage.getAllPreKeys());
+  const sessions = await awaitScoped(scope, () => keyStorage.getAllSessions());
+  const senderKeys = await awaitScoped(scope, () => keyStorage.getAllSenderKeys());
+  const trustedIdentities = await awaitScoped(scope, () => keyStorage.getAllTrustedIdentities());
+  const cachedMessages = await awaitScoped(scope, () => keyStorage.getAllCachedMessages());
+  const nextPrekeyId = await awaitScoped(scope, () => keyStorage.getMetadata<number>("nextPrekeyId"));
+  assertCurrent(scope);
 
   return {
     version: BACKUP_VERSION,
@@ -390,6 +437,8 @@ async function collectBackupContents(): Promise<BackupContents> {
       dmChannelId: m.dmChannelId,
       content: m.content,
       timestamp: m.timestamp,
+      encryptedSourceTag:m.encryptedSourceTag,
+      fileKeys:m.fileKeys,
     })),
   };
 }
@@ -415,22 +464,24 @@ async function collectBackupContents(): Promise<BackupContents> {
  * typical backup (<1MB serialized) this is fine; if backups grow to many
  * megabytes the snapshot path can be revisited.
  */
-async function importBackupContents(contents: BackupContents): Promise<void> {
+async function importBackupContents(contents: BackupContents, scope: AuthScope): Promise<void> {
+  assertCurrent(scope);
+  if (contents.registration.userId !== scope.ownerId) throw new Error("Backup account does not match authenticated account");
   // Preserve existing message cache — previously decrypted messages must remain
   // readable since ratchet state may have changed after restore
-  const existingCache = await keyStorage.getAllCachedMessages();
+  const existingCache = await awaitScoped(scope, () => keyStorage.getAllCachedMessages());
 
   // Snapshot the current crypto state so we can roll back on failure.
   // Reading these up-front catches IDB read errors before we wipe anything.
   const snapshot = {
-    identity: await keyStorage.getIdentityKeyPair(),
-    signing: await keyStorage.getSigningKeyPair(),
-    registration: await keyStorage.getRegistrationData(),
-    signedPreKeys: await keyStorage.getAllSignedPreKeys(),
-    preKeys: await keyStorage.getAllPreKeys(),
-    sessions: await keyStorage.getAllSessions(),
-    senderKeys: await keyStorage.getAllSenderKeys(),
-    trustedIdentities: await keyStorage.getAllTrustedIdentities(),
+    identity: await awaitScoped(scope, () => keyStorage.getIdentityKeyPair()),
+    signing: await awaitScoped(scope, () => keyStorage.getSigningKeyPair()),
+    registration: await awaitScoped(scope, () => keyStorage.getRegistrationData()),
+    signedPreKeys: await awaitScoped(scope, () => keyStorage.getAllSignedPreKeys()),
+    preKeys: await awaitScoped(scope, () => keyStorage.getAllPreKeys()),
+    sessions: await awaitScoped(scope, () => keyStorage.getAllSessions()),
+    senderKeys: await awaitScoped(scope, () => keyStorage.getAllSenderKeys()),
+    trustedIdentities: await awaitScoped(scope, () => keyStorage.getAllTrustedIdentities()),
     // clearAllE2EEData() wipes the metadata store too, and a rollback that
     // skipped it left the device with keys but no "deviceId": getLocalDeviceId
     // reads ONLY that entry, hasLocalKeys never looks at it, so E2EE reported
@@ -438,74 +489,74 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
     // nothing ever re-registered. Snapshotting the whole store rather than a
     // list of known keys also covers sk_signing:*/prekey_info:*/legacyDeviceIds,
     // whose key space is open-ended (security scan 2026-07-31, finding N-22).
-    metadata: await keyStorage.getAllMetadata(),
+    metadata: await awaitScoped(scope, () => keyStorage.getAllMetadata()),
   };
 
   try {
     // Clear crypto keys (including messageCache — will be re-written below)
-    await keyStorage.clearAllE2EEData();
+    await awaitScoped(scope, () => keyStorage.clearAllE2EEData());
 
     // Identity key pair
-    await keyStorage.saveIdentityKeyPair({
+    await awaitScoped(scope, () => keyStorage.saveIdentityKeyPair({
       publicKey: fromBase64(contents.identity.publicKey),
       privateKey: fromBase64(contents.identity.privateKey),
-    });
+    }));
 
     // Signing key pair
-    await keyStorage.saveSigningKeyPair({
+    await awaitScoped(scope, () => keyStorage.saveSigningKeyPair({
       publicKey: fromBase64(contents.signing.publicKey),
       privateKey: fromBase64(contents.signing.privateKey),
-    });
+    }));
 
     // Registration data
-    await keyStorage.saveRegistrationData({
+    await awaitScoped(scope, () => keyStorage.saveRegistrationData({
       registrationId: contents.registration.registrationId,
       deviceId: contents.registration.deviceId,
       userId: contents.registration.userId,
       createdAt: Date.now(),
-    });
+    }));
 
     // Write deviceId to metadata store — getLocalDeviceId() reads from here.
     // Without this, localDeviceId stays null after restore → device management breaks.
-    await keyStorage.setMetadata("deviceId", contents.registration.deviceId);
+    await awaitScoped(scope, () => keyStorage.setMetadata("deviceId", contents.registration.deviceId));
 
     // Restore nextPrekeyId to prevent new prekeys from overwriting old private keys
     if (contents.nextPrekeyId) {
-      await keyStorage.setMetadata("nextPrekeyId", contents.nextPrekeyId);
+      await awaitScoped(scope, () => keyStorage.setMetadata("nextPrekeyId", contents.nextPrekeyId!));
     }
 
     // Signed prekeys
     for (const spk of contents.signedPreKeys) {
-      await keyStorage.saveSignedPreKey({
+      await awaitScoped(scope, () => keyStorage.saveSignedPreKey({
         id: spk.id,
         publicKey: fromBase64(spk.publicKey),
         privateKey: fromBase64(spk.privateKey),
         signature: fromBase64(spk.signature),
         createdAt: spk.createdAt,
-      });
+      }));
     }
 
     // One-time prekeys — critical for X3DH
     if (contents.preKeys && contents.preKeys.length > 0) {
-      await keyStorage.savePreKeys(
+      await awaitScoped(scope, () => keyStorage.savePreKeys(
         contents.preKeys.map((pk) => ({
           id: pk.id,
           publicKey: fromBase64(pk.publicKey),
           privateKey: fromBase64(pk.privateKey),
         })),
-      );
+      ));
     }
 
     // Sessions
     for (const s of contents.sessions) {
       const state = deserializeSessionState(JSON.parse(s.state));
-      await keyStorage.saveSession({
+      await awaitScoped(scope, () => keyStorage.saveSession({
         userId: s.userId,
         deviceId: s.deviceId,
         state,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
-      });
+      }));
     }
 
     // Sender keys
@@ -515,7 +566,7 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
       // unsorted or poisoned array. Absent (older backup) normalizes to the
       // safe empty window with floor 0.
       const window = normalizeReplayWindow(sk.seenIterations, sk.replayFloor);
-      await keyStorage.saveSenderKey({
+      await awaitScoped(scope, () => keyStorage.saveSenderKey({
         channelId: sk.channelId,
         senderUserId: sk.senderUserId,
         senderDeviceId: sk.senderDeviceId,
@@ -542,18 +593,18 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
         createdAt: sk.createdAt,
         seenIterations: window.seenIterations,
         replayFloor: window.replayFloor,
-      });
+      }));
     }
 
     // Trusted identities
     for (const ti of contents.trustedIdentities) {
-      await keyStorage.saveTrustedIdentity({
+      await awaitScoped(scope, () => keyStorage.saveTrustedIdentity({
         userId: ti.userId,
         deviceId: ti.deviceId,
         identityKey: fromBase64(ti.identityKey),
         firstSeen: ti.firstSeen,
         verified: ti.verified,
-      });
+      }));
     }
 
     // Merge existing cache + backup cache (existing takes priority)
@@ -569,15 +620,18 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
             dmChannelId: m.dmChannelId,
             content: m.content,
             timestamp: m.timestamp,
+            encryptedSourceTag:m.encryptedSourceTag,
+            fileKeys:m.fileKeys,
           });
         }
       }
     }
 
     if (mergedCache.length > 0) {
-      await keyStorage.cacheDecryptedMessages(mergedCache);
+      await awaitScoped(scope, () => keyStorage.cacheDecryptedMessages(mergedCache));
     }
   } catch (err) {
+    if (!isCurrent(scope)) throw new Error("e2ee_account_scope_changed", { cause: err });
     // Restore failed mid-write. Roll back from the snapshot toward the
     // pre-restore state.
     //
@@ -595,57 +649,57 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
     console.error("[keyBackup] restore failed, rolling back to snapshot:", err);
     const failedStores: string[] = [];
 
-    await rollbackWrite(failedStores, "clear", () => keyStorage.clearAllE2EEData());
+    await rollbackWrite(scope, failedStores, "clear", () => keyStorage.clearAllE2EEData());
     for (const [key, value] of snapshot.metadata) {
-      await rollbackWrite(failedStores, "metadata", () =>
+      await rollbackWrite(scope, failedStores, "metadata", () =>
         keyStorage.setMetadata(key, value)
       );
     }
     if (snapshot.identity) {
       const identity = snapshot.identity;
-      await rollbackWrite(failedStores, "identity", () =>
+      await rollbackWrite(scope, failedStores, "identity", () =>
         keyStorage.saveIdentityKeyPair(identity)
       );
     }
     if (snapshot.signing) {
       const signing = snapshot.signing;
-      await rollbackWrite(failedStores, "signing", () =>
+      await rollbackWrite(scope, failedStores, "signing", () =>
         keyStorage.saveSigningKeyPair(signing)
       );
     }
     if (snapshot.registration) {
       const registration = snapshot.registration;
-      await rollbackWrite(failedStores, "registration", () =>
+      await rollbackWrite(scope, failedStores, "registration", () =>
         keyStorage.saveRegistrationData(registration)
       );
     }
     for (const spk of snapshot.signedPreKeys) {
-      await rollbackWrite(failedStores, "signedPreKeys", () =>
+      await rollbackWrite(scope, failedStores, "signedPreKeys", () =>
         keyStorage.saveSignedPreKey(spk)
       );
     }
     if (snapshot.preKeys.length > 0) {
-      await rollbackWrite(failedStores, "preKeys", () =>
+      await rollbackWrite(scope, failedStores, "preKeys", () =>
         keyStorage.savePreKeys(snapshot.preKeys)
       );
     }
     for (const ses of snapshot.sessions) {
-      await rollbackWrite(failedStores, "sessions", () =>
+      await rollbackWrite(scope, failedStores, "sessions", () =>
         keyStorage.saveSession(ses)
       );
     }
     for (const sk of snapshot.senderKeys) {
-      await rollbackWrite(failedStores, "senderKeys", () =>
+      await rollbackWrite(scope, failedStores, "senderKeys", () =>
         keyStorage.saveSenderKey(sk)
       );
     }
     for (const ti of snapshot.trustedIdentities) {
-      await rollbackWrite(failedStores, "trustedIdentities", () =>
+      await rollbackWrite(scope, failedStores, "trustedIdentities", () =>
         keyStorage.saveTrustedIdentity(ti)
       );
     }
     if (existingCache.length > 0) {
-      await rollbackWrite(failedStores, "messageCache", () =>
+      await rollbackWrite(scope, failedStores, "messageCache", () =>
         keyStorage.cacheDecryptedMessages(existingCache)
       );
     }
@@ -675,13 +729,17 @@ async function importBackupContents(contents: BackupContents): Promise<void> {
  * pushed as far as they go and the shortfall is logged once.
  */
 async function rollbackWrite(
+  scope: AuthScope,
   failedStores: string[],
   storeName: string,
   write: () => Promise<void>
 ): Promise<void> {
+  if (!isCurrent(scope)) return;
   try {
     await write();
+    assertCurrent(scope);
   } catch (err) {
+    if (!isCurrent(scope)) return;
     failedStores.push(storeName);
     console.error(`[keyBackup] rollback write failed for ${storeName}:`, err);
   }
@@ -739,8 +797,10 @@ function deserializeSessionState(data: any): any {
 async function deriveKeyFromPassword(
   password: string,
   salt: Uint8Array,
-  iterations: number
+  iterations: number,
+  isCurrent: () => boolean = () => true
 ): Promise<Uint8Array> {
+  if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
   const passwordBytes = new TextEncoder().encode(password);
 
   const baseKey = await crypto.subtle.importKey(
@@ -750,6 +810,7 @@ async function deriveKeyFromPassword(
     false,
     ["deriveBits"]
   );
+  if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
 
   const derivedBits = await crypto.subtle.deriveBits(
     {
@@ -761,6 +822,7 @@ async function deriveKeyFromPassword(
     baseKey,
     256 // 32 bytes
   );
+  if (!isCurrent()) throw new Error("e2ee_account_scope_changed");
 
   return new Uint8Array(derivedBits);
 }

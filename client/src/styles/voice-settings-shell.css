@@ -1,0 +1,84 @@
+/* Shared control primitives; the V2 shell owns the redesigned layout. */
+.user-bar button.ub-user { border: 0; background: transparent; text-align: left; font: inherit; }
+.user-bar button.ub-user:hover { background: var(--bg-h); }
+.ui-shell-v2 .user-bar { margin: 8px; border-radius: 10px; background: var(--bg-3); border: 1px solid var(--b1); }
+.ui-shell-v2 .shell-user-dock .user-bar { margin: 0; border: 0; background: transparent; border-radius: inherit; }
+.ui-shell-v2 .ub-main { min-height: 56px; padding: 8px; gap: 4px; }
+.ui-shell-v2 .ub-user { gap: 6px; }
+.ui-shell-v2 .ub-ctrl { width: 30px; height: 34px; flex-shrink: 0; }
+.ui-shell-v2 .ub-chevron { width: 14px; }
+.ui-shell-v2 .ub-ctrl-group { border-radius: 6px; }
+.ui-shell-v2 .ub-ctrl-group:focus-within { background: var(--bg-h); }
+.ui-shell-v2 .ub-voice-row { padding: 8px; gap: 5px; }
+.ui-shell-v2 .ub-voice-info { padding: 0; min-height: 22px; }
+.ui-shell-v2 .ub-voice-info .voice-connection-status { padding: 0; border: 0; background: transparent; min-width: 0; }
+.ui-shell-v2 .ub-voice-info .voice-connection-text { font-size: 12px; }
+.ui-shell-v2 .ub-ping-value { font-size: 11px; }
+.ui-shell-v2 .ub-return-call { display: flex; flex-direction: column; width: 100%; min-width: 0; align-items: flex-start; text-align: left; gap: 3px; color: var(--t2); border: 0; padding: 4px 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; font-size: 12px; }
+.ui-shell-v2 .ub-return-call > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-shell-v2 .ub-return-call:hover { color: var(--t0); }
+.ui-shell-v2 .ub-return-call:disabled { cursor: default; }
+.ui-shell-v2 .ub-return-call-hint { color: var(--green); font-size: 11px; }
+.ui-shell-v2 .ub-nr-row { padding: 3px 0; }
+.ui-shell-v2 .ub-nr-label { font-size: 11px; }
+.ui-shell-v2 .ub-voice-btns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 4px 0 0; }
+.ui-shell-v2 .ub-voice-btns > .ub-ctrl, .ui-shell-v2 .ub-voice-btns > .ub-ctrl-group { width: 100%; background: var(--bg-h); }
+.ui-shell-v2 .ub-voice-btns .ub-ctrl-group > .ub-ctrl { flex: 1; }
+.ui-shell-v2 .ub-voice-btns .ub-ctrl[aria-pressed="true"] { background: var(--primary-s); }
+.ui-shell-v2 .ub-p2p-row { padding: 8px; border-bottom: 1px solid var(--b1); }
+.ui-shell-v2 .ub-p2p-row .p2p-controls { gap: 6px; padding: 6px 0 0; background: transparent; justify-content: space-evenly; }
+.ui-shell-v2 .ub-p2p-row .p2p-ctrl-btn { width: 36px; height: 32px; border-radius: 6px; }
+.ui-shell-v2 .user-bar button:focus-visible, .adp-popup button:focus-visible, .adp-popup input:focus-visible, .settings-overlay--v2 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.adp-popup--v2 { width: min(280px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow-y: auto; background: var(--bg-3); }
+.adp-popup--v2 .adp-submenu { position: static; width: auto; margin: 0 8px 8px; max-height: 180px; box-shadow: none; background: var(--bg-2); }
+.adp-popup--v2 .adp-device-header-chevron.open { transform: rotate(90deg); }
+.adp-popup--v2 .adp-submenu-label { white-space: normal; overflow-wrap: anywhere; }
+.adp-device-empty { padding: 10px 12px; font-size: 12px; line-height: 1.5; color: var(--t2); }
+
+.sb-float-popup--v2 { width: min(360px, calc(100vw - 24px)); max-height: min(560px, calc(100dvh - 24px)); overflow-y: auto; background: var(--bg-3); }
+.sb-float-popup--v2 .sb-panel { padding: 16px; }
+.sb-float-popup--v2 .sb-header { margin-bottom: 12px; }
+.sb-float-popup--v2 .sb-search { padding: 10px; border-radius: 6px; background: var(--bg-1); }
+.sb-float-popup--v2 .sb-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.sb-float-popup--v2 .sb-sound-btn { min-height: 80px; justify-content: center; gap: 8px; border: 1px solid var(--b1); background: var(--bg-2); }
+.sb-float-popup--v2 .sb-sound-emoji { font-size: 26px; }
+.sb-float-popup--v2 .sb-sound-name { font-size: 12px; }
+body:has(.ui-shell-v2) .sp-card { width: 760px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 48px); border-radius: 12px; background: var(--bg-3); }
+body:has(.ui-shell-v2) .sp-grid { min-height: 180px; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); padding: 20px; gap: 16px; }
+body:has(.ui-shell-v2) .sp-source { border-radius: 8px; background: var(--bg-2); }
+body:has(.ui-shell-v2) .sp-source-name { white-space: normal; overflow-wrap: anywhere; }
+body:has(.ui-shell-v2) .sp-tab { min-height: 48px; }
+body:has(.ui-shell-v2) .sp-card button:focus-visible, .sb-float-popup--v2 button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* A continuous settings workspace, not a floating card over the chat. Theme
+   tokens keep alternate palettes intact; classic settings retain their CSS. */
+.settings-overlay--v2 { padding: 0; gap: 0; justify-content: flex-start; background: var(--bg-2); }
+.settings-overlay--v2 .settings-nav { width: 250px; min-height: 0; padding: 48px 16px 24px; background: var(--bg-1); border: 0; border-right: 1px solid var(--b1); border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.settings-overlay--v2 .settings-nav-search { margin: 0 0 16px; }
+.settings-overlay--v2 .settings-nav-label { padding: 12px 10px 6px; font-size: 11px; }
+.settings-overlay--v2 .settings-nav-item { min-height: 36px; padding: 8px 10px; }
+.settings-overlay--v2 .settings-nav-divider-push { margin-top: 24px; }
+.settings-overlay--v2 .settings-content-wrap { min-height: 0; max-width: none; background: var(--bg-2); }
+.settings-overlay--v2 .settings-content { min-width: 0; max-width: none; padding: 64px max(32px, calc(50% - 350px)) 80px; scroll-padding-top: 24px; background: var(--bg-2); border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.settings-overlay--v2 .settings-close { top: 24px; right: 24px; min-width: 36px; min-height: 36px; border: 1px solid var(--b2); background: transparent; color: var(--t2); opacity: 1; }
+.settings-overlay--v2 .settings-close:hover { border-color: var(--t3); background: var(--bg-h); color: var(--t0); }
+.settings-overlay--v2 .settings-context-heading { display: flex; flex-direction: column; gap: 4px; margin-bottom: 24px; padding-right: 32px; color: var(--t2); font-size: 12px; }
+.settings-overlay--v2 .settings-context-heading strong { color: var(--t0); font-size: 18px; overflow-wrap: anywhere; }
+.camera-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; min-height: 120px; max-height: 360px; overflow: hidden; margin: 16px 0 12px; border: 1px solid var(--b1); border-radius: 8px; background: var(--bg-0); }
+.camera-preview video { width: 100%; height: 100%; max-height: 360px; object-fit: contain; transform: scaleX(-1); }
+.camera-preview p { margin: 0; padding: 20px; color: var(--t2); text-align: center; font-size: 14px; }
+.camera-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.camera-preview-hint { margin: 10px 0 24px; }
+@media (max-width: 768px) {
+  .settings-overlay--v2 .settings-nav.settings-nav--searchable { width: 100%; max-height: 40dvh; padding: 16px 68px 12px 16px; border-right: 0; border-bottom: 1px solid var(--b1); }
+  .settings-overlay--v2 .settings-nav-search { margin: 0; }
+  .settings-overlay--v2 .settings-nav-logout { background: transparent; }
+  .settings-overlay--v2 .settings-content-wrap { position: static; }
+  .settings-overlay--v2 .settings-content { padding: 24px 16px; }
+  .settings-overlay--v2 .settings-close { top: 12px; right: 12px; width: 44px; height: 44px; }
+  .settings-overlay--v2 .settings-context-heading { margin-bottom: 16px; padding-right: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adp-popup--v2 *, .ui-shell-v2 .user-bar * { transition: none !important; }
+}

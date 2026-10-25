@@ -1,0 +1,25 @@
+{
+  "item": "p4.copy-link",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "link_format": "Web links use same-origin /channels/message routes; native shells preserve the packaged document URL and use the HashRouter fragment.",
+    "entry_points": "Desktop context menus and mobile long-press sheets both copy the navigable URL with success and failure feedback.",
+    "navigation": "Authenticated deep links open the correct channel or DM window through the existing authorized around-message APIs, arm scroll-to-message only after the target loads, and replace the transient URL.",
+    "privacy": "The client does not embed message content in URLs. Inaccessible or deleted targets rely on the existing participant/channel authorization and expose no payload."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run src/components/layout/MessageDeepLinkHandler.test.tsx src/utils/messageLinks.test.ts src/hooks/useOpenAtMessage.test.ts",
+      "working_directory": "client",
+      "result": "pass (16 tests)"
+    },
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Paste one channel and one DM link between two real clients, verify cross-server switching and centered scrolling, then verify a non-member receives only the generic unavailable result.",
+  "live_ui_verification": "Local IAB opened /channels/message/dm/not-a-channel/not-a-message, replaced the URL with /channels and displayed only the generic Turkish unavailable toast; no message payload was exposed."
+}

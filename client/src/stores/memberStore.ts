@@ -13,6 +13,12 @@
 
 import { create } from "zustand";
 import * as memberApi from "../api/members";
+import { getAuthGeneration } from "../api/client";
+import {
+  getAuthSessionOwner,
+  subscribeAuthGenerationChanges,
+  subscribeAuthOwnerChanges,
+} from "../api/authSessionEvents";
 import { useServerStore } from "./serverStore";
 import type { MemberWithRoles, UserStatus, Role } from "../types";
 
@@ -23,6 +29,11 @@ export type ActiveTimeout = {
 };
 
 type MemberState = {
+  /** Auth provenance for all account-scoped member/permission caches below. */
+  ownerId: string | null;
+  authGeneration: number;
+  /** Only a successful current-scope fetch establishes a fresh roster. */
+  statusByServer: Record<string, "loading" | "ready" | "error">;
   membersByServer: Record<string, MemberWithRoles[]>;
   onlineUserIds: Set<string>;
   loadingServers: Set<string>;
@@ -40,7 +51,7 @@ type MemberState = {
   isLoading: boolean;
 
   // ─── Actions ───
-  fetchMembers: (serverId?: string) => Promise<void>;
+  fetchMembers: (serverId?: string, force?: boolean) => Promise<void>;
 
   // ─── WS Event Handlers (all require serverId) ───
   handleReady: (onlineUserIds: string[]) => void;
@@ -68,6 +79,7 @@ const EMPTY_MEMBERS: MemberWithRoles[] = [];
 
 /** Tracks in-flight fetches to prevent duplicate requests */
 const fetchingServers = new Set<string>();
+const fetchVersions = new Map<string, number>();
 
 /**
  * Pending expiry timers, keyed by `${serverId}:${userId}`. Lives in
@@ -101,6 +113,44 @@ function clearAllTimersForServer(serverId: string): void {
   }
 }
 
+function clearAllTimers(): void {
+  for (const handle of timerHandles.values()) clearTimeout(handle);
+  timerHandles.clear();
+}
+
+/**
+ * Drop every account-owned cache synchronously when identity or token
+ * generation changes. In-flight responses are invalidated by the per-server
+ * version bump before the state is cleared.
+ */
+function synchronizeAuthScope(): void {
+  const ownerId = getAuthSessionOwner();
+  const authGeneration = getAuthGeneration();
+  const current = useMemberStore.getState();
+  if (current.ownerId === ownerId && current.authGeneration === authGeneration) return;
+
+  const serverIds = new Set([
+    ...Object.keys(current.membersByServer),
+    ...Object.keys(current.timeoutsByServer),
+    ...Object.keys(current.statusByServer),
+    ...current.loadingServers,
+    ...fetchingServers,
+    ...fetchVersions.keys(),
+  ]);
+  for (const serverId of serverIds) fetchVersions.set(serverId, (fetchVersions.get(serverId) ?? 0) + 1);
+  fetchingServers.clear();
+  clearAllTimers();
+  useMemberStore.setState({
+    ownerId,
+    authGeneration,
+    statusByServer: {},
+    membersByServer: {},
+    loadingServers: new Set(),
+    onlineUserIds: new Set(),
+    timeoutsByServer: {},
+  });
+}
+
 /**
  * Schedule a local auto-clear when the timeout passes. The server's
  * repo already hides expired rows on the next read, but this keeps the
@@ -125,6 +175,9 @@ function scheduleExpiry(serverId: string, userId: string, expiresAtIso: string):
 }
 
 export const useMemberStore = create<MemberState>((set, get) => ({
+  ownerId: getAuthSessionOwner(),
+  authGeneration: getAuthGeneration(),
+  statusByServer: {},
   membersByServer: {},
   onlineUserIds: new Set<string>(),
   loadingServers: new Set(),
@@ -138,21 +191,38 @@ export const useMemberStore = create<MemberState>((set, get) => ({
     return get().membersByServer[serverId] ?? EMPTY_MEMBERS;
   },
 
-  fetchMembers: async (explicitServerId?) => {
+  fetchMembers: async (explicitServerId?, force = false) => {
+    synchronizeAuthScope();
+    const ownerId = getAuthSessionOwner();
+    if (!ownerId) return;
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
-    if (fetchingServers.has(serverId)) return;
+    if (!force && fetchingServers.has(serverId)) return;
+
+    const version = (fetchVersions.get(serverId) ?? 0) + 1;
+    fetchVersions.set(serverId, version);
+    const generation = getAuthGeneration();
+    if (get().ownerId !== ownerId || get().authGeneration !== generation) return;
 
     fetchingServers.add(serverId);
     set((state) => ({
       loadingServers: new Set([...state.loadingServers, serverId]),
+      statusByServer: { ...state.statusByServer, [serverId]: "loading" },
     }));
 
-    const res = await memberApi.getMembers(serverId);
+    // A post-ownership refresh must supersede an older in-flight role list.
+    const res = await memberApi.getMembers(serverId).catch(() => ({ success: false, data: undefined }));
+
+    if (fetchVersions.get(serverId) !== version) return;
 
     fetchingServers.delete(serverId);
+    if (getAuthSessionOwner() !== ownerId || getAuthGeneration() !== generation
+      || get().ownerId !== ownerId || get().authGeneration !== generation) {
+      synchronizeAuthScope();
+      return;
+    }
 
-    if (res.data) {
+    if (res.success && Array.isArray(res.data)) {
       // Refresh timer state from the freshly-fetched member list.
       // Cancel any timers that no longer have a backing entry, then
       // reschedule for everyone the server still flagged as timed out.
@@ -179,6 +249,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
           membersByServer: { ...state.membersByServer, [serverId]: res.data! },
           onlineUserIds: merged,
           loadingServers: newLoading,
+          statusByServer: { ...state.statusByServer, [serverId]: "ready" },
           timeoutsByServer: {
             ...state.timeoutsByServer,
             [serverId]: seededTimeouts,
@@ -189,7 +260,10 @@ export const useMemberStore = create<MemberState>((set, get) => ({
       set((state) => {
         const newLoading = new Set(state.loadingServers);
         newLoading.delete(serverId);
-        return { loadingServers: newLoading };
+        return {
+          loadingServers: newLoading,
+          statusByServer: { ...state.statusByServer, [serverId]: "error" },
+        };
       });
     }
   },
@@ -197,6 +271,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   // ─── WS Event Handlers ───
 
   handleReady: (onlineUserIds) => {
+    synchronizeAuthScope();
     set({ onlineUserIds: new Set(onlineUserIds) });
     // Fetch members for active server on ready
     const serverId = useServerStore.getState().activeServerId;
@@ -204,6 +279,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handlePresenceUpdate: (userId, status) => {
+    synchronizeAuthScope();
     set((state) => {
       const newOnline = new Set(state.onlineUserIds);
       if (status === "offline") {
@@ -241,6 +317,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleMemberJoin: (serverId, member) => {
+    synchronizeAuthScope();
     set((state) => {
       const current = state.membersByServer[serverId];
       if (!current) return state;
@@ -255,6 +332,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleMemberLeave: (serverId, userId) => {
+    synchronizeAuthScope();
     set((state) => {
       const current = state.membersByServer[serverId];
       if (!current) return state;
@@ -271,6 +349,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleMemberUpdate: (serverId, updated) => {
+    synchronizeAuthScope();
     set((state) => {
       const current = state.membersByServer[serverId];
       if (!current) return state;
@@ -301,6 +380,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleRoleUpdate: (serverId, role) => {
+    synchronizeAuthScope();
     set((state) => {
       const current = state.membersByServer[serverId];
       if (!current) return state;
@@ -321,6 +401,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleRoleDelete: (serverId, roleId) => {
+    synchronizeAuthScope();
     set((state) => {
       const current = state.membersByServer[serverId];
       if (!current) return state;
@@ -341,6 +422,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleRolesReorder: (serverId, roles) => {
+    synchronizeAuthScope();
     const roleMap = new Map(roles.map((r) => [r.id, r]));
     set((state) => {
       const current = state.membersByServer[serverId];
@@ -358,6 +440,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleMemberTimeout: (serverId, data) => {
+    synchronizeAuthScope();
     // (Re-)schedule the local expiry timer first; if the moderator
     // EXTENDED an existing timeout, the existing handle would otherwise
     // fire at the old (earlier) time and prematurely clear the badge.
@@ -381,6 +464,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   handleMemberTimeoutRemove: (serverId, userId) => {
+    synchronizeAuthScope();
     clearTimer(serverId, userId);
     set((state) => {
       const forServer = state.timeoutsByServer[serverId];
@@ -396,17 +480,29 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   },
 
   clearServer: (serverId) => {
+    fetchVersions.set(serverId, (fetchVersions.get(serverId) ?? 0) + 1);
+    fetchingServers.delete(serverId);
     clearAllTimersForServer(serverId);
     set((state) => {
       const { [serverId]: _members, ...restMembers } = state.membersByServer;
       const { [serverId]: _timeouts, ...restTimeouts } = state.timeoutsByServer;
+      const { [serverId]: _status, ...restStatus } = state.statusByServer;
+      const loadingServers = new Set(state.loadingServers);
+      loadingServers.delete(serverId);
       return {
+        loadingServers,
         membersByServer: restMembers,
         timeoutsByServer: restTimeouts,
+        statusByServer: restStatus,
       };
     });
   },
 }));
+
+// Auth state transitions are published through the cycle-free session bus,
+// synchronously before scoped caches can be consumed under a new identity.
+subscribeAuthOwnerChanges(() => synchronizeAuthScope());
+subscribeAuthGenerationChanges(() => synchronizeAuthScope());
 
 /**
  * Derived selector: members for the currently active server.

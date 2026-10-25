@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Bounded local GIF/APNG/animated-WebP frame sampling; not complete video or classifier acceptance.",
+  "implementation": [
+    "Raster preflight and ImageDecoder sampling examine up to five deterministic frames per attachment, close frames/decoder and preserve sampled/total/attachment counts. Unsupported or incomplete decoding fails closed.",
+    "Partial negative-only samples stay uncertain; actual positive evidence dominates without claiming unsampled frames safe. Worker per-attachment bounds and aggregate four-attachment bounds are independently validated.",
+    "Chat gate displays sampled-versus-total counts with an explicit unsampled-frame warning. Existing pinned local models and assets are retained; no remote plaintext classifier is added."
+  ],
+  "verification": ["Agent focused media tests 58/58 and visibility/hook tests 19/19 passed.", "Parent gate/end-event tests 11/11 passed; combined full client snapshot passed 296 files/2753 tests, TypeScript and build passed."],
+  "open": ["Actual browser ImageDecoder codec/animated-file acceptance", "Video analysis", "Model quality and disturbing-category false-negative acceptance", "Physical-device and complete classifier acceptance"],
+  "release": "No classifier acceptance promotion or production publication."
+}

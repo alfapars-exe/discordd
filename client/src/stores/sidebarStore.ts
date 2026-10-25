@@ -57,10 +57,10 @@ function persistSidebar(state: PersistedSidebar): void {
 }
 
 /** Sync sidebar sections to server preferences */
-function syncToServer(sections: Record<string, boolean>, isExpanded: boolean): void {
+function syncToServer(sections?: Record<string, boolean>, isExpanded?: boolean): void {
   usePreferencesStore.getState().set({
-    sidebar_sections: sections,
-    sidebar_expanded: isExpanded,
+    ...(sections ? { sidebar_sections: sections } : {}),
+    ...(typeof isExpanded === "boolean" ? { sidebar_expanded: isExpanded } : {}),
   });
 }
 
@@ -83,6 +83,7 @@ type SidebarState = {
   isSectionExpanded: (sectionKey: string) => boolean;
   /** Apply sidebar state from server preferences (no re-sync to server) */
   applyFromServer: (sections: Record<string, boolean>, isExpanded?: boolean) => void;
+  resetAccountPreferences: () => void;
 };
 
 // ──────────────────────────────────
@@ -99,7 +100,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     set((state) => {
       const next = !state.isExpanded;
       persistSidebar({ isExpanded: next, expandedSections: state.expandedSections });
-      syncToServer(state.expandedSections, next);
+      syncToServer(undefined, next);
       return { isExpanded: next };
     });
   },
@@ -108,7 +109,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     set((state) => {
       if (state.isExpanded) return state;
       persistSidebar({ isExpanded: true, expandedSections: state.expandedSections });
-      syncToServer(state.expandedSections, true);
+      syncToServer(undefined, true);
       return { isExpanded: true };
     });
   },
@@ -117,7 +118,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     set((state) => {
       if (!state.isExpanded) return state;
       persistSidebar({ isExpanded: false, expandedSections: state.expandedSections });
-      syncToServer(state.expandedSections, false);
+      syncToServer(undefined, false);
       return { isExpanded: false };
     });
   },
@@ -130,7 +131,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
         [sectionKey]: !current,
       };
       persistSidebar({ isExpanded: state.isExpanded, expandedSections: next });
-      syncToServer(next, state.isExpanded);
+      syncToServer({ [sectionKey]: !current });
       return { expandedSections: next };
     });
   },
@@ -143,7 +144,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
         [sectionKey]: true,
       };
       persistSidebar({ isExpanded: state.isExpanded, expandedSections: next });
-      syncToServer(next, state.isExpanded);
+      syncToServer({ [sectionKey]: true });
       return { expandedSections: next };
     });
   },
@@ -157,5 +158,10 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     const expanded = typeof isExpanded === "boolean" ? isExpanded : get().isExpanded;
     persistSidebar({ isExpanded: expanded, expandedSections: merged });
     set({ expandedSections: merged, isExpanded: expanded });
+  },
+  resetAccountPreferences: () => {
+    const defaults = { isExpanded: true, expandedSections: { friends: true, dms: true, server: true } };
+    persistSidebar(defaults);
+    set(defaults);
   },
 }));

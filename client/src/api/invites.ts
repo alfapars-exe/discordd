@@ -14,6 +14,7 @@ export async function getInvites(serverId: string) {
 export async function createInvite(serverId: string, data: {
   max_uses: number;
   expires_in: number;
+  channel_id?: string;
 }) {
   return apiClient<Invite>(`/servers/${serverId}/invites`, {
     method: "POST",

@@ -20,6 +20,12 @@ import (
 // Second arg is unused (kept for signature compatibility).
 type UserConnectionCallback func(userID, _ string)
 
+// GameActivity callbacks are physical-connection scoped so one device closing
+// cannot erase activity reported by another device.
+type GameActivityConnectionCallback func(userID string, connectionID uint64)
+type GameActivitySnapshotCallback func(userID string)
+type GameActivityUpdateCallback func(userID string, connectionID, sequence uint64, game *GameActivityClientGame)
+
 // ─── Voice Callback Types ───
 
 // VoiceJoinCallback — user wants to join a voice channel.
@@ -113,6 +119,18 @@ func (h *Hub) OnUserFirstConnect(cb UserConnectionCallback) {
 func (h *Hub) OnUserFullyDisconnected(cb UserConnectionCallback) {
 	h.onUserFullyDisconnected = cb
 }
+
+func (h *Hub) OnGameActivitySnapshot(cb GameActivitySnapshotCallback)  { h.onGameActivitySnapshot = cb }
+func (h *Hub) OnGameActivityConnect(cb GameActivityConnectionCallback) { h.onGameActivityConnect = cb }
+func (h *Hub) OnGameActivityPresenceChange(cb GameActivitySnapshotCallback) {
+	h.onGameActivityPresenceChange = cb
+}
+func (h *Hub) OnGameActivityDisconnect(cb GameActivityConnectionCallback) {
+	h.onGameActivityDisconnect = cb
+}
+func (h *Hub) OnGameActivityUpdate(cb GameActivityUpdateCallback) { h.onGameActivityUpdate = cb }
+
+func (h *Hub) GameActivityEpoch() string { return h.gameActivityEpoch }
 
 // SetAppLogger sets the structured app logger for WS events.
 func (h *Hub) SetAppLogger(logger AppLogger) {

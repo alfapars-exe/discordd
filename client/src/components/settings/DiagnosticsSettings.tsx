@@ -13,8 +13,11 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { isElectron } from "../../utils/constants";
 import { useToastStore } from "../../stores/toastStore";
+import PlatformCapabilities from "./PlatformCapabilities";
+import { useSettingsDraft } from "./settingsWorkspaceContext";
 import {
   exportDiagnostics,
   openLogsFolder,
@@ -45,11 +48,15 @@ const btnPrimary: React.CSSProperties = {
 };
 
 function DiagnosticsSettings() {
+  const { t } = useTranslation("settings");
   const addToast = useToastStore((s) => s.addToast);
   const [description, setDescription] = useState("");
   const [reporting, setReporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [verbose, setVerbose] = useState(false);
+  const [tracing, setTracing] = useState(false);
+  const [traceSeconds, setTraceSeconds] = useState(30);
+  useSettingsDraft(!!description || reporting);
 
   const electron = isElectron();
 
@@ -58,6 +65,34 @@ function DiagnosticsSettings() {
       window.electronAPI.getDiagnosticVerbose().then(setVerbose).catch(() => {});
     }
   }, [electron]);
+
+  useEffect(() => {
+    if (!tracing) return;
+    const timer = window.setInterval(() => setTraceSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [tracing]);
+
+  async function handleTrace() {
+    if (!window.electronAPI?.capturePerformanceTrace) return;
+    setTraceSeconds(30);
+    setTracing(true);
+    try {
+      const result = await window.electronAPI.capturePerformanceTrace();
+      if (result.saved) addToast("success", t("performanceTrace.saved"));
+    } catch {
+      addToast("error", t("performanceTrace.error"));
+    } finally {
+      setTracing(false);
+    }
+  }
+
+  async function handleCancelTrace() {
+    try {
+      await window.electronAPI?.cancelPerformanceTrace?.();
+    } finally {
+      setTracing(false);
+    }
+  }
 
   async function handleReport() {
     setReporting(true);
@@ -109,6 +144,7 @@ function DiagnosticsSettings() {
 
   return (
     <div style={{ maxWidth: 640 }}>
+      <PlatformCapabilities />
       <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--t1)", marginBottom: 4 }}>
         Tanılama
       </h2>
@@ -183,6 +219,26 @@ function DiagnosticsSettings() {
             </span>
             <input type="checkbox" checked={verbose} onChange={handleToggleVerbose} style={{ width: 18, height: 18 }} />
           </label>
+        </div>
+      )}
+
+      {electron && (
+        <div style={card}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--t1)", marginBottom: 8 }}>
+            {t("performanceTrace.title")}
+          </h3>
+          <p style={{ color: "var(--t2)", fontSize: 13, marginBottom: 10 }}>
+            {t("performanceTrace.description")}
+          </p>
+          {tracing ? (
+            <button style={btn} onClick={() => void handleCancelTrace()}>
+              {t("performanceTrace.cancel", { seconds: traceSeconds })}
+            </button>
+          ) : (
+            <button style={btnPrimary} onClick={() => void handleTrace()}>
+              {t("performanceTrace.capture")}
+            </button>
+          )}
         </div>
       )}
 

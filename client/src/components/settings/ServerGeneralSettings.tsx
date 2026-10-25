@@ -10,6 +10,7 @@ import { useActiveMembers } from "../../stores/memberStore";
 import { hasPermission, Permissions } from "../../utils/permissions";
 import * as serverApi from "../../api/servers";
 import AvatarUpload from "./AvatarUpload";
+import ServerOwnershipTransfer from "./ServerOwnershipTransfer";
 import type { Server } from "../../types";
 
 /** LiveKit settings from backend */
@@ -425,6 +426,8 @@ function ServerGeneralSettings() {
           <div className="dz-separator" />
           <div className="dz-section">
             <h2 className="dz-title">{t("dangerZone")}</h2>
+
+            {currentUser && server.id === activeServerId && <ServerOwnershipTransfer key={`${currentUser.id}:${server.id}`} userID={currentUser.id} serverID={server.id} onTransferred={setServer} />}
 
             <div className="dz-card">
               <h3 className="dz-card-title">{tServers("deleteServer")}</h3>

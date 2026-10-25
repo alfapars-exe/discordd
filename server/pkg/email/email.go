@@ -18,6 +18,10 @@ type EmailSender interface {
 	SendDiagnosticsReport(ctx context.Context, toEmail, reporter, description, filename string, attachment []byte) error
 }
 
+type CategorySender interface {
+	SendCategoryEmail(context.Context, string, string, string) error
+}
+
 type resendSender struct {
 	client    *resend.Client
 	fromEmail string
@@ -30,6 +34,14 @@ func NewResendSender(apiKey, fromEmail, appURL string) EmailSender {
 		fromEmail: fromEmail,
 		appURL:    appURL,
 	}
+}
+
+func (s *resendSender) SendCategoryEmail(ctx context.Context, toEmail, subject, bodyHTML string) error {
+	response, err := s.client.Emails.SendWithContext(ctx, &resend.SendEmailRequest{From: fmt.Sprintf("HiChat <%s>", s.fromEmail), To: []string{toEmail}, Subject: subject, Html: bodyHTML})
+	if err != nil || response == nil || response.Id == "" {
+		return fmt.Errorf("category email delivery was not confirmed")
+	}
+	return nil
 }
 
 func (s *resendSender) SendPasswordReset(ctx context.Context, toEmail, token string) error {

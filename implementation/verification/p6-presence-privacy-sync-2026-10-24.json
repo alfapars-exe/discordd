@@ -1,0 +1,58 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Cross-tab manual-presence preference synchronization and safeguards against stale automatic presence transitions leaking hidden or DND state.",
+  "code": [
+    "server/ws/event.go",
+    "server/ws/client_presence.go",
+    "server/ws/hub_state.go",
+    "server/init_callbacks.go",
+    "server/init_callbacks_test.go",
+    "server/ws/hub_state_test.go",
+    "client/src/hooks/ws/systemEventHandlers.ts",
+    "client/src/hooks/ws/systemEventHandlers.test.ts",
+    "client/src/hooks/useIdleDetection.ts",
+    "client/src/hooks/useIdleDetection.test.ts",
+    "client/src/stores/authStore.ts",
+    "server/ws/hub_presence_callbacks.go",
+    "server/ws/hub_presence_callbacks_test.go",
+    "server/repository/sqlite_user_profile.go",
+    "server/repository/sqlite_user_presence_test.go"
+  ],
+  "evidence": [
+    "implementation/verification/p6-online-friend-notifications-2026-10-24.json",
+    "implementation/verification/p6-presence-callback-order-2026-10-24.json"
+  ],
+  "implemented": [
+    "Presence broadcasts carry an explicit is_auto boolean, including false for manual changes. Receiving clients sync their local manualStatus only for an explicit false self event; automatic or legacy events update displayed user status without persisting a manual preference. This propagates manual preference updates to open tabs.",
+    "Automatic presence callbacks reload persisted pref_status before writing or broadcasting; they ignore late automatic updates when the preferred status is not online. This protects DND and manual idle from stale tab activity.",
+    "The callback uses Hub.IsInvisible, a single-lock Hub getter, and refuses automatic non-offline status changes while hidden. Manual status selection alone may reveal a hidden account.",
+    "Manual visible status changes update/persist preference and visibility before the online-friend notifier runs; automatic changes do not trigger that manual notifier path.",
+    "Presence callback ordering is implemented_unverified: the bounded WebSocket dispatcher enforces same-user FIFO completion while allowing cross-user progress, and protects Hub visibility commits from stale callbacks. See p6-presence-callback-order-2026-10-24.json for repeated/race/PostgreSQL checks and remaining gates."
+  ],
+  "verification": {
+    "status": "full Go/client/typecheck/build/vet, selected race, repeated dispatcher/callback race, and PostgreSQL presence checks passed; live acceptance pending",
+    "passed": [
+      "Latest go test ./... -timeout=15m passed all packages; reported package durations: repository 56.332s, services 24.253s, root 7.989s, ws 3.354s.",
+      "Full client Vitest passed: 266 files / 2,522 tests in 58.70s.",
+      "Client tsc -b passed again after shared WebSocket types added is_auto?: boolean and the local handler cast was removed; runtime behavior is unchanged.",
+      "Vite build passed in 1.29s with existing chunk-size and native-configuration warnings.",
+      "go vet ./... passed.",
+      "Selected WebSocket presence and shutdown tests passed under -race, count=20, in 22.396s.",
+      "Root callback and offline-debouncer selected tests passed under -race, count=5, in 4.170s.",
+      "Four PostgreSQL manual-presence tests, including trigger rollback coverage, passed count=3 in 12.728s without skips.",
+      "Atomic manual-status database updates, permanent debouncer close, and first-connect fail-closed behavior passed focused tests.",
+      "Focused Vitest passed: systemEventHandlers.test.ts and useIdleDetection.test.ts, 2 files / 13 tests.",
+      "Targeted ESLint passed for systemEventHandlers.ts and both focused test files.",
+      "go test . -run '^(TestPresenceUpdateCallback_AutoPresenceRequiresOnlinePreferenceAndMarksPayload|TestPresenceUpdateCallback_ManualVisibleTransitionNotifiesAfterVisibilityChange|TestPresenceUpdateCallback_AutoIdleDoesNotRevealInvisibleUser)$' -count=1 passed.",
+      "go test ./ws -run '^TestIsInvisibleReadsHiddenFlag$' -count=1 passed."
+    ],
+    "live_acceptance": "The old test backend showed its previous behavior; it must be rebuilt with latest code. Real two-client/device acceptance remains pending with a 0x0 browser viewport while user acceptance is awaited."
+  },
+  "open_gates": [
+    "The dispatcher preserves per-user callback FIFO, but broader semantic outcomes under rapid interleaved manual and automatic updates still require real two-client/device acceptance.",
+    "The server event's status value is an account-wide aggregate across connections; source-tab intent versus that aggregate still needs explicit multi-device semantics and validation.",
+    "A callback that never returns cannot be canceled globally and may delay dispatcher shutdown; relevant database callback operations are generally bounded by five-second contexts but this is not a universal cancellation guarantee.",
+    "Real two-client acceptance, including DND/invisible selection on one client while another tab is active, is pending after rebuilding the latest test backend."
+  ],
+  "release": "Not accepted; real browser/two-client/device and deployment acceptance remain open."
+}

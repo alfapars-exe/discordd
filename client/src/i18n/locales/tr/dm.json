@@ -1,4 +1,9 @@
 {
+  "historyLoadFailed": "Mesajlar yüklenemedi. Lütfen yeniden deneyin.",
+  "reportMessageContextLabel": "Mesaj bağlamı",
+  "reportMessageHint": "Mesaj referansı eklenir. Metni yalnızca aşağıdan seçerseniz paylaşılır.",
+  "reportEncryptedMessageHint": "Bu mesaj uçtan uca şifrelidir. Çözülmüş metni açıkça paylaşmadıkça HiChat okuyamaz.",
+  "reportShareMessageContent": "Bu mesajın metnini moderasyon ekibiyle paylaş",
   "viewProfile": "Profili Görüntüle",
   "closeDM": "DM'yi Kapat",
   "markAsRead": "Okundu İşaretle",

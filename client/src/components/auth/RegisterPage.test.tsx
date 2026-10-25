@@ -82,8 +82,8 @@ describe("RegisterPage — native server-picker removal", () => {
   });
 });
 
-describe("RegisterPage — email stays optional", () => {
-  it("submits successfully with the email field left blank, and omits it from the request", async () => {
+describe("RegisterPage — email is required", () => {
+	it("does not submit when the email field is blank", async () => {
     registerMock.mockResolvedValue(registerSuccess());
 
     render(
@@ -95,16 +95,9 @@ describe("RegisterPage — email stays optional", () => {
     // No "email is required" validation error blocks this — the only two
     // client-side checks in RegisterPage.handleSubmit are password
     // match and password length, neither of which fires here.
-    await fillAndSubmit({ withEmail: false });
-
-    await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(1));
-
-    const [payload] = registerMock.mock.calls[0] as [{ email?: string }];
-    // authStore.register does `email: email || undefined`, and the
-    // component passes an empty string when the field was never touched —
-    // either shape (absent key or `undefined` value) proves email did not
-    // block or get force-required on the wire.
-    expect(payload.email).toBeUndefined();
+		await fillAndSubmit({ withEmail: false });
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(registerMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/passwordsDoNotMatch|passwordTooShort/i)).not.toBeInTheDocument();
   });
 
@@ -124,7 +117,7 @@ describe("RegisterPage — email stays optional", () => {
     expect(payload.email).toBe("user@example.com");
   });
 
-  it("marks the email input as optional, not required", () => {
+	it("marks the email input as required", () => {
     render(
       <MemoryRouter initialEntries={["/register"]}>
         <RegisterPage />
@@ -132,6 +125,6 @@ describe("RegisterPage — email stays optional", () => {
     );
 
     const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement;
-    expect(emailInput.required).toBe(false);
+		expect(emailInput.required).toBe(true);
   });
 });
