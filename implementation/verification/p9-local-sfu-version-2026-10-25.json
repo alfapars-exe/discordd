@@ -2,6 +2,7 @@
   "date": "2026-10-25",
   "scope": "Align local compose LiveKit version with existing deployment installer",
   "source_change": "docker-compose.yml LiveKit image v1.8.4 to v1.9.12, matching deploy/install.sh",
+  "compose_validation": "docker compose config --no-interpolate --quiet exposed two existing unquoted environment entries containing colon-space in required-secret help text. Quote entire JWT_SECRET and ENCRYPTION_KEY entries to preserve YAML string type and fail-fast secret requirements; no secrets supplied or services launched.",
   "controlled_test": {
     "client": "Frozen9f01982e with bounded numeric lifecycle instrumentation; no Vite HMR",
     "old": "Local v1.8.4 showed SDK reconnecting/reconnected around35/38 and52/55 seconds after page start; key acknowledgement succeeded each time.",
