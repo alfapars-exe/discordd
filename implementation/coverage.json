@@ -6603,7 +6603,7 @@
       "id": "p9.soundboard",
       "title": "Soundboard",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6617,8 +6617,8 @@
       "acceptance": [
         "Actual authorized uploaded/built-in sounds play into current voice channel and honor quota/volume/block rules."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/stores/soundboardStore.ts", "client/src/audio/soundboardPlayback.ts", "client/src/components/soundboard/SoundUploadForm.tsx", "server/services/soundboard_service.go"],
+      "evidence": ["implementation/verification/p9-soundboard-call-scope-2026-10-25.json"]
     },
     {
       "id": "p9.call-reconnect",

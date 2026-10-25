@@ -8,10 +8,9 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useSoundboardStore } from "../../stores/soundboardStore";
+import { useSoundboardStore, captureSoundboardScope, isSoundboardScopeCurrent } from "../../stores/soundboardStore";
 import { useVoiceStore } from "../../stores/voiceStore";
-import { useServerStore } from "../../stores/serverStore";
-import { useActiveMembers } from "../../stores/memberStore";
+import { useMembersForServer, useMemberStore } from "../../stores/memberStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useConfirmStore } from "../../stores/confirmStore";
 import { hasPermission, Permissions } from "../../utils/permissions";
@@ -30,8 +29,10 @@ function SoundboardPanel() {
   const setVolume = useSoundboardStore((s) => s.setVolume);
   const toggleMuted = useSoundboardStore((s) => s.toggleMuted);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
-  const serverId = useServerStore((s) => s.activeServerId);
-  const members = useActiveMembers();
+  const serverId = useVoiceStore((s) => s.currentVoiceServerId);
+  const joinGeneration = useVoiceStore((s) => s._joinGeneration);
+  const members = useMembersForServer(serverId ?? undefined);
+  const error = useSoundboardStore(s => s.error);
   const userId = useAuthStore((s) => s.user?.id);
   const confirm = useConfirmStore((s) => s.open);
 
@@ -40,7 +41,7 @@ function SoundboardPanel() {
 
   const currentMember = members.find((m) => m.id === userId);
   const perms = currentMember?.effective_permissions ?? 0;
-  const canManage = hasPermission(perms, Permissions.ManageSoundboard);
+  const canManage = !!serverId && !!currentVoiceChannelId && hasPermission(perms, Permissions.ManageSoundboard);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sounds;
@@ -49,37 +50,45 @@ function SoundboardPanel() {
   }, [sounds, search]);
 
   useEffect(() => {
-    fetchSounds();
-  }, [fetchSounds, serverId]);
+    void fetchSounds();
+    if (serverId) void useMemberStore.getState().fetchMembers(serverId);
+  }, [fetchSounds, serverId, currentVoiceChannelId, joinGeneration]);
 
   const handlePlay = (soundId: string) => {
     if (!currentVoiceChannelId) return;
-    playSound(soundId);
+    void playSound(soundId);
   };
 
   const handleDelete = async (soundId: string, soundName: string) => {
-    if (!serverId) return;
+    const scope = captureSoundboardScope();
+    if (!scope || !serverId) return;
     const ok = await confirm({
       title: t("delete"),
       message: t("deleteConfirm", { name: soundName }),
       confirmLabel: t("delete"),
       danger: true,
     });
-    if (ok) {
-      await soundboardApi.deleteSound(serverId, soundId);
+    if (ok && isSoundboardScopeCurrent(scope)) {
+      try {
+        const result = await soundboardApi.deleteSound(scope.serverId, soundId, () => isSoundboardScopeCurrent(scope));
+        if (!isSoundboardScopeCurrent(scope)) return;
+        if (result.success) useSoundboardStore.getState().handleSoundDelete({ id: soundId, server_id: scope.serverId });
+        else useSoundboardStore.setState({ error: "deleteFailed" });
+      } catch { if (isSoundboardScopeCurrent(scope)) useSoundboardStore.setState({ error: "deleteFailed" }); }
     }
   };
 
   if (showUpload) {
     return (
       <div className="sb-panel">
-        <SoundUploadForm onClose={() => setShowUpload(false)} />
+        <SoundUploadForm key={`${serverId}:${currentVoiceChannelId}:${joinGeneration}`} onClose={() => setShowUpload(false)} />
       </div>
     );
   }
 
   return (
     <div className="sb-panel">
+      {error && <p role="alert" className="sb-error">{t(error)}</p>}
       {/* Header */}
       <div className="sb-header">
         <span className="sb-title">{t("soundboard")}</span>

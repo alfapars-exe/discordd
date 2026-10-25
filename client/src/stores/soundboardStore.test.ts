@@ -1,32 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { APIResponse, SoundboardSound } from "../types";
-import { useSoundboardStore } from "./soundboardStore";
-import * as soundboardApi from "../api/soundboard";
-
-const server = vi.hoisted(() => ({ activeServerId: "server-a" }));
-vi.mock("./serverStore", () => ({ useServerStore: { getState: () => server } }));
-vi.mock("../api/soundboard", () => ({ getSounds: vi.fn(), playSound: vi.fn() }));
-vi.mock("../utils/constants", () => ({ SERVER_URL: "" }));
-
-describe("soundboard server context", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    server.activeServerId = "server-a";
-    useSoundboardStore.setState({ sounds: [], isPanelOpen: false, isLoading: false });
-  });
-
-  it("discards a list response from the server browsed before returning to the call", async () => {
-    let resolveA!: (value: APIResponse<SoundboardSound[]>) => void;
-    vi.mocked(soundboardApi.getSounds).mockImplementationOnce(() => new Promise((resolve) => { resolveA = resolve; }));
-    const requestA = useSoundboardStore.getState().fetchSounds();
-    server.activeServerId = "server-b";
-    useSoundboardStore.getState().clearForServerSwitch();
-    const soundsB = [{ id: "sound-b", server_id: "server-b", name: "B" }] as SoundboardSound[];
-    vi.mocked(soundboardApi.getSounds).mockResolvedValueOnce({ success: true, data: soundsB });
-    await useSoundboardStore.getState().fetchSounds();
-    resolveA({ success: true, data: [{ id: "sound-a", server_id: "server-a", name: "A" }] as SoundboardSound[] });
-    await requestA;
-    expect(useSoundboardStore.getState().sounds).toEqual(soundsB);
-    expect(useSoundboardStore.getState().isLoading).toBe(false);
-  });
-});
+import { beforeEach, expect, it, vi } from "vitest";
+import type { APIResponse, SoundboardSound, SoundboardPlayEvent } from "../types";
+const h=vi.hoisted(()=>({auth:{ownerId:"listener" as string|null,generation:1},owners:[] as (()=>void)[],generations:[] as (()=>void)[],players:[] as Array<{stop:(()=>void) & {mock: {calls: unknown[][]}};setVolume:ReturnType<typeof vi.fn>;isActive:()=>boolean}>,browsed:"server-b"}));
+vi.mock("./voiceStore",async()=>({useVoiceStore:(await import("zustand")).create(()=>({currentVoiceServerId:"server-a" as string|null,currentVoiceChannelId:"channel-a" as string|null,_joinGeneration:1,outputDevice:"speaker",masterVolume:100,userVolumes:{} as Record<string,number>,isDeafened:false,isServerDeafened:false}))}));
+vi.mock("./blockStore",async()=>({useBlockStore:(await import("zustand")).create<{blockedUserIds:string[];isBlocked:(id:string)=>boolean}>((_set,get)=>({blockedUserIds:[],isBlocked:id=>get().blockedUserIds.includes(id)}))}));
+vi.mock("../api/authSessionEvents",()=>({getAuthSessionSnapshot:()=>h.auth,subscribeAuthOwnerChanges:(fn:()=>void)=>{h.owners.push(fn);},subscribeAuthGenerationChanges:(fn:()=>void)=>{h.generations.push(fn);}}));
+vi.mock("../api/soundboard",()=>({getSounds:vi.fn(),playSound:vi.fn()}));vi.mock("../utils/constants",()=>({SERVER_URL:""}));
+vi.mock("../audio/soundboardPlayback",()=>({soundboardVolume:(n:number)=>Number.isFinite(n)?Math.max(0,Math.min(1,n)):0,playSoundboardAudio:vi.fn((_url,options)=>{let alive=true;const player={ready:Promise.resolve({fallback:false}),stop:vi.fn(()=>{if(alive){alive=false;options.onStop();}}),setVolume:vi.fn(),isActive:()=>alive};h.players.push(player);return player;})}));
+import { useSoundboardStore } from "./soundboardStore";import { useVoiceStore } from "./voiceStore";import { useBlockStore } from "./blockStore";import * as api from "../api/soundboard";import { playSoundboardAudio } from "../audio/soundboardPlayback";
+const sound={id:"sound-a",server_id:"server-a",name:"A"} as SoundboardSound;
+const event={sound_id:sound.id,sound_name:"A",server_id:"server-a",channel_id:"channel-a",sound_url:"/api/uploads/soundboard/a.wav",user_id:"sender",username:"Sender"} as SoundboardPlayEvent;
+const flush=async()=>{await Promise.resolve();await Promise.resolve();};
+beforeEach(()=>{h.players.forEach(p=>p.stop());h.players.length=0;vi.clearAllMocks();h.auth={ownerId:"listener",generation:1};h.browsed="server-b";useVoiceStore.setState({currentVoiceServerId:"server-a",currentVoiceChannelId:"channel-a",_joinGeneration:1,outputDevice:"speaker",masterVolume:100,userVolumes:{},isDeafened:false,isServerDeafened:false});useBlockStore.setState({blockedUserIds:[]});useSoundboardStore.setState({sounds:[],isLoading:false,isPanelOpen:false,playingSound:null,contextKey:null,volume:0.5,muted:false,error:null});vi.mocked(api.getSounds).mockResolvedValue({success:true,data:[sound]});vi.mocked(api.playSound).mockResolvedValue({success:true});});
+it("uses connected voice server despite browsing elsewhere and keeps call cache",async()=>{await useSoundboardStore.getState().fetchSounds();expect(api.getSounds).toHaveBeenCalledWith("server-a",expect.any(Function));const old=useSoundboardStore.getState().sounds;h.browsed="server-c";useSoundboardStore.getState().clearForServerSwitch();expect(useSoundboardStore.getState().sounds).toBe(old);expect(await useSoundboardStore.getState().playSound(sound.id)).toBe(true);expect(api.playSound).toHaveBeenCalledWith("server-a",sound.id,expect.any(Function));});
+it("matches actual server/channel and applies personal, master and per-user levels",async()=>{useVoiceStore.setState({masterVolume:40,userVolumes:{sender:50}});useSoundboardStore.getState().handleSoundPlay({...event,server_id:"server-b"});useSoundboardStore.getState().handleSoundPlay({...event,channel_id:"old"});expect(playSoundboardAudio).not.toHaveBeenCalled();useSoundboardStore.getState().handleSoundPlay(event);await flush();expect(playSoundboardAudio).toHaveBeenCalledWith(event.sound_url,expect.objectContaining({outputDevice:"speaker",volume:0.1,durationMs:7000}));expect(useSoundboardStore.getState().playingSound?.userId).toBe("sender");});
+it("preserves zero volumes instead of falling back to100",async()=>{useVoiceStore.setState({masterVolume:0});useSoundboardStore.getState().handleSoundPlay(event);expect(playSoundboardAudio).not.toHaveBeenCalled();useVoiceStore.setState({masterVolume:100,userVolumes:{sender:0}});useSoundboardStore.getState().handleSoundPlay(event);expect(playSoundboardAudio).not.toHaveBeenCalled();useVoiceStore.setState({userVolumes:{}});useSoundboardStore.getState().handleSoundPlay(event);await flush();useSoundboardStore.getState().setVolume(0);expect(h.players[0].setVolume).toHaveBeenLastCalledWith(0);});
+it.each(["isDeafened","isServerDeafened"] as const)("stops playback and preview on %s",async key=>{useSoundboardStore.getState().handleSoundPlay(event);const p=useSoundboardStore.getState().previewSound("blob:preview",0,1000,vi.fn());await flush();useVoiceStore.setState({[key]:true});expect(h.players.every(p=>p.stop.mock.calls.length>0)).toBe(true);expect(p?.isActive()).toBe(false);vi.mocked(playSoundboardAudio).mockClear();useSoundboardStore.getState().handleSoundPlay(event);expect(playSoundboardAudio).not.toHaveBeenCalled();});
+it.each(["leave","channel","session","output","logout"])("cancels active playback on %s",async kind=>{useSoundboardStore.getState().handleSoundPlay(event);await flush();if(kind==="leave")useVoiceStore.setState({currentVoiceChannelId:null,currentVoiceServerId:null});if(kind==="channel")useVoiceStore.setState({currentVoiceChannelId:"other"});if(kind==="session")useVoiceStore.setState({_joinGeneration:2});if(kind==="output")useVoiceStore.setState({outputDevice:"other"});if(kind==="logout"){h.auth={ownerId:null,generation:2};h.owners.forEach(fn=>fn());}expect(h.players[0].stop).toHaveBeenCalledOnce();expect(useSoundboardStore.getState().playingSound).toBeNull();});
+it("stops playback from a newly blocked sender",async()=>{useSoundboardStore.getState().handleSoundPlay(event);await flush();useBlockStore.setState({blockedUserIds:["sender"]});expect(h.players[0].stop).toHaveBeenCalledOnce();});
+it("discards stale lists and loading after leaving call",async()=>{let resolve!:(r:APIResponse<SoundboardSound[]>)=>void;vi.mocked(api.getSounds).mockImplementationOnce(()=>new Promise(done=>{resolve=done;}));const pending=useSoundboardStore.getState().fetchSounds();useVoiceStore.setState({currentVoiceServerId:null,currentVoiceChannelId:null});resolve({success:true,data:[sound]});await pending;expect(useSoundboardStore.getState().sounds).toEqual([]);expect(useSoundboardStore.getState().isLoading).toBe(false);});
+it("shows network failure and permits real retry",async()=>{vi.mocked(api.getSounds).mockRejectedValueOnce(new Error("offline"));await useSoundboardStore.getState().fetchSounds();expect(useSoundboardStore.getState().error).toBe("loadFailed");await useSoundboardStore.getState().fetchSounds();vi.mocked(api.playSound).mockRejectedValueOnce(new Error("offline"));expect(await useSoundboardStore.getState().playSound(sound.id)).toBe(false);expect(useSoundboardStore.getState().error).toBe("playFailed");expect(await useSoundboardStore.getState().playSound(sound.id)).toBe(true);});
+it("does not fetch/play outside a signed-in call",async()=>{useVoiceStore.setState({currentVoiceServerId:null,currentVoiceChannelId:null});await useSoundboardStore.getState().fetchSounds();expect(await useSoundboardStore.getState().playSound(sound.id)).toBe(false);useSoundboardStore.getState().handleSoundPlay(event);expect(api.getSounds).not.toHaveBeenCalled();expect(api.playSound).not.toHaveBeenCalled();expect(playSoundboardAudio).not.toHaveBeenCalled();});
+it("rejects legacy play payload without voice context rather than guessing browsed server",()=>{const legacy={...event};delete (legacy as Partial<SoundboardPlayEvent>).server_id;delete (legacy as Partial<SoundboardPlayEvent>).channel_id;useSoundboardStore.getState().handleSoundPlay(legacy);expect(playSoundboardAudio).not.toHaveBeenCalled();});

@@ -20,10 +20,15 @@
       "jobs_passed": 21,
       "scope": "Game grant/control baseline before this download change; not final-source CI proof"
     },
-    "local_game_client_unit": "9passed; real browser/peer crypto still unverified"
+    "local_game_client_unit": "9passed; real browser/peer crypto still unverified",
+    "final_source_ci": {
+      "run": 40173566523,
+      "source": "33c31385f1cbcb31e96aaa4e89df409533429833",
+      "jobs_passed": 21,
+      "scope": "All jobs completed successfully; does not replace installed Windows or two-client acceptance."
+    }
   },
   "remaining": [
-    "Final-source CI after this patch.",
     "Actual installed Windows and browser encrypted file round-trip. The standalone QA game client currently exercises text, not attachment upload/download.",
     "Existing history access belongs to conversation membership; revoking the write grant does not erase that shared history. UI text explicitly describes this.",
     "No new production/Windows publication;2.11.111 stays unchanged."
