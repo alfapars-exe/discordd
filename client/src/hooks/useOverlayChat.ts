@@ -15,7 +15,7 @@ import { useE2EEStore } from "../stores/e2eeStore";
 import { useChannelPermissions } from "./useChannelPermissions";
 import { Permissions } from "../utils/permissions";
 import { UI_SHELL_V2 } from "../utils/uiShell";
-import { classifySpam, shouldFilterSpam } from "../utils/spamClassification";
+import { shouldSuppressMessagePreview } from "../utils/messageSpamPolicy";
 import { overlayDMSource, overlayGroupDMSource, projectOverlayChat, type OverlayChatSourceMessage } from "../utils/overlayChat";
 import { getLiveOverlayPrivateChatTarget } from "../utils/overlayChatAccess";
 import { useThreadStore } from "../stores/threadStore";
@@ -40,7 +40,7 @@ export function useOverlayChat(enabled: boolean, connected: boolean) {
   const groupDM = useGroupDMStore();
   const blocks = useBlockStore();
   const preferences = usePreferencesStore();
-  const friends = useFriendStore((s) => s.friends);
+  const friends = useFriendStore();
   const spamState = useSpamDecisionStore();
   const errors = useE2EEStore((s) => s.decryptionErrors);
   const e2eeStatus = useE2EEStore((s) => s.initStatus);
@@ -57,14 +57,7 @@ export function useOverlayChat(enabled: boolean, connected: boolean) {
     const validTarget = !!serverId && !!channelId && servers.some((s) => s.id === serverId)
       && !!resolved && (resolved.channel.type === "text" || resolved.channel.type === "thread");
     const privacy = preferences.data.privacy as { ignoredUsers?: Record<string, boolean>; spamFilter?: "all" | "nonfriends" | "off"; spamRestoredMessages?: Record<string, string> } | undefined;
-    const isSpam = (message: OverlayChatSourceMessage, kind: "channel" | "dm" | "group") => {
-      const revision = message.edited_at ?? "original";
-      const decision = spamState.decisions[`${kind}:${message.id}`];
-      if (spamState.accountId === userId && decision?.revision === revision && decision.status === "restored") return false;
-      if (privacy?.spamRestoredMessages?.[message.id] === revision) return false;
-      return shouldFilterSpam(classifySpam(message.content), privacy?.spamFilter ?? "nonfriends",
-        friends.some((friend) => friend.user_id === message.user_id), message.user_id === userId);
-    };
+    const isSpam = (message: OverlayChatSourceMessage, kind: "channel" | "dm" | "group") => shouldSuppressMessagePreview(message, kind);
 
     if (target?.type === "dm" && privateTarget?.type === "dm") {
       const dmChannel = dm.channels.find((item) => item.id === privateTarget.channelId);
@@ -121,5 +114,7 @@ export function useOverlayChat(enabled: boolean, connected: boolean) {
       isSpam: (message) => isSpam(message, "channel"),
       decryptionErrorMessageIds: errors.filter((error) => error.channelId === channelId).map((error) => error.messageId),
     });
+  // Canonical policy reads the subscribed friend/decision stores; provenance-only changes must invalidate this projection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, connected, userId, generation, target, serverId, channelId, servers, resolved, messages, dm, groupDM, blocks, preferences, friends, spamState, errors, e2eeStatus, authorizationResolved, hasChannelPerm]);
 }

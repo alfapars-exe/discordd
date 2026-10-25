@@ -27,6 +27,9 @@ export type VoiceOverlaySnapshot = {
   chatComposeSession?: string;
   chatComposeLabel?: string;
   notificationActionSession?: string;
+  notificationReplySession?: string;
+  notificationReplyIds?: string[];
+  notificationReplyButtons?: Array<{ id: string; row: number }>;
   notificationActionsUnavailable?: boolean;
   notificationStatus?: "loading" | "ready" | "unavailable";
   notifications?: Array<{ id: string; category: "mention" | "reply" | "friend_request" | "dm_request" | "system" }>;
@@ -88,7 +91,7 @@ function VoiceOverlayToolbar({ snapshot }: { snapshot: VoiceOverlaySnapshot }) {
     </div>;
 }
 
-function NotificationInboxButton({ session }: { session: string }) {
+function NotificationInboxButton({ session, replySession, replyButtons = [] }: { session: string; replySession?: string; replyButtons?: Array<{ id: string; row: number }> }) {
   const { t } = useTranslation("common");
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -110,7 +113,18 @@ function NotificationInboxButton({ session }: { session: string }) {
       if (mounted.current) setPending(false);
     }
   }
-  return <div className="voice-overlay-notification-action-surface">
+  async function prepareReply(notificationId: string) {
+    if (!replySession || !window.electronAPI?.sendOverlayPrepareNotificationReply || busy.current) return;
+    busy.current = true; setPending(true); setFailed(false);
+    try { if (await window.electronAPI.sendOverlayPrepareNotificationReply({ session: replySession, notificationId }) !== true && mounted.current) setFailed(true); }
+    catch { if (mounted.current) setFailed(true); }
+    finally { busy.current = false; if (mounted.current) setPending(false); }
+  }
+  const buttons = replyButtons.slice(0, 3).filter((item, index, all) => typeof item.id === "string" && item.id.length > 0 && item.id.length <= 128
+    && Number.isInteger(item.row) && item.row >= 0 && item.row < 3 && all.findIndex(other => other.id === item.id || other.row === item.row) === index);
+  return <div className="voice-overlay-notification-action-surface" style={{ height: 20 + (buttons.length ? Math.max(...buttons.map(item => item.row)) + 1 : 0) * 32 }}>
+    {replySession && buttons.map(item => <button key={item.id} type="button" tabIndex={-1} style={{ position: "absolute", top: 20 + item.row * 32 + 6, left: 0 }}
+      disabled={pending || !window.electronAPI?.sendOverlayPrepareNotificationReply} aria-label={t("overlayPrepareReply")} onClick={() => void prepareReply(item.id)}>{t("overlayPrepareReply")}</button>)}
     <button type="button" tabIndex={-1} disabled={!send || pending} aria-label={t("overlayOpenInbox")} title={t(failed ? "overlayOpenInboxFailed" : "overlayOpenInbox")}
       onClick={() => void openInbox()}>{t("overlayOpenInbox")}</button>
     {failed && <span className="voice-overlay-inbox-error" role="alert" aria-label={t("overlayOpenInboxFailed")} title={t("overlayOpenInboxFailed")}>!</span>}
@@ -248,7 +262,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
     return composeSession ? <ChatComposer key={composeSession} session={composeSession} label={label} /> : null;
   }
   if (notificationActionsOnly) return notificationActionAuthorized
-    ? <NotificationInboxButton key={snapshot.notificationActionSession} session={snapshot.notificationActionSession!} />
+    ? <NotificationInboxButton key={`${snapshot.notificationActionSession}:${snapshot.notificationReplySession ?? ""}`} session={snapshot.notificationActionSession!} replySession={snapshot.notificationReplySession} replyButtons={snapshot.notificationReplyButtons} />
     : null;
   if (chatActionsOnly) {
     const openSession = chatActionAuthorized ? snapshot.chatActionSession : undefined;
@@ -317,7 +331,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
       {notificationStatus === "loading" ? <p className="voice-overlay-notification-state">{t("overlayNotificationsLoading")}</p>
         : notificationStatus === "unavailable" ? <p className="voice-overlay-notification-state">{t("overlayNotificationsUnavailable")}</p>
           : notifications.length === 0 ? <p className="voice-overlay-notification-state">{t("overlayNotificationsEmpty")}</p>
-            : notifications.map((notification) => <div className="voice-overlay-notification-row" key={notification.id}>
+            : notifications.map((notification) => <div className="voice-overlay-notification-row" key={notification.id} style={{ paddingRight: snapshot.notificationReplyIds?.includes(notification.id) ? 100 : undefined }}>
               <span aria-hidden="true" className="voice-overlay-notification-dot" />
               <span>{t(notificationLabels[notification.category])}</span>
             </div>)}

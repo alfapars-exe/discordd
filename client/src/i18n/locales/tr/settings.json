@@ -337,7 +337,7 @@
   "voiceOverlayNotifications": "Okunmamış bildirim göstergelerini göster",
   "voiceOverlayNotificationsDesc": "Yalnızca salt okunur yerel masaüstü widget'ında gerçek okunmamış bildirim göstergelerini gösterir. Katmana şifre çözülmüş mesaj metni veya önizlemesi gönderilmez; web önizlemesinde canlı bildirim gösterilmez.",
   "voiceOverlayNotificationActions": "Bildirim göstergelerinden gelen kutusunu açmaya izin ver",
-  "voiceOverlayNotificationActionsDesc": "Windows masaüstü katmanına Gelen Kutusunu aç düğmesi ekler. Ana uygulamayı öne getirip gelen kutusunu açar; mesajları okunmuş olarak işaretlemez ve doğrudan yanıt vermeyi sağlamaz. Susturma/sağırlaştırma tıklamalarından ayrı, yalnızca bu cihazda saklanan bir izindir.",
+  "voiceOverlayNotificationActionsDesc": "Gelen kutusunu açar. Uygun bahsetme ve yanıt bildirimlerinde, ana sohbette ilgili mesaja yanıt taslağı hazırlar; kendiliğinden göndermez ve mevcut taslakları değiştirmez. Susturma/sağırlaştırma tıklamalarından ayrı, yalnızca bu cihazda saklanan bir izindir.",
   "voiceOverlayChat": "Widget'ta son sohbeti göster",
   "voiceOverlayChatDesc": "Bu cihazda saklanan en fazla beş son mesajın isteğe bağlı, salt okunur özeti. Yanıt yazılamaz veya gönderilemez. Yalnızca masaüstü widget'ında kullanılabilir; web önizlemesi sohbeti göstermez.",
   "voiceOverlayChatActions": "Sohbeti uygulamada açmaya izin ver",

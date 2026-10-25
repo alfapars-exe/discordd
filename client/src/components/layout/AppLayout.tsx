@@ -25,6 +25,7 @@ import { useOverlayChatCompose } from "../../hooks/useOverlayChatCompose";
 import { useThreadReconnectRefresh } from "../../hooks/useThreadReconnectRefresh";
 import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 import { formatOverlayChatComposeLabel, getLiveOverlayChatTarget } from "../../utils/overlayChatAccess";
+import { useOverlayNotificationReply } from "../../hooks/useOverlayNotificationReply";
 import { useOverlayNotifications } from "../../hooks/useOverlayNotifications";
 import { useOverlayNotificationActions } from "../../hooks/useOverlayNotificationActions";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -125,6 +126,7 @@ function AppLayout() {
   const overlayNotificationsEnabled = useVoiceStore((s) => s.voiceOverlayNotifications);
   const overlayNotificationActions = useVoiceStore((s) => s.voiceOverlayNotificationActions);
   const { notifications: overlayNotifications, notificationStatus } = useOverlayNotifications(overlayEnabled && overlayNotificationsEnabled, connectionStatus === "connected");
+  const { notificationReplySession, notificationReplyIds } = useOverlayNotificationReply(connectionStatus === "connected", overlayNotifications);
   const notificationActionSession = useOverlayNotificationActions(connectionStatus === "connected", notificationStatus === "ready" && overlayNotifications.length > 0);
   const overlayQuickActions = useVoiceStore((s) => s.voiceOverlayQuickActions);
   const overlayClickableActions = useVoiceStore((s) => s.voiceOverlayClickableActions);
@@ -151,10 +153,10 @@ function AppLayout() {
       id: p.user_id, name: p.display_name || p.username, avatarUrl: p.avatar_url || "",
       speaking: activeSpeakers[p.user_id] ?? false, muted: p.is_muted, deafened: p.is_deafened,
     }));
-    const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, ...(notificationActionSession ? { notificationActionSession } : {}) };
+    const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, notificationReplyIds, ...(notificationReplySession ? { notificationReplySession } : {}), ...(notificationActionSession ? { notificationActionSession } : {}) };
     const chatSnapshot = { voiceOverlayChat: overlayChatEnabled, ...(overlayChatEnabled ? { ...overlayChat, voiceOverlayChatActions: overlayChatActions, ...(chatActionSession ? { chatActionSession } : {}), voiceOverlayChatCompose: overlayChatCompose, ...(chatComposeSession ? { chatComposeSession, chatComposeLabel } : {}) } : {}) };
     window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
-  }, [overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+  }, [overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, notificationReplySession, notificationReplyIds, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
   useNavigationHistory();
 
   // Idle detection — auto-set "idle" after 5min inactivity

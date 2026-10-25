@@ -151,6 +151,9 @@ interface ElectronAPI {
   sendOverlayOpenInbox?: (session: string) => Promise<boolean>;
   confirmOverlayOpenInbox?: (session: string) => Promise<boolean>;
   onOverlayOpenInbox?: (callback: (value: { session: string }) => void) => (() => void);
+  sendOverlayPrepareNotificationReply?: (request: { session: string; notificationId: string }) => Promise<boolean>;
+  confirmOverlayPrepareNotificationReply?: (request: { session: string; notificationId: string }) => Promise<boolean>;
+  onOverlayPrepareNotificationReply?: (callback: (value: { session: string; notificationId: string }) => void) => (() => void);
   sendOverlayOpenChat?: (session: string) => Promise<boolean>;
   confirmOverlayOpenChat?: (session: string) => Promise<boolean>;
   sendOverlayOpenChatComposer?: (session: string) => Promise<boolean>;

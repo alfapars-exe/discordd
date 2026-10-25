@@ -26,7 +26,8 @@ export type OpenAtMessage = (
   serverId: string,
   channelId: string,
   messageId: string,
-  channelName?: string
+  channelName?: string,
+  context?: { isCurrent: () => boolean }
 ) => Promise<boolean>;
 
 export type OpenAtDMMessage = (dmChannelId: string, messageId: string) => Promise<boolean>;
@@ -52,7 +53,8 @@ export function useOpenAtMessage(): {
   const addToast = useToastStore((s) => s.addToast);
 
   const openAtMessage = useCallback<OpenAtMessage>(
-    async (serverId, channelId, messageId, channelName) => {
+    async (serverId, channelId, messageId, channelName, context) => {
+      if (context && !context.isCurrent()) return false;
       const targetServerId = serverId || activeServerId;
       if (!targetServerId) return false;
 
@@ -76,6 +78,7 @@ export function useOpenAtMessage(): {
       const navigationRevision = useUIStore.getState().navigationRevision;
 
       const found = await fetchAroundMessage(targetServerId, channelId, messageId);
+      if (context && !context.isCurrent()) return false;
       const current = useUIStore.getState();
       if (UI_SHELL_V2 && (current.navigationRevision !== navigationRevision || current.destination.type !== "text" || current.destination.channelId !== channelId)) return found;
       if (!found) {

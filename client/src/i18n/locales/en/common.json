@@ -1,4 +1,7 @@
 {
+  "overlayPrepareReply": "Prepare reply",
+  "overlayReplyDraftConflict": "Your existing draft or edit is preserved. Finish it before trying again.",
+  "overlayReplyUnavailable": "A reply to this notification’s message could not be prepared.",
   "overlayGoLiveGuidance": "Use Share in the app to choose a screen or window.",
   "overlayWelcomeNotice": "HiChat overlay is active",
   "shortcutLofi": "Open the local lo-fi player",

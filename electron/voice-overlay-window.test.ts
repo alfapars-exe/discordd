@@ -24,12 +24,12 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   class FakeWindow extends EventEmitter {
     visible = false; destroyed = false; ignored = true;
     x = 0; y = 0; width = 300; height = 420;
-    sent: Array<{ welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
+    sent: Array<{ welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; notificationReplySession?: string; notificationReplyButtons?: Array<{ id: string; row: number }>; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
     shape: Array<{ x: number; y: number; width: number; height: number }> = [];
     webContents = Object.assign(new EventEmitter(), {
       mainFrame: {},
       isLoading: () => false,
-      send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
+      send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; notificationReplySession?: string; notificationReplyButtons?: Array<{ id: string; row: number }>; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
     });
     focusCount = 0;
     constructor(public options: Record<string, unknown>) { super(); if (options.width === 360 && options.height === 180) chatComposerWin = this; else if (options.width === 88 && options.height === 40) actionWin = this; else if (options.width !== 88 || options.height !== 20) win = this; }
@@ -410,5 +410,38 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   exports.closeVoiceOverlay();
   exports.updateVoiceOverlay({ ...readyGoLive, voiceOverlayMode: "desktop" }, area, "desktop");
   assert.equal(win.sent[win.sent.length - 1].goLive, null, "desktop-only overlay does not claim a detected game");
+  exports.closeVoiceOverlay();
+  const replySnapshot = { ...notificationActions, notificationReplySession: "reply-session", notificationReplyIds: ["notification-0", "notification-1"] };
+  exports.updateVoiceOverlay(replySnapshot, area);
+  const replySender = { sender: notificationActionWin.webContents, senderFrame: notificationActionWin.webContents.mainFrame };
+  const replyRequest = { session: "reply-session", notificationId: "notification-0" };
+  const replyBounds = notificationActionWin.getBounds(); cursor = { x: replyBounds.x + 5, y: replyBounds.y + 31 };
+  assert.equal(notificationActionWin.shape.length, 3, "the existing action window shapes only header and two allowed row targets");
+  assert.equal(notificationActionWin.sent[notificationActionWin.sent.length - 1].notifications, undefined, "reply action receives no notification body/category payload");
+  assert.equal(notificationActionWin.sent[notificationActionWin.sent.length - 1].notificationReplyButtons?.[0].id, "notification-0");
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent({ ...replySender, senderFrame: {} }, replyRequest), null);
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(replySender, { ...replyRequest, url: "https://example.invalid" }), null);
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(replySender, { ...replyRequest, notificationId: "notification-1" }), null, "a row cannot impersonate another visible row");
+  now += 251;
+  assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: {}, senderFrame: {} }, replyRequest, mainWindow), false);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), true);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "reply focus consumes a one-shot physical intent");
+  now += 251; assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  now += 5001;
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "expired physical reply intent cannot focus");
+  now += 251; assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  exports.updateVoiceOverlay({ ...replySnapshot, notificationReplySession: "replacement-session" }, area);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "rotated account/source session invalidates pending reply");
+  exports.updateVoiceOverlay(replySnapshot, { ...area, height: 140 });
+  const shortBounds = notificationActionWin.getBounds(); cursor = { x: shortBounds.x + 5, y: shortBounds.y + 63 };
+  now += 251;
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(replySender, { ...replyRequest, notificationId: "notification-1" }), null, "physically clipped rows cannot be invoked");
+  exports.updateVoiceOverlay(replySnapshot, area);
+  const renewedBounds = notificationActionWin.getBounds(); cursor = { x: renewedBounds.x + 5, y: renewedBounds.y + 31 };
+  now += 251; assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(replySender, replyRequest));
+  notificationActionWin.close();
+  exports.updateVoiceOverlay(replySnapshot, area);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "destroying the action surface prevents an old click from focusing through a replacement");
   exports.closeVoiceOverlay();
 });

@@ -99,6 +99,22 @@ beforeEach(() => {
 });
 
 describe("useOpenAtMessage — channel", () => {
+  it("honors caller lifetime before navigation and after a failed asynchronous fetch", async () => {
+    let current = false;
+    const view = renderHook(() => useOpenAtMessage());
+    await expect(view.result.current.openAtMessage("srv-1", "ch-1", "m-7", "", { isCurrent: () => current })).resolves.toBe(false);
+    expect(openTab()).not.toHaveBeenCalled();
+    let finish!: (found: boolean) => void;
+    fetchAround().mockImplementation(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    current = true;
+    let pending!: Promise<boolean>;
+    act(() => { pending = view.result.current.openAtMessage("srv-1", "ch-1", "m-7", "", { isCurrent: () => current }); });
+    current = false;
+    await act(async () => { finish(false); await pending; });
+    expect(await pending).toBe(false);
+    expect(setScroll()).not.toHaveBeenCalled();
+    expect(addToast()).not.toHaveBeenCalled();
+  });
   it("does not scroll another V2 destination when a slow message lookup finishes", async () => {
     shell.enabled = true;
     let finish!: (found: boolean) => void;

@@ -421,3 +421,13 @@ it("shows Go Live guidance without any capture action and removes it on readines
   view.rerender(<VoiceOverlayContent snapshot={{ ...source, goLive: null }} />);
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
+
+
+it("prepares the exact opaque notification reply only through its existing native action surface", async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  Object.defineProperty(window, "electronAPI", { configurable: true, value: { sendOverlayOpenInbox: vi.fn().mockResolvedValue(true), sendOverlayPrepareNotificationReply: send } });
+  render(<VoiceOverlayContent notificationActionsOnly snapshot={snapshot("top-left", { voiceOverlayNotifications: true, voiceOverlayNotificationActions: true, notificationActionSession: "inbox", notificationReplySession: "reply-session", notificationReplyButtons: [{ id: "opaque-notice", row: 1 }] })} />);
+  fireEvent.click(screen.getByRole("button", { name: "overlayPrepareReply" }));
+  await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith({ session: "reply-session", notificationId: "opaque-notice" }));
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+});

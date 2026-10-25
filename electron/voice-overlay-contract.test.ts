@@ -305,3 +305,10 @@ test("Go Live is optional bounded booleans only; renderer cannot author a native
   assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), voiceOverlayGoLive: true, goLiveEligible: true, goLiveSession: "room-a" })?.goLiveEligible, true);
   for (const patch of [{ voiceOverlayGoLive: 1 }, { goLiveEligible: "true" }, { voiceOverlayGoLive: true, goLiveEligible: true }, { goLiveSession: "bad\nroom" }, { goLive: { id: 1, expiresAt: 99999 } }, { goLiveHeight: 64 }]) assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), ...patch }), null);
 });
+
+
+test("notification reply metadata contains only a unique visible mention/reply subset and an explicit bounded session", () => {
+  const source = { ...validSnapshot(), voiceOverlayNotifications: true, voiceOverlayNotificationActions: true, notificationStatus: "ready", notifications: [{ id: "mention", category: "mention" }, { id: "friend", category: "friend_request" }], notificationReplyIds: ["mention"], notificationReplySession: "reply-session" };
+  assert.deepEqual(parseVoiceOverlaySnapshot(source)?.notificationReplyIds, ["mention"]);
+  for (const patch of [{ notificationReplyIds: ["missing"] }, { notificationReplyIds: ["friend"] }, { notificationReplyIds: ["mention", "mention"] }, { notificationReplyIds: ["mention"], notificationReplySession: undefined }, { notificationReplySession: "bad\nsession" }, { notificationReplyButtons: [{ id: "mention", row: 0 }] }, { voiceOverlayNotificationActions: false }]) assert.equal(parseVoiceOverlaySnapshot({ ...source, ...patch }), null);
+});

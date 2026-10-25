@@ -2,7 +2,7 @@ import { app, BrowserWindow, screen } from "electron";
 import { OverlayWelcomeLifecycle } from "./overlay-welcome";
 import path from "node:path";
 import { isTrustedVoiceOverlaySender, VoiceOverlayLifecycle, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
-import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH, overlayActionAt, overlayNotificationActionAt, type OverlayAction as OverlayVoiceAction } from "./overlay-action-regions";
+import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH, overlayActionAt, overlayNotificationActionAt, overlayNotificationReplyRowAt, type OverlayAction as OverlayVoiceAction } from "./overlay-action-regions";
 import { calculateVoiceOverlayGeometry, constrainOverlayPosition, normalizeOverlayPosition, restoreOverlayPosition, type VoiceOverlayWorkArea } from "./voice-overlay-geometry";
 import type { createOverlayLayoutStore, OverlayLayoutContext, OverlayLayoutPoint } from "./overlay-layout-store";
 export type { VoiceOverlaySnapshot } from "./voice-overlay-contract";
@@ -64,6 +64,8 @@ let notificationActionLoadPending = false;
 let notificationActionShapeFailed = false;
 let chatActionLoadPending = false;
 let chatActionShapeFailed = false;
+let pendingNotificationReply: { session: string; notificationId: string; expiresAt: number } | null = null;
+let lastReplyActionAt = 0;
 let pendingOpenInbox: { session: string; expiresAt: number } | null = null;
 let pendingOpenChat: { session: string; expiresAt: number } | null = null;
 type ChatSendResult = "sent" | "failed" | "unavailable";
@@ -214,7 +216,7 @@ function openChatComposer(session: string, mainWindow: TrustedOverlayMainWindow)
   return true;
 }
 
-function hideNotificationActionWindow(): void {
+function hideNotificationActionWindow(): void { pendingNotificationReply = null;
   pendingOpenInbox = null;
   if (notificationActionWindow && !notificationActionWindow.isDestroyed()) notificationActionWindow.hide();
 }
@@ -304,30 +306,40 @@ function updateNotificationActionWindow(): void {
       created.setShape([{ x: 0, y: 0, width: INBOX_ACTION_WIDTH, height: INBOX_ACTION_HEIGHT }]);
     } catch {
       notificationActionShapeFailed = true;
-      pendingOpenInbox = null;
+      pendingOpenInbox = null; pendingNotificationReply = null;
       created.close(); notificationActionWindow = null;
       overlayWindow!.webContents.send("voice-overlay-update", voiceOverlayPayload());
       return;
     }
     created.setAlwaysOnTop(true, "floating");
-    created.on("closed", () => { if (notificationActionWindow === created) { notificationActionWindow = null; notificationActionLoadPending = false; pendingOpenInbox = null; } });
+    created.on("closed", () => { if (notificationActionWindow === created) { notificationActionWindow = null; notificationActionLoadPending = false; pendingOpenInbox = null; pendingNotificationReply = null; } });
     const dev = process.env.NODE_ENV === "development" || !app.isPackaged;
     void created.loadURL(dev ? "http://localhost:3030/overlay.html?surface=notification-actions" : "app://hichat/overlay.html?surface=notification-actions");
   }
   const target = notificationActionWindow;
   const deliver = () => {
-    if (target !== notificationActionWindow || target.isDestroyed() || !notificationActionAvailable()) { if (!target.isDestroyed()) target.hide(); return; }
+    if (target !== notificationActionWindow || target.isDestroyed() || !notificationActionAvailable()) { pendingNotificationReply = null; if (!target.isDestroyed()) target.hide(); return; }
     const bounds = overlayWindow!.getBounds();
     const geometry = calculateVoiceOverlayGeometry(latest!, latestArea ?? screen.getPrimaryDisplay().workArea);
-    if (!geometry || !geometry.notificationsVisible) { target.hide(); pendingOpenInbox = null; return; }
+    if (!geometry || !geometry.notificationsVisible) { target.hide(); pendingOpenInbox = null; pendingNotificationReply = null; return; }
     const notificationHeight = 20 + geometry.notificationRows * 32;
     target.setPosition(bounds.x + bounds.width - 8 - INBOX_ACTION_WIDTH,
       bounds.y + bounds.height - 8 - geometry.actionsHeight - notificationHeight, false);
-    // Only the opaque session token crosses to this child surface; notification
-    // identifiers and all notification content remain on the passive window.
+    const replyButtons = (latest!.notifications ?? []).slice(0, geometry.notificationRows)
+      .map((item, row) => ({ id: item.id, row })).filter(item => latest!.notificationReplyIds?.includes(item.id));
+    target.setSize(INBOX_ACTION_WIDTH, notificationHeight, false);
+    try {
+      target.setShape([{ x: 0, y: 0, width: 88, height: 20 }, ...replyButtons.map(item => ({ x: 0, y: 20 + item.row * 32 + 6, width: 88, height: 20 }))]);
+    } catch {
+      notificationActionShapeFailed = true; pendingNotificationReply = null; pendingOpenInbox = null;
+      target.hide(); overlayWindow!.webContents.send("voice-overlay-update", voiceOverlayPayload()); return;
+    }
+    // Only bounded opaque IDs, row indexes and session tokens reach this existing child.
+    // No actor, conversation identifier, message body or route is forwarded.
     target.webContents.send("voice-overlay-update", {
       enabled: true, voiceOverlayNotifications: true, voiceOverlayNotificationActions: true,
       notificationActionSession: latest!.notificationActionSession, participants: [],
+      notificationReplySession: latest!.notificationReplySession, notificationReplyButtons: replyButtons,
       voiceOverlayChat: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false, chatStatus: undefined, chatMessages: undefined, chatActionSession: undefined, chatComposeSession: undefined, chatComposeLabel: undefined,
     });
     target.showInactive();
@@ -423,6 +435,49 @@ export function confirmVoiceOverlayOpenInbox(
   mainWindow.show();
   mainWindow.focus();
   return true;
+}
+
+export type OverlayNotificationReplyRequest = { session: string; notificationId: string };
+function parseNotificationReplyRequest(raw: unknown): OverlayNotificationReplyRequest | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (Object.keys(value).length !== 2 || !Object.hasOwnProperty.call(value, "session") || !Object.hasOwnProperty.call(value, "notificationId")) return null;
+  if (!isChatRequestToken(value.session, 256) || !isChatRequestToken(value.notificationId, 128)) return null;
+  return { session: value.session, notificationId: value.notificationId };
+}
+function notificationReplyAvailable(request: OverlayNotificationReplyRequest): boolean {
+  if (!notificationActionAvailable() || request.session !== latest?.notificationReplySession
+    || !latest.notificationReplyIds?.includes(request.notificationId)) return false;
+  const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
+  return !!geometry && (latest.notifications ?? []).slice(0, geometry.notificationRows)
+    .some(item => item.id === request.notificationId && (item.category === "mention" || item.category === "reply"));
+}
+
+/** Exact physical row only; the child cannot supply a conversation or URL. */
+export function takeVoiceOverlayNotificationReplyIntent(event: { sender: unknown; senderFrame: unknown }, raw: unknown): OverlayNotificationReplyRequest | null {
+  const request = parseNotificationReplyRequest(raw), win = notificationActionWindow;
+  if (!request || !win || win.isDestroyed() || !win.isVisible() || !isTrustedVoiceOverlaySender(event, win)
+    || !notificationReplyAvailable(request) || Date.now() - lastReplyActionAt < 250) return null;
+  const geometry = calculateVoiceOverlayGeometry(latest!, latestArea ?? screen.getPrimaryDisplay().workArea);
+  let row: number | null;
+  try { row = overlayNotificationReplyRowAt(screen.getCursorScreenPoint(), win.getBounds(), geometry!.notificationRows); } catch { return null; }
+  if (row === null || latest?.notifications?.[row]?.id !== request.notificationId) return null;
+  lastReplyActionAt = Date.now();
+  pendingNotificationReply = { ...request, expiresAt: Date.now() + 5000 };
+  return request;
+}
+
+/** Main renderer revalidates source access before consuming this one-shot focus intent. */
+export function confirmVoiceOverlayNotificationReply(event: { sender: unknown; senderFrame: unknown }, raw: unknown,
+  mainWindow: { isDestroyed(): boolean; isMinimized(): boolean; restore(): void; show(): void; focus(): void; webContents: { mainFrame: unknown } } | null): boolean {
+  if (!mainWindow || !isTrustedVoiceOverlaySender(event, mainWindow)) return false;
+  const pending = pendingNotificationReply, request = parseNotificationReplyRequest(raw);
+  pendingNotificationReply = null;
+  if (!request || !pending || pending.expiresAt < Date.now() || request.session !== pending.session
+    || request.notificationId !== pending.notificationId || !notificationReplyAvailable(request)
+    || !notificationActionWindow || notificationActionWindow.isDestroyed() || !notificationActionWindow.isVisible()) return false;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show(); mainWindow.focus(); return true;
 }
 
 /** The chat child can request only the generic current-channel view. */
@@ -672,6 +727,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
     if (removed) layoutPoint = null;
   }
   if (unlocked && area && (!latestArea || area.x !== latestArea.x || area.y !== latestArea.y || area.width !== latestArea.width || area.height !== latestArea.height)) lockVoiceOverlay();
+  if (pendingNotificationReply && (pendingNotificationReply.session !== snapshot.notificationReplySession || !snapshot.notificationReplyIds?.includes(pendingNotificationReply.notificationId))) pendingNotificationReply = null;
   if (pendingOpenInbox && pendingOpenInbox.session !== snapshot.notificationActionSession) pendingOpenInbox = null;
   if (pendingOpenChat && pendingOpenChat.session !== snapshot.chatActionSession) pendingOpenChat = null;
   if (blockedChatComposeSession && blockedChatComposeSession !== snapshot.chatComposeSession) blockedChatComposeSession = null;
@@ -751,6 +807,7 @@ export function closeVoiceOverlay(): void {
   chatActionLoadPending = false;
   closeChatComposerWindow();
   pendingOpenInbox = null;
+  pendingNotificationReply = null;
   pendingOpenChat = null;
   layoutPoint = null;
   lifecycle.close();

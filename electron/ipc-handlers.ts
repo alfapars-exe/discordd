@@ -79,7 +79,7 @@ import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
 import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
-import { updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
+import { updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
 import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
 import { isTrustedVoiceOverlaySender, parseVoiceOverlaySnapshot } from "./voice-overlay-contract";
@@ -124,6 +124,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("confirm-overlay-open-inbox", (event, session: unknown) => {
     return confirmVoiceOverlayOpenInbox(event, session, getMainWindow());
   });
+  ipcMain.handle("overlay-prepare-notification-reply", (event, raw: unknown) => {
+    const request = takeVoiceOverlayNotificationReplyIntent(event, raw), main = getMainWindow();
+    if (!request || !main || main.isDestroyed()) return false;
+    main.webContents.send("overlay-prepare-notification-reply", request); return true;
+  });
+  ipcMain.handle("confirm-overlay-prepare-notification-reply", (event, raw: unknown) => confirmVoiceOverlayNotificationReply(event, raw, getMainWindow()));
   ipcMain.handle("overlay-open-chat", (event, session: unknown) => {
     const request = takeVoiceOverlayOpenChatIntent(event, session);
     const main = getMainWindow();

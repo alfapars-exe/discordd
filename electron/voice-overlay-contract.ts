@@ -41,6 +41,8 @@ export type VoiceOverlaySnapshot = {
   chatComposeLabel?: string;
   voiceActionSession?: string;
   notificationActionSession?: string;
+  notificationReplySession?: string;
+  notificationReplyIds?: string[];
   selfMuted?: boolean;
   selfDeafened?: boolean;
   participants: VoiceOverlayParticipant[];
@@ -100,7 +102,7 @@ function isFiniteRange(value: unknown, min: number, max: number): value is numbe
  */
 export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | null {
   if (!isRecord(raw)) return null;
-  if (raw.welcome !== undefined || raw.welcomeHeight !== undefined || raw.goLive !== undefined || raw.goLiveHeight !== undefined) return null;
+  if (raw.welcome !== undefined || raw.welcomeHeight !== undefined || raw.goLive !== undefined || raw.goLiveHeight !== undefined || raw.notificationReplyButtons !== undefined) return null;
   if (raw.overlayNotificationDurationMs !== undefined && (!Number.isInteger(raw.overlayNotificationDurationMs) || !isFiniteRange(raw.overlayNotificationDurationMs, 3000, 20000))) return null;
   if (typeof raw.enabled !== "boolean" || typeof raw.speakingOnly !== "boolean") return null;
   if (raw.voiceOverlayMode !== undefined && raw.voiceOverlayMode !== "desktop" && raw.voiceOverlayMode !== "game") return null;
@@ -120,6 +122,12 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
     notifications.push({ id: value.id, category: value.category as VoiceOverlayNotificationCategory });
   }
   if (notifications.length > 0 && raw.notificationStatus !== "ready") return null;
+  const replyIds = raw.notificationReplyIds ?? [];
+  if (!Array.isArray(replyIds) || replyIds.length > 3 || new Set(replyIds).size !== replyIds.length
+    || replyIds.some(id => !isBoundedText(id, 128) || !notifications.some(n => n.id === id && (n.category === "mention" || n.category === "reply")))) return null;
+  if (raw.notificationReplySession !== undefined && (!isBoundedText(raw.notificationReplySession, 256)
+    || raw.voiceOverlayNotificationActions !== true || raw.voiceOverlayNotifications !== true || raw.notificationStatus !== "ready" || replyIds.length === 0)) return null;
+  if (replyIds.length > 0 && !isBoundedText(raw.notificationReplySession, 256)) return null;
   if (raw.chatStatus !== undefined && (typeof raw.chatStatus !== "string" || !CHAT_STATUSES.has(raw.chatStatus as VoiceOverlayChatStatus))) return null;
   if (raw.chatMessages !== undefined && (!Array.isArray(raw.chatMessages) || raw.chatMessages.length > MAX_OVERLAY_CHAT_MESSAGES)) return null;
   if ((raw.chatStatus !== undefined || raw.chatMessages !== undefined) && raw.voiceOverlayChat !== true) return null;
@@ -208,6 +216,8 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
     ...(raw.chatComposeSession !== undefined ? { chatComposeSession: raw.chatComposeSession as string } : {}),
     ...(raw.chatComposeLabel !== undefined ? { chatComposeLabel: raw.chatComposeLabel as string } : {}),
     ...(raw.voiceActionSession !== undefined ? { voiceActionSession: raw.voiceActionSession as string } : {}),
+    ...(raw.notificationReplySession !== undefined ? { notificationReplySession: raw.notificationReplySession as string } : {}),
+    ...(raw.notificationReplyIds !== undefined ? { notificationReplyIds: replyIds as string[] } : {}),
     ...(raw.notificationActionSession !== undefined ? { notificationActionSession: raw.notificationActionSession as string } : {}),
     ...(raw.selfMuted !== undefined ? { selfMuted: raw.selfMuted as boolean } : {}),
     ...(raw.selfDeafened !== undefined ? { selfDeafened: raw.selfDeafened as boolean } : {}),

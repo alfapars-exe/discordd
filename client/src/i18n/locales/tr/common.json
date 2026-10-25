@@ -1,4 +1,7 @@
 {
+  "overlayPrepareReply": "Yanıt hazırla",
+  "overlayReplyDraftConflict": "Mevcut taslak veya düzenleme korunuyor. Tamamladıktan sonra yeniden dene.",
+  "overlayReplyUnavailable": "Bu bildirimin mesajına şu anda yanıt hazırlanamadı.",
   "overlayGoLiveGuidance": "Uygulamadaki Paylaş düğmesiyle ekran veya pencere seçebilirsin.",
   "overlayWelcomeNotice": "HiChat oyun arayüzü açık",
   "shortcutLofi": "Yerel lo-fi oynatıcısını aç",

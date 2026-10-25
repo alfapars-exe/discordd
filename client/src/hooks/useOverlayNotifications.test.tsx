@@ -9,6 +9,7 @@ import { useServerStore } from "../stores/serverStore";
 import { useChannelStore } from "../stores/channelStore";
 import { useDMStore } from "../stores/dmStore";
 import { useGroupDMStore } from "../stores/groupDMStore";
+import { useThreadStore } from "../stores/threadStore";
 import { useBlockStore } from "../stores/blockStore";
 import type { AppNotification } from "../types/notification";
 import { getLiveOverlayNotificationItems } from "../utils/overlayNotificationAccess";
@@ -40,7 +41,7 @@ beforeEach(() => {
     fetchError: false, unreadCount: 0, hasMore: false, isLoading: false,
   });
   useServerStore.setState({ servers: [], mutedServerIds: new Set() });
-  useChannelStore.setState({ categoriesByServer: {} });
+  useChannelStore.setState({ categoriesByServer: {}, mutedChannelIds: new Set() });
   useDMStore.setState({ channels: [] });
   useGroupDMStore.setState({ groups: [] });
   useBlockStore.setState({ blockedUserIds: [] });
@@ -127,4 +128,23 @@ describe("useOverlayNotifications", () => {
     expect(result.current.notifications).toEqual([]);
     expect(result.current.notificationStatus).toBe("unavailable");
   });
+});
+
+
+it("uses current thread ownership, parent mute and ignored actors for both published and action-time rows", () => {
+  useServerStore.setState({ servers: [{ id: "server" }] as never });
+  useChannelStore.setState({ categoriesByServer: { server: [{ id: "category", channels: [{ id: "parent", type: "text", name: "Parent" }] }] } as never });
+  useThreadStore.setState({ ownerId: owner, authGeneration: getAuthGeneration(), byID: { thread: { id: "thread", type: "thread", parent_channel_id: "parent" } } as never,
+    serverIdByThread: { thread: "server" }, statusByParent: { '["server","parent"]': "ready" }, statusByThread: { thread: "ready" } });
+  makeReadyFeed([notification({ server_id: "server", channel_id: "thread", message_id: "message" })]);
+  const view = renderHook(() => useOverlayNotifications(true, true));
+  expect(view.result.current.notifications).toHaveLength(1); expect(getLiveOverlayNotificationItems()).toHaveLength(1);
+  act(() => useChannelStore.setState({ mutedChannelIds: new Set(["parent"]) }));
+  expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
+  act(() => useChannelStore.setState({ mutedChannelIds: new Set() }));
+  act(() => usePreferencesStore.setState({ data: { privacy: { ignoredUsers: { "actor-1": true } } } }));
+  expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
+  act(() => usePreferencesStore.setState({ data: {} }));
+  act(() => useThreadStore.setState({ authGeneration: getAuthGeneration() - 1 }));
+  expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
 });

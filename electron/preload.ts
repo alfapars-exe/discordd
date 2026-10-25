@@ -345,6 +345,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("overlay-open-inbox", listener);
     return () => ipcRenderer.removeListener("overlay-open-inbox", listener);
   },
+  sendOverlayPrepareNotificationReply: (request: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-prepare-notification-reply", request),
+  confirmOverlayPrepareNotificationReply: (request: unknown): Promise<boolean> => ipcRenderer.invoke("confirm-overlay-prepare-notification-reply", request),
+  onOverlayPrepareNotificationReply: (callback: (value: { session: string; notificationId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { session: string; notificationId: string }) => callback(value);
+    ipcRenderer.on("overlay-prepare-notification-reply", listener);
+    return () => ipcRenderer.removeListener("overlay-prepare-notification-reply", listener);
+  },
   sendOverlayOpenChat: (session: unknown): Promise<boolean> => ipcRenderer.invoke("overlay-open-chat", session),
   confirmOverlayOpenChat: (session: unknown): Promise<boolean> => ipcRenderer.invoke("confirm-overlay-open-chat", session),
   onOverlayOpenChat: (callback: (value: { session: string }) => void): (() => void) => {

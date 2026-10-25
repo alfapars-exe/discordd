@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     voiceOverlayPinned: false,
     voiceOverlayQuickActions: false, voiceOverlayClickableActions: false,
     voiceOverlayActivity: false,
+    voiceOverlayWelcome: false, voiceOverlayGoLive: false,
     voiceOverlayNotifications: false,
     voiceOverlayNotificationActions: false,
     voiceOverlayChat: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false,
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
     setVoiceOverlayPinned: vi.fn(), setVoiceOverlayPosition: vi.fn(), setVoiceOverlayScale: vi.fn(),
     setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(),
     setVoiceOverlayActivity: vi.fn(),
+    setVoiceOverlayWelcome: vi.fn(), setVoiceOverlayGoLive: vi.fn(),
     setVoiceOverlayNotifications: vi.fn(),
     setVoiceOverlayNotificationActions: vi.fn(),
     setVoiceOverlayChatCompose: vi.fn(),
@@ -235,13 +237,17 @@ describe("voice processing settings", () => {
     expect(screen.getByText(en.voiceOverlayNotificationsDesc)).toHaveTextContent(/not shown in the web preview/i);
   });
 
-  it("keeps opening the inbox behind a separate opt-in from mute/deafen clicks", () => {
+  it("keeps inbox and exact-source reply preparation behind a separate device-only opt-in", () => {
     render(<VoiceSettings />);
     fireEvent.click(screen.getByRole("checkbox", { name: en.voiceOverlayNotificationActions }));
     expect(mocks.state.setVoiceOverlayNotificationActions).toHaveBeenCalledWith(true);
-    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/does not mark messages read/i);
+    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/reply to the exact message in the main chat/i);
+    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/nothing is sent automatically/i);
+    expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/existing drafts are preserved/i);
     expect(screen.getByText(en.voiceOverlayNotificationActionsDesc)).toHaveTextContent(/separate device-only opt-in/i);
     expect(mocks.state.setVoiceOverlayClickableActions).not.toHaveBeenCalled();
+    expect(mocks.state.setVoiceOverlayWelcome).not.toHaveBeenCalled();
+    expect(mocks.state.setVoiceOverlayGoLive).not.toHaveBeenCalled();
   });
 
   it("resets only position and scale after native success", async () => {
