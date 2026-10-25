@@ -5,6 +5,7 @@ import { useAuthStore } from "../stores/authStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useGameActivity } from "./useGameActivity";
 import { useGameActivityStore } from "../stores/gameActivityStore";
+import { beginGameActivityMutation } from "../utils/gameActivityMutation";
 
 const native = vi.fn();
 const send = vi.fn();
@@ -40,6 +41,28 @@ it("sends only id/name and renews without starting process scans", async () => {
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
   expect(send).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(send.mock.calls)).not.toMatch(/secret|private|executable/);
+});
+
+it("publishes only an explicit supported native association, never name or arbitrary native fields", async () => {
+  native.mockResolvedValue({ enabled: true, game: { id: "game", name: "CS2", canonicalGameId: "steam:730", joinUrl: "private" } });
+  mount(); await act(async () => {});
+  expect(send).toHaveBeenLastCalledWith("game_activity_update", { game: { id: "game", name: "CS2", canonical_game_id: "steam:730" } });
+  native.mockResolvedValue({ enabled: true, game: { id: "game", name: "CS2", canonicalGameId: "steam:570" } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(send).toHaveBeenLastCalledWith("game_activity_update", { game: { id: "game", name: "CS2" } });
+});
+
+it("withdraws before a local adapter mutation settles and never republishes a delayed old native cache", async () => {
+  native.mockResolvedValue({ enabled: true, game: { id: "game", name: "CS2", canonicalGameId: "steam:730" } });
+  mount(); await act(async () => {});
+  let end!: () => void;
+  act(() => { end = beginGameActivityMutation("game"); });
+  expect(send).toHaveBeenLastCalledWith("game_activity_update", { game: null });
+  await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+  expect(send).toHaveBeenLastCalledWith("game_activity_update", { game: null });
+  native.mockResolvedValue({ enabled: true, game: { id: "game", name: "CS2" } });
+  await act(async () => { end(); });
+  expect(send).toHaveBeenLastCalledWith("game_activity_update", { game: { id: "game", name: "CS2" } });
 });
 
 it("does not consult native data when account sharing is off", async () => {

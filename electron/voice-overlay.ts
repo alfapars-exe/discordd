@@ -1,13 +1,19 @@
 import { app, BrowserWindow, screen } from "electron";
 import { OverlayWelcomeLifecycle } from "./overlay-welcome";
+import { OverlayGameNoticeLifecycle } from "./overlay-game-notices";
 import path from "node:path";
-import { isTrustedVoiceOverlaySender, VoiceOverlayLifecycle, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { isTrustedVoiceOverlaySender, VoiceOverlayLifecycle, type VoiceOverlaySnapshot, type OverlayGameActivityNotice } from "./voice-overlay-contract";
 import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH, overlayActionAt, overlayNotificationActionAt, overlayNotificationReplyRowAt, type OverlayAction as OverlayVoiceAction } from "./overlay-action-regions";
 import { calculateVoiceOverlayGeometry, constrainOverlayPosition, normalizeOverlayPosition, restoreOverlayPosition, type VoiceOverlayWorkArea } from "./voice-overlay-geometry";
 import type { createOverlayLayoutStore, OverlayLayoutContext, OverlayLayoutPoint } from "./overlay-layout-store";
 export type { VoiceOverlaySnapshot } from "./voice-overlay-contract";
 
 type TrustedOverlayMainWindow = { isDestroyed(): boolean; webContents: { mainFrame: unknown; send(channel: string, value: unknown): void } };
+const mediaLifecycleListeners = new Set<(revoke: boolean) => void>();
+export function subscribeVoiceOverlayMediaLifecycle(listener: (revoke: boolean) => void): () => void { mediaLifecycleListeners.add(listener); return () => { mediaLifecycleListeners.delete(listener); }; }
+function notifyMediaLifecycle(revoke = false): void { for (const listener of mediaLifecycleListeners) listener(revoke); }
+let mediaDocumentUsable = false;
+export function getVoiceOverlayMediaWindow() { return mediaDocumentUsable ? overlayWindow : null; }
 let overlayWindow: BrowserWindow | null = null;
 let latest: VoiceOverlaySnapshot | null = null;
 let latestArea: VoiceOverlayWorkArea | null = null;
@@ -17,6 +23,24 @@ const goLiveLifecycle = new OverlayWelcomeLifecycle();
 let goLiveTimer: ReturnType<typeof setTimeout> | null = null;
 let goLiveNoticeSession: string | null = null;
 let welcomeTimer: ReturnType<typeof setTimeout> | null = null;
+const gameNoticeLifecycle = new OverlayGameNoticeLifecycle();
+let gameNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleGameNoticeExpiry(): void {
+  if (gameNoticeTimer) clearTimeout(gameNoticeTimer);
+  gameNoticeTimer = null;
+  const notices = latest ? gameNoticeLifecycle.current(latest) : [];
+  if (!notices.length) return;
+  gameNoticeTimer = setTimeout(() => {
+    gameNoticeTimer = null;
+    if (latest) updateVoiceOverlay({ ...latest, gameActivityNotices: gameNoticeLifecycle.current(latest) }, latestArea ?? undefined, layoutContext);
+  }, Math.max(1, Math.min(...notices.map(notice => notice.expiresAt)) - Date.now()));
+  gameNoticeTimer.unref?.();
+}
+/** A main-only clear narrows current content; it never replaces another overlay capability. */
+export function clearVoiceOverlayGameNotices(additional: OverlayGameActivityNotice[] = []): void {
+  gameNoticeLifecycle.revoke([...(latest?.gameActivityNotices ?? []), ...additional]);
+  if (latest) updateVoiceOverlay({ ...latest, gameActivityNotices: [] }, latestArea ?? undefined, layoutContext);
+}
 function clearWelcome(): void {
   goLiveLifecycle.hide();
   goLiveNoticeSession = null;
@@ -84,7 +108,9 @@ let lastChatComposeActionAt = 0;
 function voiceOverlayPayload() {
   if (!latest) return null;
   const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return { ...latest, goLiveHeight: geometry?.goLiveHeight ?? 0,
+  return { ...latest, mediaHeight: geometry?.mediaHeight ?? 0, goLiveHeight: geometry?.goLiveHeight ?? 0,
+    gameActivityNotices: gameNoticeLifecycle.current(latest).slice(0, geometry?.gameActivityNoticeRows ?? 0),
+    gameActivityNoticeHeight: geometry?.gameActivityNoticeHeight ?? 0,
     goLive: geometry?.goLiveHeight && latest.voiceOverlayGoLive && latest.goLiveEligible && latest.goLiveSession === goLiveNoticeSession ? goLiveLifecycle.current(Date.now()) : null,
     welcomeHeight: geometry?.welcomeHeight ?? 0,
     welcome: geometry?.welcomeHeight && latest.voiceOverlayWelcome ? welcomeLifecycle.current(Date.now()) : null,
@@ -108,12 +134,12 @@ function setMouseIgnored(ignore: boolean): void {
   else overlayWindow.setIgnoreMouseEvents(false);
 }
 function actionAvailable(): boolean {
-  return !!latest?.enabled && latest.voiceOverlayQuickActions === true && !!latest.voiceActionSession
+  return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayQuickActions === true && !!latest.voiceActionSession
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
 }
 function notificationActionAvailable(): boolean {
   const geometry = latest && calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return !!latest?.enabled && latest.voiceOverlayNotifications === true && latest.voiceOverlayNotificationActions === true
+  return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayNotifications === true && latest.voiceOverlayNotificationActions === true
     && latest.notificationStatus === "ready" && (latest.notifications?.length ?? 0) > 0
     && !!latest.notificationActionSession && !!geometry?.notificationsVisible
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
@@ -122,7 +148,7 @@ function notificationActionAvailable(): boolean {
 
 function chatActionAvailable(): boolean {
   const geometry = latest && calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return !!latest?.enabled && latest.voiceOverlayChat === true && latest.voiceOverlayChatActions === true
+  return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayChat === true && latest.voiceOverlayChatActions === true
     && latest.chatStatus === "ready" && !!latest.chatActionSession && !!geometry?.chatVisible
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
     && process.platform === "win32" && !chatActionShapeFailed;
@@ -353,7 +379,7 @@ function updateNotificationActionWindow(): void {
 }
 
 function updateMousePolicy(): void {
-  setMouseIgnored(!unlocked);
+  setMouseIgnored(latest?.voiceOverlayCompatibility === true || !unlocked);
   if (!actionAvailable() || (!unlocked && latest?.voiceOverlayClickableActions !== true) || process.platform !== "win32" || actionShapeFailed) { hideActionWindow(); return; }
   if (!actionWindow || actionWindow.isDestroyed()) {
     const created = new BrowserWindow({ width: 88, height: 40, frame: false, transparent: true, resizable: false, alwaysOnTop: true, focusable: false, skipTaskbar: true, hasShadow: false, show: false, parent: overlayWindow!, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
@@ -635,14 +661,14 @@ export function resetVoiceOverlayLayout(): boolean {
   layoutPoint = null;
   layoutSaveFailed = false;
   lockVoiceOverlay();
-  if (latest) updateVoiceOverlay({ ...latest, position: "bottom-left", scale: 100 }, latestArea ?? undefined, layoutContext);
+  if (latest) updateVoiceOverlay({ ...latest, position: "center-left", scale: 100 }, latestArea ?? undefined, layoutContext);
   return true;
 }
 
 /** Unlock only a visible, authorized widget; never activate/focus its window. */
 export function toggleVoiceOverlayLock(): void {
   const win = overlayWindow;
-  if (!win || win.isDestroyed() || !win.isVisible() || !latest?.enabled || latest.voiceOverlayPinned) return;
+  if (!win || win.isDestroyed() || !win.isVisible() || !latest?.enabled || latest.voiceOverlayPinned || latest.voiceOverlayCompatibility === true) return;
   if (unlocked) {
     lockVoiceOverlay();
   } else {
@@ -672,12 +698,18 @@ function ensureOverlay(): BrowserWindow {
     }
   });
   createdWindow.on("move", () => { updateMousePolicy(); updateNotificationActionWindow(); updateChatActionWindow(); });
-  createdWindow.on("hide", () => { clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.on("hide", () => { if(createdWindow===overlayWindow)notifyMediaLifecycle(); clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.webContents.on("did-finish-load", () => { if (createdWindow === overlayWindow) { mediaDocumentUsable = true; notifyMediaLifecycle(); } });
+  createdWindow.webContents.on("render-process-gone", () => { if(createdWindow===overlayWindow){mediaDocumentUsable = false; notifyMediaLifecycle(true);} });
+  createdWindow.webContents.on("did-start-navigation", (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => { if (createdWindow===overlayWindow && isMainFrame && !isInPlace) { mediaDocumentUsable = false; notifyMediaLifecycle(true); } });
   createdWindow.on("closed", () => {
     if (overlayWindow === createdWindow) {
+      mediaDocumentUsable = false; notifyMediaLifecycle(true);
       lifecycle.close();
       clearWelcome();
       latest = null;
+      if (gameNoticeTimer) clearTimeout(gameNoticeTimer);
+      gameNoticeTimer = null;
       unlocked = false;
       layoutPoint = null;
       if (actionWindow && !actionWindow.isDestroyed()) actionWindow.close();
@@ -701,6 +733,18 @@ function ensureOverlay(): BrowserWindow {
 }
 
 export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceOverlayWorkArea, context?: string): void {
+  snapshot = { ...snapshot, gameActivityNotices: gameNoticeLifecycle.current(snapshot) };
+  // Compatibility is a real passive native policy, not a renderer-only preference.
+  const compatibility = snapshot.voiceOverlayCompatibility === true;
+  const compatibilityChanged = compatibility !== (latest?.voiceOverlayCompatibility === true);
+  if (compatibilityChanged) {
+    rememberPosition(); unlocked = false;
+    pendingOpenInbox = null; pendingOpenChat = null; pendingNotificationReply = null;
+    closeChatComposerWindow();
+    hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow();
+    setMouseIgnored(true);
+  }
+  if (compatibility) snapshot = { ...snapshot, voiceOverlayClickableActions: false, voiceOverlayNotificationActions: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false };
   if (process.platform !== "win32") snapshot = { ...snapshot, goLiveEligible: false };
   if (!snapshot.voiceOverlayGoLive || !snapshot.goLiveEligible || !snapshot.goLiveSession || (latest !== null && latest.goLiveSession !== snapshot.goLiveSession)) {
     goLiveLifecycle.dismiss();
@@ -736,6 +780,8 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
       || snapshot.voiceOverlayChatCompose !== true || snapshot.chatStatus !== "ready"
       || !snapshot.chatComposeSession || snapshot.chatComposeSession !== chatComposeSessionScope)) closeChatComposerWindow();
   latest = snapshot;
+  scheduleGameNoticeExpiry();
+  notifyMediaLifecycle(contextChanged);
   latestArea = area ?? null;
   if (chatComposerWindow && !chatComposerWindow.isDestroyed()) {
     if (!chatComposeAvailable() || chatComposeSessionScope !== snapshot.chatComposeSession) closeChatComposerWindow();
@@ -784,6 +830,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
       // Paint the current privacy-scoped snapshot before re-showing a hidden window.
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
       win.showInactive();
+      notifyMediaLifecycle();
       publishWelcomeAfterShow(win);
       publishGoLiveAfterShow(win);
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
@@ -795,6 +842,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
 }
 
 export function closeVoiceOverlay(): void {
+  mediaDocumentUsable = false; notifyMediaLifecycle(true);
   lockVoiceOverlay();
   if (actionWindow && !actionWindow.isDestroyed()) actionWindow.close();
   actionWindow = null;
@@ -813,6 +861,8 @@ export function closeVoiceOverlay(): void {
   lifecycle.close();
   clearWelcome();
   latest = null;
+  if (gameNoticeTimer) clearTimeout(gameNoticeTimer);
+  gameNoticeTimer = null;
   latestArea = null;
   if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.close();
   overlayWindow = null;

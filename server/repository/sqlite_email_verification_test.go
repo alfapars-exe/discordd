@@ -89,9 +89,7 @@ func TestSQLiteEmailVerificationExpiryAndRollback(t *testing.T) {
 	if ok, err := r.Reserve(ctx, "session-user", 1, "live", now+61, now+1200); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	if _, err := db.Conn.Exec(`CREATE TRIGGER fail_verify BEFORE DELETE ON account_email_tokens BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
-		t.Fatal(err)
-	}
+	installWriteFailure(t, db, "fail_verify", "account_email_tokens", "DELETE", "")
 	if ok, err := r.Consume(ctx, "live", now+62); err == nil || ok {
 		t.Fatal("failed proof deletion reported verification")
 	}
@@ -99,9 +97,7 @@ func TestSQLiteEmailVerificationExpiryAndRollback(t *testing.T) {
 	if err != nil || status.Verified {
 		t.Fatal("verification escaped rollback", err)
 	}
-	if _, err := db.Conn.Exec(`DROP TRIGGER fail_verify`); err != nil {
-		t.Fatal(err)
-	}
+	dropFailureTrigger(t, db, "fail_verify", "account_email_tokens")
 	if ok, err := r.Consume(ctx, "live", now+63); err != nil || !ok {
 		t.Fatal("proof lost on rollback", err)
 	}

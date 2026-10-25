@@ -1,3 +1,4 @@
+import P2PRemoteVideos from "../../video/P2PRemoteVideos";
 /**
  * P2PCallScreen — Main P2P call screen.
  *
@@ -7,7 +8,7 @@
  * active video (remote large + local PiP + controls).
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../../api/authSessionEvents";
 import { isElectron } from "../../utils/constants";
 import { useTranslation } from "react-i18next";
@@ -115,7 +116,8 @@ function P2PCallScreen() {
   const audioOwner=getAuthSessionSnapshot();
   const activeCall = useP2PCallStore((s) => s.activeCall);
   const localStream = useP2PCallStore((s) => s.localStream);
-  const remoteStream = useP2PCallStore((s) => s.remoteStream);
+  const remoteStream=useP2PCallStore(state=>state.remoteStream);
+  const remoteCamera = useP2PCallStore((s) => s.remoteCameraStream),remoteScreen=useP2PCallStore((s)=>s.remoteScreenVideoStream);
   const callDuration = useP2PCallStore((s) => s.callDuration);
   const isVideoOn = useP2PCallStore((s) => s.isVideoOn);
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -132,18 +134,6 @@ function P2PCallScreen() {
     const live=useP2PCallStore.getState(),auth=getAuthSessionSnapshot();
     return ownsCall&&auth.ownerId===audioOwner.ownerId&&auth.generation===audioOwner.generation&&useAuthStore.getState().user?.id===currentUserId&&live.activeCall===activeCall&&activeCall?.status==="active"&&live.peerConnection===connection;
   };
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  // Remote audio lives in P2PAudioSink, mounted at the AppLayout level so it
-  // survives tab switches (this component unmounts when the user opens any
-  // non-p2p tab). Only video is kept here since there's nothing to render
-  // off-screen anyway.
-
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
-  }, [remoteStream]);
-
   const isCaller = activeCall ? activeCall.caller_id === currentUserId : false;
   const otherName = activeCall
     ? (isCaller
@@ -158,7 +148,7 @@ function P2PCallScreen() {
   const isActive = activeCall?.status === "active";
   const isScreenSharing = useP2PCallStore((s) => s.isScreenSharing);
 
-  const hasRemoteVideo = remoteStream?.getVideoTracks().some((tr) => tr.enabled);
+  const hasRemoteVideo = [remoteCamera,remoteScreen,remoteStream].some(stream=>stream?.getVideoTracks().some(track=>track.readyState!=="ended"));
   const hasLocalVideo = localStream?.getVideoTracks().some((tr) => tr.enabled);
 
   return (
@@ -187,13 +177,7 @@ function P2PCallScreen() {
         <div className="p2p-call-screen p2p-active">
           <div className="p2p-media-area">
             {hasRemoteVideo ? (
-              <video
-                ref={remoteVideoRef}
-                className="p2p-remote-video"
-                muted
-                autoPlay
-                playsInline
-              />
+              <P2PRemoteVideos camera={remoteCamera} screen={remoteScreen} legacy={remoteStream}/>
             ) : (
               <div className="p2p-avatar-large">
                 <Avatar

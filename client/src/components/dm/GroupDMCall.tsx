@@ -1,3 +1,7 @@
+import {useGroupCallStore}from "../../stores/groupCallStore";
+import GroupRemoteVideos from "../../video/GroupRemoteVideos";
+import {useAuthorizedRoomVideos,manualNativeVideo}from "../../video/useAuthorizedRoomVideos";
+import {isPresentedVideoContext,subscribeVideoPresentation}from "../../video/videoPresentation";
 import GroupDMCallCamera from "./GroupDMCallCamera";
 import {ownsP2PCapture}from "../../audio/p2pCaptureOwner";
 import {useMicrophoneCaptureViewStore,latchPrivateCaptureFailure,clearPrivateCaptureFailure,retirePrivateCaptureFailure}from "../../stores/microphoneCaptureViewStore";
@@ -48,10 +52,19 @@ export default function GroupDMCall({ credentials, onLeave, callSessionNonce, in
     return state.groups.find((group) => group.id === credentials.channel_id)?.key_epoch ?? null;
   });
   const currentMediaEpoch = currentEpoch !== null && currentEpoch === credentials.e2ee_key_epoch;
-  const options = useMemo<RoomOptions | undefined>(() => e2eeWorker ? { e2ee: { keyProvider, worker: e2eeWorker }, adaptiveStream: true, dynacast: true } : undefined, [e2eeWorker, keyProvider]);
+  const options = useMemo<RoomOptions | undefined>(() => e2eeWorker ? { e2ee: { keyProvider, worker: e2eeWorker }, adaptiveStream: !manualNativeVideo(), dynacast: true } : undefined, [e2eeWorker, keyProvider]);
   const admission = useEncryptedRoomAdmission({ enabled: true, token: credentials.token, scope: encryption.ownerScope, keyScope: encryption.keyScope,
     keyReady: encryption.keyReady && currentMediaEpoch, keyError: encryption.keyError, keyProvider, worker: e2eeWorker,
     roomOptions: options ?? {}, isCurrentSource: isCurrentSession, onError: onEncryptionError, allowRestore: (source) => source !== Track.Source.Microphone });
+  const groupVideoLabel=useGroupDMStore(state=>state.groups.find(group=>group.id===credentials.channel_id)?.name);
+  useAuthorizedRoomVideos({room:admission.room,nonce:controlNonce,owner:"group",label:groupVideoLabel??`${t("voiceConnected")} · ${credentials.channel_id}`,
+    keyContext:credentials.e2ee_key_context??"",keyEpoch:credentials.e2ee_key_epoch??0,admitted:admission.publishReady,current:()=>{const auth=getAuthSessionSnapshot(),state=useGroupDMStore.getState(),group=state.groups.find(group=>group.id===credentials.channel_id);
+      if(auth.ownerId!==controlOwner.ownerId||auth.generation!==controlOwner.generation||state.ownerId!==controlOwner.ownerId||state.authGeneration!==controlOwner.generation||!state.groupsReady||!group||group.key_epoch!==credentials.e2ee_key_epoch||!group.members.some(member=>member.id===auth.ownerId)||isCurrentSession?.()===false)return false;
+      if(!callSessionNonce)return true;const session=useGroupCallStore.getState().session,live=session?.credentials;
+      return session?.nonce===callSessionNonce&&session.ownerId===auth.ownerId&&session.generation===auth.generation&&session.phase==="ready"&&session.keyEpoch===credentials.e2ee_key_epoch
+        &&live?.token===credentials.token&&live.url===credentials.url&&live.e2ee_key_context===credentials.e2ee_key_context&&live.e2ee_key_epoch===credentials.e2ee_key_epoch&&live.e2ee_key_index===credentials.e2ee_key_index&&live.e2ee_passphrase===credentials.e2ee_passphrase;
+    },
+    authorized:()=>true,subscribe:changed=>{const a=useGroupDMStore.subscribe(changed),b=subscribeVideoPresentation(changed),c=useGroupCallStore.subscribe(changed);return()=>{a();b();c()}},presented:()=>isPresentedVideoContext(credentials.channel_id,"group")});
   // A fresh media lease belongs to this actual Room and component mount.
   // Old SDK callbacks must not disconnect a boundary-retry replacement.
   const mountedLease=useRef(false),currentRoomLease=useRef(admission.room);
@@ -77,6 +90,7 @@ export default function GroupDMCall({ credentials, onLeave, callSessionNonce, in
     <LiveKitRoom room={admission.room ?? undefined} serverUrl={credentials.url} token={credentials.token} connect={admission.connect} audio={false} video={false} screen={false} onDisconnected={leaveCurrentRoom}>
       {Boolean(admission.error) && <p role="alert">{tE2ee("voiceE2eeError")}</p>}
       {!admission.publishReady && !admission.error && <p role="status">{t("connecting")}</p>}
+      {admission.publishReady&&<GroupRemoteVideos/>}
       <div className="group-dm-call-controls">
         {admission.publishReady && <>
           <GroupDMCallAudio room={admission.room} microphoneEnabled={microphoneEnabled} onMicrophoneChange={setMicrophoneEnabled} onCaptureState={setCaptureReady} captureFailure={captureFailure} onCaptureFailure={setCaptureFailure} isCurrentSession={isCurrentSession} conflict={conflict} />

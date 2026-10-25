@@ -6,6 +6,7 @@ import { usePushToTalk } from "./usePushToTalk";
 
 export function useMicSync(participant: LocalParticipant, initialSyncDoneRef: React.RefObject<boolean>) {
   const isMuted = useVoiceStore((s) => s.isMuted);
+  const isDeafened = useVoiceStore((s) => s.isDeafened);
   const isServerMuted = useVoiceStore((s) => s.isServerMuted);
   const inputMode = useVoiceStore((s) => s.inputMode);
   const setMicEnabled = useCallback((enabled: boolean) => {
@@ -14,6 +15,6 @@ export function useMicSync(participant: LocalParticipant, initialSyncDoneRef: Re
   const ptt=usePushToTalk({ setMicEnabled,participant });
   useEffect(() => {
     if (initialSyncDoneRef.current) setMicEnabled(inputMode !== "push_to_talk" && !isMuted && !isServerMuted);
-  }, [inputMode, isMuted, isServerMuted, setMicEnabled, initialSyncDoneRef]);
+  }, [inputMode, isMuted, isDeafened, isServerMuted, setMicEnabled, initialSyncDoneRef]);
   return ptt;
 }

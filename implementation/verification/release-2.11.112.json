@@ -1,0 +1,52 @@
+{
+  "version": "2.11.112",
+  "status": "windows_update_published_hash_verified_docker_image_still_building",
+  "authorization": "User explicitly requested publishing the tested audio fixes as a Windows update and compiling Go, then asked to continue on 2026-10-25.",
+  "source": {
+    "branch": "hotfix/audio-startup-2.11.112",
+    "commit": "fb8121a5986fba36d0cb93811898356ab614f0a4",
+    "baseline": "v2.11.111",
+    "scope": "Only the two verified microphone runtime fixes, their regressions, canonical audio asset byte preservation, release version and desktop CI gates. Other ongoing main-worktree features are excluded."
+  },
+  "verified": [
+    "User installed2.11.112-rc.1 and confirmed the microphone meter works and voice-channel changes are error-free.",
+    "After the two-file HF hotfix, user confirmed iPhone Safari outgoing speech works. Received audio crackle remains unproven; older peer versions are a hypothesis, not an established cause.",
+    "Isolated audio suite198passed, including real SDK context-change and production Vite worklet emission regressions; frontend and Electron compilation passed.",
+    "Local Go1.27.0 build ./... passed. Remote release checks use the repository's patched Go toolchain; the local compiler result is not the released server artifact.",
+    "Live PostgreSQL channel inventory confirms every voice channel, including Kuyu and High Quality, already has384000bps Opus ceiling. No bitrate, DSP-strength or music-profile change was added to this corrective release."
+  ],
+  "prepublication_ci": {
+    "server": 40192773212,
+    "desktop": 40192776425,
+    "hf_preview": 40192872102,
+    "reviewed_plan_sha256": "c83a7c4f250f1b588232de233d47b1ea19b217c54e84dec3d33ec7a3e21a7b7a",
+    "hf_expected_parent": "d28cd45557cb105f2d08395b79ffb29dd15b48fb",
+    "hf_changes": ["client/scripts/audio-build-csp.test.mjs", "client/src/audio/MicrophoneTrackProcessor.test.ts", "package-lock.json", "package.json"],
+    "hf_deletions": [],
+    "server_conclusion": "success; all21jobs including aggregate Go gate passed",
+    "desktop_conclusion": "success; Linux and Windows builds plus actual111-to112 install/upgrade passed",
+    "hf_publish_run": 40193293975,
+    "hf_publish_conclusion": "success; exact new runtime revision RUNNING and ready",
+    "hf_commit": "efcf15b1c07b76a69c9d6d30364351f3219dd704"
+  },
+  "publication": {
+    "stable_tag_created": true,
+    "windows_feeds_verified": true,
+    "hf_stable_version_deployed": true,
+    "tag": "v2.11.112",
+    "release_run": 40193774755,
+    "release_url": "https://github.com/alfapars-exe/discordd/releases/tag/v2.11.112",
+    "installer_bytes": 165872017,
+    "installer_sha256": "a010bb9d20298af0aef21562ea3e4d2833316f77a660fca2577c4fbaeb1b86e5",
+    "installer_sha512_matches_both_manifests": true,
+    "blockmap_sha256_both_feeds": "948fca091a1963ed07f4bcd175202663c6838bf55955fb01defda887aaffbeb7",
+    "verification_report": "C:/Users/PARS/.codex/tmp/hichat-release-2.11.112-verification/verified.json",
+    "rc_to_stable_bridge": "HF rc.yml published and verified byte-identical to latest.yml version2.11.112, allowing the local rc.1 installation to discover stable112. Stable clients remain on latest.yml.",
+    "docker_self_host_image": "Optional GHCR amd64/arm64 publishing job remains running. Desktop Windows/Linux and legacy bridge jobs have completed successfully. This is not represented as complete release-workflow success."
+  },
+  "remaining_acceptance": [
+    "Received audio crackle on iPhone and natural speech quality must be rechecked with both peers upgraded.",
+    "384kbps is an Opus ceiling and does not establish lossless or studio-quality audio.",
+    "The installer remains unsigned. No audio recordings, private keys or passwords were collected."
+  ]
+}

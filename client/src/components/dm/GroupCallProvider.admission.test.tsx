@@ -7,7 +7,7 @@ vi.mock("../../audio/voiceEncryptionKeys",()=>({IndexedVoiceKeyProvider:class{se
 vi.mock("livekit-client",async original=>{
  const actual=await original<typeof import("livekit-client")>();
  return {...actual,isE2EESupported:()=>true,Room:class{
- localParticipant={identity:"",trackPublications:new Map(),createTracks:vi.fn(async()=>[]),createScreenTracks:vi.fn(async()=>[]),publishTrack:vi.fn(async(track:unknown)=>({track})),unpublishTrack:vi.fn(async()=>{}),setMicrophoneEnabled:vi.fn(async()=>{}),setCameraEnabled:vi.fn(async()=>{}),setScreenShareEnabled:vi.fn(async()=>{})};
+ localParticipant={identity:"",isLocal:true,getTrackPublications:()=>[],getTrackPublication:()=>undefined,trackPublications:new Map(),createTracks:vi.fn(async()=>[]),createScreenTracks:vi.fn(async()=>[]),publishTrack:vi.fn(async(track:unknown)=>({track})),unpublishTrack:vi.fn(async()=>{}),setMicrophoneEnabled:vi.fn(async()=>{}),setCameraEnabled:vi.fn(async()=>{}),setScreenShareEnabled:vi.fn(async()=>{})};
  state="disconnected";listeners=new Map<string,Set<(...args:unknown[])=>void>>();remoteParticipants=new Map();
  constructor(){h.rooms.push(this)}
  on(event:string,handler:(...args:unknown[])=>void){const listeners=this.listeners.get(event)??new Set();listeners.add(handler);this.listeners.set(event,listeners);return this}

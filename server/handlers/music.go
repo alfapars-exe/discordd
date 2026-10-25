@@ -55,6 +55,27 @@ func NewMusicHandler(music services.MusicBotService, perms services.ChannelPermR
 	return h
 }
 
+// musicFailure preserves existing media reason codes while distinguishing
+// canceled callers, upstream deadlines and application faults.
+func musicFailure(w http.ResponseWriter, r *http.Request, err error, operation string) bool {
+	code := services.MusicErrorCode(err)
+	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		if code == "" {
+			code = "MUSIC_NETWORK"
+		}
+		pkg.ErrorCtxCode(r.Context(), w, http.StatusGatewayTimeout, "YouTube request timed out", code, "timeout", err, slog.String("component", "music"), slog.String("operation", operation))
+		return true
+	}
+	if code != "" {
+		pkg.ErrorCtxCode(r.Context(), w, http.StatusBadGateway, "failed to resolve YouTube track", code, "upstream", err, slog.String("component", "music"), slog.String("operation", operation))
+		return true
+	}
+	return false
+}
+
 // Search — GET .../music/search?q=. Returns up to five selectable YouTube
 // results and never joins the voice room or mutates the queue.
 func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
@@ -88,8 +109,7 @@ func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
 			pkg.Error(w, err)
 			return
 		}
-		if code := services.MusicErrorCode(err); code != "" {
-			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to search YouTube", code)
+		if musicFailure(w, r, err, "search") {
 			return
 		}
 		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to search YouTube", err)
@@ -184,9 +204,7 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 			pkg.Error(w, err)
 			return
 		}
-		if code := services.MusicErrorCode(err); code != "" {
-			musicHandlerLogger.Warn("play: YouTube resolution failed", "code", code, "err", pkg.ErrText(err))
-			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to resolve YouTube track", code)
+		if musicFailure(w, r, err, "play") {
 			return
 		}
 		if errors.Is(err, pkg.ErrBadRequest) {

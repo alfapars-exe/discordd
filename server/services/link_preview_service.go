@@ -3,7 +3,7 @@
 // Security:
 //   - SSRF protection: private/reserved IP ranges blocked (custom DialContext)
 //   - Body limit: max 512KB HTML
-//   - Timeout: 5s HTTP timeout
+//   - Timeout: 8s HTTP timeout
 //   - Redirect limit: max 3 redirects
 //
 // Cache:
@@ -17,17 +17,21 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/html"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
 )
 
@@ -50,6 +54,12 @@ type linkPreviewService struct {
 	repo       repository.LinkPreviewRepository
 	client     *http.Client
 	oembedBase string
+	once       sync.Once
+	mu         sync.Mutex
+	pending    map[string]*previewFlight
+	sem        chan struct{}
+	lifecycle  context.Context
+	stop       context.CancelFunc
 }
 
 // NewLinkPreviewService creates a service with an SSRF-safe HTTP client.
@@ -68,7 +78,7 @@ func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewSer
 			// used as a port scanner / open proxy against services listening
 			// on non-web ports of an otherwise-public host.
 			if port != "80" && port != "443" {
-				return nil, fmt.Errorf("SSRF blocked: port %s not allowed", port)
+				return nil, fmt.Errorf("%w: port %s not allowed", errPreviewBlocked, port)
 			}
 
 			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
@@ -78,7 +88,7 @@ func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewSer
 
 			for _, ip := range ips {
 				if isPrivateIP(ip.IP) {
-					return nil, fmt.Errorf("SSRF blocked: %s resolves to private IP %s", host, ip.IP)
+					return nil, fmt.Errorf("%w: private target", errPreviewBlocked)
 				}
 			}
 
@@ -107,7 +117,7 @@ func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewSer
 			}
 			for _, ip := range ips {
 				if isPrivateIP(ip.IP) {
-					return fmt.Errorf("SSRF blocked on redirect: %s resolves to private IP", host)
+					return fmt.Errorf("%w: private redirect target", errPreviewBlocked)
 				}
 			}
 			return nil
@@ -124,64 +134,187 @@ func newLinkPreviewServiceForTest(repo repository.LinkPreviewRepository, client 
 	return &linkPreviewService{repo: repo, client: client, oembedBase: oembedBase}
 }
 
+var previewLogger = logx.Component("service.link_preview")
+var errPreviewBlocked = errors.New("preview target blocked")
+
+type previewFailure struct {
+	status     int
+	code, kind string
+	cause      error
+}
+
+func (e *previewFailure) Error() string { return e.code + ": " + e.cause.Error() }
+func (e *previewFailure) Unwrap() error { return e.cause }
+func previewError(status int, code, kind string, err error) error {
+	return &previewFailure{status, code, kind, err}
+}
+func LinkPreviewFailureInfo(err error) (int, string, string) {
+	var e *previewFailure
+	if errors.As(err, &e) {
+		return e.status, e.code, e.kind
+	}
+	return http.StatusInternalServerError, "PREVIEW_INTERNAL", "internal"
+}
+
+type previewFlight struct {
+	done    chan struct{}
+	preview *models.LinkPreview
+	err     error
+	cancel  context.CancelFunc
+	waiters int
+}
+
+func (s *linkPreviewService) initialize() {
+	s.once.Do(func() {
+		s.pending = make(map[string]*previewFlight)
+		s.sem = make(chan struct{}, 4)
+		s.lifecycle, s.stop = context.WithCancel(context.Background())
+	})
+}
+func (s *linkPreviewService) Stop() { s.initialize(); s.stop() }
+
 func (s *linkPreviewService) GetPreview(ctx context.Context, rawURL string) (*models.LinkPreview, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	parsed, err := url.Parse(rawURL)
+	if err != nil || len(rawURL) > 4096 || parsed == nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, previewError(400, "PREVIEW_INVALID_URL", "validation", errors.New("invalid preview URL"))
+	}
+	parsed.Fragment = ""
+	parsed.Host = strings.ToLower(parsed.Host)
+	key := parsed.String()
+	s.initialize()
+	s.mu.Lock()
+	if s.lifecycle.Err() != nil {
+		s.mu.Unlock()
+		return nil, context.Canceled
+	}
+	f := s.pending[key]
+	if f == nil {
+		if len(s.pending) >= 128 {
+			s.mu.Unlock()
+			return nil, previewError(503, "PREVIEW_BUSY", "capacity", errors.New("preview capacity exhausted"))
+		}
+		shared, cancel := context.WithTimeout(s.lifecycle, 10*time.Second)
+		shared = pkg.WithRequestID(shared, pkg.RequestIDFrom(ctx))
+		f = &previewFlight{done: make(chan struct{}), cancel: cancel}
+		s.pending[key] = f
+		go s.runPreview(shared, key, parsed, f)
+	}
+	f.waiters++
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		f.waiters--
+		if f.waiters == 0 {
+			f.cancel()
+		}
+		s.mu.Unlock()
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-f.done:
+		return f.preview, f.err
+	}
+}
+func (s *linkPreviewService) runPreview(ctx context.Context, key string, parsed *url.URL, f *previewFlight) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			f.err = previewError(500, "PREVIEW_INTERNAL", "internal", errors.New("preview worker panic"))
+			previewLogger.Error("preview worker panic", "event_code", "PREVIEW_PANIC", "panic", fmt.Sprint(recovered))
+		}
+		f.cancel()
+		s.mu.Lock()
+		delete(s.pending, key)
+		close(f.done)
+		s.mu.Unlock()
+	}()
+	f.preview, f.err = s.loadPreview(ctx, key, parsed)
+}
+func parsePreviewTime(value string) (time.Time, error) {
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05"} {
+		if t, err := time.Parse(layout, value); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, errors.New("invalid preview cache timestamp")
+}
+func (s *linkPreviewService) loadPreview(ctx context.Context, normalizedURL string, parsed *url.URL) (*models.LinkPreview, error) {
+	lookup, cancel := context.WithTimeout(ctx, time.Second)
+	cached, err := s.repo.GetByURL(lookup, normalizedURL)
+	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %w", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, fmt.Errorf("unsupported scheme: %s", parsed.Scheme)
-	}
-	if parsed.Host == "" {
-		return nil, fmt.Errorf("empty host")
-	}
-
-	normalizedURL := parsed.String()
-
-	// Cache check
-	cached, err := s.repo.GetByURL(ctx, normalizedURL)
-	if err != nil {
-		return nil, fmt.Errorf("cache lookup: %w", err)
+		return nil, previewError(500, "PREVIEW_CACHE_READ", "database", err)
 	}
 	if cached != nil {
-		fetchedAt, parseErr := time.Parse("2006-01-02 15:04:05", cached.FetchedAt)
-		if parseErr == nil && time.Since(fetchedAt) < cacheTTL {
+		fetchedAt, parseErr := parsePreviewTime(cached.FetchedAt)
+		ttl := cacheTTL
+		if cached.Error {
+			ttl = time.Minute
+		}
+		if parseErr == nil && time.Since(fetchedAt) >= 0 && time.Since(fetchedAt) < ttl {
 			if cached.Error {
-				return nil, fmt.Errorf("previously failed URL")
+				return nil, previewError(502, "PREVIEW_CACHED_FAILURE", "cached", errors.New("cached preview failure"))
 			}
 			return cached, nil
 		}
 	}
-
-	// YouTube actively serves consent-walled / JS-rendered HTML to bot
-	// User-Agents, so the generic OG scraper at fetchAndParse cannot
-	// recover a title for youtube.com/youtu.be URLs and returns an error
-	// that we'd then negative-cache for 24h. The public oEmbed endpoint
-	// has none of those problems — it is the official metadata channel
-	// and ignores UA. Branching here keeps the cache lookup + upsert
-	// behavior identical to the generic path.
-	var (
-		preview  *models.LinkPreview
-		fetchErr error
-	)
+	select {
+	case s.sem <- struct{}{}:
+		defer func() { <-s.sem }()
+	case <-ctx.Done():
+		return nil, classifyPreviewFetch(ctx.Err())
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var preview *models.LinkPreview
 	if isYouTubeHost(parsed.Host) {
-		preview, fetchErr = s.fetchYouTubeOEmbed(ctx, normalizedURL)
+		preview, err = s.fetchYouTubeOEmbed(ctx, normalizedURL)
 	} else {
-		preview, fetchErr = s.fetchAndParse(ctx, normalizedURL, parsed)
+		preview, err = s.fetchAndParse(ctx, normalizedURL, parsed)
 	}
-	if fetchErr != nil {
-		// Cache failed fetches to prevent retries
-		errPreview := &models.LinkPreview{URL: normalizedURL, Error: true}
-		_ = s.repo.Upsert(ctx, errPreview)
-		return nil, fetchErr
+	if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return nil, ctx.Err()
 	}
-
-	// Cache write error is non-critical — still return the preview
-	if err := s.repo.Upsert(ctx, preview); err != nil {
-		_ = err
+	if err != nil {
+		classified := classifyPreviewFetch(err)
+		// Neither cancellation nor policy rejection is a cacheable fetch result.
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, errPreviewBlocked) {
+			s.storePreview(ctx, &models.LinkPreview{URL: normalizedURL, Error: true}, parsed.Hostname())
+		}
+		return nil, classified
 	}
-
+	s.storePreview(ctx, preview, parsed.Hostname())
 	return preview, nil
+}
+func (s *linkPreviewService) storePreview(ctx context.Context, p *models.LinkPreview, host string) {
+	write, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	if err := s.repo.Upsert(write, p); err != nil && ctx.Err() == nil {
+		previewLogger.WarnContext(ctx, "preview cache write failed", "event_code", "PREVIEW_CACHE_WRITE", "error_kind", "database", "host", host, "err", pkg.ErrText(err))
+	}
+}
+func classifyPreviewFetch(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	if errors.Is(err, errPreviewBlocked) {
+		return previewError(403, "PREVIEW_BLOCKED", "validation", err)
+	}
+	var network net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &network) && network.Timeout()) {
+		return previewError(504, "PREVIEW_TIMEOUT", "timeout", errors.New("preview upstream timed out"))
+	}
+	// url.Error includes the complete target, including query strings. Preserve
+	// its underlying network cause instead, never its URL.
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		err = ue.Err
+	}
+	return previewError(502, "PREVIEW_UPSTREAM", "upstream", err)
 }
 
 // isYouTubeHost identifies the URLs that should bypass the generic OG

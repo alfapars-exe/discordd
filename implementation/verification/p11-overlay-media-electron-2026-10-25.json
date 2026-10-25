@@ -1,0 +1,311 @@
+{
+  "date": "2026-10-25",
+  "source_commit": "1452e14becfc188fb45346b23b2742376fb9a2bb",
+  "scope": "Controlled real Electron native broker/video bridge integration; synthetic video only",
+  "runtime": {
+    "electron": "45.0.0",
+    "livekit_client": "2.23.0",
+    "actual_source_modules": [
+      "electron/overlay-media-broker.ts",
+      "electron/overlay-media-contract.ts",
+      "electron/preload.ts",
+      "client/src/video/overlayMediaBridge.ts",
+      "client/src/api/authSessionEvents.ts"
+    ],
+    "source_sha256_lf": {
+      "electron/overlay-media-broker.ts": "f068618c0eaadc9b3c15a85d79e751933a49f2f5c603f169a10416bc7c5dfe78",
+      "electron/overlay-media-contract.ts": "c6e0e1f5fdf91c3ba640b0bac469fcce04fdc380835c18c2bc77e7d889cfe38b",
+      "electron/preload.ts": "1d16cd1ef9cf65500ed708e4abc6b6273e6b1e367a6cc0423186c181b9e1f060",
+      "client/src/video/overlayMediaBridge.ts": "cad54b02202b5ffce48541cbe3e34e815bc94b8510443a7f68756a27c5db82cb"
+    },
+    "windows": "Actual sandbox:true/contextIsolation:true/nodeIntegration:false BrowserWindows; tested sender and passive focusable:false HUD shown with showInactive. Independent hidden fixture publisher only uses backgroundThrottling:false; tested sender default was not overridden.",
+    "transport": "Canvas/requestFrame -> real upstream RTCPeerConnection -> real SDK RemoteVideoTrack attached to sender video -> actual bridge-owned clone -> actual native broker IPC via actual compiled preload -> actual receiver video decode and own synthetic pixel-color sampling.",
+    "isolation": "Fresh dedicated Temp app/userData. No login, media room, GUM, audio, camera, keys, or user files. File-only session web requests, iceServers:[], no STUN/TURN. Actual unmodified host candidates verified against own OS interface addresses; no candidate/SDP/address payload stored. No desktop automation or other app focus/move."
+  },
+  "summary": {
+    "outcome": "pass",
+    "checks": {
+      "foreignPublisherDeniedByActualBroker": true,
+      "firstLeaseReady": true,
+      "actualHUDDecodedChangingSyntheticPattern": true,
+      "bridgeRemoteCandidatesVerifiedOwnHost": true,
+      "noForeignSignaledHostCandidate": true,
+      "actualMainMinimizedAndHUDVisible": true,
+      "fixtureSourceAdvancedWhileMainMinimized": true,
+      "HUDFramesAdvanceWhileMainMinimized": true,
+      "hideStopsOwnedClonesOnly": true,
+      "actualVisibilityUnavailable": true,
+      "freshLeaseAfterReshow": true,
+      "sourceRevokeStopsClonesNotOriginal": true,
+      "noBridgeErrors": true
+    },
+    "sourceFramesBeforeMinimize": 18,
+    "sourceFramesAfterMinimize": 62,
+    "initialHUDDecodedFrames": 6,
+    "minimizedHUDDecodedFrames": 50,
+    "initialColorChanges": 3,
+    "minimizedColorChanges": 8,
+    "reshownHUDDecodedFrames": 7,
+    "teardown": {
+      "ownWindowsDestroyed": 3,
+      "exceptions": 0
+    },
+    "elapsedAfterReadyMs": 6846,
+    "localHostCandidateCounts": {
+      "ownNumeric": 4,
+      "mdns": 0,
+      "other": 0
+    }
+  },
+  "sanitized_observations": {
+    "sourceCommit": "1452e14becfc188fb45346b23b2742376fb9a2bb",
+    "fixture": "synthetic upstream RTC->actual SDK RemoteVideoTrack->actual overlay bridge->actual native broker->HUD decoded video",
+    "noAudio": true,
+    "noGUM": true,
+    "noLogin": true,
+    "noCloudRoomOrE2EEClaim": true,
+    "loopbackCandidateRewrite": false,
+    "localHostCandidateCounts": {
+      "ownNumeric": 4,
+      "mdns": 0,
+      "other": 0
+    },
+    "checks": {
+      "foreignPublisherDeniedByActualBroker": true,
+      "firstLeaseReady": true,
+      "actualHUDDecodedChangingSyntheticPattern": true,
+      "bridgeRemoteCandidatesVerifiedOwnHost": true,
+      "noForeignSignaledHostCandidate": true,
+      "actualMainMinimizedAndHUDVisible": true,
+      "fixtureSourceAdvancedWhileMainMinimized": true,
+      "HUDFramesAdvanceWhileMainMinimized": true,
+      "hideStopsOwnedClonesOnly": true,
+      "actualVisibilityUnavailable": true,
+      "freshLeaseAfterReshow": true,
+      "sourceRevokeStopsClonesNotOriginal": true,
+      "noBridgeErrors": true
+    },
+    "samples": {
+      "initialHUD": {
+        "role": "hud",
+        "errors": [],
+        "generated": 0,
+        "receivedCallbacks": 7,
+        "colorChanges": 3,
+        "lastColor": "blue",
+        "framesDecoded": 6,
+        "framesReceived": 6,
+        "bytesReceived": 20285,
+        "loopback": true,
+        "verifiedCandidateAddresses": 1,
+        "playbackFrames": 7,
+        "originalReady": null,
+        "originalEnabled": null,
+        "cloneStates": [],
+        "acks": 2,
+        "rejected": 0,
+        "listenerReady": true
+      },
+      "publisherBeforeMinimize": {
+        "role": "publisher",
+        "errors": [],
+        "generated": 18,
+        "receivedCallbacks": 0,
+        "colorChanges": 0,
+        "lastColor": "",
+        "framesDecoded": 0,
+        "framesReceived": 0,
+        "bytesReceived": 0,
+        "loopback": true,
+        "verifiedCandidateAddresses": 0,
+        "playbackFrames": 0,
+        "originalReady": "live",
+        "originalEnabled": true,
+        "cloneStates": [],
+        "acks": 0,
+        "rejected": 0,
+        "listenerReady": null
+      },
+      "minimizedHUD": {
+        "role": "hud",
+        "errors": [],
+        "generated": 0,
+        "receivedCallbacks": 51,
+        "colorChanges": 8,
+        "lastColor": "red",
+        "framesDecoded": 50,
+        "framesReceived": 50,
+        "bytesReceived": 44603,
+        "loopback": true,
+        "verifiedCandidateAddresses": 1,
+        "playbackFrames": 51,
+        "originalReady": null,
+        "originalEnabled": null,
+        "cloneStates": [],
+        "acks": 2,
+        "rejected": 0,
+        "listenerReady": true
+      },
+      "publisherAfterMinimize": {
+        "role": "publisher",
+        "errors": [],
+        "generated": 62,
+        "receivedCallbacks": 0,
+        "colorChanges": 0,
+        "lastColor": "",
+        "framesDecoded": 0,
+        "framesReceived": 0,
+        "bytesReceived": 0,
+        "loopback": true,
+        "verifiedCandidateAddresses": 0,
+        "playbackFrames": 0,
+        "originalReady": "live",
+        "originalEnabled": true,
+        "cloneStates": [],
+        "acks": 0,
+        "rejected": 0,
+        "listenerReady": null
+      },
+      "hiddenSender": {
+        "role": "sender",
+        "errors": [],
+        "generated": 0,
+        "receivedCallbacks": 0,
+        "colorChanges": 0,
+        "lastColor": "",
+        "framesDecoded": 0,
+        "framesReceived": 0,
+        "bytesReceived": 0,
+        "loopback": true,
+        "verifiedCandidateAddresses": 0,
+        "playbackFrames": 61,
+        "originalReady": "live",
+        "originalEnabled": true,
+        "cloneStates": [
+          "ended"
+        ],
+        "acks": 2,
+        "rejected": 0,
+        "listenerReady": null
+      },
+      "reshownHUD": {
+        "role": "hud",
+        "errors": [],
+        "generated": 0,
+        "receivedCallbacks": 59,
+        "colorChanges": 11,
+        "lastColor": "red",
+        "framesDecoded": 7,
+        "framesReceived": 7,
+        "bytesReceived": 19560,
+        "loopback": true,
+        "verifiedCandidateAddresses": 1,
+        "playbackFrames": 8,
+        "originalReady": null,
+        "originalEnabled": null,
+        "cloneStates": [],
+        "acks": 4,
+        "rejected": 0,
+        "listenerReady": true
+      },
+      "revokedSender": {
+        "role": "sender",
+        "errors": [],
+        "generated": 0,
+        "receivedCallbacks": 0,
+        "colorChanges": 0,
+        "lastColor": "",
+        "framesDecoded": 0,
+        "framesReceived": 0,
+        "bytesReceived": 0,
+        "loopback": true,
+        "verifiedCandidateAddresses": 0,
+        "playbackFrames": 76,
+        "originalReady": "live",
+        "originalEnabled": true,
+        "cloneStates": [
+          "ended",
+          "ended"
+        ],
+        "acks": 5,
+        "rejected": 0,
+        "listenerReady": null
+      },
+      "revokedHUD": {
+        "role": "hud",
+        "errors": [],
+        "generated": 0,
+        "receivedCallbacks": 59,
+        "colorChanges": 11,
+        "lastColor": "red",
+        "framesDecoded": 0,
+        "framesReceived": 0,
+        "bytesReceived": 0,
+        "loopback": true,
+        "verifiedCandidateAddresses": 0,
+        "playbackFrames": 0,
+        "originalReady": null,
+        "originalEnabled": null,
+        "cloneStates": [],
+        "acks": 4,
+        "rejected": 0,
+        "listenerReady": true
+      }
+    },
+    "native": {
+      "open": 2,
+      "send": 9,
+      "rejected": 1,
+      "end": 1
+    },
+    "outcome": "pass",
+    "loaded": [
+      {
+        "api": true,
+        "qa": true
+      },
+      {
+        "api": true,
+        "qa": true
+      },
+      {
+        "api": true,
+        "qa": true
+      }
+    ],
+    "testedMainConfiguredBackgroundThrottling": "default, not overridden",
+    "fixturePublisherConfiguredBackgroundThrottling": false,
+    "teardown": {
+      "ownWindowsDestroyed": 3,
+      "exceptions": 0
+    },
+    "elapsedAfterReadyMs": 6846
+  },
+  "fixture_files": [
+    {
+      "name": "main.cjs",
+      "sha256": "5ddec059800b04449b2c629c4c7fc751efe616bdcd0cad9cc8f2da0c829be71d"
+    },
+    {
+      "name": "page.html",
+      "sha256": "4f36bbf205e30f397cca7e0d2c024fbd7c865c30deb672a083be257c1ecb9952"
+    },
+    {
+      "name": "source/client/qa-overlay-entry.ts",
+      "sha256": "d0ea0a57be494f6f09f77b98d02955155fb40d887e47983ffefa25aa0e273d34"
+    },
+    {
+      "name": "bundle.js",
+      "sha256": "81819cbd26cdfbf68c03e258e54c0a1a4ce4fa02b1f01d86912e97eacf3a4cfc"
+    }
+  ],
+  "temporary_evidence_directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-overlay-native-1452-0cdb2c25",
+  "qualification": [
+    "This tests real Electron/Chromium and actual compiled broker/preload/bridge/SDK classes with deterministic synthetic source authority. It does not exercise production React overlay UI/source catalog/visibility coordinator hooks or cloud LiveKit/E2EE admission.",
+    "The legacy sanitized metric field loopback means verified own-host candidate addresses, including private NIC addresses; no candidate address rewriting was used in the successful fixed-source probes. This is own-machine kernel routing, not a127.0.0.1-only claim.",
+    "Initial801 probes did not pass: a fixture script ran before document.body existed, and actual Electron closed-window getters exposed the production teardown TypeError. The broker was fixed/committed as1452 before the fresh final archive/probe. Temporary masking was removed for final verification.",
+    "The first fixed-source run passed, then a second passed with explicit post-destroy evidence: all3 own windows destroyed,0 teardown exceptions, app completed under45-second deadline.",
+    "No FPS/quality, physical camera, real game/windowed/borderless, multi-monitor/DPI/anti-cheat, or production deployment acceptance follows from this controlled probe."
+  ],
+  "workspace_changes": "Evidence file only; no production source changes, staging, commit or push by this test run."
+}

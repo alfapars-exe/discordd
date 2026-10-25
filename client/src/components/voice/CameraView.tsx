@@ -1,3 +1,4 @@
+import AuthorizedVideoTrack from "../../video/AuthorizedVideoTrack";
 /**
  * CameraView — Renders all active camera tracks in the voice room's central
  * featured area. Mirrors ScreenShareView's layout logic (1=full, 2=split with
@@ -10,7 +11,7 @@
  * is identical, only the source state differs.
  */
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useTracks, VideoTrack } from "@livekit/components-react";
+import { useTracks } from "@livekit/components-react";
 import type { TrackReferenceOrPlaceholder, TrackReference } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { useTranslation } from "react-i18next";
@@ -61,7 +62,7 @@ function CameraPanel({ trackRef }: Readonly<{ trackRef: TrackReferenceOrPlacehol
   return (
     <div ref={containerRef} className="screen-share-panel">
       {trackRef.publication && (
-        <VideoTrack
+        <AuthorizedVideoTrack
           trackRef={trackRef as TrackReference}
           style={{ transform: "scaleX(-1)" }}
         />

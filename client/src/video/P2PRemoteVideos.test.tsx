@@ -1,0 +1,5 @@
+import{render,screen}from "@testing-library/react";
+import{expect,it,vi}from "vitest";
+vi.mock("react-i18next",()=>({useTranslation:()=>({t:(key:string)=>key})}));
+import P2PRemoteVideos from "./P2PRemoteVideos";
+it("renders distinct authorized camera/screen streams, while legacy aggregate stays generic and muted",()=>{const camera={}as MediaStream,share={}as MediaStream,legacy={}as MediaStream;const view=render(<P2PRemoteVideos camera={camera} screen={share} legacy={legacy}/>);expect(screen.getByLabelText("camera")).toHaveProperty("srcObject",camera);expect(screen.getByLabelText("screenShare")).toHaveProperty("srcObject",share);expect(screen.queryByLabelText("videoCall")).toBeNull();view.rerender(<P2PRemoteVideos camera={null} screen={null} legacy={legacy}/>);const element=screen.getByLabelText("videoCall")as HTMLVideoElement;expect(element.srcObject).toBe(legacy);expect(element.muted).toBe(true);expect(screen.queryByLabelText("camera")).toBeNull();expect(screen.queryByLabelText("screenShare")).toBeNull();view.unmount();expect(element.srcObject).toBeNull()});

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -93,6 +95,7 @@ type Services struct {
 	UserNote                services.UserNoteService
 	ProfileAudience         services.ProfileAudiencePolicy
 	GameActivity            *services.GameActivityService
+	GameJoin                *services.GameJoinService
 	Personalization         services.PersonalizationService
 	ClipRecording           services.ClipRecordingService
 	ProfileShowcase         services.ProfileShowcaseService
@@ -380,6 +383,26 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	presenceHub, _ := hub.(gameActivityHubPresence)
 	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
 	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	gameJoinService := services.NewGameJoinService(gameActivityService, services.NewGameJoinPolicy(gameActivityPolicy, repos.Preferences, repos.Friendship, repos.User, repos.AccountLifecycle, repos.Server, repos.Ban, repos.Channel, channelPermService, voiceService))
+	if connector, ok := hub.(interface {
+		OnGameJoinOffer(func(string, uint64, any) any)
+	}); ok {
+		connector.OnGameJoinOffer(func(user string, connection uint64, data any) any {
+			raw, err := json.Marshal(data)
+			if err != nil || len(raw) > 2048 {
+				return nil
+			}
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			var input services.GameJoinOfferInput
+			if decoder.Decode(&input) != nil {
+				return nil
+			}
+			ctx, cancel := services.BroadcastContext()
+			defer cancel()
+			return gameJoinService.SetOffer(ctx, user, connection, input)
+		})
+	}
 	if setter, ok := blockService.(interface {
 		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
 	}); ok {
@@ -579,6 +602,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		UserNote:                userNoteService,
 		ProfileAudience:         profileAudiencePolicy,
 		GameActivity:            gameActivityService,
+		GameJoin:                gameJoinService,
 		Personalization:         personalizationService,
 		ClipRecording:           clipRecordingService,
 		ProfileShowcase:         services.NewProfileShowcaseService(repos.ProfileShowcase, repos.Server, profileAudiencePolicy),

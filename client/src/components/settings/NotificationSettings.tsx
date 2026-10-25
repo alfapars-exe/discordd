@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 import { ensureNotificationPermission } from "../../utils/notifications";
 import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "../../utils/notificationPreferences";
-import { previewIncomingCallSound } from "../../utils/sounds";
+import { previewIncomingCallSound, playVoiceEventSound, VOICE_SOUND_EVENTS, VOICE_SOUND_PREFERENCES } from "../../utils/sounds";
 import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import { isCapacitor } from "../../utils/constants";
 
@@ -19,7 +19,7 @@ function object(value: unknown): Record<string, unknown> {
 
 function Toggle({ label, description, checked, onChange, disabled = false }: { label: string; description: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return <div className="vs-toggle-row"><div><div className="vs-label">{label}</div><div className="vs-desc">{description}</div></div>
-    <label className="vs-switch"><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span className="vs-switch-slider" /></label></div>;
+    <label className="vs-switch"><input type="checkbox" aria-label={label} checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span className="vs-switch-slider" /></label></div>;
 }
 
 export default function NotificationSettings() {
@@ -71,6 +71,11 @@ export default function NotificationSettings() {
       <Toggle label={t("notifications.currentChannelSound")} description={t("notifications.currentChannelSoundDesc")} checked={notifications.currentChannelSound} disabled={notifications.muteAllSounds} onChange={(value) => updateNotification("currentChannelSound", value)} />
       <Toggle label={t("notifications.incomingCallSound")} description={t("notifications.incomingCallSoundDesc")} checked={notifications.incomingCallSound} disabled={notifications.muteAllSounds} onChange={(value) => updateNotification("incomingCallSound", value)} />
       <button className="settings-btn" type="button" disabled={notifications.muteAllSounds || !notifications.incomingCallSound} onClick={previewIncomingCallSound}>{t("notifications.previewIncomingCall")}</button>
+      <p className="vs-desc">{t("notifications.voiceEffectsDesc")}</p>
+      {VOICE_SOUND_EVENTS.map(event => <div key={event}>
+        <Toggle label={t(`notifications.voiceEffects.${event}`)} description="" checked={notifications[VOICE_SOUND_PREFERENCES[event]]} disabled={notifications.muteAllSounds} onChange={value => updateNotification(VOICE_SOUND_PREFERENCES[event],value)} />
+        <button type="button" className="settings-btn" disabled={notifications.muteAllSounds || !notifications[VOICE_SOUND_PREFERENCES[event]]} aria-label={t("notifications.voiceEffectPreview",{event:t(`notifications.voiceEffects.${event}`)})} onClick={()=>playVoiceEventSound(event)}>{t("notifications.voiceEffectPreview",{event:t(`notifications.voiceEffects.${event}`)})}</button>
+      </div>)}
       <label className="vs-label" htmlFor="sound-pack">{t("notifications.soundPack")}</label>
       <select id="sound-pack" className="vs-select" value={notifications.soundPack} disabled={notifications.muteAllSounds} onChange={(event) => updateNotification("soundPack", event.target.value as NotificationPreferences["soundPack"])}>
         <option value="classic">{t("notifications.soundClassic")}</option><option value="soft">{t("notifications.soundSoft")}</option><option value="minimal">{t("notifications.soundMinimal")}</option>

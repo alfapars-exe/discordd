@@ -179,7 +179,18 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	conn.SetMaxIdleConns(2)
 	conn.SetConnMaxIdleTime(5 * time.Second)
 	conn.SetConnMaxLifetime(5 * time.Minute)
+	return initializeSQLite(conn, migrationsFS)
+}
 
+// Until initialization succeeds this function owns the pool, including every
+// ping and migration failure path. The caller owns it only after success.
+func initializeSQLite(conn *sql.DB, migrationsFS fs.FS) (*DB, error) {
+	ready := false
+	defer func() {
+		if !ready {
+			_ = conn.Close()
+		}
+	}()
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -191,6 +202,7 @@ func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	}
 
 	logger.Info("connected and migrations applied")
+	ready = true
 	return db, nil
 }
 

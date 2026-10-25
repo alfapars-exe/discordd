@@ -11,6 +11,7 @@ export interface OverlayActivityGame {
   id: string;
   name: string;
   started_at: string;
+  canonical_game_id?: "steam:730";
 }
 
 export interface OverlayActivityEntry {
@@ -23,6 +24,7 @@ export interface OverlayActivityItem {
   label: string;
   gameName: string;
 }
+export type AuthorizedOverlayActivity = OverlayActivityItem & { game: OverlayActivityGame; revision: number };
 
 export interface OverlayActivityProjectionInput {
   /** Ownership metadata from the current game-activity store snapshot. */
@@ -38,6 +40,7 @@ export interface OverlayActivityProjectionInput {
   friendsStatus: "idle" | "loading" | "ready" | "error";
   friends: readonly FriendshipWithUser[];
   blockedUserIds: readonly string[];
+  ignoredUsers?: Readonly<Record<string, boolean>>;
   statusByUserId: Readonly<Record<string, UserStatus | undefined>>;
 }
 
@@ -59,7 +62,8 @@ function validGame(value: unknown): value is OverlayActivityGame {
   return isGameActivityId(game.id)
     && isGameActivityName(game.name)
     && typeof game.started_at === "string"
-    && Number.isFinite(Date.parse(game.started_at));
+    && Number.isFinite(Date.parse(game.started_at))
+    && (game.canonical_game_id === undefined || game.canonical_game_id === "steam:730");
 }
 
 /**
@@ -67,6 +71,11 @@ function validGame(value: unknown): value is OverlayActivityGame {
  * Only the global activity key is read; server-scoped grants are intentionally ignored.
  */
 export function projectOverlayActivity(input: OverlayActivityProjectionInput): OverlayActivityItem[] {
+  return projectAuthorizedOverlayActivity(input, MAX_RESULTS).map(({ userId, label, gameName }) => ({ userId, label, gameName }));
+}
+
+/** Same authorization for transient notices, without the five visible-widget-row cap. */
+export function projectAuthorizedOverlayActivity(input: OverlayActivityProjectionInput, limit = 10_000): AuthorizedOverlayActivity[] {
   if (!input.ownerId || input.ownerId !== input.currentOwnerId
     || !Number.isSafeInteger(input.authGeneration) || input.authGeneration !== input.currentAuthGeneration
     || input.friendOwnerId !== input.currentOwnerId || input.friendAuthGeneration !== input.currentAuthGeneration
@@ -75,11 +84,11 @@ export function projectOverlayActivity(input: OverlayActivityProjectionInput): O
 
   const blocked = new Set(input.blockedUserIds);
   const seen = new Set<string>();
-  const result: OverlayActivityItem[] = [];
+  const result: AuthorizedOverlayActivity[] = [];
   for (const friend of input.friends) {
-    if (result.length >= MAX_RESULTS) break;
+    if (result.length >= Math.min(10_000, limit)) break;
     if (friend.status !== "accepted" || !isGameActivityId(friend.user_id)
-      || friend.user_id === input.ownerId || blocked.has(friend.user_id) || seen.has(friend.user_id)) continue;
+      || friend.user_id === input.ownerId || blocked.has(friend.user_id) || input.ignoredUsers?.[friend.user_id] === true || seen.has(friend.user_id)) continue;
     seen.add(friend.user_id);
 
     const status = Object.prototype.hasOwnProperty.call(input.statusByUserId, friend.user_id)
@@ -92,7 +101,7 @@ export function projectOverlayActivity(input: OverlayActivityProjectionInput): O
 
     const label = safeLabel(friend.display_name) ?? safeLabel(friend.username);
     if (!label) continue;
-    result.push({ userId: friend.user_id, label, gameName: entry.game.name });
+    result.push({ userId: friend.user_id, label, gameName: entry.game.name, game: entry.game, revision: entry.revision });
   }
   return result;
 }

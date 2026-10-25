@@ -130,7 +130,7 @@ func TestBanRepo_TempFuture_Active(t *testing.T) {
 
 	// Format guard.
 	raw := rawBanExpiresAt(t, db, banServer, banTarget)
-	if raw == nil || !expiryFormatRe.MatchString(*raw) {
+	if raw == nil || (!database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(*raw)) {
 		t.Errorf("stored expires_at = %v, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
 	}
 }
@@ -219,7 +219,7 @@ func TestBanRepo_ReBan_ReplacesRow(t *testing.T) {
 // normalized by 076, must read as expired afterwards, and 076 must be
 // idempotent on a second run.
 func TestBanRepo_Migration076_NormalizesLegacyRFC3339Row(t *testing.T) {
-	db := newTestDB(t)
+	db, _ := newSQLiteTestDBWithPath(t)
 	seedBanWorld(t, db)
 	repo := NewSQLiteBanRepo(wrapForRepo(db))
 	ctx := context.Background()
@@ -240,7 +240,7 @@ func TestBanRepo_Migration076_NormalizesLegacyRFC3339Row(t *testing.T) {
 	exec076Migration(t, db)
 
 	raw = rawBanExpiresAt(t, db, banServer, banTarget)
-	if raw == nil || !expiryFormatRe.MatchString(*raw) {
+	if raw == nil || (!database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(*raw)) {
 		t.Errorf("after 076: expires_at = %v, want YYYY-MM-DD HH:MM:SS format", raw)
 	}
 	exists, err := repo.Exists(ctx, banServer, banTarget)
@@ -264,7 +264,7 @@ func TestBanRepo_Migration076_NormalizesLegacyRFC3339Row(t *testing.T) {
 // permanent ban's NULL row must be left untouched (COALESCE/datetime(NULL)
 // would otherwise be a landmine if the WHERE guard were ever dropped).
 func TestBanRepo_Migration076_LeavesPermanentBanNull(t *testing.T) {
-	db := newTestDB(t)
+	db, _ := newSQLiteTestDBWithPath(t)
 	seedBanWorld(t, db)
 	repo := NewSQLiteBanRepo(wrapForRepo(db))
 	ctx := context.Background()

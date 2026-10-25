@@ -39,12 +39,14 @@ const activeTones = new Set<ActiveTone>();
 const requests = new Set<{ authorized: () => boolean; cancel: () => void }>();
 const effectsAllowed = () => useVoiceStore.getState().soundsEnabled && !getNotificationPreferences().muteAllSounds;
 let notificationRevision = 0;
+const voiceEventRevisions = new Map<string, number>();
 const notificationsAllowed = () => effectsAllowed() && getNotificationPreferences().messageSound
   && !["dnd", "offline"].includes(useAuthStore.getState().manualStatus)
   && useAccessibilityStore.getState().notificationSoundVolume > 0;
 function cancelUnauthorized(): void {
   if (!effectsAllowed()) { cancelTones(); return; }
   if (!notificationsAllowed()) notificationRevision++;
+  for(const event of VOICE_SOUND_EVENTS)if(getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]]===false)voiceEventRevisions.set(event,(voiceEventRevisions.get(event)??0)+1);
   for (const request of [...requests]) if (!request.authorized()) request.cancel();
 }
 let routedDevice = "";
@@ -276,35 +278,29 @@ export function playToneAt(
   }
 }
 
-export function playJoinSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled || !effectsAllowed()) return;
-
-  playToneAt(350, 600, 0.15, 1, "sine", 0, true);
+export type VoiceSoundEvent = "join" | "leave" | "watchStart" | "watchStop" | "mute" | "unmute" | "deafen" | "undeafen";
+export const VOICE_SOUND_EVENTS: readonly VoiceSoundEvent[] = ["join", "leave", "watchStart", "watchStop", "mute", "unmute", "deafen", "undeafen"];
+export const VOICE_SOUND_PREFERENCES = {join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"} as const;
+/** Current call effects and explicit previews share exactly the same tone and policy. */
+export function playVoiceEventSound(event: VoiceSoundEvent): void {
+  const revision=voiceEventRevisions.get(event)??0;
+  const authorized = () => revision===(voiceEventRevisions.get(event)??0) && effectsAllowed() && getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]] !== false;
+  if (!authorized()) return;
+  const notes: Record<VoiceSoundEvent, [number, number, number, OscillatorType]> = {
+    join:[350,600,0.15,"sine"],leave:[400,200,0.12,"sine"],watchStart:[380,500,0.08,"triangle"],watchStop:[480,320,0.1,"triangle"],
+    mute:[520,320,0.09,"sine"],unmute:[320,520,0.09,"sine"],deafen:[300,180,0.12,"triangle"],undeafen:[180,380,0.12,"triangle"],
+  };
+  const [from,to,duration,wave]=notes[event];
+  playToneAt(from,to,duration,1,wave,0,true,authorized);
+  if(event==="watchStart"){
+    const generation=eventGeneration;
+    setTimeout(()=>{if(generation===eventGeneration&&authorized())playToneAt(500,620,0.08,1,"triangle",0,true,authorized)},90);
+  }
 }
-
-export function playLeaveSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled || !effectsAllowed()) return;
-
-  playToneAt(400, 200, 0.12, 1, "sine", 0, true);
-}
-
-export function playWatchStartSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled || !effectsAllowed()) return;
-
-  const generation = eventGeneration;
-  playToneAt(380, 500, 0.08, 1, "triangle", 0, true);
-  setTimeout(() => { if (generation === eventGeneration) playToneAt(500, 620, 0.08, 1, "triangle", 0, true); }, 90);
-}
-
-export function playWatchStopSound(): void {
-  const { soundsEnabled } = useVoiceStore.getState();
-  if (!soundsEnabled || !effectsAllowed()) return;
-
-  playToneAt(480, 320, 0.1, 1, "triangle", 0, true);
-}
+export function playJoinSound(): void { playVoiceEventSound("join"); }
+export function playLeaveSound(): void { playVoiceEventSound("leave"); }
+export function playWatchStartSound(): void { playVoiceEventSound("watchStart"); }
+export function playWatchStopSound(): void { playVoiceEventSound("watchStop"); }
 
 /** Notification sound — skipped in DND and invisible mode. */
 export function playNotificationSound(): void {

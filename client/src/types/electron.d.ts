@@ -43,6 +43,7 @@ export interface ElectronRegisteredGame {
   displayName: string;
   executableName: string;
   shareAllowed: boolean;
+  joinAdapter?: "none" | "cs2-steam";
   /** Local opt-in for a voice overlay over this game's foreground window. */
   overlayAllowed: boolean;
   availability: "available" | "missing" | "unreadable";
@@ -62,7 +63,7 @@ export interface ElectronRegisteredGamesSnapshot {
 /** Path-free local activity projection; process detection is never triggered by its getter. */
 export interface ElectronRegisteredGameActivity {
   enabled: boolean;
-  game: { id: string; name: string } | null;
+  game: { id: string; name: string; canonicalGameId?: "steam:730" } | null;
 }
 
 /**
@@ -165,6 +166,9 @@ interface ElectronAPI {
   onOverlayOpenChat?: (callback: (value: { session: string }) => void) => (() => void);
   /** Read local Windows registered-game state; no executable paths are exposed. */
   getRegisteredGames?: () => Promise<ElectronRegisteredGamesSnapshot>;
+  syncGameJoinContext?: (context: { origin: string; ownerId: string; generation: number; nonce: string } | null) => Promise<{ accepted: boolean; scopeNonce: string | null }>;
+  launchCS2GameJoin?: (request: { scopeNonce: string; ticketId: string; ticket: string; targetUserId: string; offerRevision: number; accessToken: string; requestId: string }) => Promise<"forwarded" | "denied" | "expired" | "busy" | "unavailable" | "error">;
+  setRegisteredGameJoinAdapter?: (id: string, adapter: "none" | "cs2-steam") => Promise<boolean>;
   getRegisteredGameActivity?: () => Promise<ElectronRegisteredGameActivity>;
   setRegisteredGamesBackgroundDetection?: (enabled: boolean) => Promise<boolean>;
   /** Ask the main process to select and register a local .exe; paths never cross IPC. */
@@ -275,14 +279,24 @@ interface ElectronAPI {
   getAppSettings: () => Promise<{ openAtLogin: boolean; startMinimized: boolean; closeToTray: boolean; transparentBackground: boolean; hardwareAcceleration: boolean }>;
   setAppSetting: (key: string, value: boolean) => Promise<void>;
   onVoiceOverlayUpdate?: (cb: (snapshot: unknown) => void) => (() => void);
-  sendVoiceOverlaySnapshot?: (snapshot: unknown) => void;
+  sendVoiceOverlaySnapshot?: (snapshot: unknown) => Promise<boolean>;
+  clearOverlayGameNotices?: () => Promise<void>;
+  openOverlayMediaLease?: (lease: {session:string;revision:number;tiles:{tileId:string;kind:"camera"|"screen";label?:string}[]}) => Promise<boolean>;
+  sendOverlayMedia?: (envelope: unknown) => Promise<boolean>;
+  sendOverlayMediaViewport?: (viewport: {session:string;revision:number;tileId:string;visible:boolean;width:number;height:number;fps:number}) => Promise<boolean>;
+  setOverlayMediaReceiverReady?: (ready: boolean) => Promise<boolean>;
+  getOverlayMediaAvailability?: () => Promise<{ready:boolean;visible:boolean;allowedKinds:("camera"|"screen")[];windowGeneration:string}|null>;
+  onOverlayMedia?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaLease?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaViewport?: (callback: (value: unknown) => void) => (() => void);
+  onOverlayMediaAvailability?: (callback: (value: unknown) => void) => (() => void);
   setOverlayShortcut?: (binding: { code: string; ctrl: boolean; shift: boolean; alt: boolean; meta: boolean } | null) => Promise<boolean>;
 
   /** Custom titlebar window controls */
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
-  onMaximizedChange: (cb: (isMaximized: boolean) => void) => void;
+  onMaximizedChange: (cb: (isMaximized: boolean) => void) => (() => void);
   removeMaximizedListener: () => void;
 
   /** Windows taskbar overlay badge. count=0 removes badge. */
@@ -293,10 +307,10 @@ interface ElectronAPI {
   /** Clipboard write via main process IPC — always works */
   writeClipboard: (text: string) => Promise<void>;
 
-  onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => void;
-  onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => void;
-  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => void;
-  onUpdateError: (cb: (message: string) => void) => void;
+  onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => (() => void);
+  onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => (() => void);
+  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => (() => void);
+  onUpdateError: (cb: (message: string) => void) => (() => void);
 }
 
 declare global {

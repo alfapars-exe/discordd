@@ -1,0 +1,50 @@
+{
+  "version": "2.11.111",
+  "status": "superseded_by_tested_audio_hotfix_remaining_received_audio_quality",
+  "hotfix_user_confirmation": "User installed2.11.112-rc.1; microphone meter works and voice channel changes are error-free. After HF two-file hotfix, iPhone outgoing speech works. Received crackle remains under investigation and is not proven to be caused by old peer versions.",
+  "user_report": "Two-device test performed; background noise and crackling are audible, particularly while speaking. Direction and microphone-test parity are not yet confirmed.",
+  "observed_audio_failure": "Installed 2.11.111 microphone test shows RNNoise requested, active engine none, fallback processing, gain/gate unavailable, 48 kHz. No inference that this alone explains every crackle.",
+  "scope": "Existing Windows profile update, TAYFA visibility, real two-way voice, and explanation of the legacy E2EE recovery prompt.",
+  "verified": {
+    "installed_product_and_file_version": "2.11.111",
+    "packaged_session_start_utc": "2026-10-25T08:41:17.460Z",
+    "installed_electron": "45.0.0",
+    "installed_update_provider": "generic",
+    "installed_update_url": "https://huggingface.co/datasets/infinayazilim/hichat-releases/resolve/main/",
+    "github_and_hf_manifest_version": "2.11.111",
+    "downloaded_updater_cache_bytes": 165874293,
+    "downloaded_updater_cache_sha256": "0cabd75a2fe606febe990c100ea1dc37741a55585f4a4578efbe41c67558c448",
+    "downloaded_updater_cache_sha512": "O89iF082Ju0SOotKmNQbvRoP2J/OSK4IuhmdUcAs4ZWKitsgxLP7g9AvpWOvOMP/qm1ON5eAMWgl+5MfS/GixQ==",
+    "cached_installer_matches_publication": true,
+    "existing_profile_tayfa_visible": true,
+    "tayfa_text_channels_visible": true,
+    "current_voice_channel": "Kuyu",
+    "voice_connected_indicator": true,
+    "observed_rtt_ms_samples": [58, 56, 54],
+    "observed_connection_quality": "excellent",
+    "observed_voice_participant_count": 1,
+    "production_readiness": "ready; database=true; livekit_configured=true",
+    "legacy_recovery_tests": "3 files, 69 tests passed; these six source/test files have no diff against v2.11.111. React act warnings and deliberate offline/mismatch fixture errors are not runtime acceptance results."
+  },
+  "legacy_key_prompt": {
+    "reason": "No keys yet in the current account/backend-scoped IndexedDB while a legacy mqvi_e2ee archive exists and can be inspected. User choice is required before import or fresh-key initialization.",
+    "eligibility": "Legacy registration user ID, device ID and derived public identity must match the authenticated account and server device identity. The proof does not establish ownership of every archived record.",
+    "preservation": "Original legacy archive is preserved for both choices. New keys alone cannot decrypt older encrypted history.",
+    "agent_changed_user_keys": false,
+    "user_choice_and_restart_persistence": "not yet confirmed"
+  },
+  "pending": [
+    "Second device version and update experience confirmation.",
+    "Two participants visible in the same TAYFA voice channel.",
+    "Both human participants confirm intelligible audio in each direction using headphones.",
+    "Mute/unmute, output routing and leave/rejoin preserve real audio.",
+    "Several-minute real conversation without audible dropouts or connection loss.",
+    "User-selected legacy archive handling survives an ordinary app restart."
+  ],
+  "limits": [
+    "Downloaded files, an installed version, connection indicators and unit tests do not establish delivery to every Windows computer or actual two-way audibility.",
+    "No audio recordings, private keys, authentication tokens or passwords were collected.",
+    "No new release, installer execution, key import/reset or call-control input was performed in this verification turn.",
+    "Camera/screen sharing and the complete P0-P11 acceptance program are outside this focused check."
+  ]
+}

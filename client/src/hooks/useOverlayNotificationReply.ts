@@ -24,7 +24,7 @@ import i18n from "../i18n";
 export function useOverlayNotificationReply(connected: boolean, notifications: readonly OverlayNotification[]) {
   const owner = useAuthStore(s => s.user?.id);
   const generation = useAuthStore(() => getAuthSessionSnapshot().generation);
-  const enabled = useVoiceStore(s => s.voiceOverlayEnabled && s.voiceOverlayNotifications && s.voiceOverlayNotificationActions);
+  const enabled = useVoiceStore(s => !s.voiceOverlayCompatibility && s.voiceOverlayEnabled && s.voiceOverlayNotifications && s.voiceOverlayNotificationActions);
   useNotificationStore(); usePreferencesStore(); useBlockStore(); useChannelStore(); useMemberStore();
   useChannelPermissionStore(); useThreadStore(); useMessageStore(); useDMStore(); useGroupDMStore(); useE2EEStore(); useSpamDecisionStore(); useFriendStore();
   const { openAtMessage, openAtDMMessage, openAtGroupMessage } = useOpenAtMessage();
@@ -50,7 +50,7 @@ export function useOverlayNotificationReply(connected: boolean, notifications: r
     const current = () => {
       const auth = getAuthSessionSnapshot(), voice = useVoiceStore.getState();
       return !disposed && connectedRef.current && auth.ownerId === owner && auth.generation === generation
-        && voice.voiceOverlayEnabled && voice.voiceOverlayNotifications && voice.voiceOverlayNotificationActions;
+        && !voice.voiceOverlayCompatibility && voice.voiceOverlayEnabled && voice.voiceOverlayNotifications && voice.voiceOverlayNotificationActions;
     };
     const stop = bridge?.onOverlayPrepareNotificationReply?.(value => {
       if (busy || value?.session !== session || !current()) return;

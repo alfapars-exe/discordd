@@ -62,7 +62,7 @@ export class VideoVisibilityCoordinator {
   let authorized = false; try { authorized = record.authorizedSubscribed(); } catch { /* Fail closed. */ }
   let admitted = false; try { admitted = this.options.isAdmitted(); } catch { /* Fail closed. */ }
   const visible = [...record.views.values()].filter(value => value.visible);
-  if (!manual || !admitted || this.scope.room.state !== ConnectionState.Connected || !authorized || !publication.isSubscribed || publication.permissionStatus !== TrackPublication.PermissionStatus.Allowed || record.raw.readyState === "ended" || visible.length === 0) { if (manual) this.disable(record); return; }
+  if (!manual || !admitted || this.scope.room.state !== ConnectionState.Connected || !authorized || !publication.isSubscribed || publication.isMuted || record.track.isMuted || publication.permissionStatus !== TrackPublication.PermissionStatus.Allowed || record.raw.readyState === "ended" || visible.length === 0) { if (manual) this.disable(record); return; }
   const width = Math.max(...visible.map(value => value.width)), height = Math.max(...visible.map(value => value.height)), fps = Math.max(...visible.map(value => value.fps));
   try {
    if (record.dimensions?.width !== width || record.dimensions.height !== height) { publication.setVideoDimensions({ width, height }); record.dimensions = { width, height }; }

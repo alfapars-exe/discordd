@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { createFrozenSource, removeFrozenSource } from './run-frozen-quality.mjs';
+import { sourceSnapshot } from './run-quality.mjs';
+
+test('frozen copy includes dirty/untracked source and never cleans original dependencies', (t) => {
+  const origin = mkdtempSync(join(tmpdir(), 'hichat-source-fixture-'));
+  const frozen = mkdtempSync(join(tmpdir(), 'hichat-quality-frozen-'));
+  t.after(() => { if (existsSync(frozen)) removeFrozenSource(frozen); rmSync(origin, { recursive: true, force: true }); });
+  const git = (...args) => execFileSync('git', args, { cwd: origin, stdio: 'pipe', windowsHide: true });
+  git('init');
+  writeFileSync(join(origin, '.gitignore'), 'node_modules/\n');
+  writeFileSync(join(origin, 'app.ts'), 'initial');
+  git('add', '.');
+  git('-c', 'user.name=Quality Fixture', '-c', 'user.email=quality@example.invalid', 'commit', '-m', 'fixture');
+  writeFileSync(join(origin, 'app.ts'), 'dirty source');
+  writeFileSync(join(origin, 'new.ts'), 'untracked source');
+  mkdirSync(join(origin, 'node_modules'));
+  writeFileSync(join(origin, 'node_modules/keep.txt'), 'dependency');
+  const snapshot = createFrozenSource(origin, frozen);
+  assert.equal(snapshot.sha256, sourceSnapshot(origin).sha256);
+  assert.equal(readFileSync(join(frozen, 'new.ts'), 'utf8'), 'untracked source');
+  writeFileSync(join(origin, 'app.ts'), 'concurrent edit');
+  assert.equal(readFileSync(join(frozen, 'app.ts'), 'utf8'), 'dirty source');
+  removeFrozenSource(frozen);
+  assert.equal(readFileSync(join(origin, 'node_modules/keep.txt'), 'utf8'), 'dependency');
+  assert.throws(() => removeFrozenSource(origin), /Refusing cleanup/);
+});

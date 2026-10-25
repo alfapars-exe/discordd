@@ -60,6 +60,18 @@ describe("RegisteredGamesSettings", () => {
     expect(checkbox).toBeChecked();
   });
 
+  it("associates the join adapter explicitly, without guessing from the executable or display name", async () => {
+    const setAdapter = vi.fn().mockResolvedValue(true);
+    setApi({ getRegisteredGames: vi.fn().mockResolvedValue({ detection: "available", backgroundDetectionEnabled: true, games: [game] }), setRegisteredGameJoinAdapter: setAdapter });
+    render(<RegisteredGamesSettings />);
+    const select = await screen.findByRole("combobox", { name: "cs2JoinAdapter" });
+    expect(select).toHaveValue("none");
+    fireEvent.change(select, { target: { value: "cs2-steam" } });
+    await waitFor(() => expect(setAdapter).toHaveBeenCalledWith(game.id, "cs2-steam"));
+    expect(select).toHaveValue("cs2-steam");
+    expect(screen.getByRole("button", { name: "cs2OfferShare" })).toBeDisabled(); // game is not shared
+  });
+
   it("changes the local foreground-overlay opt-in independently from game-activity sharing", async () => {
     const setSharing = vi.fn().mockResolvedValue(true);
     const setRegisteredGameOverlay = vi.fn().mockResolvedValue(true);

@@ -73,6 +73,8 @@ electron
 !electron/
 electron/*
 !electron/voice-overlay-contract.ts
+!electron/overlay-media-contract.ts
+!electron/cs2-join-contract.ts
 native
 icons
 bots

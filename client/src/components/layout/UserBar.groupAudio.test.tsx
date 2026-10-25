@@ -16,8 +16,8 @@ vi.mock("../../audio/MicrophoneTrackProcessor",()=>({MicrophoneTrackProcessor:cl
 vi.mock("../../audio/privateRoomPlayback",()=>({privateRoomPlayback:()=>()=>{}}));
 vi.mock("../../hooks/useE2EEKeyProvider",()=>({useE2EEKeyProvider:()=>({keyProvider:{},e2eeWorker:{},keyReady:true,keyError:null,keyScope:"key",ownerScope:"owner"})}));
 vi.mock("../../hooks/useEncryptedRoomAdmission",()=>({useEncryptedRoomAdmission:()=>({room:audio.room,connect:true,publishReady:true,error:null})}));
-vi.mock("../../stores/groupDMStore",()=>({useGroupDMStore:Object.assign(()=>1,{subscribe:()=>()=>{},getState:()=>({groups:[]})})}));
-vi.mock("@livekit/components-react",()=>({LiveKitRoom:({children}:{children:React.ReactNode})=><>{children}</>,TrackToggle:()=>null,DisconnectButton:()=>null}));
+vi.mock("../../stores/groupDMStore",()=>{const getState=()=>({ownerId:"me",authGeneration:10,groupsReady:true,groups:[{id:"group",name:"Audio test group",key_epoch:1,members:[{id:"me"}]}]});return{useGroupDMStore:Object.assign((select:(state:ReturnType<typeof getState>)=>unknown)=>select(getState()),{subscribe:()=>()=>{},getState})};});
+vi.mock("@livekit/components-react",()=>({LiveKitRoom:({children}:{children:React.ReactNode})=><>{children}</>,TrackToggle:()=>null,DisconnectButton:()=>null,useTracks:()=>[]}));
 
 
 const state = vi.hoisted(() => ({
@@ -36,7 +36,7 @@ vi.mock("../../stores/serverStore", () => ({ useServerStore: Object.assign((sele
 vi.mock("../../stores/channelStore", () => ({ useChannelStore: (select: (value: typeof state.channel) => unknown) => select(state.channel) }));
 vi.mock("../../stores/p2pCallStore",async()=>{const {create}=await import("zustand");return{useP2PCallStore:create(()=>({activeCall:null}))};});
 vi.mock("../../stores/settingsStore", () => ({ useSettingsStore: (select: (value: typeof state.settings) => unknown) => select(state.settings) }));
-vi.mock("../../stores/uiStore", () => ({ useUIStore: (select: (value: typeof state.ui) => unknown) => select(state.ui) }));
+vi.mock("../../stores/uiStore", () => ({ useUIStore: Object.assign((select: (value: typeof state.ui) => unknown) => select(state.ui), {getState:()=>state.ui,subscribe:()=>()=>{}}) }));
 vi.mock("../../stores/soundboardStore", () => ({ useSoundboardStore: Object.assign((select: (value: typeof state.soundboard) => unknown) => select(state.soundboard), { getState: () => state.soundboard }) }));
 vi.mock("../../utils/uiShell", () => ({ UI_SHELL_V2: true }));
 vi.mock("../../hooks/useDismissablePopup", () => ({ useDismissablePopup: () => {} }));
@@ -55,7 +55,7 @@ const actions={onToggleMute:vi.fn(),onToggleDeafen:()=>useVoiceStore.getState().
 beforeEach(()=>{
  vi.clearAllMocks();publishAuthOwnerChange("me");publishAuthGenerationChange(10);useGroupCallAudioControlStore.setState({control:null});useMicrophoneCaptureViewStore.setState({view:null,privateFailure:null,failedCall:null});
  useVoiceStore.setState({currentVoiceChannelId:null,currentVoiceServerId:null,isMuted:false,isDeafened:false,muteBeforeDeafen:null,isServerMuted:true,isServerDeafened:true,inputMode:"voice_activity"});audio.tracks=[];audio.sources=[];
- const publications=new Map();audio.room={state:"connected",on:vi.fn(),off:vi.fn(),localParticipant:{permissions:{canPublish:true},trackPublications:publications,getTrackPublication:()=>[...publications.values()][0],publishTrack:vi.fn(async(track:unknown)=>{publications.set("mic",{track});}),unpublishTrack:vi.fn(async(track:unknown)=>{if(publications.get("mic")?.track===track)publications.delete("mic");})}};
+ const publications=new Map();audio.room={state:"connected",remoteParticipants:new Map(),on:vi.fn(),off:vi.fn(),localParticipant:{permissions:{canPublish:true},trackPublications:publications,getTrackPublication:()=>[...publications.values()][0],publishTrack:vi.fn(async(track:unknown)=>{publications.set("mic",{track});}),unpublishTrack:vi.fn(async(track:unknown)=>{if(publications.get("mic")?.track===track)publications.delete("mic");})}};
  registerCaptureAdmission((audio.room as {localParticipant:LocalParticipant}).localParticipant,()=>true).open();
  audio.createTrack.mockImplementation(async()=>{const track={isMuted:false,setProcessor:vi.fn(async()=>{}),mute:vi.fn(async()=>{track.isMuted=true;}),unmute:vi.fn(async()=>{track.isMuted=false;}),stop:vi.fn()};audio.tracks.push(track);return track;});
 });

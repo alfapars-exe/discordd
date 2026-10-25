@@ -324,7 +324,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 
 	channel, err := s.channels.GetByID(ctx, channelID)
 	if err != nil {
-		musicBotLogger.Error("enqueue: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
+		musicBotLogger.DebugContext(ctx, "enqueue: channel lookup failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		return nil, fmt.Errorf("channel lookup failed: %w", err)
 	}
 	if channel.Type != models.ChannelTypeVoice {
@@ -375,8 +375,8 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	}()
 	extractMs := time.Since(extractStart).Milliseconds()
 	if err != nil {
-		musicBotLogger.Error("enqueue: yt-dlp extract failed",
-			"channel_id", channelID, "url", url, "err", pkg.ErrText(err), "duration_ms", extractMs)
+		musicBotLogger.DebugContext(ctx, "enqueue: yt-dlp extract failed",
+			"channel_id", channelID, "source", "youtube", "err", pkg.ErrText(err), "duration_ms", extractMs)
 		return nil, fmt.Errorf("yt-dlp extraction failed: %w", err)
 	}
 	musicBotLogger.Info("enqueue: extracted tracks", "track_count", len(tracks), "channel_id", channelID, "duration_ms", extractMs)
@@ -391,7 +391,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	// cannot race another durable queue mutation or play-loop dequeue.
 	bot, err := s.lockLiveBot(ctx, channel.ServerID, channelID)
 	if err != nil {
-		musicBotLogger.Error("enqueue: getOrCreateBot failed", "channel_id", channelID, "err", pkg.ErrText(err))
+		musicBotLogger.DebugContext(ctx, "enqueue: getOrCreateBot failed", "channel_id", channelID, "err", pkg.ErrText(err))
 		return nil, err
 	}
 	lifecycleLock := s.channelLifecycleLock(channelID)

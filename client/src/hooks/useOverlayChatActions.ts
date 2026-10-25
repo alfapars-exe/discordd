@@ -9,7 +9,7 @@ import { getLiveOverlayChatTarget } from "../utils/overlayChatAccess";
 export function useOverlayChatActions(connected: boolean, chatReady: boolean) {
   const owner = useAuthStore((s) => s.user?.id ?? null);
   const generation = useAuthStore(() => getAuthSessionSnapshot().generation);
-  const enabled = useVoiceStore((s) => s.voiceOverlayEnabled && s.voiceOverlayChat && s.voiceOverlayChatActions);
+  const enabled = useVoiceStore((s) => !s.voiceOverlayCompatibility && s.voiceOverlayEnabled && s.voiceOverlayChat && s.voiceOverlayChatActions);
   const destination = useUIStore((s) => s.destination);
   const liveTarget = getLiveOverlayChatTarget();
   const channelId = liveTarget?.channelId;
@@ -26,7 +26,7 @@ export function useOverlayChatActions(connected: boolean, chatReady: boolean) {
     const currentTarget = () => {
       const scope = getAuthSessionSnapshot();
       const voice = useVoiceStore.getState();
-      if (disposed || !connected || !voice.voiceOverlayEnabled || !voice.voiceOverlayChat || !voice.voiceOverlayChatActions
+      if (disposed || !connected || voice.voiceOverlayCompatibility || !voice.voiceOverlayEnabled || !voice.voiceOverlayChat || !voice.voiceOverlayChatActions
         || scope.ownerId !== owner || scope.generation !== generation || useAuthStore.getState().user?.id !== owner) return null;
       const target = getLiveOverlayChatTarget();
       return target?.type === targetType && target.channelId === channelId && target.serverInfo?.serverId === serverId ? target : null;

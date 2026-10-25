@@ -6,7 +6,7 @@
  */
 
 import type { StateCreator } from "zustand";
-import { playJoinSound, playLeaveSound } from "../../utils/sounds";
+import { playWatchStartSound, playWatchStopSound } from "../../utils/sounds";
 import type { VoiceStore } from "../voiceStore";
 
 /**
@@ -126,10 +126,10 @@ export const createVoiceScreenShareSlice: StateCreator<
       const next = { ...watchingScreenShares };
       delete next[userId];
       set({ watchingScreenShares: next });
-      playLeaveSound();
+      playWatchStopSound();
     } else {
       set({ watchingScreenShares: { ...watchingScreenShares, [userId]: true } });
-      playJoinSound();
+      playWatchStartSound();
     }
 
     if (_wsSend) {
@@ -222,6 +222,6 @@ export const createVoiceScreenShareSlice: StateCreator<
     }
 
     set({ watchingScreenShares: { [userId]: true } });
-    playLeaveSound();
+    playWatchStopSound();
   },
 });

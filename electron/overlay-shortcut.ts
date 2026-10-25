@@ -70,6 +70,8 @@ export function createOverlayShortcutController(
 ) {
   let accelerator: string | null = null;
   let disposed = false;
+  let suspended = false;
+  let bindingEpoch = 0;
 
   return {
     setBinding(binding: OverlayShortcutBinding | null): boolean {
@@ -78,19 +80,20 @@ export function createOverlayShortcutController(
         if (accelerator === null) return true;
         try {
           adapter.unregister(accelerator);
-          accelerator = null;
+          accelerator = null; bindingEpoch++;
           return true;
         } catch {
           return false;
         }
       }
-      if (adapter.supported === false) return false;
+      if (suspended || adapter.supported === false) return false;
       const next = toOverlayAccelerator(binding);
       if (!next) return false;
       if (next === accelerator) return true;
 
+      const epoch = bindingEpoch + 1;
       let registered = false;
-      try { registered = adapter.register(next, () => { if (!disposed && accelerator === next) onToggle(); }); } catch { return false; }
+      try { registered = adapter.register(next, () => { if (!disposed && !suspended && bindingEpoch === epoch && accelerator === next) onToggle(); }); } catch { return false; }
       if (!registered) return false;
 
       if (accelerator !== null) {
@@ -101,8 +104,15 @@ export function createOverlayShortcutController(
           return false;
         }
       }
-      accelerator = next;
+      accelerator = next; bindingEpoch = epoch;
       return true;
+    },
+    /** Compatibility releases OS keyboard ownership, not only the callback. */
+    setSuspended(value: boolean): boolean {
+      suspended = value;
+      if (!suspended || accelerator === null) return true;
+      try { adapter.unregister(accelerator); accelerator = null; bindingEpoch++; return true; }
+      catch { return false; }
     },
     getAccelerator(): string | null {
       return accelerator;

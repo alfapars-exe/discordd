@@ -1,3 +1,5 @@
+vi.mock("../../video/useAuthorizedRoomVideos",()=>({useAuthorizedRoomVideos:()=>{},manualNativeVideo:()=>false}));
+vi.mock("../../video/videoPresentation",()=>({isPresentedVideoContext:()=>false,subscribeVideoPresentation:()=>()=>{}}));
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fixture=vi.hoisted(()=>({ admission:{room:{} as object|null,connect:true,publishReady:false,error:null as unknown}, room:vi.fn(), admissionInput:vi.fn(), native:false }));

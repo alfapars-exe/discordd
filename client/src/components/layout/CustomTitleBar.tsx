@@ -19,11 +19,12 @@ function CustomTitleBar() {
     const api = window.electronAPI;
     if (!api) return;
 
-    api.onMaximizedChange((val) => setIsMaximized(val));
-    api.onUpdateDownloaded(() => setUpdateReady(true));
+    const stopMaximized = api.onMaximizedChange((val) => setIsMaximized(val));
+    const stopDownloaded = api.onUpdateDownloaded(() => setUpdateReady(true));
 
     return () => {
-      api.removeMaximizedListener();
+      stopMaximized?.();
+      stopDownloaded?.();
     };
   }, []);
 

@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -226,7 +227,7 @@ func TestMessageRepo_Pagination(t *testing.T) {
 		m := newMessage(t, ctx, repo, msgChannel, msgAuthor, string(rune('a'+i)))
 		ids[i] = m.ID
 		if _, err := db.Conn.Exec(
-			`UPDATE messages SET created_at = datetime('2026-01-01 00:00:0'||?) WHERE id = ?`, i, m.ID,
+			`UPDATE messages SET created_at = ? WHERE id = ?`, fmt.Sprintf("2026-01-01 00:00:%02d", i), m.ID,
 		); err != nil {
 			t.Fatalf("stamp created_at: %v", err)
 		}
@@ -641,7 +642,7 @@ func TestMessageRepo_ReplyReference(t *testing.T) {
 
 func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 	t.Run("editing a message leaves its old text searchable", func(t *testing.T) {
-		db := newTestDB(t)
+		db, _ := newSQLiteTestDBWithPath(t)
 		seedMessageWorld(t, db)
 		repo := NewSQLiteMessageRepo(db.Conn)
 		search := NewSQLiteSearchRepo(db.Conn)
@@ -685,7 +686,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 	})
 
 	t.Run("the first content edit on a fresh database errors", func(t *testing.T) {
-		db := newTestDB(t)
+		db, _ := newSQLiteTestDBWithPath(t)
 		seedMessageWorld(t, db)
 		repo := NewSQLiteMessageRepo(db.Conn)
 		ctx := context.Background()
@@ -706,7 +707,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 	// insert, which is what makes it observable through the product's own
 	// search API rather than merely as index litter.
 	t.Run("deleting a message takes its text out of the index", func(t *testing.T) {
-		db := newTestDB(t)
+		db, _ := newSQLiteTestDBWithPath(t)
 		seedMessageWorld(t, db)
 		repo := NewSQLiteMessageRepo(db.Conn)
 		search := NewSQLiteSearchRepo(db.Conn)
@@ -758,7 +759,7 @@ func TestMessageRepo_FTSTriggers_KnownBug(t *testing.T) {
 	// one must be a no-op rather than a delete against an absent doclist —
 	// which would drive the accounting negative, i.e. re-create the corruption.
 	t.Run("deleting an unindexed E2EE message leaves the index intact", func(t *testing.T) {
-		db := newTestDB(t)
+		db, _ := newSQLiteTestDBWithPath(t)
 		seedMessageWorld(t, db)
 		repo := NewSQLiteMessageRepo(db.Conn)
 		search := NewSQLiteSearchRepo(db.Conn)

@@ -30,6 +30,7 @@ var defaultEventLimits = map[string]eventRateLimits{
 	OpTyping:             {burst: 10, refill: 200 * time.Millisecond}, // ~5/sec sustained
 	OpPresenceUpdate:     {burst: 3, refill: time.Second},             // ~1/sec sustained
 	OpGameActivityUpdate: {burst: 3, refill: 10 * time.Second},        // renewals are intentionally sparse
+	"game_join_offer":    {burst: 3, refill: 10 * time.Second},
 	OpVoiceActivity:      {burst: 20, refill: 100 * time.Millisecond}, // ~10/sec sustained
 	OpDMTypingStart:      {burst: 10, refill: 200 * time.Millisecond}, // mirrors typing
 }

@@ -55,7 +55,7 @@ func (s *authService) ChangePassword(ctx context.Context, userID, currentPasswor
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
-		s.logWarn(&userID, "password change attempted with wrong current password", nil)
+		s.logWarn(ctx, &userID, "password change attempted with wrong current password", nil)
 		return fmt.Errorf("%w: current password is incorrect", pkg.ErrUnauthorized)
 	}
 
@@ -132,7 +132,7 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 
 	identifier = strings.TrimSpace(identifier)
 	user, err := s.userRepo.GetByEmail(ctx, identifier)
-	if errors.Is(err, pkg.ErrNotFound) || user == nil {
+	if errors.Is(err, pkg.ErrNotFound) {
 		user, err = s.userRepo.GetByUsername(ctx, identifier)
 	}
 	if err != nil {
@@ -141,14 +141,14 @@ func (s *authService) ForgotPassword(ctx context.Context, identifier string) (in
 		}
 		return 0, fmt.Errorf("failed to look up user: %w", err)
 	}
-	if user.Email == nil || strings.TrimSpace(*user.Email) == "" {
+	if user == nil || user.Email == nil || strings.TrimSpace(*user.Email) == "" {
 		return 0, nil
 	}
 	emailAddr := strings.TrimSpace(*user.Email)
 
 	// Cooldown check
 	lastToken, err := s.resetRepo.GetLatestByUserID(ctx, user.ID)
-	if err == nil {
+	if err == nil && lastToken != nil {
 		elapsed := time.Since(lastToken.CreatedAt)
 		if elapsed < resetCooldown {
 			remaining := int((resetCooldown - elapsed).Seconds())

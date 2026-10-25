@@ -1,0 +1,121 @@
+{
+  "scope": "P11 transient game activity and same-game notices: strict transport, passive HUD and native expiry/revocation",
+  "date": "2026-10-26",
+  "ownership": {
+    "base": "45b7affd0fdfebed8603303221e5008fb1b281d8",
+    "owned_projection_lf": {
+      "electron/voice-overlay-contract.ts": "d4492727e5403c231a8214824f3690825aed8091cd6e0ae6586d129330aa4f9d",
+      "electron/voice-overlay-contract.test.ts": "ec84b4efe1175cfb7d2f1232b1317e3def067f708264adf49f19f117e33b84c2",
+      "electron/voice-overlay-geometry.ts": "4423943dee8ae13355dc8ae79d45b554f0ec75dfe5726bee902a42285d353d0a",
+      "electron/voice-overlay-geometry.test.ts": "0f7402439b139d73b2748ff3811eb595311552a80eb9483595af16fc8b9384ad",
+      "electron/voice-overlay.ts": "03526afc63d063c17b6498d7451900ba021d24ec56b0adc9064e6017b5f34b84",
+      "electron/ipc-handlers.ts": "5eac7c135bfe090f8128e220c5852a51c3190be7cbe8a2de599ec28dd622a5f3",
+      "electron/preload.ts": "0e293728d75a9c8adbd27fc31189e5651a6fee630a490ad32ea54bb007df3a6b",
+      "client/src/types/electron.d.ts": "e59e219c9a4fb86e15ab778c4b8bd844ac5212c858cc828546cb4582f651017c",
+      "client/src/components/voice/VoiceOverlayContent.tsx": "dbb1fb20ead46a68e26f3479fe4e920b3274758b4fd5e0eaf8136eac70071f41",
+      "electron/overlay-game-notices.ts": "e76d695aea361d4289863c460376c04df3b76ed8b164a16ceff2a7a633d8d700",
+      "electron/overlay-game-notices.test.ts": "516344573efe83011da832aee69fada051ab8709a36ed436b287c63d564cf4de",
+      "electron/overlay-game-notice-ipc.ts": "44ea77637f2ea3f300d8e4b017882e7187ce4e88b0c3c4839e26a76dddc656ad",
+      "electron/overlay-game-notice-ipc.test.ts": "6baac57d6032f80c0ea97ee8177fc2346d2f0662225279cbaf26751dd3152289",
+      "client/src/components/voice/GameActivityNotices.tsx": "32dc602f4b5e9fa9a2224ab0ec001741a4631e4474d3bfb2f7eaa955fbc348c0",
+      "client/src/components/voice/GameActivityNotices.test.tsx": "950e58b0bdb3636d126679394ecccc4cb95517ae6234f1fb5f14e0c43856bb03"
+    },
+    "tested_worktree_lf": {
+      "electron/voice-overlay-contract.ts": "d995f34a0ce915997b25766f2c0f0d52098eb518f9bcaf25b97e24350d68ba0a",
+      "electron/voice-overlay-contract.test.ts": "ec84b4efe1175cfb7d2f1232b1317e3def067f708264adf49f19f117e33b84c2",
+      "electron/voice-overlay-geometry.ts": "21c57952c85ed16854c996cc8acd5306400018a0cb818bab0bcf07ed800b6854",
+      "electron/voice-overlay-geometry.test.ts": "88b7ed3c4af6aa20258bc775365cddbeecdb3b0e0ecef9192075e89856e537e8",
+      "electron/voice-overlay.ts": "de5840a2f9b75bad1af9437bd0b75111c79d7d9503d9a21bab011fc9463f6a70",
+      "electron/ipc-handlers.ts": "14e034322bf5b67b22b3a0dc0f7769c21513d46effe8d4b85285a94e11672860",
+      "electron/preload.ts": "0e293728d75a9c8adbd27fc31189e5651a6fee630a490ad32ea54bb007df3a6b",
+      "client/src/types/electron.d.ts": "e59e219c9a4fb86e15ab778c4b8bd844ac5212c858cc828546cb4582f651017c",
+      "client/src/components/voice/VoiceOverlayContent.tsx": "2f97488b38f222db46cb04c04a4aecfe0c78717adbdbbe0a400175ef0596308e",
+      "electron/overlay-game-notices.ts": "e76d695aea361d4289863c460376c04df3b76ed8b164a16ceff2a7a633d8d700",
+      "electron/overlay-game-notices.test.ts": "516344573efe83011da832aee69fada051ab8709a36ed436b287c63d564cf4de",
+      "electron/overlay-game-notice-ipc.ts": "44ea77637f2ea3f300d8e4b017882e7187ce4e88b0c3c4839e26a76dddc656ad",
+      "electron/overlay-game-notice-ipc.test.ts": "6baac57d6032f80c0ea97ee8177fc2346d2f0662225279cbaf26751dd3152289",
+      "client/src/components/voice/GameActivityNotices.tsx": "32dc602f4b5e9fa9a2224ab0ec001741a4631e4474d3bfb2f7eaa955fbc348c0",
+      "client/src/components/voice/GameActivityNotices.test.tsx": "950e58b0bdb3636d126679394ecccc4cb95517ae6234f1fb5f14e0c43856bb03"
+    },
+    "paths": [
+      "electron/voice-overlay-contract.ts",
+      "electron/voice-overlay-contract.test.ts",
+      "electron/voice-overlay-geometry.ts",
+      "electron/voice-overlay-geometry.test.ts",
+      "electron/voice-overlay.ts",
+      "electron/ipc-handlers.ts",
+      "electron/preload.ts",
+      "client/src/types/electron.d.ts",
+      "client/src/components/voice/VoiceOverlayContent.tsx",
+      "electron/overlay-game-notices.ts",
+      "electron/overlay-game-notices.test.ts",
+      "electron/overlay-game-notice-ipc.ts",
+      "electron/overlay-game-notice-ipc.test.ts",
+      "client/src/components/voice/GameActivityNotices.tsx",
+      "client/src/components/voice/GameActivityNotices.test.tsx"
+    ],
+    "excluded_foreign": [
+      "center-left placement/defaultreset",
+      "five-person voice reserve geometry/layout-v2",
+      "logging diagnostics IPC hunks"
+    ]
+  },
+  "validation": {
+    "native_typecheck": "npx tsc -p electron/tsconfig.json --pretty false exited0",
+    "native_tests": {
+      "files": [
+        "voice-overlay-contract.test",
+        "voice-overlay-geometry.test",
+        "overlay-game-notices.test",
+        "overlay-game-notice-ipc.test"
+      ],
+      "passed": 46,
+      "failed": 0,
+      "duration_ms": 141.5225
+    },
+    "client_tests": {
+      "files": [
+        "GameActivityNotices.test.tsx",
+        "VoiceOverlayContent.test.tsx"
+      ],
+      "passed": 39,
+      "failed": 0,
+      "duration_seconds": 2.56
+    },
+    "lint": "Targeted GameActivityNotices.tsx/tests +VoiceOverlayContent.tsx exited0",
+    "owned_patch_check": "git apply --check --cached --whitespace=nowarn owned.patch exited0; read-only index check; no staging",
+    "client_typecheck": "npx tsc -b --pretty false session81051 exited0"
+  },
+  "actual_native_window": {
+    "result": {
+      "realElectron": true,
+      "productionNativeOverlay": true,
+      "productionPreload": true,
+      "productionNoticeComponent": true,
+      "appendPreservesTwoRows": true,
+      "passiveButtons": 0,
+      "clearedOldReplayBlocked": true,
+      "retainedFreshIdOriginalExpiry": true,
+      "freshRowCount": 1,
+      "nativeExpiryHidesWindow": true,
+      "remainingOwnWindows": 0,
+      "passed": true
+    },
+    "fixture_source_sha256": {
+      "main.cjs": "64de47d075eed6b3d5daa8e1d325123911a03925639f26b4201cf389e6565e7f",
+      "entry.tsx": "9add9595f0f6f08926fea699cc3ef058d950d1699ba81adc63b2084a5adb2e8c",
+      "build.mjs": "59edbd3d5d17a75594b4b58e4ebe5414275d966dc4f2e12cd92e760df6927ec4"
+    },
+    "runtime": "Real Electron sandboxed contextIsolation native HUD window with production preload and compiled native voice-overlay; actual production GameActivityNotices bundled by installed Vite. Synthetic QA labels only; isolated Temp userData; own-process development overlay URL redirected to ephemeral loopback fixture. No microphones/cameras/Steam/user sessions. Initial fixture bundling lacked Temp i18next aliases; aliases corrected before successful real-window run. All fixture windows closed automatically."
+  },
+  "behavior": {
+    "dto": "max3 strict own-field UUID noticeId,label80,gameName80,kind game_activity|now_playing,finite integer expiresAt <=20sec; expired entries dropped; independent opt-in flags",
+    "safety": "Display only, no user/source/Steam/ticket IDs, URL, join action or button. Native trusted MAIN-only payload-free clear; bounded short-lived tombstones reject late old snapshots. Survivor events must mint fresh display UUID with original expiry after genuine revocation; appends and natural expiry do not clear.",
+    "geometry": "Notices use only spare height after existing voice/media/widgets; at most3 unscaled48DIP rows; no voice/media displacement. Foreign center-left and five-person reserve changes excluded from owned projection."
+  },
+  "remaining": [
+    "Combined immutable producer/server/native/HUD gates pending",
+    "Actual windowed/borderless game, real privacy changes across two clients, DPI/multi-monitor and accessibility acceptance remain unverified",
+    "Actual native fixture validated tested worktree hashes including preexisting placement/layout differences; owned-only projection has read-only patch check, not a separate immutable full-suite claim"
+  ]
+}

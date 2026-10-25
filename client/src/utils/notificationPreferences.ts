@@ -10,6 +10,15 @@ export type NotificationPreferences = {
   currentChannelSound: boolean;
   incomingCallSound: boolean;
   muteAllSounds: boolean;
+  voiceJoinSound: boolean;
+  voiceLeaveSound: boolean;
+  voiceWatchStartSound: boolean;
+  voiceWatchStopSound: boolean;
+  voiceMuteSound: boolean;
+  voiceUnmuteSound: boolean;
+  voiceDeafenSound: boolean;
+  voiceUndeafenSound: boolean;
+
   notifyWhenFocused: boolean;
   /** Delay/coalesce OS desktop toasts; 0 delivers immediately. */
   desktopDelaySeconds: 0 | 3 | 5 | 10;
@@ -30,6 +39,15 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   currentChannelSound: false,
   incomingCallSound: true,
   muteAllSounds: false,
+  voiceJoinSound: true,
+  voiceLeaveSound: true,
+  voiceWatchStartSound: true,
+  voiceWatchStopSound: true,
+  voiceMuteSound: true,
+  voiceUnmuteSound: true,
+  voiceDeafenSound: true,
+  voiceUndeafenSound: true,
+
   notifyWhenFocused: false,
   desktopDelaySeconds: 0,
   streamNotifications: true,

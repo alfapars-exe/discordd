@@ -1,3 +1,5 @@
+import { createOverlayMediaBroker } from "./overlay-media-broker";
+import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
 import {registerSystemAudioLeaseIPC}from "./system-audio-ipc";
 import {registerPTTLeaseHandlers}from "./ptt-ipc";
@@ -82,10 +84,12 @@ import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
 import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
-import { updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
+import { getVoiceOverlayMediaWindow, subscribeVoiceOverlayMediaLifecycle, updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayNotificationReplyIntent, confirmVoiceOverlayNotificationReply, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
 import { createOverlayLayoutStore } from "./overlay-layout-store";
 import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
-import { isTrustedVoiceOverlaySender, parseVoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { isTrustedVoiceOverlaySender, applyAcknowledgedVoiceOverlaySnapshot, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
+import { clearVoiceOverlayGameNotices } from "./voice-overlay";
+import { registerOverlayGameNoticeClearIPC } from "./overlay-game-notice-ipc";
 import { copyFile, writeFile } from "fs/promises";
 import { buildUploadBytes, bundleBaseName, newestCrashDumpFullPath } from "./diagnostic-bundle";
 import { getLogsDir, setVerbose } from "./diagnostic-log";
@@ -104,7 +108,14 @@ function diagStamp(): string {
 }
 
 export function registerIpcHandlers(): void {
-  const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout.json") });
+  const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
+    fetch: (url, init) => net.fetch(url, init), openExternal: url => shell.openExternal(url),
+    allowLoopback: !app.isPackaged, supported: process.platform === "win32",
+  });
+  app.once("before-quit", () => gameJoin.dispose());
+  // Start the middle-left layout generation without restoring old bottom-edge
+  // drag offsets. New drag positions remain persistent in this generation.
+  const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout-v2.json") });
   configureVoiceOverlayLayout(overlayLayouts);
   ipcMain.handle("reset-overlay-layout", (event) => {
     assertTrustedMainWindowSender(event);
@@ -160,6 +171,14 @@ export function registerIpcHandlers(): void {
     if (binding === null) lockVoiceOverlay();
     return accepted;
   });
+  let overlayMediaPolicy: VoiceOverlaySnapshot | null = null;
+  const overlayMedia = createOverlayMediaBroker({main:getMainWindow,overlay:getVoiceOverlayMediaWindow,policy:()=>overlayMediaPolicy});
+  const stopOverlayMediaLifecycle = subscribeVoiceOverlayMediaLifecycle(revoke => { if(revoke)overlayMedia.revoke();else overlayMedia.refresh(); });
+  ipcMain.handle("open-overlay-media-lease", (event, raw:unknown) => overlayMedia.open(event,raw));
+  ipcMain.handle("send-overlay-media", (event, raw:unknown) => overlayMedia.send(event,raw));
+  ipcMain.handle("send-overlay-media-viewport", (event, raw:unknown) => overlayMedia.viewport(event,raw));
+  ipcMain.handle("set-overlay-media-receiver-ready", (event, ready:unknown) => overlayMedia.setReady(event,ready));
+  ipcMain.handle("get-overlay-media-availability", event => overlayMedia.getAvailability(event));
   let gameOverlay: ReturnType<typeof createGameOverlayController> | undefined;
   const gameHelperPath = app.isPackaged
     ? path.join(process.resourcesPath, "native", "game-window.exe")
@@ -189,14 +208,15 @@ export function registerIpcHandlers(): void {
   });
   void registeredGames.initialize().catch(() => undefined);
   app.on("web-contents-created", (_event, contents) => {
+    contents.on("destroyed", () => { overlayMedia.retireForContents(contents); });
     contents.on("render-process-gone", () => {
-      if (getMainWindow()?.webContents === contents) { gameOverlay?.clear(); overlayShortcut.setBinding(null); }
+      if (getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
     });
     contents.on("did-start-navigation", (_navigationEvent, _url, isInPlace, isMainFrame) => {
-      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { gameOverlay?.clear(); overlayShortcut.setBinding(null); }
+      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { overlayMediaPolicy=null; overlayMedia.revoke(); gameOverlay?.clear(); overlayShortcut.setBinding(null); }
     });
   });
-  app.once("before-quit", () => { overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
+  app.once("before-quit", () => { stopOverlayMediaLifecycle(); overlayMedia.revoke(); overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
 
   ipcMain.handle("get-registered-games", (event) => {
     assertTrustedMainWindowSender(event);
@@ -230,6 +250,11 @@ export function registerIpcHandlers(): void {
     return removed;
   });
   registerGameNameIPC(ipcMain, assertTrustedMainWindowSender, registeredGames);
+  ipcMain.handle("set-registered-game-join-adapter", (event, id: unknown, adapter: unknown) => {
+    assertTrustedMainWindowSender(event);
+    assertString(id, "registered game id", 64);
+    return registeredGames.setJoinAdapter(id, adapter);
+  });
 
   ipcMain.handle("set-registered-game-sharing", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);
@@ -238,10 +263,19 @@ export function registerIpcHandlers(): void {
     return registeredGames.setShareAllowed(id, allowed);
   });
 
-  ipcMain.on("voice-overlay-snapshot", (event, raw: unknown) => {
-    if (!isTrustedMainWindowSender(event)) return;
-    const snapshot = parseVoiceOverlaySnapshot(raw);
-    if (snapshot) gameOverlay?.setSnapshot(snapshot);
+  const applyOverlaySnapshot = (event: Parameters<typeof isTrustedMainWindowSender>[0], raw: unknown): boolean =>
+    applyAcknowledgedVoiceOverlaySnapshot(raw, isTrustedMainWindowSender(event), {
+      setSuspended: value => overlayShortcut.setSuspended(value),
+      setSnapshot: snapshot => { overlayMediaPolicy=snapshot; overlayMedia.refresh(); gameOverlay?.setSnapshot(snapshot); },
+    });
+  ipcMain.on("voice-overlay-snapshot", applyOverlaySnapshot);
+  ipcMain.handle("voice-overlay-snapshot", applyOverlaySnapshot);
+  registerOverlayGameNoticeClearIPC(ipcMain, assertTrustedMainWindowSender, () => {
+    clearVoiceOverlayGameNotices(overlayMediaPolicy?.gameActivityNotices ?? []);
+    if (overlayMediaPolicy) {
+      overlayMediaPolicy = { ...overlayMediaPolicy, gameActivityNotices: [] };
+      gameOverlay?.setSnapshot(overlayMediaPolicy);
+    }
   });
   ipcMain.handle("set-registered-game-overlay", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);

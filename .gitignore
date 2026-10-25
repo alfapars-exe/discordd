@@ -98,6 +98,15 @@ documents/
 # MD files (private)
 # ========================
 docs/
+# Track only the reviewed refactoring documents; other docs stay private.
+!/docs/
+/docs/*
+!/docs/REFACTORING_PLAN.md
+!/docs/TECHNICAL_DEBT.md
+!/docs/TEST_STRATEGY.md
+!/docs/CODE_QUALITY_STANDARDS.md
+!/docs/ARCHITECTURE_IMPROVEMENTS.md
+!/docs/REFACTORING_TASKS.md
 
 # ========================
 # Deploy build output (contains compiled binary + real configs)
@@ -129,6 +138,7 @@ server/static/dist/
 *.log
 *.tmp
 coverage/
+/artifacts/refactoring/
 __pycache__/
 deploy.md
 

@@ -63,7 +63,7 @@ func TestResetTokenRepo_CreateAndGetByHash(t *testing.T) {
 
 	// Format guard.
 	raw := rawResetTokenExpiresAt(t, db, got.ID)
-	if !expiryFormatRe.MatchString(raw) {
+	if !database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(raw) {
 		t.Errorf("stored expires_at = %q, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
 	}
 }
@@ -101,7 +101,7 @@ func TestResetTokenRepo_DeleteExpired(t *testing.T) {
 // is idempotent, and that DeleteExpired (previously silently no-op on such
 // rows) now actually deletes it.
 func TestResetTokenRepo_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
-	db := newTestDB(t)
+	db, _ := newSQLiteTestDBWithPath(t)
 	seedResetTokenWorld(t, db)
 	repo := NewSQLiteResetTokenRepo(wrapForRepo(db))
 	ctx := context.Background()
@@ -123,7 +123,7 @@ func TestResetTokenRepo_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
 	exec077Migration(t, db)
 
 	raw = rawResetTokenExpiresAt(t, db, tokenID)
-	if !expiryFormatRe.MatchString(raw) {
+	if !database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(raw) {
 		t.Errorf("after 077: expires_at = %q, want YYYY-MM-DD HH:MM:SS format", raw)
 	}
 

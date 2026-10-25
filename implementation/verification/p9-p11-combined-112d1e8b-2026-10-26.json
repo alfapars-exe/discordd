@@ -1,0 +1,27 @@
+{
+  "status": "automated_gates_verified_runtime_acceptance_open",
+  "source_commit": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "scope": "Immutable archive: game-notice producer/native/HUD plus production music feedback port. Foreign logging/coverage-package/center-left overlays excluded.",
+  "dependencies": "Every existing frozen client lock entry/runtime/build version matched installed tree;8 additional dev-only coverage entries unused by these gates. Frozen lock/source unchanged; qualification stored beside archive.",
+  "client": "431files4170tests ALLPASS97.43s session95718 exit0; tests include actualversionedmusicprotocol feedback fixture.",
+  "server": "Go1.26.10 GOMAXPROCS3 go test -p3 ./... ALLPASS session12926 exit0. Root17.269s handlers11.821s repository129.114s services57.868s ws6.890s.",
+  "electron": "Actual TypeScript compile+243tests242PASS1existingSKIP0fail1053.05ms. Clean projected source, not foreign-hunk worktree count.",
+  "build": "Actual tsc-b+Vite production PASS1.51s session57792 exit0.",
+  "lint": "Full immutable client ESLint exit0:0errors5existingwarnings session36357.",
+  "docker": {
+    "build": "Full Dockerfile finalimage PASS session71633 exit0",
+    "image": "hichat-notices-112d1e8b-qa:latest",
+    "manifest": "sha256:f7d435662855a00d4b8ac425bd80d23624efee10ed8f69351c56922c330e1af0",
+    "runtime": "Own fresh synthetic secrets/no user volume/networknone. /api/ready200,statusready,database:true,livekit_configured:false. Own container stopped exit0. No production/cloudmedia acceptance."
+  },
+  "audio_processing": "Actual sandboxed/context-isolated Electron45 with productionappscheme/CSP/worklet/WASM and installedSDKprocessor: RNNoise realfinite nonzeroPCM, gainpower4x/zero0,VADopenclose,all9contextsclosed,capture/permissionrequests0. Syntheticcapturepolicy adapter explicitlydoesnotverifyhardwareAEC/AGC. See p9-electron-rnnoise-synthetic-2026-10-26.json.",
+  "remaining": [
+    "Actual Steam/CS2 join and web externalprotocol launch, game/window/DPI/focus acceptance remain open.",
+    "Full renderedHiChat multiuser/device/physicalAEC/AGC/output routing/realcamera/screen acceptance remains open.",
+    "EgoCLI bootstrap unavailable during current attempt; no new Space/profile or browserupgrade used to route around it.",
+    "Separate localWindowsRC is source4b0+versionoverride, not final112installer or publishedstable update.",
+    "No new HF production publication, release tag or updaterfeed upload performed."
+  ],
+  "exact_electron_notice_window": "Actual native overlay/preload and frozen GameActivityNotices on exact112: A-to-AB stack, clear+staleReplaydeny, freshB keepsoriginalexpiry, nativeexpiryhide,0remainingwindows; realappwindow sourcehashverified. See p11-game-notice-electron-112d1e8b-2026-10-26.json.",
+  "local_windows_rc": "Separate exact4b0+2.11.114-rc.1 versionoverride: fresh hardenedhelpers, stockNSISinstaller/localmetadata/blockmap/assets and actualarchivedmoduleloads validated. Root rechecked installer166032568B SHA25658b9c07fc2954e8ac84f019f3dfd8c3dd0df34e9e35982796d6327ffbcca06a0. Unsigned; noinstall/update/upload. DoesNOTinclude later112changes."
+}

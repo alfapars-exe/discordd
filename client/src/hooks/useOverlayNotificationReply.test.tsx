@@ -1,12 +1,12 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
-  owner: "owner", generation: 1, enabled: true, sourceMessage: "message", receive: undefined as ((value: { session: string; notificationId: string }) => void) | undefined,
+  owner: "owner", generation: 1, enabled: true, compatibility:false, sourceMessage: "message", receive: undefined as ((value: { session: string; notificationId: string }) => void) | undefined,
   confirm: vi.fn(), prepare: vi.fn(), prime: vi.fn(), fetchBlocks: vi.fn(), open: vi.fn(), toast: vi.fn(), unsubscribe: vi.fn(),
 }));
 vi.mock("../api/authSessionEvents", () => ({ getAuthSessionSnapshot: () => ({ ownerId: h.owner, generation: h.generation }) }));
 vi.mock("../stores/authStore", () => ({ useAuthStore: (pick?: (state: unknown) => unknown) => pick?.({ user: { id: h.owner } }) }));
-vi.mock("../stores/voiceStore", () => ({ useVoiceStore: Object.assign((pick: (state: unknown) => unknown) => pick({ voiceOverlayEnabled: h.enabled, voiceOverlayNotifications: true, voiceOverlayNotificationActions: true }), { getState: () => ({ voiceOverlayEnabled: h.enabled, voiceOverlayNotifications: true, voiceOverlayNotificationActions: true }) }) }));
+vi.mock("../stores/voiceStore", () => ({ useVoiceStore: Object.assign((pick: (state: unknown) => unknown) => pick({ voiceOverlayCompatibility:h.compatibility, voiceOverlayEnabled: h.enabled, voiceOverlayNotifications: true, voiceOverlayNotificationActions: true }), { getState: () => ({ voiceOverlayCompatibility:h.compatibility, voiceOverlayEnabled: h.enabled, voiceOverlayNotifications: true, voiceOverlayNotificationActions: true }) }) }));
 vi.mock("../stores/blockStore", () => ({ useBlockStore: Object.assign(() => ({}), { getState: () => ({ fetchBlocked: h.fetchBlocks }) }) }));
 vi.mock("../stores/notificationStore", () => ({ useNotificationStore: () => ({}) }));
 vi.mock("../stores/preferencesStore", () => ({ usePreferencesStore: () => ({}) }));
@@ -33,7 +33,7 @@ import { useOverlayNotificationReply } from "./useOverlayNotificationReply";
 const rows = [{ id: "notice", category: "mention" as const }];
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes; }); return { promise, resolve }; }
 beforeEach(() => {
-  vi.clearAllMocks(); h.owner = "owner"; h.generation = 1; h.enabled = true; h.sourceMessage = "message";
+  vi.clearAllMocks(); h.owner = "owner"; h.generation = 1; h.enabled = true; h.compatibility=false; h.sourceMessage = "message";
   h.confirm.mockResolvedValue(true); h.prepare.mockResolvedValue("prepared"); h.fetchBlocks.mockResolvedValue(undefined); h.prime.mockResolvedValue(undefined);
   Object.defineProperty(window, "electronAPI", { configurable: true, value: {
     onOverlayPrepareNotificationReply: (callback: typeof h.receive) => { h.receive = callback; return h.unsubscribe; }, confirmOverlayPrepareNotificationReply: h.confirm,
@@ -75,3 +75,4 @@ it("coalesces duplicate in-flight clicks and reports a preserved draft conflict 
   await waitFor(() => expect(h.prepare).toHaveBeenCalledOnce());
   expect(h.toast).toHaveBeenCalledWith("info", "common:overlayReplyDraftConflict");
 });
+it("does not prepare a reply after compatibility changes across confirmation",async()=>{const gate=deferred<boolean>();h.confirm.mockReturnValueOnce(gate.promise);const view=renderHook(()=>useOverlayNotificationReply(true,rows));const old=view.result.current.notificationReplySession!;act(()=>h.receive?.({session:old,notificationId:"notice"}));h.compatibility=true;await act(async()=>gate.resolve(true));expect(h.prepare).not.toHaveBeenCalled();view.rerender();expect(view.result.current.notificationReplySession).toBeUndefined();h.compatibility=false;view.rerender();expect(view.result.current.notificationReplySession).not.toBe(old);});

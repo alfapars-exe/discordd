@@ -9,6 +9,7 @@ import (
 
 // Handlers holds all HTTP handler instances.
 type Handlers struct {
+	GameJoin              *handlers.GameJoinHandler
 	AccountStatus         *handlers.AccountStatusHandler
 	AccountDeletionStatus *handlers.AccountDeletionStatusHandler
 	EmailVerification     *handlers.EmailVerificationHandler
@@ -90,6 +91,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		panic("music session validation dependency is not wired")
 	}
 	return &Handlers{
+		GameJoin:              handlers.NewGameJoinHandler(svcs.GameJoin, svcs.Auth, repos.User, repos.AccountLifecycle),
 		AccountStatus:         handlers.NewAccountStatusHandler(repos.AccountStatus),
 		AccountDeletionStatus: handlers.NewAccountDeletionStatusHandler(repos.AccountDeletionStatus),
 		EmailVerification:     handlers.NewEmailVerificationHandler(svcs.EmailVerification, limiters.VerifyEmail),

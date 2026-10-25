@@ -75,7 +75,7 @@ class FakeCtx {
   }
 }
 
-import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playToneAt, closeAudioContext } from "./sounds";
+import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playVoiceEventSound, VOICE_SOUND_EVENTS, playToneAt, closeAudioContext } from "./sounds";
 const subscriptionsAtModuleImport = h.voiceListeners.length;
 
 beforeEach(() => {
@@ -301,4 +301,12 @@ it.each(["notification","preview"])("volume zero retires deferred %s even if res
 });
 it("volume zero immediately cancels sounding notification/preview but leaves master-following voice effects",async()=>{
  playNotificationSound();previewIncomingCallSound();playJoinSound();await vi.waitFor(()=>expect(h.oscillators).toBe(4));const voice=h.oscillatorNodes[3];h.a11y.notificationSoundVolume=0;h.accessibilityListeners.forEach(fn=>fn());for(const node of h.oscillatorNodes.slice(0,3))expect(node.stop).toHaveBeenCalledTimes(2);expect(voice.stop).toHaveBeenCalledTimes(1);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(4);
+});
+
+it.each(VOICE_SOUND_EVENTS)("uses actual %s catalog tone for preview and respects its individual switch",async event=>{
+ playVoiceEventSound(event);await vi.waitFor(()=>expect(h.oscillators).toBeGreaterThan(0));closeAudioContext();h.oscillators=0;const key={join:"voiceJoinSound",leave:"voiceLeaveSound",watchStart:"voiceWatchStartSound",watchStop:"voiceWatchStopSound",mute:"voiceMuteSound",unmute:"voiceUnmuteSound",deafen:"voiceDeafenSound",undeafen:"voiceUndeafenSound"}[event];Object.assign(h.prefs,{[key]:false});playVoiceEventSound(event);await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(0);
+});
+
+it("individual watch preference revoke/restore cannot resurrect its delayed second note",async()=>{
+ playVoiceEventSound("watchStart");await vi.waitFor(()=>expect(h.oscillators).toBe(1));Object.assign(h.prefs,{voiceWatchStartSound:false});h.preferenceListeners.forEach(fn=>fn());Object.assign(h.prefs,{voiceWatchStartSound:true});h.preferenceListeners.forEach(fn=>fn());await vi.advanceTimersByTimeAsync(100);expect(h.oscillators).toBe(1);
 });

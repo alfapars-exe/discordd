@@ -16,6 +16,7 @@ import { useEffect, useRef } from "react";
 import { ConnectionState, RoomEvent, type Room } from "livekit-client";
 
 import { useVoiceStore } from "../stores/voiceStore";
+import { routeAudioOutput } from "../audio/outputRouting";
 
 export function useOutputDeviceSync(room: Room): void {
   const outputDevice = useVoiceStore((s) => s.outputDevice);
@@ -33,19 +34,13 @@ export function useOutputDeviceSync(room: Room): void {
         try {
           // The empty preference means the system default, not "leave the
           // previously selected speaker active".
-          await room.switchActiveDevice("audiooutput", outputDevice || "default");
+          await routeAudioOutput(outputDevice, (sink) => room.switchActiveDevice("audiooutput", sink), {
+            defaultSink: "default", isCurrent: current, canFallback: () => true,
+          });
         } catch (err) {
           // Queue the latest choice after an in-flight switch. A superseded
           // failure must not restore the default over the new preference.
           if (!current()) return;
-          if (outputDevice && outputDevice !== "default") {
-            try {
-              await room.switchActiveDevice("audiooutput", "default");
-              return;
-            } catch {
-              // Keep the call alive if no routable output exists.
-            }
-          }
           if (current()) console.warn("[useOutputDeviceSync] Output device unavailable; using browser default.", err);
         }
       });

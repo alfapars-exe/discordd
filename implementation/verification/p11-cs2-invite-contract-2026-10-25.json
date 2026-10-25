@@ -1,0 +1,16 @@
+{
+  "status": "groundwork_verified_full_join_unimplemented",
+  "user_selection": "CS2, Steam app730",
+  "owned_paths": ["electron/cs2-join-contract.ts", "electron/cs2-join-contract.test.ts"],
+  "checks": "Electron TypeScript compile0;6 node tests PASS0skip; diffcheck0",
+  "behavior": "Strict canonical uint64 recipe, public Steam universe, lobby/individual account types, documented lobby/MMS instance masks, fixed adapter/app730 only. Rejects arbitrary URL/executable/arguments/decorations/precision loss. Builds a fixed URI locally; never invokes Steam or a shell.",
+  "primary_sources": [
+    "https://store.steampowered.com/app/730/CounterStrike_2/",
+    "https://partner.steamgames.com/doc/features/multiplayer/matchmaking",
+    "https://partner.steamgames.com/doc/api/isteammatchmaking#ELobbyType",
+    "https://github.com/ValveSoftware/GameNetworkingSockets/blob/master/include/steam/steamclientpublic.h"
+  ],
+  "qualification": "Primary sources establish app identity, ID layout and Steam lobby permissions. They do not prove current CS2 steam://joinlobby URI runtime success. No real account/lobby identifiers copied into tests.",
+  "remaining": ["Source-bound offer and privacy policy", "Separate friend/voice consent and authoritative server eligibility", "Single-use expiring authorization and native consume", "Explicit user launch and real Steam-generated invite/two-client acceptance"],
+  "production": "No launch, messaging, publication or verified Steam ownership claim"
+}

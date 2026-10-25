@@ -28,7 +28,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     shape: Array<{ x: number; y: number; width: number; height: number }> = [];
     webContents = Object.assign(new EventEmitter(), {
       mainFrame: {},
-      isLoading: () => false,
+      isLoading: (): boolean => false,
       send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; notificationReplySession?: string; notificationReplyButtons?: Array<{ id: string; row: number }>; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
     });
     focusCount = 0;
@@ -443,5 +443,62 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   notificationActionWin.close();
   exports.updateVoiceOverlay(replySnapshot, area);
   assert.equal(exports.confirmVoiceOverlayNotificationReply({ sender: mainWebContents, senderFrame: mainFrame }, replyRequest, mainWindow), false, "destroying the action surface prevents an old click from focusing through a replacement");
+  // Actual compatibility entry retires native hit surfaces, drafts and focus intents.
+  const compatibilitySnapshot = { ...replySnapshot, voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
+    voiceActionSession: "compat-voice", voiceOverlayChat: true, voiceOverlayChatActions: true,
+    voiceOverlayChatCompose: true, chatStatus: "ready" as const, chatActionSession: "compat-chat", chatComposeSession: "compat-compose" };
+  exports.updateVoiceOverlay(compatibilitySnapshot, area);
+  const passiveHUD = win;
+  const compatibilityChatSender = { sender: chatActionWin.webContents, senderFrame: chatActionWin.webContents.mainFrame };
+  const compatibilityNotificationSender = { sender: notificationActionWin.webContents, senderFrame: notificationActionWin.webContents.mainFrame };
+  const notificationBoundsForCompatibility = notificationActionWin.getBounds();
+  cursor = { x: notificationBoundsForCompatibility.x+5, y: notificationBoundsForCompatibility.y+31 }; now+=251;
+  assert.ok(exports.takeVoiceOverlayNotificationReplyIntent(compatibilityNotificationSender,replyRequest));
+  const composerBoundsForCompatibility=chatActionWin.getBounds();cursor={x:composerBoundsForCompatibility.x+5,y:composerBoundsForCompatibility.y+5};now+=251;
+  assert.ok(exports.takeVoiceOverlayOpenChatComposerIntent(compatibilityChatSender,"compat-compose",mainWindow));
+  const compatibilityComposer=chatComposerWin;
+  const compatibilityComposerSender={sender:compatibilityComposer.webContents,senderFrame:compatibilityComposer.webContents.mainFrame};
+  const compatibilityPending=exports.sendOverlayChatMessage(compatibilityComposerSender,{session:"compat-compose",requestId:"compat-pending",text:"explicit draft"},mainWindow);
+  const staleLoadWindows=[passiveHUD,actionWin,notificationActionWin,chatActionWin];
+  for(const child of staleLoadWindows)child.webContents.isLoading=()=>true;
+  exports.updateVoiceOverlay(compatibilitySnapshot,area);
+  const focusBeforeCompatibility=focuses;
+  exports.updateVoiceOverlay({...compatibilitySnapshot,voiceOverlayCompatibility:true},area);
+  assert.equal(await compatibilityPending,"unavailable");
+  assert.equal(compatibilityComposer.destroyed,true,"compatibility closes the focused composer");
+  assert.equal(passiveHUD.ignored,true,"compatibility is actual native mouse passthrough");
+  assert.equal(actionWin.visible,false);assert.equal(notificationActionWin.visible,false);assert.equal(chatActionWin.visible,false);
+  for(const child of staleLoadWindows){child.webContents.isLoading=()=>false;child.webContents.emit("did-finish-load");}
+  assert.equal(actionWin.visible,false,"late native action load cannot revive compatibility input");
+  assert.equal(notificationActionWin.visible,false);assert.equal(chatActionWin.visible,false);
+  exports.toggleVoiceOverlayLock();assert.equal(passiveHUD.ignored,true,"shortcut cannot unlock read-only mode");
+  assert.equal(passiveHUD.focusCount,0,"compatibility never focuses the HUD");
+  assert.equal(exports.takeVoiceOverlayAction({sender:actionWin.webContents,senderFrame:actionWin.webContents.mainFrame},"toggle-mute","compat-voice"),null);
+  assert.equal(exports.takeVoiceOverlayOpenInboxIntent(compatibilityNotificationSender,"session-notifications"),null);
+  assert.equal(exports.takeVoiceOverlayNotificationReplyIntent(compatibilityNotificationSender,replyRequest),null);
+  assert.equal(exports.confirmVoiceOverlayNotificationReply({sender:mainWebContents,senderFrame:mainFrame},replyRequest,mainWindow),false);
+  assert.equal(exports.confirmVoiceOverlayOpenInbox({sender:mainWebContents,senderFrame:mainFrame},"session-notifications",mainWindow),false);
+  assert.equal(exports.takeVoiceOverlayOpenChatIntent(compatibilityChatSender,"compat-chat"),null);
+  assert.equal(exports.confirmVoiceOverlayOpenChat({sender:mainWebContents,senderFrame:mainFrame},"compat-chat",mainWindow),false);
+  assert.equal(exports.takeVoiceOverlayOpenChatComposerIntent(compatibilityChatSender,"compat-compose",mainWindow),null);
+  assert.equal(await exports.sendOverlayChatMessage(compatibilityComposerSender,{session:"compat-compose",requestId:"compat-stale",text:"never forwarded"},mainWindow),"unavailable");
+  assert.equal(exports.resolveOverlayChatSend(mainSender,{session:"compat-compose",requestId:"compat-pending",result:"sent"},mainWindow),false);
+  assert.equal(focuses,focusBeforeCompatibility,"stale confirmations never focus the main app");
+  exports.updateVoiceOverlay({...compatibilitySnapshot,voiceOverlayCompatibility:false},area);
+  assert.equal(passiveHUD.ignored,true,"normal mode does not implicitly unlock after compatibility");
+  assert.equal(passiveHUD.focusCount,0);assert.equal(focuses,focusBeforeCompatibility);
+  const mediaLifecycle:boolean[]=[];
+  const stopMediaLifecycle=exports.subscribeVoiceOverlayMediaLifecycle(revoke=>mediaLifecycle.push(revoke));
+  const actualHUD=exports.getVoiceOverlayMediaWindow();
+  passiveHUD.webContents.emit("did-finish-load");
+  assert.equal(exports.getVoiceOverlayMediaWindow(),passiveHUD,"only the actual passive HUD is exposed, never its action/composer windows");
+  passiveHUD.emit("hide");assert.equal(mediaLifecycle[mediaLifecycle.length-1],false,"hide refreshes visibility without discarding installed receiver listeners");
+  passiveHUD.webContents.emit("did-start-navigation",{},"app://hichat/overlay.html",false,true);
+  assert.equal(exports.getVoiceOverlayMediaWindow(),null,"in-flight navigation cannot reauthorize the old frame");
+  assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);
+  passiveHUD.webContents.emit("did-finish-load");assert.equal(exports.getVoiceOverlayMediaWindow(),passiveHUD);
+  passiveHUD.webContents.emit("render-process-gone");assert.equal(exports.getVoiceOverlayMediaWindow(),null);
+  assert.equal(mediaLifecycle[mediaLifecycle.length-1],true);void actualHUD;
+  stopMediaLifecycle();
   exports.closeVoiceOverlay();
 });

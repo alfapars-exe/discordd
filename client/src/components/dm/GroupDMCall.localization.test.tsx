@@ -1,3 +1,6 @@
+vi.mock("../../video/GroupRemoteVideos",()=>({default:()=>null}));
+vi.mock("../../video/useAuthorizedRoomVideos",()=>({useAuthorizedRoomVideos:()=>{},manualNativeVideo:()=>false}));
+vi.mock("../../video/videoPresentation",()=>({isPresentedVideoContext:()=>false,subscribeVideoPresentation:()=>()=>{}}));
 vi.mock("../../hooks/useRoomCamera",()=>({useRoomCamera:()=>({phase:"idle",retry:()=>{}})}));
 import {cleanup,fireEvent,render,screen} from "@testing-library/react";
 import {afterEach,beforeEach,expect,it,vi} from "vitest";

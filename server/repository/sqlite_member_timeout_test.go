@@ -105,7 +105,7 @@ func TestMemberTimeoutRepo_FutureExpiry_IsActive(t *testing.T) {
 
 	// Format guard.
 	raw := rawExpiresAt(t, db, mtServer, mtTarget)
-	if !expiryFormatRe.MatchString(raw) {
+	if !database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(raw) {
 		t.Errorf("stored expires_at = %q, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
 	}
 }
@@ -256,7 +256,7 @@ func exec076Migration(t testing.TB, db *database.DB) {
 // idempotent on a second run, and that the row correctly reads as expired
 // afterwards.
 func TestMemberTimeoutRepo_Migration076_NormalizesLegacyRFC3339Row(t *testing.T) {
-	db := newTestDB(t)
+	db, _ := newSQLiteTestDBWithPath(t)
 	seedMemberTimeoutWorld(t, db)
 	repo := NewSQLiteMemberTimeoutRepo(wrapForRepo(db))
 	ctx := context.Background()
@@ -277,7 +277,7 @@ func TestMemberTimeoutRepo_Migration076_NormalizesLegacyRFC3339Row(t *testing.T)
 	exec076Migration(t, db)
 
 	raw = rawExpiresAt(t, db, mtServer, mtTarget)
-	if !expiryFormatRe.MatchString(raw) {
+	if !database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(raw) {
 		t.Errorf("after 076: expires_at = %q, want YYYY-MM-DD HH:MM:SS format", raw)
 	}
 	active, err := repo.IsActive(ctx, mtServer, mtTarget)

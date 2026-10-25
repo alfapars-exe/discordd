@@ -53,7 +53,7 @@ describe("ActivityPrivacySettings", () => {
 
   it("sorts by name, filters memberships, and patches only the game privacy leaves", () => {
     render(<ActivityPrivacySettings />);
-    expect(screen.getAllByRole("switch").slice(1).map((el) => el.getAttribute("aria-label"))).toEqual(["Alpha", "Beta"]);
+    expect(screen.getAllByRole("switch").slice(3).map((el) => el.getAttribute("aria-label"))).toEqual(["Alpha", "Beta"]);
     fireEvent.change(screen.getByRole("textbox", { name: "activityPrivacySearch" }), { target: { value: "beta" } });
     expect(screen.getByText("Beta")).toBeInTheDocument();
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
@@ -67,7 +67,7 @@ describe("ActivityPrivacySettings", () => {
     render(<ActivityPrivacySettings />);
     fireEvent.change(screen.getByRole("combobox", { name: "activityPrivacySort" }), { target: { value: "sidebar" } });
     const switches = screen.getAllByRole("switch");
-    expect(switches[1]).toHaveAccessibleName("Beta");
+    expect(switches[3]).toHaveAccessibleName("Beta");
     fireEvent.click(screen.getByRole("button", { name: "activityPrivacyEnableCurrent" }));
     expect(usePreferencesStore.getState().get<Record<string, unknown>>("privacy")?.gameActivityServerOverrides).toEqual({ b: true, a: true });
   });
@@ -114,4 +114,16 @@ describe("ActivityPrivacySettings", () => {
     expect(screen.getByRole("switch", { name: "activityPrivacyMaster" })).toBeEnabled();
   });
 
+  it("defaults both join permissions off and saves independent account-bound boolean leaves", () => {
+    render(<ActivityPrivacySettings />);
+    for (const key of ["allowFriendsToJoinGame", "allowVoiceParticipantsToJoinGame"]) {
+      const toggle = screen.getByRole("switch", { name: key });
+      expect(toggle).not.toBeChecked(); fireEvent.click(toggle); expect(toggle).toBeChecked();
+    }
+    expect(usePreferencesStore.getState().get<Record<string, unknown>>("privacy")).toMatchObject({
+      allowFriendsToJoinGame: true, allowVoiceParticipantsToJoinGame: true, shareStreamUpdates: true,
+    });
+    act(() => usePreferencesStore.setState({ accountId: "other" }));
+    expect(screen.getByRole("switch", { name: "allowFriendsToJoinGame" })).toBeDisabled();
+  });
 });

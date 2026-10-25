@@ -2,9 +2,7 @@
 package ws
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"runtime/debug"
 	"time"
 
@@ -23,6 +21,7 @@ func init() {
 		OpTyping:                (*Client).handleTyping,
 		OpPresenceUpdate:        (*Client).handlePresenceUpdate,
 		OpGameActivityUpdate:    (*Client).handleGameActivityUpdate,
+		"game_join_offer":       (*Client).handleGameJoinOffer,
 		OpVoiceJoin:             (*Client).handleVoiceJoin,
 		OpVoiceLeave:            func(c *Client, _ Event) { c.handleVoiceLeave() },
 		OpVoiceStateUpdateReq:   (*Client).handleVoiceStateUpdate,
@@ -66,16 +65,12 @@ func (c *Client) handleEvent(event Event) {
 		// see pkg/logx/sentry.go) and event.Op — client-controlled — goes in
 		// as a structured attr instead of into a format string, so a
 		// malicious op value can't forge or split log lines (G706).
-		slog.LogAttrs(context.Background(), slog.LevelError, "ws handler panic recovered",
-			slog.String("user_id", c.userID),
-			slog.String("op", event.Op),
-			slog.String("panic", fmt.Sprintf("%v", r)),
-			slog.String("stack", string(stack)),
-		)
+
 		c.hub.logEvent(
 			models.LogLevelError, models.LogCategoryWS, &c.userID,
-			fmt.Sprintf("WS handler panic recovered (op=%s)", event.Op),
+			"ws handler panic recovered",
 			map[string]string{
+				"component": "ws.dispatch", "event_code": "WS_PANIC", "error_kind": "panic",
 				"op":     event.Op,
 				"panic":  fmt.Sprintf("%v", r),
 				"stack":  string(stack),

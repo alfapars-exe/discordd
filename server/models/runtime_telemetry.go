@@ -21,6 +21,7 @@ type RuntimeTelemetry struct {
 	WSDispatchTotal       uint64 `json:"ws_dispatch_total"`
 	WSRateLimitDropsTotal uint64 `json:"ws_rate_limit_drops_total"`
 
+	Diagnostics      string  `json:"diagnostics"`
 	HTTPRequests     int64   `json:"http_requests"`
 	HTTP5xx          int64   `json:"http_5xx"`
 	HTTPMaxLatencyMs int64   `json:"http_max_latency_ms"`

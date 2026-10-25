@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-26",
+  "source_revision": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "scope": "Actual native notice window with exact immutable candidate source, replacing the source-precision limitation of the older worktree fixture only.",
+  "source_archive": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-clean-112d1e8b-7p_qyxca\\source",
+  "source_hashes": {
+    "electron/voice-overlay.ts": {
+      "actual_sha256": "7bca80747fe3da745d00fd69a3a7a72af3fa29d482c1e9ead72c97c6b7515af4",
+      "git_blob_lf_sha256": "03526afc63d063c17b6498d7451900ba021d24ec56b0adc9064e6017b5f34b84"
+    },
+    "electron/voice-overlay-contract.ts": {
+      "actual_sha256": "6ebbb0423d8e1b60f5c41ec98155c9e87f15cdc94b5c86b6af16162b75460783",
+      "git_blob_lf_sha256": "d4492727e5403c231a8214824f3690825aed8091cd6e0ae6586d129330aa4f9d"
+    },
+    "electron/voice-overlay-geometry.ts": {
+      "actual_sha256": "e80c435e186666c8acb70e4c8ef072e75048c0ac1e8b7e8e3d9c1af35143256d",
+      "git_blob_lf_sha256": "4423943dee8ae13355dc8ae79d45b554f0ec75dfe5726bee902a42285d353d0a"
+    },
+    "electron/overlay-game-notices.ts": {
+      "actual_sha256": "26aa416930be36bb0b33eb37b237ad2b595a36f5c594cbf11ab25484d487e6b2",
+      "git_blob_lf_sha256": "e76d695aea361d4289863c460376c04df3b76ed8b164a16ceff2a7a633d8d700"
+    },
+    "electron/preload.ts": {
+      "actual_sha256": "a12abce6f7bce9d5b5865dcf9ff1d213d2b38cfec3d8d41eef989be67646788f",
+      "git_blob_lf_sha256": "0e293728d75a9c8adbd27fc31189e5651a6fee630a490ad32ea54bb007df3a6b"
+    },
+    "client/src/components/voice/GameActivityNotices.tsx": {
+      "actual_sha256": "11e5a89c80cfdfcb820d9e587d50dc2adc1c60fa9f73f686017bfc858939be4d",
+      "git_blob_lf_sha256": "32dc602f4b5e9fa9a2224ab0ec001741a4631e4474d3bfb2f7eaa955fbc348c0"
+    }
+  },
+  "compiled_native_sha256": {
+    "overlay-game-notices.js": "cc928720ce91dec3d760a988dcb2709a132a33df9db058d6f9227621f2605867",
+    "preload.js": "d541c124025c4294b209414269e0a67e34220347c281e67bd89d770df6d78909",
+    "voice-overlay-contract.js": "5c895add01d9f810778bd4c75846f66875fd2e5cb6e16b3ff5c633c1e781f2f8",
+    "voice-overlay-geometry.js": "7b485f74721995805911bd8d59e1a370fc046cea604c48899564d0801f67f9e1",
+    "voice-overlay.js": "9754b9e5104f6761f08525e0a9eb380801caf3754f26becbf1b7ec956a28cc9a"
+  },
+  "fixture": {
+    "directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-notice-exact112-z4z9rm6i",
+    "fresh_user_data": true,
+    "sha256": {
+      "main.cjs": "4770d84cd3e540b9a4bfa0cf53e33be2ccd5882519ee7fd7ab0dd9b89e5d24af",
+      "entry.tsx": "fa7a7b0f16e1873802a7fd4d7e77e363fb00dab461d8b78ca5ec3143d339733c",
+      "build.mjs": "d9ccbda0fd08769c537979d2393209ab58f7ab51fe1737892f59432fc83a6a13",
+      "result.json": "2bc2ba3800fa994d50223c80267467757330f2bba67c2a8b8cf1422a302b3f94"
+    },
+    "build": "Fresh TypeScript compile from immutable electron/tsconfig.json into fixture/native. Actual immutable GameActivityNotices component imported in a fresh Vite bundle with installed dependencies. No mutated worktree native/renderer files were loaded.",
+    "runtime": "Electron45 Windows, production native overlay BrowserWindow and production preload, sandbox/contextIsolation enabled, nodeIntegration disabled. Own-process development overlay URL redirects to ephemeral loopback fixture. GPU disabled for the controlled fixture. Synthetic QA labels only.",
+    "exit_code": 0,
+    "elapsed_seconds": 6.08
+  },
+  "result": {
+    "realElectron": true,
+    "productionNativeOverlay": true,
+    "productionPreload": true,
+    "productionNoticeComponent": true,
+    "appendPreservesTwoRows": true,
+    "passiveButtons": 0,
+    "clearedOldReplayBlocked": true,
+    "retainedFreshIdOriginalExpiry": true,
+    "freshRowCount": 1,
+    "nativeExpiryHidesWindow": true,
+    "remainingOwnWindows": 0,
+    "passed": true
+  },
+  "assertions": [
+    "A then A+B renders two passive rows.",
+    "Trusted native clear tombstones A/B; replaying both old IDs keeps the window hidden.",
+    "Fresh surviving B display ID renders one row with B original expiry unchanged.",
+    "Native expiry timer hides the window without another main-renderer update.",
+    "No buttons or anchors; all owned windows closed."
+  ],
+  "qualifications": [
+    "No audio, microphone, camera, desktop capture, Steam, authentication, user profile, or actual game was used.",
+    "This proves native display transport, actual component rendering, revocation, replay fencing and expiry for exact candidate code. It does not exercise AppLayout tracker production, game focus/DPI/multi-monitor, two-client privacy propagation, or production service behavior.",
+    "The older worktree fixture remains qualified separately in p11-game-notice-transport-2026-10-26.json; its source hashes and evidence were not rewritten."
+  ]
+}

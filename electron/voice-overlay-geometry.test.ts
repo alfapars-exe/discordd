@@ -203,3 +203,49 @@ test("Go Live guidance reserves bounded room only for an eligible game overlay a
   assert.equal(calculateVoiceOverlayGeometry(source, { ...area, height: 180 })?.goLiveHeight, 0);
   assert.equal(calculateVoiceOverlayGeometry({ ...source, participants: [], voiceOverlayMaxParticipants: 0 }, area)?.shouldShow, false);
 });
+
+test("opt-in media-only HUD reserves passive bounded space without participant/action requirements",()=>{
+ const source=snapshot({participants:[],voiceOverlayMaxParticipants:0,voiceOverlayVideo:true});
+ for(const area of [{x:0,y:0,width:1200,height:800},{x:-300,y:10,width:280,height:220},{x:0,y:0,width:50,height:80}]){
+  const geometry=calculateVoiceOverlayGeometry(source,area)!;
+  assert.ok(geometry.mediaHeight<=320);assert.ok(geometry.height<=area.height);assert.ok(geometry.width<=area.width);
+  assert.equal(geometry.shouldShow,geometry.mediaHeight>0);
+ }
+ const off=calculateVoiceOverlayGeometry({...source,voiceOverlayVideo:false},{x:0,y:0,width:1200,height:800})!;assert.equal(off.mediaHeight,0);assert.equal(off.shouldShow,false);
+});
+
+test("middle-left shows all five members including silent and muted users", () => {
+  const participants = snapshot().participants.slice(0, 5).map((p, i) => ({ ...p, speaking: i < 2, muted: i === 4 }));
+  for (const scale of [75, 100, 150]) {
+    const area = { x: -1920, y: 100, width: 1920, height: 1080 };
+    const geometry = calculateVoiceOverlayGeometry(snapshot({ position: "center-left", participants, scale }), area)!;
+    assert.equal(geometry.visibleParticipants, 5);
+    assert.equal(geometry.x, area.x + 24);
+    assert.ok(Math.abs(geometry.y + geometry.height / 2 - (area.y + area.height / 2)) <= 0.5);
+  }
+});
+
+test("optional game panels cannot reduce a five-person roster to two rows", () => {
+  const source = snapshot({ voiceOverlayMode: "game", position: "center-left",
+    participants: snapshot().participants.slice(0, 5), voiceOverlayVideo: true,
+    voiceOverlayChat: true, chatStatus: "ready", chatMessages: Array.from({ length: 5 }, (_, i) => ({ id: String(i), author: "Friend", text: "Hello" })),
+    voiceOverlayActivity: true, activities: [], voiceOverlayNotifications: true, notificationStatus: "ready", notifications: [],
+  });
+  const geometry = calculateVoiceOverlayGeometry(source, { x: 0, y: 0, width: 1280, height: 720 })!;
+  assert.equal(geometry.visibleParticipants, 5);
+  assert.ok(geometry.height <= 720 - 48);
+});
+
+test("transient game notices use only spare room without shrinking voice or media", () => {
+  const notices = Array.from({ length: 3 }, (_, i) => ({ noticeId: `12345678-1234-4234-8234-${String(i).padStart(12, "0")}`, label: "Friend", gameName: "CS2", kind: "game_activity" as const, expiresAt: Date.now() + 10000 }));
+  const source = snapshot({ participants: snapshot().participants.slice(0, 5), voiceOverlayMode: "game", voiceOverlayVideo: true });
+  for (const height of [140, 300, 500, 720, 1080]) {
+    const area = { x: 0, y: 0, width: 1280, height };
+    const before = calculateVoiceOverlayGeometry(source, area)!;
+    const after = calculateVoiceOverlayGeometry({ ...source, voiceOverlayGameActivityNotifications: true, gameActivityNotices: notices }, area)!;
+    assert.equal(after.visibleParticipants, before.visibleParticipants); assert.equal(after.mediaHeight, before.mediaHeight);
+    assert.ok(after.gameActivityNoticeRows >= 0 && after.gameActivityNoticeRows <= 3); assert.ok(after.height <= area.height);
+  }
+  const noticesOnly = calculateVoiceOverlayGeometry(snapshot({ participants: [], voiceOverlayMaxParticipants: 0, voiceOverlayGameActivityNotifications: true, gameActivityNotices: notices }), { x: 0, y: 0, width: 600, height: 500 })!;
+  assert.equal(noticesOnly.gameActivityNoticeRows, 3); assert.equal(noticesOnly.shouldShow, true);
+});

@@ -1,3 +1,7 @@
+import {getAuthSessionSnapshot}from "../../api/authSessionEvents";
+import {useAuthorizedRoomVideos,manualNativeVideo}from "../../video/useAuthorizedRoomVideos";
+import {isPresentedVideoContext,subscribeVideoPresentation}from "../../video/videoPresentation";
+import {resolveUserId}from "../../utils/constants";
 /**
  * VoiceProvider — owns the LiveKitRoom for the active voice session.
  *
@@ -71,6 +75,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const keyIndex = useVoiceStore((s) => s.e2eeKeyIndex);
   const keyEpoch = useVoiceStore((s) => s.e2eeKeyEpoch);
   const keyContext = useVoiceStore((s) => s.e2eeKeyContext);
+  const videoJoinGeneration=useVoiceStore(state=>state._joinGeneration);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
 
   // Per-channel Opus bitrate (Track T1). Resolved from the channel store
@@ -217,7 +222,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       // adaptiveStream: SFU sends the lower simulcast layer when a
       // subscriber's viewport is small. Without this, full-res is sent
       // regardless of viewer size → bandwidth waste → packet loss.
-      adaptiveStream: true,
+      adaptiveStream: !manualNativeVideo(),
       // dynacast: pauses video encoding when no subscriber is watching a
       // track. Saves upstream bandwidth when e.g. screen share has 0 viewers.
       dynacast: true,
@@ -252,6 +257,15 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const admission = useEncryptedRoomAdmission({ enabled: isConnected, token: livekitToken ?? "", scope: encryption.ownerScope,
     keyScope: encryption.keyScope, keyReady: encryption.keyReady, keyError: encryption.keyError,
     keyProvider, worker: e2eeWorker, roomOptions: roomOptions ?? {}, onError: handleE2eeKeyError, allowRestore });
+  const videoAuth=getAuthSessionSnapshot();
+  const videoIdentity=useMemo(()=>({room:admission.room,nonce:crypto.randomUUID()}),[admission.room]);
+  const videoLabel=useChannelStore(state=>state.categories.flatMap(category=>category.channels).find(channel=>channel.id===currentVoiceChannelId)?.name)??`${t("voiceConnected")} · ${currentVoiceChannelId??""}`;
+  useAuthorizedRoomVideos({room:admission.room,nonce:videoIdentity.nonce,owner:"guild",label:videoLabel,keyContext:keyContext??"",keyEpoch:keyEpoch??0,admitted:admission.publishReady,
+    current:()=>{const state=useVoiceStore.getState(),auth=getAuthSessionSnapshot();return !!currentVoiceChannelId&&state.currentVoiceChannelId===currentVoiceChannelId&&state._joinGeneration===videoJoinGeneration
+      &&state.livekitToken===livekitToken&&state.livekitUrl===livekitUrl&&state.e2eeKeyContext===keyContext&&state.e2eeKeyEpoch===keyEpoch&&state.e2eeKeyIndex===keyIndex&&state.e2eePassphrase===e2eePassphrase
+      &&auth.ownerId===videoAuth.ownerId&&auth.generation===videoAuth.generation;},
+    authorized:(participant,publication)=>publication.source===Track.Source.Camera||!!useVoiceStore.getState().watchingScreenShares[resolveUserId(participant.identity)],
+    subscribe:changed=>{const a=useVoiceStore.subscribe(changed),b=subscribeVideoPresentation(changed);return()=>{a();b()}},presented:()=>isPresentedVideoContext(currentVoiceChannelId??"","guild")});
   const leaveFailedEncryption = () => {
     const current = useVoiceStore.getState();
     if (current._onLeaveCallback) current._onLeaveCallback(); else current.leaveVoiceChannel();

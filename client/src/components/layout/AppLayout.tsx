@@ -1,3 +1,4 @@
+import {useOverlayMediaSender} from "../../hooks/useOverlayMediaSender";
 /**
  * AppLayout — Main layout with sidebar, split panes, and member list.
  *
@@ -19,6 +20,7 @@ import { useVoiceOverlayCleanup } from "../../hooks/useVoiceOverlayCleanup";
 import { useOverlayShortcut } from "../../hooks/useOverlayShortcut";
 import { getOverlayVoiceSession, useOverlayVoiceActions } from "../../hooks/useOverlayVoiceActions";
 import { useOverlayActivity } from "../../hooks/useOverlayActivity";
+import { getLiveOverlayGameNotices, useOverlayGameNotices } from "../../hooks/useOverlayGameNotices";
 import { useOverlayChat } from "../../hooks/useOverlayChat";
 import { useOverlayChatActions } from "../../hooks/useOverlayChatActions";
 import { useOverlayChatCompose } from "../../hooks/useOverlayChatCompose";
@@ -51,6 +53,7 @@ const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
 import GroupCallProvider from "../dm/GroupCallProvider";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useGameActivity } from "../../hooks/useGameActivity";
+import { useGameJoinStore } from "../../stores/gameJoinStore";
 import { useVoice } from "../../hooks/useVoice";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
 import { useVoiceActivityReporter } from "../../hooks/useVoiceActivityReporter";
@@ -103,7 +106,6 @@ import "../../styles/voice-overlay.css";
 function AppLayout() {
   const { ownerId: overlayRenderOwner, generation: overlayRenderGeneration } = getAuthSessionSnapshot();
   useVoiceOverlayCleanup();
-  useOverlayShortcut();
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
     useWebSocket();
   useThreadReconnectRefresh(connectionStatus === "connected");
@@ -113,22 +115,27 @@ function AppLayout() {
   const goLiveEligible = useOverlayGoLiveStore(s => s.eligible) && connectionStatus === "connected";
   const overlayWelcome = useVoiceStore((s) => s.voiceOverlayWelcome);
   const overlayEnabled = useVoiceStore((s) => s.voiceOverlayEnabled);
+  const overlayCompatibility = useVoiceStore(s=>s.voiceOverlayCompatibility);
   const overlayChatEnabled = useVoiceStore((s) => s.voiceOverlayChat);
   const overlayChat = useOverlayChat(overlayEnabled && overlayChatEnabled, connectionStatus === "connected");
   const overlayChatActions = useVoiceStore((s) => s.voiceOverlayChatActions);
-  const chatActionSession = useOverlayChatActions(connectionStatus === "connected", overlayChat.chatStatus === "ready");
+  const chatActionSession = useOverlayChatActions(connectionStatus === "connected" && !overlayCompatibility, overlayChat.chatStatus === "ready");
   const overlayChatCompose = useVoiceStore((s) => s.voiceOverlayChatCompose);
-  const chatComposeSession = useOverlayChatCompose(connectionStatus === "connected", overlayChat.chatStatus === "ready");
+  const chatComposeSession = useOverlayChatCompose(connectionStatus === "connected" && !overlayCompatibility, overlayChat.chatStatus === "ready");
   const chatComposeLabel = formatOverlayChatComposeLabel(getLiveOverlayChatTarget(true)?.label);
   const overlayMode = useVoiceStore((s) => s.voiceOverlayMode);
   const overlayPinned = useVoiceStore((s) => s.voiceOverlayPinned);
   const overlayActivityEnabled = useVoiceStore((s) => s.voiceOverlayActivity);
+  const overlayVideo=useVoiceStore(s=>s.voiceOverlayVideo),overlayStreams=useVoiceStore(s=>s.voiceOverlayStreams);
   const overlayActivities = useOverlayActivity(overlayActivityEnabled, connectionStatus === "connected");
+  const overlayGameActivityNotifications = useVoiceStore(s => s.voiceOverlayGameActivityNotifications);
+  const overlayNowPlayingNotifications = useVoiceStore(s => s.voiceOverlayNowPlayingNotifications);
+  const overlayGameNotices = useOverlayGameNotices(connectionStatus === "connected");
   const overlayNotificationsEnabled = useVoiceStore((s) => s.voiceOverlayNotifications);
   const overlayNotificationActions = useVoiceStore((s) => s.voiceOverlayNotificationActions);
   const { notifications: overlayNotifications, notificationStatus } = useOverlayNotifications(overlayEnabled && overlayNotificationsEnabled, connectionStatus === "connected");
-  const { notificationReplySession, notificationReplyIds } = useOverlayNotificationReply(connectionStatus === "connected", overlayNotifications);
-  const notificationActionSession = useOverlayNotificationActions(connectionStatus === "connected", notificationStatus === "ready" && overlayNotifications.length > 0);
+  const { notificationReplySession, notificationReplyIds } = useOverlayNotificationReply(connectionStatus === "connected" && !overlayCompatibility, overlayNotifications);
+  const notificationActionSession = useOverlayNotificationActions(connectionStatus === "connected" && !overlayCompatibility, notificationStatus === "ready" && overlayNotifications.length > 0);
   const overlayQuickActions = useVoiceStore((s) => s.voiceOverlayQuickActions);
   const overlayClickableActions = useVoiceStore((s) => s.voiceOverlayClickableActions);
   const overlaySelfMuted = useVoiceStore((s) => s.isMuted);
@@ -145,7 +152,10 @@ function AppLayout() {
   const voiceStates = useVoiceStore((s) => s.voiceStates);
   const overlayChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const activeSpeakers = useVoiceStore((s) => s.activeSpeakers);
+  const overlayPolicyAck = useRef<Promise<boolean>>(Promise.resolve(false));
+  const awaitOverlayPolicy = useCallback(() => overlayPolicyAck.current, []);
   useEffect(() => {
+    overlayPolicyAck.current = Promise.resolve(false);
     if (!window.electronAPI?.sendVoiceOverlaySnapshot) return;
     const currentScope = getAuthSessionSnapshot();
     if (!overlayRenderOwner || currentScope.ownerId !== overlayRenderOwner || currentScope.generation !== overlayRenderGeneration) return;
@@ -156,8 +166,13 @@ function AppLayout() {
     }));
     const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, notificationReplyIds, ...(notificationReplySession ? { notificationReplySession } : {}), ...(notificationActionSession ? { notificationActionSession } : {}) };
     const chatSnapshot = { voiceOverlayChat: overlayChatEnabled, ...(overlayChatEnabled ? { ...overlayChat, voiceOverlayChatActions: overlayChatActions, ...(chatActionSession ? { chatActionSession } : {}), voiceOverlayChatCompose: overlayChatCompose, ...(chatComposeSession ? { chatComposeSession, chatComposeLabel } : {}) } : {}) };
-    window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
-  }, [overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, notificationReplySession, notificationReplyIds, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+    const acknowledgement = window.electronAPI.sendVoiceOverlaySnapshot({ voiceOverlayGameActivityNotifications: overlayGameActivityNotifications, voiceOverlayNowPlayingNotifications: overlayNowPlayingNotifications, gameActivityNotices: getLiveOverlayGameNotices(), enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, voiceOverlayVideo:overlayVideo,voiceOverlayStreams:overlayStreams,mediaHeight:overlayVideo||overlayStreams?320:0, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, voiceOverlayCompatibility: overlayCompatibility, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
+    overlayPolicyAck.current = Promise.resolve(acknowledgement).then(value => value === true, () => false);
+  }, [overlayGameNotices, overlayGameActivityNotifications, overlayNowPlayingNotifications, overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayVideo,overlayStreams,overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, notificationReplySession, notificationReplyIds, overlayQuickActions, overlayClickableActions, overlayCompatibility, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+  // Project native compatibility before configuring the chord. This prevents
+  // normal-mode re-registration racing the native suspension policy.
+  useOverlayShortcut(`${overlayRenderOwner ?? ""}:${overlayRenderGeneration}`, awaitOverlayPolicy);
+  useOverlayMediaSender(connectionStatus === "connected");
   useNavigationHistory();
 
   // Idle detection — auto-set "idle" after 5min inactivity
@@ -344,6 +359,11 @@ function AppLayout() {
       useVoiceStore.getState().registerWsSend(null);
     };
   }, [sendWS]);
+
+  useEffect(() => {
+    useGameJoinStore.getState().register(connectionStatus === "connected" ? sendWS : null);
+    return () => useGameJoinStore.getState().register(null);
+  }, [sendWS, connectionStatus, overlayRenderOwner, overlayRenderGeneration]);
 
   // Voice channel change -> close stale voice tabs + refetch channel list
   // (hidden channels may become visible via voice-connected override, or vice versa)

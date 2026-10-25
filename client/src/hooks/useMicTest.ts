@@ -4,6 +4,7 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { createMicrophonePipeline, type MicrophonePipeline } from "../audio/microphonePipeline";
 import { captureConstraints, microphoneSettings } from "../audio/microphoneSettings";
 import { getActiveCallPipeline, registerMicrophonePipeline, subscribeMicrophoneStatus } from "../audio/pipelineStatus";
+import { routeAudioOutput } from "../audio/outputRouting";
 
 /** Monitor the actual call output, or own one identical local pipeline when idle. */
 export function useMicTest(): { isTesting: boolean; toggleTesting: () => void; micLevel: number; error?: string } {
@@ -15,6 +16,20 @@ export function useMicTest(): { isTesting: boolean; toggleTesting: () => void; m
   const [error, setError] = useState<string>();
   const own = useRef<MicrophonePipeline | null>(null);
   const playback = useRef<HTMLAudioElement | null>(null);
+  const outputRouting = useRef<{ audio: HTMLAudioElement; queue: Promise<void>; revision: number } | null>(null);
+  const routePlayback = useCallback((audio: HTMLAudioElement, device: string) => {
+    if (outputRouting.current?.audio !== audio) outputRouting.current = { audio, queue: Promise.resolve(), revision: 0 };
+    const owner = outputRouting.current;
+    const revision = ++owner.revision;
+    const current = () => playback.current === audio && outputRouting.current === owner && owner.revision === revision;
+    const operation = owner.queue.catch(() => {}).then(async () => {
+      if (typeof audio.setSinkId === "function") {
+        await routeAudioOutput(device, (sink) => audio.setSinkId(sink), { defaultSink: "", isCurrent: current });
+      }
+    });
+    owner.queue = operation;
+    return operation;
+  }, []);
   const { inputDevice, micProfile } = settings;
   useEffect(() => {
     if (!isTesting) return;
@@ -55,7 +70,14 @@ export function useMicTest(): { isTesting: boolean; toggleTesting: () => void; m
       playback.current = audio;
       audio.srcObject = new MediaStream([selected.processedTrack]);
       const device = useVoiceStore.getState().outputDevice;
-      if (typeof audio.setSinkId === "function") await audio.setSinkId(device || "");
+      await routePlayback(audio, device);
+      // A device change during preparation owns the last switch. Do not start
+      // playback until that newer queued routing operation has also settled.
+      let pending: Promise<void> | undefined;
+      do {
+        pending = outputRouting.current?.queue;
+        await pending;
+      } while (playback.current === audio && pending !== outputRouting.current?.queue);
       if (abort.signal.aborted) { cleanup(); return; }
       await audio.play();
       if (abort.signal.aborted) { cleanup(); return; }
@@ -71,7 +93,7 @@ export function useMicTest(): { isTesting: boolean; toggleTesting: () => void; m
       cleanup();
     });
     return cleanup;
-  }, [isTesting, shared, inputDevice, micProfile]);
+  }, [isTesting, shared, inputDevice, micProfile, routePlayback]);
 
   useEffect(() => {
     const pipeline = own.current;
@@ -81,10 +103,15 @@ export function useMicTest(): { isTesting: boolean; toggleTesting: () => void; m
   }, [settings]);
   useEffect(() => {
     const audio = playback.current;
-    if (audio && typeof audio.setSinkId === "function") void audio.setSinkId(outputDevice || "").catch((failure: unknown) => {
-      if (playback.current === audio) setError(failure instanceof Error ? failure.message : String(failure));
+    if (!audio) return;
+    const operation = routePlayback(audio, outputDevice);
+    const revision = outputRouting.current?.revision;
+    void operation.catch((failure: unknown) => {
+      if (playback.current === audio && outputRouting.current?.revision === revision) {
+        setError(failure instanceof Error ? failure.message : String(failure));
+      }
     });
-  }, [outputDevice]);
+  }, [outputDevice, routePlayback]);
   const toggleTesting = useCallback(() => { setMicLevel(0); setError(undefined); setIsTesting((value) => !value); }, []);
   return { isTesting, toggleTesting, micLevel, error };
 }

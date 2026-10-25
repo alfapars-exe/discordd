@@ -8,6 +8,7 @@ import hashlib
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 
 def parse_test_names(output: str) -> list[str]:
@@ -53,6 +54,7 @@ def main() -> int:
     parser.add_argument("--package", required=True, help="one Go package pattern, for example ./services")
     parser.add_argument("--shards", required=True, type=int)
     parser.add_argument("--shard", required=True, type=int, help="zero-based shard index")
+    parser.add_argument("--coverprofile", help="unique coverage output for this shard")
     args = parser.parse_args()
     if args.shards < 1 or not 0 <= args.shard < args.shards:
         parser.error("require --shards >= 1 and 0 <= --shard < --shards")
@@ -68,7 +70,13 @@ def main() -> int:
         print(f"  {name}", flush=True)
     run_pattern = "^(" + "|".join(re.escape(name) for name in selected) + ")$"
     command = ["go", "test", "-race", "-cover", "-timeout=15m", "-run", run_pattern, args.package]
-    return subprocess.run(command, check=False).returncode
+    if args.coverprofile:
+        Path(args.coverprofile).parent.mkdir(parents=True, exist_ok=True)
+        command.extend(["-covermode=atomic", "-coverprofile=" + args.coverprofile])
+    code = subprocess.run(command, check=False).returncode
+    if code == 0 and args.coverprofile:
+        code = subprocess.run([sys.executable, str(Path(__file__).with_name("coverage-meta.py")), args.coverprofile], check=False).returncode
+    return code
 
 
 if __name__ == "__main__":

@@ -52,6 +52,13 @@ func newTestDBWithPath(t testing.TB) (*database.DB, string) {
 	if dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN"); dsn != "" {
 		return newPostgresTestDB(t, dsn)
 	}
+	return newSQLiteTestDBWithPath(t)
+}
+
+// SQLite TEXT storage and historical SQLite migrations have no PostgreSQL
+// equivalent. These tests explicitly own a SQLite fixture in either CI lane.
+func newSQLiteTestDBWithPath(t testing.TB) (*database.DB, string) {
+	t.Helper()
 	// runMigrations expects the FS rooted at the migrations dir (main.go does
 	// the same fs.Sub before calling database.New).
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")

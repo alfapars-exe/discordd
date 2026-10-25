@@ -43,9 +43,7 @@ func TestAccountAssetCleanupConcurrentRetirementAndCompletionFailure(t *testing.
 	if _, err := db.Conn.Exec(`INSERT INTO account_asset_cleanup(file_url,requested_at) VALUES('/api/uploads/uncertain.bin',?)`, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Conn.Exec(`CREATE TRIGGER fail_cleanup_complete BEFORE UPDATE OF completed_at ON account_asset_cleanup BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
-		t.Fatal(err)
-	}
+	installWriteFailure(t, db, "fail_cleanup_complete", "account_asset_cleanup", "UPDATE OF completed_at", "")
 	outcome, err := r.Process(ctx, "/api/uploads/uncertain.bin", now, func() error { return nil })
 	if err == nil || outcome != "retry" {
 		t.Fatalf("uncertain completion %s %v", outcome, err)
@@ -53,9 +51,7 @@ func TestAccountAssetCleanupConcurrentRetirementAndCompletionFailure(t *testing.
 	if _, err := db.Conn.Exec(`UPDATE users SET avatar_url='/api/uploads/uncertain.bin' WHERE id='session-other'`); err == nil {
 		t.Fatal("failed completion reopened a removed URL")
 	}
-	if _, err := db.Conn.Exec(`DROP TRIGGER fail_cleanup_complete`); err != nil {
-		t.Fatal(err)
-	}
+	dropFailureTrigger(t, db, "fail_cleanup_complete", "account_asset_cleanup")
 	outcome, err = r.Process(ctx, "/api/uploads/uncertain.bin", now+61, func() error { return nil })
 	if err != nil || outcome != "removed" {
 		t.Fatalf("retry %s %v", outcome, err)

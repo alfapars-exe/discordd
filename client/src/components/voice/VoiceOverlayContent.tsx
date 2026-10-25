@@ -1,13 +1,24 @@
+import OverlayMediaPanel from "./media/OverlayMediaPanel";
+import GameActivityNotices from "./GameActivityNotices";
+import { visibleOverlayGameActivityNotices, type OverlayGameActivityNotice } from "../../../../electron/voice-overlay-contract";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export type VoiceOverlaySnapshot = {
   unlocked?: boolean;
+  voiceOverlayCompatibility?: boolean;
   voiceOverlayPinned?: boolean;
   voiceOverlayQuickActions?: boolean;
   voiceOverlayClickableActions?: boolean;
   voiceOverlayNotificationActions?: boolean;
   voiceOverlayActivity?: boolean;
+  voiceOverlayGameActivityNotifications?: boolean;
+  voiceOverlayNowPlayingNotifications?: boolean;
+  gameActivityNotices?: OverlayGameActivityNotice[];
+  gameActivityNoticeHeight?: number;
+  voiceOverlayVideo?: boolean;
+  voiceOverlayStreams?: boolean;
+  mediaHeight?: number;
   voiceOverlayWelcome?: boolean;
   voiceOverlayGoLive?: boolean;
   goLiveEligible?: boolean;
@@ -43,7 +54,7 @@ export type VoiceOverlaySnapshot = {
   speakingOpacity: number;
   idleOpacity: number;
   scale: number;
-  position: "top-left" | "bottom-left" | "top-right" | "bottom-right";
+  position: "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
   speakingOnly: boolean;
   voiceOverlayAvatarSize: "small" | "large";
   voiceOverlayNameDisplay: "always" | "speaking" | "never";
@@ -236,7 +247,8 @@ function OverlayWelcomeNotice({ notice, bottom, height = 32, textKey = "overlayW
   return visible ? <div role="status" className="voice-overlay-welcome" style={{ position: "absolute", bottom, left: 8, right: 8, height, boxSizing: "border-box", overflow: "hidden", padding: "6px", borderRadius: 6, background: "rgba(12, 14, 20, .96)", color: "#f4f6fb", fontSize: 12, lineHeight: height === 64 ? "16px" : "20px", overflowWrap: "anywhere", pointerEvents: "none" }}>{t(textKey)}</div> : null;
 }
 
-export default function VoiceOverlayContent({ snapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
+export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
+  const snapshot=rawSnapshot.voiceOverlayCompatibility?{...rawSnapshot,unlocked:false,voiceOverlayClickableActions:false,voiceOverlayNotificationActions:false,voiceOverlayChatActions:false,voiceOverlayChatCompose:false}:rawSnapshot;
   const { t } = useTranslation("common");
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -248,6 +260,9 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const showActivity = snapshot.voiceOverlayActivity === true;
   const showNotifications = snapshot.voiceOverlayNotifications === true;
   const showChat = snapshot.voiceOverlayChat === true;
+  const gameActivityNoticeHeight = Number.isInteger(snapshot.gameActivityNoticeHeight) && (snapshot.gameActivityNoticeHeight ?? 0) >= 0 && (snapshot.gameActivityNoticeHeight ?? 0) <= 144
+    ? snapshot.gameActivityNoticeHeight ?? 0 : 0;
+  const showGameNotices = gameActivityNoticeHeight >= 48 && visibleOverlayGameActivityNotices(snapshot).length > 0;
   const canOpenInbox = showNotifications && snapshot.voiceOverlayNotificationActions === true
     && snapshot.notificationStatus === "ready" && (snapshot.notifications?.length ?? 0) > 0
     && typeof snapshot.notificationActionSession === "string" && snapshot.notificationActionsUnavailable !== true;
@@ -269,10 +284,10 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
     if (!openSession && !composeSession) return null;
     return <ChatActionSurface key={`${openSession ?? ""}:${composeSession ?? ""}`} openSession={openSession} composeSession={composeSession} />;
   }
-  if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat)) return null;
+  if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat && !showGameNotices)) return null;
   const participants = snapshot.participants.filter((participant) => !snapshot.speakingOnly || participant.speaking)
     .slice(0, Math.max(0, Math.min(25, Math.floor(snapshot.voiceOverlayMaxParticipants))));
-  const transformOrigin = `${snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
+  const transformOrigin = `${snapshot.position === "center-left" ? "center" : snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
   const scaleFactor = snapshot.scale / 100;
   const maxWidthVw = viewportWidth > 0 ? Math.min(100, Math.max(0, ((viewportWidth - 16) / scaleFactor / viewportWidth) * 100)) : 100;
   const toolbar = showActions && <VoiceOverlayToolbar key={snapshot.voiceActionSession} snapshot={snapshot} />;
@@ -283,6 +298,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const notificationRows = snapshot.notificationStatus === "ready" ? Math.max(1, notifications.length) : 1;
   const notificationHeight = showNotifications ? 20 + notificationRows * 32 : 0;
   const actionHeight = showActions ? 48 : 0;
+  const mediaHeight=(snapshot.voiceOverlayVideo===true||snapshot.voiceOverlayStreams===true)&&Number.isFinite(snapshot.mediaHeight)?Math.max(0,Math.min(320,snapshot.mediaHeight??0)):0;
   const goLiveHeight = snapshot.voiceOverlayGoLive === true && snapshot.goLiveEligible === true && snapshot.goLiveHeight === 64 ? 64 : 0;
   const goLive = goLiveHeight && snapshot.goLive && Number.isSafeInteger(snapshot.goLive.id) && snapshot.goLive.id > 0 && Number.isFinite(snapshot.goLive.expiresAt) ? snapshot.goLive : null;
   const welcomeHeight = snapshot.voiceOverlayWelcome === true && snapshot.welcomeHeight === 32 ? 32 : 0;
@@ -301,8 +317,12 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const chatHasRows = snapshot.chatStatus === "ready" && chatMessages.length > 0;
   const chatHeight = showChat ? CHAT_HEADER_HEIGHT + (chatHasRows ? chatMessages.length : 1) * CHAT_ROW_MAX_HEIGHT : 0;
   return <div className="voice-overlay-root" data-position={snapshot.position} data-unlocked={snapshot.unlocked === true} data-actions={showActions}
-    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight }}>
+    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight + (showGameNotices ? gameActivityNoticeHeight : 0) }}>
     {toolbar}
+    {showGameNotices && <GameActivityNotices gameActivityNotices={snapshot.gameActivityNotices} voiceOverlayGameActivityNotifications={snapshot.voiceOverlayGameActivityNotifications}
+      voiceOverlayNowPlayingNotifications={snapshot.voiceOverlayNowPlayingNotifications} height={gameActivityNoticeHeight}
+      bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight} />}
+    {snapshot.enabled&&mediaHeight>0&&<OverlayMediaPanel video={snapshot.voiceOverlayVideo===true} streams={snapshot.voiceOverlayStreams===true} height={mediaHeight} bottom={8+actionHeight+activityHeight+notificationHeight+welcomeHeight+goLiveHeight}/>}
     {goLive && <OverlayWelcomeNotice key={`go-live:${goLive.id}`} notice={goLive} bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight} height={64} textKey="overlayGoLiveGuidance" />}
     {welcome && <OverlayWelcomeNotice key={welcome.id} notice={welcome} bottom={8 + actionHeight + activityHeight + notificationHeight} />}
     {showChat && <section className="voice-overlay-chat" aria-label={t("overlayChatTitle")}
@@ -343,6 +363,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
         <strong>{entry.label}</strong><span>{t("gameActivityPlaying", { name: entry.gameName })}</span>
       </div>) : <p className="voice-overlay-activity-empty">{t("overlayActivityEmpty")}</p>}
     </section>}
+    {snapshot.voiceOverlayCompatibility && <span className="voice-overlay-pin" role="status" title={t("overlayCompatibilityActive")} aria-label={t("overlayCompatibilityActive")}>◌</span>}
     {snapshot.layoutSaveFailed && <span className="voice-overlay-layout-error" role="alert" title={t("overlayLayoutSaveFailed")} aria-label={t("overlayLayoutSaveFailed")}>!</span>}
     {snapshot.voiceOverlayPinned && <span className="voice-overlay-pin" title={t("overlayWidgetPinned")} aria-label={t("overlayWidgetPinned")}>⌖</span>}
     <div className="voice-overlay-widget" data-avatar-size={snapshot.voiceOverlayAvatarSize} style={{ transform: `scale(${scaleFactor})`, transformOrigin, maxWidth: `${maxWidthVw}vw` }}>

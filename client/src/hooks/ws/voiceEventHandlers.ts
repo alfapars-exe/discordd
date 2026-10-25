@@ -11,7 +11,7 @@ import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useToastStore } from "../../stores/toastStore";
-import { playJoinSound, playLeaveSound } from "../../utils/sounds";
+import { playJoinSound, playLeaveSound, playWatchStartSound, playWatchStopSound } from "../../utils/sounds";
 import i18n from "../../i18n";
 import { isMusicBotErrorReason } from "../../types/music";
 import type { WSMessage } from "../../types";
@@ -100,8 +100,8 @@ export async function handleVoiceEvent(
 
       const myId = useAuthStore.getState().user?.id;
       if (myId === viewerData.streamer_user_id) {
-        if (viewerData.action === "join") playJoinSound();
-        else if (viewerData.action === "leave") playLeaveSound();
+        if (viewerData.action === "join") playWatchStartSound();
+        else if (viewerData.action === "leave") playWatchStopSound();
       }
       return true;
     }

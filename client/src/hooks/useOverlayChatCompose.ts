@@ -46,7 +46,7 @@ export function useOverlayChatCompose(connected: boolean, chatReady: boolean): s
   useLayoutEffect(() => { connectedRef.current = connected; chatReadyRef.current = chatReady; }, [connected, chatReady]);
   const owner = useAuthStore((s) => s.user?.id ?? null);
   const generation = useAuthStore(() => getAuthSessionSnapshot().generation);
-  const enabled = useVoiceStore((s) => s.voiceOverlayEnabled && s.voiceOverlayChat
+  const enabled = useVoiceStore((s) => !s.voiceOverlayCompatibility && s.voiceOverlayEnabled && s.voiceOverlayChat
     && s.voiceOverlayChatActions && s.voiceOverlayChatCompose);
   const destination = useUIStore((s) => s.destination);
   const composeBridge = window.electronAPI;
@@ -74,7 +74,7 @@ export function useOverlayChatCompose(connected: boolean, chatReady: boolean): s
     const currentTarget = () => {
       const scope = getAuthSessionSnapshot();
       const voice = useVoiceStore.getState();
-      if (disposed || closed || !connectedRef.current || !chatReadyRef.current || !voice.voiceOverlayEnabled || !voice.voiceOverlayChat
+      if (disposed || closed || !connectedRef.current || !chatReadyRef.current || voice.voiceOverlayCompatibility || !voice.voiceOverlayEnabled || !voice.voiceOverlayChat
         || !voice.voiceOverlayChatActions || !voice.voiceOverlayChatCompose
         || scope.ownerId !== owner || scope.generation !== generation
         || useAuthStore.getState().user?.id !== owner) return null;

@@ -289,7 +289,7 @@ func postgresQuery(query string) (string, error) {
 		clauses := map[string]string{
 			"bans":              "(server_id,user_id) DO UPDATE SET username=excluded.username,reason=excluded.reason,banned_by=excluded.banned_by,expires_at=excluded.expires_at,created_at=excluded.created_at",
 			"member_timeouts":   "(server_id,user_id) DO UPDATE SET expires_at=excluded.expires_at,applied_by=excluded.applied_by,reason=excluded.reason,created_at=excluded.created_at",
-			"runtime_telemetry": "(bucket_at) DO UPDATE SET goroutines=excluded.goroutines,heap_alloc_bytes=excluded.heap_alloc_bytes,online_users=excluded.online_users,db_open_conns=excluded.db_open_conns,db_in_use=excluded.db_in_use,db_idle=excluded.db_idle,db_wait_count=excluded.db_wait_count,ws_dispatch_total=excluded.ws_dispatch_total,ws_rate_limit_drops_total=excluded.ws_rate_limit_drops_total,http_requests=excluded.http_requests,http_5xx=excluded.http_5xx,http_max_latency_ms=excluded.http_max_latency_ms,http_avg_latency_ms=excluded.http_avg_latency_ms",
+			"runtime_telemetry": "(bucket_at) DO UPDATE SET goroutines=excluded.goroutines,heap_alloc_bytes=excluded.heap_alloc_bytes,online_users=excluded.online_users,db_open_conns=excluded.db_open_conns,db_in_use=excluded.db_in_use,db_idle=excluded.db_idle,db_wait_count=excluded.db_wait_count,ws_dispatch_total=excluded.ws_dispatch_total,ws_rate_limit_drops_total=excluded.ws_rate_limit_drops_total,http_requests=excluded.http_requests,http_5xx=excluded.http_5xx,http_max_latency_ms=excluded.http_max_latency_ms,http_avg_latency_ms=excluded.http_avg_latency_ms,diagnostics=excluded.diagnostics",
 		}
 		clause, ok := clauses[strings.ToLower(m[1])]
 		if !ok {

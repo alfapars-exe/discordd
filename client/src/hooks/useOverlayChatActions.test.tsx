@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
-  owner: "viewer" as string | null, generation: 1, enabled: true,
+  owner: "viewer" as string | null, generation: 1, enabled: true, compatibility:false,
   target: { type: "text", channelId: "channel", label: "Channel", serverInfo: { serverId: "server", serverName: "Server", serverIconUrl: null } } as
     | { type: "text"; channelId: string; label: string; serverInfo: { serverId: string; serverName: string; serverIconUrl: null } }
     | { type: "dm"; channelId: string }
@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
 vi.mock("../api/authSessionEvents", () => ({ getAuthSessionSnapshot: () => ({ ownerId: state.owner, generation: state.generation }) }));
 vi.mock("../stores/authStore", () => ({ useAuthStore: Object.assign((pick: (s: unknown) => unknown) => pick({ user: state.owner ? { id: state.owner } : null }), { getState: () => ({ user: state.owner ? { id: state.owner } : null }) }) }));
 vi.mock("../stores/voiceStore", () => {
-  const snapshot = () => ({ voiceOverlayEnabled: state.enabled, voiceOverlayChat: state.enabled, voiceOverlayChatActions: state.enabled });
+  const snapshot = () => ({ voiceOverlayCompatibility:state.compatibility, voiceOverlayEnabled: state.enabled, voiceOverlayChat: state.enabled, voiceOverlayChatActions: state.enabled });
   return { useVoiceStore: Object.assign((pick: (s: unknown) => unknown) => pick(snapshot()), { getState: snapshot }) };
 });
 vi.mock("../stores/uiStore", () => ({ useUIStore: Object.assign((pick: (s: unknown) => unknown) => pick({ destination: state.target }), { getState: () => ({ navigate: state.navigate }) }) }));
@@ -21,7 +21,7 @@ vi.mock("../utils/overlayChatAccess", () => ({ getLiveOverlayChatTarget: () => s
 import { useOverlayChatActions } from "./useOverlayChatActions";
 
 beforeEach(() => {
-  state.owner = "viewer"; state.generation = 1; state.enabled = true;
+  state.owner = "viewer"; state.generation = 1; state.enabled = true; state.compatibility=false;
   state.target = { type: "text", channelId: "channel", label: "Channel", serverInfo: { serverId: "server", serverName: "Server", serverIconUrl: null } };
   state.receive = undefined; state.confirm.mockReset().mockResolvedValue(true); state.navigate.mockReset(); state.unsubscribe.mockReset();
   Object.defineProperty(window, "electronAPI", { configurable: true, value: {
@@ -98,3 +98,4 @@ it("retires callbacks on disconnect/unmount and issues no session without a read
   view.rerender({ connected: true, ready: false });
   expect(view.result.current).toBeNull();
 });
+it("revokes pending focus and rotates chat grants through compatibility",async()=>{let finish!:(value:boolean)=>void;state.confirm.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const view=renderHook(()=>useOverlayChatActions(true,true));const old=view.result.current!,receive=state.receive!;act(()=>receive({session:old}));state.compatibility=true;await act(async()=>finish(true));expect(state.navigate).not.toHaveBeenCalled();view.rerender();expect(view.result.current).toBeNull();state.compatibility=false;view.rerender();expect(view.result.current).not.toBe(old);act(()=>receive({session:old}));expect(state.navigate).not.toHaveBeenCalled();});

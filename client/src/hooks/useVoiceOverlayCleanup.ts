@@ -4,12 +4,15 @@ import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../ap
 /** Explicitly clear the native widget when the authenticated layout disappears. */
 export function useVoiceOverlayCleanup() {
   useLayoutEffect(() => {
-    const clear = () => window.electronAPI?.sendVoiceOverlaySnapshot?.({
+    const clear = () => {
+      // Older preloads return void; neither void nor failure is an acknowledgement.
+      void Promise.resolve(window.electronAPI?.sendVoiceOverlaySnapshot?.({
       enabled: false, voiceOverlayMode: "desktop", participants: [], speakingOpacity: 100,
       idleOpacity: 35, scale: 100, position: "bottom-left", speakingOnly: false,
       voiceOverlayAvatarSize: "small", voiceOverlayNameDisplay: "always", voiceOverlayMaxParticipants: 0,
       voiceOverlayChat: false, voiceOverlayChatActions: false,
-    });
+      })).catch(() => undefined);
+    };
     // Queue the blank snapshot at the identity boundary, not after a React
     // render/passive-effect cycle. The publisher separately fences old effects.
     const stopOwner = subscribeAuthOwnerChanges(clear);

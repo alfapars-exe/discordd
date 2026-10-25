@@ -1,3 +1,4 @@
+import {ManualVoiceSoundTracker} from "../utils/voiceEventSounds";
 import {bindNativePTT,nativePTTAvailable}from "../audio/nativePTT";
 import { createMicrophonePipeline, type MicrophonePipeline } from "../audio/microphonePipeline";
 import { captureConstraints, microphoneSettings, settingsEqual, type MicrophoneSettings } from "../audio/microphoneSettings";
@@ -11,6 +12,7 @@ type Resource = { source: MediaStreamTrack; pipeline: MicrophonePipeline; settin
 type Options = {
   isCurrent: () => boolean;
   isMuted: () => boolean;
+  manualMuted?: () => boolean;
   replaceTrack: (previous: MediaStreamTrack, next: MediaStreamTrack, isCurrent?: () => boolean) => Promise<boolean>;
   onError: (error: unknown) => void;
   commitTrack?: (previous:MediaStreamTrack,next:MediaStreamTrack)=>boolean;
@@ -25,6 +27,8 @@ const editable = (target: EventTarget | null) => target instanceof Element && !!
 /** One exact call owns raw capture, failure latch, focused PTT and processed output. */
 export class P2PMicrophoneSession {
   private stopped = false;
+  private soundState(){return {manualMuted:this.options.manualMuted?.()??this.options.isMuted(),deafened:useVoiceStore.getState().isDeafened};}
+  private soundTracker:ManualVoiceSoundTracker;
   private failed = false;
   private retrying = false;
   private controller = new AbortController();
@@ -49,6 +53,7 @@ export class P2PMicrophoneSession {
   private readonly options: Options;
   constructor(options: Options) {
     this.options=options;
+    this.soundTracker=new ManualVoiceSoundTracker(this.soundState(),()=>this.current());
     const retire = () => { if (JSON.stringify(getAuthSessionSnapshot()) !== this.auth) this.dispose(); };
     const owner = subscribeAuthOwnerChanges(retire), generation = subscribeAuthGenerationChanges(retire);
     this.authCleanup = () => { owner(); generation(); };
@@ -72,7 +77,7 @@ export class P2PMicrophoneSession {
   }
   private fail(error: unknown) {
     if (!this.current()) return;
-    this.failed = true;this.refreshNativePTT?.(); this.retrying = false; this.pressed = false; this.pressedCode = null;
+    this.soundTracker.reject();this.failed = true;this.refreshNativePTT?.(); this.retrying = false; this.pressed = false; this.pressedCode = null;
     ++this.generation; this.controller.abort(); this.controller = new AbortController(); this.pendingKey = null;
     // Stop hardware and disable every possible sender output before notifying UI.
     if (this.resource) this.release(this.resource);
@@ -222,8 +227,11 @@ export class P2PMicrophoneSession {
   }
   syncMute() {
     if (!this.current()) return;
+    this.soundTracker.observe(this.soundState());
+    if(this.failed)this.soundTracker.reject();
     if(this.resource&&!this.failed&&this.sourceEnded(this.resource.source)){this.fail(new DOMException("Microphone capture stopped","NotReadableError"));return;}
     if (this.resource) this.resource.pipeline.processedTrack.enabled = this.enabled();
+    if(this.resource&&!this.failed)this.soundTracker.commit(this.soundState(),this.resource.pipeline.processedTrack.enabled);
     // Never enable an output whose sender replacement has not committed.
     for (const candidate of this.staged) candidate.pipeline.processedTrack.enabled = false;
   }

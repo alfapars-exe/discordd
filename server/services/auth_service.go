@@ -140,8 +140,10 @@ type authService struct {
 	// If a second refresh request arrives with the same token, that's a
 	// reuse attempt — almost always means the token was leaked. We
 	// invalidate every session for that user as defense in depth.
-	usedRefreshMu sync.Mutex
-	usedRefresh   map[string]usedRefreshEntry
+	usedRefreshMu  sync.Mutex
+	usedRefresh    map[string]usedRefreshEntry
+	refreshSweepMu sync.Mutex
+	refreshSweep   *authRefreshSweep
 }
 
 // usedRefreshEntry records a recently-consumed refresh token. We store the
@@ -269,14 +271,10 @@ func (s *authService) revokeAllSessions(ctx context.Context, userID string) {
 	s.disconnectVoice(userID)
 }
 
-// context.Background(): logWarn/logError are called from several call sites
-// across authService (Register, RefreshToken's reuse-detection path, ...),
-// not all of which carry a request-scoped context that's still relevant by
-// the time the log fires. Threading ctx through every caller is out of
-// scope for P3.8 — see AppLogService.Log's doc comment.
-func (s *authService) logWarn(userID *string, message string, metadata map[string]string) {
-	if s.appLogger != nil {
-		s.appLogger.Log(context.Background(), models.LogLevelWarn, models.LogCategoryAuth, userID, nil, message, metadata)
+// Authentication diagnostics retain the caller context for request correlation.
+func (s *authService) logWarn(ctx context.Context, userID *string, message string, metadata map[string]string) {
+	if !logx.EmitAppEvent(ctx, authLogger, "warn", "auth", userID, nil, message, metadata) && s.appLogger != nil {
+		s.appLogger.Log(ctx, models.LogLevelWarn, models.LogCategoryAuth, userID, nil, message, metadata)
 	}
 }
 
@@ -289,9 +287,12 @@ func (s *authService) logWarn(userID *string, message string, metadata map[strin
 // fails or partially fails, since those failures are invisible to Sentry via
 // a plain 500 alone (see pkg/response.go's Error()) and would otherwise only
 // surface as a support ticket about a missing account.
-func (s *authService) logError(userID *string, message string, metadata map[string]string) {
-	if s.appLogger != nil {
-		s.appLogger.Log(context.Background(), models.LogLevelError, models.LogCategoryAuth, userID, nil, message, metadata)
+func (s *authService) logError(ctx context.Context, userID *string, message string, metadata map[string]string) {
+	if !pkg.ClaimRequestError(ctx) {
+		return
+	}
+	if !logx.EmitAppEvent(ctx, authLogger, "error", "auth", userID, nil, message, metadata) && s.appLogger != nil {
+		s.appLogger.Log(ctx, models.LogLevelError, models.LogCategoryAuth, userID, nil, message, metadata)
 	}
 }
 
@@ -320,29 +321,18 @@ func NewAuthService(
 	for _, option := range options {
 		option(s)
 	}
-	// Background sweep so the used-refresh map can't grow unbounded if a
-	// large user base actively rotates tokens. Sweep cadence = refreshExp/4
-	// is plenty: entries expire long before they'd matter, and the sweep
-	// just bounds memory.
-	go s.usedRefreshSweepLoop()
 	return s
 }
 
-// usedRefreshSweepLoop evicts expired entries from usedRefresh once an hour.
-// Runs for the life of the process.
-func (s *authService) usedRefreshSweepLoop() {
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-	for range ticker.C {
-		now := time.Now()
-		s.usedRefreshMu.Lock()
-		for k, v := range s.usedRefresh {
-			if now.After(v.expiresAt) {
-				delete(s.usedRefresh, k)
-			}
-		}
-		s.usedRefreshMu.Unlock()
+// StartAuthMaintenance owns the legacy refresh-cache worker independently of
+// request handling. Durable sessions do not use this cache and need no worker.
+// Constructors and short-lived test services never start background work.
+func StartAuthMaintenance(ctx context.Context, service AuthService) func() {
+	s, ok := service.(*authService)
+	if !ok || s.authSessions != nil {
+		return func() {}
 	}
+	return s.startRefreshSweep(ctx)
 }
 
 // hashRefreshToken returns the SHA-256 of a refresh token. Used as the
@@ -427,7 +417,7 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 			// pkg.ErrText, not err.Error(): a libSQL connection failure echoes
 			// the DSN (incl. authToken) into the driver error, and app_logs is
 			// a durable sink rendered in the platform-admin log viewer.
-			s.logError(nil, "Register: user/session creation failed", map[string]string{
+			s.logError(ctx, nil, "Register: user/session creation failed", map[string]string{
 				"username": req.Username,
 				"error":    pkg.ErrText(err),
 			})
@@ -441,7 +431,7 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 		// the orphan case: the client sees an error, but the account (and a
 		// working refresh session) already exist. logError above/A1 exist
 		// to surface exactly this.
-		s.logError(&user.ID, "Register: user committed but access token signing failed", map[string]string{
+		s.logError(ctx, &user.ID, "Register: user committed but access token signing failed", map[string]string{
 			"username": req.Username,
 			"error":    pkg.ErrText(err),
 		})
@@ -490,14 +480,14 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*Aut
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		s.logWarn(&user.ID, "Login failed: invalid password", map[string]string{
+		s.logWarn(ctx, &user.ID, "Login failed: invalid password", map[string]string{
 			"username": req.Username,
 		})
 		return nil, fmt.Errorf("%w: invalid username or password", pkg.ErrUnauthorized)
 	}
 
 	if user.IsPlatformBanned {
-		s.logWarn(&user.ID, "Login blocked: account suspended", map[string]string{
+		s.logWarn(ctx, &user.ID, "Login blocked: account suspended", map[string]string{
 			"username": req.Username,
 		})
 		return nil, fmt.Errorf("%w: account suspended", pkg.ErrForbidden)
@@ -582,8 +572,7 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 				// Error and given structured metadata so monitoring can
 				// alert specifically on this event. This is a
 				// near-certain indicator of credential compromise.
-				authLogger.Error("SECURITY: refresh token reuse detected, invalidating all sessions", "user_id", entry.userID)
-				s.logError(&entry.userID, "Refresh token reuse detected — all sessions invalidated", map[string]string{
+				s.logError(ctx, &entry.userID, "Refresh token reuse detected — all sessions invalidated", map[string]string{
 					"event":           "token_compromise_detected",
 					"severity":        "critical",
 					"action_taken":    "all_sessions_invalidated,token_version_incremented",
@@ -654,7 +643,7 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 	}
 
 	if user.IsPlatformBanned {
-		s.logWarn(&user.ID, "Token refresh blocked: account suspended", map[string]string{
+		s.logWarn(ctx, &user.ID, "Token refresh blocked: account suspended", map[string]string{
 			"username": user.Username,
 		})
 		return nil, fmt.Errorf("%w: account suspended", pkg.ErrForbidden)

@@ -17,9 +17,7 @@ func TestApplicationRemovalPreservesHistoryAndDetachesOwnership(t *testing.T) {
 		t.Run(fmt.Sprintf("foreign_keys_%v", fk), func(t *testing.T) {
 			db, sessions, _ := authSessionRepoFixture(t)
 			if !fk {
-				if _, err := db.Conn.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
-					t.Fatal(err)
-				}
+				disableFixtureForeignKeys(t, db)
 			}
 			actor, _ := createLogicalSession(t, sessions, "session-user", "app-removal-actor", "app-removal-refresh")
 			execSeed(t, db, []seedStmt{
@@ -42,9 +40,7 @@ func TestApplicationRemovalPreservesHistoryAndDetachesOwnership(t *testing.T) {
 			if err := r.Remove(ctx, actor.UserID, actor.ID, "hash", "changed-factor", "app", now); !errors.Is(err, pkg.ErrForbidden) {
 				t.Fatal("stale factor proof accepted", err)
 			}
-			if _, err := db.Conn.Exec(`CREATE TRIGGER reject_app_retirement BEFORE UPDATE OF deleted_at ON users WHEN NEW.id='app' BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
-				t.Fatal(err)
-			}
+			installWriteFailure(t, db, "reject_app_retirement", "users", "UPDATE OF deleted_at", "NEW.id='app'")
 			if err := r.Remove(ctx, actor.UserID, actor.ID, "hash", "", "app", now); err == nil {
 				t.Fatal("partial retirement succeeded")
 			}
@@ -52,9 +48,7 @@ func TestApplicationRemovalPreservesHistoryAndDetachesOwnership(t *testing.T) {
 			if err := db.Conn.QueryRow(`SELECT COUNT(*) FROM bot_tokens WHERE bot_user_id='app'`).Scan(&tokens); err != nil || tokens != 1 {
 				t.Fatal("failed retirement revoked token", tokens, err)
 			}
-			if _, err := db.Conn.Exec(`DROP TRIGGER reject_app_retirement`); err != nil {
-				t.Fatal(err)
-			}
+			dropFailureTrigger(t, db, "reject_app_retirement", "users")
 			var winners atomic.Int32
 			var wg sync.WaitGroup
 			for i := 0; i < 12; i++ {

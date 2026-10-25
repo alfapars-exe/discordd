@@ -88,7 +88,7 @@ function AccessibilitySettings() {
             <div className="acc-preview-body">
               <div className="acc-preview-head">
                 {roleColorMode === "dots" && <span className="msg-role-color-dot" style={{ backgroundColor: "#57f287" }} aria-hidden="true" />}
-                <span className="acc-preview-author" style={roleColorMode === "names" ? { color: "#57f287" } : undefined}>ALFAP4RS</span>
+                <span className="acc-preview-author" style={roleColorMode === "names" ? { color: "#57f287" } : undefined}>{t("acc.previewIdentity")}</span>
                 <span className="acc-preview-time">21:38</span>
               </div>
               <div className="acc-preview-text">{t("acc.previewMsg1")}</div>
@@ -102,13 +102,13 @@ function AccessibilitySettings() {
             <div className="acc-preview-avatar" />
             <div className="acc-preview-body">
               <div className="acc-preview-head">
-                <span className="acc-preview-author">ALFAP4RS</span>
+                <span className="acc-preview-author">{t("acc.previewIdentity")}</span>
                 <span className="acc-preview-time">21:38</span>
               </div>
               <div className="acc-preview-text">
                 {t("acc.previewMsg2")}{" "}
                 <a href="#" onClick={(e) => e.preventDefault()}>
-                  https://tayfa.app/accessibility
+                  https://example.com/accessibility
                 </a>
               </div>
               <button type="button" className="acc-preview-button">

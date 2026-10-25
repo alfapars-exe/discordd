@@ -9,5 +9,15 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     css: false,
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts", "src/test/**"],
+      reporter: ["text-summary", "json-summary", "lcov"],
+      reportsDirectory: "./coverage",
+      thresholds: {
+        "src/audio/outputRouting.ts": { statements: 90, branches: 85, functions: 90, lines: 90 },
+      },
+    },
   },
 });

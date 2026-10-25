@@ -26,6 +26,14 @@ function snapshot(position: VoiceOverlaySnapshot["position"], patch: Partial<Voi
 }
 
 describe("VoiceOverlayContent", () => {
+  it("shows all five names at middle left when only two members are speaking", () => {
+    const participants = Array.from({ length: 5 }, (_, i) => ({ ...participant(`member-${i}`, i < 2), muted: i === 4 }));
+    const view = render(<VoiceOverlayContent snapshot={snapshot("center-left", { participants })} />);
+    expect(view.container.querySelector(".voice-overlay-root")).toHaveAttribute("data-position", "center-left");
+    expect(view.container.querySelectorAll(".voice-overlay-row")).toHaveLength(5);
+    participants.forEach(p => expect(screen.getByText(p.name)).toBeVisible());
+    expect(view.container.querySelector(".voice-overlay-widget")).toHaveStyle({ transformOrigin: "center left" });
+  });
   it("renders real projected activity independently from voice and an honest empty state", () => {
     const source = snapshot("top-left", { participants: [], voiceOverlayMaxParticipants: 0, voiceOverlayActivity: true, activities: [{ userId: "friend", label: "Friend", gameName: "Example Game" }] });
     const view = render(<VoiceOverlayContent snapshot={source} />);
@@ -431,3 +439,4 @@ it("prepares the exact opaque notification reply only through its existing nativ
   await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith({ session: "reply-session", notificationId: "opaque-notice" }));
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
 });
+it('keeps every renderer action passive even if a stale snapshot still includes old opt-ins and unlock',()=>{const send=vi.fn();vi.stubGlobal('electronAPI',{sendOverlayVoiceAction:send});const value=snapshot('top-left',{voiceOverlayCompatibility:true,unlocked:true,voiceOverlayQuickActions:true,voiceOverlayClickableActions:true,voiceActionSession:'old',voiceOverlayChat:true,voiceOverlayChatActions:true,voiceOverlayChatCompose:true,chatActionSession:'chat',chatComposeSession:'compose',chatStatus:'ready',chatMessages:[]});const view=render(<VoiceOverlayContent snapshot={value}/>);expect(screen.getByRole('status',{name:'overlayCompatibilityActive'})).toBeInTheDocument();for(const button of screen.queryAllByRole('button'))expect(button).toBeDisabled();expect(send).not.toHaveBeenCalled();view.rerender(<VoiceOverlayContent snapshot={value} chatActionsOnly/>);expect(screen.queryByRole('button')).toBeNull();view.rerender(<VoiceOverlayContent snapshot={value} chatComposerOnly/>);expect(screen.queryByRole('textbox')).toBeNull();});
