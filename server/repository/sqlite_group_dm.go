@@ -16,7 +16,9 @@ type sqliteGroupDMRepo struct{ db database.TxQuerier }
 
 func NewSQLiteGroupDMRepo(db database.TxQuerier) GroupDMRepository { return &sqliteGroupDMRepo{db: db} }
 
-func (r *sqliteGroupDMRepo) Create(ctx context.Context, group *models.GroupDM, memberIDs []string) error {
+// An omitted admission actor is reserved for trusted internal legacy/import callers.
+// Public services always supply the authenticated actor; HTTP never supplies this scope.
+func (r *sqliteGroupDMRepo) Create(ctx context.Context, group *models.GroupDM, memberIDs []string, admissionActor ...string) error {
 	db := database.RawDB(r.db)
 	if db == nil {
 		return fmt.Errorf("group create requires transaction-capable database")
@@ -26,6 +28,14 @@ func (r *sqliteGroupDMRepo) Create(ctx context.Context, group *models.GroupDM, m
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := checkGroupAdmissionScope(admissionActor, group.OwnerID); err != nil {
+		return err
+	}
+	if len(admissionActor) != 0 {
+		if err := lockGroupAdmissionFriends(ctx, tx, admissionActor[0], memberIDs); err != nil {
+			return err
+		}
+	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO group_dm_channels(id,owner_id,name,key_epoch,call_room_key) VALUES(?,?,?,?,?)`, group.ID, group.OwnerID, group.Name, group.KeyEpoch, group.CallRoomKey); err != nil {
 		return fmt.Errorf("create group: %w", err)
 	}
@@ -91,13 +101,13 @@ func (r *sqliteGroupDMRepo) IsMember(ctx context.Context, groupID, userID string
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM group_dm_members WHERE group_id=? AND user_id=?`, groupID, userID).Scan(&n)
 	return n > 0, err
 }
-func (r *sqliteGroupDMRepo) AddMember(ctx context.Context, groupID, userID string) (int64, error) {
-	return r.changeMember(ctx, groupID, userID, true)
+func (r *sqliteGroupDMRepo) AddMember(ctx context.Context, groupID, userID string, admissionActor ...string) (int64, error) {
+	return r.changeMember(ctx, groupID, userID, true, admissionActor...)
 }
 func (r *sqliteGroupDMRepo) RemoveMember(ctx context.Context, groupID, userID string) (int64, error) {
 	return r.changeMember(ctx, groupID, userID, false)
 }
-func (r *sqliteGroupDMRepo) changeMember(ctx context.Context, groupID, userID string, add bool) (int64, error) {
+func (r *sqliteGroupDMRepo) changeMember(ctx context.Context, groupID, userID string, add bool, admissionActor ...string) (int64, error) {
 	db := database.RawDB(r.db)
 	if db == nil {
 		return 0, fmt.Errorf("membership change requires transaction")
@@ -109,6 +119,18 @@ func (r *sqliteGroupDMRepo) changeMember(ctx context.Context, groupID, userID st
 	defer func() { _ = tx.Rollback() }()
 	if err := lockGroupDM(ctx, tx, groupID); err != nil {
 		return 0, err
+	}
+	if len(admissionActor) != 0 {
+		var owner string
+		if err := tx.QueryRowContext(ctx, `SELECT owner_id FROM group_dm_channels WHERE id=?`, groupID).Scan(&owner); err != nil {
+			return 0, err
+		}
+		if err := checkGroupAdmissionScope(admissionActor, owner); err != nil {
+			return 0, err
+		}
+		if err := lockGroupAdmissionFriends(ctx, tx, admissionActor[0], []string{userID}); err != nil {
+			return 0, err
+		}
 	}
 	var result sql.Result
 	if add {

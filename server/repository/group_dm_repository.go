@@ -13,12 +13,14 @@ type GroupDMRepository interface {
 	CancelSend(ctx context.Context, groupID, userID, requestID string) (*models.GroupSendOperation, error)
 	GetSendOperation(ctx context.Context, groupID, userID, requestID string) (*models.GroupSendOperation, error)
 	CompleteSend(ctx context.Context, groupID, userID, requestID string, failedIndices []int) (*models.GroupSendOperation, error)
-	Create(ctx context.Context, group *models.GroupDM, memberIDs []string) error
+	// admissionActor is mandatory for public services; omission is trusted internal legacy/import use only.
+	Create(ctx context.Context, group *models.GroupDM, memberIDs []string, admissionActor ...string) error
 	GetByID(ctx context.Context, id string) (*models.GroupDM, error)
 	ListForUser(ctx context.Context, userID string) ([]models.GroupDM, error)
 	ListMemberIDs(ctx context.Context, groupID string) ([]string, error)
 	IsMember(ctx context.Context, groupID, userID string) (bool, error)
-	AddMember(ctx context.Context, groupID, userID string) (int64, error)
+	// Supplied actor scopes cannot be empty/multiple; public callers pass the authenticated owner.
+	AddMember(ctx context.Context, groupID, userID string, admissionActor ...string) (int64, error)
 	RemoveMember(ctx context.Context, groupID, userID string) (int64, error)
 	UpdateProfile(ctx context.Context, groupID, name string, iconURL *string) error
 	TransferOwner(ctx context.Context, groupID, userID string) error

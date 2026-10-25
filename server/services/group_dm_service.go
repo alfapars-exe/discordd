@@ -164,6 +164,9 @@ func (s *groupDMService) requireMember(ctx context.Context, groupID, userID stri
 }
 
 func (s *groupDMService) Create(ctx context.Context, creatorID string, req *models.CreateGroupDMRequest) (*models.GroupDM, error) {
+	if s.friendships == nil {
+		return nil, pkg.ErrForbidden
+	}
 	if err := req.Validate(); err != nil {
 		return nil, badGroupRequest(err)
 	}
@@ -191,6 +194,9 @@ func (s *groupDMService) Create(ctx context.Context, creatorID string, req *mode
 		if blocked {
 			return nil, pkg.ErrForbidden
 		}
+		if err := s.requireGroupAdmissionFriend(ctx, creatorID, id); err != nil {
+			return nil, err
+		}
 		members = append(members, id)
 	}
 	id, err := randomGroupToken("gdm_")
@@ -202,7 +208,7 @@ func (s *groupDMService) Create(ctx context.Context, creatorID string, req *mode
 		return nil, err
 	}
 	g := &models.GroupDM{ID: id, OwnerID: creatorID, Name: req.Name, KeyEpoch: 1, CallRoomKey: roomKey}
-	if err := s.groups.Create(ctx, g, members); err != nil {
+	if err := s.groups.Create(ctx, g, members, creatorID); err != nil {
 		return nil, err
 	}
 	if err := s.hydrate(ctx, g); err != nil {
@@ -271,6 +277,9 @@ func (s *groupDMService) Update(ctx context.Context, groupID, actorID string, re
 }
 
 func (s *groupDMService) AddMember(ctx context.Context, groupID, actorID, userID string) (*models.GroupDM, error) {
+	if s.friendships == nil {
+		return nil, pkg.ErrForbidden
+	}
 	g, err := s.requireMember(ctx, groupID, actorID)
 	if err != nil {
 		return nil, err
@@ -295,7 +304,10 @@ func (s *groupDMService) AddMember(ctx context.Context, groupID, actorID, userID
 	if blocked {
 		return nil, pkg.ErrForbidden
 	}
-	epoch, err := s.groups.AddMember(ctx, groupID, userID)
+	if err := s.requireGroupAdmissionFriend(ctx, actorID, userID); err != nil {
+		return nil, err
+	}
+	epoch, err := s.groups.AddMember(ctx, groupID, userID, actorID)
 	if err != nil {
 		return nil, err
 	}
