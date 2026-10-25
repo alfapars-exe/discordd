@@ -6295,13 +6295,13 @@
         "client/src/components/settings/LinkedGameSettings.tsx",
         "client/src/components/chat/GameMessageOrigin.tsx"
       ],
-      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json", "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json"]
+      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json", "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json", "implementation/verification/p8-game-signal-browser-2026-10-25.json"]
     },
     {
       "id": "p8.game-message-delivery",
       "title": "Authorized game-origin messaging",
       "phase": "P8",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R05",
         "R06"
@@ -6324,7 +6324,7 @@
         "client/src/components/settings/LinkedGameSettings.tsx",
         "client/src/components/chat/GameMessageOrigin.tsx"
       ],
-      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json", "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json", "implementation/verification/p8-bot-private-download-2026-10-25.json"]
+      "evidence": ["implementation/verification/p8-linked-game-grants-2026-10-25.json", "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json", "implementation/verification/p8-bot-private-download-2026-10-25.json", "implementation/verification/p8-game-signal-browser-2026-10-25.json"]
     },
     {
       "id": "p9.input-device",

@@ -29,12 +29,6 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-func (b *syncBuffer) Len() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Len()
-}
-
 // captureSlog swaps the default slog handler with one that records into a
 // concurrency-safe buffer, mirroring pkg.captureSlog's pattern for
 // pkg.ErrorCtx tests.
@@ -50,6 +44,8 @@ func captureSlog(t *testing.T) (*syncBuffer, func()) {
 // down the test process — if Go's recover failed, this whole binary would
 // crash instead of reporting a test failure.
 func TestGo_recoversPanicWithoutCrashing(t *testing.T) {
+	buf, restore := captureSlog(t)
+	defer restore()
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -66,7 +62,9 @@ func TestGo_recoversPanicWithoutCrashing(t *testing.T) {
 
 	select {
 	case <-done:
-		// fn ran (and its own defer fired) despite the panic — recovered.
+		// fn's defer precedes the outer recovery. Wait for recovery logging too,
+		// so this goroutine cannot write into the next test's default logger.
+		waitForPanicLog(t, buf, "test.panicker", "boom")
 	case <-time.After(2 * time.Second):
 		t.Fatal("goroutine did not complete — panic recovery may have hung or crashed")
 	}
@@ -87,14 +85,7 @@ func TestGo_logsComponentAndPanicValue(t *testing.T) {
 	})
 	wg.Wait()
 
-	// The log write happens in the deferred recover after fn's own defer —
-	// give it a moment to land before asserting on buf.
-	deadline := time.Now().Add(2 * time.Second)
-	for buf.Len() == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-
-	logLine := buf.String()
+	logLine := waitForPanicLog(t, buf, "test.component", "kaboom")
 	if !strings.Contains(logLine, `"component":"test.component"`) {
 		t.Errorf("log missing component: %s", logLine)
 	}
@@ -103,6 +94,32 @@ func TestGo_logsComponentAndPanicValue(t *testing.T) {
 	}
 	if !strings.Contains(logLine, `"stack"`) {
 		t.Errorf("log missing stack trace: %s", logLine)
+	}
+}
+
+func waitForPanicLog(t *testing.T, buf *syncBuffer, component, panicValue string) string {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		line := buf.String()
+		if strings.Contains(line, `"component":"`+component+`"`) && strings.Contains(line, `"panic":"`+panicValue+`"`) {
+			return line
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("recovery log did not complete for %s: %s", component, line)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestGo_recoveryLogIsNotSatisfiedByAnotherGoroutine(t *testing.T) {
+	buf, restore := captureSlog(t)
+	defer restore()
+	slog.Error("goroutine panic recovered", "component", "another.component", "panic", "another panic")
+	Go("test.current", func() { panic("current panic") })
+	line := waitForPanicLog(t, buf, "test.current", "current panic")
+	if !strings.Contains(line, `"component":"test.current"`) || !strings.Contains(line, `"stack"`) {
+		t.Fatalf("expected the current goroutine's completed recovery record: %s", line)
 	}
 }
 
