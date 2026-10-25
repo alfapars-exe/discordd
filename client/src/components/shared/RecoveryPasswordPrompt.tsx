@@ -12,6 +12,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useE2EEStore } from "../../stores/e2eeStore";
+import { useAuthStore } from "../../stores/authStore";
+import { shouldShowDownloadPrompt } from "../../utils/detectOS";
 import { useToastStore } from "../../stores/toastStore";
 import {
   checkRecoveryPassphrase,
@@ -25,6 +27,7 @@ type PromptView = "main" | "restore" | "setPassword";
 
 function RecoveryPasswordPrompt() {
   const { t } = useTranslation("e2ee");
+  const user = useAuthStore((s) => s.user);
   const hasRecoveryBackup = useE2EEStore((s) => s.hasRecoveryBackup);
   const restoreFromRecovery = useE2EEStore((s) => s.restoreFromRecovery);
   const completeRecoverySetup = useE2EEStore((s) => s.completeRecoverySetup);
@@ -35,6 +38,10 @@ function RecoveryPasswordPrompt() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Keep the recovery offer pending while first-run dialogs own the screen.
+  // Dismissing onboarding updates these account flags optimistically.
+  if (!user || !user.has_seen_welcome || (!user.has_seen_download_prompt && shouldShowDownloadPrompt())) return null;
 
   async function handleRestore() {
     if (!password.trim() || isLoading) return;
