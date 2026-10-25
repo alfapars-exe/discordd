@@ -10,6 +10,13 @@
   "receiverObservation": "Second client encrypted live receiver reached 330529 bytes, but decoded sample duration and energy stayed zero and post-receive PCM analyser RMS was zero. Peer audio acceptance FAILED to establish despite actual nonzero sender input.",
   "additionalObservation": "Second client's own pipeline reported fallback/none despite nonzero generated source. Investigate independently; no root cause asserted.",
   "samplingCorrection": "Early connected UI can precede publication. Empty tracks and localEncrypted false in early samples do not prove failed encryption or missing capture. Later samples waited for an actual active pipeline.",
-  "cleanup": "Both clients explicitly left calls and stopped generators in round155. No microphone recordings or raw audio retained; no encryption bypass used.",
+  "localWorkerIsolation": {
+    "rounds": [156, 157],
+    "scope": "Frozen QA10, two actual local RTCPeerConnections and bundled LiveKit encryption workers, fresh local QA key at slot 1; no API, SFU, account credentials or hardware capture",
+    "result": "20-second run completed with zero reported worker errors. Source RMS approximately 0.0703, receiver 105319 bytes / 958 packets, but decoded duration, energy and PCM RMS remained zero.",
+    "interpretation": "Silent receive reproduces without application Room/SFU. This narrows investigation to the worker/browser transform or diagnostic harness; it does not establish a library or production defect by itself.",
+    "next": "Measure numeric encoded/decrypted frame flow around actual worker streams before changing application encryption."
+  },
+  "cleanup": "Both clients explicitly left calls and stopped generators in round155. Local two-PC isolation harness automatically cleaned up after 20 seconds and explicit stop was also called in round157. No microphone recordings or raw audio retained; no encryption bypass used.",
   "acceptance": "Physical microphone, audible peer playback and production runtime remain unaccepted. Test fixture instrumentation is not shipped as application functionality."
 }
