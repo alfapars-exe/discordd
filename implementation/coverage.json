@@ -7254,7 +7254,7 @@
       "id": "p11.recent-games",
       "title": "Registered and recently played games",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R20"
       ],
@@ -7267,13 +7267,14 @@
         "Current and added list uses real play timestamps; removal and game-level sharing toggle persist."
       ],
       "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
-      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json"]
+      "evidence": ["implementation/verification/p11-local-registered-games-2026-10-24.json",
+        "implementation/verification/p11-local-game-names-recents-2026-10-25.json"]
     },
     {
       "id": "p11.game-metadata",
       "title": "Game metadata attribution",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R20"
       ],
@@ -7285,8 +7286,8 @@
       "acceptance": [
         "Only supported or user-provided title/art is shown; no fake verified game badge or external inventory."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["electron/registered-games.ts", "client/src/components/settings/RegisteredGamesSettings.tsx"],
+      "evidence": ["implementation/verification/p11-local-game-names-recents-2026-10-25.json"]
     },
     {
       "id": "p11.activity-global",
