@@ -108,6 +108,10 @@ jobs:
       - name: Install client dependencies
         run: npm ci --prefix client
 
+      - name: Verify packaged microphone worklet remains CSP-compatible
+        run: node --test scripts/audio-build-csp.test.mjs
+        working-directory: client
+
       # ─── Build client (Vite) ───
       - name: Build client
         run: npx vite build --outDir dist
