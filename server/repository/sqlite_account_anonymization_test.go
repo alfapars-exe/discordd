@@ -41,6 +41,7 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 			a, old := createLogicalSession(t, sessions, "session-user", "deleting", "old-refresh")
 			b, _ := createLogicalSession(t, sessions, "session-other", "surviving", "other-refresh")
 			execSeed(t, db, []seedStmt{
+				{q: `INSERT INTO data_exports(id,user_id,status,payload,expires_at) VALUES('retiring-export','session-user','ready','{"email":"private@example.invalid"}',?),('survivor-export','session-other','ready','{"preserve":true}',?)`, args: []any{time.Now().UTC().Add(time.Hour), time.Now().UTC().Add(time.Hour)}},
 				{q: `INSERT INTO servers(id,name,owner_id) VALUES('preserved-server','Shared server','session-other')`},
 				{q: `INSERT INTO channels(id,name,type,server_id) VALUES('shared-delete-channel','shared','text','preserved-server')`},
 				{q: `INSERT INTO channels(id,name,type,server_id) VALUES('shared-music-channel','music','voice','preserved-server')`},
@@ -142,6 +143,8 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 				t.Fatalf("identity not stripped: %s %s %s %d %d", name, display, status, deleted, personal)
 			}
 			for query, want := range map[string]int{
+				`SELECT COUNT(*) FROM data_exports WHERE user_id='session-user'`:                                                  0,
+				`SELECT COUNT(*) FROM data_exports WHERE user_id='session-other'`:                                                 1,
 				`SELECT COUNT(*) FROM music_operation_receipts WHERE actor_id='session-user'`:                                     0,
 				`SELECT COUNT(*) FROM music_operation_receipts WHERE actor_id='session-other'`:                                    1,
 				`SELECT COUNT(*) FROM music_control_heads WHERE channel_id='shared-music-channel'`:                                1,

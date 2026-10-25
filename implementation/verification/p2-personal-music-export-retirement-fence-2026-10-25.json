@@ -1,0 +1,55 @@
+{
+  "phase": "P2",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "server/repository/sqlite_data_export.go",
+    "server/repository/sqlite_data_export_test.go",
+    "server/repository/sqlite_account_anonymization.go",
+    "server/repository/sqlite_account_anonymization_test.go",
+    "implementation/verification/p2-personal-music-export-retirement-fence-2026-10-25.json"
+  ],
+  "behavior": [
+    "Personal-data exports now include own_music_queue_items. Only persisted entries whose requested_by_user_id matches the requesting account are emitted. Queue item identity and position preserve repeated tracks. Track fields are explicitly allowlisted; raw shared queue JSON, other requester entries and unknown future fields are excluded.",
+    "own_music_operations contains only receipts owned by actor_id with channel_id, request_id, session_id, expected_revision and created_at. Raw result_json and request_hash are excluded; this is operation receipt metadata, not a reconstructed action or full playback history.",
+    "Existing ciphertext, encryption version, sender device and opaque metadata exports remain unchanged; the server does not decrypt messages.",
+    "Large snapshot collection remains outside the global retirement lock. Final export publication shares the existing account-retirement boundary (PostgreSQL advisory lock and SQLite writer boundary), checks live human/non-disabled/non-banned state and captured token version, then inserts and returns job metadata in one transaction. PostgreSQL locks the account row after the retirement boundary.",
+    "Get and Download query current live/non-disabled/non-banned human owner state along with owner, export ID and expiry. Unauthorized publication returns Unauthorized; hidden/missing/expired downloads return NotFound.",
+    "Human self-deletion and bot retirement explicitly delete data_exports for the retiring identity within anonymization cleanup, including when foreign-key enforcement is disabled. Other accounts exports and shared ciphertext/history remain."
+  ],
+  "verification": {
+    "focused_native": {
+      "result": "passed",
+      "command": "go test ./repository -run 'Test(SQLiteDataExport|DataExport|SQLiteAccountAnonymization)' -count=1",
+      "top_level_tests": 7,
+      "note": "Includes ownership/expiry/secret exclusion, notification decisions, duplicate own music entries, unknown/foreign field exclusion, ciphertext preservation, disabled/deleted/stale-token guards, deterministic collected-snapshot-before-deletion race, shared-history cleanup with FK-on and FK-off."
+    },
+    "focused_postgres": {
+      "result": "passed",
+      "command": "HICHAT_TEST_POSTGRES_DSN=<process-only disposable fixture> go test ./repository -run 'Test(SQLiteDataExport|DataExport|SQLiteAccountAnonymization)' -count=1",
+      "database": "postgres:18.6-bookworm",
+      "top_level_tests": 7,
+      "final_run_seconds": 6.276,
+      "fixture": "Random password existed only in process environment; uniquely named owned container exposed on loopback with dynamically allocated port. Existing newTestDB used isolated schemas/native PostgreSQL migrations. Container removed and environment restored; no credential values printed or saved."
+    },
+    "deterministic_race": "Test-only TxQuerier wrapper pauses RawDB unwrapping after all snapshot rows close and before final publication. Real anonymization commits first; resumed export is Unauthorized, no export row survives or is recreated, and the prior snapshot cannot be downloaded. Runs against both databases without production test hooks.",
+    "broad_native_repository": {
+      "result": "passed",
+      "command": "go test ./repository -count=1",
+      "seconds": 76.959,
+      "note": "Whole repository package passed on native SQLite at this source freeze. No whole-server, remote CI or production claim."
+    },
+    "static": {
+      "vet": "go vet ./repository passed",
+      "format": "gofmt applied to owned Go files",
+      "diff": "git diff --check passed for owned files"
+    }
+  },
+  "limits": [
+    "No individual-session ID is part of the unchanged repository interface. Per-session-only revocation after middleware admission is not independently revalidated here; the patch closes the account retirement/live-state/token-version publication boundary.",
+    "Get/Download guards evaluate at database read time; already returned or transmitted bytes cannot be revoked. No claim of cancellation of an already admitted download stream.",
+    "Only currently persisted music queue entries and stored receipt metadata are exported. No complete historical music audit log is invented.",
+    "No production, Windows, browser or multi-client runtime acceptance was performed. No complete P2 acceptance or deployment is claimed.",
+    "No schema change, commit or push was performed by this subagent. Root owns final evidence integration, static false-positive exact-hash review and publication."
+  ]
+}

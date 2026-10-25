@@ -182,6 +182,7 @@ func anonymizeIdentityTx(ctx context.Context, tx *sql.Tx, owner, expectedHash st
 }
 
 var anonymizationPrivateDeletes = []string{
+	`DELETE FROM data_exports WHERE user_id=?`,
 	// Retry receipts cache requester display metadata, not shared history.
 	`DELETE FROM music_operation_receipts WHERE actor_id=?`,
 	`DELETE FROM bot_tokens WHERE bot_user_id=?`,
