@@ -49,7 +49,7 @@ export default function NotificationSettings() {
     <section className="vs-section" data-settings-section="desktop">
       <div className="vs-section-header">{t("notifications.desktop")}</div>
       <div className="vs-desc" role="status">{t(`notifications.permission.${permission}`)}</div>
-      {permission === "default" && <button className="btn-primary" type="button" onClick={() => void ensureNotificationPermission().then(setPermission)}>{t("notifications.requestPermission")}</button>}
+      {permission === "default" && <button className="settings-btn" type="button" onClick={() => void ensureNotificationPermission().then(setPermission)}>{t("notifications.requestPermission")}</button>}
       <Toggle label={t("notifications.desktopEnabled")} description={t("notifications.desktopEnabledDesc")} checked={notifications.desktopEnabled} disabled={permission === "unsupported" || permission === "denied"} onChange={(value) => updateNotification("desktopEnabled", value)} />
       <Toggle label={t("notifications.taskbarFlash")} description={t("notifications.taskbarFlashDesc")} checked={notifications.taskbarFlash} onChange={(value) => updateNotification("taskbarFlash", value)} />
       <Toggle label={t("notifications.unreadBadge")} description={t("notifications.unreadBadgeDesc")} checked={notifications.unreadBadge} onChange={(value) => updateNotification("unreadBadge", value)} />

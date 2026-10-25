@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-26",
+  "scope": "Real compiled source UI regression follow-up; partial reference acceptance",
+  "source_base": "4dd50ddfafbcbc4a477abaaa7cc5a2d1810f1d22",
+  "backend_source": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "source_qualification": "Pinned4dd50ddf archive plus exactly two owned UI follow-up source overrides, served through real Vite compilation/HMR; no transient DOM styling.",
+  "source_overrides": {
+    "client/src/styles/globals.css": "c817f7158df8f6601bfadf76556761dea749d2475fdc02cbd8bd12634751b026",
+    "client/src/components/settings/NotificationSettings.tsx": "95462693784963134a4e59b6b06325175cea3ac0a0a45e3a832fd49e87fe60d9"
+  },
+  "verification": {
+    "real_vite_source_and_HMR": true,
+    "no_injected_style": true,
+    "width": 390,
+    "html_zoom": 2,
+    "preview_client_and_scroll_width": [
+      161,
+      161
+    ],
+    "text_client_and_scroll_widths": [
+      [
+        125,
+        125
+      ],
+      [
+        125,
+        125
+      ]
+    ],
+    "narrow_layout": "Avatar and message text flow onto separate rows when remaining inline space is insufficient; wide preview remains inline.",
+    "neutral_preview_link": "https://example.com/themes",
+    "notification_permission_button": {
+      "class": "settings-btn",
+      "padding": "0px 20px",
+      "border_radius": "8px",
+      "height": 36,
+      "permission_remained": "default"
+    },
+    "tests": {
+      "NotificationSettings_existing_tests": 3,
+      "eslint_targeted_exit": 0,
+      "fixture_tsc_and_vite_build_exit": 0,
+      "vite_modules": 1734
+    },
+    "cleanup": "Application scale returned100; emulated device metrics cleared; no temporary style node remains."
+  },
+  "screenshots": [
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-4dd-preview-real-390-app200.png",
+      "sha256": "ac95390df8eb5de445b500dcbf9f4088d8792ab4eec51e82cdb74d5da857bf1e"
+    },
+    {
+      "file": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-preview-stacked-real-390-app200.png",
+      "sha256": "4b2b1cd8c24f3edeba48ac98ff5dbf5f41202066ca1043d71422ccf2efa44d8d"
+    }
+  ],
+  "additional_reference_observation": {
+    "notification_source": "112d1e8b",
+    "widths": [
+      390,
+      768,
+      1024,
+      1440,
+      2560
+    ],
+    "all_document_scroll_widths_equal_viewport": true,
+    "all_five_screenshots_visually_inspected": true,
+    "native_permission_or_audio_preview_activated": false
+  },
+  "remaining": [
+    "Full screenshot matrix across remaining settings/profile/invite/chat/viewer",
+    "Native browser zoom remains separate from tested application zoom",
+    "Actual installed Windows UI and physical-device acceptance",
+    "New profile-save empty-language failure is being remediated separately"
+  ],
+  "delivery": "No stable tag/feed rewrite or production publication by this verification."
+}

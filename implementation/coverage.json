@@ -1124,7 +1124,8 @@
       ],
       "code": [],
       "evidence": [
-        "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json"
+        "implementation/verification/p0-partial-visual-112d1e8b-2026-10-26.json",
+        "implementation/verification/p7-preview-followup-render-2026-10-26.json"
       ]
     },
     {
@@ -5098,7 +5099,8 @@
       "code": ["client/src/components/settings/AccessibilitySettings.tsx", "client/src/styles/accessibility.ts", "client/src/styles/globals.css"],
       "evidence": [
         "implementation/verification/p7-accessibility-foundation-2026-10-23.json",
-        "implementation/verification/p7-preview-wrap-2026-10-26.json"
+        "implementation/verification/p7-preview-wrap-2026-10-26.json",
+        "implementation/verification/p7-preview-followup-render-2026-10-26.json"
       ]
     },
     {
@@ -5269,7 +5271,8 @@
       "code": ["client/src/components/settings/AppearanceSettings.tsx", "client/src/stores/settingsStore.ts", "client/src/styles/globals.css"],
       "evidence": [
         "implementation/verification/p7-accessibility-foundation-2026-10-23.json",
-        "implementation/verification/p7-preview-wrap-2026-10-26.json"
+        "implementation/verification/p7-preview-wrap-2026-10-26.json",
+        "implementation/verification/p7-preview-followup-render-2026-10-26.json"
       ]
     },
     {
