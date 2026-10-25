@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": [
+    "Explicit queue/session edits serialize durable writes and roll back queue/revision/loop intent on returned repository errors.",
+    "Failed enqueue save permits a later successful retry to start playback; durable stop-delete failure preserves paused restored state for retry.",
+    "Repository calls have a five-second timeout; lifecycle coordination must preserve connect sharing, cancellation and explicit Stop during connect."
+  ],
+  "verification": [
+    "Initial narrow Music/Seek/Repeat tests and race repetitions passed but did not cover all existing connect concurrency contracts.",
+    "Expanded full-server and race checks exposed regressions in TestGetOrCreateBot_ConnectFailureNotHandedOut and TestGetOrCreateBot_WaitersShareOneConnect, then a deadlock in ExplicitStopDuringConnectIsNotUndone. The two owned test containers were stopped; these runs are failed/terminated, not passes.",
+    "Lifecycle stripes now protect bot publication/finalization and stop/delete but are released during network connect and ready waits. Returned lock ownership is consistent for explicit queue mutations.",
+    "Added regressions for shared connects, explicit Stop during connect, connect panic followed by retry, blocked Delete versus Enqueue, restored-queue append, failed-save idle cleanup, stale Restore snapshot and visibly paused restored recovery.",
+    "Post-correction parent full Go suite passed (services 26.625s); parent expanded music/connect/restore race selection passed three repetitions (47.644s). The final selection after the live-test-only SIF correction also passed three repetitions (47.455s).",
+    "Parent go vet ./services passed."
+  ],
+  "open": [
+    "Real packaged Windows and two-HiChat-client acceptance remains required even after server tests pass.",
+    "Internal play-loop persistence failures are logged and playback continues; this slice does not claim transactional rollback of an already-playing audio transition.",
+    "Repository panics are outside the returned-error rollback contract; repository implementations must return errors and honor context cancellation.",
+    "Real YouTube playback in an encrypted LiveKit room, two actual clients, key rotation, Windows packaging and restart acceptance remain open."
+  ]
+}

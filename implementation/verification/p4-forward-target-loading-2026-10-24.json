@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Forward destination discovery settles server requests independently, retains successfully loaded targets, and exposes a localized partial-failure alert with an explicit reload action. Rejected promises and failed API responses no longer silently leave loading active or masquerade as a verified empty list.",
+    "DM discovery failures do not prevent available server destinations from loading. dmStore.fetchChannels now reports true/false for successful/failed API results, allowing the picker to distinguish a valid empty DM list from failed discovery. Existing callers can continue ignoring the return value.",
+    "Retry disables while loading or forwarding, refreshes targets without sending a message, and retains the prior account/lifetime guard on async completion. Unexpected parsing errors are caught with a visible recoverable loading error."
+  ],
+  "verification": [
+    "Component tests cover a rejected server request alongside available destinations, failed API response followed by successful explicit retry, and thrown DM discovery alongside available server targets. Store regression covers success-with-empty-list versus failed API response.",
+    "Initial focused component/locale suites passed: 2 files / 38 tests. Final tsc -b and targeted ESLint passed. Full client regression passed: 229 files / 2197 tests in 46.86s. Vite production web build passed in 710ms. Existing warning categories remain visible. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "Full send-permission filtering, group forwarding destinations, source access revocation races and real two-client encrypted forwarding remain open. Server permission enforcement remains authoritative; a displayed destination is not proof that a later send will be permitted.",
+    "Actual browser/device acceptance and overall P0-P11 are incomplete. No commit, push, merge, Windows packaging or production release performed."
+  ]
+}

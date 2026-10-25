@@ -1,0 +1,24 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "A default-off device-local activity-widget preference and real read-only panel display only accepted friends' already-authorized global game activity. Server-only grants are never reinterpreted as global grants. Blocked, offline/invisible/unknown, revoked/tombstoned and stale-account data are excluded. At most five cards contain only userId, display label and game name, without process paths, URLs, timestamps or join actions.",
+    "Projection subscribes to the existing account-scoped epoch-fenced activity store, friendships, outgoing blocks and live presence. Native publication additionally gates cached rows on connected WebSocket state. Existing useGameActivity already clears the activity store when disconnected; this change tightens publication ordering rather than claiming that earlier clients retained rows throughout offline periods.",
+    "Strict native IPC validates/project cards, enforces uniqueness, control-character/text bounds and five-card cap. Native geometry reserves header/row space, reduces rows to physical workarea limits and reapplies those limits on lock/unlock deliveries. The action-only renderer receives no activity cards or voice roster.",
+    "Activity works independently from a current voice roster. An enabled empty panel states that no shared activity is visible. Maximum voice-user Off now hides the voice list only; enabled quick actions/activity remain independent, while the master switch disables everything. Game mode still requires supported foreground tracking and explicit registered-executable overlay permission; no local process inventory is sent to the server.",
+    "This is a partial widget slice. The composite seven-widget acceptance remains missing; notifications/chat/video/streams and independently movable widget layouts are not claimed complete."
+  ],
+  "verification": [
+    "Electron TypeScript compilation and complete native suite passed: 148 passed, zero failed, one previously documented physical symlink permission skip. Covers strict activity IPC, no-roster game-mode activation, Off/master independence, empty-state geometry, physical row caps and bounded lock/unlock re-delivery.",
+    "Focused parent projection/hook/renderer/settings checks passed: 42 tests; final connection-gating tests plus existing publisher tests passed: 15 tests. Agent UI/store/filter checks: 75 tests passed. Tests use synthetic fixture users and game labels, not uploaded personal screenshot data.",
+    "Final complete client regression passed: 312 files, 2887 tests, zero failures. Report C:/Users/PARS/AppData/Local/Temp/hichat-overlay-activity-final-20261025.json. Client TypeScript and scoped ESLint passed. Production Vite build passed with existing ineffective-dynamic-import warnings.",
+    "Coverage structure VALID and all 32 validator regressions passed. Composite widget acceptance intentionally remains missing: 41 missing, 175 implemented_unverified, 32 existing, 2 accepted and 11 excluded. No acceptance gate was silently closed."
+  ],
+  "open": [
+    "Real Windows rendering/readability at DPI and monitor changes, game focus/drag/resize and actual two-client privacy-revocation observation",
+    "Independent per-widget layouts and remaining notification/chat/video/stream widget implementations",
+    "Remaining P0-P11 functional, device, deployment and acceptance gates",
+    "Clean Windows installer, helper/signing/update verification and separate production publication approval"
+  ],
+  "release": "No commit, push, merge, Windows update publication or production deployment. Goal remains active and incomplete."
+}

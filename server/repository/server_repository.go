@@ -65,3 +65,11 @@ type ServerRepository interface {
 	// CountOwnedMqviHostedServers returns the number of platform-managed servers owned by a user.
 	CountOwnedMqviHostedServers(ctx context.Context, ownerID string) (int, error)
 }
+
+// GameActivityMembershipSnapshotRepository is an optional server-repository
+// capability for join-time privacy snapshots; kept separate from the broad
+// ServerRepository contract so existing test doubles and adapters remain valid.
+type GameActivityMembershipSnapshotRepository interface {
+	AddMemberWithGameActivityAudience(ctx context.Context, serverID, userID string, allowed bool) error
+	GetMemberGameActivityAudience(ctx context.Context, serverID, userID string) (*bool, error)
+}

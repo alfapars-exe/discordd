@@ -1,0 +1,20 @@
+{
+  "scope": "P4 group DM creation, membership, rekey and LiveKit call foundation",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "checks": [
+    "Go main, repository and service packages compile with group DM schema and routes",
+    "Client TypeScript project compiles",
+    "19 targeted Vitest cases pass, including multipart attachment transport, group store lifecycle, read/reaction state and websocket reconnect mocks",
+    "LiveKit group token is member-gated and its SFrame passphrase changes with membership key_epoch",
+    "Group call controls expose microphone, camera, screen share and disconnect",
+    "Create/member/message mutations are rate limited",
+    "Encrypted group messages support reply, edit, delete, reactions, paged client-side E2EE search, unread cursors and encrypted attachments",
+    "Attachment download authorization checks current group membership and message deletion cleans the encrypted file"
+  ],
+  "limitations": [
+    "Windows Application Control blocks executing newly linked local Go binaries, so live two-client acceptance remains pending",
+    "Ego Lite task space 16 reaches the client but remains on the server-waking screen",
+    "Live two-client acceptance is still required before these items can be marked accepted"
+  ]
+}

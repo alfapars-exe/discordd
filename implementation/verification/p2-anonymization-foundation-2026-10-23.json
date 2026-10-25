@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "scope": "Unexposed database foundation only. Not an available or accepted self-service deletion feature.",
+  "user_decision": "Anonymize the deleted identity; preserve shared history for surviving participants.",
+  "implemented": [
+    "Additive migration 096 adds deleted_at and a durable personal-asset cleanup queue. No existing account is deleted by migration.",
+    "A distinct repository verifies owner, active session and expected password hash inside one transaction. Platform administration, owned servers and owned applications block the operation until handoff/removal; existing administrative HardDeleteUser is not reused.",
+    "Retain the user row as a non-authenticating tombstone to avoid DM/channel foreign-key cascades. Random replacement username, generic display name, stripped profile/email, invalid password hash, offline/lifecycle state and token version bump. Immutable deleted-user update trigger rejects late profile/credential writes.",
+    "Explicit private-state deletion does not depend on foreign-key enforcement: sessions, reset/verification proofs, MFA, device/prekeys, personal backup, recipient envelopes, preferences, personal notes/read states/mutes, memberships/roles and cosmetic/entrance selections.",
+    "Shared DM/channel messages and attachments are untouched. Other recipients' sealed sender-key envelopes remain available for their retained history. Other users' preferences/notes and sign-in sessions remain unchanged.",
+    "Personal profile/entrance asset URLs are captured in the durable queue before identity removal. Audit identity snapshots and associated metadata are stripped. No filesystem removal happens yet."
+  ],
+  "checks": [
+    {"command": "go test ./repository -run TestSQLiteAccountAnonymization -count=1", "result": "passed", "covers": "Foreign keys on/off, retained channel and DM ciphertext/attachments/recipient envelopes, private-data removal, surviving-user state, no shared asset queueing, wrong/stale owner proof, ownership/admin/application blockers, transaction rollback and 12 contenders with one winner."},
+    {"command": "go test ./...", "result": "all non-repository packages passed; repository failed because the new test assumed a channel existed in an intentionally empty fixture"},
+    {"command": "corrected fixture and focused repository rerun", "result": "passed; explicit shared server/channel seeds replaced empty INSERT SELECT test setup; no production logic weakened"},
+    {"command": "go test ./repository -json", "result": "passed full repository package after fixture correction; combined with the unchanged other packages above, every Go package passed"},
+    {"command": "npm run check:coverage", "result": "passed structural validation; acceptance still incomplete"}
+  ],
+  "remaining_before_exposure": [
+    "Wire a service with durable recent-password/MFA attempt controls, explicit typed confirmation and account-affinity response guard, then an authenticated handler and UI. Currently there is no route and the repository is not registered in production services.",
+    "Implement safe, retryable cleanup worker with canonical path validation, symlink/root protection and surviving reference checks; test actual files/failure/retry. Queueing is not file erasure.",
+    "Reject late private-table inserts/updates and authority grants from requests authorized before deletion; invalidate user/profile caches and active HTTP/WS/voice state. Prevent administrative hard deletion from accidentally cascading retained tombstone history.",
+    "Exercise owner transfer, fresh registrations with freed names, signed-out recovery, user search/DM behavior, shared history on a second independent client and installed Windows.",
+    "Review historical audit/report/support data, retention and backup treatment. Do not claim text manually authored by others, downloaded copies, old backups or shared internal author IDs become unlinkable or erased."
+  ],
+  "status": "p2.delete remains missing; no destructive production action or release occurred"
+}

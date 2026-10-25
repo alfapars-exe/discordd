@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-24",
+  "scope": "Atomic compare-and-swap for account-private manual media labels",
+  "implemented": [
+    "Additive SQLite 122 and PostgreSQL 024 migrations add an opaque version column. Existing records retain their labels and receive the legacy migration token; every subsequent successful write rotates a cryptographically random 128-bit token.",
+    "Public PUT/DELETE bodies require expected_version. Empty string means observed absence. Atomic insert-if-absent, version-matching update and version-matching deletion reject stale state with HTTP 409 / CONFLICT. Internal repository compatibility calls may omit the comparison; HTTP callers cannot.",
+    "GET returns the current version. The client validates and sends the observed version, never retries a conflicting write automatically, and requires explicit reload/reselection. Drafts affected by another session's invalidation display a conflict instead of silently disappearing.",
+    "Socket invalidations while a version-checked write is pending revoke visible media but allow the atomic write receipt to finish. This handles an originating session's own socket echo arriving before its HTTP response. Successful writes then reload canonical state.",
+    "OpenAPI documents required expected versions, returned opaque versions and conflict responses. No media plaintext or URLs were added to the server payload."
+  ],
+  "verification": [
+    {"command": "SQLite media-label repository/models/handler targeted tests", "result": "passed", "detail": "Eight competing creates and eight competing updates each accept exactly one caller; stale delete, delete/recreate ABA, expected-absence delete, token rotation, malformed versions and missing HTTP expected_version are covered."},
+    {"command": "Disposable PostgreSQL 18 media-label repository tests and private data export regression", "result": "passed", "detail": "Same CAS races, legacy-token update, quota-boundary updates and ownership tests ran through the PostgreSQL test harness. Container had no host ports/production mounts and was stopped/removed afterward. Not the full PostgreSQL suite."},
+    {"command": "Client TypeScript project build and targeted ESLint", "result": "passed"},
+    {"command": "Client targeted media annotation/API tests", "result": "passed", "files": 3, "tests": 17, "detail": "Includes observed version forwarding, 409 explicit reload, dirty-draft invalidation and own socket echo before HTTP receipt."},
+    {"command": "Final client full Vitest suite", "result": "passed", "files": 237, "tests": 2357},
+    {"command": "Client Vite production build", "result": "passed", "detail": "1.80s; existing ineffective dynamic import warning remains."},
+    {"command": "Docker Linux Go 1.26.8 CGO_ENABLED=0 go test ./... -timeout=15m", "result": "passed", "detail": "Full runtime snapshot; migration-only regression test added afterward and executed separately."},
+    {"command": "Docker Linux go vet ./...", "result": "passed", "detail": "Before the subsequently added migration-only test."},
+    {"command": "TestMigration122PreservesExistingMediaLabelsAndRunnerReplay", "result": "passed", "detail": "Applies real embedded 121 to a temporary schema, inserts an existing label, upgrades through the production migration runner with 122, verifies every source/label field, verifies runner replay preserves a rotated token and verifies rollback of a DROP COLUMN transaction retains the column/data. This is not a full production backup/restore rehearsal."},
+    {"command": "OpenAPI YAML parse and conflict response check", "result": "passed"},
+    {"command": "git diff --check for changed implementation files", "result": "passed"}
+  ],
+  "test_fixture_correction": "The initial migration replay test incorrectly called applyMigrationFile twice, bypassing the production runner's applied-file check. It was corrected to use runMigrations with actual embedded migration content. A string-to-byte fixture compile error was also corrected; no production migration checks were disabled.",
+  "remaining": [
+    "Real two-client/browser acceptance with migrated backend and annotation conflicts; currently running QA backend predates these APIs/migrations.",
+    "Full production backup/restore and deployment rollback rehearsal for both databases.",
+    "Automatic on-device media classification and representative quality evaluation. Manual user annotations do not satisfy that requirement."
+  ],
+  "acceptance": "Not accepted. Automated CAS evidence does not close P3 or the larger P0-P11 goal. No release or production migration performed."
+}

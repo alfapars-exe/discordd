@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Manual device-local Windows game registry, on-open detection and explicit opt-in background detection; not complete global game activity or overlay.",
+  "implementation": [
+    "A separate cross-platform-visible Registered Games settings page uses verified additive IPC. Native file selection registers eligible existing executable files locally; missing/unreadable selections reject with path-free errors. Deleted registered files remain visible with unknown running state and recovery guidance.",
+    "A fixed bounded Windows PowerShell/CIM query receives known image names as data through stdin, not interpolated command text. Matching uses canonical case-insensitive executable paths, not basename alone; protected null paths remain unknown. Only matching results remain in main; no full process inventory or absolute path is returned to the renderer or server.",
+    "Registry reads and writes have byte/schema/count bounds, serialized mutations and failure rollback. Corruption or permission errors do not overwrite saved registrations. The settings page polls while open; stale polls cannot resurrect removed entries. Current/recent sections use real local detection timestamps and the global time formatter.",
+    "A separate device-local backgroundDetectionEnabled consent defaults false, is stored additively in the existing v1 registry, and restores on app start. When explicitly enabled, main checks registered executables every 30 seconds independently of settings mounting. Foreground/background requests share one scan; interval ticks cannot queue a backlog. Disabling or quitting invalidates queued background generations before native scan and before last-seen commit; dispose prevents further scans. Running applications are not a foreground/play-duration assertion.",
+    "Per-game local sharing consent defaults off, persists locally and is explicitly described as not yet connected to server activity. No verified-game badge, external catalog attribution, automatic discovery catalog or join adapter is invented."
+  ],
+  "verification": [
+    "Parent full Electron suite passed 84/84. Agent game/UI checks passed 9/9; final combined client snapshot passed 299 files/2786 tests, zero failures. Client TypeScript, build and scoped ESLint passed.",
+    "Real bounded Windows CIM smoke against only the current known Node executable returned aggregate-only knownExecutableMatched=true and unreadablePathCount=0. No game was launched or full process inventory printed.",
+    "Tests cover exact-path separation of identical filenames, protected paths, scanner errors, corrupt/oversized files, write rollback, deleted executable recovery and stale UI polls.",
+    "Follow-up parent Electron compilation/full tests passed 87/87 after opt-in background lifecycle and pre-scan disable/dispose regressions. Focused UI tests passed 10/10. Final combined client suite passed 299 files/2798 tests, zero failures (C:/Users/PARS/AppData/Local/Temp/hichat-games-privacy-final-20261024.json); client TypeScript/scoped lint and updated Vite build passed. Coverage structure remained valid with 32/32 validator regressions passing, but acceptance remains incomplete. No real game was launched."
+  ],
+  "open": ["Real game executable selection/restart/device acceptance", "Automatic supported-game discovery and continuous remote activity integration", "Server activity/privacy sharing, external game metadata and authorized join adapters", "Game overlay and complete P11 acceptance"],
+  "release": "No process injection, game launch, remote activity write, commit, push, merge or production publication."
+}

@@ -2,6 +2,7 @@
 
 import { memo, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useToastStore } from "../../stores/toastStore";
 import { createPortal } from "react-dom";
 import DecoratedAvatar from "../cosmetics/DecoratedAvatar";
 import Nameplate from "../cosmetics/Nameplate";
@@ -28,6 +29,8 @@ import BadgeAssignModal from "./BadgeAssignModal";
 import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatFullDateTime, lastSeenLabel } from "../../utils/dateFormat";
+import { useDeveloperSettingsStore } from "../../stores/developerSettingsStore";
+import GameActivityLabel from "../shared/GameActivityLabel";
 
 type MemberItemProps = {
   member: MemberWithRoles;
@@ -92,6 +95,7 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
   const { menuState, openMenu, closeMenu } = useContextMenu();
   const confirm = useConfirm();
   const currentUser = useAuthStore((s) => s.user);
+  const developerMode = useDeveloperSettingsStore((s) => s.developerMode);
   const members = useActiveMembers();
   const friends = useFriendStore((s) => s.friends);
   const incoming = useFriendStore((s) => s.incoming);
@@ -218,11 +222,13 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
       }
 
       // ─── Copy ID ───
-      items.push({
-        label: "Copy ID",
-        onClick: () => copyToClipboard(member.id),
-        separator: !isSelf,
-      });
+      if (developerMode) {
+        items.push({
+          label: t("copyUserId"),
+          onClick: () => copyToClipboard(member.id).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))),
+          separator: !isSelf,
+        });
+      }
 
       // ─── Assign Badge (badge admin only, including self) ───
       if (currentUser?.is_platform_admin === true) {
@@ -319,7 +325,7 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
 
       openMenu(e, items);
     },
-    [currentUser, member, members, friends, incoming, outgoing, timeoutExpiresAt, openMenu, confirm, t]
+    [currentUser, member, members, friends, incoming, outgoing, timeoutExpiresAt, openMenu, confirm, t, developerMode]
   );
 
   async function handleTimeoutPick(seconds: number) {
@@ -436,6 +442,7 @@ function MemberItem({ member, isOnline, nowMs }: MemberItemProps) {
               </span>
             )
           )}
+          {activeServerId && <GameActivityLabel userId={member.id} serverId={activeServerId} visible={isOnline && member.status !== "offline"} />}
         </div>
       </div>
 

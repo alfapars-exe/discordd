@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Avatar from "../shared/Avatar";
+import SpamPreview from "../chat/SpamPreview";
 import { useSavedStore } from "../../stores/savedStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { formatRelativePast } from "../../utils/dateFormat";
@@ -75,7 +76,7 @@ function SavedMessageItem({ item }: SavedMessageItemProps) {
         <p className="saved-item-gone">{t(item.unavailable ? "unavailable" : "messageGone")}</p>
       ) : (
         <>
-          {body && <p className="saved-item-body">{body}</p>}
+          {body && <p className="saved-item-body"><SpamPreview kind={item.message ? "channel" : "dm"} message={ref}>{body}</SpamPreview></p>}
           {ref.attachment_count > 0 && (
             <p className="saved-item-attachments">
               {t("attachments", { count: ref.attachment_count })}

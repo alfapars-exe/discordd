@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-23",
+  "scope": "P3 account content preferences, server-specific DM permissions and personalized friend-request introductions",
+  "implemented": [
+    "Server-validated account preferences for sexual and disturbing media policy by friend DM, other DM and server-channel scope.",
+    "Server-validated spam mode with all, nonfriends and off values.",
+    "Global server-member DM default plus bounded per-server overrides, editable from the real joined-server list with search and override count.",
+    "New non-friend conversations enforce the recipient's common-server DM policy on the server; existing conversations and friends are not retroactively removed.",
+    "Shared-server friend-request eligibility honors the same recipient server-DM overrides.",
+    "Personalized friend-request introduction preference removes the introduction field and prevents delivery when disabled. Enabled introductions continue through the normal encrypted DM send path and remain in conversation history."
+  ],
+  "verification": [
+    {
+      "command": "client TypeScript project build",
+      "result": "passed"
+    },
+    {
+      "command": "vitest run preferencesStore, textToSpeech and useUserProfile",
+      "result": "passed",
+      "tests": 47
+    },
+    {
+      "command": "go test ./models ./services -run Test(Preferences|ServerDMPolicy|FriendRequestPolicy) -count=1",
+      "result": "passed"
+    }
+  ],
+  "not_claimed": [
+    "Media and spam classification and the spam inbox are not implemented by this evidence.",
+    "Two-client browser acceptance remains pending because the local acceptance frontend is currently bound to an unavailable API port."
+  ]
+}

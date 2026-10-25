@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Reference-aware durable personal-asset cleanup foundation. Not scheduled in production or exposed as complete account deletion.",
+  "implemented": [
+    "Migration 098 adds separate durable retirement and completion timestamps. Structured media writers reject retired URLs, including conservative case-insensitive Windows aliases and equipped cosmetic snapshots.",
+    "Bounded database queue batches and sixty-second persisted retry deadlines. Reference check and retirement commit under a database write transaction before any filesystem operation; failed completion cannot reopen a removed URL for late reattachment.",
+    "Reference checks cover public profile/server media, channel/DM/report/support attachments, emoji/sticker/entrance/soundboard/badge/cosmetic media, preview images/favicons and equipped snapshots. Referenced files stay intact and remain eligible for a later check.",
+    "Local single-file remover uses os.Root containment, canonical upload URLs and explicit symlink/non-regular-file rejection. No recursive deletion or directory sweep. Missing files complete idempotently; failed removals remain retired and retryable.",
+    "Worker RunOnce processes at most 25 queue records and honors cancellation between records. Scheduling, operational health and self-deletion service wiring remain outstanding. No production account/file was modified."
+  ],
+  "checks": [
+    {"command": "go test ./services -run TestAccountAssetCleanup -count=1 -v", "result": "passed actual-file/reference and durable-retry tests; symlink test skipped because this Windows host cannot create symlinks without an unavailable privilege"},
+    {"command": "go test ./repository -run TestAccountAssetCleanup -count=1", "result": "passed twelve concurrent processors with one remover, retirement committed before callback, and injected completion-write failure followed by safe retry"},
+    {"command": "go test ./... -json", "result": "all Go packages passed; symbolic-link runtime and optional external media-service tests remain skipped where prerequisites are unavailable"},
+    {"command": "npm run check:coverage and git diff --check", "result": "passed; ledger still explicitly reports incomplete acceptance"}
+  ],
+  "remaining_acceptance": [
+    "Run symlink/root-swap cases on a host permitting symbolic links; local skipped test is not evidence that this runtime scenario was exercised.",
+    "Remote libSQL transaction/commit uncertainty, multiple processes, backup/restore and persistent service scheduling/health.",
+    "Complete self-deletion password/MFA/confirmation, ownership handoff, realtime/cache/voice invalidation, remaining in-flight write audit and installed Windows/independent-client acceptance.",
+    "No installer, update, commit/push/merge or production deployment was performed. P0-P11 acceptance remains incomplete."
+  ]
+}

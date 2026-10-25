@@ -6,7 +6,7 @@
 #          tursodatabase/go-libsql native driver, which is the only one that
 #          handles the current Turso wire protocol correctly. The pure-Go
 #          modernc.org/sqlite driver is still used for the local SQLite path.
-# Stage 3: Alpine runtime with the binary + ca-certificates.
+# Stage 3: Debian runtime with the binary and music/backup dependencies.
 
 # ─── Stage 1: React (Vite) ───
 FROM node:26-alpine AS frontend
@@ -25,6 +25,10 @@ COPY package.json /app/package.json
 # so a build without --build-arg VITE_SENTRY_DSN=... stays Sentry-free.
 ARG VITE_SENTRY_DSN
 ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
+# Build-time rollout switch. Runtime environment changes cannot alter Vite's
+# already compiled bundle. Use the single-destination UI by default; false is rollback.
+ARG VITE_UI_SHELL_V2=true
+ENV VITE_UI_SHELL_V2=${VITE_UI_SHELL_V2}
 RUN npm run build
 # Output: /app/client/dist/
 
@@ -69,10 +73,15 @@ WORKDIR /app/server
 RUN CGO_ENABLED=1 GOOS=linux \
     go build -trimpath -ldflags="-s -w" -o /out/hichat-server .
 
+# YouTube challenge solving requires a JS runtime. Use the official Deno
+# binary image, pinned to a multiarch manifest (amd64 + arm64).
+FROM denoland/deno:bin-2.9.8@sha256:b507583d3c68ba69f3ed2ce5969ae5b8b70f43421c781279c7aea06435263543 AS music-js
+
 # ─── Stage 3: Runtime ───
 # Stay on glibc (debian-slim) to match what go-libsql linked against. The
 # image is ~30MB larger than alpine but the binary actually runs.
 FROM debian:bookworm-slim
+COPY --from=music-js /deno /usr/local/bin/deno
 
 # yt-dlp pinned + checksum-verified. The previous "latest" fetch was
 # both a supply-chain risk (any compromise of the yt-dlp release artifact
@@ -83,30 +92,10 @@ FROM debian:bookworm-slim
 # release is fetched and verified, so the build fails loudly on any
 # tampering instead of silently shipping an unknown binary.
 #
-# Bumped 2024.11.04 -> 2026.07.04 (security scan 2026-07-31, finding N-28:
-# the old pin was ~21 months stale). Verified before bumping, not just
-# assumed safe: downloaded both release binaries with the same checksum
-# check this file performs, diffed `--list-extractors` output filtered to
-# ^youtube -- 21 extractors on the old pin, 20 on the new one, the only
-# removal being youtube:search:date (search-by-date; music_bot_pipeline.go
-# only ever passes a direct URL, never invokes yt-dlp's search syntax, so
-# this extractor was unreachable either way). No new Youtube-prefixed
-# extractor name appeared, so the class-name pattern below still matches
-# only the intended family, and `generic` -- the extractor --use-extractors
-# is here specifically to exclude -- is still present and still excluded
-# by omission. See music_url_guard.go and playTrackYtdlpArgs in
-# music_bot_pipeline.go.
-#
-# Bumped 2026.07.04 -> 2026.08.19 (2026-10-20): 2026.07.04's
-# `-f bestaudio -o -` got `HTTP Error 403: Forbidden` (exit 1, 0 bytes) on
-# music videos with or without a JS runtime, so /play queued tracks that
-# never played; 2026.08.19 works with no JS runtime, so no deno/node is
-# added. The --use-extractors "Youtube.*" pattern is unchanged, and the same
-# check as above was repeated: both release binaries downloaded and
-# checksum-verified, `--list-extractors` filtered to ^youtube gives the same
-# 20 names on both pins (no addition, no removal), `generic` still present
-# and still excluded by omission.
-ARG YT_DLP_VERSION=2026.08.19
+# The official zipimport binary includes the matching EJS challenge scripts.
+# Deno is enabled by yt-dlp automatically; no runtime code download is needed.
+# See https://github.com/yt-dlp/yt-dlp/wiki/EJS and MUSIC_BOT.md.
+ARG YT_DLP_VERSION=2026.10.21
 
 # huggingface_hub pinned for the same reason as yt-dlp above (security scan
 # 2026-07-31, finding N-16). The constraint used to be `>=0.20` with no upper
@@ -182,8 +171,13 @@ RUN set -eux; \
 # isn't actually executable. Prevents shipping a Space where the music
 # bot silently fails at runtime due to a missing PATH entry, or where
 # the backup service can't find `hf` / `sqlite3` and silently no-ops.
-RUN yt-dlp --version && ffmpeg -version | head -1 && python3 --version && \
+RUN yt-dlp --version && deno --version && ffmpeg -version | head -1 && python3 --version && \
     sqlite3 --version && hf --version
+# Exercise the actual encoder offline; --version does not prove libopus is
+# present. Network/YouTube and LiveKit are verified separately at deployment.
+RUN ffmpeg -hide_banner -loglevel error -f lavfi -i anullsrc=r=48000:cl=stereo \
+      -t 0.1 -c:a libopus -f ogg /tmp/hichat-music-smoke.ogg && \
+    test -s /tmp/hichat-music-smoke.ogg && rm /tmp/hichat-music-smoke.ogg
 
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server

@@ -22,6 +22,7 @@ func init() {
 		OpHeartbeat:             (*Client).handleHeartbeat,
 		OpTyping:                (*Client).handleTyping,
 		OpPresenceUpdate:        (*Client).handlePresenceUpdate,
+		OpGameActivityUpdate:    (*Client).handleGameActivityUpdate,
 		OpVoiceJoin:             (*Client).handleVoiceJoin,
 		OpVoiceLeave:            func(c *Client, _ Event) { c.handleVoiceLeave() },
 		OpVoiceStateUpdateReq:   (*Client).handleVoiceStateUpdate,

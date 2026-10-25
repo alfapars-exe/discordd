@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Shared channel/DM send helper no longer automatically replays network failures or proxy 502/503/504 responses. A lost response or gateway failure cannot establish that the underlying write did not commit. Existing timeout non-retry policy and error/rate-limit/silent toast behavior remain.",
+    "Historical helper export is preserved for current callers; no endpoint, encryption, schema or production configuration changed. This is a duplicate-risk reduction, not persisted send idempotency or outcome reconciliation."
+  ],
+  "verification": [
+    "Focused retry helper: 12 tests passed, including all three gateway statuses, lost response with a hypothetical successful second call, no delayed replay, deterministic errors and toast behavior.",
+    "Correct solution typecheck tsc -b passed. Targeted ESLint passed. Full client regression passed: 223 files / 2115 tests, 45.95s.",
+    "Targeted git diff --check passed. Coverage validator remains VALID, 33/33 references and 261 behaviors; acceptance is not complete."
+  ],
+  "remaining": [
+    "Durable server-side operation identity, request-payload matching, concurrent-request coordination and result lookup are still required for safe explicit retries and restart recovery, including multipart partial successes.",
+    "Generic sendFailed UI does not yet distinguish all ambiguous outcomes. A user's manual resend can still duplicate an already committed message; do not claim duplicate-free delivery.",
+    "No actual two-client Windows/web acceptance, build/installer, deployment or release performed for this change. Existing authenticated refresh retry path was not changed or certified by this helper test."
+  ]
+}

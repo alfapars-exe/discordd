@@ -1,0 +1,248 @@
+{
+  "startedAt": "2026-10-23T02:07:54.915Z",
+  "cases": [
+    {
+      "scenario": "corrupt-deepfilter",
+      "requestedEngine": "deepfilter",
+      "captureConstraintsSimulated": true,
+      "reportBrowserSuppression": false,
+      "initialStatus": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "rnnoise",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": false,
+        "error": "Audio asset size mismatch: ../../deepfilter/v2/pkg/df_bg.wasm"
+      },
+      "status": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "rnnoise",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -20.397723232900496,
+        "outputDb": -22.668001215385534,
+        "gateOpen": true,
+        "error": "Audio asset size mismatch: ../../deepfilter/v2/pkg/df_bg.wasm"
+      },
+      "finite": true,
+      "power": 0.005260435051373612,
+      "policies": [
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "scenario": "unavailable-audioworklet",
+      "requestedEngine": "deepfilter",
+      "captureConstraintsSimulated": true,
+      "reportBrowserSuppression": true,
+      "initialStatus": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "webrtc",
+        "phase": "fallback",
+        "sampleRate": 44100,
+        "gateAvailable": false,
+        "gateEnabled": false,
+        "gainAvailable": false,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": false,
+        "error": "48 kHz AudioWorklet unavailable"
+      },
+      "status": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "webrtc",
+        "phase": "fallback",
+        "sampleRate": 44100,
+        "gateAvailable": false,
+        "gateEnabled": false,
+        "gainAvailable": false,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": false,
+        "error": "48 kHz AudioWorklet unavailable"
+      },
+      "finite": true,
+      "power": 0.005167573386779756,
+      "policies": [
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": true,
+          "channelCount": 1
+        },
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": true,
+          "channelCount": 1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "scenario": "unverified-browser-suppression",
+      "requestedEngine": "webrtc",
+      "captureConstraintsSimulated": true,
+      "reportBrowserSuppression": false,
+      "initialStatus": {
+        "requestedEngine": "webrtc",
+        "activeEngine": "none",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": false,
+        "error": "Browser noise suppression could not be verified as enabled"
+      },
+      "status": {
+        "requestedEngine": "webrtc",
+        "activeEngine": "none",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -22.35606921217598,
+        "outputDb": -22.53201295203574,
+        "gateOpen": true,
+        "error": "Browser noise suppression could not be verified as enabled"
+      },
+      "finite": true,
+      "power": 0.005200741592227195,
+      "policies": [
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": true,
+          "channelCount": 1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "scenario": "locked-browser-suppression",
+      "requestedEngine": "deepfilter",
+      "captureConstraintsSimulated": true,
+      "reportBrowserSuppression": "locked",
+      "initialStatus": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "webrtc",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": true,
+        "error": "Browser noise suppression remained enabled; software noise reduction was not started to avoid double processing",
+        "errorCode": "browser-noise-suppression-locked"
+      },
+      "status": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "webrtc",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -26.231086178848408,
+        "outputDb": -22.71519138868595,
+        "gateOpen": true,
+        "error": "Browser noise suppression remained enabled; software noise reduction was not started to avoid double processing",
+        "errorCode": "browser-noise-suppression-locked"
+      },
+      "finite": true,
+      "power": 0.0055911719065281015,
+      "policies": [
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        },
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        },
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": true,
+          "channelCount": 1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "scenario": "late-locked-browser-suppression",
+      "requestedEngine": "deepfilter",
+      "captureConstraintsSimulated": true,
+      "reportBrowserSuppression": "late-locked",
+      "initialStatus": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "deepfilter",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -120,
+        "outputDb": -120,
+        "gateOpen": true
+      },
+      "status": {
+        "requestedEngine": "deepfilter",
+        "activeEngine": "webrtc",
+        "phase": "fallback",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "gainAvailable": true,
+        "inputDb": -26.231086178848408,
+        "outputDb": -22.71519138868595,
+        "gateOpen": true,
+        "error": "Browser noise suppression remained enabled; software noise reduction was not started to avoid double processing",
+        "errorCode": "browser-noise-suppression-locked"
+      },
+      "finite": true,
+      "power": 0.0055911719065281015,
+      "policies": [
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        },
+        {
+          "echoCancellation": true,
+          "autoGainControl": true,
+          "noiseSuppression": false,
+          "channelCount": 1
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "completedAt": "2026-10-23T02:08:04.072Z"
+}

@@ -1,0 +1,18 @@
+{
+  "phase": "P6",
+  "status": "implemented_unverified",
+  "implemented": [
+    "Webhook verification retains the verified API-key issuer's owning instance instead of losing source identity after multi-key HMAC verification.",
+    "Participant and track room events require the room server's current LiveKit instance to match the verified source before room callbacks. Ambiguous reused API keys and missing mapping resolver fail closed.",
+    "Production handler wiring provides the existing LiveKit repository as the narrow server-instance resolver."
+  ],
+  "verification": [
+    "Implementing agent signed-request tests passed for matching issuer, foreign issuer, wrong-instance track publication, duplicate API keys and missing resolver.",
+    "Root full Go suite passed after webhook wiring (handlers 3.766s)."
+  ],
+  "open": [
+    "Current assignment validation rejects delayed events from a former instance after migration; no migration grace mapping exists.",
+    "This prerequisite does not implement stream notification production, persistent deduplication or verified track/session lifecycle.",
+    "Real provider webhook and two-client acceptance are still required."
+  ]
+}

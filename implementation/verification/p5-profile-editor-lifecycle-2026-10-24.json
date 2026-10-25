@@ -1,0 +1,13 @@
+{
+  "status": "implemented_unverified",
+  "profileSettings": "Account/auth generation/mounted save guard, immediate duplicate-save lock and save tickets prevent late completions from updating or unlocking a replacement account form. Successful avatar/banner stages are cleared without losing remaining edits when a later stage fails.",
+  "showcase": "Scope/account/auth generation guards, load error/retry and unavailable-server fail-closed state. Dirty scope buttons are blocked; version conflicts retain draft; successful saves preserve edits entered during the request. Wishlist reorder uses original board indices. Manual links reject unsafe protocols and credentials.",
+  "clientRequestAffinity": "Profile update/avatar/banner/delete and own showcase get/save accept optional expectedUserId/isCurrent; requests capture auth generation and pass 15-second deadline. Showcase queries merge server_id and expected_user_id; public profile and wallpaper endpoints unchanged.",
+  "verification": "Main four-file profile test run: 20 tests passed. API and component agents report targeted ESLint clean. Invalid direct-test ByRoleOptions corrected; no source validation bypass used.",
+  "serverRequestAffinity": "Six own-profile handlers reject mismatched expected_user_id with PROFILE_ACCOUNT_MISMATCH before body parsing, limiter, storage or service. Nil/empty authenticated users fail closed; omitted query remains compatible. Direct guard tests include unread-body and legacy-query behavior.",
+  "typecheck": "Main tsc -b passed after explicit request-guard assertion fixed optional options typing in the API test. tsc --noEmit alone had not checked all referenced test projects.",
+  "integratedRegression": "Full client suite after initial profile lifecycle and request-affinity edits passed: 260 files / 2498 tests, exit 0, 55.94s. Production Vite build passed with existing chunk/config/dynamic-import warnings. Later draft recovery changes must be verified separately.",
+  "draftRecovery": "Component-local account/scope cache preserves dirty drafts across forced server changes; returning restores matching-base drafts. Conflicts fetch the latest base while retaining edits and require explicit overwrite/discard; overwrite uses fresh CAS version. Account transition clears retained drafts and invalidates save tickets. Main direct editor regression: 8 tests passed; agent ESLint clean. Full regression after recovery still required.",
+  "remaining": ["Real browser profile save/cancel, scope transitions and second-client visibility acceptance", "Full regression after draft recovery"],
+  "release": "No publication or production mutation"
+}

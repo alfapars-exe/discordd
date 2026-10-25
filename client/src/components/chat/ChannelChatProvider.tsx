@@ -7,9 +7,10 @@ import { usePinStore } from "../../stores/pinStore";
 import { useMemberStore, useMemberTimeout } from "../../stores/memberStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useAuthStore } from "../../stores/authStore";
+import { composerKey, useComposerDraftStore } from "../../stores/composerDraftStore";
 import { useChannelPermissions } from "../../hooks/useChannelPermissions";
 import { hasPermission, Permissions } from "../../utils/permissions";
-import type { Message, MemberWithRoles } from "../../types";
+import type { MemberWithRoles } from "../../types";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_STRINGS: string[] = [];
@@ -19,6 +20,7 @@ type ChannelChatProviderProps = {
   channelId: string;
   channelName: string;
   serverId?: string;
+  archived?: boolean;
   sendTyping: (channelId: string) => void;
   children: ReactNode;
 };
@@ -27,6 +29,7 @@ function ChannelChatProvider({
   channelId,
   channelName,
   serverId: explicitServerId,
+  archived = false,
   sendTyping: sendTypingProp,
   children,
 }: ChannelChatProviderProps) {
@@ -42,13 +45,11 @@ function ChannelChatProvider({
   const hasMoreAfter = useMessageStore((s) =>
     channelId ? s.hasMoreAfterByChannel[channelId] ?? false : false
   );
-  const replyingTo = useMessageStore((s) => s.replyingTo) as ChatMessage | null;
   const scrollToMessageId = useMessageStore((s) => s.scrollToMessageId);
   const typingUsers = useMessageStore((s) =>
     channelId ? s.typingUsers[channelId] ?? EMPTY_STRINGS : EMPTY_STRINGS
   );
 
-  const storeSetReplyingTo = useMessageStore((s) => s.setReplyingTo);
   const storeSetScrollToMessageId = useMessageStore((s) => s.setScrollToMessageId);
   const storeSendMessage = useMessageStore((s) => s.sendMessage);
   const storeEditMessage = useMessageStore((s) => s.editMessage);
@@ -68,7 +69,9 @@ function ChannelChatProvider({
   const membersByServer = useMemberStore((s) => s.membersByServer);
   const members = targetServerId ? (membersByServer[targetServerId] ?? EMPTY_MEMBERS) : EMPTY_MEMBERS;
   const currentUser = useAuthStore((s) => s.user);
-  const { hasChannelPerm, permsResolved } = useChannelPermissions(channelId);
+  const draftKey = composerKey(currentUser?.id, "channel", channelId, targetServerId ?? undefined);
+  const replyingTo = useComposerDraftStore((s) => s.drafts[draftKey]?.replyingTo ?? null);
+  const { hasChannelPerm, permsResolved } = useChannelPermissions(channelId, targetServerId ?? undefined);
   const selfTimeout = useMemberTimeout(targetServerId, currentUser?.id);
 
   // ─── File drop ref — forwards drag-drop files from ChatArea to MessageInput ───
@@ -89,7 +92,7 @@ function ChannelChatProvider({
   // concern — a moderator timeout is a live, store-known fact (populated
   // by the initial member fetch and kept current via WS events), not
   // something still in flight.
-  const canSend = (!permsResolved || hasChannelPerm(Permissions.SendMessages)) && !selfTimeout;
+  const canSend = (!permsResolved || hasChannelPerm(Permissions.SendMessages)) && !selfTimeout && !archived;
   const currentMember = members.find((m) => m.id === currentUser?.id);
   const canManageMessages = currentMember
     ? hasPermission(currentMember.effective_permissions, Permissions.ManageMessages)
@@ -98,52 +101,51 @@ function ChannelChatProvider({
   // ─── Actions (stable refs) ───
   const sendMessage = useCallback(
     (content: string, files?: File[], replyToId?: string) =>
-      storeSendMessage(channelId, content, files, replyToId, explicitServerId),
-    [channelId, storeSendMessage, explicitServerId]
+      storeSendMessage(channelId, content, files, replyToId, targetServerId ?? undefined),
+    [channelId, storeSendMessage, targetServerId]
   );
 
   const editMessage = useCallback(
-    (id: string, content: string) => storeEditMessage(id, content, explicitServerId),
-    [storeEditMessage, explicitServerId]
+    (id: string, content: string) => storeEditMessage(id, content, targetServerId ?? undefined),
+    [storeEditMessage, targetServerId]
   );
 
   const deleteMessage = useCallback(
-    (id: string) => storeDeleteMessage(id, explicitServerId),
-    [storeDeleteMessage, explicitServerId]
+    (id: string) => storeDeleteMessage(id, targetServerId ?? undefined),
+    [storeDeleteMessage, targetServerId]
   );
 
   const fetchMessages = useCallback(
-    () => storeFetchMessages(channelId, explicitServerId),
-    [channelId, storeFetchMessages, explicitServerId]
+    () => storeFetchMessages(channelId, targetServerId ?? undefined),
+    [channelId, storeFetchMessages, targetServerId]
   );
 
   const fetchOlderMessages = useCallback(
-    () => storeFetchOlderMessages(channelId, explicitServerId),
-    [channelId, storeFetchOlderMessages, explicitServerId]
+    () => storeFetchOlderMessages(channelId, targetServerId ?? undefined),
+    [channelId, storeFetchOlderMessages, targetServerId]
   );
 
   const fetchNewerMessages = useCallback(
-    () => storeFetchNewerMessages(channelId, explicitServerId),
-    [channelId, storeFetchNewerMessages, explicitServerId]
+    () => storeFetchNewerMessages(channelId, targetServerId ?? undefined),
+    [channelId, storeFetchNewerMessages, targetServerId]
   );
 
   const jumpToPresent = useCallback(
-    () => storeJumpToPresent(channelId, explicitServerId),
-    [channelId, storeJumpToPresent, explicitServerId]
+    () => storeJumpToPresent(channelId, targetServerId ?? undefined),
+    [channelId, storeJumpToPresent, targetServerId]
   );
 
   const toggleReaction = useCallback(
     (messageId: string, emoji: string) =>
-      storeToggleReaction(messageId, channelId, emoji, explicitServerId),
-    [channelId, storeToggleReaction, explicitServerId]
+      storeToggleReaction(messageId, channelId, emoji, targetServerId ?? undefined),
+    [channelId, storeToggleReaction, targetServerId]
   );
 
   const setReplyingTo = useCallback(
     (msg: ChatMessage | null) => {
-      // Safe cast: runtime object is already a Message, just typed as ChatMessage
-      storeSetReplyingTo(msg as Message | null);
+      useComposerDraftStore.getState().patch(draftKey, { replyingTo: msg });
     },
-    [storeSetReplyingTo]
+    [draftKey]
   );
 
   const setScrollToMessageId = useCallback(
@@ -158,16 +160,16 @@ function ChannelChatProvider({
 
   const pinMessage = useCallback(
     async (messageId: string) => {
-      await pinAction(channelId, messageId, explicitServerId);
+      await pinAction(channelId, messageId, targetServerId ?? undefined);
     },
-    [channelId, pinAction, explicitServerId]
+    [channelId, pinAction, targetServerId]
   );
 
   const unpinMessage = useCallback(
     async (messageId: string) => {
-      await unpinAction(channelId, messageId, explicitServerId);
+      await unpinAction(channelId, messageId, targetServerId ?? undefined);
     },
-    [channelId, unpinAction, explicitServerId]
+    [channelId, unpinAction, targetServerId]
   );
 
   const pinnedIds = useMemo(
@@ -186,7 +188,7 @@ function ChannelChatProvider({
       mode: "channel" as const,
       channelId,
       channelName,
-      serverId: explicitServerId,
+      serverId: targetServerId ?? undefined,
       messages,
       isLoading,
       isLoadingMore,
@@ -217,7 +219,7 @@ function ChannelChatProvider({
       selfTimeoutExpiresAt: selfTimeout?.expires_at,
     }),
     [
-      channelId, channelName, explicitServerId, messages, isLoading, isLoadingMore, hasMore,
+      channelId, channelName, targetServerId, messages, isLoading, isLoadingMore, hasMore,
       hasMoreAfter, replyingTo, scrollToMessageId, typingUsers,
       sendMessage, editMessage, deleteMessage, fetchMessages, fetchOlderMessages,
       fetchNewerMessages, jumpToPresent,

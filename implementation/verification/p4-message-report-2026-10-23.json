@@ -1,0 +1,34 @@
+{
+  "item": "p4.report",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "entry_points": "Desktop message menus and mobile long-press sheets open the existing moderation report dialog for messages not authored by the current user.",
+    "authorization": "The service loads the source through the existing channel or DM around-message service, thereby enforcing channel read permission or DM participation, then verifies that the reported user authored the source message.",
+    "persistence": "Migration 106 and the report repository persist source kind, server, channel and message IDs plus the optional evidence snapshot; duplicate pending checks are message-specific.",
+    "e2ee_consent": "Decrypted message text is omitted by default. The client sends it only after a separate explicit checkbox and the server rejects evidence_content without evidence_consent."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run src/components/shared/ReportModal.test.tsx src/api/report.test.ts",
+      "working_directory": "client",
+      "result": "pass (3 tests)"
+    },
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    },
+    {
+      "command": "services.test.exe -test.run=TestMessageReport|TestEncryptedEvidence -test.v",
+      "working_directory": "server",
+      "result": "pass (2 tests; repository-local compiled binary was used because App Control blocked temp executables)"
+    },
+    {
+      "command": "go test -c ./repository",
+      "working_directory": "server",
+      "result": "compile pass; execution blocked by Windows Application Control"
+    }
+  ],
+  "remaining_acceptance": "Submit plaintext and E2EE reports from a real second client, verify moderator queue fields and optional evidence content, verify an outsider gets no source disclosure, and rerun the repository round-trip test when Windows Application Control permits the binary."
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Owner-bound deletion route, client consent and bounded local runtime acceptance; not complete P2 deletion or full P0-P11 acceptance.",
+  "implemented": [
+    "Production auth option and POST /api/users/me/delete are wired through the existing authenticated handler; route golden and declared gate checks updated.",
+    "TR/EN security panel loads fresh ownership preflight, preserves full blocking count across pages, disables deletion on failed reads/owned resources/admin status, and provides explicit refresh and resource list.",
+    "Password, optional enabled MFA, exact DELETE text, unchecked separate consent and final existing danger dialog are required. Cancel/error retains drafts; unconfirmed or incomplete acknowledgements never trigger success/logout and require a new preflight.",
+    "Account-generation/alive guards prevent late responses affecting a replacement sign-in. Confirmed deletion clears only the intended local account session, never shared cookies via a late response.",
+    "Retention wording distinguishes identity removal, retained shared history, queued personal-file cleanup, stable author IDs and preexisting copies/backups. All cosmetic/payment decisions unchanged.",
+    "Fixed duplicate React sibling keys in security MFA/session/status/lifecycle sections; each retains an owner-specific but distinct key. Live section count is one."
+  ],
+  "checks": [
+    {"command": "focused client deletion/security tests", "result": "11 tests passed including cancellation, failed preflight, ownership blockers, acknowledgement contract, preserved credentials and late-login response guards"},
+    {"command": "npm test -- --reporter=dot", "result": "passed", "files": 165, "tests": 1755},
+    {"command": "go test ./... -json", "result": "all packages passed; external media and unavailable symlink-host cases remain open"},
+    {"command": "npm run build", "result": "passed TypeScript/web build", "modules": 1589, "note": "Existing Vite configuration, dependency eval and import/chunk warnings remain."},
+    {"command": "focused ESLint for deletion API/form/tests, security form and navigation", "result": "passed"},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-deletion.exe .", "result": "passed"}
+  ],
+  "local_runtime": {
+    "environment": "Own isolated API 9191/web 3131; only task fixtures changed. User explicitly approved replacement Ego space after old space 10 disappeared; new space 12 reused thereafter. Personal user-owned space left untouched.",
+    "visual": "Actual p1_acceptance page listed its owned test server and disabled deletion. 1440/390 screenshots visually inspected with empty secret fields. Mobile document and viewport width both 390; existing teal preference preserved, not reference-fidelity acceptance.",
+    "screenshots": ["implementation/verification/p2-deletion-1440.png", "implementation/verification/p2-deletion-390.png"],
+    "deletion": "Created one disposable local account and a clearly labelled plaintext acceptance DM to surviving p1_acceptance. Real deletion acknowledged retained history/queued cleanup; survivor fetched the unchanged message under Deleted User and a replacement username. Old bearer/refresh both HTTP 401, active WebSocket closed 4001/session_revoked, and explicit restore login was rejected.",
+    "cleanup": "Only that disposable identity was permanently removed; retained test history remains intentionally. Independent survivor HTTP sign-ins were logged out without altering browser cookies. Existing fixture account/server were not deleted.",
+    "test_recovery": "First script stopped when the existing accept-DM endpoint correctly returned HTTP 204 without JSON. Inspected the handler, resumed the one unambiguously identified fixture without recreating it, then completed deletion successfully. No fake success or repeated destructive action.",
+    "limitations": "Runtime test used same-computer HTTP clients, a real socket and plaintext test message. It is not independent physical-client encrypted-history/attachment/SFU or installed Windows acceptance; successful browser-button deletion remains to exercise."
+  },
+  "remaining": [
+    "Working ownership handoff/application transfer paths, not just blocker explanations. This panel deliberately does not pretend to change ownership.",
+    "Actual browser successful deletion/cancellation journey, independent encrypted clients and downloadable attachment preservation, actual personal-file cleanup after API deletion, real SFU and remote libSQL.",
+    "All viewports/zoom/accessibility, symlink-enabled host, backup/retention and release/update acceptance. No commit/push/merge, installer/update or production deployment occurred."
+  ]
+}

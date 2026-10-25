@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -9,10 +10,11 @@ type Invite struct {
 	Code      string     `json:"code"`
 	ServerID  string     `json:"server_id"`
 	CreatedBy string     `json:"created_by"`
-	MaxUses   int        `json:"max_uses"`   // 0 = unlimited
+	MaxUses   int        `json:"max_uses"` // 0 = unlimited
 	Uses      int        `json:"uses"`
 	ExpiresAt *time.Time `json:"expires_at"` // nil = never expires
 	CreatedAt time.Time  `json:"created_at"`
+	ChannelID *string    `json:"channel_id,omitempty"`
 }
 
 type InviteWithCreator struct {
@@ -29,11 +31,13 @@ type InvitePreview struct {
 }
 
 type CreateInviteRequest struct {
-	MaxUses   int `json:"max_uses"`   // 0 = unlimited
-	ExpiresIn int `json:"expires_in"` // minutes, 0 = never
+	MaxUses   int    `json:"max_uses"`   // 0 = unlimited
+	ExpiresIn int    `json:"expires_in"` // minutes, 0 = never
+	ChannelID string `json:"channel_id"`
 }
 
 func (r *CreateInviteRequest) Validate() error {
+	r.ChannelID = strings.TrimSpace(r.ChannelID)
 	if r.MaxUses < 0 {
 		return fmt.Errorf("max_uses cannot be negative")
 	}

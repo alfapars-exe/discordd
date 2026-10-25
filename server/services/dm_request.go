@@ -10,6 +10,7 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -27,8 +28,11 @@ func (s *dmService) AcceptRequest(ctx context.Context, userID, channelID string)
 	if channel.InitiatedBy != nil && *channel.InitiatedBy == userID {
 		return fmt.Errorf("%w: only the recipient can accept a DM request", pkg.ErrForbidden)
 	}
+	if err := s.verifyRequestNotBlocked(ctx, channel); err != nil {
+		return err
+	}
 
-	if err := s.dmRepo.UpdateChannelStatus(ctx, channelID, models.DMStatusAccepted); err != nil {
+	if err := s.acceptPendingStatus(ctx, channelID); err != nil {
 		return fmt.Errorf("failed to accept DM request: %w", err)
 	}
 
@@ -105,8 +109,11 @@ func (s *dmService) AcceptPendingChannels(ctx context.Context, userA, userB stri
 	if ch.Status != models.DMStatusPending {
 		return nil
 	}
+	if err := s.verifyRequestNotBlocked(ctx, ch); err != nil {
+		return err
+	}
 
-	if err := s.dmRepo.UpdateChannelStatus(ctx, ch.ID, models.DMStatusAccepted); err != nil {
+	if err := s.acceptPendingStatus(ctx, ch.ID); err != nil {
 		return fmt.Errorf("failed to auto-accept pending DM: %w", err)
 	}
 
@@ -125,5 +132,33 @@ func (s *dmService) AcceptPendingChannels(ctx context.Context, userA, userB stri
 		settleRequestNotifications(ctx, s.notificationRepo, s.hub, uid, ids, markErr)
 	}
 
+	return nil
+}
+
+func (s *dmService) acceptPendingStatus(ctx context.Context, channelID string) error {
+	if writer, ok := s.dmRepo.(repository.PendingDMAccepter); ok {
+		changed, err := writer.AcceptPendingUnblocked(ctx, channelID)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return fmt.Errorf("%w: DM request changed or blocked", pkg.ErrConflict)
+		}
+		return nil
+	}
+	return s.dmRepo.UpdateChannelStatus(ctx, channelID, models.DMStatusAccepted)
+}
+
+func (s *dmService) verifyRequestNotBlocked(ctx context.Context, channel *models.DMChannel) error {
+	if s.blockChecker == nil {
+		return nil
+	}
+	blocked, err := s.blockChecker.IsBlocked(ctx, channel.User1ID, channel.User2ID)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return fmt.Errorf("%w: cannot accept a blocked DM request", pkg.ErrForbidden)
+	}
 	return nil
 }

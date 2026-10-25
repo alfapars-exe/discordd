@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
 import "./i18n"; // Must be imported before App for i18n initialization
 import "./styles/globals.css";
+import "./styles/product-navigation.css";
+import "./styles/ui-shell-v2.css";
+import "./styles/voice-settings-shell.css";
+import { UI_SHELL_V2 } from "./utils/uiShell";
 import "./utils/screenShareCursorPatch"; // Wire user's cursor preference into getDisplayMedia
 import "./stores/accessibilityStore"; // Side-effect: applyAccessibility(initial) on module load
 import App from "./App";
@@ -18,6 +22,7 @@ import { initSentry } from "./monitoring/sentry";
 // never exported or Fast-Refreshed -- this is the app entry point, mounted once.
 // eslint-disable-next-line react-refresh/only-export-components
 const Router = isNativeApp() ? HashRouter : BrowserRouter;
+document.documentElement.classList.toggle("ui-v2", UI_SHELL_V2);
 
 // Configure mobile-specific UI (safe area insets, status bar, keyboard) — no-op on web/Electron
 configureMobileUI();

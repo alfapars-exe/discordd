@@ -6,6 +6,7 @@
 
 import { useTranslation } from "react-i18next";
 import Avatar from "../shared/Avatar";
+import SpamPreview from "../chat/SpamPreview";
 import { useInboxDMs, type InboxDMRow } from "../../hooks/useInboxDMs";
 
 type InboxListProps = {
@@ -28,7 +29,7 @@ function InboxRow({ row, onOpen }: { row: InboxDMRow; onOpen: (row: InboxDMRow) 
         <span className="inbox-row-name">{name}</span>
         <span className="inbox-row-preview">
           {isOwn && preview && <span className="inbox-row-you">{t("youPrefix")} </span>}
-          {preview}
+          <SpamPreview kind="dm" message={{ id: dm.last_message?.id ?? "", user_id: dm.last_message?.user_id ?? "", content: preview }}>{preview}</SpamPreview>
         </span>
       </span>
       {unread > 0 && <span className="inbox-row-badge">{unread > 99 ? "99+" : unread}</span>}

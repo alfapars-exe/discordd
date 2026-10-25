@@ -96,6 +96,26 @@ func (h *DMHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusOK, map[string]string{"message": "marked as read"})
 }
 
+func (h *DMHandler) MarkUnread(w http.ResponseWriter, r *http.Request) {
+	channelID := r.PathValue("channelId")
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	var req models.MarkDMReadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.MessageID) == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "message_id is required")
+		return
+	}
+	count, err := h.dmService.MarkUnreadFrom(r.Context(), user.ID, channelID, strings.TrimSpace(req.MessageID))
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]int{"unread_count": count})
+}
+
 // CreateOrGetChannel handles POST /api/dms
 // Finds or creates a DM channel between two users.
 func (h *DMHandler) CreateOrGetChannel(w http.ResponseWriter, r *http.Request) {
@@ -397,6 +417,15 @@ func (h *DMHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if service, ok := h.dmService.(services.DMDeletionReceiptService); ok {
+		receipt, err := service.DeleteMessageWithReceipt(r.Context(), user.ID, messageID)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		pkg.JSON(w, http.StatusOK, receipt)
+		return
+	}
 	if err := h.dmService.DeleteMessage(r.Context(), user.ID, messageID); err != nil {
 		pkg.Error(w, err)
 		return

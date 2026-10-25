@@ -1,0 +1,595 @@
+{
+  "startedAt": "2026-10-23T02:05:05.821Z",
+  "results": [
+    {
+      "recordingPath": "offline",
+      "fixture": "clean",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "rnnoise-clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "deepfilter-clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "gtcrn-clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "dtln-clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "speex-clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "offline",
+      "fixture": "fan",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "rnnoise-fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "deepfilter-fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "gtcrn-fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "dtln-fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "speex-fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "offline",
+      "fixture": "keyboard",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "rnnoise-keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "deepfilter-keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "gtcrn-keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "dtln-keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "speex-keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "offline",
+      "fixture": "transient",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "rnnoise-transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "deepfilter-transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "gtcrn-transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "dtln-transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "speex-transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "livekit",
+      "fixture": "clean",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-clean-livekit.webm",
+          "duration": 22.501232,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-clean-livekit.webm",
+          "duration": 22.560095,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-clean-livekit.webm",
+          "duration": 22.799072,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-clean-livekit.webm",
+          "duration": 21.960859,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-clean-livekit.webm",
+          "duration": 22.859585,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "livekit",
+      "fixture": "fan",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-fan-livekit.webm",
+          "duration": 19.740544,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-fan-livekit.webm",
+          "duration": 19.680689,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-fan-livekit.webm",
+          "duration": 20.039701,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-fan-livekit.webm",
+          "duration": 19.680007,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-fan-livekit.webm",
+          "duration": 19.679958,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "livekit",
+      "fixture": "keyboard",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-keyboard-livekit.webm",
+          "duration": 19.679601,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-keyboard-livekit.webm",
+          "duration": 20.400269,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-keyboard-livekit.webm",
+          "duration": 19.67948,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-keyboard-livekit.webm",
+          "duration": 19.739408,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-keyboard-livekit.webm",
+          "duration": 19.67975,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "livekit",
+      "fixture": "transient",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-transient-livekit.webm",
+          "duration": 19.740591,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-transient-livekit.webm",
+          "duration": 22.500589,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-transient-livekit.webm",
+          "duration": 20.579527,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-transient-livekit.webm",
+          "duration": 21.540312,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-transient-livekit.webm",
+          "duration": 22.620898,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "p2p",
+      "fixture": "clean",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/clean.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-clean-p2p.webm",
+          "duration": 22.501207,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-clean-p2p.webm",
+          "duration": 22.560121,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-clean-p2p.webm",
+          "duration": 22.799033,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-clean-p2p.webm",
+          "duration": 21.960876,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-clean-p2p.webm",
+          "duration": 22.920132,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "p2p",
+      "fixture": "fan",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/fan.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-fan-p2p.webm",
+          "duration": 19.740513,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-fan-p2p.webm",
+          "duration": 19.680646,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-fan-p2p.webm",
+          "duration": 20.039701,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-fan-p2p.webm",
+          "duration": 19.679994,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-fan-p2p.webm",
+          "duration": 19.679943,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "p2p",
+      "fixture": "keyboard",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/keyboard.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-keyboard-p2p.webm",
+          "duration": 19.679609,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-keyboard-p2p.webm",
+          "duration": 20.400228,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-keyboard-p2p.webm",
+          "duration": 19.679478,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-keyboard-p2p.webm",
+          "duration": 19.739361,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-keyboard-p2p.webm",
+          "duration": 19.67971,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "recordingPath": "p2p",
+      "fixture": "transient",
+      "players": [
+        {
+          "engine": "input",
+          "src": "inputs/transient.wav",
+          "duration": 19.16,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "rnnoise",
+          "src": "remote-rnnoise-transient-p2p.webm",
+          "duration": 19.740601,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "deepfilter",
+          "src": "remote-deepfilter-transient-p2p.webm",
+          "duration": 22.500548,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "gtcrn",
+          "src": "remote-gtcrn-transient-p2p.webm",
+          "duration": 20.579494,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "dtln",
+          "src": "remote-dtln-transient-p2p.webm",
+          "duration": 21.540337,
+          "metadataLoaded": true,
+          "expectedSource": true
+        },
+        {
+          "engine": "speex",
+          "src": "remote-speex-transient-p2p.webm",
+          "duration": 22.620892,
+          "metadataLoaded": true,
+          "expectedSource": true
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "completedAt": "2026-10-23T02:05:06.412Z"
+}

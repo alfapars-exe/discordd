@@ -1,12 +1,13 @@
 import { useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./stores/authStore";
 import { useSettingsStore } from "./stores/settingsStore";
 import CustomTitleBar from "./components/layout/CustomTitleBar";
 import UpdateBanner from "./components/shared/UpdateBanner";
 import { isElectron, isNativeApp } from "./utils/constants";
 import { logToServer } from "./api/clientLog";
+import { usePreferencesSync } from "./hooks/usePreferencesSync";
 
 // Lazy-load route components so each path bundles separately. The
 // initial JS that has to ship before the first paint is just App.tsx +
@@ -21,6 +22,7 @@ const LoginPage = lazy(() => import("./components/auth/LoginPage"));
 const RegisterPage = lazy(() => import("./components/auth/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./components/auth/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./components/auth/ResetPasswordPage"));
+const VerifyEmailPage = lazy(() => import("./components/auth/VerifyEmailPage"));
 const InviteJoinPage = lazy(() => import("./components/servers/InviteJoinPage"));
 const AppLayout = lazy(() => import("./components/layout/AppLayout"));
 
@@ -30,6 +32,8 @@ const AppLayout = lazy(() => import("./components/layout/AppLayout"));
  * to /channels (authenticated) or /login (unauthenticated).
  */
 function App() {
+  const location = useLocation();
+  usePreferencesSync();
   const { t } = useTranslation("common");
   const initialize = useAuthStore((s) => s.initialize);
   const isInitialized = useAuthStore((s) => s.isInitialized);
@@ -98,7 +102,7 @@ function App() {
     document.body.classList.toggle("transparent-bg", transparentBackground);
   }, [transparentBackground]);
 
-  if (!isInitialized) {
+  if (!isInitialized && location.pathname !== "/verify-email") {
     const spinner = (
       <div className="app-loading">
         <div className="app-loading-inner">
@@ -161,6 +165,7 @@ function App() {
       />
 
       {/* Legal pages — public */}
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
 

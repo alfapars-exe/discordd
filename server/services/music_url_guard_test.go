@@ -246,17 +246,14 @@ func TestValidateMusicURLNetwork_RejectsPrivateIP(t *testing.T) {
 // change to that chain doesn't silently make playTrack's guard call reject
 // every track resolved from a playlist. The explicit track.URL == entry.URL
 // check pins the fallback *order*: entry.WebpageURL and entry.OriginalURL
-// are both empty here, so entry.URL (the "url" JSON field, i.e. flat-playlist
-// entries) must win over falling back to originalUserURL. Without this
-// check, deleting the entry.URL fallback branch entirely would still leave
-// this test green — resolvedURL would drop straight to originalUserURL,
-// which also happens to pass the guard (vacuous pass, confirmed by mutation).
+// are both empty here. Canonicalization from the validated video ID must
+// still yield an individual, allowlisted video, never the playlist input.
 func TestFlatPlaylistEntryURLStaysAllowlisted(t *testing.T) {
-	entry := ytdlpEntry{ID: "abc", URL: "https://www.youtube.com/watch?v=abc"}
+	entry := ytdlpEntry{ID: "BaW_jenozKc", URL: "https://www.youtube.com/watch?v=BaW_jenozKc"}
 	track := entry.toTrack("https://www.youtube.com/playlist?list=X", "u", "n")
 
 	if track.URL != entry.URL {
-		t.Fatalf("track.URL = %q, want entry.URL = %q — toTrack's fallback chain no longer prefers the per-entry URL", track.URL, entry.URL)
+		t.Fatalf("track.URL = %q, want canonical single-video URL %q", track.URL, entry.URL)
 	}
 	if err := validateMusicURLSyntax(track.URL); err != nil {
 		t.Fatalf("resolved track URL %q failed the guard: %v", track.URL, err)

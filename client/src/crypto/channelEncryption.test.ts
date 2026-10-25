@@ -229,8 +229,8 @@ vi.mock("./keyStorage", () => ({
   getMetadata: vi.fn(async (key: string) => h.active.meta.get(key) ?? null),
   cacheDecryptedMessage: vi.fn(async () => {}),
   getCachedDecryptedMessage: vi.fn(async () => null),
-  cacheDecryptedMessages: vi.fn(async (msgs: CachedDecryptedMessage[]) => {
-    h.cached.push(...msgs);
+  cacheDecryptedMessages: vi.fn(async (msgs: CachedDecryptedMessage[], isCurrent: () => boolean = () => true) => {
+    if (isCurrent()) h.cached.push(...msgs);
   }),
 }));
 
@@ -488,6 +488,49 @@ async function receiverReads(
   );
   return payload?.content ?? null;
 }
+
+describe("sender distribution origin scoping", () => {
+  it("captures the origin before waiting for distribution work while navigation changes", async () => {
+    h.roster = [rosterEntry(BOB)];
+    switchTo(ALICE);
+    const pending = encryptChannelMessage(CH, ALICE.userId, ALICE.deviceId, "origin message");
+    h.activeServerId = "other-server";
+    await pending;
+    expect(e2eeApi.fetchSenderKeyRecipients).toHaveBeenCalledWith(SERVER_ID, CH, ALICE.deviceId);
+    expect(e2eeApi.uploadGroupSession).toHaveBeenCalledWith(SERVER_ID, CH, ALICE.deviceId, expect.any(Object));
+  });
+
+  it("uses an explicit origin for roster rechecks after navigating to another server", async () => {
+    h.roster = [rosterEntry(BOB)];
+    await aliceSends("first");
+    vi.mocked(e2eeApi.fetchSenderKeyRecipients).mockClear();
+    markChannelRecipientsStale(CH);
+    h.activeServerId = "other-server";
+    await encryptChannelMessage(CH, ALICE.userId, ALICE.deviceId, "next", SERVER_ID);
+    expect(e2eeApi.fetchSenderKeyRecipients).toHaveBeenCalledWith(SERVER_ID, CH, ALICE.deviceId);
+    expect(uploadCount()).toBe(1);
+  });
+
+  it("fetches an incoming sender key from the origin even if navigation changes during decryption", async () => {
+    h.roster = [rosterEntry(BOB)];
+    const message = await aliceSends("origin history");
+    switchTo(BOB);
+    const pending = decryptChannelMessage(ALICE.userId, CH, JSON.stringify(message), ALICE.deviceId);
+    h.activeServerId = "other-server";
+    expect((await pending)?.content).toBe("origin history");
+    expect(e2eeApi.fetchGroupSessions).toHaveBeenCalledWith(SERVER_ID, CH, BOB.deviceId);
+  });
+
+  it("bulk decryption uses the explicit origin after loading history from a nonselected server", async () => {
+    h.roster = [rosterEntry(BOB)];
+    const message = await aliceSends("old server history");
+    switchTo(BOB);
+    h.activeServerId = "other-server";
+    const decrypted = await decryptChannelMessages([e2eeMsg("message-A", message)], SERVER_ID);
+    expect(decrypted[0].content).toBe("old server history");
+    expect(e2eeApi.fetchGroupSessions).toHaveBeenCalledWith(SERVER_ID, CH, BOB.deviceId);
+  });
+});
 
 /** Minimal Message; author is a stub since decrypt only reads scalar fields. */
 function baseMessage(id: string, overrides: Partial<Message>): Message {
@@ -908,13 +951,13 @@ describe("channelEncryption — rotation policy", () => {
     expect(e2eeApi.fetchSenderKeyRecipients).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects encryption when there is no active server", async () => {
+  it("rejects encryption when there is no origin server", async () => {
     h.activeServerId = null;
     switchTo(ALICE);
 
     await expect(
       encryptChannelMessage(CH, ALICE.userId, ALICE.deviceId, "x")
-    ).rejects.toThrow(/No active server/);
+    ).rejects.toThrow(/No origin server/);
     expect(uploadCount()).toBe(0);
   });
 
@@ -1263,6 +1306,23 @@ describe("channelEncryption — decryptChannelMessages", () => {
         content: "with file",
       })
     );
+  });
+
+  it("passes the owning-session guard through to the plaintext cache write", async () => {
+    const enc = await aliceSends("guarded plaintext");
+    switchTo(BOB);
+    let current = true;
+    vi.mocked(keyStorage.cacheDecryptedMessages).mockImplementationOnce((messages, isCurrent = () => true) => {
+      current = false;
+      if (isCurrent()) h.cached.push(...messages);
+      return Promise.resolve();
+    });
+    const out = await decryptChannelMessages(
+      [e2eeMsg("guarded", enc)], CH, () => current
+    );
+
+    expect(out[0].content).toBe("guarded plaintext");
+    expect(h.cached).toHaveLength(0);
   });
 
   it("records a decryption error for one bad message while still decrypting the rest", async () => {

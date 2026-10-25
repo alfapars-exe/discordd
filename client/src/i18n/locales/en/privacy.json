@@ -30,7 +30,7 @@
   "deletionDesc": "You can request account deletion through the app settings. After a 14-day grace period (during which you can cancel), your profile information, uploaded files, and personal data are permanently removed. Your messages are preserved for conversation continuity but displayed anonymously as \"Deleted User\". Direct message conversations remain visible to the other participant.",
 
   "contactTitle": "Contact",
-  "contactDesc": "For privacy-related questions, open an issue on our GitHub repository or reach out via the app.",
+  "contactDesc": "For privacy-related questions, reach out through the in-app feedback feature.",
 
-  "footerCopy": "© 2026 HiChat! — Open source, free communication."
+  "footerCopy": "© 2026 HiChat! — Private communication."
 }

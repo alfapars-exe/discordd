@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Existing bundled Windows system-audio worker startup, termination and PCM framing. Not independent helper installation or full screen-share acceptance.",
+  "implementation": [
+    "Existing start IPC resolves only after a validated PCM header. Missing helper, unsupported platform, spawn error, invalid header, timeout and cancellation reject rather than pretending capture started. Generation guards prevent obsolete process events from affecting a later capture.",
+    "Renderer startup timeout stops the native worker and clears listeners, tracks, worklet and AudioContext. Late worklet initialization cannot resurrect stopped capture. Runtime worker termination also clears active renderer resources.",
+    "PCM batching retains incomplete frame bytes across pipe chunks and 20ms flushes, emits whole frames only, and preserves frame boundaries when the 100KiB backlog limit drops data. Renderer little-endian DataView conversion supports arbitrary IPC byte offsets.",
+    "The only separate binary currently bundled is native/audio-capture.exe. This is not represented as a separately installed general system helper; that product choice remains with the user."
+  ],
+  "verification": [
+    "Agent complete Electron suite passed 73/73. Parent Electron TypeScript compile and audio-capture lifecycle tests passed 10/10, including byte-exact 1/3/7/5-byte split reconstruction, late child events and startup failures.",
+    "Parent latest capture hook/mixed-media gate/settings tests passed 20/20; client TypeScript passed. Agent scoped ESLint passed.",
+    "Combined client snapshot passed 298 files/2770 tests with zero failures: C:/Users/PARS/AppData/Local/Temp/hichat-social-video-audio-final-20261024.json. That snapshot preceded the final PCM boundary assertion; final touched hook suite and TypeScript passed afterward. Production Vite build passed with existing chunk/import warnings."
+  ],
+  "open": ["Actual Windows WASAPI system/app audio, stereo channel integrity and screen-share listening acceptance", "Native helper binary build/package/signature acceptance", "Two-client reconnect, device and permission acceptance", "User choice for P8 independent helper lifecycle"],
+  "release": "No device capture, helper installation/removal, commit, push, merge or production publication."
+}

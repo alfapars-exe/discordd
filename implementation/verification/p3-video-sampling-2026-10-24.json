@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Actual local video frame decode/inference path; not classifier quality or browser codec acceptance.",
+  "implementation": [
+    "MP4/WebM is decoded through a muted local HTMLVideoElement backed only by an already fetched or locally decrypted Blob URL, never a sender-controlled remote video URL. No demux dependency or remote classifier was added.",
+    "Each file is bounded to 12 MiB, 120 seconds, five deterministic frames and four million pixels per frame. Metadata, seek, bitmap decode and classification share a 30-second abort deadline; late bitmaps are closed and video/Blob resources released.",
+    "Video metadata records real sampled frame counts and duration, not invented total frame counts. Negative-only video samples stay uncertain. Combined animated-raster/video metadata is limited to four attachments; single decoded-frame worker responses cannot claim sampling metadata.",
+    "The media gate shows both video and animation coverage warnings for mixed attachments. Unsupported codecs, long or malformed videos and incomplete decoding remain unclassified."
+  ],
+  "verification": ["Agent focused tests 35/35, scoped ESLint and TypeScript passed.", "Parent combined full client snapshot passed 298 files/2770 tests, zero failures; TypeScript and production Vite build passed. Report: C:/Users/PARS/AppData/Local/Temp/hichat-social-video-audio-final-20261024.json.", "Parent mixed-coverage gate, settings and capture-hook regressions passed 20/20 after the final PCM follow-up."],
+  "open": ["Actual browser MP4/WebM codec and encrypted attachment playback/sampling acceptance", "Long-video support or explicit safe fallback acceptance", "Model quality/false-negative evaluation", "Real device and complete P3 acceptance"],
+  "release": "No classifier acceptance promotion or production publication."
+}

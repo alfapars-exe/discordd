@@ -30,6 +30,7 @@ const APP_SETTING_VALIDATORS: Record<string, (v: unknown) => v is boolean> = {
   startMinimized: (v): v is boolean => typeof v === "boolean",
   closeToTray: (v): v is boolean => typeof v === "boolean",
   transparentBackground: (v): v is boolean => typeof v === "boolean",
+  hardwareAcceleration: (v): v is boolean => typeof v === "boolean",
 };
 
 const MAX_CLIPBOARD_BYTES = 10 * 1024 * 1024; // 10 MB — prevent renderer-side DoS
@@ -60,9 +61,9 @@ function assertFiniteNumber(
   }
 }
 
-import { app, clipboard, dialog, ipcMain, nativeImage, net, screen, shell } from "electron";
+import { app, clipboard, dialog, globalShortcut, ipcMain, nativeImage, net, screen, shell } from "electron";
 import { autoUpdater } from "electron-updater";
-import { startCapture, stopCapture } from "./audio-capture";
+import { getCaptureStatus, startCapture, startDiagnosticCapture, stopCapture, stopDiagnosticCapture } from "./audio-capture";
 import { consumeLastCrash } from "./crash-reporter";
 import { appendDiagnostic } from "./diagnostic-log";
 import {
@@ -78,9 +79,19 @@ import { DEFAULT_APP_SETTINGS, getSettings, setSetting } from "./settings";
 import { setTrayTooltip } from "./tray";
 import { wasPrelaunchChecked } from "./auto-updater";
 import { getMainWindow } from "./window";
+import { updateVoiceOverlay, toggleVoiceOverlayLock, lockVoiceOverlay, configureVoiceOverlayLayout, resetVoiceOverlayLayout, takeVoiceOverlayAction, takeVoiceOverlayOpenInboxIntent, confirmVoiceOverlayOpenInbox, takeVoiceOverlayOpenChatIntent, confirmVoiceOverlayOpenChat, takeVoiceOverlayOpenChatComposerIntent, sendOverlayChatMessage, closeOverlayChatComposer, resolveOverlayChatSend } from "./voice-overlay";
+import { createOverlayLayoutStore } from "./overlay-layout-store";
+import { createOverlayShortcutController, type OverlayShortcutBinding } from "./overlay-shortcut";
+import { isTrustedVoiceOverlaySender, parseVoiceOverlaySnapshot } from "./voice-overlay-contract";
 import { copyFile, writeFile } from "fs/promises";
 import { buildUploadBytes, bundleBaseName, newestCrashDumpFullPath } from "./diagnostic-bundle";
 import { getLogsDir, setVerbose } from "./diagnostic-log";
+import { cancelPerformanceTrace, capturePerformanceTrace } from "./performance-trace";
+import { createRegisteredGamesService } from "./registered-games";
+import { createGameWindowTracker } from "./game-window-tracker";
+import { createGameOverlayController } from "./game-overlay-controller";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 // Compact local timestamp (YYYYMMDD-HHmmss) for diagnostics filenames.
 function diagStamp(): string {
@@ -90,6 +101,143 @@ function diagStamp(): string {
 }
 
 export function registerIpcHandlers(): void {
+  const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout.json") });
+  configureVoiceOverlayLayout(overlayLayouts);
+  ipcMain.handle("reset-overlay-layout", (event) => {
+    assertTrustedMainWindowSender(event);
+    return resetVoiceOverlayLayout();
+  });
+  ipcMain.handle("overlay-voice-action", (event, action: unknown, session: unknown) => {
+    const request = takeVoiceOverlayAction(event, action, session);
+    const main = getMainWindow();
+    if (!request || !main || main.isDestroyed()) return false;
+    main.webContents.send("overlay-voice-action", request);
+    return true;
+  });
+  ipcMain.handle("overlay-open-inbox", (event, session: unknown) => {
+    const request = takeVoiceOverlayOpenInboxIntent(event, session);
+    const main = getMainWindow();
+    if (!request || !main || main.isDestroyed()) return false;
+    main.webContents.send("overlay-open-inbox", request);
+    return true;
+  });
+  ipcMain.handle("confirm-overlay-open-inbox", (event, session: unknown) => {
+    return confirmVoiceOverlayOpenInbox(event, session, getMainWindow());
+  });
+  ipcMain.handle("overlay-open-chat", (event, session: unknown) => {
+    const request = takeVoiceOverlayOpenChatIntent(event, session);
+    const main = getMainWindow();
+    if (!request || !main || main.isDestroyed()) return false;
+    main.webContents.send("overlay-open-chat", request);
+    return true;
+  });
+  ipcMain.handle("confirm-overlay-open-chat", (event, session: unknown) => {
+    return confirmVoiceOverlayOpenChat(event, session, getMainWindow());
+  });
+  ipcMain.handle("overlay-open-chat-composer", (event, session: unknown) => {
+    return !!takeVoiceOverlayOpenChatComposerIntent(event, session, getMainWindow());
+  });
+  ipcMain.handle("overlay-chat-send", (event, request: unknown) => sendOverlayChatMessage(event, request, getMainWindow()));
+  ipcMain.handle("close-overlay-chat-composer", (event, session: unknown) => closeOverlayChatComposer(event, session));
+  ipcMain.handle("resolve-overlay-chat-send", (event, request: unknown) => resolveOverlayChatSend(event, request, getMainWindow()));
+  const overlayShortcut = createOverlayShortcutController({
+    supported: process.platform === "win32",
+    register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
+    unregister: (accelerator) => globalShortcut.unregister(accelerator),
+  }, toggleVoiceOverlayLock);
+  ipcMain.handle("set-overlay-shortcut", (event, binding: unknown) => {
+    assertTrustedMainWindowSender(event);
+    const accepted = overlayShortcut.setBinding(binding as OverlayShortcutBinding | null);
+    if (binding === null) lockVoiceOverlay();
+    return accepted;
+  });
+  let gameOverlay: ReturnType<typeof createGameOverlayController> | undefined;
+  const gameHelperPath = app.isPackaged
+    ? path.join(process.resourcesPath, "native", "game-window.exe")
+    : path.join(app.getAppPath(), "native", "game-window.exe");
+  const gameOverlaySupported = process.platform === "win32" && existsSync(gameHelperPath);
+  const registeredGames = createRegisteredGamesService({
+    filePath: path.join(app.getPath("userData"), "registered-games.json"),
+    onOverlayPolicyChanged: () => { void gameOverlay?.policyChanged().catch(() => undefined); },
+  });
+  // Unsupported platforms and absent optional helpers must not break app startup.
+  const gameWindowTracker = gameOverlaySupported
+    ? createGameWindowTracker({ helperPath: gameHelperPath, onChange: () => gameOverlay?.foregroundChanged() })
+    : { start: () => {}, stop: async () => {}, dispose: async () => {}, getSnapshot: () => null };
+  gameOverlay = createGameOverlayController({
+    tracker: gameWindowTracker,
+    getTargets: () => registeredGames.getOverlayTargets(),
+    supported: gameOverlaySupported,
+    display: updateVoiceOverlay,
+    toVisibleDipRect: (rect) => {
+      const dip = screen.screenToDipRect(null, rect);
+      const area = screen.getDisplayMatching(dip).workArea;
+      const x = Math.max(dip.x, area.x), y = Math.max(dip.y, area.y);
+      const right = Math.min(dip.x + dip.width, area.x + area.width);
+      const bottom = Math.min(dip.y + dip.height, area.y + area.height);
+      return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
+    },
+  });
+  void registeredGames.initialize().catch(() => undefined);
+  app.on("web-contents-created", (_event, contents) => {
+    contents.on("render-process-gone", () => {
+      if (getMainWindow()?.webContents === contents) { gameOverlay?.clear(); overlayShortcut.setBinding(null); }
+    });
+    contents.on("did-start-navigation", (_navigationEvent, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace && getMainWindow()?.webContents === contents) { gameOverlay?.clear(); overlayShortcut.setBinding(null); }
+    });
+  });
+  app.once("before-quit", () => { overlayShortcut.dispose(); gameOverlay?.dispose(); registeredGames.dispose(); void gameWindowTracker.dispose(); });
+
+  ipcMain.handle("get-registered-games", (event) => {
+    assertTrustedMainWindowSender(event);
+    return registeredGames.snapshot().then((snapshot) => ({ ...snapshot, overlaySupport: process.platform !== "win32" ? "unsupported" : gameOverlaySupported ? "available" : "unavailable" }));
+  });
+  ipcMain.handle("get-registered-game-activity", (event) => {
+    assertTrustedMainWindowSender(event);
+    return registeredGames.getActivity();
+  });
+  ipcMain.handle("set-registered-games-background-detection", async (event, enabled: unknown) => {
+    assertTrustedMainWindowSender(event);
+    if (typeof enabled !== "boolean") throw new TypeError("background detection setting must be boolean");
+    return registeredGames.setBackgroundDetectionEnabled(enabled);
+  });
+  ipcMain.handle("add-registered-game", async (event) => {
+    assertTrustedMainWindowSender(event);
+    if (process.platform !== "win32") return null;
+    const result = await dialog.showOpenDialog({
+      title: "Select a game executable",
+      properties: ["openFile"],
+      filters: [{ name: "Windows applications", extensions: ["exe"] }],
+    });
+    const selected = result.canceled ? undefined : result.filePaths[0];
+    return selected ? registeredGames.addExecutable(selected) : null;
+  });
+  ipcMain.handle("remove-registered-game", async (event, id: unknown) => {
+    assertTrustedMainWindowSender(event);
+    assertString(id, "game id", 64);
+    const removed = await registeredGames.remove(id);
+    if (removed) overlayLayouts.remove(`game:${id}`);
+    return removed;
+  });
+  ipcMain.handle("set-registered-game-sharing", async (event, id: unknown, allowed: unknown) => {
+    assertTrustedMainWindowSender(event);
+    assertString(id, "game id", 64);
+    if (typeof allowed !== "boolean") throw new TypeError("sharing permission must be boolean");
+    return registeredGames.setShareAllowed(id, allowed);
+  });
+
+  ipcMain.on("voice-overlay-snapshot", (event, raw: unknown) => {
+    if (!isTrustedMainWindowSender(event)) return;
+    const snapshot = parseVoiceOverlaySnapshot(raw);
+    if (snapshot) gameOverlay?.setSnapshot(snapshot);
+  });
+  ipcMain.handle("set-registered-game-overlay", async (event, id: unknown, allowed: unknown) => {
+    assertTrustedMainWindowSender(event);
+    assertString(id, "game id", 64);
+    if (typeof allowed !== "boolean") throw new TypeError("overlay permission must be boolean");
+    return registeredGames.setOverlayAllowed(id, allowed);
+  });
   // ─── App / version ──────────────────────────────────────────────
   ipcMain.handle("get-version", () => app.getVersion());
   ipcMain.handle("relaunch", () => {
@@ -172,6 +320,8 @@ export function registerIpcHandlers(): void {
     setSetting("diagnosticVerbose", value);
     setVerbose(value);
   });
+  ipcMain.handle("capture-performance-trace", () => capturePerformanceTrace());
+  ipcMain.handle("cancel-performance-trace", () => cancelPerformanceTrace());
 
   // ─── Auto-updater (renderer-driven) ─────────────────────────────
   ipcMain.handle("was-update-checked", () => wasPrelaunchChecked());
@@ -235,6 +385,14 @@ export function registerIpcHandlers(): void {
   // ─── Process-exclusive system audio ──────────────────────────────
   ipcMain.handle("start-system-capture", () => startCapture());
   ipcMain.handle("stop-system-capture", () => stopCapture());
+  ipcMain.handle("get-system-capture-status", () => getCaptureStatus());
+  ipcMain.handle("start-system-capture-diagnostic", () => startDiagnosticCapture());
+  ipcMain.handle("stop-system-capture-diagnostic", (_event, token: unknown) => {
+    if (typeof token !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)) {
+      throw new TypeError("diagnostic capture token is invalid");
+    }
+    return stopDiagnosticCapture(token);
+  });
 
   // ─── Taskbar overlay icon (Windows unread badge) ─────────────────
   ipcMain.handle(
@@ -357,4 +515,12 @@ export function registerIpcHandlers(): void {
     return registerMuteHotkey(keyCode);
   });
   ipcMain.handle("unregister-mute-hotkey-shortcut", () => unregisterMuteHotkey());
+}
+
+function isTrustedMainWindowSender(event: { sender: unknown; senderFrame: unknown }): boolean {
+  return isTrustedVoiceOverlaySender(event, getMainWindow());
+}
+
+function assertTrustedMainWindowSender(event: { sender: unknown; senderFrame: unknown }): void {
+  if (!isTrustedMainWindowSender(event)) throw new Error("Untrusted IPC sender.");
 }

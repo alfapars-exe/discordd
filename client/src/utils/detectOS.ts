@@ -1,7 +1,6 @@
 import { isNativeApp } from "./constants";
 
-const RELEASE_BASE = "https://github.com/alfapars-exe/discordd/releases/latest/download";
-const RELEASES_PAGE = "https://github.com/alfapars-exe/discordd/releases/latest";
+export const RELEASE_BASE = "https://huggingface.co/datasets/infinayazilim/hichat-releases/resolve/main";
 
 export type OSInfo = {
   os: "windows" | "macos" | "linux" | "mobile";
@@ -12,7 +11,7 @@ export type OSInfo = {
 export function detectOS(): OSInfo {
   const ua = navigator.userAgent.toLowerCase();
   if (/android|iphone|ipad|ipod|mobile/i.test(ua)) {
-    return { os: "mobile", url: RELEASES_PAGE, i18nKey: "hero_download_desktop" };
+    return { os: "mobile", url: `${RELEASE_BASE}/hichat-setup.exe`, i18nKey: "hero_download_desktop" };
   }
   if (ua.includes("mac")) {
     return { os: "macos", url: `${RELEASE_BASE}/hichat-setup.dmg`, i18nKey: "hero_download_macos" };

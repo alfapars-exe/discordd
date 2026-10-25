@@ -9,6 +9,7 @@ import "time"
 type AuditEventType string
 
 const (
+	AuditEventServerOwnershipTransfer AuditEventType = "server_ownership_transfer"
 	// ── Moderation (voice) ──
 	AuditEventServerMute     AuditEventType = "server_mute"
 	AuditEventServerUnmute   AuditEventType = "server_unmute"
@@ -18,14 +19,14 @@ const (
 	AuditEventVoiceMove      AuditEventType = "voice_move" // metadata: from_channel, to_channel
 
 	// ── Membership ──
-	AuditEventMemberJoin          AuditEventType = "member_join"
-	AuditEventMemberLeave         AuditEventType = "member_leave"
-	AuditEventMemberKick          AuditEventType = "member_kick"
-	AuditEventMemberBan           AuditEventType = "member_ban"          // metadata: reason, expires_at (optional)
-	AuditEventMemberUnban         AuditEventType = "member_unban"
-	AuditEventMemberTimeout        AuditEventType = "member_timeout"          // metadata: reason, expires_at
+	AuditEventMemberJoin           AuditEventType = "member_join"
+	AuditEventMemberLeave          AuditEventType = "member_leave"
+	AuditEventMemberKick           AuditEventType = "member_kick"
+	AuditEventMemberBan            AuditEventType = "member_ban" // metadata: reason, expires_at (optional)
+	AuditEventMemberUnban          AuditEventType = "member_unban"
+	AuditEventMemberTimeout        AuditEventType = "member_timeout" // metadata: reason, expires_at
 	AuditEventMemberTimeoutRemove  AuditEventType = "member_timeout_remove"
-	AuditEventMemberNicknameChange AuditEventType = "member_nickname_change"  // metadata: nickname (omitted = cleared)
+	AuditEventMemberNicknameChange AuditEventType = "member_nickname_change" // metadata: nickname (omitted = cleared)
 
 	// ── Roles ──
 	AuditEventRoleCreate AuditEventType = "role_create"

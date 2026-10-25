@@ -1,0 +1,26 @@
+{
+  "package": "P4",
+  "behaviors": ["p4.thread", "p4.thread-lifecycle"],
+  "automated": {
+    "client_command": "vitest run ThreadModal, action registry, forwarding and ChannelChatProvider tests; tsc -b tsconfig.json",
+    "client_result": "passed",
+    "client_tests": 18,
+    "server_compile_command": "go test -c ./services; go test -c ./repository; go test -c .",
+    "server_compile_result": "passed",
+    "server_execution_result": "blocked by Windows Application Control before the generated test executable could start"
+  },
+  "implemented": [
+    "Persisted thread channels with parent and starter message relationships",
+    "Thread list/create/archive/reopen APIs and main-chat navigation",
+    "Parent-channel permission inheritance for single and bulk resolution",
+    "Archived-thread server-side send rejection plus read-only client state",
+    "Starter-author or ManageMessages lifecycle authorization",
+    "Per-thread reply counts on source messages and source-message navigation",
+    "Existing channel message encryption, history and read-state paths reused for thread messages"
+  ],
+  "remaining_acceptance": [
+    "Execute compiled Go tests after the host Application Control policy permits locally built binaries",
+    "Two-client encrypted thread messaging and reload persistence",
+    "Keyboard and screen-reader live acceptance"
+  ]
+}

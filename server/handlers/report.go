@@ -61,6 +61,14 @@ func (h *ReportHandler) CreateReport(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Reason = r.FormValue("reason")
 		req.Description = r.FormValue("description")
+		req.SourceKind = r.FormValue("source_kind")
+		req.SourceServerID = r.FormValue("source_server_id")
+		req.SourceChannelID = r.FormValue("source_channel_id")
+		req.SourceMessageID = r.FormValue("source_message_id")
+		req.EvidenceConsent = r.FormValue("evidence_consent") == "true"
+		if evidence := r.FormValue("evidence_content"); evidence != "" {
+			req.EvidenceContent = &evidence
+		}
 	} else {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid request body")

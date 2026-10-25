@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+export HF_TOKEN
+HF_TOKEN=$(cat /srv/hichat/secrets/hf_token)
+export HF_HUB_DISABLE_TELEMETRY=1
+export HF_HUB_DISABLE_PROGRESS_BARS=1
+hf=/opt/hichat-infra/hf-venv/bin/hf
+bucket=hf://buckets/infinayazilim/hichat-db-backups
+hourly=${1:?hourly archive required}
+daily=${2:?daily archive required}
+[[ "$hourly" == /srv/hichat/backups/hourly/*.dump.age ]] || exit 2
+[[ "$daily" == /srv/hichat/backups/daily/*.dump.age ]] || exit 2
+test -s "$hourly"
+test -s "$daily"
+"$hf" cp "$hourly" "$bucket/hourly/$(basename "$hourly")" --quiet
+"$hf" cp "$daily" "$bucket/daily/$(basename "$daily")" --quiet
+# Read back the actual remote bytes before reporting backup success.
+tmp=$(mktemp -d /srv/hichat/backups/.verify.XXXXXXXX)
+trap 'rm -f -- "$tmp/hourly" "$tmp/daily"; rmdir -- "$tmp"' EXIT
+"$hf" cp "$bucket/hourly/$(basename "$hourly")" "$tmp/hourly" --quiet
+"$hf" cp "$bucket/daily/$(basename "$daily")" "$tmp/daily" --quiet
+cmp -- "$hourly" "$tmp/hourly"
+cmp -- "$daily" "$tmp/daily"
+python3 /opt/hichat-infra/backup-retention.py "hourly/$(basename "$hourly")" "daily/$(basename "$daily")"
+echo 'Remote encrypted backup content verified.'

@@ -2,9 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const motion = { reduced: false };
+const accessibility = { stickerAnimation: "always" as "always" | "interaction" | "never" };
 
 vi.mock("../../hooks/useReducedMotion", () => ({
   useReducedMotion: () => motion.reduced,
+}));
+vi.mock("../../stores/accessibilityStore", () => ({
+  useAccessibilityStore: (selector: (state: typeof accessibility) => unknown) => selector(accessibility),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -26,6 +30,7 @@ const ID = "0123456789abcdef";
 
 beforeEach(() => {
   motion.reduced = false;
+  accessibility.stickerAnimation = "always";
 });
 
 describe("StickerImage", () => {
@@ -58,6 +63,21 @@ describe("StickerImage", () => {
     fireEvent.mouseEnter(img);
     expect(screen.getByRole("img").getAttribute("src")).toContain(`${ID}.gif`);
     fireEvent.mouseLeave(screen.getByRole("img"));
+    expect(screen.getByRole("img").getAttribute("src")).toContain(`${ID}.png`);
+  });
+
+  it("interaction mode supports hover and keyboard focus, while never stays static", () => {
+    accessibility.stickerAnimation = "interaction";
+    const { rerender } = render(<StickerImage id={ID} name="kedi" animated />);
+    let img = screen.getByRole("img");
+    expect(img.getAttribute("src")).toContain(`${ID}.png`);
+    fireEvent.focus(img);
+    expect(screen.getByRole("img").getAttribute("src")).toContain(`${ID}.gif`);
+    fireEvent.blur(screen.getByRole("img"));
+    accessibility.stickerAnimation = "never";
+    rerender(<StickerImage id={ID} name="kedi" animated />);
+    img = screen.getByRole("img");
+    fireEvent.mouseEnter(img);
     expect(screen.getByRole("img").getAttribute("src")).toContain(`${ID}.png`);
   });
 

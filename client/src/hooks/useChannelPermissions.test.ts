@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 vi.mock("../api/members", () => ({
   getMembers: vi.fn(async () => ({ success: true, data: [] })),
@@ -40,15 +40,19 @@ vi.mock("../stores/serverStore", async () => {
 vi.mock("../stores/channelPermissionStore", async () => {
   const { create } = await import("zustand");
   return {
-    useChannelPermissionStore: create(() => ({ getOverrides: () => [] })),
+    useChannelPermissionStore: create(() => ({ overridesByChannel: {}, statusByChannel: {} })),
   };
 });
 
 import { useChannelPermissions } from "./useChannelPermissions";
 import { useMemberStore } from "../stores/memberStore";
 import { useServerStore } from "../stores/serverStore";
+import { useChannelPermissionStore } from "../stores/channelPermissionStore";
+import { useChannelStore } from "../stores/channelStore";
+import { useThreadStore } from "../stores/threadStore";
 import { Permissions } from "../utils/permissions";
-import type { MemberWithRoles } from "../types";
+import { getAuthGeneration } from "../api/client";
+import type { ChannelPermissionOverride, MemberWithRoles } from "../types";
 
 function makeMember(effectivePerms: number): MemberWithRoles {
   return {
@@ -65,16 +69,137 @@ function makeMember(effectivePerms: number): MemberWithRoles {
 }
 
 beforeEach(() => {
+  useChannelPermissionStore.setState({ overridesByChannel: {}, statusByChannel: {} });
   useServerStore.setState({ activeServerId: "srv-1" });
   useMemberStore.setState({
     membersByServer: {},
     onlineUserIds: new Set<string>(),
     loadingServers: new Set<string>(),
     timeoutsByServer: {},
+    ownerId: "u-me", authGeneration: getAuthGeneration(), statusByServer: {},
   });
 });
 
 describe("useChannelPermissions — permsResolved", () => {
+  it("requires both exact-account successful snapshots for sensitive authorization", () => {
+    const generation = getAuthGeneration();
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [makeMember(Permissions.ReadMessages | Permissions.ViewChannel)] },
+      ownerId: "u-me", authGeneration: generation, statusByServer: { "srv-1": "ready" },
+    });
+    const { result } = renderHook(() => useChannelPermissions("ch-1"));
+    expect(result.current.permsResolved).toBe(true);
+    expect(result.current.authorizationResolved).toBe(false);
+    act(() => useChannelPermissionStore.setState({ statusByChannel: {
+      "ch-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+    } }));
+    expect(result.current.authorizationResolved).toBe(false);
+    act(() => useChannelPermissionStore.setState({ overridesByChannel: { "ch-1": [] } }));
+    expect(result.current.authorizationResolved).toBe(true);
+    act(() => useChannelPermissionStore.setState({ statusByChannel: {
+      "ch-1": { status: "error", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+    } }));
+    expect(result.current.authorizationResolved).toBe(false);
+  });
+
+  it("rejects stale account/session or mismatched server override snapshots", () => {
+    const generation = getAuthGeneration();
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [makeMember(Permissions.ReadMessages)] },
+      ownerId: "u-me", authGeneration: generation, statusByServer: { "srv-1": "ready" },
+    });
+    const { result } = renderHook(() => useChannelPermissions("ch-1"));
+    for (const patch of [{ ownerId: "old" }, { authGeneration: generation - 1 }, { serverId: "other" }]) {
+      act(() => useChannelPermissionStore.setState({ statusByChannel: {
+        "ch-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation, ...patch },
+      } }));
+      expect(result.current.authorizationResolved).toBe(false);
+    }
+  });
+  it("reacts immediately to an override revoking read access", () => {
+    const member = { ...makeMember(Permissions.ViewChannel | Permissions.ReadMessages), roles: [{ id: "role" }] } as MemberWithRoles;
+    useMemberStore.setState({ membersByServer: { "srv-1": [member] } });
+    const { result } = renderHook(() => useChannelPermissions("ch-1"));
+    expect(result.current.hasChannelPerm(Permissions.ReadMessages)).toBe(true);
+    act(() => useChannelPermissionStore.setState({ overridesByChannel: { "ch-1": [{ channel_id: "ch-1", role_id: "role", allow: 0, deny: Permissions.ReadMessages } as ChannelPermissionOverride] } }));
+    expect(result.current.hasChannelPerm(Permissions.ReadMessages)).toBe(false);
+    expect(result.current.hasChannelPerm(Permissions.ViewChannel)).toBe(true);
+  });
+
+  it("uses the verified parent snapshot for a thread and reacts to parent revocation", () => {
+    const generation = getAuthGeneration();
+    const member = { ...makeMember(Permissions.ViewChannel | Permissions.ReadMessages), roles: [{ id: "role" }] } as MemberWithRoles;
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [member] }, ownerId: "u-me", authGeneration: generation,
+      statusByServer: { "srv-1": "ready" }, loadingServers: new Set<string>(),
+    });
+    useChannelPermissionStore.setState({
+      overridesByChannel: {
+        "thread-1": [{ channel_id: "thread-1", role_id: "role", allow: 0, deny: Permissions.ReadMessages } as ChannelPermissionOverride],
+        "parent-1": [],
+      },
+      statusByChannel: {
+        "thread-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+        "parent-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+      },
+    });
+    const { result } = renderHook(() => useChannelPermissions("thread-1", "srv-1", "parent-1"));
+    expect(result.current.hasChannelPerm(Permissions.ReadMessages)).toBe(true);
+    expect(result.current.authorizationResolved).toBe(true);
+
+    act(() => useChannelPermissionStore.setState({
+      overridesByChannel: {
+        "thread-1": [],
+        "parent-1": [{ channel_id: "parent-1", role_id: "role", allow: 0, deny: Permissions.ReadMessages } as ChannelPermissionOverride],
+      },
+    }));
+    expect(result.current.hasChannelPerm(Permissions.ReadMessages)).toBe(false);
+
+    act(() => useChannelPermissionStore.setState({ statusByChannel: {
+      "thread-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+      "parent-1": { status: "error", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+    } }));
+    expect(result.current.authorizationResolved).toBe(false);
+  });
+
+  it("derives the parent ACL by default for ChannelChatProvider thread lookups", () => {
+    const generation = getAuthGeneration();
+    const member = { ...makeMember(Permissions.ViewChannel | Permissions.ReadMessages), roles: [{ id: "role" }] } as MemberWithRoles;
+    useMemberStore.setState({
+      membersByServer: { "srv-1": [member] }, ownerId: "u-me", authGeneration: generation,
+      statusByServer: { "srv-1": "ready" }, loadingServers: new Set<string>(),
+    });
+    useChannelStore.setState({ categoriesByServer: { "srv-1": [{
+      category: { id: "cat", name: "cat", position: 0 },
+      channels: [{ id: "parent-1", name: "parent", type: "text", category_id: "cat", topic: null, position: 0, user_limit: 0, bitrate: 0, created_at: "2026-01-01T00:00:00Z" }],
+    }] } });
+    useThreadStore.setState({
+      ownerId: "u-me", authGeneration: generation,
+      byID: { "thread-1": { id: "thread-1", name: "thread", type: "thread", category_id: null, topic: null, position: 0, user_limit: 0, bitrate: 0, created_at: "2026-01-01T00:00:00Z", parent_channel_id: "parent-1" } },
+      serverIdByThread: { "thread-1": "srv-1" },
+      statusByParent: { [JSON.stringify(["srv-1", "parent-1"])]: "ready" },
+    });
+    useChannelPermissionStore.setState({
+      overridesByChannel: {
+        "thread-1": [{ channel_id: "thread-1", role_id: "role", allow: 0, deny: Permissions.ReadMessages } as ChannelPermissionOverride],
+        "parent-1": [],
+      },
+      statusByChannel: {
+        "thread-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+        "parent-1": { status: "ready", serverId: "srv-1", ownerId: "u-me", authGeneration: generation },
+      },
+    });
+    const { result } = renderHook(() => useChannelPermissions("thread-1", "srv-1"));
+    expect(result.current.hasChannelPerm(Permissions.ReadMessages)).toBe(true);
+    expect(result.current.authorizationResolved).toBe(true);
+  });
+
+  it("resolves an explicit origin server independently of current navigation", () => {
+    useMemberStore.setState({ membersByServer: { "srv-1": [makeMember(Permissions.SendMessages)], "srv-2": [makeMember(Permissions.ReadMessages)] } });
+    const { result } = renderHook(() => useChannelPermissions("ch-1", "srv-1"));
+    act(() => useServerStore.setState({ activeServerId: "srv-2" }));
+    expect(result.current.hasChannelPerm(Permissions.SendMessages)).toBe(true);
+  });
   it("is false while the active server's member list has not arrived yet", () => {
     const { result } = renderHook(() => useChannelPermissions("ch-1"));
 

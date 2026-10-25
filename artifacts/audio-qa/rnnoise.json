@@ -1,0 +1,150 @@
+{
+  "engine": "rnnoise",
+  "results": [
+    {
+      "fixture": "clean",
+      "outputFile": "rnnoise-clean.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 3.4646000000000186,
+      "inferenceWallMs": {
+        "p50": 0.13449999999988904,
+        "p95": 0.2056999999999789,
+        "p99": 0.26969999999982974
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": null,
+      "outputLag": {
+        "samples": 480,
+        "milliseconds": 10,
+        "normalizedCorrelation": 0.8020834759454513,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.223069114456706,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "fan",
+      "outputFile": "rnnoise-fan.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 2.294800000000123,
+      "inferenceWallMs": {
+        "p50": 0.13930000000004839,
+        "p95": 0.2142999999998665,
+        "p99": 0.2840000000001055
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 15
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -31.801171518596867,
+          "outputRmsDbfs": -81.20018573998726,
+          "attenuationDb": 49.399014221390395
+        },
+        "tail": {
+          "inputRmsDbfs": -32.43268685735202,
+          "outputRmsDbfs": -83.17413380663089,
+          "attenuationDb": 50.741446949278874
+        }
+      },
+      "outputLag": {
+        "samples": 480,
+        "milliseconds": 10,
+        "normalizedCorrelation": 0.7114576188693216,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -36.27640004728013,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "keyboard",
+      "outputFile": "rnnoise-keyboard.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 2.4486000000001695,
+      "inferenceWallMs": {
+        "p50": 0.12329999999997199,
+        "p95": 0.16689999999994143,
+        "p99": 0.23520000000007713
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.17333244610398,
+          "outputRmsDbfs": -37.04677602679196,
+          "attenuationDb": 3.873443580687983
+        },
+        "tail": {
+          "inputRmsDbfs": -33.31342352961014,
+          "outputRmsDbfs": -48.583503593158326,
+          "attenuationDb": 15.270080063548185
+        }
+      },
+      "outputLag": {
+        "samples": 479,
+        "milliseconds": 9.979166666666666,
+        "normalizedCorrelation": 0.7587605051355117,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -34.54335805929809,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "transient",
+      "outputFile": "rnnoise-transient.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 2.4980000000000473,
+      "inferenceWallMs": {
+        "p50": 0.12579999999979918,
+        "p95": 0.17229999999972279,
+        "p99": 0.25309999999990396
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.97000337466929,
+          "outputRmsDbfs": -46.70740955730913,
+          "attenuationDb": 12.737406182639837
+        },
+        "tail": {
+          "inputRmsDbfs": -33.84338417586975,
+          "outputRmsDbfs": -38.74630902383246,
+          "attenuationDb": 4.9029248479627086
+        }
+      },
+      "outputLag": {
+        "samples": 480,
+        "milliseconds": 10,
+        "normalizedCorrelation": 0.7947601491179032,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.285454395596446,
+      "finite": true,
+      "clippedSamples": 0
+    }
+  ]
+}

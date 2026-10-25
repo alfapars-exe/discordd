@@ -16,6 +16,7 @@ import { x25519, ed25519 } from "@noble/curves/ed25519.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 import * as keyStorage from "./keyStorage";
 import {
   type StoredIdentityKeyPair,
@@ -31,6 +32,19 @@ import {
   PREKEY_BATCH_SIZE,
   HKDF_INFO,
 } from "./types";
+
+/** Capture the account boundary at protocol entry; null owners remain usable in isolated crypto tests. */
+function captureAuthGuard(parent: () => boolean = () => true): () => boolean {
+  const scope = getAuthSessionSnapshot();
+  return () => {
+    const current = getAuthSessionSnapshot();
+    return current.ownerId === scope.ownerId && current.generation === scope.generation && parent();
+  };
+}
+
+function assertAuthCurrent(isCurrent: () => boolean): void {
+  if (!isCurrent()) throw new Error("Auth session changed during Signal operation");
+}
 
 // ──────────────────────────────────
 // Identity Key Change Detection (MITM warning)
@@ -126,7 +140,7 @@ function generateX25519KeyPair(): StoredIdentityKeyPair {
  * Generate all E2EE keys for new device setup and save to IndexedDB.
  * Returns public keys for server upload.
  */
-export async function generateAllKeys(): Promise<{
+export async function generateAllKeys(isCurrent: () => boolean = () => true): Promise<{
   identityPublicKey: string;
   signingPublicKey: string;
   signedPreKey: {
@@ -137,9 +151,12 @@ export async function generateAllKeys(): Promise<{
   oneTimePreKeys: Array<{ id: number; publicKey: string }>;
   registrationId: number;
 }> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   // 1. Identity key pair (X25519)
   const identityKeyPair = generateX25519KeyPair();
   await keyStorage.saveIdentityKeyPair(identityKeyPair);
+  assertAuthCurrent(current);
 
   // 2. Ed25519 signing key pair — INDEPENDENT seed.
   //
@@ -159,14 +176,18 @@ export async function generateAllKeys(): Promise<{
     publicKey: signingPublicKey,
     privateKey: signingSeed,
   });
+  assertAuthCurrent(current);
 
   // 3. Signed prekey — signed with the dedicated Ed25519 key
   const signedPreKey = await generateSignedPreKey(signingSeed, 1);
+  assertAuthCurrent(current);
   await keyStorage.saveSignedPreKey(signedPreKey);
+  assertAuthCurrent(current);
 
   // 4. One-time prekeys (100)
   const preKeys = generatePreKeys(1, PREKEY_BATCH_SIZE);
   await keyStorage.savePreKeys(preKeys);
+  assertAuthCurrent(current);
 
   // 5. Registration ID — random 16-bit device identifier
   const registrationId = crypto.getRandomValues(new Uint16Array(1))[0];
@@ -227,10 +248,14 @@ function generatePreKeys(start: number, count: number): StoredPreKey[] {
 /** Generate additional one-time prekeys when server signals prekey_low. */
 export async function generateMorePreKeys(
   startId: number,
-  count: number = PREKEY_BATCH_SIZE
+  count: number = PREKEY_BATCH_SIZE,
+  isCurrent: () => boolean = () => true
 ): Promise<Array<{ id: number; publicKey: string }>> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   const preKeys = generatePreKeys(startId, count);
   await keyStorage.savePreKeys(preKeys);
+  assertAuthCurrent(current);
   return preKeys.map((pk) => ({
     id: pk.id,
     publicKey: toBase64(pk.publicKey),
@@ -238,16 +263,19 @@ export async function generateMorePreKeys(
 }
 
 /** Rotate signed prekey. Called periodically (e.g., weekly). */
-export async function rotateSignedPreKey(newId: number): Promise<{
+export async function rotateSignedPreKey(newId: number, isCurrent: () => boolean = () => true): Promise<{
   id: number;
   publicKey: string;
   signature: string;
 }> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   // Use the dedicated signing key, not the X25519 identity private key.
   // Legacy devices may have a signing key derived from the X25519 secret
   // (cryptographic anti-pattern); on next rotation they migrate forward
   // because the signing key store is independently maintained.
   const signingKeyPair = await keyStorage.getSigningKeyPair();
+  assertAuthCurrent(current);
   if (!signingKeyPair) {
     throw new Error("Signing key pair not found — device not initialized");
   }
@@ -256,7 +284,9 @@ export async function rotateSignedPreKey(newId: number): Promise<{
     signingKeyPair.privateKey,
     newId
   );
+  assertAuthCurrent(current);
   await keyStorage.saveSignedPreKey(newSignedPreKey);
+  assertAuthCurrent(current);
 
   return {
     id: newSignedPreKey.id,
@@ -300,9 +330,13 @@ export async function processPreKeyBundle(
     oneTimePrekeyId?: number;
     oneTimePrekey?: string;    // base64 X25519 public (optional)
     registrationId: number;
-  }
+  },
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   const identityKeyPair = await keyStorage.getIdentityKeyPair();
+  assertAuthCurrent(current);
   if (!identityKeyPair) {
     throw new Error("Identity key pair not found — device not initialized");
   }
@@ -389,9 +423,11 @@ export async function processPreKeyBundle(
   // proceeds with the new key (so the user can communicate), but the UI
   // can prompt them to verify out-of-band before continuing.
   const existingTrust = await keyStorage.getTrustedIdentity(userId, deviceId);
+  assertAuthCurrent(current);
   if (existingTrust && !bytesEqual(existingTrust.identityKey, theirIdentityKey)) {
     recordIdentityKeyChange(userId, deviceId, existingTrust.identityKey, theirIdentityKey);
   }
+  assertAuthCurrent(current);
   await keyStorage.saveTrustedIdentity({
     userId,
     deviceId,
@@ -401,7 +437,8 @@ export async function processPreKeyBundle(
     verified: existingTrust && bytesEqual(existingTrust.identityKey, theirIdentityKey)
       ? existingTrust.verified
       : false,
-  });
+  }, current);
+  assertAuthCurrent(current);
 
   const session: StoredSession = {
     userId,
@@ -412,15 +449,19 @@ export async function processPreKeyBundle(
   };
 
   // Store PreKey info as metadata (used by encryptMessage for first message)
+  const registration = await keyStorage.getRegistrationData();
+  assertAuthCurrent(current);
   await keyStorage.setMetadata(`prekey_info:${userId}:${deviceId}`, {
-    registrationId: (await keyStorage.getRegistrationData())?.registrationId ?? 0,
+    registrationId: registration?.registrationId ?? 0,
     identityKey: toBase64(identityKeyPair.publicKey),
     ephemeralKey: toBase64(ephemeralKeyPair.publicKey),
     signedPrekeyId: bundle.signedPrekeyId,
     oneTimePrekeyId: bundle.oneTimePrekeyId,
   });
+  assertAuthCurrent(current);
 
-  await keyStorage.saveSession(session);
+  await keyStorage.saveSession(session, current);
+  assertAuthCurrent(current);
 }
 
 /**
@@ -431,9 +472,16 @@ export async function processPreKeyBundle(
 export async function processPreKeyMessage(
   senderUserId: string,
   senderDeviceId: string,
-  preKeyInfo: PreKeyMessageInfo
+  preKeyInfo: PreKeyMessageInfo,
+  isCurrent: () => boolean = () => true
 ): Promise<SessionState> {
+  const current = captureAuthGuard(isCurrent);
+  const assertCurrent = () => {
+    assertAuthCurrent(current);
+  };
+  assertCurrent();
   const identityKeyPair = await keyStorage.getIdentityKeyPair();
+  assertCurrent();
   if (!identityKeyPair) {
     throw new Error("Identity key pair not found");
   }
@@ -445,6 +493,7 @@ export async function processPreKeyMessage(
   const signedPreKey = await keyStorage.getSignedPreKey(
     preKeyInfo.signedPrekeyId
   );
+  assertCurrent();
   if (!signedPreKey) {
     throw new Error(
       `Signed prekey ${preKeyInfo.signedPrekeyId} not found`
@@ -470,6 +519,7 @@ export async function processPreKeyMessage(
   // Include one-time prekey if used
   if (preKeyInfo.oneTimePrekeyId !== undefined) {
     const otpk = await keyStorage.getPreKey(preKeyInfo.oneTimePrekeyId);
+    assertCurrent();
     if (otpk) {
       const dh4 = x25519.getSharedSecret(
         otpk.privateKey,
@@ -527,6 +577,7 @@ export async function processPreKeyMessage(
 
   // TOFU + safety-number-change detection (see processPreKeyBundle).
   const existingReceiverTrust = await keyStorage.getTrustedIdentity(senderUserId, senderDeviceId);
+  assertCurrent();
   if (existingReceiverTrust && !bytesEqual(existingReceiverTrust.identityKey, senderIdentityKey)) {
     recordIdentityKeyChange(
       senderUserId,
@@ -535,6 +586,7 @@ export async function processPreKeyMessage(
       senderIdentityKey,
     );
   }
+  assertCurrent();
   await keyStorage.saveTrustedIdentity({
     userId: senderUserId,
     deviceId: senderDeviceId,
@@ -543,7 +595,8 @@ export async function processPreKeyMessage(
     verified: existingReceiverTrust && bytesEqual(existingReceiverTrust.identityKey, senderIdentityKey)
       ? existingReceiverTrust.verified
       : false,
-  });
+  }, current);
+  assertCurrent();
 
   await keyStorage.saveSession({
     userId: senderUserId,
@@ -551,7 +604,8 @@ export async function processPreKeyMessage(
     state: sessionState,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  });
+  }, current);
+  assertCurrent();
 
   return sessionState;
 }
@@ -564,9 +618,13 @@ export async function processPreKeyMessage(
 export async function encryptMessage(
   userId: string,
   deviceId: string,
-  plaintext: string
+  plaintext: string,
+  isCurrent: () => boolean = () => true
 ): Promise<SignalWireMessage> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   const session = await keyStorage.getSession(userId, deviceId);
+  assertAuthCurrent(current);
   if (!session) {
     throw new Error(`No session found for ${userId}:${deviceId}`);
   }
@@ -589,21 +647,25 @@ export async function encryptMessage(
   // Encrypt with AES-256-GCM
   const plaintextBytes = new TextEncoder().encode(plaintext);
   const ciphertext = await aesGcmEncrypt(messageKey, plaintextBytes, header);
+  assertAuthCurrent(current);
 
   state.sendMessageNumber++;
 
   session.state = state;
   session.updatedAt = Date.now();
-  await keyStorage.saveSession(session);
+  await keyStorage.saveSession(session, current);
+  assertAuthCurrent(current);
 
   // Check if this is a PreKey message (first message in session)
   const preKeyInfo = await keyStorage.getMetadata<PreKeyMessageInfo>(
     `prekey_info:${userId}:${deviceId}`
   );
+  assertAuthCurrent(current);
 
   if (preKeyInfo) {
     // Clear PreKey info — only used for first message
     await keyStorage.setMetadata(`prekey_info:${userId}:${deviceId}`, null);
+    assertAuthCurrent(current);
 
     return {
       type: SignalMessageType.PreKey,
@@ -624,8 +686,14 @@ export async function encryptMessage(
 export async function decryptMessage(
   senderUserId: string,
   senderDeviceId: string,
-  wireMessage: SignalWireMessage
+  wireMessage: SignalWireMessage,
+  isCurrent: () => boolean = () => true
 ): Promise<string> {
+  const current = captureAuthGuard(isCurrent);
+  const assertCurrent = () => {
+    assertAuthCurrent(current);
+  };
+  assertCurrent();
   // PreKey message?
   if (
     wireMessage.type === SignalMessageType.PreKey &&
@@ -636,11 +704,14 @@ export async function decryptMessage(
     await processPreKeyMessage(
       senderUserId,
       senderDeviceId,
-      wireMessage.preKeyInfo
+      wireMessage.preKeyInfo,
+      current
     );
+    assertCurrent();
   }
 
   const session = await keyStorage.getSession(senderUserId, senderDeviceId);
+  assertCurrent();
   if (!session) {
     throw new Error(
       `No session found for ${senderUserId}:${senderDeviceId}`
@@ -663,11 +734,13 @@ export async function decryptMessage(
     state.skippedMessageKeys.splice(skippedIdx, 1);
 
     const plaintext = await aesGcmDecrypt(skipped.messageKey, ciphertext, header);
+    assertCurrent();
     const decoded = new TextDecoder().decode(plaintext);
 
     session.state = state;
     session.updatedAt = Date.now();
-    await keyStorage.saveSession(session);
+    await keyStorage.saveSession(session, current);
+    assertCurrent();
 
     return decoded;
   }
@@ -682,6 +755,7 @@ export async function decryptMessage(
   ) {
     // New DH ratchet key — save skipped message keys
     await skipMessageKeys(state, header.previousChainLength);
+    assertCurrent();
 
     // DH ratchet step
     state.receivingRatchetKey = headerRatchetKey;
@@ -724,6 +798,7 @@ export async function decryptMessage(
 
   // Save skipped message keys
   await skipMessageKeys(state, header.messageNumber);
+  assertCurrent();
 
   if (!state.receivingChainKey) {
     throw new Error("Receiving chain key not initialized");
@@ -734,11 +809,13 @@ export async function decryptMessage(
   state.receiveMessageNumber++;
 
   const plaintext = await aesGcmDecrypt(messageKey, ciphertext, header);
+  assertCurrent();
   const decoded = new TextDecoder().decode(plaintext);
 
   session.state = state;
   session.updatedAt = Date.now();
-  await keyStorage.saveSession(session);
+  await keyStorage.saveSession(session, current);
+  assertCurrent();
 
   return decoded;
 }
@@ -750,22 +827,34 @@ export async function decryptMessage(
 /** Check if a session exists for a user/device pair. */
 export async function hasSessionFor(
   userId: string,
-  deviceId: string
+  deviceId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<boolean> {
-  return keyStorage.hasSession(userId, deviceId);
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
+  const found = await keyStorage.hasSession(userId, deviceId);
+  assertAuthCurrent(current);
+  return found;
 }
 
 /** Delete session for a specific user/device pair. */
 export async function deleteSessionFor(
   userId: string,
-  deviceId: string
+  deviceId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   await keyStorage.deleteSession(userId, deviceId);
+  assertAuthCurrent(current);
 }
 
 /** Delete all sessions for a user. */
-export async function deleteAllSessionsFor(userId: string): Promise<void> {
+export async function deleteAllSessionsFor(userId: string, isCurrent: () => boolean = () => true): Promise<void> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   await keyStorage.deleteAllSessionsForUser(userId);
+  assertAuthCurrent(current);
 }
 
 // ──────────────────────────────────

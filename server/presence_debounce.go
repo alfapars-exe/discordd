@@ -43,8 +43,9 @@ const presenceOfflineGrace = 8 * time.Second
 type presenceOfflineDebouncer struct {
 	grace time.Duration
 
-	mu     sync.Mutex
-	timers map[string]*time.Timer
+	mu      sync.Mutex
+	timers  map[string]*time.Timer
+	stopped bool
 	// gens is a per-user generation counter, bumped by every schedule() and
 	// cancel(). A fired callback captures the generation it was scheduled
 	// with and re-validates it (current()) before each externally visible
@@ -75,6 +76,9 @@ func newPresenceOfflineDebouncer(grace time.Duration) *presenceOfflineDebouncer 
 func (d *presenceOfflineDebouncer) schedule(userID string, fire func(gen uint64)) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.stopped {
+		return
+	}
 
 	if existing, ok := d.timers[userID]; ok {
 		existing.Stop()
@@ -85,7 +89,7 @@ func (d *presenceOfflineDebouncer) schedule(userID string, fire func(gen uint64)
 
 	d.timers[userID] = time.AfterFunc(d.grace, func() {
 		d.mu.Lock()
-		if d.gens[userID] != gen {
+		if d.stopped || d.gens[userID] != gen {
 			// A cancel() or a fresh schedule() superseded this timer after
 			// it had already committed to firing (Timer.Stop's documented
 			// "may have already started" caveat) — do nothing.
@@ -105,7 +109,7 @@ func (d *presenceOfflineDebouncer) schedule(userID string, fire func(gen uint64)
 func (d *presenceOfflineDebouncer) current(userID string, gen uint64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.gens[userID] == gen
+	return !d.stopped && d.gens[userID] == gen
 }
 
 // cancel aborts a pending offline debounce for userID, if any. Called on
@@ -116,6 +120,9 @@ func (d *presenceOfflineDebouncer) current(userID string, gen uint64) bool {
 func (d *presenceOfflineDebouncer) cancel(userID string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.stopped {
+		return false
+	}
 
 	// Bumping the generation even when no timer is pending is deliberate:
 	// it also invalidates a fire that has already left the timers map and
@@ -141,19 +148,16 @@ func (d *presenceOfflineDebouncer) pending(userID string) bool {
 	return ok
 }
 
-// stopAll cancels every pending timer. Called during graceful shutdown
-// (main.go) before the dependencies a fired timer would touch — the DB pool
-// (db.Close) and the Hub (hub.Shutdown) — are torn down. Stop()ing here
-// ensures no NEW timer goroutine starts after shutdown begins. A callback
-// that already passed its generation check and left the timers map is
-// neither joined nor invalidated — its side effects against a closed DB /
-// drained hub were verified benign (error-logged, no panic).
+// stopAll permanently closes the debouncer and cancels every pending timer.
+// Later schedule/cancel calls are ignored, including callbacks entering their
+// fire closure (current() returns false once stopped). This also prevents a
+// late queued disconnect callback from creating a fresh shutdown-time timer.
 func (d *presenceOfflineDebouncer) stopAll() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.stopped = true
 	for userID, timer := range d.timers {
 		timer.Stop()
 		delete(d.timers, userID)
-		d.gens[userID]++
 	}
 }

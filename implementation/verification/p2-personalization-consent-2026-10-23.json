@@ -1,0 +1,29 @@
+{
+  "item": "p2.personalization-consent",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "consent": "experiencePersonalization is account-scoped, validated by the server and off by default.",
+    "data_boundary": "The recommendation service checks consent before reading the user's profile, server memberships or friendship activity; disabled responses are empty.",
+    "consumer": "When enabled, the Friends view renders localized suggestions derived from incomplete profile, no server membership and no accepted friendships.",
+    "endpoint": "GET /api/users/me/recommendations is authenticated, self-scoped and documented in OpenAPI."
+  },
+  "automated_verification": [
+    {
+      "command": "go test ./services -run 'Test(Personalization|Profile|UpdateProfile)' -count=1",
+      "working_directory": "server",
+      "result": "pass; includes assertion that disabled consent performs no optional input reads"
+    },
+    {
+      "command": "go test . -run 'Test.*Routes' -count=1",
+      "working_directory": "server",
+      "result": "pass"
+    },
+    {
+      "command": "tsc -b client/tsconfig.json",
+      "working_directory": ".",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Browser-test the account-scoped toggle across reload and confirm suggestions disappear immediately after a disabled-state refresh."
+}

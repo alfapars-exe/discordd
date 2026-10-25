@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P8 device-local developer mode and developer-only ID affordances.",
+  "implemented": [
+    "Account settings expose a localized Developer section with a device-local developer-mode switch.",
+    "The preference survives reload through a versioned local-storage key and remains usable when storage is blocked.",
+    "Message, member and direct-message user ID copy actions are omitted from context menus unless developer mode is enabled."
+  ],
+  "checks": [
+    {
+      "command": "node node_modules/typescript/bin/tsc -b --pretty false",
+      "cwd": "client",
+      "result": "passed"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run src/stores/developerSettingsStore.test.ts src/components/settings/settingsNavigation.test.ts src/components/members/MemberItem.test.tsx",
+      "cwd": "client",
+      "result": "passed",
+      "tests": 12
+    }
+  ],
+  "remaining": [
+    "Fresh-session browser and packaged-Windows acceptance must verify persistence and all three context-menu surfaces before this behavior can be accepted."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

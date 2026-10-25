@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Extended existing request-scoped DM history buffers with independent reaction/pin patches. Tail, around, older and newer history publication applies those patches after body/version merging, preserving live reaction removal and explicit unpin false as well as additions.",
+    "Live metadata events also update detached held messages and already-buffered bodies. Delete removes both buffered body and metadata. Older/newer readers now lease/release the same existing buffer infrastructure; no new API, crypto format or persistence schema was added.",
+    "Reaction/pin events for off-window messages no longer replace an unchanged loaded array, avoiding cancellation of an otherwise valid pending pagination request. Metadata does not invalidate ciphertext decryption or replace plaintext/file-key fields."
+  ],
+  "verification": [
+    "Final targeted dmStore suite passed: 81 tests. New regressions cover all four history paths, reactions/pins before the target is loaded, explicit removal/unpin values, and metadata changes to held messages during forward paging.",
+    "Final TypeScript tsc -b and targeted ESLint passed.",
+    "Full client suite passed: 232 files / 2331 tests in 47.95s. Vite production build passed in 695ms with existing warnings. Targeted diff whitespace and coverage validation passed: 33 references / 261 behaviors; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Actual browser/two-client acceptance and authoritative server revision ordering remain open. A delayed live message edit outside an active history lease can still carry stale metadata; independent live-event revision reconciliation is not claimed complete.",
+    "Pagination still conservatively rejects a changed loaded-window identity. Reconnect, cross-tab ordering, long-history and high-event-rate performance require further verification.",
+    "Overall P0-P11 remains incomplete. No commit, push, merge, Windows packaging or production release performed."
+  ]
+}

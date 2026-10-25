@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Group messages expose copy and explicit speech in the same action list used by pointer buttons and focused message shortcuts. Null/undecrypted bodies do not offer copy, speech or empty edit operations. Speech uses existing account rate/language without enabling automatic reading.",
+    "Shared ignore-policy hook and reveal scope now cover channel, 1:1 DM and group messages. Ignored content stays behind an explicit reveal; reveals do not transfer between accounts, privacy-policy objects, conversation, message identity, author, body or edit revision. Spam quarantine remains independent and takes precedence.",
+    "Shared quote/search/forward preview wrapper suppresses ignored plaintext and caller-provided preview children in channel, DM and group contexts, without changing delivery, membership or block state.",
+    "Legacy clipboard fallback now checks execCommand's boolean result, rejects unavailable/failed copying, always removes its temporary plaintext textarea and restores focus/selection. Copy callers surface failures rather than producing false success or unhandled rejection. Browser and Electron clipboard preference is unchanged."
+  ],
+  "verification": [
+    "After shared reveal-hook integration: 5 focused files / 29 tests passed; targeted ESLint passed and tsc -b passed.",
+    "Tests cover hidden pointer/keyboard actions, explicit reveal, account/policy/content changes, null message bodies, all preview kinds, own-message exceptions, speech/clipboard failure, browser/native/legacy clipboard, cleanup and focus restoration.",
+    "An initial GroupSpamGate test mock lacked initReactI18next after adding the account store; replaced the incomplete mock with the existing partial-mock pattern. Tests then passed without skipping or weakening assertions.",
+    "Correct project-reference typecheck tsc -b found and fixed nullable reveal-state access; prior solution-level tsc --noEmit did not traverse references and was insufficient evidence. Current tsc -b passed.",
+    "Local Vite production web build succeeded (1645 transformed modules, 2.56s). Warnings remain for existing native-config __dirname usage, >500kB chunks and ineffective dynamic imports; no warning suppression was added. This is not Windows packaging or production publication.",
+    "Full client regression after final shared-hook changes: 220 files / 2049 tests passed in 45.10s. Existing jsdom navigation warnings were not suppressed. Coverage validator passed with acceptance complete NO; no package was accepted on unit tests alone."
+  ],
+  "remaining": [
+    "Real audible TTS and clipboard permission/focus acceptance on web/Windows; browser test space remains handed to the user.",
+    "Other group message tools (forward, pin, reminders and supported application actions) remain incomplete; unread was subsequently implemented with revisioned state (p4-group-unread-2026-10-24.json). This does not close P4 or P8.",
+    "Two-client ignore/unignore acceptance, screen-reader and mobile visual QA remain open."
+  ]
+}

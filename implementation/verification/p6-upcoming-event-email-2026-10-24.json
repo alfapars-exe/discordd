@@ -1,0 +1,24 @@
+{
+  "status": "implemented_unverified",
+  "phase": "P6",
+  "implemented": [
+    "Event occurrence dedupe, optional in-app notification and eligible social email enqueue commit atomically.",
+    "Email social consent is independent of the upcoming-event in-app toggle.",
+    "Generic email content excludes event title and channel metadata; dedupe is per recipient and scheduled occurrence.",
+    "Send-time checks revalidate active scheduled occurrence, start window, current membership and RSVP, verified claimed email address, account lifecycle and social email preferences.",
+    "Same-start edits remain eligible with generic content; cancelled, expired or rescheduled occurrences are suppressed.",
+    "Additive SQLite migration 127 and PostgreSQL migration 029 carry queue occurrence context."
+  ],
+  "verification": [
+    "Fresh PostgreSQL 18 TestServerEvent|TestEmailDelivery count=3 passed in 32.167s after fixing timestamp text normalization and bigint fixture.",
+    "SQLite worker-to-queue-to-sender integration passed (0.527s), including app toggle off with email on, repeated worker drain dedupe, unsubscribe footer, and RSVP withdrawal cancelling before send.",
+    "SQLite repository TestServerEvent|TestEmailDelivery count=3 passed (17.370s).",
+    "Final full Go test ./... and go vet ./... passed after integrated voice/email changes."
+  ],
+  "runtimeSafety": "Fresh PostgreSQL container had no host ports, used a generated QA-only password, and was identity-checked before automatic removal. Existing browser QA servers were preserved. No external email was sent.",
+  "remaining": [
+    "Real SMTP/provider configuration, deliverability and user acceptance.",
+    "Provider accept followed by process crash may retry delivery; external exactly-once requires provider idempotency support.",
+    "No deployment, release or whole P6 acceptance implied."
+  ]
+}

@@ -1,8 +1,10 @@
 /** ProfileSettings — User profile settings tab. */
 
 import { useState, useEffect, useRef } from "react";
+import { useSettingsDraft } from "./settingsWorkspaceContext";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
+import { getAuthGeneration } from "../../api/client";
 import { useToastStore } from "../../stores/toastStore";
 import { showApiError } from "../../utils/apiError";
 import * as profileApi from "../../api/profile";
@@ -11,6 +13,7 @@ import BannerUpload from "./BannerUpload";
 import ColorPicker from "./ColorPicker";
 import ProfilePreviewCard from "./ProfilePreviewCard";
 import LanguageSelector from "./LanguageSelector";
+import ProfileShowcaseEditor from "./ProfileShowcaseEditor";
 
 const BIO_MAX_RUNES = 190;
 const PRONOUNS_MAX = 40;
@@ -57,8 +60,34 @@ function ProfileSettings() {
 
   const prevPreviewUrlRef = useRef<string | null>(null);
   const prevBannerUrlRef = useRef<string | null>(null);
+  const previousUserIdRef = useRef(user?.id);
+  const saveInProgressRef = useRef(false);
+  const saveSequenceRef = useRef(0);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      saveSequenceRef.current += 1;
+      saveInProgressRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const accountChanged = previousUserIdRef.current !== user?.id;
+    previousUserIdRef.current = user?.id;
+    if (accountChanged) {
+      // A new account gets an independent form/save lifecycle, even while an
+      // earlier account's request is still unresolved.
+      saveSequenceRef.current += 1;
+      saveInProgressRef.current = false;
+      setIsSaving(false);
+    }
+    // Upload responses patch the current account while this form is saving.
+    // Keep its other staged fields intact; a real account switch still resets
+    // every draft immediately, even if the old save is in flight.
+    if (saveInProgressRef.current && !accountChanged) return;
     // Mirror current `user` snapshot into the local form buffers when
     // the upstream user object changes (login flip, profile API
     // patch). setState deferred via microtask so the lint rule
@@ -91,7 +120,7 @@ function ProfileSettings() {
     });
   }, [
     user?.username, user?.display_name, user?.custom_status, user?.language, user?.avatar_url, user?.dm_privacy,
-    user?.bio, user?.pronouns, user?.accent_color, user?.banner_url,
+    user?.bio, user?.pronouns, user?.accent_color, user?.banner_url, user?.id,
   ]);
 
   useEffect(() => {
@@ -125,6 +154,7 @@ function ProfileSettings() {
     accentChanged ||
     bannerChanged;
   const canSave = hasChanges && accentValid && runeCount(normalizedBio) <= BIO_MAX_RUNES;
+  useSettingsDraft(hasChanges || isSaving);
 
   async function handleAvatarSelect(file: File) {
     if (prevPreviewUrlRef.current) {
@@ -164,12 +194,21 @@ function ProfileSettings() {
   }
 
   async function handleSave() {
-    if (!canSave || isSaving) return;
+    const saveOwnerId = user?.id;
+    const saveGeneration = getAuthGeneration();
+    const isCurrentSave = () => mountedRef.current && Boolean(saveOwnerId) &&
+      getAuthGeneration() === saveGeneration && useAuthStore.getState().user?.id === saveOwnerId;
+    if (!canSave || saveInProgressRef.current || !isCurrentSave()) return;
+    const requestContext = { expectedUserId: saveOwnerId, isCurrent: isCurrentSave };
 
+    const saveSequence = ++saveSequenceRef.current;
+    saveInProgressRef.current = true;
     setIsSaving(true);
     try {
       if (pendingAvatarFile) {
-        const avatarRes = await profileApi.uploadAvatar(pendingAvatarFile);
+        if (!isCurrentSave()) return;
+        const avatarRes = await profileApi.uploadAvatar(pendingAvatarFile, requestContext);
+        if (!isCurrentSave()) return;
         if (avatarRes.success && avatarRes.data) {
           // Cache-bust: server reuses the same path on overwrite, so the
           // <img src=...> reference stays identical and the browser keeps
@@ -179,6 +218,12 @@ function ProfileSettings() {
           // to every other UI consumer (sidebar, voice tile, member list).
           const cacheBustedUrl = withCacheBust(avatarRes.data.avatar_url ?? "");
           updateUser({ avatar_url: cacheBustedUrl, avatar_animated_url: avatarRes.data.avatar_animated_url ?? null });
+          setPendingAvatarFile(null);
+          if (prevPreviewUrlRef.current) {
+            URL.revokeObjectURL(prevPreviewUrlRef.current);
+            prevPreviewUrlRef.current = null;
+          }
+          setAvatarPreviewUrl(null);
         } else {
           showApiError(avatarRes, { fallbackKey: "settings:avatarUploadError" });
           setIsSaving(false);
@@ -187,11 +232,20 @@ function ProfileSettings() {
       }
 
       if (pendingBannerFile || bannerRemoved) {
+        if (!isCurrentSave()) return;
         const bannerRes = pendingBannerFile
-          ? await profileApi.uploadBanner(pendingBannerFile)
-          : await profileApi.deleteBanner();
+          ? await profileApi.uploadBanner(pendingBannerFile, requestContext)
+          : await profileApi.deleteBanner(requestContext);
+        if (!isCurrentSave()) return;
         if (bannerRes.success && bannerRes.data) {
-          updateUser({ banner_url: bannerRes.data.banner_url ?? null });
+          updateUser({ banner_url: bannerRes.data.banner_url ?? null, banner_animated_url: bannerRes.data.banner_animated_url ?? null });
+          setPendingBannerFile(null);
+          setBannerRemoved(false);
+          if (prevBannerUrlRef.current) {
+            URL.revokeObjectURL(prevBannerUrlRef.current);
+            prevBannerUrlRef.current = null;
+          }
+          setBannerPreviewUrl(null);
         } else {
           showApiError(bannerRes, { fallbackKey: "settings:profileBannerUploadError" });
           setIsSaving(false);
@@ -210,6 +264,7 @@ function ProfileSettings() {
         accentChanged;
 
       if (profileChanged) {
+        if (!isCurrentSave()) return;
         const res = await profileApi.updateProfile({
           ...(username !== (user?.username ?? "") ? { username } : {}),
           display_name: displayName,
@@ -220,8 +275,9 @@ function ProfileSettings() {
           ...(bioChanged ? { bio: normalizedBio } : {}),
           ...(pronounsChanged ? { pronouns: normalizedPronouns } : {}),
           ...(accentChanged ? { accent_color: accentColor } : {}),
-        });
+        }, requestContext);
 
+        if (!isCurrentSave()) return;
         if (res.success && res.data) {
           if (pendingLanguage !== (user?.language ?? "en")) {
             i18n.changeLanguage(pendingLanguage);
@@ -258,9 +314,12 @@ function ProfileSettings() {
       setBannerPreviewUrl(null);
       addToast("success", t("profileSaved"));
     } catch {
-      addToast("error", t("profileSaveError"));
+      if (isCurrentSave()) addToast("error", t("profileSaveError"));
     } finally {
-      setIsSaving(false);
+      if (saveSequenceRef.current === saveSequence) {
+        saveInProgressRef.current = false;
+        if (mountedRef.current) setIsSaving(false);
+      }
     }
   }
 
@@ -399,6 +458,7 @@ function ProfileSettings() {
         avatarUrl={avatarPreviewUrl ?? user.avatar_url}
         animatedUrl={avatarPreviewUrl ? null : user.avatar_animated_url ?? null}
         bannerUrl={bannerPreviewUrl ?? (bannerRemoved ? null : user.banner_url ?? null)}
+        animatedBannerUrl={bannerPreviewUrl ? null : user.banner_animated_url ?? null}
         accentColor={accentValid ? accentColor : user.accent_color ?? ""}
         bio={bio}
         pronouns={pronouns}
@@ -431,6 +491,8 @@ function ProfileSettings() {
 
       {/* Separator */}
       <div className="settings-separator" />
+
+      <ProfileShowcaseEditor />
 
       {/* Save */}
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

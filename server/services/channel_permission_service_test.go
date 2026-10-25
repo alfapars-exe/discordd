@@ -25,6 +25,58 @@ func newTestChannelPermService(
 
 // ─── ResolveChannelPermissions ───
 
+func TestResolveChannelPermissions_ThreadInheritsParentOverrides(t *testing.T) {
+	parentID := "parent"
+	var overrideChannelIDs []string
+	channels := &testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+		if id == "thread" {
+			return &models.Channel{ID: id, ServerID: "srv", Type: models.ChannelTypeThread, ParentChannelID: &parentID}, nil
+		}
+		return &models.Channel{ID: id, ServerID: "srv", Type: models.ChannelTypeText}, nil
+	}}
+	roles := &testutil.MockRoleRepo{
+		GetByUserIDAndServerFn: func(context.Context, string, string) ([]models.Role, error) {
+			return []models.Role{{ID: "member", Permissions: models.PermViewChannel | models.PermSendMessages}}, nil
+		},
+		GetRolesForUsersFn: func(_ context.Context, _ string, ids []string) (map[string][]models.Role, error) {
+			out := make(map[string][]models.Role, len(ids))
+			for _, id := range ids {
+				out[id] = []models.Role{{ID: "member", Permissions: models.PermViewChannel | models.PermSendMessages}}
+			}
+			return out, nil
+		},
+	}
+	permissions := &testutil.MockChannelPermRepo{
+		GetByChannelAndRolesFn: func(_ context.Context, channelID string, _ []string) ([]models.ChannelPermissionOverride, error) {
+			overrideChannelIDs = append(overrideChannelIDs, channelID)
+			return []models.ChannelPermissionOverride{{RoleID: "member", Deny: models.PermSendMessages}}, nil
+		},
+		GetByChannelFn: func(_ context.Context, channelID string) ([]models.ChannelPermissionOverride, error) {
+			overrideChannelIDs = append(overrideChannelIDs, channelID)
+			return []models.ChannelPermissionOverride{{RoleID: "member", Deny: models.PermSendMessages}}, nil
+		},
+	}
+	core := newUncachedChannelPermService(permissions, roles, channels, &testutil.MockBroadcaster{})
+
+	got, err := core.ResolveChannelPermissions(context.Background(), "user", "thread")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Has(models.PermSendMessages) {
+		t.Fatal("thread ignored the parent's deny override")
+	}
+	bulk, err := core.ResolveChannelPermissionsBulk(context.Background(), "thread", []string{"user"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bulk["user"].Has(models.PermSendMessages) {
+		t.Fatal("bulk thread resolution ignored the parent's deny override")
+	}
+	if len(overrideChannelIDs) != 2 || overrideChannelIDs[0] != parentID || overrideChannelIDs[1] != parentID {
+		t.Fatalf("overrides queried for %v, want parent twice", overrideChannelIDs)
+	}
+}
+
 func TestResolveChannelPermissions(t *testing.T) {
 	const (
 		userID    = "user-1"
@@ -508,10 +560,10 @@ type nonVacuityFixture struct {
 
 func (f *nonVacuityFixture) build() (ChannelPermissionService, *bool, *bool) {
 	const (
-		serverID      = "srv-nv"
-		targetRoleID  = "role-nv-target"
-		adminRoleID   = "role-nv-admin"
-		victimRoleID  = "role-nv-victim"
+		serverID     = "srv-nv"
+		targetRoleID = "role-nv-target"
+		adminRoleID  = "role-nv-admin"
+		victimRoleID = "role-nv-victim"
 	)
 	adminRole := models.Role{ID: adminRoleID, Position: 10, Permissions: models.PermAdmin}
 	victimRole := models.Role{ID: victimRoleID, Position: 2, Permissions: models.PermSendMessages}

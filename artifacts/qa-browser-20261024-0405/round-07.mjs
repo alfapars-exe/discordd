@@ -1,0 +1,10 @@
+const task = await taskSpace(6);
+const page = task.page("p1");
+await page.fill("@9", "qa_oct24_a");
+await page.fill("@10", "QA Player A");
+await page.fill("@12", "Local-QA-Only-2026!Password");
+await page.fill("@14", "Local-QA-Only-2026!Password");
+await page.click("@16", { label: "accept disposable account terms" });
+await page.click("@19", { label: "submit test account registration" });
+await page.waitForFunction(() => !document.querySelector('input[type="password"]') || !!document.querySelector('[role="alert"]'), undefined, { timeout: 15000 });
+console.log(await page.snapshot());

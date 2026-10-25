@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Forward destination discovery includes existing group conversations and loads them through the current group store if not initialized. Group discovery failure uses the recoverable destination-load warning rather than a fabricated empty success.",
+    "Selected groups refresh membership after attachment materialization, then load existing durable pending work before using groupDMStore.send. Decrypted original File objects and attributed plaintext enter the existing group encryption/send path; source ciphertext is not reused as a destination message.",
+    "Groups with unresolved sends are disabled. An uncertain new group operation stays visible with a result-check warning and no success/automatic retry. Confirmed partial delivery or pending local bookkeeping produces a warning directing the user to the group's existing recovery UI, not an unconditional full-success toast."
+  ],
+  "verification": [
+    "Five new component regressions cover forwarding through the existing group sender, refreshed membership removal, disabled pending targets/partial result warning, failed group discovery followed by explicit retry, and uncertain operation retention without claiming delivery.",
+    "Component group encryption/send functions are mocked; these tests prove destination orchestration, not actual two-client re-encryption. Existing real group-store/storage suites remain in the full regression run.",
+    "Initial focused component/locale suites passed: 2 files / 43 tests before the last two regressions were added. Final tsc -b and targeted ESLint passed. Full client suite passed: 229 files / 2205 tests in 46.26s. Vite web production build passed in 717ms. Targeted git diff --check passed; existing warning categories remain visible."
+  ],
+  "remaining": [
+    "Source group-message actions still need integration with the shared forwarding surface; this step adds groups as destinations. Richer DM eligibility/block filtering, source revocation races and real two-client re-encryption/attachment delivery remain open.",
+    "Crypto initialization, membership epochs, restore scope and pending-send gates remain enforced by the existing group store. No workaround bypasses them; unavailable initialization can still prevent forwarding and needs real-user acceptance.",
+    "Overall P0-P11 remains incomplete. No server migration, commit, push, merge, Windows packaging or production release performed."
+  ]
+}

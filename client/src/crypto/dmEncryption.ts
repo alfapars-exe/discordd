@@ -18,10 +18,14 @@ import * as signalProtocol from "./signalProtocol";
 import * as e2eeApi from "../api/e2ee";
 import { logToServer } from "../api/clientLog";
 import * as keyStorage from "./keyStorage";
+import { cacheGroupMessage,groupMessageCacheTag } from "./groupMessageCache";
+import { groupAttachmentKey } from "../utils/groupAttachmentKeys";
 import * as deviceManager from "./deviceManager";
 import { decodePayload, type E2EEPayload } from "./e2eePayload";
 import { useE2EEStore } from "../stores/e2eeStore";
-import type { EncryptedEnvelope, PreKeyBundleResponse, DMMessage } from "../types";
+import {useComposerDraftStore} from "../stores/composerDraftStore";
+import {cacheDMMessage,readDMMessageCache} from "./dmMessageCache";
+import type { EncryptedEnvelope, PreKeyBundleResponse, DMMessage, GroupDMMessage } from "../types";
 import type { SignalWireMessage } from "./types";
 
 // ──────────────────────────────────
@@ -29,45 +33,54 @@ import type { SignalWireMessage } from "./types";
 // ──────────────────────────────────
 
 /**
- * FIFO plaintext cache for sent DM messages.
+ * Source-bound plaintext cache for sent DM messages.
  *
  * Signal Protocol cannot create an envelope for the sender's own device
  * (no Double Ratchet session to self). So on WS echo, the sender cannot
  * decrypt its own message.
  *
  * Solution (Signal Desktop / WhatsApp model):
- * Plaintext is pushed to an in-memory FIFO queue BEFORE the API call.
- * On WS echo, it's popped from the queue. After API response, it's
+ * Plaintext is pushed with its ciphertext/metadata BEFORE the API call.
+ * On WS echo, the matching entry is removed. After API response, it's
  * persisted to IndexedDB for historical message access.
  *
  * Two-phase cache:
- * 1. preSendQueue: channelId → E2EEPayload[] (FIFO) — pushed before API call
+ * 1. preSendQueue: channelId → source/payload entries — pushed before API call
  * 2. IndexedDB messageCache: messageId → content — persisted after API response
  *
- * No race condition: preSendQueue is set synchronously before the API call,
- * and WS echo only arrives after the server processes the message.
+ * The queue is populated before POST so an early WS echo can find it.
+ * Runtime echo matching never falls back to a different queued entry.
+ * This identifies a local send; it is not server-side sender authentication.
  */
-const preSendQueue = new Map<string, E2EEPayload[]>();
+type SentPlaintextSource={ciphertext:string;metadata?:string|null};
+type SentPlaintextEntry={payload:E2EEPayload;source?:string};
+const preSendQueue = new Map<string, SentPlaintextEntry[]>();
+const sentSource=(source:SentPlaintextSource)=>JSON.stringify([source.ciphertext,source.metadata??null]);
 
 /**
  * Local device id the queued entries were pushed under. The WS handler only
  * pops for echoes whose sender_device_id is the CURRENT local device, so an
  * entry pushed before a recovery restore (which changes the id) would never
  * match its own echo and would instead be popped onto a later send's echo.
- * Every queue access first drops the whole queue if the id has moved on.
+ * Every access drops the queue if the device or composer/session generation
+ * has moved on, including same-device logout/relogin.
  */
 let preSendQueueDeviceId: string | null = null;
+let preSendQueueGeneration=-1;
 
 function syncPreSendQueueDevice(): void {
   const current = useE2EEStore.getState().localDeviceId;
-  if (current !== preSendQueueDeviceId) {
+  const generation=useComposerDraftStore.getState().generation;
+  if (current !== preSendQueueDeviceId || generation!==preSendQueueGeneration) {
     preSendQueue.clear();
+    editCache.clear();
     preSendQueueDeviceId = current;
+    preSendQueueGeneration=generation;
   }
 }
 
 /** In-memory cache for edit operations. messageId is known, so a direct Map suffices. */
-const editCache = new Map<string, E2EEPayload>();
+const editCache = new Map<string, SentPlaintextEntry[]>();
 
 // ──────────────────────────────────
 // Self-Fanout Reset Lock
@@ -101,23 +114,28 @@ function withSelfFanoutLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** Push plaintext to FIFO queue before API call, so WS echo can find it. */
-export function pushSentPlaintext(dmChannelId: string, payload: E2EEPayload): void {
+export function pushSentPlaintext(dmChannelId: string, payload: E2EEPayload, source?:SentPlaintextSource): void {
   syncPreSendQueueDevice();
+  const entry={payload,source:source?sentSource(source):undefined};
   const queue = preSendQueue.get(dmChannelId);
   if (queue) {
-    queue.push(payload);
+    queue.push(entry);
   } else {
-    preSendQueue.set(dmChannelId, [payload]);
+    preSendQueue.set(dmChannelId, [entry]);
   }
 }
 
-/** Pop own message plaintext from FIFO on WS echo. Order is preserved by server. */
-export function popSentPlaintext(dmChannelId: string): E2EEPayload | null {
+/** Runtime callers supply a source; no match/ambiguous match consumes nothing.
+ * Source-less compatibility calls can consume only source-less legacy entries. */
+export function popSentPlaintext(dmChannelId: string,source?:SentPlaintextSource): E2EEPayload | null {
   syncPreSendQueueDevice();
   const queue = preSendQueue.get(dmChannelId);
   if (!queue || queue.length === 0) return null;
 
-  const payload = queue.shift()!;
+  const key=source?sentSource(source):undefined;
+  const matches=queue.map((entry,index)=>entry.source===key?index:-1).filter(index=>index>=0);
+  if(!matches.length||(source&&matches.length!==1))return null;
+  const payload = queue.splice(matches[0],1)[0].payload;
   if (queue.length === 0) preSendQueue.delete(dmChannelId);
   return payload;
 }
@@ -132,23 +150,34 @@ export function discardLastSentPlaintext(dmChannelId: string): void {
   if (queue.length === 0) preSendQueue.delete(dmChannelId);
 }
 
+/** Remove this send's exact entry, never another concurrent send's payload. */
+export function discardSentPlaintext(dmChannelId:string,payload:E2EEPayload):void{
+  syncPreSendQueueDevice();const queue=preSendQueue.get(dmChannelId);if(!queue)return;
+  const index=queue.findIndex(entry=>entry.payload===payload);if(index<0)return;queue.splice(index,1);if(!queue.length)preSendQueue.delete(dmChannelId);
+}
+
 /** Cache plaintext before edit API call. */
-export function cacheEditPlaintext(messageId: string, payload: E2EEPayload): void {
-  editCache.set(messageId, payload);
+export function cacheEditPlaintext(messageId: string, payload: E2EEPayload,source?:SentPlaintextSource): void {
+  syncPreSendQueueDevice();const entries=editCache.get(messageId)??[];entries.push({payload,source:source?sentSource(source):undefined});editCache.set(messageId,entries);
 }
 
 /** Pop plaintext from edit cache. */
-export function popEditPlaintext(messageId: string): E2EEPayload | null {
-  const payload = editCache.get(messageId) ?? null;
-  if (payload) editCache.delete(messageId);
-  return payload;
+export function popEditPlaintext(messageId: string,source?:SentPlaintextSource): E2EEPayload | null {
+  syncPreSendQueueDevice();const entries=editCache.get(messageId);if(!entries)return null;
+  const key=source?sentSource(source):undefined,matches=entries.map((entry,index)=>entry.source===key?index:-1).filter(index=>index>=0);
+  if(!matches.length||(source&&matches.length!==1))return null;
+  const payload=entries.splice(matches[0],1)[0].payload;if(!entries.length)editCache.delete(messageId);return payload;
+}
+export function discardEditPlaintext(messageId:string,payload:E2EEPayload):void{
+  syncPreSendQueueDevice();const entries=editCache.get(messageId);if(!entries)return;const index=entries.findIndex(entry=>entry.payload===payload);if(index>=0)entries.splice(index,1);if(!entries.length)editCache.delete(messageId);
 }
 
 /** Persist plaintext to IndexedDB after API response for historical access. */
 export async function persistSentPlaintext(
   messageId: string,
   dmChannelId: string,
-  content: string
+  content: string,
+  isCurrent:()=>boolean=()=>true
 ): Promise<void> {
   await keyStorage.cacheDecryptedMessage({
     messageId,
@@ -156,7 +185,7 @@ export async function persistSentPlaintext(
     dmChannelId,
     content,
     timestamp: Date.now(),
-  });
+  },isCurrent);
 }
 
 // ──────────────────────────────────
@@ -211,6 +240,25 @@ export async function encryptDMMessage(
     ))
   );
 
+  return envelopes;
+}
+
+/** Encrypt one group-DM payload for every current member device and for the
+ * sender's other devices. Member IDs must come from the server's current
+ * group snapshot; the group key epoch on the send request prevents a stale
+ * membership snapshot from being accepted after a rekey. */
+export async function encryptGroupDMMessage(
+  currentUserId: string,
+  memberUserIds: readonly string[],
+  localDeviceId: string,
+  plaintext: string
+): Promise<EncryptedEnvelope[]> {
+  const envelopes: EncryptedEnvelope[] = [];
+  const recipients = [...new Set(memberUserIds)].filter((id) => id !== currentUserId);
+  for (const recipientUserId of recipients) {
+    envelopes.push(...await encryptForRecipientDevices(recipientUserId, localDeviceId, plaintext));
+  }
+  envelopes.push(...await encryptForSelfFanout(currentUserId, localDeviceId, plaintext, true));
   return envelopes;
 }
 
@@ -704,12 +752,16 @@ export async function decryptDMMessage(
  * Successfully decrypted messages are cached to IndexedDB for client-side search.
  */
 export async function decryptDMMessages(
-  messages: DMMessage[]
+  messages: DMMessage[],isCurrent:()=>boolean=()=>true,isMessageCurrent:(message:DMMessage)=>boolean=()=>true
 ): Promise<DMMessage[]> {
   const result: DMMessage[] = [];
-  const toCache: import("./types").CachedDecryptedMessage[] = [];
+  const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+  const contextCurrent=()=>isCurrent()&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
 
   for (const msg of messages) {
+    if(!contextCurrent())return [];
+    const current=()=>contextCurrent()&&isMessageCurrent(msg);
+    if(!current())continue;
     if (
       msg.encryption_version === 1 &&
       msg.ciphertext &&
@@ -717,14 +769,18 @@ export async function decryptDMMessages(
     ) {
       // Check IndexedDB cache first — re-decrypting breaks Double Ratchet state
       try {
-        const cached = await keyStorage.getCachedDecryptedMessage(msg.id);
+        const cached = await readDMMessageCache(msg,current);
+        if(!contextCurrent())return [];
+        if(!current())continue;
         if (cached) {
-          result.push({ ...msg, content: cached.content });
+          result.push({ ...msg, content: cached.content,e2ee_file_keys:cached.file_keys });
           continue;
         }
       } catch {
         // Cache read error — fall through to decrypt
       }
+      if(!contextCurrent())return [];
+      if(!current())continue;
 
       // Decrypt via Signal Protocol
       try {
@@ -733,6 +789,8 @@ export async function decryptDMMessages(
           msg.ciphertext,
           msg.sender_device_id
         );
+        if(!contextCurrent())return [];
+        if(!current())continue;
 
         if (payload) {
           result.push({
@@ -741,20 +799,14 @@ export async function decryptDMMessages(
             e2ee_file_keys: payload.file_keys,
           });
 
-          if (payload.content) {
-            toCache.push({
-              messageId: msg.id,
-              channelId: "",
-              dmChannelId: msg.dm_channel_id,
-              content: payload.content,
-              timestamp: new Date(msg.created_at).getTime(),
-            });
-          }
+          try{await cacheDMMessage(msg,payload,current)}catch{console.warn("[dmEncryption] version cache write failed")}
         } else {
           // No envelope found for this device
-          result.push({ ...msg, content: null });
+          result.push({ ...msg, content: null,e2ee_file_keys:undefined });
         }
       } catch (err) {
+        if(!contextCurrent())return [];
+        if(!current())continue;
         console.error(
           `[dmEncryption] Failed to decrypt msg ${msg.id}:`,
           err
@@ -765,7 +817,7 @@ export async function decryptDMMessages(
           error: err instanceof Error ? err.message : "Decryption failed",
           timestamp: Date.now(),
         });
-        result.push({ ...msg, content: null });
+        result.push({ ...msg, content: null,e2ee_file_keys:undefined });
       }
     } else {
       // Plaintext message — pass through
@@ -773,12 +825,57 @@ export async function decryptDMMessages(
     }
   }
 
-  // Batch cache write for performance
-  if (toCache.length > 0) {
-    keyStorage.cacheDecryptedMessages(toCache).catch((err) => {
-      console.error("[dmEncryption] Failed to cache messages:", err);
-    });
-  }
+  return result.filter(isMessageCurrent);
+}
 
-  return result;
+/** Batch decryptor for group DMs. It shares the same Signal envelopes and
+ * local plaintext cache as 1:1 DMs, while keeping the group id as a separate
+ * cache namespace. */
+export async function decryptGroupDMMessages(messages: GroupDMMessage[],isCurrent:()=>boolean=()=>true,isMessageCurrent:(message:GroupDMMessage)=>boolean=()=>true): Promise<GroupDMMessage[]> {
+  const result: GroupDMMessage[] = [];
+  for (const msg of messages) {
+    if(!isCurrent())return [];
+    if(!isMessageCurrent(msg))continue;
+    const active=()=>isCurrent()&&isMessageCurrent(msg);
+    if (!msg.ciphertext || !msg.sender_device_id) {
+      result.push({ ...msg, content: null,e2ee_file_keys:undefined });
+      continue;
+    }
+    const cached = await keyStorage.getCachedDecryptedMessage(msg.id).catch(() => null);
+    if(!isCurrent())return [];
+    if(!isMessageCurrent(msg))continue;
+    try {
+      const tag=await groupMessageCacheTag(msg);
+      if(!isCurrent())return [];
+      if(!isMessageCurrent(msg))continue;
+      const sameScope=cached?.dmChannelId===`group:${msg.group_id}` && cached.channelId==="";
+      const hasFileKeys=!msg.attachments?.length || msg.attachments.every((attachment,index)=>Boolean(groupAttachmentKey(cached?.fileKeys,attachment,index)));
+      const legacyOriginal=sameScope && !cached.encryptedSourceTag && !msg.edited_at && !msg.attachments?.length;
+      if(cached && sameScope && hasFileKeys && (cached.encryptedSourceTag===tag || legacyOriginal)){
+        if(legacyOriginal) {
+          // Preserve pre-versioning original plaintext without replaying a
+          // consumed Signal message. Edited legacy entries stay untouched
+          // unless the current encrypted version can actually be opened.
+          try{await cacheGroupMessage(msg,{content:cached.content},active,tag)}catch{ /* An upgrade failure must not hide the available original. */ }
+          if(!isCurrent())return [];
+          if(!isMessageCurrent(msg))continue;
+        }
+        result.push({...msg,content:cached.content,e2ee_file_keys:cached.fileKeys,decryption_error:undefined});
+        continue;
+      }
+      const payload = await decryptDMMessage(msg.user_id, msg.ciphertext, msg.sender_device_id);
+      if(!isCurrent())return [];
+      if(!isMessageCurrent(msg))continue;
+      result.push({ ...msg, content: payload?.content ?? null, e2ee_file_keys: payload?.file_keys,decryption_error:!payload&&cached?"version_unavailable":undefined });
+      if (payload) {
+        // A cache failure does not invalidate successfully decrypted content.
+        try{await cacheGroupMessage(msg,payload,active,tag)}catch{console.warn("[groupDM] decrypted version cache write failed")}
+      }
+    } catch {
+      if(!isCurrent())return [];
+      if(!isMessageCurrent(msg))continue;
+      result.push({ ...msg, content: null,e2ee_file_keys:undefined,decryption_error:cached?"version_unavailable":undefined });
+    }
+  }
+  return isCurrent()?result.filter(isMessageCurrent):[];
 }

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "verified_at": "2026-10-22T22:20:14Z",
+  "goal_turn_classification": "progress",
+  "scope": "Continuation of the full P0-P11 implementation and final GitHub/Windows delivery goal. This record covers settings workspace changes, not completion of the goal.",
+  "implemented": [
+    "DOM-backed subsection navigation with stable anchors, scroll-spy, keyboard focus and mobile selection",
+    "Cross-panel subsection search available before lazy panels are opened; search destinations retain permission and platform filters",
+    "Bounded in-memory scroll positions scoped to backend, account, settings context, server and panel; delayed restoration after lazy rendering",
+    "Related-settings cards for existing account panels and back navigation to their prior scroll location",
+    "Explicit unsaved-form protection for profile, security, wallpaper upload and diagnostic description; unload warning and stale-confirmation checks",
+    "Nested confirmation keyboard focus containment, Escape cancellation, opener restoration and cancellation of replaced questions",
+    "Device capability explanations without invoking permission prompts; source-dependent shared audio is described as conditional"
+  ],
+  "automated_checks": [
+    {"command": "npm test", "cwd": "client", "result": "passed", "files": 154, "tests": 1704, "note": "Full suite after the initial workspace/confirmation changes. Subsequent cross-panel-search and capability refinements were verified by the focused run below; this is not a claim that the full suite was rerun after every later edit."},
+    {"command": "npx vitest run src/hooks/useSettingsWorkspace.test.tsx src/components/settings/SettingsNav.test.tsx src/components/settings/settingsNavigation.test.ts src/components/settings/SettingsModal.test.tsx src/components/shared/ConfirmDialog.test.tsx src/components/settings/PlatformCapabilities.test.tsx", "cwd": "client", "result": "passed", "files": 6, "tests": 23},
+    {"command": "npx tsc -b", "cwd": "client", "result": "passed", "note": "An initial dynamic-translation-key type error was corrected with literal key types; the subsequent check passed."},
+    {"command": "npx eslint src/hooks/useSettingsWorkspace.ts src/hooks/useSettingsWorkspace.test.tsx src/components/settings/SettingsNav.tsx src/components/settings/SettingsNav.test.tsx src/components/settings/settingsNavigation.ts src/components/settings/PlatformCapabilities.tsx", "cwd": "client", "result": "passed", "errors": 0},
+    {"command": "git diff --check", "cwd": ".", "result": "passed", "note": "Existing LF/CRLF conversion notices were emitted."}
+  ],
+  "browser": {
+    "environment": "Ego Lite task space 10, local web client 127.0.0.1:3131 and isolated SQLite-backed server 127.0.0.1:9191. Reused throwaway test accounts from the preceding preferences check.",
+    "observations": [
+      "At 1440x900, selecting Color and Contrast set scrollTop to 1246, focused settings-accessibility-contrast and updated the active subsection.",
+      "Closing settings, reopening and returning to Accessibility restored the recorded scroll position.",
+      "Following the Appearance related card and using Back returned to the Accessibility source and its scroll location.",
+      "Entering an unsaved email, then attempting navigation, opened a confirmation. Escape preserved the email text and settings dialog; an explicit Discard then navigated.",
+      "Diagnostics displayed eight capability rows; startup, tray and global shortcuts were unavailable on web.",
+      "At 390x844, the mobile subsection selector focused settings-accessibility-motion; document width stayed 390 CSS pixels.",
+      "At 1440x900 and actual in-app scale 200, root zoom was 2, document width stayed 1440 and the Wallpaper subsection remained selected. The reset button restored 100.",
+      "Searching Color from Appearance opened the contrast subsection in Accessibility and focused its heading."
+    ],
+    "screenshots_visually_inspected": [
+      "implementation/verification/p1-workspace-1440.png",
+      "implementation/verification/p1-capabilities-390.png",
+      "implementation/verification/p1-workspace-390.png",
+      "implementation/verification/p1-workspace-200.png"
+    ],
+    "execution_notes": [
+      "The first screenshot attempt found the test browser minimized. The task's current window was restored through its page CDP context before captures.",
+      "Browser.getWindowForTarget with the wrapper target identifier failed without changing page state; querying the current page context succeeded.",
+      "The browser task remains available for the ongoing full goal; no acceptance claim depends on these failed capture attempts."
+    ]
+  },
+  "remaining": [
+    "Implement and register the remaining P2-P11 settings panels, controls, anchors and related-setting cards.",
+    "Extend owner-provided draft guards to remaining server/platform editors and nested edit flows.",
+    "Verify installed Windows behavior, all reference screens at all required widths, and real independent-client/device/media acceptance.",
+    "Preserve the complete active goal: no commit, push, merge or Windows update publication is counted complete by these local checks."
+  ],
+  "delivery": {
+    "user_authorization": "The active goal authorizes commit/push/merge, conflict resolution and Windows update publication after complete implementation and acceptance.",
+    "github_remote_observed": "https://github.com/alfapars-exe/discordd.git",
+    "commit_push_merge_performed": false,
+    "windows_release_performed": false,
+    "production_deployment_performed": false
+  }
+}

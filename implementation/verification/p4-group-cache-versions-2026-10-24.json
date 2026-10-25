@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "New groupMessageCache helper derives group-v1 SHA-256 tags from group/message/author/device/key-epoch/ciphertext context. Identical timestamps and ciphertext lengths do not alias different edits. This is cache identity, NOT sender authentication or cryptographic conversation binding.",
+    "Group batch decryption requires matching cache scope and source tag, and sufficient stored file keys for attachment messages. Send/edit/decrypt cache writes preserve source tags and encrypted attachment keys; own-device and attachment-only messages can reopen without replaying already-consumed Signal envelopes.",
+    "Additive optional encryptedSourceTag/fileKeys fields use the existing IndexedDB object store. No schema bump, blanket cache deletion or production migration. Same-scope unedited legacy originals can be upgraded without replaying Signal; this compatibility path relies on the existing unedited server metadata and is not advertised as authenticity verification.",
+    "Edited/mismatched legacy entries are left intact. If the current encrypted version cannot actually open, content and stale file keys are withheld and a localized version-unavailable explanation is shown. Old cached plaintext is never relabeled as a successfully decrypted edit.",
+    "Per-message freshness guards prevent an old history item from overwriting a newer edit's persistent cache while other valid items in the batch continue. Cache-write failure does not discard a successfully decrypted body or attachment keys.",
+    "Encrypted recovery backup export/import preserves the additive cache fields. Existing backup version/algorithm and old optional-field compatibility remain unchanged; no plaintext network path was introduced."
+  ],
+  "verification": [
+    "6 focused files / 124 tests passed; correct tsc -b and targeted ESLint passed. Initial typecheck caught a test mock returning null where the real Signal decrypt API returns string/throws; changed the test to model a real decrypt failure rather than weakening types.",
+    "Full client regression after cache changes: 222 files / 2091 tests passed in 45.64s. Existing jsdom navigation warnings were not suppressed.",
+    "Encrypted recovery follow-up: keyBackup suite 20 tests passed in 11.31s. The existing real AES-GCM/PBKDF2 round-trip now restores version tags and file keys into an empty cache, so existing-cache priority cannot mask dropped backup fields. TypeScript and targeted lint also passed after the follow-up.",
+    "Real SHA-256 tests vary same-length ciphertext and source context while proving timestamp-only changes do not invalidate an identical encrypted version.",
+    "Tests cover exact-version own-device attachment cache reuse, same-timestamp edits, wrong-conversation cache entries, legacy original upgrade, unavailable legacy edit, per-item supersession, attachment-only empty text, cache-write failure and real IndexedDB field round-trip.",
+    "Local Vite production web build passed (1646 modules, 683ms). Existing config-loader, chunk-size and ineffective-dynamic-import warnings remain. No Windows packaging or production publication was performed."
+  ],
+  "remaining": [
+    "Actual two-client/device edit delivery, offline/reconnect, recovery and attachment playback acceptance remains unperformed; browser space remains handed to the user.",
+    "An edited legacy record without a source fingerprint cannot always be safely matched or re-decrypted after Signal state was consumed. Its old data is preserved, but availability of that latest version is not guaranteed and is explicitly explained.",
+    "Broader Signal/session account-lifecycle isolation, cryptographic conversation binding and concurrent session-write validation remain separate incomplete gates; cache hashing does not prove them.",
+    "Known partial attachment-upload results and original key ordering were subsequently implemented (p4-group-partial-uploads-2026-10-24.json). Unknown network commit outcomes and real file acceptance remain open. Pre-edit draft backup/restore was also implemented (p4-group-edit-drafts-2026-10-24.json); this does not close P4 or overall acceptance."
+  ]
+}

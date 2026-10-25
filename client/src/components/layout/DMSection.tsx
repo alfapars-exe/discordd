@@ -4,6 +4,7 @@
  */
 
 import { useState } from "react";
+import {useGroupSendRestoration} from "../../hooks/useGroupSendRestoration";
 import { useTranslation } from "react-i18next";
 import { useSidebarStore } from "../../stores/sidebarStore";
 import { useMobileStore } from "../../stores/mobileStore";
@@ -19,11 +20,14 @@ import { UserDecoratedAvatar, UserNameplate } from "../cosmetics/UserCosmetics";
 import ContextMenu from "../shared/ContextMenu";
 import DMMuteDurationPicker from "../dm/DMMuteDurationPicker";
 import SelfNotesRow from "../dm/SelfNotesRow";
+import NewConversationModal from "../dm/NewConversationModal";
 import ReportModal from "../shared/ReportModal";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuthStore } from "../../stores/authStore";
 import type { DMChannelWithUser, PublicUser } from "../../types";
+import { useDeveloperSettingsStore } from "../../stores/developerSettingsStore";
+import { useGroupDMStore } from "../../stores/groupDMStore";
 
 type DMSectionProps = {
   onShowUserCard: (user: PublicUser, top: number, left: number) => void;
@@ -39,6 +43,7 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   const confirmDialog = useConfirm();
 
   const dmChannels = useDMStore((s) => s.channels);
+  const isLoading = useDMStore((s) => s.isLoading);
   const selectedDMId = useDMStore((s) => s.selectedDMId);
   const selectDM = useDMStore((s) => s.selectDM);
   const dmUnreadCounts = useDMStore((s) => s.dmUnreadCounts);
@@ -77,9 +82,20 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
 
   const closeAllDrawers = useMobileStore((s) => s.closeAllDrawers);
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const developerMode = useDeveloperSettingsStore((s) => s.developerMode);
   const isExpanded = expandedSections["dms"] ?? true;
   const [requestsExpanded, setRequestsExpanded] = useState(false);
   const [query, setQuery] = useState("");
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const groupDMs = useGroupDMStore((s) => s.groups);
+  useGroupSendRestoration();
+
+
+  function handleGroupClick(groupId: string, name: string) {
+    openTab(groupId, "group-dm", name);
+    void useGroupDMStore.getState().fetchMessages(groupId);
+    closeAllDrawers();
+  }
 
   // The self-DM ("My Notes") has its own pinned row — keep it out of the list.
   const acceptedChannels = dmChannels.filter(
@@ -94,8 +110,9 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleChannels = [...acceptedChannels, ...pendingOutgoing].filter((dm) => {
     if (!normalizedQuery) return true;
-    const name = dm.other_user.display_name || dm.other_user.username;
-    return name.toLocaleLowerCase().includes(normalizedQuery);
+    return [dm.other_user.display_name, dm.other_user.username].some(
+      (name) => name?.toLocaleLowerCase().includes(normalizedQuery)
+    );
   });
 
   function handleDMClick(dmId: string, userName: string) {
@@ -226,14 +243,18 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
     });
 
     // Copy User ID
-    items.push({
-      label: tDM("copyUserId"),
-      onClick: async () => {
-        await copyToClipboard(user.id);
-        addToast("success", tDM("userIdCopied"));
-      },
-      separator: true,
-    });
+    if (developerMode) {
+      items.push({
+        label: tDM("copyUserId"),
+        onClick: async () => {
+          try {
+            await copyToClipboard(user.id);
+            addToast("success", tDM("userIdCopied"));
+          } catch { addToast("error",t("shortcutCopyFailed")); }
+        },
+        separator: true,
+      });
+    }
 
     openMenu(e, items);
   }
@@ -241,35 +262,47 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
   return (
     <>
       <div className="ch-tree-section">
+        <div className="ch-tree-section-heading">
         <button
           className="ch-tree-section-header"
           onClick={() => toggleSection("dms")}
+          aria-expanded={isExpanded}
         >
           <span className={`ch-tree-chevron${isExpanded ? " expanded" : ""}`}>&#x276F;</span>
           <span>{t("directMessages")}</span>
         </button>
+        <button className="ch-new-conversation" aria-label={t("newConversation")} title={t("newConversation")}
+          onClick={() => setShowNewConversation(true)}>+</button>
+        </div>
 
         {isExpanded && (
           <div className="ch-tree-section-body">
             <SelfNotesRow onOpen={handleDMClick} />
-            {(acceptedChannels.length + pendingOutgoing.length) > 3 && (
-              <label className="ch-tree-search">
+            <div className="ch-tree-search">
                 <span className="ch-tree-search-icon" aria-hidden="true">⌕</span>
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t("search")}
-                  aria-label={t("search")}
+                  placeholder={t("searchConversations")}
+                  aria-label={t("searchConversations")}
+                  onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }}
                 />
                 {query && <button type="button" onClick={() => setQuery("")} aria-label={t("clear")}>×</button>}
-              </label>
-            )}
+            </div>
+            {groupDMs.filter((group) => !normalizedQuery || group.name.toLocaleLowerCase().includes(normalizedQuery)).map((group) => (
+              <button key={group.id} className="ch-tree-item ch-tree-dm ch-tree-group-dm" onClick={() => handleGroupClick(group.id, group.name)}>
+                <span className="ch-tree-group-avatar" aria-hidden="true">{group.icon_url ? <img src={group.icon_url} alt="" /> : "◉"}</span>
+                <span className="ch-tree-label">{group.name}</span>
+                <span className="ch-tree-dm-indicators">{group.unread_count > 0 ? <b aria-label={t("shellUnread")}>{group.unread_count}</b> : group.members.length}</span>
+              </button>
+            ))}
             {/* ── Message Requests (collapsible, default collapsed) ── */}
             {pendingChannels.length > 0 && (
               <div className="ch-tree-dm-requests">
                 <button
                   className="ch-tree-dm-requests-label"
                   onClick={() => setRequestsExpanded((v) => !v)}
+                  aria-expanded={requestsExpanded}
                 >
                   <span className={`ch-tree-chevron${requestsExpanded ? " expanded" : ""}`}>&#x276F;</span>
                   <span>{tDM("messageRequests")}</span>
@@ -300,9 +333,19 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
               </div>
             )}
             {/* ── Normal DMs + outgoing pending ── */}
-            {visibleChannels.length === 0 && pendingChannels.length === 0 ? (
-              <div className="ch-tree-placeholder">
-                <span className="ch-tree-placeholder-text">{query ? t("noResults") : "—"}</span>
+            {isLoading && dmChannels.length === 0 ? (
+              <div className="ch-tree-empty" role="status">{t("loading")}</div>
+            ) : visibleChannels.length === 0 && groupDMs.length === 0 ? (
+              <div className="ch-tree-empty" role="status">
+                <p>{normalizedQuery ? t("noResults") : t("noConversationsYet")}</p>
+                {normalizedQuery ? (
+                  <button className="ch-tree-empty-action" onClick={() => setQuery("")}>{t("clear")}</button>
+                ) : (
+                  <button className="ch-tree-empty-action" onClick={() => {
+                    openTab("friends", "friends", t("friends"));
+                    closeAllDrawers();
+                  }}>{t("findFriends")}</button>
+                )}
               </div>
             ) : (
               visibleChannels.map((dm) => {
@@ -360,6 +403,9 @@ function DMSection({ onShowUserCard }: DMSectionProps) {
       </div>
 
       <ContextMenu state={menuState} onClose={closeMenu} />
+      {showNewConversation && <NewConversationModal onClose={() => {
+        setShowNewConversation(false);
+      }} />}
 
       {mutePicker && (
         <DMMuteDurationPicker

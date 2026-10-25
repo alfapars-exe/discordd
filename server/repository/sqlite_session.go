@@ -52,8 +52,8 @@ func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session)
 	// has rolled past 067.
 	hash := hashRefreshToken(session.RefreshToken)
 	query := `
-		INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at)
-		VALUES (?, ?, ?, ?, ?)`
+		INSERT INTO sessions (id, user_id, refresh_token_hash, refresh_token, expires_at, auth_session_id, token_version)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?,''), ?)`
 
 	// expires_at is bound as a pre-formatted "YYYY-MM-DD HH:MM:SS" string, not
 	// the raw time.Time — go-libsql writes time.Time as RFC3339 ("...T...Z"),
@@ -69,6 +69,7 @@ func (r *sqliteSessionRepo) Create(ctx context.Context, session *models.Session)
 		hash,
 		hash, // legacy NOT NULL + UNIQUE column — reuse hash for uniqueness
 		session.ExpiresAt.UTC().Format("2006-01-02 15:04:05"),
+		session.AuthSessionID, session.TokenVersion,
 	)
 
 	if err != nil {
@@ -88,7 +89,7 @@ func (r *sqliteSessionRepo) GetByRefreshToken(ctx context.Context, token string)
 	// rows created since the upgrade.
 	hash := hashRefreshToken(token)
 	query := `
-		SELECT id, user_id, refresh_token, expires_at, created_at
+		SELECT id, user_id, refresh_token, expires_at, created_at, COALESCE(auth_session_id,''),token_version
 		FROM sessions WHERE refresh_token_hash = ?`
 
 	session := &models.Session{}
@@ -96,6 +97,7 @@ func (r *sqliteSessionRepo) GetByRefreshToken(ctx context.Context, token string)
 	err := r.db.QueryRowContext(ctx, query, hash).Scan(
 		&session.ID, &session.UserID, &storedToken,
 		&session.ExpiresAt, &session.CreatedAt,
+		&session.AuthSessionID, &session.TokenVersion,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {

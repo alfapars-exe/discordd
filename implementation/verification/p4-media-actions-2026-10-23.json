@@ -1,0 +1,19 @@
+{
+  "package": "P4",
+  "behaviors": ["p4.media-forward", "p4.media-menu"],
+  "automated": {
+    "command": "vitest run ImageLightbox.test.tsx ForwardMessageModal.test.tsx MessageAttachments.test.tsx; tsc -b tsconfig.json",
+    "result": "passed",
+    "tests": 30
+  },
+  "implemented": [
+    "Viewer receives the complete source message for plaintext and locally decrypted encrypted media",
+    "Forward action reuses the permission-checked destination forwarding flow",
+    "Context menu exposes forward, open original and download actions",
+    "Encrypted attachment forwarding retains the source key metadata so the existing local decrypt and destination re-encrypt path is used"
+  ],
+  "remaining_acceptance": [
+    "Two-account encrypted image forward round-trip",
+    "Touch-device menu and download acceptance"
+  ]
+}

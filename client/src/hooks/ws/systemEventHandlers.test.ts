@@ -19,8 +19,10 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { WSMessage } from "../../types";
+import type { AppNotification, WSMessage } from "../../types";
 import type { WSHandlerContext } from "./types";
+const shell = vi.hoisted(() => ({ enabled: false }));
+vi.mock("../../utils/uiShell", () => ({ get UI_SHELL_V2() { return shell.enabled; } }));
 
 vi.mock("../../stores/channelStore", () => ({
   useChannelStore: {
@@ -41,12 +43,15 @@ vi.mock("../../stores/messageStore", () => ({
   },
 }));
 vi.mock("../../stores/memberStore", () => ({
-  useMemberStore: { getState: () => ({ handleReady: vi.fn(), membersByServer: {} }) },
+  useMemberStore: { getState: () => ({ handleReady: vi.fn(), fetchMembers: vi.fn(), membersByServer: {}, handlePresenceUpdate: vi.fn(), handleMemberUpdate: vi.fn(), handleRoleUpdate: vi.fn(), handleRoleDelete: vi.fn() }) },
 }));
-vi.mock("../../stores/roleStore", () => ({ useRoleStore: { getState: () => ({}) } }));
+vi.mock("../../stores/presenceStore", () => ({
+  usePresenceStore: { getState: () => ({ handleReady: vi.fn(), handlePresenceUpdate: vi.fn() }) },
+}));
+vi.mock("../../stores/roleStore", () => ({ useRoleStore: { getState: () => ({ handleRoleUpdate: vi.fn(), handleRoleDelete: vi.fn() }) } }));
 vi.mock("../../stores/voiceStore", () => ({
   useVoiceStore: {
-    getState: () => ({ currentVoiceChannelId: null, livekitToken: null }),
+    getState: () => ({ currentVoiceChannelId: null, currentVoiceServerId: null, livekitToken: null, handleForceDisconnect: vi.fn(), updateUserInfo: vi.fn(), setVoiceEpoch: vi.fn() }),
   },
 }));
 vi.mock("../../stores/serverStore", () => ({
@@ -54,6 +59,8 @@ vi.mock("../../stores/serverStore", () => ({
     getState: () => ({
       setServersFromReady: vi.fn(),
       setMutedServersFromReady: vi.fn(),
+      handleServerDelete: vi.fn(),
+      handleServerUpdate: vi.fn(),
     }),
   },
 }));
@@ -65,8 +72,11 @@ vi.mock("../../stores/authStore", () => ({
 }));
 vi.mock("../../stores/dmStore", () => ({
   useDMStore: {
-    getState: () => ({ fetchChannels: vi.fn(), fetchDMSettings: vi.fn() }),
+    getState: () => ({ fetchChannels: vi.fn(), fetchDMSettings: vi.fn(), handleDMAuthorUpdate: vi.fn() }),
   },
+}));
+vi.mock("../../stores/groupDMStore", () => ({
+  useGroupDMStore: { getState: () => ({ fetchGroups: vi.fn(), groups: [] }) },
 }));
 vi.mock("../../stores/friendStore", () => ({
   useFriendStore: { getState: () => ({ fetchFriends: vi.fn(), fetchRequests: vi.fn() }) },
@@ -96,6 +106,7 @@ vi.mock("../../utils/notifications", () => ({ showNotification: vi.fn() }));
 vi.mock("../../stores/uiStore", () => ({
   useUIStore: {
     getState: () => ({
+      destination: { type: "text", channelId: "single-channel", label: "Single", serverInfo: { serverId: "single-server" } },
       panels: {
         "panel-1": {
           id: "panel-1",
@@ -163,10 +174,129 @@ async function loadFresh() {
 }
 
 beforeEach(() => {
+  vi.restoreAllMocks();
   vi.clearAllMocks();
+  shell.enabled = false;
 });
 
 describe("handleSystemEvent — ready reconnect refetch", () => {
+  it("syncs self manual status only when presence explicitly says it is not automatic", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useAuthStore } = await import("../../stores/authStore");
+    const setManualStatus = vi.fn();
+    const updateUser = vi.fn();
+    const state = {
+      ...useAuthStore.getState(),
+      user: { id: "me" },
+      setManualStatus,
+      updateUser,
+    } as unknown as ReturnType<typeof useAuthStore.getState>;
+    vi.spyOn(useAuthStore, "getState").mockReturnValue(state);
+
+    await handleSystemEvent({ op: "presence_update", d: { user_id: "me", status: "dnd", is_auto: false } } as WSMessage, ctx, vi.fn());
+    expect(setManualStatus).toHaveBeenCalledExactlyOnceWith("dnd");
+    expect(updateUser).toHaveBeenCalledExactlyOnceWith({ status: "dnd" });
+
+    setManualStatus.mockClear();
+    updateUser.mockClear();
+    await handleSystemEvent({ op: "presence_update", d: { user_id: "me", status: "idle", is_auto: true } } as WSMessage, ctx, vi.fn());
+    expect(setManualStatus).not.toHaveBeenCalled();
+    expect(updateUser).toHaveBeenCalledExactlyOnceWith({ status: "idle" });
+
+    setManualStatus.mockClear();
+    await handleSystemEvent({ op: "presence_update", d: { user_id: "me", status: "online" } } as WSMessage, ctx, vi.fn());
+    expect(setManualStatus).not.toHaveBeenCalled();
+  });
+
+  it("routes private media invalidations and refreshes mounted labels on ready", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const sync = await import("../../utils/mediaLabelSync");
+    const reference = {source_kind:"dm" as const,channel_id:"private",message_id:"message",revision:"original",fingerprint:"a".repeat(64)};
+    const notify = vi.fn();
+    const unsubscribe = sync.subscribeMediaLabelChanges("me",reference,notify);
+    try {
+      await handleSystemEvent({op:"media_label_changed",d:{...reference,user_id:"foreign"}},ctx,vi.fn());
+      expect(notify).not.toHaveBeenCalled();
+      await handleSystemEvent({op:"media_label_changed",d:{...reference,user_id:"me"}},ctx,vi.fn());
+      expect(notify).toHaveBeenCalledOnce();
+      await handleSystemEvent(readyMsg,ctx,vi.fn());
+      expect(notify).toHaveBeenCalledTimes(2);
+    } finally { unsubscribe(); }
+  });
+  it.each(["reaction", "anniversary", "stream"] as const)("plays a %s cue only on the first persistent delivery", async (kind) => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useNotificationStore } = await import("../../stores/notificationStore");
+    const { playNotificationSound } = await import("../../utils/sounds");
+    const items: AppNotification[] = [];
+    vi.spyOn(useNotificationStore, "getState").mockReturnValue({
+      ...useNotificationStore.getState(), items,
+      handleCreate: (n: AppNotification) => { if (!items.some((item) => item.id === n.id)) items.push(n); },
+    });
+    const n: AppNotification = { id: kind, user_id: "me", kind: "system", actor_id: "other", actor: null, server_id: null, channel_id: null, message_id: "message", dm_channel_id: "private", payload: kind === "reaction" ? { subtype: "reaction", emoji: "👍" } : kind === "anniversary" ? { action: "friend_anniversary", years: 2 } : { action: "stream_start" }, read_at: null, created_at: "2026-10-24T00:00:00Z" };
+    await handleSystemEvent({ op: "notification_create", d: n }, ctx, vi.fn());
+    await handleSystemEvent({ op: "notification_create", d: n }, ctx, vi.fn());
+    expect(playNotificationSound).toHaveBeenCalledTimes(1);
+    expect(items).toHaveLength(1);
+  });
+  it("suppresses a delayed group-DM reaction toast after membership is no longer available", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useNotificationStore } = await import("../../stores/notificationStore");
+    const { showNotification } = await import("../../utils/notifications");
+    const items: AppNotification[] = [];
+    vi.spyOn(useNotificationStore, "getState").mockReturnValue({
+      ...useNotificationStore.getState(), items,
+      handleCreate: (n: AppNotification) => { if (!items.some((item) => item.id === n.id)) items.push(n); },
+    });
+    const notification: AppNotification = {
+      id: "group-reaction", user_id: "me", kind: "system", actor_id: "other", actor: null,
+      server_id: null, channel_id: null, message_id: "message", dm_channel_id: null,
+      payload: { subtype: "reaction", group_id: "group-one", emoji: "👍" }, read_at: null,
+      created_at: "2026-10-24T00:00:00Z",
+    };
+    await handleSystemEvent({ op: "notification_create", d: notification }, ctx, vi.fn());
+
+    const options = vi.mocked(showNotification).mock.calls[0]?.[0];
+    expect(options?.isStillEligible?.()).toBe(false);
+  });
+  it("server updates force a fresh role list for the originating server", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useMemberStore } = await import("../../stores/memberStore");
+    const members = useMemberStore.getState();
+    vi.spyOn(useMemberStore, "getState").mockReturnValue(members);
+    await handleSystemEvent({ op: "server_update", d: { id: "background-server", owner_id: "new-owner", e2ee_enabled: false } } as WSMessage, ctx, vi.fn());
+    expect(members.fetchMembers).toHaveBeenCalledExactlyOnceWith("background-server", true);
+  });
+  it.each(["role_update", "role_delete", "member_update"] as const)("%s refreshes the originating server rather than the currently browsed one", async (op) => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useChannelStore } = await import("../../stores/channelStore");
+    const channels = useChannelStore.getState();
+    vi.spyOn(useChannelStore, "getState").mockReturnValue(channels);
+
+    await handleSystemEvent({ op, server_id: "background-server", d: { id: "me", roles: [] } } as WSMessage, ctx, vi.fn());
+
+    expect(channels.fetchChannels).toHaveBeenCalledExactlyOnceWith("background-server");
+  });
+  it("delegates server removal without forcing an unrelated voice session to disconnect", async () => {
+    const { handleSystemEvent } = await loadFresh();
+    const { useVoiceStore } = await import("../../stores/voiceStore");
+    const { useServerStore } = await import("../../stores/serverStore");
+    const voice = { ...useVoiceStore.getState(), currentVoiceChannelId: "voice-one", currentVoiceServerId: "one" };
+    vi.spyOn(useVoiceStore, "getState").mockReturnValue(voice);
+    const servers = useServerStore.getState();
+    vi.spyOn(useServerStore, "getState").mockReturnValue(servers);
+
+    await handleSystemEvent({ op: "server_delete", d: { id: "two" } }, ctx, vi.fn());
+
+    expect(servers.handleServerDelete).toHaveBeenCalledExactlyOnceWith("two");
+    expect(voice.handleForceDisconnect).not.toHaveBeenCalled();
+  });
+  it("heals only the visible V2 destination, not rollback tabs or stale sidebar selections", async () => {
+    shell.enabled = true;
+    const { handleSystemEvent, fetchMessages } = await loadFresh();
+    await handleSystemEvent(readyMsg, ctx, vi.fn());
+    await handleSystemEvent(readyMsg, ctx, vi.fn());
+    expect(fetchMessages).toHaveBeenCalledExactlyOnceWith("single-channel", "single-server");
+  });
   it("does NOT invalidate or refetch on the first ready (initial connect)", async () => {
     const { handleSystemEvent, invalidateFetchedFlags, fetchMessages } = await loadFresh();
 

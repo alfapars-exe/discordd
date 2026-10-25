@@ -22,6 +22,7 @@
  */
 
 import type { APIResponse } from "../types";
+import { publishAuthGenerationChange } from "./authSessionEvents";
 import {
   API_BASE_URL,
   SERVER_URL,
@@ -122,6 +123,10 @@ function withUpstreamHeader(headers: Record<string, string>): Record<string, str
 // visible to scripts that can't intercept the in-memory variable
 // directly (which is a much higher bar than reading a known storage key).
 let accessTokenMemory: string | null = null;
+let authAccountMemory: string | null = null;
+// Login/logout delimit an identity, unlike an ordinary token refresh.
+let authGeneration = 0;
+export function getAuthGeneration(): number { return authGeneration; }
 
 // Sweep any leftovers from prior storage schemes so a stored XSS that
 // scans localStorage can't lift a stale credential we no longer write.
@@ -136,7 +141,16 @@ function getAccessToken(): string | null {
   return accessTokenMemory;
 }
 
-function setTokens(access: string, _refresh: string): void {
+/** Identifier only, not a signature/authorization check. The server owns that. */
+export function getAccessSessionID(token: string | null = getAccessToken()): string | null {
+  try {
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.sid === "string" && payload.sid ? payload.sid : null;
+  } catch { return null; }
+}
+
+function setTokens(access: string, _refresh: string, accountId?: string): void {
   // Access token stays in memory only — see the comment at the top of
   // this file for the rationale. The _refresh parameter is unused; it
   // remains in the signature so the rest of the auth code can keep
@@ -145,10 +159,18 @@ function setTokens(access: string, _refresh: string): void {
   // body (AuthTokens.RefreshToken is `json:"-"` now), so most callers
   // already pass an empty string.
   accessTokenMemory = access;
+  authAccountMemory = accountId ?? null;
+  authGeneration++;
+  refreshPromise = null;
+  publishAuthGenerationChange(authGeneration);
 }
 
 function clearTokens(): void {
   accessTokenMemory = null;
+  authAccountMemory = null;
+  authGeneration++;
+  refreshPromise = null;
+  publishAuthGenerationChange(authGeneration);
   // Sweep historical entries — if a user was signed in under the old
   // localStorage scheme we still want logout to evict whatever they
   // had cached. New code never writes these keys.
@@ -168,25 +190,32 @@ function clearTokens(): void {
  * tokens and causing unexpected logouts.
  */
 let refreshPromise: Promise<boolean> | null = null;
+// Refresh is shared by HTTP and WebSocket consumers, so it must release its
+// promise lock even when the transport or response body stops making progress.
+const REFRESH_TIMEOUT_MS = 15_000;
 
 async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
-  refreshPromise = doRefresh();
+  const pending = doRefresh(authGeneration);
+  refreshPromise = pending;
   try {
-    return await refreshPromise;
+    return await pending;
   } finally {
-    refreshPromise = null;
+    if (refreshPromise === pending) refreshPromise = null;
   }
 }
 
-async function doRefresh(): Promise<boolean> {
+async function doRefresh(generation: number): Promise<boolean> {
+  const expectedAccount = authAccountMemory;
+  const expectedSession = getAccessSessionID();
   // The refresh token is delivered automatically via the HttpOnly cookie
   // because we pass `credentials: 'include'`. We send an empty body so the
   // server-side handler reads the cookie (legacy clients can still pass
   // refresh_token in the body if they don't manage cookies).
+  const lifetime = requestLifetime(REFRESH_TIMEOUT_MS);
   try {
-    const res = await fetch(apiUrl("/auth/refresh"), {
+    const res = await lifetime.wait(() => fetch(apiUrl("/auth/refresh"), {
       method: "POST",
       headers: withUpstreamHeader({
         "Content-Type": "application/json",
@@ -196,9 +225,11 @@ async function doRefresh(): Promise<boolean> {
         [CLIENT_HINT_HEADER]: clientHint(),
       }),
       credentials: "include",
-      body: JSON.stringify({}),
-    });
+      body: JSON.stringify({ ...(expectedAccount ? { expected_user_id: expectedAccount } : {}), ...(expectedSession ? { expected_session_id: expectedSession } : {}) }),
+      signal: lifetime.signal,
+    }));
 
+    if (generation !== authGeneration) return false;
     if (!res.ok) {
       // Only clear tokens on explicit auth rejection — 5xx/429/network errors
       // don't mean the token is invalid, just that the server/network failed.
@@ -214,14 +245,19 @@ async function doRefresh(): Promise<boolean> {
       return false;
     }
 
-    const data: APIResponse<{ access_token: string; refresh_token: string }> =
-      await res.json();
+    const data: APIResponse<{ access_token: string; refresh_token: string; user?: { id: string } }> =
+      await lifetime.wait(() => res.json());
 
+    if (generation !== authGeneration) return false;
     if (data.success && data.data) {
-      // The server has already rotated the cookie via Set-Cookie. We still
-      // pass the body's refresh_token to setTokens for callsite stability;
-      // setTokens deliberately drops it on the floor.
-      setTokens(data.data.access_token, data.data.refresh_token);
+      // Defense in depth for older servers: never install a different user's
+      // token behind an already-bound account UI. The server-side constraint
+      // also prevents rotating that other account's cookie in the first place.
+      if (expectedAccount && data.data.user?.id !== expectedAccount) return false;
+      authAccountMemory = data.data.user?.id ?? expectedAccount;
+      // The server rotated its HttpOnly cookie. Refresh the access token without
+      // advancing the account generation used by in-flight request guards.
+      accessTokenMemory = data.data.access_token;
       return true;
     }
 
@@ -229,48 +265,92 @@ async function doRefresh(): Promise<boolean> {
   } catch {
     // Network error (timeout, DNS, offline) — tokens may still be valid, don't clear.
     return false;
+  } finally {
+    lifetime.dispose();
   }
 }
 
 type RequestOptions = {
+  /** Credential login must not use a prior session to retry a factor challenge. */
+  skipAuthRefresh?: boolean;
+  /** Do not replay a one-time-code operation on a credential-error 401. */
+  retryUnauthorized?: boolean;
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
   /**
-   * Abort the request after this many ms and resolve with `isTimeout: true`.
+   * Bound the entire request (refresh, retries and response body included) by
+   * this many ms and resolve with `isTimeout: true`.
    * Opt-in per call site — there is deliberately NO global default: large
    * multipart uploads and slow-but-progressing GETs must not be cut off.
    * Used by the chat send path so a stalled connection can't freeze the
    * composer indefinitely.
    */
   timeoutMs?: number;
+  /** Cancel an account-scoped request, including a retry after token refresh. */
+  signal?: AbortSignal;
+  isCurrent?: () => boolean;
 };
 
 /**
- * Core HTTP request function. Generic type <T> specifies the expected response data type.
- *
- * Usage:
- *   const data = await apiClient<User[]>("/users");
- *   const user = await apiClient<User>("/users/me", { method: "PATCH", body: { display_name: "New" } });
+ * One lifetime spans every await in a logical request. Racing each operation
+ * also settles a stalled body reader / non-cooperative transport. The operation
+ * itself is not cancelled here: fetch receives this lifetime's signal, whereas
+ * a shared refresh has its OWN lifetime and must survive a caller's abort.
  */
-/**
- * Runs fetch with an optional timeout. A FRESH AbortController per physical
- * fetch: the 401-refresh retry re-fetches with the same RequestInit, and a
- * shared already-aborted signal would make that retry fail instantly.
- */
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs?: number
-): Promise<Response> {
-  if (!timeoutMs) return fetch(url, init);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
+function requestLifetime(timeoutMs?: number, callerSignal?: AbortSignal) {
+  const bounded = typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0;
+  const controller = bounded ? new AbortController() : undefined;
+  const signal = controller?.signal ?? callerSignal;
+  let timedOut = false;
+  const abort = () => controller?.abort();
+  if (controller) {
+    if (callerSignal?.aborted) controller.abort();
+    else callerSignal?.addEventListener("abort", abort, { once: true });
   }
+  const timer = bounded ? setTimeout(() => {
+    timedOut = true;
+    controller!.abort();
+  }, timeoutMs) : undefined;
+
+  return {
+    signal,
+    timedOut: () => timedOut,
+    wait<T>(operation: () => Promise<T>): Promise<T> {
+      if (!signal) return operation();
+      return new Promise<T>((resolve, reject) => {
+        const onAbort = () => {
+          signal.removeEventListener("abort", onAbort);
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        };
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+        try {
+          operation().then(
+            (value) => {
+              signal.removeEventListener("abort", onAbort);
+              if (signal.aborted) onAbort();
+              else resolve(value);
+            },
+            (error: unknown) => {
+              signal.removeEventListener("abort", onAbort);
+              reject(error);
+            },
+          );
+        } catch (error) {
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        }
+      });
+    },
+    dispose() {
+      if (timer !== undefined) clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", abort);
+    },
+  };
 }
 
 /** Envelope for a request cut off by RequestOptions.timeoutMs. */
@@ -284,156 +364,180 @@ function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
 }
 
+/** Core HTTP request, with opt-in total deadline and account cancellation. */
 export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<APIResponse<T>> {
-  const { method = "GET", body, headers: extraHeaders, timeoutMs } = options;
+  const { method = "GET", body, headers: extraHeaders, timeoutMs, signal, isCurrent } = options;
+  const cancelled = () => signal?.aborted || (isCurrent && !isCurrent());
+  const cancellation = (): APIResponse<T> => ({ success: false, error: "request_cancelled" });
+  if (cancelled()) return cancellation();
 
-  const headers: Record<string, string> = withUpstreamHeader({
-    ...extraHeaders,
-    // Set after the spread so a caller-supplied header can never drop or
-    // spoof the client hint — the server's cookie handling depends on it.
-    [CLIENT_HINT_HEADER]: clientHint(),
-  });
-
-  // Proactive refresh — if the access token is inside the 5-minute pre-
-  // expiry window, refresh BEFORE issuing the request rather than waiting
-  // for the 401-retry cycle. The refresh promise lock in
-  // refreshAccessToken() collapses parallel requests onto a single network
-  // call. If refresh fails we still send with the stale token; the 401
-  // handler below will try once more and then propagate the failure.
-  let token = getAccessToken();
-  if (token && isTokenAboutToExpire(token)) {
-    await refreshAccessToken();
-    token = getAccessToken();
-  }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  if (body && !(body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const fetchOptions: RequestInit = {
-    method,
-    headers,
-    // Cookies (HttpOnly refresh token) ride along automatically. Server
-    // CORS already restricts allowed origins so this isn't a CSRF vector.
-    credentials: "include",
-  };
-
-  if (body) {
-    fetchOptions.body =
-      body instanceof FormData ? body : JSON.stringify(body);
-  }
-
-  let res: Response;
-
+  const lifetime = requestLifetime(timeoutMs, signal);
   try {
-    res = await fetchWithTimeout(apiUrl(endpoint), fetchOptions, timeoutMs);
-  } catch (err) {
-    if (isAbortError(err)) {
-      console.error(`[apiClient] ${method} ${endpoint}: timed out after ${timeoutMs}ms`);
-      return timeoutResponse<T>();
-    }
-    const message =
-      err instanceof Error ? err.message : "Network request failed";
-    console.error(`[apiClient] ${method} ${endpoint}:`, message);
-    // isNetworkError lets sendWithRetryAndToast decide "worth retrying"
-    // vs "give up" without string-matching the error message.
-    return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
-  }
+    const headers: Record<string, string> = withUpstreamHeader({
+      ...extraHeaders,
+      // Set after the spread so a caller-supplied header can never drop or
+      // spoof the client hint — the server's cookie handling depends on it.
+      [CLIENT_HINT_HEADER]: clientHint(),
+    });
 
-  // 401 — attempt token refresh.
-  //
-  // Detailed status logging is dev-only. In production the same trace
-  // would help an attacker correlate "refresh failed" with "retry"
-  // timing; the only useful signal for end-users is the eventual error,
-  // which is already returned to the caller below.
-  const isDev = import.meta.env?.DEV;
-  if (res.status === 401) {
-    // Refresh token cookie is HttpOnly post-C2 — JS can't read it. We
-    // just attempt refresh; the server-side cookie presence is what
-    // matters. The old `getRefreshToken()` gate guarded against a
-    // pre-cookie storage scheme that no longer exists.
-    if (isDev) {
-      console.warn(`[apiClient] 401 on ${method} ${endpoint} — attempting refresh`);
+    // Proactive refresh — if the access token is inside the 5-minute pre-
+    // expiry window, refresh BEFORE issuing the request rather than waiting
+    // for the 401-retry cycle. The refresh promise lock in
+    // refreshAccessToken() collapses parallel requests onto a single network
+    // call. If refresh fails we still send with the stale token; the 401
+    // handler below will try once more and then propagate the failure.
+    let token = getAccessToken();
+    if (!options.skipAuthRefresh && token && isTokenAboutToExpire(token)) {
+      await lifetime.wait(refreshAccessToken);
+      if (cancelled()) return cancellation();
+      token = getAccessToken();
     }
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      headers["Authorization"] = `Bearer ${getAccessToken()}`;
-      try {
-        res = await fetchWithTimeout(
-          apiUrl(endpoint),
-          { ...fetchOptions, headers },
-          timeoutMs
-        );
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    if (body && !(body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    const fetchOptions: RequestInit = {
+      method,
+      headers,
+      // Cookies (HttpOnly refresh token) ride along automatically. Server
+      // CORS already restricts allowed origins so this isn't a CSRF vector.
+      credentials: "include",
+      signal: lifetime.signal,
+    };
+
+    if (body) {
+      fetchOptions.body =
+        body instanceof FormData ? body : JSON.stringify(body);
+    }
+
+    let res = await lifetime.wait(() => fetch(apiUrl(endpoint), fetchOptions));
+
+    // 401 — attempt token refresh.
+    //
+    // Detailed status logging is dev-only. In production the same trace
+    // would help an attacker correlate "refresh failed" with "retry"
+    // timing; the only useful signal for end-users is the eventual error,
+    // which is already returned to the caller below.
+    if (cancelled()) return cancellation();
+    const isDev = import.meta.env?.DEV;
+    if (res.status === 401 && !options.skipAuthRefresh && options.retryUnauthorized !== false) {
+      // Refresh token cookie is HttpOnly post-C2 — JS can't read it. We
+      // just attempt refresh; the server-side cookie presence is what
+      // matters. The old `getRefreshToken()` gate guarded against a
+      // pre-cookie storage scheme that no longer exists.
+      if (isDev) {
+        console.warn(`[apiClient] 401 on ${method} ${endpoint} — attempting refresh`);
+      }
+      const refreshed = await lifetime.wait(refreshAccessToken);
+      if (cancelled()) return cancellation();
+      if (refreshed) {
+        headers["Authorization"] = `Bearer ${getAccessToken()}`;
+        res = await lifetime.wait(() => fetch(apiUrl(endpoint), { ...fetchOptions, headers }));
         if (isDev) {
           console.warn(`[apiClient] retry after refresh: ${method} ${endpoint} status=${res.status}`);
         }
-      } catch (err) {
-        if (isAbortError(err)) {
-          if (isDev) {
-            console.error(`[apiClient] ${method} ${endpoint} (retry): timed out after ${timeoutMs}ms`);
-          }
-          return timeoutResponse<T>();
-        }
-        const message =
-          err instanceof Error ? err.message : "Network request failed";
-        if (isDev) {
-          console.error(`[apiClient] ${method} ${endpoint} (retry):`, message);
-        }
-        return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
+      } else if (isDev) {
+        console.warn(`[apiClient] refresh FAILED on ${method} ${endpoint} — returning original 401`);
       }
-    } else if (isDev) {
-      console.warn(`[apiClient] refresh FAILED on ${method} ${endpoint} — returning original 401`);
     }
-  }
 
-  // 204 No Content — no body to parse
-  if (res.status === 204) {
-    return { success: true, data: undefined as T, status: 204 };
-  }
+    if (cancelled()) return cancellation();
+    // 204 No Content — no body to parse
+    if (res.status === 204) {
+      return { success: true, data: undefined as T, status: 204 };
+    }
 
-  // HF Space "uyku" veya boot durumunda HF edge katmanı 502/503/504 + HTML
-  // gövdesi döner ("Your space is in error, check its status on hf.co"). Bu
-  // bir uygulama hatası değil, geçici altyapı durumu. JSON parse'tan ÖNCE
-  // yakalayıp stable bir sentinel string döndürüyoruz: üst katmanlar (auth
-  // localizer, useServerWakeUp hook) bu prefix'i okuyup retry/UI kararı verir.
-  if (res.status === 502 || res.status === 503 || res.status === 504) {
-    return {
-      success: false,
-      error: `service_unavailable: HTTP ${res.status}`,
-      status: res.status,
-    } as APIResponse<T>;
-  }
-
-  try {
-    const data: APIResponse<T> = await res.json();
-    // Tag status on the JSON envelope so downstream helpers (retry, rate
-    // limit toast) can branch on the HTTP code without string-matching.
-    data.status = res.status;
-    return data;
-  } catch {
-    // text/html dönmüşse büyük ihtimalle HF/proxy hata sayfasıdır — yine
-    // sentinel'e düş ki UI ham HTML değil dostça mesaj göstersin.
-    const contentType = res.headers.get("content-type") ?? "";
-    if (contentType.includes("text/html")) {
-      console.error(`[apiClient] ${method} ${endpoint}: HTML response (HTTP ${res.status})`);
+    // HF edge failures are usually HTML. Preserve structured API JSON on
+    // the same statuses: it can carry a safe, actionable MUSIC_* error code.
+    const isGatewayError = res.status === 502 || res.status === 503 || res.status === 504;
+    const isJsonResponse = (res.headers.get("content-type") ?? "").toLowerCase().includes("application/json");
+    if (isGatewayError && !isJsonResponse) {
       return {
         success: false,
         error: `service_unavailable: HTTP ${res.status}`,
         status: res.status,
       } as APIResponse<T>;
     }
-    console.error(`[apiClient] ${method} ${endpoint}: invalid JSON (HTTP ${res.status})`);
-    return {
-      success: false,
-      error: `HTTP ${res.status}: ${res.statusText}`,
-      status: res.status,
-    } as APIResponse<T>;
+
+    try {
+      const data: APIResponse<T> = await lifetime.wait(() => res.json());
+      if (cancelled()) return cancellation();
+      // Tag status on the JSON envelope so downstream helpers (retry, rate
+      // limit toast) can branch on the HTTP code without string-matching.
+      data.status = res.status;
+      return data;
+    } catch (err) {
+      if (cancelled() || lifetime.timedOut() || isAbortError(err)) throw err;
+      // text/html dönmüşse büyük ihtimalle HF/proxy hata sayfasıdır — yine
+      // sentinel'e düş ki UI ham HTML değil dostça mesaj göstersin.
+      const contentType = res.headers.get("content-type") ?? "";
+      if (isGatewayError || contentType.includes("text/html")) {
+        console.error(`[apiClient] ${method} ${endpoint}: HTML response (HTTP ${res.status})`);
+        return {
+          success: false,
+          error: `service_unavailable: HTTP ${res.status}`,
+          status: res.status,
+        } as APIResponse<T>;
+      }
+      console.error(`[apiClient] ${method} ${endpoint}: invalid JSON (HTTP ${res.status})`);
+      return {
+        success: false,
+        error: `HTTP ${res.status}: ${res.statusText}`,
+        status: res.status,
+      } as APIResponse<T>;
+    }
+  } catch (err) {
+    if (cancelled()) return cancellation();
+    if (lifetime.timedOut() || isAbortError(err)) {
+      console.error(`[apiClient] ${method} ${endpoint}: timed out after ${timeoutMs}ms`);
+      return timeoutResponse<T>();
+    }
+    const message = err instanceof Error ? err.message : "Network request failed";
+    console.error(`[apiClient] ${method} ${endpoint}:`, message);
+    // Never label a timeout as a network error: automatic retries of a write
+    // that may have reached the server could otherwise duplicate it.
+    return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
+  } finally {
+    lifetime.dispose();
+  }
+}
+
+/** Authenticated binary download with the same cookie/token refresh boundary as apiClient. */
+export async function apiDownload(endpoint: string, filename: string): Promise<APIResponse<void>> {
+  const headers = withUpstreamHeader({ [CLIENT_HINT_HEADER]: clientHint() });
+  let token = getAccessToken();
+  if (token && isTokenAboutToExpire(token)) {
+    await refreshAccessToken();
+    token = getAccessToken();
+  }
+  if (token) headers.Authorization = `Bearer ${token}`;
+  try {
+    let res = await fetch(apiUrl(endpoint), { headers, credentials: "include" });
+    if (res.status === 401 && await refreshAccessToken()) {
+      headers.Authorization = `Bearer ${getAccessToken()}`;
+      res = await fetch(apiUrl(endpoint), { headers, credentials: "include" });
+    }
+    if (!res.ok) return { success: false, error: `download_failed: HTTP ${res.status}`, status: res.status };
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return { success: true, data: undefined, status: res.status };
+  } catch {
+    return { success: false, error: "network_error", isNetworkError: true };
   }
 }
 

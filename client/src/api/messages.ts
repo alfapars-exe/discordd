@@ -24,7 +24,8 @@ export async function getMessages(
   serverId: string,
   channelId: string,
   before?: string,
-  limit?: number
+  limit?: number,
+  options?: { timeoutMs?: number; signal?: AbortSignal; isCurrent?: () => boolean }
 ) {
   const params = new URLSearchParams();
   if (before) params.set("before", before);
@@ -33,7 +34,7 @@ export async function getMessages(
   const query = params.toString();
   const endpoint = `/servers/${serverId}/channels/${channelId}/messages${query ? `?${query}` : ""}`;
 
-  return apiClient<MessagePage>(endpoint);
+  return apiClient<MessagePage>(endpoint, options);
 }
 
 /**
@@ -44,12 +45,14 @@ export function getMessagesAround(
   serverId: string,
   channelId: string,
   messageId: string,
-  limit?: number
+  limit?: number,
+  options?: { timeoutMs?: number; signal?: AbortSignal; isCurrent?: () => boolean }
 ) {
   const params = new URLSearchParams({ around: messageId });
   if (limit) params.set("limit", limit.toString());
   return apiClient<MessagePage>(
-    `/servers/${serverId}/channels/${channelId}/messages?${params}`
+    `/servers/${serverId}/channels/${channelId}/messages?${params}`,
+    options
   );
 }
 
@@ -76,7 +79,8 @@ export async function sendMessage(
   channelId: string,
   content: string,
   files?: File[],
-  replyToId?: string
+  replyToId?: string,
+  context?: { isCurrent: () => boolean }
 ) {
   if (files && files.length > 0) {
     const formData = new FormData();
@@ -91,12 +95,14 @@ export async function sendMessage(
     return apiClient<Message>(`/servers/${serverId}/channels/${channelId}/messages`, {
       method: "POST",
       body: formData,
+      ...(context ? { isCurrent: context.isCurrent } : {}),
     });
   }
 
   return apiClient<Message>(`/servers/${serverId}/channels/${channelId}/messages`, {
     method: "POST",
     body: { content, reply_to_id: replyToId },
+    ...(context ? { isCurrent: context.isCurrent } : {}),
     timeoutMs: SEND_TIMEOUT_MS,
   });
 }
@@ -112,7 +118,8 @@ export async function sendEncryptedMessage(
   senderDeviceId: string,
   metadata: string,
   files?: File[],
-  replyToId?: string
+  replyToId?: string,
+  context?: { isCurrent: () => boolean }
 ) {
   if (files && files.length > 0) {
     const formData = new FormData();
@@ -130,6 +137,7 @@ export async function sendEncryptedMessage(
     return apiClient<Message>(`/servers/${serverId}/channels/${channelId}/messages`, {
       method: "POST",
       body: formData,
+      ...(context ? { isCurrent: context.isCurrent } : {}),
     });
   }
 
@@ -142,6 +150,7 @@ export async function sendEncryptedMessage(
       e2ee_metadata: metadata,
       ...(replyToId ? { reply_to_id: replyToId } : {}),
     },
+    ...(context ? { isCurrent: context.isCurrent } : {}),
     timeoutMs: SEND_TIMEOUT_MS,
   });
 }

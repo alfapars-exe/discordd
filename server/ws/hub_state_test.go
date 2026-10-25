@@ -5,6 +5,21 @@ package ws
 
 import "testing"
 
+func TestIsInvisibleReadsHiddenFlag(t *testing.T) {
+	h := NewHub()
+	if h.IsInvisible("u1") {
+		t.Fatal("unknown user must not be invisible")
+	}
+	h.SetInvisible("u1", true)
+	if !h.IsInvisible("u1") {
+		t.Fatal("invisible flag was not observed")
+	}
+	h.SetInvisible("u1", false)
+	if h.IsInvisible("u1") {
+		t.Fatal("cleared invisible flag still observed")
+	}
+}
+
 func TestUpdateUserInfo_RefreshesExistingEntry(t *testing.T) {
 	h := NewHub()
 	h.SetUserInfo("u1", "alice", "Alice", "/a.png")

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Real producers for announcements, tips and recommendations via platform-admin email campaigns; communication summaries remain unimplemented.",
+  "implementation": [
+    "Platform-admin-only draft, recipient-count preview and explicit publish endpoints are wired into production repository/service/handler initialization and authAdmin routes. Server moderators cannot use this gate.",
+    "Server-generated immutable campaign ID; bounded plain text and escaped rendering; published audit actor/time/count survive retries. Publication and per-recipient queue inserts commit atomically; consent/verified-address eligibility and per-user campaign dedupe apply.",
+    "Expiry is persisted on jobs and checked at claim and immediately before provider send. Provider send already in progress cannot be recalled. No recipient addresses are fetched for audience selection or exposed in preview.",
+    "Recommendations additionally require explicit privacy.experiencePersonalization=true at enqueue, campaign audience selection and delivery. Missing/malformed/false personalization denies recommendations; other categories and security email remain unchanged. Tests cover revocation after queueing and malformed/missing consent.",
+    "Admin UI supports persisted account/server-scoped draft, plain-text preview, eligible count, explicit confirmation, same-ID retry/reconciliation, discard confirmation and account/session/admin-revocation fences. Publishing is presented as queueing, never confirmed email delivery."
+  ],
+  "schema": ["server/database/migrations/130_email_campaigns.sql", "server/database/postgres_migrations/032_email_campaigns.sql"],
+  "verification": [
+    "Full Go go test ./... -timeout=15m passed (repository 59.114s; services 24.997s). Focused route/OpenAPI/handler/service/repository campaign and unread checks passed.",
+    "Actual disposable PostgreSQL 18.6 repository run passed in 2.515s: campaigns, DM/group oldest unread anchors and group around windows. A SQLite-only rollback failure fixture was repaired with backend-specific triggers, preserving the rollback assertion. Native PostgreSQL migration enforces published immutability.",
+    "Race-selected services/repository checks passed in 3.272s / 25.743s.",
+    "Combined client snapshot: 292 files, 2715 tests passed; C:/Users/PARS/AppData/Local/Temp/hichat-email-unread-final-20261024.json. Afterward a stale-session render guard was added: parent TypeScript plus panel/unread focused suite passed 2 files/17 tests. Scoped lint and final Vite build passed.",
+    "After the personalization consent and publication timestamp fixes, parent full Go suite passed again: repository 63.410s, services 26.224s. This precedes the later voice-read-state slice, tracked separately."
+  ],
+  "rollback": {
+    "migration_policy": "Additive schema only; keep campaign/audit records and expiry column during application rollback. Production backup/restore has not been rehearsed for this slice.",
+    "precondition": "Before starting an older sender that does not understand campaign expiry, stop the email worker and reconcile any in-flight provider request. Cancel pending/delivering campaign-prefixed jobs transactionally, retaining records; verify no claimable campaign jobs remain before starting the older sender. Do not roll back a live worker blindly.",
+    "queue_filter": "dedupe_key LIKE 'campaign:%' AND status IN ('pending','delivering')",
+    "acceptance": "Operational rollback and provider delivery remain unverified; no live rollback or email send was performed."
+  },
+  "open": ["Real configured-provider delivery/unsubscribe acceptance", "Communication-category privacy-preserving event producers", "Real browser admin workflow and accessibility acceptance", "Windows packaging and complete release gates"],
+  "cleanup": "Disposable local PostgreSQL container stopped and removed. Existing HiChat QA containers preserved.",
+  "release": "No actual email send, commit, push, merge, installer or production publication."
+}

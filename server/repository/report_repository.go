@@ -17,6 +17,7 @@ type ReportRepository interface {
 	UpdateStatus(ctx context.Context, id string, status models.ReportStatus, resolvedBy string) error
 	// HasPendingReport checks if an active (pending) report exists for this reporter->target pair.
 	HasPendingReport(ctx context.Context, reporterID, targetID string) (bool, error)
+	HasPendingMessageReport(ctx context.Context, reporterID, messageID string) (bool, error)
 	// CreateAttachment adds an evidence file to a report.
 	CreateAttachment(ctx context.Context, att *models.ReportAttachment) error
 	GetAttachmentsByReportID(ctx context.Context, reportID string) ([]models.ReportAttachment, error)

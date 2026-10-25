@@ -7,7 +7,7 @@
   "hero_userCount": "{{count}} users and growing",
   "hero_h1_1": "Chat with friends.",
   "hero_h1_2": "Open. Talk. Done.",
-  "hero_sub": "Voice, video, screen sharing, and messaging — all in one place. Lightweight, fast, and open source.",
+  "hero_sub": "Voice, video, screen sharing, and messaging — all in one place. Lightweight and fast.",
   "hero_cta": "Get Started",
   "hero_cta2": "See Features",
   "hero_download": "Download for Windows",
@@ -130,21 +130,21 @@
   "faq_a5": "Yes — voice channels, video calls, and screen sharing with system audio. Powered by LiveKit.",
 
   "faq_q6": "Is it open source?",
-  "faq_a6": "Every line of code is on GitHub. You can audit it, contribute, or fork it and run your own independent instance.",
+  "faq_a6": "HiChat! is designed for private, reliable communication and can be used through the hosted service.",
 
   "faq_q7": "Can I delete my account?",
   "faq_a7": "Yes. You can request account deletion from the app settings. There's a 14-day grace period in case you change your mind.",
 
   "faq_q8": "How do I report a bug?",
-  "faq_a8": "Open an issue on our GitHub repository or use the in-app feedback feature.",
+  "faq_a8": "Use the in-app feedback feature to contact us.",
 
   "cta_t1": "Ready to try it?",
   "cta_t2": "It's free.",
-  "cta_desc": "Open source, no tracking. Just sign up and start talking.",
+  "cta_desc": "Private communication without unnecessary tracking. Just sign up and start talking.",
   "cta_btn1": "Get Started",
-  "cta_btn2": "View on GitHub",
+  "cta_btn2": "Learn more",
 
-  "footer_copy": "© 2026 HiChat! — Open source, free communication.",
+  "footer_copy": "© 2026 HiChat! — Private communication.",
   "footer_privacy": "Privacy",
   "footer_terms": "Terms",
 
@@ -154,6 +154,5 @@
   "ss_step2": "Then click \"Run anyway\" to start the installation. That's it!",
   "ss_back": "Back",
   "ss_next": "Next",
-  "ss_download": "Got it, download",
-  "ss_github_note": "HiChat! is fully open source. You can review every line of code on"
+  "ss_download": "Got it, download"
 }

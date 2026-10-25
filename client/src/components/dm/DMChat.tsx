@@ -15,6 +15,8 @@ import { useConfirm } from "../../hooks/useConfirm";
 import { useFileDrop } from "../../hooks/useFileDrop";
 import DMChatProvider from "./DMChatProvider";
 import MessageList from "../chat/MessageList";
+import { useConversationCommand } from "../../hooks/useConversationCommand";
+import { useDMCallShortcut } from "../../hooks/useDMCallShortcut";
 import MessageInput from "../chat/MessageInput";
 import TypingIndicator from "../chat/TypingIndicator";
 import DMPinnedMessages from "./DMPinnedMessages";
@@ -24,6 +26,7 @@ import FileDropOverlay from "../shared/FileDropOverlay";
 import Avatar from "../shared/Avatar";
 import * as e2eeApi from "../../api/e2ee";
 import { useAuthStore } from "../../stores/authStore";
+import { getAuthGeneration } from "../../api/client";
 import type { PublicUser } from "../../types";
 
 type DMChatProps = {
@@ -108,9 +111,19 @@ function DMChatContent({
   const dmE2EEEnabled = channels.find((ch) => ch.id === channelId)?.e2ee_enabled ?? false;
   const addToast = useToastStore((s) => s.addToast);
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const authGeneration = getAuthGeneration();
   const acceptDMRequest = useDMStore((s) => s.acceptDMRequest);
   const declineDMRequest = useDMStore((s) => s.declineDMRequest);
   const blockUser = useBlockStore((s) => s.blockUser);
+
+  useDMCallShortcut({
+    channelId,
+    ownerId: currentUserId,
+    otherUserId: otherUser?.id,
+    otherUserName: otherUser?.display_name || otherUser?.username || "DM",
+    isSelf,
+    authGeneration,
+  });
 
   const dmChannel = channels.find((ch) => ch.id === channelId);
   const showE2EEControls = !isSelf || SELF_DM_E2EE_ENABLED;
@@ -196,6 +209,11 @@ function DMChatContent({
   const handleToggleSearch = useCallback(() => {
     setShowSearch((prev) => !prev);
   }, []);
+  useConversationCommand({kind:"dm",id:channelId}, (command) => {
+    if (command === "pins") { handleTogglePins(); return true; }
+    if (command === "search" && !isSelf) { handleToggleSearch(); return true; }
+    return false;
+  });
 
   /** Toggle safety number / device verification panel */
   const handleToggleSafetyNumber = useCallback(() => {

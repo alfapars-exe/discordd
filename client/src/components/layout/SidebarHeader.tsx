@@ -10,6 +10,7 @@ import { useIsMobile } from "../../hooks/useMediaQuery";
 import { publicAsset } from "../../utils/constants";
 import HeaderInboxButtons from "../inbox/HeaderInboxButtons";
 import SavedHeaderButton from "../saved/SavedHeaderButton";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 
 function SidebarHeader() {
   const { t } = useTranslation("common");
@@ -18,7 +19,13 @@ function SidebarHeader() {
   const closeLeftDrawer = useMobileStore((s) => s.closeLeftDrawer);
   const isMobile = useIsMobile();
 
+  if (UI_SHELL_V2) return <div className="shell-sidebar-search">
+    <button className="sb-quick-search" onClick={toggleQuickSwitcher}><span>{t("quickSwitcherPlaceholder")}</span>{!isMobile && <kbd>Ctrl K</kbd>}</button>
+    {isMobile && <button className="sb-header-btn" onClick={closeLeftDrawer} aria-label={t("closeSidebar")}>×</button>}
+  </div>;
+
   return (
+    <>
     <div className="sb-header">
       <div className="sb-header-brand">
         <img src={publicAsset("hlogo.png")} alt="HiChat!" className="sb-logo" />
@@ -30,23 +37,12 @@ function SidebarHeader() {
         <HeaderInboxButtons variant="header" />
         <SavedHeaderButton />
 
-        {/* Search — opens QuickSwitcher */}
-        <button
-          className="sb-header-btn"
-          onClick={toggleQuickSwitcher}
-          title={`${t("search")} (Ctrl+K)`}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </button>
-
         {/* Collapse sidebar (mobile: closes drawer) */}
         <button
           className="sb-header-btn"
           onClick={isMobile ? closeLeftDrawer : collapseSidebar}
-          title="Collapse"
+          title={t("closeSidebar")}
+          aria-label={t("closeSidebar")}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
@@ -54,6 +50,11 @@ function SidebarHeader() {
         </button>
       </div>
     </div>
+    <button className="sb-quick-search" onClick={toggleQuickSwitcher}>
+      <span>{t("quickSwitcherPlaceholder")}</span>
+      {!isMobile && <kbd>Ctrl K</kbd>}
+    </button>
+    </>
   );
 }
 

@@ -58,6 +58,15 @@ type stubMemberService struct {
 	profileErr    error
 }
 
+type stubProfileAudiencePolicy struct {
+	allowed bool
+	err     error
+}
+
+func (s stubProfileAudiencePolicy) CanView(context.Context, string, string) (bool, error) {
+	return s.allowed, s.err
+}
+
 func (s *stubMemberService) GetAll(context.Context, string) ([]models.MemberWithRoles, error) {
 	return nil, nil
 }
@@ -544,6 +553,31 @@ func TestGetUserProfileHandler(t *testing.T) {
 		NewMemberHandler(stub).GetUserProfile(rec, newReq("ghost"))
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want 404", rec.Code)
+		}
+	})
+
+	t.Run("404 when the target profile audience denies the viewer", func(t *testing.T) {
+		stub := &stubMemberService{profile: &models.UserProfile{ID: "u-2", Username: "bob"}}
+		req := newReq("u-2")
+		req = req.WithContext(context.WithValue(req.Context(), UserContextKey, &models.User{ID: "u-1"}))
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: false}).GetUserProfile(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404", rec.Code)
+		}
+		if stub.profileUserID != "" {
+			t.Fatalf("profile service was called for denied viewer")
+		}
+	})
+
+	t.Run("loads profile after audience allows the viewer", func(t *testing.T) {
+		stub := &stubMemberService{profile: &models.UserProfile{ID: "u-2", Username: "bob"}}
+		req := newReq("u-2")
+		req = req.WithContext(context.WithValue(req.Context(), UserContextKey, &models.User{ID: "u-1"}))
+		rec := httptest.NewRecorder()
+		NewMemberHandler(stub, stubProfileAudiencePolicy{allowed: true}).GetUserProfile(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (body %q)", rec.Code, rec.Body.String())
 		}
 	})
 

@@ -20,6 +20,8 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const authGenerationState = vi.hoisted(() => ({ value: 0 }));
+vi.mock("../api/client", () => ({ getAuthGeneration: () => authGenerationState.value }));
 vi.mock("../api/messages", () => ({
   getMessages: vi.fn(),
   getMessagesAround: vi.fn(),
@@ -33,6 +35,7 @@ vi.mock("../api/messages", () => ({
 vi.mock("../api/reactions", () => ({
   toggleReaction: vi.fn(),
 }));
+vi.mock("../utils/registerSpamMessage", () => ({ registerSpamBatch: vi.fn() }));
 // Pass-through decrypt — these tests exercise fetch/WS plumbing, not E2EE.
 vi.mock("../crypto/channelEncryption", () => ({
   encryptChannelMessage: vi.fn(),
@@ -45,7 +48,7 @@ vi.mock("./serverStore", () => ({
   useServerStore: {
     getState: () => ({
       activeServerId: "srv-1",
-      activeServer: { e2ee_enabled: false },
+      activeServer: { id: "srv-1", e2ee_enabled: false },
     }),
   },
 }));
@@ -53,9 +56,6 @@ vi.mock("./e2eeStore", () => ({
   useE2EEStore: {
     getState: () => ({ initStatus: "uninitialized", localDeviceId: null }),
   },
-}));
-vi.mock("./authStore", () => ({
-  useAuthStore: { getState: () => ({ user: null }) },
 }));
 vi.mock("./readStateStore", () => ({
   useReadStateStore: { getState: () => ({ markAsRead: vi.fn() }) },
@@ -65,7 +65,9 @@ vi.mock("./toastStore", () => ({
 }));
 
 import { useMessageStore } from "./messageStore";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import * as messageApi from "../api/messages";
+import * as spamRegistration from "../utils/registerSpamMessage";
 import { decryptChannelMessages } from "../crypto/channelEncryption";
 import type { APIResponse, Message, MessagePage } from "../types";
 
@@ -74,6 +76,7 @@ const getMessagesAround = vi.mocked(messageApi.getMessagesAround);
 const getMessagesAfter = vi.mocked(messageApi.getMessagesAfter);
 const sendMessage = vi.mocked(messageApi.sendMessage);
 const decryptMock = vi.mocked(decryptChannelMessages);
+const registerSpamBatch = vi.mocked(spamRegistration.registerSpamBatch);
 
 /** Same minimal Message shape SearchPanel.test.tsx builds. */
 function makeMessage(id: string, channelId = "ch-1"): Message {
@@ -125,7 +128,14 @@ function resetStore() {
   });
 }
 
+function switchSession(userId: string, generation = authGenerationState.value + 1) {
+  authGenerationState.value = generation;
+  publishAuthOwnerChange(userId);
+}
+
 beforeEach(() => {
+  authGenerationState.value = 0;
+  publishAuthOwnerChange("test-user");
   resetStore();
   getMessages.mockReset();
   getMessagesAround.mockReset();
@@ -133,6 +143,7 @@ beforeEach(() => {
   sendMessage.mockReset();
   decryptMock.mockReset();
   decryptMock.mockImplementation(async (msgs) => msgs as Message[]);
+  registerSpamBatch.mockReset();
 });
 
 describe("messageStore — handleMessageCreate dedup", () => {
@@ -183,6 +194,44 @@ describe("messageStore — handleMessageDelete", () => {
 });
 
 describe("messageStore — in-flight fetch aborts", () => {
+  it("clears channel-keyed data on a same-owner auth generation change", () => {
+    useMessageStore.setState({ messagesByChannel: { "ch-1": [makeMessage("old-session")] } });
+    authGenerationState.value++;
+    publishAuthGenerationChange(authGenerationState.value);
+    expect(useMessageStore.getState().messagesByChannel).toEqual({});
+    expect(useMessageStore.getState().ownerId).toBe("test-user");
+  });
+
+  it("clears caches synchronously and drops a late response when the auth owner changes", async () => {
+    const api = deferred<APIResponse<MessagePage>>();
+    getMessages.mockReturnValueOnce(api.promise);
+    const fetching = useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+
+    switchSession("next-user");
+    expect(useMessageStore.getState().ownerId).toBe("next-user");
+    expect(useMessageStore.getState().messagesByChannel).toEqual({});
+    api.resolve(ok([makeMessage("old-account")]));
+    await fetching;
+
+    expect(useMessageStore.getState().messagesByChannel).toEqual({});
+    expect(registerSpamBatch).not.toHaveBeenCalled();
+  });
+
+  it("drops decrypted tail results if the auth owner changes during decrypt", async () => {
+    const decrypting = deferred<Message[]>();
+    getMessages.mockResolvedValueOnce(ok([makeMessage("old-account")]));
+    decryptMock.mockReturnValueOnce(decrypting.promise);
+    const fetching = useMessageStore.getState().fetchMessages("ch-1", "srv-1");
+    await vi.waitFor(() => expect(decryptMock).toHaveBeenCalledTimes(1));
+
+    switchSession("next-user");
+    decrypting.resolve([makeMessage("old-account")]);
+    await fetching;
+
+    expect(useMessageStore.getState().messagesByChannel).toEqual({});
+    expect(registerSpamBatch).not.toHaveBeenCalled();
+  });
+
   it("a re-fetch aborts the stale request; its late payload is dropped", async () => {
     const stale = deferred<APIResponse<MessagePage>>();
     const fresh = deferred<APIResponse<MessagePage>>();
@@ -221,6 +270,37 @@ describe("messageStore — in-flight fetch aborts", () => {
 
     // The late payload must not repopulate the cleared window.
     expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+  });
+});
+
+describe("messageStore — paged requests are session fenced", () => {
+  it.each(["older", "newer"] as const)("does not commit a stale %s page", async (direction) => {
+    const page = deferred<APIResponse<MessagePage>>();
+    useMessageStore.setState({
+      messagesByChannel: { "ch-1": [makeMessage("anchor")] },
+      hasMoreByChannel: { "ch-1": true },
+      hasMoreAfterByChannel: { "ch-1": true },
+    });
+    if (direction === "older") getMessages.mockReturnValueOnce(page.promise);
+    else getMessagesAfter.mockReturnValueOnce(page.promise);
+
+    const pending = direction === "older"
+      ? useMessageStore.getState().fetchOlderMessages("ch-1", "srv-1")
+      : useMessageStore.getState().fetchNewerMessages("ch-1", "srv-1");
+    switchSession("next-user");
+    page.resolve(ok([makeMessage("old-account-page")]));
+    await pending;
+
+    expect(useMessageStore.getState().ownerId).toBe("next-user");
+    expect(useMessageStore.getState().messagesByChannel).toEqual({});
+    expect(registerSpamBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not let an old WS owner insert a message after an account transition", () => {
+    const oldOwner = { ownerId: "test-user", authGeneration: 0 };
+    switchSession("next-user");
+    useMessageStore.getState().handleMessageCreate(makeMessage("old-ws"), oldOwner);
+    expect(useMessageStore.getState().messagesByChannel).toEqual({});
   });
 });
 
@@ -311,6 +391,28 @@ describe("messageStore — per-channel loading & abort hygiene", () => {
 });
 
 describe("messageStore — sendMessage inserts the POST body", () => {
+  it("refuses a stale source before dispatch and rechecks it after server resolution", async () => {
+    expect(await useMessageStore.getState().sendMessage("ch-1", "hello", undefined, undefined, "srv-1", { isCurrent: () => false })).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+    let current = true;
+    const pending = useMessageStore.getState().sendMessage("ch-1", "hello", undefined, undefined, "srv-1", { isCurrent: () => current });
+    current = false;
+    expect(await pending).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not claim a source-invalidated in-flight POST as current success", async () => {
+    const api = deferred<APIResponse<Message>>();
+    sendMessage.mockReturnValueOnce(api.promise);
+    let current = true;
+    const pending = useMessageStore.getState().sendMessage("ch-1", "hello", undefined, undefined, "srv-1", { isCurrent: () => current });
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+    current = false;
+    api.resolve({ success: true, data: makeMessage("late-source-post") });
+    expect(await pending).toBe(false);
+    expect(useMessageStore.getState().messagesByChannel["ch-1"] ?? []).toEqual([]);
+  });
+
   it("renders the sender's message from the 201 response, without waiting for the WS echo", async () => {
     const created = makeMessage("sent-1");
     sendMessage.mockResolvedValueOnce({ success: true, data: created });
@@ -411,6 +513,79 @@ describe("messageStore — fetchAroundMessage vs mount-time fetchMessages race",
       expect(useMessageStore.getState().messagesByChannel["ch-1"]?.map((m) => m.id)).toEqual(["tail-1"])
     );
     expect(getMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not decrypt, register spam, fall back, or write state after scoped navigation goes stale", async () => {
+    const around = deferred<APIResponse<MessagePage>>();
+    getMessagesAround.mockReturnValueOnce(around.promise);
+    let current = true;
+    const jumping = useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target", {
+      isCurrent: () => current,
+      timeoutMs: 5000,
+    });
+    const requestOptions = getMessagesAround.mock.calls[0][4];
+    expect(requestOptions?.signal).toBeInstanceOf(AbortSignal);
+    expect(requestOptions?.timeoutMs).toBe(5000);
+    expect(requestOptions?.isCurrent?.()).toBe(true);
+
+    current = false;
+    around.resolve(aroundPage([makeMessage("target")], true, false));
+    expect(await jumping).toBe(false);
+    expect(decryptMock).not.toHaveBeenCalled();
+    expect(registerSpamBatch).not.toHaveBeenCalled();
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(false);
+  });
+
+  it("rechecks scoped navigation after decryption before spam or store writes", async () => {
+    const decrypting = deferred<Message[]>();
+    decryptMock.mockReturnValueOnce(decrypting.promise);
+    getMessagesAround.mockResolvedValueOnce(aroundPage([makeMessage("target")], true, false));
+    let current = true;
+    const jumping = useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target", {
+      isCurrent: () => current,
+    });
+    await vi.waitFor(() => expect(decryptMock).toHaveBeenCalledTimes(1));
+    current = false;
+    decrypting.resolve([makeMessage("target")]);
+
+    expect(await jumping).toBe(false);
+    expect(registerSpamBatch).not.toHaveBeenCalled();
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(false);
+  });
+
+  it("does not clear loading in a reset store when an old-account request finishes", async () => {
+    const around = deferred<APIResponse<MessagePage>>();
+    getMessagesAround.mockReturnValueOnce(around.promise);
+    const jumping = useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target");
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(true);
+
+    useMessageStore.getState().invalidateFetchCache();
+    authGenerationState.value++;
+    // Represents a new account's request owning the same channel key.
+    useMessageStore.setState({ isLoadingByChannel: { "ch-1": true } });
+    around.resolve(aroundPage([makeMessage("target")], true, false));
+
+    expect(await jumping).toBe(false);
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(true);
+    expect(useMessageStore.getState().messagesByChannel["ch-1"]).toBeUndefined();
+    expect(registerSpamBatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["request", "decrypt"] as const)("releases around ownership and loading after a thrown %s error", async (failure) => {
+    if (failure === "request") {
+      getMessagesAround.mockRejectedValueOnce(new Error("network"));
+    } else {
+      getMessagesAround.mockResolvedValueOnce(aroundPage([makeMessage("target")], true, false));
+      decryptMock.mockRejectedValueOnce(new Error("decrypt"));
+    }
+    await expect(useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target")).rejects.toThrow();
+    expect(useMessageStore.getState().isLoadingByChannel["ch-1"]).toBe(false);
+
+    getMessagesAround.mockResolvedValueOnce(aroundPage([makeMessage("target")], true, false));
+    expect(await useMessageStore.getState().fetchAroundMessage("srv-1", "ch-1", "target")).toBe(true);
   });
 });
 

@@ -7,6 +7,7 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
 import { searchCachedDMMessages } from "../../crypto/keyStorage";
 import Avatar from "../shared/Avatar";
+import SpamPreview from "../chat/SpamPreview";
 import type { DMMessage } from "../../types";
 
 /** Debounce delay (ms) */
@@ -285,7 +286,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
                     <span className="search-result-time">{formatDate(msg.created_at)}</span>
                   </div>
                   <div className="search-result-content">
-                    {msg.content ?? ""}
+                    <SpamPreview kind="dm" message={msg} />
                   </div>
                 </div>
               );

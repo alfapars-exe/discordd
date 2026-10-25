@@ -1,0 +1,40 @@
+{
+  "item": "p4.reminder",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "entry_points": "Desktop message context menus and mobile long-press sheets open a Turkish/English reminder manager with one-hour, tomorrow, next-week and custom date-time choices.",
+    "authorization": "Creation resolves current channel read permissions or DM membership and verifies that the supplied message belongs to the supplied conversation. List, edit and cancel are scoped to the authenticated owner.",
+    "persistence": "Migration 107 stores private scheduled, delivered and cancelled reminders. Server startup launches a durable scheduler; reminders survive client and server restarts.",
+    "exactly_once": "The repository changes a scheduled reminder to delivered and inserts the system notification in one database transaction guarded by status='scheduled'. Concurrent workers cannot insert a second notification for the same reminder.",
+    "delivery": "The notification carries the original server/channel/message or DM-channel/message navigation target and is broadcast only after the transaction commits."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run src/components/chat/ReminderModal.test.tsx",
+      "working_directory": "client",
+      "result": "pass (2 tests: create, edit and cancel UI/API contracts)"
+    },
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    },
+    {
+      "command": "go test -c -o reminder_repo.test.exe ./repository",
+      "working_directory": "server",
+      "result": "compile pass; execution blocked by Windows Application Control"
+    },
+    {
+      "command": "UPDATE_ROUTES_GOLDEN=1 go test -count=1 -run TestInitRoutesGolden .",
+      "working_directory": "server",
+      "result": "pass and intended route golden regenerated"
+    }
+  ],
+  "live_verification": {
+    "environment": "Ego Browser against local Vite 15173 and Go API 19191",
+    "result": "Migration 107 applied; a real channel message opened Bana hatırlat, created a persisted upcoming reminder, and edited it from one hour to tomorrow. The reminder remained listed with Düzenle and İptal et controls.",
+    "additional_fix": "Live rendering exposed an unstable empty ignored-user Zustand selector that crashed on the first real message; it was replaced with a referentially stable frozen fallback and the same channel rendered successfully after retry."
+  },
+  "remaining_acceptance": "Wait for an actual due time or use the repository test on a host where App Control permits execution; confirm exactly one toast arrives after an API restart and confirm cancellation in the UI."
+}

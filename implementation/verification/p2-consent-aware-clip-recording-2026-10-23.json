@@ -1,0 +1,31 @@
+{
+  "items": ["p2.clip-consent", "p2.recording"],
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "consent": "clipVoiceConsent is account-scoped, server-validated and disabled by default. Every active voice participant is classified into included or excluded sets.",
+    "authorization": "The server requires the recorder to be present in the exact server and voice channel before issuing or refreshing a recording session.",
+    "recording": "The client mixes only consenting microphone publications into a local MediaRecorder stream and never uploads clip audio to the server.",
+    "live_changes": "The client refreshes consent during recording, disconnects prior MediaStreamAudioSourceNode instances and rebuilds the mix from the latest included set.",
+    "audit": "Start and stop events record the consent snapshot, recording identifier, channel and duration in the application log without recording audio content.",
+    "disposal": "Stop and component cleanup clear polling, disconnect all media sources, close AudioContext and revoke replaced object URLs."
+  },
+  "automated_verification": [
+    {
+      "command": "go test ./services -run 'Test(ClipRecording|Personalization|Profile|UpdateProfile)' -count=1",
+      "working_directory": "server",
+      "result": "pass; covers opt-in/opt-out classification, lifecycle, audit entries and outside-channel denial"
+    },
+    {
+      "command": "go test . ./handlers -run 'Test.*Routes|TestNonExistent' -count=1",
+      "working_directory": "server",
+      "result": "pass; route inventory includes consent/start/stop endpoints"
+    },
+    {
+      "command": "tsc -b client/tsconfig.json",
+      "working_directory": ".",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Use two real clients in a LiveKit voice channel to confirm playable output, opt-out removal during an active recording, selected output behavior and device-disconnect cleanup."
+}

@@ -27,6 +27,7 @@ func (s *dmService) ToggleReaction(ctx context.Context, userID, messageID, emoji
 
 	// A custom emoji that no longer validates can only be taken back:
 	// delete-only, and the same unknown-emoji error when nothing matched.
+	added := false
 	if removeOnly {
 		removed, err := s.dmRepo.RemoveReaction(ctx, messageID, userID, key)
 		if err != nil {
@@ -35,8 +36,11 @@ func (s *dmService) ToggleReaction(ctx context.Context, userID, messageID, emoji
 		if !removed {
 			return models.ErrUnknownEmoji
 		}
-	} else if _, err := s.dmRepo.ToggleReaction(ctx, messageID, userID, key); err != nil {
-		return fmt.Errorf("failed to toggle DM reaction: %w", err)
+	} else {
+		added, err = s.dmRepo.ToggleReaction(ctx, messageID, userID, key)
+		if err != nil {
+			return fmt.Errorf("failed to toggle DM reaction: %w", err)
+		}
 	}
 
 	reactions, err := s.dmRepo.GetReactionsByMessageID(ctx, messageID)
@@ -52,6 +56,22 @@ func (s *dmService) ToggleReaction(ctx context.Context, userID, messageID, emoji
 			"reactions":     reactions,
 		},
 	})
+	if added && msg.UserID != userID && channel.Status == models.DMStatusAccepted {
+		if creator, ok := s.notificationRepo.(reactionNotificationCreator); ok {
+			blocked := false
+			if s.blockChecker != nil {
+				var checkErr error
+				blocked, checkErr = s.blockChecker.IsBlocked(ctx, userID, msg.UserID)
+				if checkErr != nil {
+					return nil
+				}
+			}
+			if !blocked {
+				n := &models.Notification{UserID: msg.UserID, Kind: models.NotificationKindSystem, ActorID: &userID, MessageID: &msg.ID, DMChannelID: &msg.DMChannelID}
+				deliverReactionNotification(ctx, creator, s.reactionPreferences, s.userRepo, s.hub, n, key, true)
+			}
+		}
+	}
 
 	return nil
 }

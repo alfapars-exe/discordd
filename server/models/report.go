@@ -35,16 +35,22 @@ const (
 
 // Report — time fields are strings because modernc.org/sqlite doesn't auto-convert to time.Time.
 type Report struct {
-	ID             string             `json:"id"`
-	ReporterID     string             `json:"reporter_id"`
-	ReportedUserID string             `json:"reported_user_id"`
-	Reason         ReportReason       `json:"reason"`
-	Description    string             `json:"description"`
-	Status         ReportStatus       `json:"status"`
-	ResolvedBy     *string            `json:"resolved_by"`
-	ResolvedAt     *string            `json:"resolved_at"`
-	CreatedAt      string             `json:"created_at"`
-	Attachments    []ReportAttachment `json:"attachments"`
+	ID              string             `json:"id"`
+	ReporterID      string             `json:"reporter_id"`
+	ReportedUserID  string             `json:"reported_user_id"`
+	Reason          ReportReason       `json:"reason"`
+	Description     string             `json:"description"`
+	Status          ReportStatus       `json:"status"`
+	ResolvedBy      *string            `json:"resolved_by"`
+	ResolvedAt      *string            `json:"resolved_at"`
+	CreatedAt       string             `json:"created_at"`
+	SourceKind      *string            `json:"source_kind,omitempty"`
+	SourceServerID  *string            `json:"source_server_id,omitempty"`
+	SourceChannelID *string            `json:"source_channel_id,omitempty"`
+	SourceMessageID *string            `json:"source_message_id,omitempty"`
+	EvidenceContent *string            `json:"evidence_content,omitempty"`
+	EvidenceShared  bool               `json:"evidence_shared"`
+	Attachments     []ReportAttachment `json:"attachments"`
 }
 
 // ReportAttachment — evidence file (images only). Parallel structure to Attachment/DMAttachment.
@@ -87,8 +93,14 @@ func (r *UpdateReportStatusRequest) Validate() error {
 }
 
 type CreateReportRequest struct {
-	Reason      string `json:"reason"`
-	Description string `json:"description"`
+	Reason          string  `json:"reason"`
+	Description     string  `json:"description"`
+	SourceKind      string  `json:"source_kind,omitempty"`
+	SourceServerID  string  `json:"source_server_id,omitempty"`
+	SourceChannelID string  `json:"source_channel_id,omitempty"`
+	SourceMessageID string  `json:"source_message_id,omitempty"`
+	EvidenceContent *string `json:"evidence_content,omitempty"`
+	EvidenceConsent bool    `json:"evidence_consent"`
 }
 
 func (r *CreateReportRequest) Validate() error {
@@ -105,6 +117,32 @@ func (r *CreateReportRequest) Validate() error {
 	}
 	if descLen > 1000 {
 		return fmt.Errorf("description must be at most 1000 characters")
+	}
+
+	hasSource := r.SourceKind != "" || r.SourceServerID != "" || r.SourceChannelID != "" || r.SourceMessageID != ""
+	if hasSource {
+		if r.SourceKind != "channel" && r.SourceKind != "dm" && r.SourceKind != "group" {
+			return fmt.Errorf("invalid source kind")
+		}
+		if r.SourceChannelID == "" || r.SourceMessageID == "" {
+			return fmt.Errorf("source channel and message are required")
+		}
+		if r.SourceKind == "channel" && r.SourceServerID == "" {
+			return fmt.Errorf("source server is required")
+		}
+		if r.SourceKind != "channel" && r.SourceServerID != "" {
+			return fmt.Errorf("private source cannot include a server")
+		}
+	}
+	if r.EvidenceContent != nil {
+		trimmed := strings.TrimSpace(*r.EvidenceContent)
+		r.EvidenceContent = &trimmed
+		if !hasSource || !r.EvidenceConsent {
+			return fmt.Errorf("explicit evidence consent is required")
+		}
+		if utf8.RuneCountInString(trimmed) > MaxMessageLength {
+			return fmt.Errorf("evidence content is too long")
+		}
 	}
 
 	return nil

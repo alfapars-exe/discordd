@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Server ownership service, route, consent form and real local handoff/deletion verification. Not full P2 acceptance.",
+  "implemented": [
+    "POST /api/servers/{serverId}/transfer-ownership binds account and server identity, rejects unknown/oversized/multiple JSON bodies, requires password, separate consent and exact TRANSFER text. Actual ownership/eligible recipient checks remain transactional; no generic administrator bypass.",
+    "Fresh password/MFA verification uses the existing durable attempt budget and single-use recovery proofs. Password, factor and session changes after proof cannot commit the transfer.",
+    "Committed transfer clears local permission caches and sends server_update. Member refresh is server-scoped and forced; an older in-flight member list cannot overwrite refreshed roles or resurrect a left server.",
+    "Account deletion lists offer actual handoff forms; server general settings also expose the form to their owner. Forms preserve credentials on cancellation/failure, require fresh ownership after uncertain responses and ignore late account-generation responses.",
+    "Audit snapshots are written inside the ownership transaction; Turkish/English templates and API documentation were added."
+  ],
+  "automated": [
+    "Full Go test ./... -json passed after service/handler/route additions, including proof races, audit failure rollback, runtime invalidation order and route gate/golden checks.",
+    "Focused six client files: 46 tests passed, covering transfer, deletion, credentials, member races, server WS refresh and microphone test lifecycle.",
+    "Full client suite: 178 files / 1853 tests passed after replacing an intermediate audio-construction wait with the actual meter-result wait in a previously timing-dependent microphone test.",
+    "TypeScript build and web production build passed (1589 transformed modules). Existing bundle-size/dynamic-import/config-loader warnings remain.",
+    "Targeted ESLint checks passed for new transfer files and modified settings/member/WS files."
+  ],
+  "real_local_acceptance": {
+    "browser_space": 12,
+    "rounds": "51-72; failed observation/setup assertions were inspected and resumed without replaying committed mutations",
+    "test_server": "b01989a22e7e979e",
+    "test_account": "p2_handoff_20261023_0425 (now irreversibly anonymized)",
+    "recipient": "p2_affinity_20261023",
+    "checks": [
+      "Transferred ownership using the visible recipient/password/TRANSFER/checkbox form and final danger dialog.",
+      "Independent recipient API sign-in confirmed new owner and persisted audit actor/target snapshots; old-owner server PATCH returned HTTP403.",
+      "Deletion requirements refreshed to no owned resources after successful handoff.",
+      "Deleted only the disposable former-owner account using the visible DELETE/checkbox/final dialog. UI returned to login.",
+      "Independent recipient sign-in still read the transferred server and exact plaintext fixture message 3d065c32eb2f9253 under Deleted User; old personal audit names were gone and only recipient membership remained.",
+      "Explicit restore login for the deleted fixture was rejected. Returned browser to p1_acceptance afterward; its original server was untouched."
+    ],
+    "screenshot": {
+      "path": "implementation/verification/p2-handoff-confirm-1440.png",
+      "actual_raster": "996x589",
+      "note": "Visually inspected readable final dialog. Filename reflects requested metrics, not verified raster viewport coverage; not a 1440px acceptance proof."
+    }
+  },
+  "remaining": [
+    "Permission-cache invalidation currently clears local caches but in-flight server-side resolver repopulation and distributed-instance behavior still need explicit guards/tests.",
+    "Application handoff/removal, real encrypted history/attachments, SFU and Windows acceptance remain outstanding.",
+    "No 390/768/1024/1440/2560 visual acceptance claim for this form; reference fidelity and all other P0-P11 gates remain active."
+  ],
+  "release": "Only disposable local data changed. Its account cannot be restored; transferred server/message remain with the local recipient. No commit, push, merge, installer or production update release."
+}

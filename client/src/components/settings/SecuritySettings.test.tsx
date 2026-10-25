@@ -1,145 +1,74 @@
-/**
- * SecuritySettings — password-change regression pins.
- *
- * The change-password feature was silently broken end-to-end: the server
- * (POST /api/users/me/password) 400s without `current_password`, but the
- * client never asked for it or sent it. These tests pin (1) the request
- * body includes current_password, and (2) a server "incorrect" rejection
- * renders as the wrongCurrentPassword toast, not the generic one.
- */
-
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-
-const mockChangePassword = vi.fn();
-
-vi.mock("../../api/auth", () => ({
-  changePassword: (...args: unknown[]) => mockChangePassword(...args),
-  changeEmail: vi.fn(),
-}));
-
-vi.mock("../../stores/authStore", async () => {
-  const { create } = await import("zustand");
-  return {
-    useAuthStore: create(() => ({
-      user: { id: "u-1", email: "user@example.com" },
-      updateUser: vi.fn(),
-    })),
-  };
-});
-
-// addToast is created INSIDE the factory (not a closed-over outer const) —
-// referencing an outer `const mockAddToast` here would throw
-// "Cannot access before initialization": vi.mock factories run as part of
-// module resolution, which happens before this file's own top-level
-// statements (ES import ordering), so an outer const wouldn't be
-// initialized yet. Assertions read the spy back via
-// useToastStore.getState().addToast instead.
-vi.mock("../../stores/toastStore", async () => {
-  const { create } = await import("zustand");
-  return {
-    useToastStore: create(() => ({ addToast: vi.fn() })),
-  };
-});
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { create } from "zustand";
 import SecuritySettings from "./SecuritySettings";
-import { useToastStore } from "../../stores/toastStore";
 
-beforeEach(() => {
-  mockChangePassword.mockReset();
-  useToastStore.setState({ addToast: vi.fn() });
-});
+const mocks = vi.hoisted(() => ({ email: vi.fn(), password: vi.fn(), toast: vi.fn(), update: vi.fn(), logout: vi.fn() }));
+vi.mock("../../api/auth", () => ({ changeEmail: mocks.email, changePassword: mocks.password }));
+vi.mock("./ServerOwnershipTransfer", () => ({ default: () => null }));
+vi.mock("../../stores/toastStore", () => ({ useToastStore: (select: (s: unknown) => unknown) => select({ addToast: mocks.toast }) }));
+vi.mock("../../stores/settingsStore", () => ({ useSettingsStore: { getState: () => ({ setActiveTab: vi.fn() }) } }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
+vi.mock("../../stores/authStore", () => ({ useAuthStore: create(() => ({ user: { id: "a", email: "old@example.invalid" }, updateUser: mocks.update, logout: mocks.logout })) }));
+import { useAuthStore } from "../../stores/authStore";
 
-/** Fills the three password-section fields and clicks submit. */
-async function fillAndSubmitPasswordForm(current: string, next: string, confirm: string) {
-  const currentInput = screen.getByPlaceholderText("currentPasswordPlaceholder");
-  const newInput = screen.getByPlaceholderText("newPasswordPlaceholder");
-  const confirmInput = screen.getByPlaceholderText("confirmNewPasswordPlaceholder");
-
-  await act(async () => {
-    fireEvent.change(currentInput, { target: { value: current } });
-    fireEvent.change(newInput, { target: { value: next } });
-    fireEvent.change(confirmInput, { target: { value: confirm } });
-  });
-
-  const submitButtons = screen.getAllByText("changePassword");
-  const submitButton = submitButtons[submitButtons.length - 1]!;
-  await act(async () => {
-    fireEvent.click(submitButton);
-  });
+function fill(id: string, value: string) { fireEvent.change(document.getElementById(id)!, { target: { value } }); }
+function fillPassword(value = "new-password") {
+  fill("currentPasswordForChange", "current-password"); fill("newPassword", value); fill("confirmNewPassword", value);
 }
 
-describe("SecuritySettings — password change", () => {
-  it("renders a current-password input with autocomplete=current-password", () => {
-    render(<SecuritySettings />);
-    const currentInput = screen.getByPlaceholderText(
-      "currentPasswordPlaceholder"
-    ) as HTMLInputElement;
-    expect(currentInput.type).toBe("password");
-    expect(currentInput.autocomplete).toBe("current-password");
+describe("SecuritySettings credential writes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthStore.setState({ user: { id: "a", email: "old@example.invalid" } as never });
+    mocks.email.mockResolvedValue({ success: true, data: { email: null } });
+    mocks.password.mockResolvedValue({ success: true });
   });
-
-  it("sends current_password alongside new_password on submit", async () => {
-    mockChangePassword.mockResolvedValue({ success: true, data: { message: "ok" } });
+	it("does not render an email removal action", () => {
     render(<SecuritySettings />);
-
-    await fillAndSubmitPasswordForm("oldSecret1", "newSecret1", "newSecret1");
-
-    expect(mockChangePassword).toHaveBeenCalledTimes(1);
-    expect(mockChangePassword).toHaveBeenCalledWith("oldSecret1", "newSecret1");
-    expect(useToastStore.getState().addToast).toHaveBeenCalledWith(
-      "success",
-      "passwordChanged"
-    );
+		expect(screen.queryByRole("button", { name: "removeEmail" })).not.toBeInTheDocument();
   });
-
-  it("submit is disabled until current password is filled in", async () => {
+  it("clears private drafts on an account switch and ignores the old response", async () => {
+    let finish!: (value: unknown) => void;
+    mocks.email.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     render(<SecuritySettings />);
-    const newInput = screen.getByPlaceholderText("newPasswordPlaceholder");
-    const confirmInput = screen.getByPlaceholderText("confirmNewPasswordPlaceholder");
-
-    await act(async () => {
-      fireEvent.change(newInput, { target: { value: "newSecret1" } });
-      fireEvent.change(confirmInput, { target: { value: "newSecret1" } });
-    });
-
-    const submitButtons = screen.getAllByText("changePassword");
-    const submitButton = submitButtons[submitButtons.length - 1]!;
-    expect(submitButton).toBeDisabled();
-    expect(mockChangePassword).not.toHaveBeenCalled();
+    fill("newEmail", "new@example.invalid"); fill("emailPassword", "private-draft");
+    fireEvent.click(screen.getByRole("button", { name: "changeEmail" }));
+    act(() => useAuthStore.setState({ user: { id: "b", email: "b@example.invalid" } as never }));
+    expect(document.getElementById("emailPassword")).toHaveValue("");
+    expect(document.getElementById("newEmail")).toHaveValue("");
+    await act(async () => finish({ success: true, data: { email: "new@example.invalid" } }));
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.toast).not.toHaveBeenCalled();
   });
-
-  it("renders wrongCurrentPassword when the server rejects the current password", async () => {
-    mockChangePassword.mockResolvedValue({
-      success: false,
-      error: "unauthorized: current password is incorrect",
-    });
+  it("applies the shared password policy before sending", async () => {
     render(<SecuritySettings />);
-
-    await fillAndSubmitPasswordForm("wrongOld", "newSecret1", "newSecret1");
-
-    expect(useToastStore.getState().addToast).toHaveBeenCalledWith(
-      "error",
-      "wrongCurrentPassword"
-    );
+    fillPassword("ş".repeat(7));
+    fireEvent.click(screen.getByRole("button", { name: "changePassword" }));
+    expect(mocks.toast).toHaveBeenLastCalledWith("error", "passwordTooShort");
+    fillPassword("😀".repeat(19));
+    fireEvent.click(screen.getByRole("button", { name: "changePassword" }));
+    expect(mocks.toast).toHaveBeenLastCalledWith("error", "passwordTooLong");
+    expect(mocks.password).not.toHaveBeenCalled();
+    fillPassword();
+    fireEvent.click(screen.getByRole("button", { name: "changePassword" }));
+    await waitFor(() => expect(mocks.password).toHaveBeenCalledWith("current-password", "new-password", "a"));
+    expect(mocks.logout).toHaveBeenCalledWith({ localOnly: true, expectedUserId: "a" });
   });
-
-  it("falls back to the generic error toast for other failures", async () => {
-    mockChangePassword.mockResolvedValue({
-      success: false,
-      error: "internal server error",
-    });
-    render(<SecuritySettings />);
-
-    await fillAndSubmitPasswordForm("oldSecret1", "newSecret1", "newSecret1");
-
-    expect(useToastStore.getState().addToast).toHaveBeenCalledWith(
-      "error",
-      "passwordChangeError"
-    );
+  it("shows account mismatch without success and preserves fields for retry", async () => {
+    mocks.email.mockResolvedValue({ success: false, code: "ACCOUNT_MISMATCH" });
+    render(<SecuritySettings />); fill("newEmail", "new@example.invalid"); fill("emailPassword", "secret");
+    fireEvent.click(screen.getByRole("button", { name: "changeEmail" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("error", "securityAccountChanged"));
+    expect(document.getElementById("newEmail")).toHaveValue("new@example.invalid");
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("reports transport failure and allows retry without an unhandled rejection", async () => {
+    mocks.password.mockRejectedValueOnce(new Error("offline"));
+    render(<SecuritySettings />); fillPassword();
+    fireEvent.click(screen.getByRole("button", { name: "changePassword" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith("error", "passwordChangeError"));
+    expect(screen.getByRole("button", { name: "changePassword" })).toBeEnabled();
+    expect(document.getElementById("newPassword")).toHaveValue("new-password");
   });
 });

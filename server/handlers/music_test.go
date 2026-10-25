@@ -41,6 +41,12 @@ func (s *stubMusicService) Skip(string) error                            { retur
 func (s *stubMusicService) Pause(string) error                           { return nil }
 func (s *stubMusicService) Resume(string) error                          { return nil }
 func (s *stubMusicService) Stop(string) error                            { return nil }
+func (s *stubMusicService) RemoveQueueItem(string, string, uint64) error { return nil }
+func (s *stubMusicService) ReorderQueue(string, []string, uint64) error  { return nil }
+func (s *stubMusicService) ShuffleQueue(string, uint64) error            { return nil }
+func (s *stubMusicService) SetRepeatMode(string, string) error           { return nil }
+func (s *stubMusicService) Seek(string, int) error                       { return nil }
+func (s *stubMusicService) Restore(context.Context, string) error        { return nil }
 func (s *stubMusicService) GetState(string) *models.MusicBotChannelState { return nil }
 func (s *stubMusicService) StopAllForChannel(string)                     {}
 
@@ -76,6 +82,42 @@ func newPlayRequest(t *testing.T, body string) *http.Request {
 	user := &models.User{ID: "user-1", Username: "tester"}
 	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, user))
 	return req
+}
+
+func TestSearch_ReturnsSelectableResultsWithoutQueueMutation(t *testing.T) {
+	music := &stubMusicService{}
+	h := NewMusicHandler(music, stubPermResolver{}, nil)
+	h.search = func(_ context.Context, query string) ([]models.MusicTrack, error) {
+		if query != "daft punk" {
+			t.Fatalf("query = %q", query)
+		}
+		return []models.MusicTrack{{VideoID: "abcdefghijk", Title: "Result", URL: "https://www.youtube.com/watch?v=abcdefghijk"}}, nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/servers/srv/channels/ch/music/search?q=daft+punk", nil)
+	req.SetPathValue("channelId", "ch")
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, &models.User{ID: "user-1"}))
+	rec := httptest.NewRecorder()
+	h.Search(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"video_id":"abcdefghijk"`) {
+		t.Fatalf("search response = %d %s", rec.Code, rec.Body.String())
+	}
+	if music.enqueueCalled {
+		t.Fatal("search must not mutate the queue")
+	}
+}
+
+func TestSearch_RejectsOversizedQueryBeforeProvider(t *testing.T) {
+	h := NewMusicHandler(&stubMusicService{}, stubPermResolver{}, nil)
+	called := false
+	h.search = func(context.Context, string) ([]models.MusicTrack, error) { called = true; return nil, nil }
+	req := httptest.NewRequest(http.MethodGet, "/api/servers/srv/channels/ch/music/search?q="+strings.Repeat("x", 101), nil)
+	req.SetPathValue("channelId", "ch")
+	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, &models.User{ID: "user-1"}))
+	rec := httptest.NewRecorder()
+	h.Search(rec, req)
+	if rec.Code != http.StatusBadRequest || called {
+		t.Fatalf("status=%d provider_called=%v", rec.Code, called)
+	}
 }
 
 // ─── Tests ───

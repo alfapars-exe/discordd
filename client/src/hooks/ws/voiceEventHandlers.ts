@@ -29,7 +29,12 @@ export async function handleVoiceEvent(
       const prevStates = voiceState.voiceStates[voiceData.channel_id] ?? [];
       const prevStreaming = prevStates.find((s) => s.user_id === voiceData.user_id)?.is_streaming ?? false;
       const myUserId = useAuthStore.getState().user?.id;
-      voiceState.handleVoiceStateUpdate(voiceData);
+      const applied = voiceState.handleVoiceStateUpdate(
+        { ...voiceData, server_id: msg.server_id },
+        msg.voice_epoch,
+        msg.voice_revision,
+      );
+      if (!applied) return true;
 
       const isMe = voiceData.user_id === myUserId;
       const myChannelId = voiceState.currentVoiceChannelId;
@@ -85,7 +90,12 @@ export async function handleVoiceEvent(
 
     case "screen_share_viewer_update": {
       const viewerData = msg.d;
-      useVoiceStore.getState().handleScreenShareViewerUpdate(viewerData);
+      const applied = useVoiceStore.getState().handleScreenShareViewerUpdate(
+        viewerData,
+        msg.voice_epoch,
+        msg.voice_revision,
+      );
+      if (!applied) return true;
 
       const myId = useAuthStore.getState().user?.id;
       if (myId === viewerData.streamer_user_id) {
@@ -98,13 +108,16 @@ export async function handleVoiceEvent(
     case "voice_states_sync": {
       const syncData = msg.d;
       const vs = useVoiceStore.getState();
-      vs.handleVoiceStatesSync(syncData.states);
+      const syncApplied = vs.handleVoiceStatesSync(syncData.states, syncData.voice_epoch, syncData.voice_revision);
+      if (!syncApplied) return true;
 
       const myId = useAuthStore.getState().user?.id;
       if (!myId) return true;
 
       const myVoiceChannel = vs.currentVoiceChannelId;
-      const selfEntry = syncData.states.find((s) => s.user_id === myId);
+      const selfEntry = Object.values(useVoiceStore.getState().voiceStates)
+        .flat()
+        .find((s) => s.user_id === myId);
       const liveKitStillConnected = !!vs.livekitToken;
 
       console.warn("[ws] voice_states_sync handler", {

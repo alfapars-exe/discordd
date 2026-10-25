@@ -3,6 +3,8 @@
  */
 
 import { create } from "zustand";
+import { getAuthSessionSnapshot, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../api/authSessionEvents";
+import { inspectLegacyKeyArchive, importLegacyKeyArchive, type LegacyArchiveInspection } from "../crypto/legacyKeyArchive";
 import * as deviceManager from "../crypto/deviceManager";
 import * as keyBackup from "../crypto/keyBackup";
 import * as keyStorage from "../crypto/keyStorage";
@@ -26,6 +28,7 @@ export type E2EEInitStatus =
   | "uninitialized"
   | "initializing"
   | "ready"
+  | "legacy-recovery"
   | "error";
 
 export type DecryptionError = {
@@ -62,6 +65,7 @@ export type PeerTrustAlert = {
 
 type E2EEState = {
   initStatus: E2EEInitStatus;
+  legacyArchive: LegacyArchiveInspection | null;
   /** null = not yet registered */
   localDeviceId: string | null;
   devices: DeviceInfo[];
@@ -90,6 +94,7 @@ type E2EEState = {
   // ─── Actions ───
 
   initialize: (userId: string) => Promise<void>;
+  resolveLegacyArchive: (choice: "import" | "fresh") => Promise<boolean>;
   setupNewDevice: (userId: string, displayName?: string) => Promise<void>;
   restoreFromRecovery: (password: string) => Promise<boolean>;
   setRecoveryPassword: (password: string) => Promise<void>;
@@ -162,6 +167,7 @@ const EVICTION_PROTECTED_KINDS: ReadonlySet<PeerTrustAlertKind> = new Set([
 
 export const useE2EEStore = create<E2EEState>((set, get) => ({
   initStatus: "uninitialized",
+  legacyArchive: null,
   localDeviceId: null,
   devices: [],
   hasRecoveryBackup: false,
@@ -174,25 +180,43 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   peerTrustAlerts: {},
 
   initialize: async (userId: string) => {
+    const session = getAuthSessionSnapshot();
+    if (session.ownerId !== userId) return;
+    const isCurrent = () => {
+      const latest = getAuthSessionSnapshot();
+      return latest.ownerId === userId && latest.generation === session.generation;
+    };
     const current = get().initStatus;
     if (current === "initializing" || current === "ready") return;
+    const previousArchive = get().legacyArchive;
 
-    set({ initStatus: "initializing", initError: null });
+    set({ initStatus: previousArchive ? "legacy-recovery" : "initializing", initError: null });
 
     try {
-      let hasKeys = await keyStorage.hasLocalKeys();
+      const hasKeys = await keyStorage.hasLocalKeys();
+      if (!isCurrent()) return;
 
-      // Clear keys if logged in as a different user
+      // Scoped storage must never contain another account's registration.
+      // Preserve it for recovery rather than silently deleting key material.
       if (hasKeys) {
         const registration = await keyStorage.getRegistrationData();
+        if (!isCurrent()) return;
         if (registration && registration.userId !== userId) {
-          await keyStorage.clearAllE2EEData();
-          hasKeys = false;
-          // Trust alerts belong to the account that was just wiped: they carry
-          // that account's contacts' userIds and identity keys. The in-memory
-          // copy has to go too, otherwise the next markPeerTrustAlert writes
-          // user A's alerts back into user B's freshly cleared metadata store.
-          set({ peerTrustAlerts: {} });
+          set({ initStatus: "error", initError: "Local key registration does not match this account", peerTrustAlerts: {} });
+          return;
+        }
+      }
+
+      if (!hasKeys) {
+        const decision = await keyStorage.getMetadata<string>("legacyArchiveDecision.v1");
+        if (!isCurrent()) return;
+        if (decision !== "fresh") {
+          const archive = await inspectLegacyKeyArchive();
+          if (!isCurrent()) return;
+          if (archive.status === "eligible" || archive.status === "unverified" || previousArchive) {
+            set({ initStatus: "legacy-recovery", legacyArchive: archive });
+            return;
+          }
         }
       }
 
@@ -205,6 +229,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
 
       if (hasKeys) {
         let deviceId = await deviceManager.getLocalDeviceId();
+        if (!isCurrent()) return;
 
         // Recover a lost device id from the registration record.
         //
@@ -220,8 +245,10 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         // over stranding the device.
         if (!deviceId) {
           const registration = await keyStorage.getRegistrationData();
+          if (!isCurrent()) return;
           if (registration?.deviceId) {
             await keyStorage.setMetadata("deviceId", registration.deviceId);
+            if (!isCurrent()) return;
             deviceId = registration.deviceId;
           }
         }
@@ -229,22 +256,34 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         // Re-register if server lost this device (DB reset, manual deletion).
         // Without this: prekey upload FK error + other devices can't create envelopes.
         if (deviceId) {
+          let devicesRes: Awaited<ReturnType<typeof e2eeApi.listMyDevices>> | undefined;
           try {
-            const devicesRes = await e2eeApi.listMyDevices();
-            const existsOnServer = devicesRes.success && devicesRes.data?.some(
-              (d) => d.device_id === deviceId
-            );
-            if (!existsOnServer) {
-              await deviceManager.reRegisterDevice(deviceId);
-            }
+            devicesRes = await e2eeApi.listMyDevices();
+            if (!isCurrent()) return;
           } catch {
-            // Network error — will retry during prekey refresh
+            if (!isCurrent()) return;
+            // Offline local decryption remains available. A failed lookup is
+            // not evidence that this device vanished and must be overwritten.
           }
-        }
+          if (devicesRes?.success && Array.isArray(devicesRes.data)) {
+            const registered = devicesRes.data.find((device) => device.device_id === deviceId);
+            if (registered) {
+              const identity = await keyStorage.getIdentityKeyPair();
+              if (!isCurrent()) return;
+              if (!identity || registered.user_id !== userId || registered.identity_key !== signalProtocol.toBase64(identity.publicKey)) {
+                throw new Error("Local device identity does not match the authenticated account");
+              }
+            } else {
+              await deviceManager.reRegisterDevice(deviceId);
+              if (!isCurrent()) return;
+            }
+          }
+        } else throw new Error("Local device registration is incomplete");
 
         set({
           initStatus: "ready",
           localDeviceId: deviceId,
+          legacyArchive: null,
         });
 
         // Background: prekey check + device list + backup status + deferred recovery prompt
@@ -260,28 +299,77 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         // a backup from the old mandatory recovery password flow.
         try {
           const backupRes = await e2eeApi.downloadKeyBackup();
+          if (!isCurrent()) return;
           if (backupRes.success && backupRes.data) {
             set({ hasRecoveryBackup: true });
           }
         } catch {
+          if (!isCurrent()) return;
           // Non-critical — continue
         }
 
         await get().setupNewDevice(userId);
+        if (!isCurrent()) return;
         scheduleDeferredRecoveryCheck(get);
       }
     } catch (err) {
+      if (!isCurrent()) return;
       const message =
         err instanceof Error ? err.message : "E2EE initialization failed";
       console.error("[e2eeStore] initialize error:", message);
       set({
-        initStatus: "error",
+        initStatus: previousArchive ? "legacy-recovery" : "error",
         initError: message,
       });
     }
   },
 
+  resolveLegacyArchive: async (choice) => {
+    const session = getAuthSessionSnapshot();
+    if (!session.ownerId || get().initStatus !== "legacy-recovery" || get().isGeneratingKeys) return false;
+    const archive = get().legacyArchive;
+    const isCurrent = () => {
+      const latest = getAuthSessionSnapshot();
+      return latest.ownerId === session.ownerId && latest.generation === session.generation;
+    };
+    set({ isGeneratingKeys: true, initError: null });
+    try {
+      if (choice === "import") {
+        if (get().legacyArchive?.status !== "eligible") return false;
+        const result = await importLegacyKeyArchive(true);
+        if (!isCurrent()) return false;
+        if (!result.success) {
+          set({ initError: "Legacy key archive could not be imported" });
+          return false;
+        }
+      } else if (choice === "fresh") {
+        // Explicit user decision; the legacy source remains untouched.
+        await keyStorage.setMetadata("legacyArchiveDecision.v1", "fresh");
+      } else return false;
+      if (!isCurrent()) return false;
+      set({ initStatus: "uninitialized", legacyArchive: null });
+      await get().initialize(session.ownerId);
+      if (!isCurrent()) return false;
+      if (get().initStatus !== "ready") {
+        set({ initStatus: "legacy-recovery", legacyArchive: archive, initError: get().initError ?? "Legacy key recovery failed" });
+        return false;
+      }
+      return true;
+    } catch {
+      if (isCurrent()) set({ initStatus: "legacy-recovery", legacyArchive: archive, initError: "Legacy key recovery failed" });
+      return false;
+    } finally {
+      if (isCurrent()) set({ isGeneratingKeys: false });
+    }
+  },
+
   setupNewDevice: async (userId: string, displayName?: string) => {
+    const session = getAuthSessionSnapshot();
+    if (session.ownerId !== userId) return;
+    const isCurrent = () => {
+      const latest = getAuthSessionSnapshot();
+      return latest.ownerId === userId && latest.generation === session.generation;
+    };
     set({ isGeneratingKeys: true, initError: null });
 
     try {
@@ -289,10 +377,12 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         userId,
         displayName
       );
+      if (!isCurrent()) return;
 
       set({
         initStatus: "ready",
         localDeviceId: deviceId,
+        legacyArchive: null,
         isGeneratingKeys: false,
       });
 
@@ -309,6 +399,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Device setup failed";
+      if (!isCurrent()) return;
       console.error("[e2eeStore] setupNewDevice error:", message);
       set({
         initError: message,
@@ -318,10 +409,13 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   restoreFromRecovery: async (password: string) => {
+    const isCurrent = captureStoreScope();
+    if (!isCurrent()) return false;
     set({ isGeneratingKeys: true, initError: null });
 
     try {
       const response = await e2eeApi.downloadKeyBackup();
+      if (!isCurrent()) return false;
       if (!response.success || !response.data) {
         set({
           initError: "No backup found on server",
@@ -341,6 +435,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         },
         password
       );
+      if (!isCurrent()) return false;
 
       if (!restored) {
         set({
@@ -352,6 +447,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
 
       // New device ID for self-fanout; legacy ID kept for old envelope matching.
       const newDeviceId = await deviceManager.registerRestoredDevice();
+      if (!isCurrent()) return false;
 
       set({
         initStatus: "ready",
@@ -376,6 +472,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Recovery failed";
+      if (!isCurrent()) return false;
       console.error("[e2eeStore] restoreFromRecovery error:", message);
       set({
         initError: message,
@@ -408,8 +505,13 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
       throw new WeakRecoveryPassphraseError(policy.reason);
     }
 
+    const isCurrent = captureStoreScope();
+    const assertCurrent = () => { if (!isCurrent()) throw new Error("Auth session changed during backup"); };
+    assertCurrent();
+
     try {
       const backup = await keyBackup.createBackup(password);
+      assertCurrent();
 
       const response = await e2eeApi.uploadKeyBackup({
         version: backup.version,
@@ -418,6 +520,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
         nonce: backup.nonce,
         salt: backup.salt,
       });
+      assertCurrent();
 
       if (!response.success) {
         throw new Error(response.error ?? "Failed to upload key backup");
@@ -433,8 +536,9 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   completeRecoverySetup: async (password: string) => {
+    const isCurrent = captureStoreScope();
     await get().setRecoveryPassword(password);
-    set({ showRecoveryPrompt: false });
+    if (isCurrent()) set({ showRecoveryPrompt: false });
   },
 
   checkAndPromptRecovery: () => {
@@ -459,8 +563,11 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   fetchDevices: async () => {
+    const isCurrent = captureStoreScope();
+    if (!isCurrent()) return;
     try {
       const response = await e2eeApi.listMyDevices();
+      if (!isCurrent()) return;
       if (response.success && response.data) {
         set({ devices: response.data });
       }
@@ -470,8 +577,11 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   removeDevice: async (deviceId: string) => {
+    const isCurrent = captureStoreScope();
+    if (!isCurrent()) return;
     try {
       const response = await e2eeApi.removeDevice(deviceId);
+      if (!isCurrent()) return;
       if (response.success) {
         set((state) => ({
           devices: state.devices.filter((d) => d.device_id !== deviceId),
@@ -581,11 +691,13 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 
   loadPeerTrustAlerts: async () => {
+    const isCurrent = captureStoreScope();
+    if (!isCurrent()) return;
     try {
       const stored = await keyStorage.getMetadata<Record<string, PeerTrustAlert>>(
         "peer_trust_alerts"
       );
-      if (stored) {
+      if (stored && typeof stored === "object" && !Array.isArray(stored) && isCurrent()) {
         set({ peerTrustAlerts: stored });
       }
     } catch (err) {
@@ -600,6 +712,7 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
     // Device removal is done explicitly via Settings > Encryption.
     set({
       initStatus: "uninitialized",
+      legacyArchive: null,
       localDeviceId: null,
       devices: [],
       hasRecoveryBackup: false,
@@ -614,16 +727,29 @@ export const useE2EEStore = create<E2EEState>((set, get) => ({
   },
 }));
 
+subscribeAuthOwnerChanges(() => { void useE2EEStore.getState().reset(); });
+subscribeAuthGenerationChanges(() => { void useE2EEStore.getState().reset(); });
+
 // ──────────────────────────────────
 // Internal Helpers
 // ──────────────────────────────────
+
+function captureStoreScope(): () => boolean {
+  const scope = getAuthSessionSnapshot();
+  return () => {
+    const current = getAuthSessionSnapshot();
+    return !!scope.ownerId && scope.ownerId === current.ownerId && scope.generation === current.generation;
+  };
+}
 
 /** Check recovery backup status in background. Silently continues on error. */
 async function checkRecoveryBackup(
   set: (partial: Partial<E2EEState>) => void
 ): Promise<void> {
+  const isCurrent = captureStoreScope();
   try {
     const response = await e2eeApi.downloadKeyBackup();
+    if (!isCurrent()) return;
     if (response.success && response.data) {
       set({ hasRecoveryBackup: true });
     }
@@ -640,8 +766,9 @@ async function checkRecoveryBackup(
 function scheduleDeferredRecoveryCheck(
   get: () => E2EEState
 ): void {
+  const isCurrent = captureStoreScope();
   setTimeout(() => {
-    get().checkAndPromptRecovery();
+    if (isCurrent()) get().checkAndPromptRecovery();
   }, 5000);
 }
 

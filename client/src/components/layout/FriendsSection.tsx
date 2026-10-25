@@ -10,6 +10,7 @@ import { useFriendStore } from "../../stores/friendStore";
 import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
+import { useToastStore } from "../../stores/toastStore";
 import Avatar from "../shared/Avatar";
 import { IconFriends } from "../shared/Icons";
 import ContextMenu from "../shared/ContextMenu";
@@ -42,8 +43,20 @@ function FriendsSection({ onShowUserCard }: FriendsSectionProps) {
     closeAllDrawers();
   }
 
+  async function handleMessage(friend: FriendshipWithUser) {
+    const channelId = await useDMStore.getState().createOrGetChannel(friend.user_id);
+    if (!channelId) {
+      useToastStore.getState().addToast("error", t("dmOpenFailed"));
+      return;
+    }
+    selectDM(channelId);
+    openTab(channelId, "dm", friend.display_name ?? friend.username);
+    clearDMUnread(channelId);
+    void fetchMessages(channelId);
+    closeAllDrawers();
+  }
+
   function handleFriendContextMenu(e: React.MouseEvent, friend: FriendshipWithUser) {
-    const name = friend.display_name ?? friend.username;
     const items: ContextMenuItem[] = [
       {
         label: t("viewProfile"),
@@ -80,15 +93,7 @@ function FriendsSection({ onShowUserCard }: FriendsSectionProps) {
       },
       {
         label: t("sendMessage"),
-        onClick: async () => {
-          const channelId = await useDMStore.getState().createOrGetChannel(friend.user_id);
-          if (channelId) {
-            selectDM(channelId);
-            openTab(channelId, "dm", name);
-            clearDMUnread(channelId);
-            fetchMessages(channelId);
-          }
-        },
+        onClick: () => { void handleMessage(friend); },
         separator: true,
       },
       {
@@ -107,6 +112,7 @@ function FriendsSection({ onShowUserCard }: FriendsSectionProps) {
         <button
           className="ch-tree-section-header"
           onClick={() => toggleSection("friends")}
+          aria-expanded={isExpanded}
         >
           <span className={`ch-tree-chevron${isExpanded ? " expanded" : ""}`}>&#x276F;</span>
           <span>{t("friends")}</span>
@@ -132,7 +138,8 @@ function FriendsSection({ onShowUserCard }: FriendsSectionProps) {
                 <button
                   key={friend.user_id}
                   className="ch-tree-item"
-                  onClick={() => handleFriendsClick()}
+                  onClick={() => { void handleMessage(friend); }}
+                  title={t("sendMessage")}
                   onContextMenu={(e) => handleFriendContextMenu(e, friend)}
                 >
                   <Avatar

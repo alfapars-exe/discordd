@@ -92,9 +92,6 @@ function PrivacyPage() {
             <img src="/hlogo.png" alt="HiChat!" className="lp-footer-logo-img" />
             <span className="lp-footer-copy">{t("footerCopy")}</span>
           </div>
-          <div className="lp-footer-links">
-            <a href="https://github.com/akinalpfdn/Mqvi" target="_blank" rel="noopener noreferrer" className="lp-footer-link">GitHub</a>
-          </div>
         </footer>
       </div>
     </div>

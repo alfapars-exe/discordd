@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -26,6 +27,7 @@ func scanChannel(rows *sql.Rows) (models.Channel, error) {
 	err := rows.Scan(
 		&ch.ID, &ch.ServerID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic,
 		&ch.Position, &ch.UserLimit, &ch.Bitrate, &ch.CreatedAt,
+		&ch.ParentChannelID, &ch.StarterMessageID, &ch.ArchivedAt, &ch.ReplyCount,
 	)
 	return ch, err
 }
@@ -38,8 +40,8 @@ func (r *sqliteChannelRepo) Create(ctx context.Context, channel *models.Channel)
 	channel.ID = id
 
 	query := `
-		INSERT INTO channels (id, server_id, name, type, category_id, topic, position, user_limit, bitrate)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		INSERT INTO channels (id, server_id, name, type, category_id, topic, position, user_limit, bitrate, parent_channel_id, starter_message_id, archived_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	if _, err := r.db.ExecContext(ctx, query,
 		channel.ID,
@@ -51,6 +53,9 @@ func (r *sqliteChannelRepo) Create(ctx context.Context, channel *models.Channel)
 		channel.Position,
 		channel.UserLimit,
 		channel.Bitrate,
+		channel.ParentChannelID,
+		channel.StarterMessageID,
+		channel.ArchivedAt,
 	); err != nil {
 		return fmt.Errorf("failed to create channel: %w", err)
 	}
@@ -64,13 +69,13 @@ func (r *sqliteChannelRepo) Create(ctx context.Context, channel *models.Channel)
 
 func (r *sqliteChannelRepo) GetByID(ctx context.Context, id string) (*models.Channel, error) {
 	query := `
-		SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at
+		SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at, parent_channel_id, starter_message_id, archived_at, 0
 		FROM channels WHERE id = ?`
 
 	ch := &models.Channel{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&ch.ID, &ch.ServerID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic,
-		&ch.Position, &ch.UserLimit, &ch.Bitrate, &ch.CreatedAt,
+		&ch.Position, &ch.UserLimit, &ch.Bitrate, &ch.CreatedAt, &ch.ParentChannelID, &ch.StarterMessageID, &ch.ArchivedAt, &ch.ReplyCount,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -85,8 +90,8 @@ func (r *sqliteChannelRepo) GetByID(ctx context.Context, id string) (*models.Cha
 
 func (r *sqliteChannelRepo) GetAllByServer(ctx context.Context, serverID string) ([]models.Channel, error) {
 	query := `
-		SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at
-		FROM channels WHERE server_id = ? ORDER BY position ASC`
+		SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at, parent_channel_id, starter_message_id, archived_at, 0
+		FROM channels WHERE server_id = ? AND type <> 'thread' ORDER BY position ASC`
 
 	rows, err := r.db.QueryContext(ctx, query, serverID)
 	if err != nil {
@@ -97,7 +102,7 @@ func (r *sqliteChannelRepo) GetAllByServer(ctx context.Context, serverID string)
 
 func (r *sqliteChannelRepo) GetByCategoryID(ctx context.Context, categoryID string) ([]models.Channel, error) {
 	query := `
-		SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at
+		SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at, parent_channel_id, starter_message_id, archived_at, 0
 		FROM channels WHERE category_id = ? ORDER BY position ASC`
 
 	rows, err := r.db.QueryContext(ctx, query, categoryID)
@@ -105,6 +110,40 @@ func (r *sqliteChannelRepo) GetByCategoryID(ctx context.Context, categoryID stri
 		return nil, fmt.Errorf("failed to get channels by category: %w", err)
 	}
 	return scanRows(rows, "channel", scanChannel)
+}
+
+func (r *sqliteChannelRepo) GetThreadsByParent(ctx context.Context, parentChannelID string, includeArchived bool) ([]models.Channel, error) {
+	query := `SELECT id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at, parent_channel_id, starter_message_id, archived_at,
+		(SELECT COUNT(*) FROM messages WHERE messages.channel_id = channels.id)
+		FROM channels WHERE parent_channel_id = ? AND type = 'thread'`
+	if !includeArchived {
+		query += ` AND archived_at IS NULL`
+	}
+	query += ` ORDER BY created_at DESC, id DESC`
+	rows, err := r.db.QueryContext(ctx, query, parentChannelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list threads: %w", err)
+	}
+	return scanRows(rows, "thread", scanChannel)
+}
+
+func (r *sqliteChannelRepo) SetThreadArchived(ctx context.Context, threadID string, archived bool) error {
+	var value any
+	if archived {
+		value = time.Now().UTC()
+	}
+	result, err := r.db.ExecContext(ctx, `UPDATE channels SET archived_at=? WHERE id=? AND type='thread'`, value, threadID)
+	if err != nil {
+		return fmt.Errorf("failed to update thread lifecycle: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return pkg.ErrNotFound
+	}
+	return nil
 }
 
 func (r *sqliteChannelRepo) Update(ctx context.Context, channel *models.Channel) error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
@@ -195,6 +196,77 @@ func TestDeleteServerCascade_DoesNotTouchOtherServers(t *testing.T) {
 	_ = survivorMessageID
 }
 
+func TestDeleteServerCascade_RemovesServerEventsWithoutForeignKeys(t *testing.T) {
+	db, path := newTestDBWithPath(t)
+	serverRepo := NewSQLiteServerRepo(db.Conn)
+	roleRepo := NewSQLiteRoleRepo(db.Conn)
+	channelRepo := NewSQLiteChannelRepo(db.Conn)
+	categoryRepo := NewSQLiteCategoryRepo(db.Conn)
+	messageRepo := NewSQLiteMessageRepo(db.Conn)
+	userRepo := NewSQLiteUserRepo(db.Conn)
+	repos := struct {
+		server   ServerRepository
+		role     RoleRepository
+		channel  ChannelRepository
+		category CategoryRepository
+		message  MessageRepository
+		user     UserRepository
+	}{serverRepo, roleRepo, channelRepo, categoryRepo, messageRepo, userRepo}
+	deleteServerID, _, _, _ := seedFullServer(t, repos)
+	survivorServerID, _, _, _ := seedFullServer(t, repos)
+	eventRepo := NewSQLiteServerEventRepo(db.Conn)
+	ctx := context.Background()
+	createEvent := func(serverID string) string {
+		t.Helper()
+		server, err := serverRepo.GetByID(ctx, serverID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		event := &models.ServerEvent{
+			ServerID: serverID, CreatorID: server.OwnerID, Name: "Cascade fixture",
+			StartsAt: time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339Nano),
+		}
+		if err := eventRepo.Create(ctx, event); err != nil {
+			t.Fatalf("create event: %v", err)
+		}
+		if err := eventRepo.SetInterested(ctx, event.ID, server.OwnerID, true); err != nil {
+			t.Fatalf("RSVP: %v", err)
+		}
+		if _, err := db.Conn.ExecContext(ctx, `INSERT INTO server_event_deliveries(event_id,user_id,starts_at)
+			SELECT id,creator_id,starts_at FROM server_events WHERE id=?`, event.ID); err != nil {
+			t.Fatalf("seed event delivery: %v", err)
+		}
+		return event.ID
+	}
+	deletedEventID := createEvent(deleteServerID)
+	survivorEventID := createEvent(survivorServerID)
+
+	// Run the full cascade on the same FK-off/replica connection used for the
+	// remote-libSQL condition. Event descendants must be removed explicitly,
+	// not merely as a side effect of ON DELETE CASCADE.
+	if err := deleteServerCascade(ctx, entranceFKOffConn(t, path), deleteServerID); err != nil {
+		t.Fatalf("deleteServerCascade: %v", err)
+	}
+	for query, id := range map[string]string{
+		`SELECT COUNT(*) FROM server_events WHERE id=?`:                 deletedEventID,
+		`SELECT COUNT(*) FROM server_event_rsvps WHERE event_id=?`:      deletedEventID,
+		`SELECT COUNT(*) FROM server_event_deliveries WHERE event_id=?`: deletedEventID,
+	} {
+		if got := countRows(t, db, query, id); got != 0 {
+			t.Errorf("deleted event data survived (%s): %d", query, got)
+		}
+	}
+	for query, id := range map[string]string{
+		`SELECT COUNT(*) FROM server_events WHERE id=?`:                 survivorEventID,
+		`SELECT COUNT(*) FROM server_event_rsvps WHERE event_id=?`:      survivorEventID,
+		`SELECT COUNT(*) FROM server_event_deliveries WHERE event_id=?`: survivorEventID,
+	} {
+		if got := countRows(t, db, query, id); got != 1 {
+			t.Errorf("sibling event data changed (%s): %d, want 1", query, got)
+		}
+	}
+}
+
 // TestDeleteServerCascade_NotFound preserves the pre-existing contract: no
 // such server is still pkg.ErrNotFound, not a silent no-op.
 func TestDeleteServerCascade_NotFound(t *testing.T) {
@@ -317,13 +389,17 @@ func TestHardDeleteUser_CascadesOwnedServers(t *testing.T) {
 // comment — six tables leaked silently for years because ADD COLUMN can't
 // carry a REFERENCES clause in SQLite).
 var fkCoveredTables = map[string]string{
-	"server_members":    "ON DELETE CASCADE to servers (018_multi_server.sql)",
-	"server_mutes":      "ON DELETE CASCADE to servers (025_server_mutes.sql)",
-	"channel_mutes":     "ON DELETE CASCADE to servers (032_channel_mutes.sql)",
-	"soundboard_sounds": "ON DELETE CASCADE to servers (051_soundboard.sql)",
-	"audit_logs":        "ON DELETE CASCADE to servers (061_audit_channel.sql)",
-	"member_timeouts":   "ON DELETE CASCADE to servers (064_moderation_timeout.sql)",
-	"app_logs":          "server_id is nullable (043_app_logs.sql) — app logs are observability data, not server-owned rows that must vanish with the server",
+	"server_members":            "ON DELETE CASCADE to servers (018_multi_server.sql)",
+	"server_mutes":              "ON DELETE CASCADE to servers (025_server_mutes.sql)",
+	"channel_mutes":             "ON DELETE CASCADE to servers (032_channel_mutes.sql)",
+	"soundboard_sounds":         "ON DELETE CASCADE to servers (051_soundboard.sql)",
+	"audit_logs":                "ON DELETE CASCADE to servers (061_audit_channel.sql)",
+	"member_timeouts":           "ON DELETE CASCADE to servers (064_moderation_timeout.sql)",
+	"application_installations": "ON DELETE CASCADE to servers (102_application_registry.sql)",
+	"application_invocations":   "ON DELETE CASCADE to servers (102_application_registry.sql)",
+	"music_sessions":            "ON DELETE CASCADE to servers (104_music_sessions.sql)",
+	"message_reminders":         "ON DELETE CASCADE to servers (107_message_reminders.sql)",
+	"app_logs":                  "server_id is nullable (043_app_logs.sql) — app logs are observability data, not server-owned rows that must vanish with the server",
 }
 
 // deleteServerCascadeTargetTable extracts the table name from a

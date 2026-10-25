@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "stage": "write-before-POST and outcome cleanup wired; startup restore queue not yet wired",
+  "changes": [
+    "Every newly constructed group send now awaits its AES-GCM local snapshot before the first POST. Storage errors stop transmission and retain the in-memory exact request for an explicit retry. Successful durable writes are tracked so retries do not overwrite their write-once record or re-encrypt files.",
+    "Full committed success removes its durable snapshot; failed local deletion is a cleanup error, not a failed server send. The already-committed message remains visible and returns committed=true while pending state permits result/cleanup rechecking without another POST.",
+    "Partial results retain their durable snapshot and associate file-recovery UI with its stable owner/device/request scope. Failed-files-only child sends persist the source operation ID/device in their sealed manifest before POST. Once a child commits, the source snapshot is removed; a partial child retains its own narrowed recoverable snapshot.",
+    "Explicit recovery dismissal deletes the exact durable record; a failed deletion restores the in-memory recovery if the account/group is still current. Moving files back to a draft deliberately preserves the durable source rather than discarding the last recovery copy. Cancelled/deleted outcomes also preserve missing original files for review where necessary.",
+    "Pending UI distinguishes a saved encrypted copy from a memory-only failed-save attempt and explicitly states that automatic restart restoration is not yet available. Recovery actions are serialized while an unresolved send exists. No automatic send was added.",
+    "Removed an eager storage-export alias so importing unrelated WebSocket handlers does not require unused persistence functions to run/resolve at module initialization. No test was skipped or disabled."
+  ],
+  "verification": [
+    "Store tests verify deferred durable write blocks the first POST, injected quota error causes no new POST, committed cleanup failure remains committed and retries only cleanup, partial snapshots survive, child source lineage/cleanup order is retained and failed dismissal restores file recovery.",
+    "New integration suite uses real fake-indexeddb semantics, AES-GCM local storage and real attachment encryption. The API double observes a decryptable exact encrypted-file snapshot at POST entry; timeout retains it across DB connection close/reopen and its original file key decrypts the exact remote file bytes. Full success removes the real record. Group Signal fan-out and the network are mocked, so this is not real two-client acceptance.",
+    "Initial full regression exposed an obsolete eager keyStorage export dependency in a WebSocket test mock; a new test fixture also lacked required GroupDMMessage fields. Both were corrected. Final full suite passed: 226 files / 2153 tests in 46.51s.",
+    "After the final stricter origin validation, 2 storage/integration files / 9 tests passed in 3.62s. Final tsc -b and targeted ESLint passed. Local Vite production build passed: 1649 modules, 702ms; existing warnings remain unsuppressed. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "Authenticated startup restore, ready-device gating, multi-operation dependency ordering and recovery UI hydration are NOT wired yet. Persisted data exists, but the app still tells the user to keep it open; do not claim automatic restart-safe delivery.",
+    "Partial source/child chains and reviewed-to-draft files require restart reconciliation without presenting already-resolved files as new retries. Preserved review records intentionally remain until this lifecycle can safely resolve them; the current primitives do not silently drop their last copy.",
+    "Before enabling automatic restore, account/device/group/server context must be revalidated, older-server capability failures must not downgrade to unkeyed sends, and corrupted/missing-key records must remain reportable. Local cache/device-change adoption and persisted outbox delivery remain open.",
+    "Actual browser/Electron process restart, two-client encrypted upload, real disk quota/large-file pressure, full PostgreSQL API acceptance, Windows packaging and visual/accessibility acceptance remain unperformed. Existing browser QA server was not restarted while its area is handed to the user.",
+    "No production migration, commit, push, merge or release performed. Overall P0-P11 is incomplete."
+  ]
+}

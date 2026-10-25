@@ -21,6 +21,8 @@ const dmStoreState = {
   incrementDMUnread: vi.fn(),
   decrementDMUnread: vi.fn(),
   handleDMMessageCreate: vi.fn(),
+  handleDMMessageUpdate:vi.fn(),
+  handleDMMessageDelete:vi.fn(),
   handleDMReadSync: vi.fn(),
 };
 
@@ -50,17 +52,24 @@ vi.mock("../../crypto/dmEncryption", () => ({
   popEditPlaintext: vi.fn(),
 }));
 vi.mock("../../crypto/keyStorage", () => ({
+  deleteCachedDMMessage:vi.fn(async()=>true),
   cacheDecryptedMessage: vi.fn(async () => {}),
   getCachedDecryptedMessage: vi.fn(async () => null),
 }));
 vi.mock("../../utils/sounds", () => ({ playNotificationSound: vi.fn() }));
 vi.mock("../../utils/notifications", () => ({ showNotification: vi.fn() }));
+vi.mock("../../utils/textToSpeech", () => ({ speakIncomingMessage: vi.fn() }));
 
 import { handleDMEvent } from "./dmEventHandlers";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
 import { markDMRead } from "../../api/dm";
-import { decryptDMMessage, popSentPlaintext } from "../../crypto/dmEncryption";
+import { decryptDMMessage, popSentPlaintext,popEditPlaintext } from "../../crypto/dmEncryption";
+import { speakIncomingMessage } from "../../utils/textToSpeech";
+import { usePreferencesStore } from "../../stores/preferencesStore";
+import { useFriendStore } from "../../stores/friendStore";
+import {useComposerDraftStore} from "../../stores/composerDraftStore";
+import {deleteCachedDMMessage} from "../../crypto/keyStorage";
 
 function makeDMMessage(overrides: Partial<DMMessage> = {}): DMMessage {
   return {
@@ -97,6 +106,9 @@ const flashFrame = vi.fn(async () => {});
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useComposerDraftStore.getState().reset();
+  usePreferencesStore.setState({ data: {} });
+  useFriendStore.setState({ friends: [] });
   dmStoreState.selectedDMId = null;
   dmStoreState.channels = [{ id: "dm-1", is_muted: false }];
   dmStoreState.dmUnreadCounts = {};
@@ -110,6 +122,61 @@ beforeEach(() => {
 });
 
 describe("handleDMEvent — dm_message_create cue gating", () => {
+  it("scopes deleted-message cache cleanup to its captured session",async()=>{
+    await handleDMEvent({op:"dm_message_delete",d:{dm_channel_id:"dm-1",id:"msg-1"}});
+    expect(deleteCachedDMMessage).toHaveBeenCalledWith("msg-1","dm-1",expect.any(Function));
+    const guard=vi.mocked(deleteCachedDMMessage).mock.calls[0][2];expect(guard()).toBe(true);
+    useComposerDraftStore.getState().reset();expect(guard()).toBe(false);
+  });
+  it("does not guess an unread decrement for a duplicate or unloaded deletion",async()=>{
+    dmStoreState.dmUnreadCounts={"dm-1":3};
+    await handleDMEvent({op:"dm_message_delete",d:{dm_channel_id:"dm-1",id:"unknown"}});
+    expect(dmStoreState.decrementDMUnread).not.toHaveBeenCalled();
+  });
+  it("decrements a loaded peer deletion only once when its WS event is repeated",async()=>{
+    dmStoreState.dmUnreadCounts={"dm-1":3};
+    dmStoreState.messagesByChannel={"dm-1":[makeDMMessage()]};
+    dmStoreState.handleDMMessageDelete.mockImplementationOnce(()=>{dmStoreState.messagesByChannel={"dm-1":[]};});
+    const deleted:WSMessage={op:"dm_message_delete",d:{dm_channel_id:"dm-1",id:"msg-1"}};
+    await handleDMEvent(deleted);await handleDMEvent(deleted);
+    expect(dmStoreState.decrementDMUnread).toHaveBeenCalledExactlyOnceWith("dm-1");
+  });
+  it("does not publish or notify a create decrypted after its deletion", async () => {
+    let finish!:(payload:{content:string})=>void;
+    vi.mocked(decryptDMMessage).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    const creating=handleDMEvent(createMsg({encryption_version:1,ciphertext:"cipher",sender_device_id:"remote"}));
+    await handleDMEvent({op:"dm_message_delete",d:{dm_channel_id:"dm-1",id:"msg-1"}});
+    finish({content:"deleted"});
+    await creating;
+    expect(dmStoreState.handleDMMessageDelete).toHaveBeenCalledOnce();
+    expect(dmStoreState.handleDMMessageCreate).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+  it("does not let an older asynchronous edit replace the newer event", async () => {
+    let finish!:(payload:{content:string})=>void;
+    vi.mocked(decryptDMMessage).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+    const editing=handleDMEvent({op:"dm_message_update",d:makeDMMessage({encryption_version:1,ciphertext:"old",sender_device_id:"remote"})});
+    await handleDMEvent({op:"dm_message_update",d:makeDMMessage({content:"new"})});
+    finish({content:"old"});
+    await editing;
+    expect(dmStoreState.handleDMMessageUpdate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({content:"new"}));
+  });
+  it("retains decrypted spam without speaking or notifying its content", async () => {
+    const content = "https://trusted.test@evil.test";
+    vi.mocked(decryptDMMessage).mockResolvedValueOnce({ content });
+    await handleDMEvent(createMsg({ encryption_version: 1, ciphertext: "encrypted", sender_device_id: "remote" }));
+    expect(dmStoreState.handleDMMessageCreate).toHaveBeenCalledWith(expect.objectContaining({ content }));
+    expect(speakIncomingMessage).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
+    expect(playNotificationSound).not.toHaveBeenCalled();
+    expect(flashFrame).not.toHaveBeenCalled();
+  });
+  it("honors disabling spam filters for incoming cues", async () => {
+    usePreferencesStore.setState({ data: { privacy: { spamFilter: "off" } } });
+    await handleDMEvent(createMsg({ content: "https://trusted.test@evil.test" }));
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(speakIncomingMessage).toHaveBeenCalledTimes(1);
+  });
   it("unmuted DM in the background: bumps unread and fires sound + flash + toast", async () => {
     await handleDMEvent(createMsg());
 
@@ -153,6 +220,13 @@ describe("handleDMEvent — dm_message_create cue gating", () => {
 });
 
 describe("handleDMEvent — dm_message_create own E2EE echo (sent-plaintext FIFO)", () => {
+  it("uses source-bound own edit payloads and retains their attachment keys",async()=>{
+    const keys=[{key:"key",iv:"iv",digest:"digest",filename:"file.txt",mimeType:"text/plain",originalSize:1}];vi.mocked(popEditPlaintext).mockReturnValueOnce({content:"edited",file_keys:keys});await handleDMEvent({op:"dm_message_update",d:makeDMMessage({user_id:"me",encryption_version:1,ciphertext:"edit-cipher",sender_device_id:"dev-local",e2ee_metadata:"edit-meta"})});expect(popEditPlaintext).toHaveBeenCalledWith("msg-1",{ciphertext:"edit-cipher",metadata:"edit-meta"});expect(dmStoreState.handleDMMessageUpdate).toHaveBeenCalledWith(expect.objectContaining({content:"edited",e2ee_file_keys:keys}));
+  });
+  it("does not publish or notify an old-session decryption result",async()=>{
+    let finish!:(payload:{content:string})=>void;vi.mocked(decryptDMMessage).mockReturnValueOnce(new Promise(resolve=>{finish=resolve}));
+    const handling=handleDMEvent(createMsg({encryption_version:1,ciphertext:"[]",sender_device_id:"peer-device",content:null}));await vi.waitFor(()=>expect(decryptDMMessage).toHaveBeenCalledOnce());useComposerDraftStore.getState().reset();finish({content:"old session"});await handling;expect(dmStoreState.handleDMMessageCreate).not.toHaveBeenCalled();expect(playNotificationSound).not.toHaveBeenCalled();expect(showNotification).not.toHaveBeenCalled();
+  });
   /** Own E2EE message as the server echoes it; content is server-side null. */
   function ownEncrypted(senderDeviceId: string): WSMessage {
     return createMsg({
@@ -174,7 +248,7 @@ describe("handleDMEvent — dm_message_create own E2EE echo (sent-plaintext FIFO
 
     await handleDMEvent(ownEncrypted("dev-local"));
 
-    expect(popSentPlaintext).toHaveBeenCalledWith("dm-1");
+    expect(popSentPlaintext).toHaveBeenCalledWith("dm-1",{ciphertext:"[]",metadata:undefined});
     expect(decryptDMMessage).not.toHaveBeenCalled();
     expect(stored().content).toBe("my note");
   });

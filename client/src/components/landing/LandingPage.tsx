@@ -10,7 +10,6 @@ import { FEATURES, COMPARISON_ROWS } from "./landingData";
 import "../../styles/landing.css";
 
 import { detectOS } from "../../utils/detectOS";
-import SmartScreenGuide from "./SmartScreenGuide";
 
 const LANDING_ASSETS = "/static/landing";
 
@@ -45,7 +44,6 @@ function LandingPage() {
   const navigate = useNavigate();
   const [totalUsers, setTotalUsers] = useState(0);
   const [guideOS, setGuideOS] = useState<"linux" | "windows">("linux");
-  const [showSmartScreen, setShowSmartScreen] = useState(false);
 
   useEffect(() => {
     getPublicStats().then((res) => {
@@ -62,7 +60,6 @@ function LandingPage() {
   const demoVideoUrl = `${LANDING_ASSETS}/demo-${lang}.mp4`;
   const osInfo = detectOS();
   const { url: downloadUrl, i18nKey: downloadKey } = osInfo;
-  const isWindows = osInfo.os === "windows";
 
   return (
     <div className="landing-page">
@@ -128,28 +125,14 @@ function LandingPage() {
             <p className="lp-hero-sub">{t("hero_sub")}</p>
           </div>
 
-          {isWindows ? (
-            <button
-              className="lp-download-link"
-              onClick={() => setShowSmartScreen(true)}
-            >
+          <a href={downloadUrl} className="lp-download-link" target="_blank" rel="noopener noreferrer">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
               {t(downloadKey)}
-            </button>
-          ) : (
-            <a href={downloadUrl} className="lp-download-link" target="_blank" rel="noopener noreferrer">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              {t(downloadKey)}
-            </a>
-          )}
+          </a>
 
           {/* Demo Video — omitted entirely when the asset isn't deployed */}
           {!isMissing(demoVideoUrl) && (
@@ -342,21 +325,14 @@ function LandingPage() {
                       {guideOS === "linux" ? (
                         <>
                           <div><span className="lp-terminal-comment"># {t("guide_auto_comment_linux")}</span></div>
-                          <div>
-                            <span className="lp-terminal-cmd">curl</span>{" "}
-                            <span className="lp-terminal-flag">-fsSL</span>{" "}
-                            <span className="lp-terminal-url">https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/livekit-setup.sh</span>{" "}
-                            | <span className="lp-terminal-cmd">sudo bash</span>
-                          </div>
+                          <div><span className="lp-terminal-comment"># Review and run the installer from your local copy.</span></div>
+                          <div><span className="lp-terminal-cmd">sudo bash</span> deploy/livekit-setup.sh</div>
                         </>
                       ) : (
                         <>
                           <div><span className="lp-terminal-comment"># {t("guide_auto_comment_windows")}</span></div>
-                          <div>
-                            <span className="lp-terminal-cmd">irm</span>{" "}
-                            <span className="lp-terminal-url">https://raw.githubusercontent.com/akinalpfdn/Mqvi/main/deploy/livekit-setup.ps1</span>{" "}
-                            | <span className="lp-terminal-cmd">iex</span>
-                          </div>
+                          <div><span className="lp-terminal-comment"># Review and run the installer from your local copy.</span></div>
+                          <div><span className="lp-terminal-cmd">.\deploy\livekit-setup.ps1</span></div>
                         </>
                       )}
                       <br />
@@ -375,15 +351,15 @@ function LandingPage() {
                   <div className="lp-guide-fields">
                     <div className="lp-guide-field">
                       <span className="lp-guide-field-label">URL</span>
-                      <span className="lp-guide-field-val">ws://203.0.113.10:7880</span>
+                      <span className="lp-guide-field-val">wss://your-livekit-domain.example</span>
                     </div>
                     <div className="lp-guide-field">
                       <span className="lp-guide-field-label">API Key</span>
-                      <span className="lp-guide-field-val">LiveKitKeyf3a1b2c4</span>
+                      <span className="lp-guide-field-val">generated during setup</span>
                     </div>
                     <div className="lp-guide-field">
                       <span className="lp-guide-field-label">API Secret</span>
-                      <span className="lp-guide-field-val">aBcDeFgHiJkLmNoPqRsTuVwXyZ012345</span>
+                      <span className="lp-guide-field-val">generated during setup</span>
                     </div>
                   </div>
                 </div>
@@ -463,12 +439,6 @@ function LandingPage() {
               <button className="lp-btn-primary" onClick={() => navigate("/register")}>
                 {t("cta_btn1")}
               </button>
-              <button
-                className="lp-btn-secondary"
-                onClick={() => window.open("https://github.com/akinalpfdn/Mqvi", "_blank")}
-              >
-                {t("cta_btn2")}
-              </button>
             </div>
           </section>
         </RevealOnScroll>
@@ -480,7 +450,6 @@ function LandingPage() {
             <span className="lp-footer-copy">{t("footer_copy")}</span>
           </div>
           <div className="lp-footer-links">
-            <a href="https://github.com/akinalpfdn/Mqvi" target="_blank" rel="noopener noreferrer" className="lp-footer-link">GitHub</a>
             <a href="/privacy" className="lp-footer-link">{t("footer_privacy")}</a>
             <a href="/terms" className="lp-footer-link">{t("footer_terms")}</a>
           </div>
@@ -488,12 +457,6 @@ function LandingPage() {
 
       </div>
 
-      {showSmartScreen && (
-        <SmartScreenGuide
-          onClose={() => setShowSmartScreen(false)}
-          downloadUrl={downloadUrl}
-        />
-      )}
     </div>
   );
 }

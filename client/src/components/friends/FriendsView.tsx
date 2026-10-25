@@ -12,6 +12,7 @@ import { useToastStore } from "../../stores/toastStore";
 import FriendItem from "./FriendItem";
 import FriendRequestForm from "./FriendRequestForm";
 import BlockedList from "./BlockedList";
+import PersonalizedSuggestions from "./PersonalizedSuggestions";
 import type { FriendshipWithUser } from "../../types";
 
 type FriendsTab = "online" | "all" | "pending" | "blocked" | "add";
@@ -116,14 +117,24 @@ function FriendsView() {
   function renderList(list: FriendshipWithUser[], type: "friend" | "incoming" | "outgoing") {
     if (list.length === 0) {
       return (
-        <div className="fv-empty">
-          {query
+        <div className="fv-empty" role="status">
+          <p>{query
             ? t("noResults")
             : type === "friend"
-              ? t("noFriendsYet")
+              ? t(activeTab === "online" && friends.length > 0 ? "noOnlineFriends" : "noFriendsYet")
               : type === "incoming"
                 ? t("noIncomingRequests")
-                : t("noOutgoingRequests")}
+                : t("noOutgoingRequests")}</p>
+          {query ? (
+            <button className="ch-tree-empty-action" onClick={() => setSearchQuery("")}>{t("clear")}</button>
+          ) : type === "friend" && (
+            <>
+              <p>{t(friends.length > 0 ? "offlineFriendsHint" : "noFriendsHint")}</p>
+              <button className="ch-tree-empty-action" onClick={() => handleTabChange(friends.length > 0 ? "all" : "add")}>
+                {t(friends.length > 0 ? "friendsAll" : "addFriend")}
+              </button>
+            </>
+          )}
         </div>
       );
     }
@@ -156,6 +167,7 @@ function FriendsView() {
 
   return (
     <div className="friends-view">
+      <PersonalizedSuggestions />
       {/* Header */}
       <div className="fv-header">
         <h2 className="fv-title">{t("friends")}</h2>
@@ -214,6 +226,7 @@ function FriendsView() {
               className="fv-search-input"
               type="text"
               placeholder={t("friendSearchPlaceholder")}
+              aria-label={t("friendSearchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -245,7 +258,7 @@ function FriendsView() {
             )}
           </div>
         ) : activeTab === "blocked" ? (
-          <BlockedList />
+          <BlockedList searchQuery={searchQuery} />
         ) : (
           <FriendRequestForm />
         )}

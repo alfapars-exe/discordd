@@ -1,0 +1,150 @@
+{
+  "engine": "gtcrn",
+  "results": [
+    {
+      "fixture": "clean",
+      "outputFile": "gtcrn-clean.wav",
+      "frameSamples": 768,
+      "frameBudgetMs": 16,
+      "frames": 1198,
+      "initializationMs": 7.164800000000014,
+      "inferenceWallMs": {
+        "p50": 0.7377000000001317,
+        "p95": 2.0832000000000335,
+        "p99": 3.6260999999999513
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": null,
+      "outputLag": {
+        "samples": 890,
+        "milliseconds": 18.541666666666668,
+        "normalizedCorrelation": 0.8706079499631215,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.33419855068905,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "fan",
+      "outputFile": "gtcrn-fan.wav",
+      "frameSamples": 768,
+      "frameBudgetMs": 16,
+      "frames": 1198,
+      "initializationMs": 7.027799999999843,
+      "inferenceWallMs": {
+        "p50": 0.7128999999999905,
+        "p95": 1.7662000000000262,
+        "p99": 2.470600000000104
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -31.801171518596867,
+          "outputRmsDbfs": -62.219989994334064,
+          "attenuationDb": 30.418818475737197
+        },
+        "tail": {
+          "inputRmsDbfs": -32.43268685735202,
+          "outputRmsDbfs": -63.87160006755841,
+          "attenuationDb": 31.438913210206394
+        }
+      },
+      "outputLag": {
+        "samples": 890,
+        "milliseconds": 18.541666666666668,
+        "normalizedCorrelation": 0.7741568370336568,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -38.774544712147765,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "keyboard",
+      "outputFile": "gtcrn-keyboard.wav",
+      "frameSamples": 768,
+      "frameBudgetMs": 16,
+      "frames": 1198,
+      "initializationMs": 6.041099999999915,
+      "inferenceWallMs": {
+        "p50": 0.7224000000005617,
+        "p95": 1.6417999999998756,
+        "p99": 2.0738000000001193
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.17333244610398,
+          "outputRmsDbfs": -89.89038601302542,
+          "attenuationDb": 56.71705356692144
+        },
+        "tail": {
+          "inputRmsDbfs": -33.31342352961014,
+          "outputRmsDbfs": -74.3599075633628,
+          "attenuationDb": 41.046484033752655
+        }
+      },
+      "outputLag": {
+        "samples": 890,
+        "milliseconds": 18.541666666666668,
+        "normalizedCorrelation": 0.8337621129974051,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.78276970505294,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "transient",
+      "outputFile": "gtcrn-transient.wav",
+      "frameSamples": 768,
+      "frameBudgetMs": 16,
+      "frames": 1198,
+      "initializationMs": 6.6796000000003914,
+      "inferenceWallMs": {
+        "p50": 0.7371000000002823,
+        "p95": 1.7917999999999665,
+        "p99": 2.263400000000729
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.97000337466929,
+          "outputRmsDbfs": -90.36520502072588,
+          "attenuationDb": 56.39520164605659
+        },
+        "tail": {
+          "inputRmsDbfs": -33.84338417586975,
+          "outputRmsDbfs": -82.63172185314832,
+          "attenuationDb": 48.78833767727857
+        }
+      },
+      "outputLag": {
+        "samples": 890,
+        "milliseconds": 18.541666666666668,
+        "normalizedCorrelation": 0.8418076535300396,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.432514341463886,
+      "finite": true,
+      "clippedSamples": 0
+    }
+  ]
+}

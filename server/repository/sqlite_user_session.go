@@ -26,6 +26,15 @@ func (r *sqliteUserRepo) CreateWithSession(ctx context.Context, user *models.Use
 		}
 
 		session.UserID = user.ID
+		if session.AuthSession != nil {
+			session.AuthSession.UserID = user.ID
+			session.AuthSession.TokenVersion = user.TokenVersion
+			if err := NewSQLiteAuthSessionRepo(tx).Create(ctx, session.AuthSession); err != nil {
+				return err
+			}
+			session.AuthSessionID = session.AuthSession.ID
+			session.TokenVersion = user.TokenVersion
+		}
 		txSessionRepo := &sqliteSessionRepo{db: tx}
 		if err := txSessionRepo.Create(ctx, session); err != nil {
 			return fmt.Errorf("failed to create session: %w", err)

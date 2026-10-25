@@ -1,0 +1,35 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Visible-online friend notification producer wired to aggregate WebSocket presence callbacks.",
+  "code": [
+    "server/services/online_friend_notifier.go",
+    "server/services/online_friend_notifier_test.go",
+    "server/init_callbacks.go",
+    "server/init_callbacks_test.go",
+    "server/init_services.go",
+    "server/main.go",
+    "client/src/components/settings/NotificationSettings.tsx",
+    "client/src/stores/preferencesStore.ts",
+    "server/models/preferences.go"
+  ],
+  "behavior": [
+    "Requires persisted non-offline actor status and Hub visible-presence membership; honors actor privacy.shareOnlineUpdates (default true) and recipient notifications.onlineFriendNotifications (default false).",
+    "Uses accepted friendships and bidirectional block checks; writes a scope-free system notification before broadcasting it, naming the actor rather than the recipient.",
+    "Callback emits only after a fresh visible first-connect and successful status write; debounced offline observation resets the process-local deduplication epoch only after a successful current-generation status write. Reconnects inside the debounce window are suppressed.",
+    "Manual status changes invoke the notifier only after the preference write and visibility update; automatic status changes are gated by the persisted online preference and hidden-presence state.",
+    "The process-local per-actor gate retries failed recipients without repeating successful recipients. It is not a durable cross-process exactly-once guarantee."
+  ],
+  "checks": [
+    { "name": "online_friend_service_tests", "result": "passed", "command": "go test ./services -run TestOnlineFriendNotifier -count=1" },
+    { "name": "presence_callback_tests", "result": "passed", "command": "go test . -run 'Test(UserFirstConnectCallback|OfflinePresenceTransition|PresenceOfflineDebounce)' -count=1" },
+    { "name": "client_typecheck", "result": "passed", "command": "tsc -b" },
+    { "name": "client_notification_tests", "result": "passed", "detail": "3 files, 45 tests" },
+    { "name": "go_all_packages", "result": "passed", "command": "go test ./... -timeout=15m" },
+    { "name": "go_vet", "result": "passed", "command": "go vet ./..." }
+  ],
+  "remaining": [
+    "Presence callbacks are dispatched asynchronously; ordering under rapid interleaved manual/automatic changes remains unverified.",
+    "Two-client live acceptance, including real reconnect behavior, remains open."
+  ],
+  "release": "No external email, publication, or production mutation."
+}

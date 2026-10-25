@@ -2,13 +2,10 @@ package models
 
 import "testing"
 
-// Email has always been optional at CreateUserRequest.Validate() — these
-// tests pin that contract so a future change can't silently reintroduce a
-// mandatory-email requirement nobody asked for.
-func TestCreateUserRequest_Validate_EmailOptional(t *testing.T) {
+func TestCreateUserRequest_Validate_EmailRequired(t *testing.T) {
 	r := &CreateUserRequest{Username: "validuser", Password: "longenough123"}
-	if err := r.Validate(); err != nil {
-		t.Fatalf("blank email must be accepted, got: %v", err)
+	if err := r.Validate(); err == nil {
+		t.Fatal("blank email must be rejected")
 	}
 }
 

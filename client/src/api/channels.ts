@@ -22,8 +22,8 @@ import type {
 
 // ─── Channel API ───
 
-export async function getChannels(serverId: string) {
-  return apiClient<CategoryWithChannels[]>(`/servers/${serverId}/channels`);
+export async function getChannels(serverId: string, options?: { signal?: AbortSignal; timeoutMs?: number; isCurrent?: () => boolean }) {
+  return apiClient<CategoryWithChannels[]>(`/servers/${serverId}/channels`, options);
 }
 
 export async function createChannel(serverId: string, data: {

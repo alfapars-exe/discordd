@@ -1,0 +1,24 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Incremental chat widget implementation, not complete interactive chat: a default-off device-local option displays up to five recent loaded messages from the currently viewed text channel, without fetching or marking history read.",
+    "Projection requires matching message owner/login generation, loaded account preferences, current successful block-list provenance, current server/channel membership and strictly resolved ViewChannel plus ReadMessages permissions. Detached historical windows and connection loss suppress text.",
+    "Blocked, ignored, spam-filtered, undecrypted and spoiler-delimited messages are excluded. Only bounded ID, author label and literal text cross IPC; no attachments, ciphertext, reply metadata, links as actions or hidden full message objects.",
+    "Native parser enforces five rows and UTF-16 bounds, normalizes line endings, reserves physical work-area capacity above existing widgets and strips chat data from action child surfaces. Renderer reserves chat height and renders text nodes only.",
+    "Block-list provenance is invalidated synchronously on account/login-generation changes; failed or superseded list fetches cannot authorize this second message surface."
+  ],
+  "verification": [
+    "Focused projection tests 8/8; hook lifecycle/policy tests 5/5; block store tests 10/10.",
+    "Agent UI/settings/preference checks 76/76; native focused tests 27/27.",
+    "Complete native suite 156 passed, one existing symlink-permission test skipped. Client TypeScript, scoped lint and Vite production build passed.",
+    "Final complete client regression: 323 files, 3033 tests passed, zero failed/pending. Exact report C:/Users/PARS/AppData/Local/Temp/hichat-overlay-chat-final-20261025.json. Existing JSDOM cross-document navigation notices remain non-failing.",
+    "Coverage structure VALID; validator tests 32/32 passed. Overall package acceptance remains incomplete."
+  ],
+  "open": [
+    "Interactive channel opening and overlay message composition/sending; DM, group and thread variants; independent widget placement; video and stream widgets.",
+    "Actual Windows game overlay, multi-monitor/DPI and two-client visual/privacy acceptance. DOM and geometry assertions do not replace these tests.",
+    "Remaining P0-P11 acceptance, Windows distribution and publication approval. Composite p11.overlay-widgets remains missing."
+  ],
+  "release": "No commit, push, merge, deployment or publication."
+}

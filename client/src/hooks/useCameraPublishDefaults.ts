@@ -61,6 +61,7 @@ export type CameraPublishDefaults = {
   /** Goes to setCameraEnabled's 2nd arg (VideoCaptureOptions). */
   cameraCapture: {
     resolution: VideoResolution;
+    deviceId?: { exact: string };
   };
   /** Goes to setCameraEnabled's 3rd arg (TrackPublishOptions). */
   cameraPublish: {
@@ -99,11 +100,13 @@ const LAYERS_FOR: Record<CameraQuality, VideoPreset[]> = {
 export function cameraPublishDefaultsFor(
   quality: CameraQuality,
   fps: CameraFps,
+  deviceId = "",
 ): CameraPublishDefaults {
   const preset = PRESET_FOR[quality];
 
   return {
     cameraCapture: {
+      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       resolution: {
         width: preset.width,
         height: preset.height,
@@ -126,9 +129,10 @@ export function cameraPublishDefaultsFor(
 export function useCameraPublishDefaults(): CameraPublishDefaults {
   const cameraQuality = useVoiceStore((s) => s.cameraQuality);
   const cameraFps = useVoiceStore((s) => s.cameraFps);
+  const cameraDevice = useVoiceStore((s) => s.cameraDevice);
 
   return useMemo(
-    () => cameraPublishDefaultsFor(cameraQuality, cameraFps),
-    [cameraQuality, cameraFps],
+    () => cameraPublishDefaultsFor(cameraQuality, cameraFps, cameraDevice),
+    [cameraQuality, cameraFps, cameraDevice],
   );
 }

@@ -11,6 +11,11 @@ import { create } from "zustand";
 import { useVoiceStore } from "./voiceStore";
 import { useMessageStore } from "./messageStore";
 import { useReadStateStore } from "./readStateStore";
+import { useServerStore } from "./serverStore";
+import { useChannelStore } from "./channelStore";
+import { useDMStore } from "./dmStore";
+import { useMobileStore } from "./mobileStore";
+import { UI_SHELL_V2 } from "../utils/uiShell";
 import {
   insertSplit,
   type LayoutNode,
@@ -30,6 +35,7 @@ export type TabType =
   | "voice"
   | "screen"
   | "dm"
+  | "group-dm"
   | "friends"
   | "p2p"
   | "audit"
@@ -42,6 +48,14 @@ export type TabServerInfo = {
   serverId: string;
   serverName: string;
   serverIconUrl: string | null;
+};
+
+export type ServerEventsTarget = {
+  serverId: string;
+  serverName: string;
+  eventId?: string;
+  expectedUserId: string;
+  authGeneration: number;
 };
 
 export type Tab = {
@@ -60,16 +74,37 @@ export type Panel = {
   activeTabId: string | null;
 };
 
+/** The new shell has one destination, independent of the lifetime of a call. */
+export type Destination = Omit<Tab, "id" | "hasUnread" | "type"> & {
+  type: TabType | "server-home";
+};
+
+export const HOME_DESTINATION: Destination = { type: "friends", channelId: "friends", label: "" };
+
+function serverDestination(serverInfo: TabServerInfo): Destination {
+  return { type: "server-home", channelId: serverInfo.serverId, label: serverInfo.serverName, serverInfo };
+}
+
 // ──────────────────────────────────
 // Store interface
 // ──────────────────────────────────
 
 type UIState = {
+  destination: Destination;
+  navigationRevision: number;
+  lastChannelByServer: Record<string, Destination>;
+  navigate: (destination: Destination, options?: { closeDrawers?: boolean }) => void;
+  openServer: (serverId: string) => void;
+  closeDestination: (channelId: string) => void;
+  resetNavigation: () => void;
   panels: Record<string, Panel>;
   layout: LayoutNode;
   activePanelId: string;
   membersOpen: boolean;
   quickSwitcherOpen: boolean;
+  serverEventsTarget: ServerEventsTarget | null;
+  openServerEvents: (target: ServerEventsTarget) => void;
+  closeServerEvents: () => void;
 
   // Tab actions
   openTab: (channelId: string, type: TabType, label: string, serverInfo?: TabServerInfo) => void;
@@ -166,13 +201,95 @@ const defaultPanel: Panel = {
 // ──────────────────────────────────
 
 export const useUIStore = create<UIState>((set, get) => ({
+  destination: HOME_DESTINATION,
+  navigationRevision: 0,
+  lastChannelByServer: {},
+
+  navigate(destination, options) {
+    const serverScoped = ["text", "audit", "voice", "screen", "server-home"].includes(destination.type);
+    let target = destination;
+    if (serverScoped) {
+      const servers = useServerStore.getState();
+      const serverId = destination.serverInfo?.serverId ?? servers.activeServerId;
+      const server = servers.servers.find((item) => item.id === serverId);
+      if (!server) return;
+      const serverInfo = { serverId: server.id, serverName: server.name, serverIconUrl: server.icon_url };
+      target = { ...destination, serverInfo };
+      if (servers.activeServerId !== server.id) servers.setActiveServer(server.id);
+      const tree = useChannelStore.getState().categoriesByServer[server.id];
+      if (target.type !== "server-home" && tree && !tree.some((group) => group.channels.some((channel) => channel.id === target.channelId))) {
+        target = serverDestination(serverInfo);
+      }
+      if (target.type === "text" || target.type === "audit") {
+        useChannelStore.getState().selectChannel(target.channelId);
+      }
+    }
+    if (target.type === "dm") {
+      useDMStore.getState().selectDM(target.channelId);
+      useDMStore.getState().clearDMUnread(target.channelId);
+    } else {
+      useDMStore.getState().selectDM(null);
+    }
+    if (target.type !== "text" && target.type !== "audit") useChannelStore.getState().selectChannel(null);
+    set((state) => ({
+      destination: target,
+      navigationRevision: state.navigationRevision + 1,
+      lastChannelByServer: target.serverInfo && (target.type === "text" || target.type === "audit")
+        ? { ...state.lastChannelByServer, [target.serverInfo.serverId]: target }
+        : state.lastChannelByServer,
+    }));
+    // Only a deliberately opened text conversation consumes its unread marker.
+    if (target.type === "text") {
+      const messages = useMessageStore.getState().messagesByChannel[target.channelId];
+      if (messages?.length) {
+        void useReadStateStore.getState().markAsRead(target.channelId, messages[messages.length - 1].id);
+      } else {
+        useReadStateStore.getState().clearUnread(target.channelId);
+      }
+    }
+    if (options?.closeDrawers !== false) useMobileStore.getState().closeAllDrawers();
+  },
+
+  openServer(serverId) {
+    const server = useServerStore.getState().servers.find((item) => item.id === serverId);
+    if (!server) return;
+    const remembered = get().lastChannelByServer[serverId];
+    const cached = useChannelStore.getState().categoriesByServer[serverId];
+    const stillVisible = remembered && cached?.some((group) => group.channels.some((channel) => channel.id === remembered.channelId));
+    get().navigate(stillVisible ? remembered : serverDestination({ serverId: server.id, serverName: server.name, serverIconUrl: server.icon_url }), { closeDrawers: false });
+  },
+
+  closeDestination(channelId) {
+    const current = get().destination;
+    const remaining = Object.fromEntries(Object.entries(get().lastChannelByServer).filter(([, target]) => target.channelId !== channelId));
+    set({ lastChannelByServer: remaining });
+    if (current.channelId !== channelId) return;
+    get().navigate(current.serverInfo ? serverDestination(current.serverInfo) : HOME_DESTINATION);
+  },
+
+  resetNavigation() {
+    set((state) => ({ destination: HOME_DESTINATION, navigationRevision: state.navigationRevision + 1, lastChannelByServer: {}, quickSwitcherOpen: false, serverEventsTarget: null }));
+  },
   panels: { [defaultPanelId]: defaultPanel },
   layout: { type: "leaf", panelId: defaultPanelId },
   activePanelId: defaultPanelId,
   membersOpen: true,
   quickSwitcherOpen: false,
+  serverEventsTarget: null,
+
+  openServerEvents(target) {
+    set({ serverEventsTarget: target });
+  },
+
+  closeServerEvents() {
+    set({ serverEventsTarget: null });
+  },
 
   openTab(channelId, type, label, serverInfo) {
+    if (UI_SHELL_V2) {
+      get().navigate({ channelId, type, label, serverInfo });
+      return;
+    }
     const state = get();
 
     // Channel already open — focus it
@@ -282,6 +399,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   closeVoiceTabs(channelId) {
+    if (UI_SHELL_V2) {
+      const current = get().destination;
+      if (current.channelId === channelId && (current.type === "voice" || current.type === "screen")) get().closeDestination(channelId);
+      return;
+    }
     // Close voice/screen tabs after voice leave. No recursion risk:
     // currentVoiceChannelId is already null, so triggerVoiceLeaveIfNeeded is a no-op.
     const state = get();
@@ -454,6 +576,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateTabLabel(channelId, newLabel) {
+    if (get().destination.channelId === channelId) set({ destination: { ...get().destination, label: newLabel } });
     const state = get();
     let changed = false;
     const newPanels = { ...state.panels };
@@ -480,6 +603,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   closeTextTabByChannel(channelId) {
+    if (UI_SHELL_V2) {
+      get().closeDestination(channelId);
+      return;
+    }
     const state = get();
     const found = findTabAcrossPanels(state.panels, channelId);
     if (!found) return;
@@ -493,6 +620,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   closeDMTab(channelId: string) {
+    if (UI_SHELL_V2) {
+      if (get().destination.type === "dm") get().closeDestination(channelId);
+      return;
+    }
     const state = get();
     const found = findTabAcrossPanels(state.panels, channelId);
     if (!found) return;
@@ -505,6 +636,13 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   closeTabsForServer(serverId: string) {
+    const remembered = { ...get().lastChannelByServer };
+    delete remembered[serverId];
+    set({ lastChannelByServer: remembered });
+    if (UI_SHELL_V2) {
+      if (get().destination.serverInfo?.serverId === serverId) get().navigate(HOME_DESTINATION);
+      return;
+    }
     // Collect every tab scoped to this server first, then close them one-by-one.
     // closeTab mutates the panel state, so we cannot iterate and close inline.
     const state = get();

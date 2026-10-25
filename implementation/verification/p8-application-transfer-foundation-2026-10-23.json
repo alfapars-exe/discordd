@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Recipient-accepted application ownership transfer foundation.",
+  "implemented": [
+    "Migration 101 adds one pending, expiring ownership request per application with sender, recipient and application foreign keys.",
+    "Only the current human owner can address a request to another live human account. Expired requests are removed before a replacement is created.",
+    "Only the named recipient can accept or decline. Acceptance atomically changes the owner, revokes every old credential, creates one replacement credential hash, and removes outstanding requests.",
+    "The replacement plaintext token is returned once after commit and the bot runtime is disconnected after durable rotation.",
+    "The TR/EN application settings panel can send requests, list incoming requests, accept or decline, and exposes the rotated token in the existing transient one-time-token surface.",
+    "OpenAPI and the route golden include all three transfer endpoints."
+  ],
+  "checks": [
+    "Service integration proves a stranger cannot accept, the named recipient can accept, the old token becomes invalid, the new token authenticates, ownership moves, and runtime disconnect occurs.",
+    "Handler tests prove bot identities cannot manage transfers and acceptance returns the rotated credential.",
+    "Full Go test ./... passed after migration and route changes.",
+    "Full client Vitest passed 180 files and 1875 tests; TypeScript project checking passed.",
+    "A freshly built server applied migration 101 to the isolated acceptance database. Independent p1_acceptance and p2_affinity_20261023 API sessions proved recipient visibility, recipient acceptance, owner-list movement, old credential rejection (401), replacement credential authentication before WebSocket upgrade (400), and cleanup removal with shared-history retention."
+  ],
+  "remaining": [
+    "Two independent web API sessions passed, but two independently rendered browser clients and installed Windows have not yet accepted the transfer UI.",
+    "Distributed credential invalidation across multiple API processes remains bounded by periodic credential validation.",
+    "Application manifests, scoped grants, installations, message actions and owned-application test mode are now implemented with automated evidence in p8-application-registry-grants-2026-10-23.json, but real-client acceptance remains open."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

@@ -1,0 +1,21 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "The currently selected accepted DM or current-member group DM can supply a bounded text-only overlay projection from already-loaded messages. No history fetch or read receipt is introduced.",
+    "DM and group caches carry account and credential-generation provenance and reset synchronously across authentication boundaries. Encrypted conversations require ready crypto; undecrypted content, spoilers, blocked and ignored authors, and filtered spam are excluded.",
+    "Open/compose grants bind conversation type as well as identifier, owner and generation, preventing a same-ID switch between DM and group from reusing a grant. Native children still receive only bounded labels/text and opaque grants, not cryptographic material or history objects.",
+    "Explicit sends use existing DM/group encrypted store paths with captured owner/generation and a live caller predicate. Scoped group sends cannot adopt or retry an older pending operation, preserving the main composer draft. Installing the new send's pending operation does not revoke its own authorization."
+  ],
+  "verification": [
+    "Stable complete client regression: 331 files, 3155 passed, zero failed/pending. Report: C:/Users/PARS/AppData/Local/Temp/hichat-private-overlay-stable-20261025.json.",
+    "Focused projection, access, group store and compose suites: 107 tests passed after pending-operation lifecycle correction.",
+    "Client TypeScript and scoped ESLint passed. Production client build passed with existing ineffective-dynamic-import warnings.",
+    "Electron TypeScript and native suite: 161 passed, one existing environment-dependent skip. Coverage validator suite: 32 passed."
+  ],
+  "open": [
+    "Real Windows overlay focus, click-through, DPI/multi-monitor and two-client encrypted DM/group delivery acceptance is still required.",
+    "Attachments, richer overlay message actions, independent widget placement, video/stream widgets and remaining P0-P11 requirements remain open."
+  ],
+  "release": "No commit, push, merge, deployment or publication; complete acceptance remains pending."
+}

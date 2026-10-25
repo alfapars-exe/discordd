@@ -32,6 +32,8 @@ import type { Namespace, TFunction } from "i18next";
  * everywhere, not just on the auth pages that call localizeAuthError below.
  */
 export const AUTH_ERROR_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/invalid or already used verification code/i, "mfaInvalid"],
+  [/too many security attempts/i, "mfaRateLimited"],
   // Login
   [/invalid username or password/i, "invalidCredentials"],
   [/invalid refresh token|refresh token expired/i, "sessionExpired"],
@@ -43,6 +45,7 @@ export const AUTH_ERROR_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 
   // Password reset / change
   [/password must be at least \d+ characters/i, "passwordTooShort"],
+  [/password must be at most 72 UTF-8 bytes/i, "passwordTooLong"],
   [/password is incorrect/i, "currentPasswordIncorrect"],
   [/invalid or expired (reset )?token|reset token has expired/i, "invalidOrExpiredToken"],
   [/password reset is not configured/i, "passwordResetNotConfigured"],

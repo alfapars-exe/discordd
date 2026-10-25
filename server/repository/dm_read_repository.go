@@ -9,6 +9,7 @@ type DMReadRepository interface {
 	// last_read_at. messageID nil keeps the existing last_read_message_id
 	// (a body-less POST .../read only clears the counter).
 	MarkRead(ctx context.Context, userID, channelID string, messageID *string) error
+	MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error)
 	// IncrementUnread bumps unread_count by one for userID on channelID,
 	// creating the row (unread_count = 1) when none exists yet. Called for
 	// the OTHER participant inside the DM send transaction.

@@ -1,0 +1,25 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import AddServerModal from "./AddServerModal";
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key:string) => key }) }));
+vi.mock("../../stores/serverStore", () => ({ useServerStore: (select:(state:unknown) => unknown) => select({ createServer:vi.fn(), joinServer:vi.fn() }) }));
+vi.mock("../../stores/toastStore", () => ({ useToastStore: (select:(state:unknown) => unknown) => select({ addToast:vi.fn() }) }));
+vi.mock("../../utils/apiError", () => ({ showApiError:vi.fn() }));
+afterEach(() => { cleanup(); });
+it("exposes a modal, traps boundary Tab, consumes Escape and restores the launcher focus", () => {
+  const origin = document.createElement("button"); document.body.append(origin); origin.focus();
+  const close = vi.fn();
+  const view = render(<AddServerModal onClose={close} />);
+  const dialog = screen.getByRole("dialog");
+  const controls = [...dialog.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+  expect(controls[0]).toHaveFocus();
+  fireEvent.keyDown(controls[0], { key:"Tab", shiftKey:true });
+  expect(controls.at(-1)).toHaveFocus();
+  fireEvent.keyDown(controls.at(-1)!, { key:"Tab" });
+  expect(controls[0]).toHaveFocus();
+  const event = new KeyboardEvent("keydown", { key:"Escape", bubbles:true, cancelable:true });
+  fireEvent(controls[0], event);
+  expect(event.defaultPrevented).toBe(true);
+  expect(close).toHaveBeenCalledOnce();
+  view.unmount(); expect(origin).toHaveFocus(); origin.remove();
+});

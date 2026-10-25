@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Contextual friendship request/acceptance emails and stale legacy-job retirement; provider acceptance remains open.",
+  "implementation": [
+    "Existing friendship service wiring uses the durable contextual enqueuer. Successful request/acceptance operations enqueue generic content with stable friendship/event dedupe; actor identity and personalized request content are not included. Legacy enqueuers without contextual options fail closed.",
+    "Delivery checks the current pending/accepted relationship, original recipient/requester and bidirectional blocks. Removed friendships remove contextual queued jobs. Existing server-event email checks remain in effect.",
+    "Additive context migrations and a follow-up migration cancel unbound pending/leased legacy friendship jobs while retaining their audit rows and clearing claims. Delivered/unrelated/contextual jobs are not cancelled by that migration.",
+    "The delivery worker rechecks eligibility after unsubscribe proof issuance immediately before external send. No database lock can retract a provider request already in progress; later revocation can still race an external send."
+  ],
+  "schema": ["server/database/migrations/132_friendship_email_context.sql", "server/database/migrations/133_cancel_unbound_friendship_emails.sql", "server/database/postgres_migrations/034_friendship_email_context.sql", "server/database/postgres_migrations/035_cancel_unbound_friendship_emails.sql"],
+  "verification": [
+    "Full Go suite passed: root 8.678s, database 25.480s, repository 70.816s, services 27.809s; handlers, models and WS passed.",
+    "Focused race checks for P2P snapshots, friendship events, social delivery state and final eligibility checks passed: services 3.106s, repository 12.769s.",
+    "Actual disposable PostgreSQL 18.6 repository tests for social/communication/campaign email passed in 1.922s. Disposable container stopped and removed. SQLite legacy migration regression passed in the full database suite.",
+    "Settings navigation regressions passed 10/10: concise labels retain stable anchors, direct/related navigation reveals collapsed sections, native summary disclosure semantics and keyboard tab behavior are preserved."
+  ],
+  "open": ["Configured-provider delivery and unsubscribe acceptance", "Operational backup/rollback rehearsal: stop and reconcile in-flight senders before applying retirement migrations", "Independent-client friendship notification acceptance", "Complete Windows/web release gates"],
+  "release": "No external email send, commit, push, merge or production publication."
+}

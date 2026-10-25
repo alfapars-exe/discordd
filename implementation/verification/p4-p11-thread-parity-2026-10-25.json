@@ -1,0 +1,24 @@
+{
+  "phase": "P4",
+  "status": "implemented_unverified",
+  "scope": [
+    "Thread destinations now resolve in the single-chat shell and overlay without pretending their channel type is text. Their governing permission source is exactly one same-server text parent, matching server inheritance rules.",
+    "Thread metadata is account/login-generation/server scoped. List/detail requests carry expected owner and current-context guards; late account, delete, parent-delete, archive and list/detail responses are fenced. Thread WS events use the original live-connection predicate.",
+    "The authenticated GET /api/servers/{serverId}/threads/{threadId} endpoint validates thread/server, a real same-server text parent and current parent read permission, allowing archived reads but no unauthorized metadata disclosure.",
+    "Main-shell reload/deep-link and repeated-navigation paths force detail revalidation instead of relying on ephemeral cache. Reconnection refreshes the current known thread before reusing compose capability. Loading/failed metadata does not authorize native projection.",
+    "Preview/history may remain available for archived threads; compose additionally requires unarchived metadata and parent SendMessages. Sends still target the actual thread ID through the existing E2EE-aware path. Nested-thread UI/actions are suppressed for known non-text parents.",
+    "No migration or user database modification was needed for this additive API/client slice."
+  ],
+  "verification": [
+    "Complete server go test ./... passed, including root route golden, handlers, repository, services and ws packages; some unchanged packages were served from Go's test cache.",
+    "Agent main destination/permission checks: 36 passed; provider checks: 11 passed. Store stale-response regression checks: 17 passed.",
+    "Final client regression: 331 files, 3129 tests passed, zero failed/pending. Exact report C:/Users/PARS/AppData/Local/Temp/hichat-thread-overlay-final-20261025.json.",
+    "Client TypeScript, scoped lint and production Vite build passed. Coverage structure VALID; validator tests 32/32 passed. Existing ineffective-dynamic-import warnings remain."
+  ],
+  "open": [
+    "Real two-account encrypted thread history/send, archive/reopen, reload and network acceptance on Windows/web.",
+    "DM/group overlay variants, richer message actions, independent widget placement, video/stream widgets and remaining P0-P11 acceptance.",
+    "Final release review, Windows update artifacts and explicit publication approval."
+  ],
+  "release": "No commit, push, merge, deployment or publication. Overall acceptance remains incomplete."
+}

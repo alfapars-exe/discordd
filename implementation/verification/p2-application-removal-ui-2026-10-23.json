@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Owner-facing application creation, credential revocation and irreversible retirement API/UI, plus bot gateway revocation race closure.",
+  "implemented": [
+    "Bot WebSocket admission now waits until the Hub has indexed the connection and then revalidates the exact credential. A retirement/revocation committed during admission closes the socket with code 4001 before pumps begin.",
+    "Active bot sockets revalidate the credential on keepalive. Same-process credential revocation disconnects the owned bot immediately after the durable transaction; other processes fail closed at periodic revalidation.",
+    "The production repository and authentication service now include application removal. POST /api/bots/{botID}/remove binds the active human account, session and path identity; uses a bounded strict JSON body; requires password, current MFA when enabled, a separate checkbox and exact REMOVE text; and never mutates login cookies.",
+    "Bot identity plus initial token hash are created in one transaction. Token persistence failure rolls back the identity, while the plaintext credential is returned only after commit and shown only in transient UI state.",
+    "Token revocation proves current ownership and updates token tombstones in one transaction. Foreign/missing targets return not found and are never disconnected; repeated revocation of an owned bot stays idempotent.",
+    "Account settings now have a Turkish/English Applications and bots panel with real list/create, one-time token handling, explicit revoke, and irreversible retirement. It guards late responses by account generation and preserves uncertain-state warnings instead of reporting success.",
+    "Account deletion resource cards route owned applications to the real management panel. Shared history retention and queued personal-asset cleanup are checked in both the API acknowledgement and the UI before reporting removal success.",
+    "The OpenAPI contract and route golden include the human-only removal operation and its explicit consent/error behavior."
+  ],
+  "checks": [
+    "Bot gateway registration-race and keepalive revalidation tests passed ten consecutive runs before integration; focused ws, handler, service and repository suites passed afterward.",
+    "Atomic create rollback, owned-only revoke/disconnect, foreign-owner isolation, removal proof/MFA/runtime, transaction rollback and shared-history preservation tests passed.",
+    "Full Go test ./... -json passed. Windows symlink privilege and external ffmpeg/YouTube/LiveKit smoke prerequisites remain explicitly skipped and unaccepted.",
+    "Full client Vitest run passed: 180 files and 1874 tests. TypeScript project build check and targeted ESLint passed.",
+    "The freshly built server was started against the isolated acceptance database on port 9191; migration 100_retired_application_tokens.sql applied successfully and the version endpoint responded.",
+    "In Ego Lite task space 11, the p1_acceptance fixture created a disposable application, observed its one-time credential, hid it, revoked all credentials, completed password plus exact REMOVE plus checkbox plus final-confirm retirement, received the shared-history-retained acknowledgement, and observed an empty owned-application list.",
+    "A fresh authenticated API check confirmed acceptbot_20261023 is absent and deletion-status reports only the pre-existing disposable server blocker, not the retired application.",
+    "Targeted git diff --check passed with only existing Windows line-ending conversion warnings."
+  ],
+  "migration": {
+    "file": "server/database/migrations/100_retired_application_tokens.sql",
+    "production_wiring": "Included by the production migration set and repository initialization; a freshly built local acceptance binary applied migration 100 to the isolated acceptance database before live UI verification.",
+    "rollback_schema": [
+      "DROP TRIGGER retired_application_token_insert",
+      "DROP TRIGGER retired_application_token_update"
+    ],
+    "limitations": "No production backup/restore rehearsal or remote libSQL acceptance is claimed. Identity retirement is intentionally irreversible through the application."
+  },
+  "remaining": [
+    "Application ownership transfer still requires a recipient-accepted request, recipient consent and credential rotation; unsolicited owner assignment is not implemented.",
+    "Application manifests/actions, scoped installations, permission grants, invocation and test mode remain P8 work; the current registry covers owned automation identities and credentials only.",
+    "Membership/author refresh broadcasting across independent clients, distributed immediate invalidation, encrypted attachment/SFU retention and installed Windows acceptance remain unverified. Browser-button retirement is now accepted only for the isolated web fixture described above.",
+    "All remaining P0-P11, packaging, backup/rollback, release and production update gates remain active."
+  ],
+  "release": "Source and isolated disposable acceptance data only. A throwaway bot was retired after explicit UI confirmation; no real user bot was touched. No commit, push, merge, deployment or Windows update was performed."
+}

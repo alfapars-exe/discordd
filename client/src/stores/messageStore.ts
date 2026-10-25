@@ -4,13 +4,21 @@
 
 import { create } from "zustand";
 import i18n from "../i18n";
+import { getAuthGeneration } from "../api/client";
+import {
+  getAuthSessionOwner,
+  subscribeAuthGenerationChanges,
+  subscribeAuthOwnerChanges,
+} from "../api/authSessionEvents";
 import * as messageApi from "../api/messages";
+import * as serversApi from "../api/servers";
 import * as reactionApi from "../api/reactions";
 import { useServerStore } from "./serverStore";
 import { useE2EEStore } from "./e2eeStore";
-import { useAuthStore } from "./authStore";
+import { registerSpamBatch } from "../utils/registerSpamMessage";
 import { useReadStateStore } from "./readStateStore";
 import { useToastStore } from "./toastStore";
+import { useComposerDraftStore } from "./composerDraftStore";
 import {
   encryptChannelMessage,
   decryptChannelMessages,
@@ -18,7 +26,7 @@ import {
 } from "../crypto/channelEncryption";
 import { encodePayload } from "../crypto/e2eePayload";
 import * as keyStorage from "../crypto/keyStorage";
-import type { Message, ReactionGroup } from "../types";
+import type { Message, ReactionGroup, Server } from "../types";
 import { DEFAULT_MESSAGE_LIMIT } from "../utils/constants";
 import {
   encryptFilesForE2EE,
@@ -30,7 +38,26 @@ import {
 } from "./shared/messageUtils";
 import { sendWithRetryAndToast } from "./shared/sendWithRetry";
 
+/** The sidebar server list is only labels/icons, never an encryption policy. */
+async function resolveMessageServer(serverId: string): Promise<Server | null> {
+  const activeServer = useServerStore.getState().activeServer;
+  if (activeServer?.id === serverId && typeof activeServer.e2ee_enabled === "boolean") return activeServer;
+  try {
+    const response = await serversApi.getServer(serverId);
+    return response.success && response.data?.id === serverId && typeof response.data.e2ee_enabled === "boolean" ? response.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function showEncryptionFailure() {
+  useToastStore.getState().addToast("error", i18n.t("e2ee:encryptionFailed"));
+}
+
 type MessageState = {
+  /** Account/session that owns all channel-keyed cached messages below. */
+  ownerId: string | null;
+  authGeneration: number;
   /** channelId -> Message[] */
   messagesByChannel: Record<string, Message[]>;
   hasMoreByChannel: Record<string, boolean>;
@@ -68,7 +95,7 @@ type MessageState = {
    * message). Resolves false when the message no longer exists. Does NOT
    * mark the channel read — the user is looking at the past, not the tail.
    */
-  fetchAroundMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>;
+  fetchAroundMessage: (serverId: string, channelId: string, messageId: string, options?: { isCurrent?: () => boolean; timeoutMs?: number }) => Promise<boolean>;
   /** Append the next page after the window's last message (forward paging). */
   fetchNewerMessages: (channelId: string, serverId?: string) => Promise<void>;
   /** Drop a jumped-to window and reload the channel tail. */
@@ -81,7 +108,7 @@ type MessageState = {
    * otherwise wrong — see the action body.
    */
   invalidateFetchedFlags: () => void;
-  sendMessage: (channelId: string, content: string, files?: File[], replyToId?: string, serverId?: string) => Promise<boolean>;
+  sendMessage: (channelId: string, content: string, files?: File[], replyToId?: string, serverId?: string, context?: { isCurrent: () => boolean }) => Promise<boolean>;
   editMessage: (messageId: string, content: string, serverId?: string) => Promise<boolean>;
   deleteMessage: (messageId: string, serverId?: string) => Promise<boolean>;
 
@@ -93,8 +120,8 @@ type MessageState = {
   toggleReaction: (messageId: string, channelId: string, emoji: string, serverId?: string) => Promise<void>;
 
   // ─── WS Event Handlers ───
-  handleMessageCreate: (message: Message) => void;
-  handleMessageUpdate: (message: Message) => void;
+  handleMessageCreate: (message: Message, expectedSession?: { ownerId: string; authGeneration: number }) => void;
+  handleMessageUpdate: (message: Message, expectedSession?: { ownerId: string; authGeneration: number }) => void;
   handleMessageDelete: (data: { id: string; channel_id: string }) => void;
   handleTypingStart: (channelId: string, username: string) => void;
   handleReactionUpdate: (data: { message_id: string; channel_id: string; reactions: ReactionGroup[] }) => void;
@@ -120,7 +147,8 @@ const fetchedChannels = new Set<string>();
 const inflightFetches = new Map<string, AbortController>();
 
 /** Channels with a forward (?after=) page in flight — one at a time each. */
-const inflightNewerFetches = new Set<string>();
+const inflightNewerFetches = new Map<string, symbol>();
+const inflightOlderFetches = new Map<string, { token: symbol; controller: AbortController }>();
 
 /**
  * Channels with a jump (fetchAroundMessage) in flight. Claimed synchronously
@@ -147,6 +175,55 @@ function abortChannelFetch(channelId: string): void {
   }
 }
 
+type MessageSession = { ownerId: string; authGeneration: number; draftGeneration: number };
+type AuthSession = Pick<MessageSession, "ownerId" | "authGeneration">;
+
+function sessionStillCurrent(session: AuthSession): boolean {
+  const store = useMessageStore.getState();
+  return getAuthSessionOwner() === session.ownerId
+    && getAuthGeneration() === session.authGeneration
+    && store.ownerId === session.ownerId && store.authGeneration === session.authGeneration;
+}
+
+function sendSessionStillCurrent(session: MessageSession): boolean {
+  return sessionStillCurrent(session)
+    && useComposerDraftStore.getState().generation === session.draftGeneration;
+}
+
+function clearMessageCaches(ownerId: string | null, authGeneration: number): void {
+  for (const controller of inflightFetches.values()) controller.abort();
+  for (const controller of aroundPending.values()) controller.abort();
+  for (const request of inflightOlderFetches.values()) request.controller.abort();
+  inflightFetches.clear();
+  inflightOlderFetches.clear();
+  inflightNewerFetches.clear();
+  aroundPending.clear();
+  fetchedChannels.clear();
+  detachedWsMessages.clear();
+  useMessageStore.setState({
+    messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {},
+    isLoadingByChannel: {}, isLoadingMore: false, typingUsers: {},
+    lastDeleted: null, replyingTo: null, scrollToMessageId: null,
+    ownerId, authGeneration,
+  });
+}
+
+function syncMessageSession(): void {
+  const ownerId = getAuthSessionOwner();
+  const authGeneration = getAuthGeneration();
+  const state = useMessageStore.getState();
+  if (state.ownerId !== ownerId || state.authGeneration !== authGeneration) {
+    clearMessageCaches(ownerId, authGeneration);
+  }
+}
+
+function currentMessageSession(): MessageSession | null {
+  syncMessageSession();
+  const ownerId = getAuthSessionOwner();
+  if (!ownerId) return null;
+  return { ownerId, authGeneration: getAuthGeneration(), draftGeneration: useComposerDraftStore.getState().generation };
+}
+
 /**
  * Extracts the created Message from a send response. 201 returns the message
  * directly; 207 Multi-Status (some attachments failed) wraps it as
@@ -159,7 +236,11 @@ function unwrapSentMessage(data: unknown): Message | null {
   return wrapped && typeof wrapped === "object" && "id" in wrapped ? wrapped : null;
 }
 
-export const useMessageStore = create<MessageState>((set, get) => ({
+export const useMessageStore = create<MessageState>((set, get) => {
+  const handleTyping = createTypingHandler(set);
+  return ({
+  ownerId: getAuthSessionOwner(),
+  authGeneration: getAuthGeneration(),
   messagesByChannel: {},
   hasMoreByChannel: {},
   hasMoreAfterByChannel: {},
@@ -174,14 +255,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     // Cancel any in-flight fetches; their late completion would re-populate
     // messagesByChannel with stale ciphertext encrypted against the
     // pre-restore E2EE state.
-    for (const ctrl of inflightFetches.values()) {
-      ctrl.abort();
-    }
-    inflightFetches.clear();
-    fetchedChannels.clear();
-    aroundPending.clear();
-    detachedWsMessages.clear();
-    set({ messagesByChannel: {}, hasMoreByChannel: {}, hasMoreAfterByChannel: {} });
+    syncMessageSession();
+    clearMessageCaches(get().ownerId, get().authGeneration);
   },
 
   invalidateFetchedFlags: () => {
@@ -195,14 +270,22 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     // Deliberately does NOT touch messagesByChannel: the cached window is
     // stale, not wrong, and clearing it would blank every open channel on
     // each reconnect before the refetch lands. The refetch merges over it.
-    for (const ctrl of inflightFetches.values()) {
-      ctrl.abort();
-    }
+    for (const ctrl of inflightFetches.values()) ctrl.abort();
+    for (const ctrl of aroundPending.values()) ctrl.abort();
+    for (const request of inflightOlderFetches.values()) request.controller.abort();
     inflightFetches.clear();
+    inflightOlderFetches.clear();
+    inflightNewerFetches.clear();
+    aroundPending.clear();
     fetchedChannels.clear();
+    detachedWsMessages.clear();
+    set({ hasMoreAfterByChannel: {}, isLoadingByChannel: {}, isLoadingMore: false });
   },
 
   fetchMessages: async (channelId, explicitServerId?) => {
+    const session = currentMessageSession();
+    if (!session) return;
+    const isCurrent = () => sessionStillCurrent(session);
     // A jump in flight owns the channel — see aroundPending.
     if (fetchedChannels.has(channelId) || aroundPending.has(channelId)) return;
 
@@ -222,6 +305,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     // owns this channel, or the replacement fetch's own flag would be
     // clobbered by the aborted one resolving late (permanent skeleton bug).
     const clearLoadingIfOwner = () => {
+      if (!isCurrent()) return;
       const owner = inflightFetches.get(channelId);
       if (!owner || owner === controller) setLoading(false);
     };
@@ -235,25 +319,28 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       return;
     }
 
-    const res = await messageApi.getMessages(serverId, channelId, undefined, DEFAULT_MESSAGE_LIMIT);
+    const res = await messageApi.getMessages(serverId, channelId, undefined, DEFAULT_MESSAGE_LIMIT, {
+      signal: controller.signal, isCurrent,
+    });
 
     // Aborted while the request was in flight — drop the response. Cache
     // invalidate also aborts, so this branch covers both user-switch and
     // E2EE-rotation cases without polluting messagesByChannel.
-    if (controller.signal.aborted) {
+    if (controller.signal.aborted || !isCurrent()) {
       clearLoadingIfOwner();
       return;
     }
 
     if (res.success && res.data) {
       // Go nil slice -> JSON null; fallback to empty array
-      const apiMessages = await decryptChannelMessages(res.data.messages ?? []);
+      const apiMessages = await decryptChannelMessages(res.data.messages ?? [], serverId, isCurrent);
+      if (!controller.signal.aborted && isCurrent()) void registerSpamBatch(apiMessages, "channel", channelId, isCurrent);
 
       // Re-check abort after the async decrypt — a fast channel-switch
       // during decryption would otherwise still write stale content. The
       // controller stays registered in inflightFetches until AFTER this
       // check so invalidateFetchCache during the decrypt still reaches it.
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || !isCurrent()) {
         clearLoadingIfOwner();
         return;
       }
@@ -286,6 +373,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       // Auto-mark-read after messages load
       const allMessages = get().messagesByChannel[channelId];
       if (allMessages && allMessages.length > 0) {
+        if (!isCurrent()) return;
         const lastMsg = allMessages[allMessages.length - 1];
         useReadStateStore.getState().markAsRead(channelId, lastMsg.id);
       }
@@ -296,20 +384,34 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   fetchOlderMessages: async (channelId, explicitServerId?) => {
+    const session = currentMessageSession();
+    if (!session) return;
+    const isCurrent = () => sessionStillCurrent(session);
     const messages = get().messagesByChannel[channelId];
     if (!messages || messages.length === 0) return;
     if (!get().hasMoreByChannel[channelId]) return;
 
+    const token = Symbol("older-page");
+    const controller = new AbortController();
+    inflightOlderFetches.get(channelId)?.controller.abort();
+    inflightOlderFetches.set(channelId, { token, controller });
     set({ isLoadingMore: true });
 
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
-    if (!serverId) { set({ isLoadingMore: false }); return; }
+    if (!serverId) { inflightOlderFetches.delete(channelId); set({ isLoadingMore: false }); return; }
 
     const beforeId = messages[0].id;
-    const res = await messageApi.getMessages(serverId, channelId, beforeId, DEFAULT_MESSAGE_LIMIT);
+    try {
+    const res = await messageApi.getMessages(serverId, channelId, beforeId, DEFAULT_MESSAGE_LIMIT, {
+      signal: controller.signal, isCurrent,
+    });
+    if (controller.signal.aborted || !isCurrent() || inflightOlderFetches.get(channelId)?.token !== token) return;
 
     if (res.success && res.data) {
-      const decrypted = await decryptChannelMessages(res.data.messages ?? []);
+      const decrypted = await decryptChannelMessages(res.data.messages ?? [], serverId, isCurrent);
+      if (controller.signal.aborted || !isCurrent() || inflightOlderFetches.get(channelId)?.token !== token) return;
+      void registerSpamBatch(decrypted, "channel", channelId, isCurrent);
+      if (!isCurrent()) return;
 
       set((state) => ({
         messagesByChannel: {
@@ -325,9 +427,32 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     } else {
       set({ isLoadingMore: false });
     }
+    } finally {
+      if (inflightOlderFetches.get(channelId)?.token === token) {
+        inflightOlderFetches.delete(channelId);
+        if (isCurrent()) set({ isLoadingMore: false });
+      }
+    }
   },
 
-  fetchAroundMessage: async (serverId, channelId, messageId) => {
+  fetchAroundMessage: async (serverId, channelId, messageId, options) => {
+    const session = currentMessageSession();
+    if (!session) return false;
+    const requestAuthGeneration = getAuthGeneration();
+    const requestUserId = getAuthSessionOwner();
+    const sameAuthSession = () => sessionStillCurrent(session)
+      && getAuthGeneration() === requestAuthGeneration
+      && getAuthSessionOwner() === requestUserId;
+    const scopeCurrent = () => {
+      try {
+        return sameAuthSession() && options?.isCurrent?.() !== false;
+      } catch {
+        return false;
+      }
+    };
+    // A stale caller must not cancel or replace a valid in-flight request.
+    if (!scopeCurrent()) return false;
+
     // Same abort discipline as fetchMessages: the tail fetch MessageList
     // kicks off on mount must not land after this window and replace it.
     abortChannelFetch(channelId);
@@ -340,6 +465,10 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       if (aroundPending.get(channelId) === controller) aroundPending.delete(channelId);
     };
     const clearLoadingIfOwner = () => {
+      // A cancelled old-account operation must never publish into the new
+      // account's reset store, even when its former controller is no longer
+      // present in the ownership map.
+      if (!sameAuthSession()) return;
       const owner = inflightFetches.get(channelId);
       if (!owner || owner === controller) {
         set((state) => ({
@@ -347,19 +476,32 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         }));
       }
     };
+    const abandon = () => {
+      controller.abort();
+      if (inflightFetches.get(channelId) === controller) inflightFetches.delete(channelId);
+      release();
+      clearLoadingIfOwner();
+      return false;
+    };
 
     set((state) => ({
       isLoadingByChannel: { ...state.isLoadingByChannel, [channelId]: true },
     }));
 
-    const res = await messageApi.getMessagesAround(
-      serverId, channelId, messageId, DEFAULT_MESSAGE_LIMIT
-    );
-    if (controller.signal.aborted) {
-      release();
-      clearLoadingIfOwner();
-      return false;
+    let res: Awaited<ReturnType<typeof messageApi.getMessagesAround>>;
+    try {
+      res = await messageApi.getMessagesAround(
+        serverId,
+        channelId,
+        messageId,
+        DEFAULT_MESSAGE_LIMIT,
+        { signal: controller.signal, timeoutMs: options?.timeoutMs, isCurrent: scopeCurrent }
+      );
+    } catch (error) {
+      abandon();
+      throw error;
     }
+    if (controller.signal.aborted || !scopeCurrent()) return abandon();
 
     const page = res.success ? res.data : undefined;
     const raw = page?.messages ?? [];
@@ -370,16 +512,21 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       inflightFetches.delete(channelId);
       release();
       clearLoadingIfOwner();
-      void get().fetchMessages(channelId, serverId);
+      if (scopeCurrent()) void get().fetchMessages(channelId, serverId);
       return false;
     }
 
-    const decrypted = await decryptChannelMessages(raw);
-    if (controller.signal.aborted) {
-      release();
-      clearLoadingIfOwner();
-      return false;
+    if (!scopeCurrent()) return abandon();
+    let decrypted: Message[];
+    try {
+      decrypted = await decryptChannelMessages(raw, serverId, () => sameAuthSession() && scopeCurrent());
+    } catch (error) {
+      abandon();
+      throw error;
     }
+    if (controller.signal.aborted || !scopeCurrent()) return abandon();
+    void registerSpamBatch(decrypted, "channel", channelId, () => sameAuthSession() && scopeCurrent());
+    if (controller.signal.aborted || !scopeCurrent()) return abandon();
     inflightFetches.delete(channelId);
 
     // Mark fetched so a later fetchMessages() is a no-op and doesn't pull
@@ -400,6 +547,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   fetchNewerMessages: async (channelId, explicitServerId?) => {
+    const session = currentMessageSession();
+    if (!session) return;
+    const isCurrent = () => sessionStillCurrent(session);
     const messages = get().messagesByChannel[channelId];
     if (!messages || messages.length === 0) return;
     if (!get().hasMoreAfterByChannel[channelId]) return;
@@ -408,14 +558,18 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
 
-    inflightNewerFetches.add(channelId);
+    const token = Symbol("newer-page");
+    inflightNewerFetches.set(channelId, token);
     const afterId = messages[messages.length - 1].id;
     try {
       const res = await messageApi.getMessagesAfter(
         serverId, channelId, afterId, DEFAULT_MESSAGE_LIMIT
       );
-      if (!res.success || !res.data) return;
-      const decrypted = await decryptChannelMessages(res.data.messages ?? []);
+      if (!isCurrent() || inflightNewerFetches.get(channelId) !== token || !res.success || !res.data) return;
+      const decrypted = await decryptChannelMessages(res.data.messages ?? [], serverId, isCurrent);
+      if (!isCurrent() || inflightNewerFetches.get(channelId) !== token) return;
+      void registerSpamBatch(decrypted, "channel", channelId, isCurrent);
+      if (!isCurrent()) return;
       const hasMoreAfter = res.data.has_more_after ?? false;
       // Reached the tail: live messages held back while detached belong
       // after it now (dedup by id below — the page may already carry them).
@@ -440,11 +594,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         };
       });
     } finally {
-      inflightNewerFetches.delete(channelId);
+      if (inflightNewerFetches.get(channelId) === token) inflightNewerFetches.delete(channelId);
     }
   },
 
   jumpToPresent: (channelId, explicitServerId?) => {
+    if (!currentMessageSession()) return;
     abortChannelFetch(channelId);
     fetchedChannels.delete(channelId);
     aroundPending.delete(channelId);
@@ -461,9 +616,20 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     void get().fetchMessages(channelId, explicitServerId);
   },
 
-  sendMessage: async (channelId, content, files, replyToId, explicitServerId?) => {
+  sendMessage: async (channelId, content, files, replyToId, explicitServerId?, context?) => {
+    const session = currentMessageSession();
+    if (!session) return false;
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return false;
+    const isCurrentSession = () => sendSessionStillCurrent(session) && (!context || context.isCurrent());
+    if (!isCurrentSession()) return false;
+    const server = await resolveMessageServer(serverId);
+    if (!isCurrentSession()) return false;
+    // Never infer plaintext from another selected server or unloaded metadata.
+    if (!server) {
+      useToastStore.getState().addToast("error", i18n.t("chat:sendFailed"));
+      return false;
+    }
 
     // Sending from a jumped-to window: return to the tail first so the
     // sender's own message (inserted below via handleMessageCreate) lands
@@ -472,9 +638,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
     // E2EE: encrypt with Sender Key
     const e2eeState = useE2EEStore.getState();
-    const activeServer = useServerStore.getState().activeServer;
-    if (activeServer?.e2ee_enabled && e2eeState.initStatus === "ready" && e2eeState.localDeviceId) {
-      const currentUserId = useAuthStore.getState().user?.id;
+    if (server.e2ee_enabled) {
+      const currentUserId = getAuthSessionOwner();
+      if (e2eeState.initStatus !== "ready" || !e2eeState.localDeviceId || !currentUserId) {
+        showEncryptionFailure();
+        return false;
+      }
       if (currentUserId) {
         try {
           let encryptedFiles: File[] | undefined;
@@ -482,18 +651,22 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
           if (files && files.length > 0) {
             const result = await encryptFilesForE2EE(files);
+            if (!isCurrentSession()) return false;
             encryptedFiles = result.files;
             fileMetas = result.metas;
           }
 
           const plaintext = encodePayload(content, fileMetas);
+          if (!isCurrentSession()) return false;
 
           const senderKeyMsg = await encryptChannelMessage(
             channelId,
             currentUserId,
             e2eeState.localDeviceId,
-            plaintext
+            plaintext,
+            serverId
           );
+          if (!isCurrentSession()) return false;
           const ciphertext = JSON.stringify(senderKeyMsg);
           // The server cannot read mentions out of ciphertext, so the
           // recipient ids ride along in plaintext metadata (ids only — no
@@ -507,17 +680,19 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             ...(mentionUserIds.length ? { mention_user_ids: mentionUserIds } : {}),
           });
 
-          const res = await sendWithRetryAndToast(() =>
-            messageApi.sendEncryptedMessage(
+          if (!isCurrentSession()) return false;
+          const res = await sendWithRetryAndToast(() => isCurrentSession()
+            ? messageApi.sendEncryptedMessage(
               serverId,
               channelId,
               ciphertext,
               e2eeState.localDeviceId!,
               metadata,
               encryptedFiles,
-              replyToId
-            )
-          );
+              replyToId,
+              ...(context ? ([{ isCurrent: isCurrentSession }] as const) : ([] as const))
+            ) : Promise.resolve({ success: false }), { isCurrent: isCurrentSession });
+          if (!isCurrentSession()) return false;
           if (res.success) {
             const created = unwrapSentMessage(res.data);
             if (created) {
@@ -527,22 +702,24 @@ export const useMessageStore = create<MessageState>((set, get) => ({
               // later decrypted echo hit the id-dedupe and leave the message
               // permanently unreadable, so overlay the plaintext we just
               // encrypted. handleMessageCreate dedupes by id either way.
-              get().handleMessageCreate({ ...created, content, e2ee_file_keys: fileMetas });
+              get().handleMessageCreate({ ...created, content, e2ee_file_keys: fileMetas }, session);
               if (content) {
                 // Sender-key ratchets can't re-decrypt our own past messages
                 // on refetch — persist the plaintext like the echo path does.
+                if (!isCurrentSession()) return false;
                 keyStorage.cacheDecryptedMessage({
                   messageId: created.id,
                   channelId,
                   dmChannelId: null,
                   content,
                   timestamp: new Date(created.created_at).getTime(),
-                }).catch(() => {});
+                }, isCurrentSession).catch(() => {});
               }
             }
           }
           return res.success;
         } catch (err) {
+          if (!isCurrentSession()) return false;
           console.error("[messageStore] E2EE encryption failed:", err);
           // A suppressed roster is a security event, not a transient failure:
           // the server claimed this channel has no readable recipients while
@@ -564,10 +741,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       }
     }
 
-    // Plaintext fallback
-    const res = await sendWithRetryAndToast(() =>
-      messageApi.sendMessage(serverId, channelId, content, files, replyToId)
-    );
+    // Only a confirmed non-E2EE origin server may use plaintext.
+    const res = await sendWithRetryAndToast(() => isCurrentSession()
+      ? messageApi.sendMessage(serverId, channelId, content, files, replyToId,
+        ...(context ? ([{ isCurrent: isCurrentSession }] as const) : ([] as const)))
+      : Promise.resolve({ success: false }), { isCurrent: isCurrentSession });
+    if (!isCurrentSession()) return false;
     if (res.success) {
       // Insert the 201 body directly: the sender's view of their own message
       // must not depend on the WS echo, which a dead/reconnecting socket
@@ -580,14 +759,26 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   editMessage: async (messageId, content, explicitServerId?) => {
+    const session = currentMessageSession();
+    if (!session) return false;
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return false;
+    const isCurrentSession = () => sendSessionStillCurrent(session);
+    const server = await resolveMessageServer(serverId);
+    if (!isCurrentSession()) return false;
+    if (!server) {
+      useToastStore.getState().addToast("error", i18n.t("chat:sendFailed"));
+      return false;
+    }
 
     // E2EE encrypted edit
     const e2eeState = useE2EEStore.getState();
-    const activeServerForEdit = useServerStore.getState().activeServer;
-    if (activeServerForEdit?.e2ee_enabled && e2eeState.initStatus === "ready" && e2eeState.localDeviceId) {
-      const currentUserId = useAuthStore.getState().user?.id;
+    if (server.e2ee_enabled) {
+      const currentUserId = getAuthSessionOwner();
+      if (e2eeState.initStatus !== "ready" || !e2eeState.localDeviceId || !currentUserId) {
+        showEncryptionFailure();
+        return false;
+      }
       // Find which channel this message belongs to
       const allChannels = get().messagesByChannel;
       let channelId: string | null = null;
@@ -604,13 +795,16 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             channelId,
             currentUserId,
             e2eeState.localDeviceId,
-            content
+            content,
+            serverId
           );
+          if (!isCurrentSession()) return false;
           const ciphertext = JSON.stringify(senderKeyMsg);
           const metadata = JSON.stringify({
             distribution_id: senderKeyMsg.distributionId,
           });
 
+          if (!isCurrentSession()) return false;
           const res = await messageApi.editEncryptedMessage(
             serverId,
             messageId,
@@ -618,8 +812,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             e2eeState.localDeviceId,
             metadata
           );
-          return res.success;
+          return isCurrentSession() && res.success;
         } catch (err) {
+          if (!isCurrentSession()) return false;
           console.error("[messageStore] E2EE edit encryption failed:", err);
           // Same classification as the send path — see the note there.
           useToastStore
@@ -635,23 +830,31 @@ export const useMessageStore = create<MessageState>((set, get) => ({
           return false;
         }
       }
+      // An encrypted edit with no known channel must not fall through to plaintext.
+      showEncryptionFailure();
+      return false;
     }
 
-    // Plaintext fallback
+    // Only a confirmed non-E2EE origin server may use plaintext.
     const res = await messageApi.editMessage(serverId, messageId, content);
-    return res.success;
+    return isCurrentSession() && res.success;
   },
 
   deleteMessage: async (messageId, explicitServerId?) => {
+    const session = currentMessageSession();
+    if (!session) return false;
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return false;
     const res = await messageApi.deleteMessage(serverId, messageId);
-    return res.success;
+    return sessionStillCurrent(session) && res.success;
   },
 
   // ─── Reply Actions ───
 
-  setReplyingTo: (message) => set({ replyingTo: message }),
+  setReplyingTo: (message) => {
+    if (!currentMessageSession()) return;
+    set({ replyingTo: message });
+  },
 
   /** One-shot: UI scrolls to message and highlights, then resets to null. */
   setScrollToMessageId: (id) => set({ scrollToMessageId: id }),
@@ -660,6 +863,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
   /** No optimistic update — WS event will update via handleReactionUpdate. */
   toggleReaction: async (messageId, _channelId, emoji, explicitServerId?) => {
+    const session = currentMessageSession();
+    if (!session) return;
     const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
     await reactionApi.toggleReaction(serverId, messageId, emoji);
@@ -667,7 +872,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
   // ─── WebSocket Event Handlers ───
 
-  handleMessageCreate: (message) => {
+  handleMessageCreate: (message, expectedSession) => {
+    const session = currentMessageSession();
+    if (!session || (expectedSession && (expectedSession.ownerId !== session.ownerId || expectedSession.authGeneration !== session.authGeneration))) return;
     // Jumped-to window: the tail isn't loaded, so a live insert would be
     // appended after messages that are NOT the newest. Hold it until forward
     // paging reaches the end (fetchNewerMessages merges it).
@@ -705,7 +912,9 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     });
   },
 
-  handleMessageUpdate: (message) => {
+  handleMessageUpdate: (message, expectedSession) => {
+    const session = currentMessageSession();
+    if (!session || (expectedSession && (expectedSession.ownerId !== session.ownerId || expectedSession.authGeneration !== session.authGeneration))) return;
     set((state) => ({
       messagesByChannel: updateMessageInRecord(
         state.messagesByChannel, message.channel_id, message
@@ -714,6 +923,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   handleMessageDelete: (data) => {
+    if (!currentMessageSession()) return;
     const held = detachedWsMessages.get(data.channel_id);
     if (held) detachedWsMessages.set(data.channel_id, held.filter((m) => m.id !== data.id));
     set((state) => ({
@@ -725,10 +935,14 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   /** Auto-cleared after 5s if no new typing event arrives. */
-  handleTypingStart: createTypingHandler(set),
+  handleTypingStart: (channelId, username) => {
+    if (!currentMessageSession()) return;
+    handleTyping(channelId, username);
+  },
 
   /** Backend sends full reaction list after each toggle — direct replace, no client merge. */
   handleReactionUpdate: (data) => {
+    if (!currentMessageSession()) return;
     set((state) => ({
       messagesByChannel: updateReactionInRecord(
         state.messagesByChannel, data.channel_id, data.message_id, data.reactions
@@ -737,6 +951,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   handleAuthorUpdate: (userId, patch) => {
+    if (!currentMessageSession()) return;
     set((state) => {
       const { updated, changed } = updateAuthorInRecord(
         state.messagesByChannel, userId, patch
@@ -744,4 +959,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       return changed ? { messagesByChannel: updated } : state;
     });
   },
-}));
+  });
+});
+
+// Keep channel-keyed caches and module-level paging buffers private to the
+// authenticated session. These subscriptions are synchronous Zustand updates,
+// so a late request cannot observe a new auth generation with old rows still
+// mounted in the store.
+subscribeAuthOwnerChanges(() => syncMessageSession());
+subscribeAuthGenerationChanges((generation) => clearMessageCaches(getAuthSessionOwner(), generation));

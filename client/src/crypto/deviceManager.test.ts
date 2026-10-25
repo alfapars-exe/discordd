@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 import * as deviceManager from "./deviceManager";
 import * as keyStorage from "./keyStorage";
 import * as e2eeApi from "../api/e2ee";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import { PREKEY_BATCH_SIZE, PREKEY_LOW_THRESHOLD } from "./types";
 import type { StoredSession } from "./types";
 
@@ -37,6 +38,7 @@ vi.mock("../api/e2ee", () => ({
 const HEX32 = /^[0-9a-f]{32}$/;
 
 let consoleErrorSpy: MockInstance;
+let authGeneration = 12000;
 
 beforeEach(async () => {
   // Singleton reset (mandatory order): drop the cached connection FIRST, then
@@ -44,6 +46,8 @@ beforeEach(async () => {
   await keyStorage.closeDB();
   (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB =
     new FakeIDBFactory();
+  publishAuthOwnerChange("user-1");
+  publishAuthGenerationChange(++authGeneration);
 
   // resetAllMocks also drains any leftover mockResolvedValueOnce queue, so a
   // failure override that a prior test never consumed can't bleed forward.
@@ -104,7 +108,7 @@ async function seedExistingKeys(
   });
   await keyStorage.saveRegistrationData({
     registrationId: 777,
-    deviceId: "dev-existing",
+    deviceId: "dev-1",
     userId: "user-1",
     createdAt: 1000,
   });
@@ -133,6 +137,15 @@ function makeSession(userId: string, deviceId: string): StoredSession {
   };
 }
 
+async function seedCurrentRegistration(deviceId = "dev-1"): Promise<void> {
+  await keyStorage.saveRegistrationData({
+    registrationId: 777,
+    deviceId,
+    userId: "user-1",
+    createdAt: 1000,
+  });
+}
+
 // ──────────────────────────────────
 // getLocalDeviceId
 // ──────────────────────────────────
@@ -151,6 +164,11 @@ describe("deviceManager — getLocalDeviceId", () => {
 // ──────────────────────────────────
 
 describe("deviceManager — registerNewDevice", () => {
+  it("rejects a caller-supplied user that differs from the authenticated owner", async () => {
+    await expect(deviceManager.registerNewDevice("other-user")).rejects.toThrow("e2ee_account_scope_owner_mismatch");
+    expect(e2eeApi.registerDevice).not.toHaveBeenCalled();
+  });
+
   it("generates a device id, uploads the bundle, and writes local metadata", async () => {
     const deviceId = await deviceManager.registerNewDevice("user-1", "My Laptop");
 
@@ -197,6 +215,19 @@ describe("deviceManager — registerNewDevice", () => {
       /Device registration failed: duplicate device/
     );
     expect(await keyStorage.getMetadata<string>("deviceId")).toBeNull();
+  });
+
+  it("does not write registration metadata into the next account after an API response", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof e2eeApi.registerDevice>>) => void;
+    vi.mocked(e2eeApi.registerDevice).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const registering = deviceManager.registerNewDevice("user-1");
+    await vi.waitFor(() => expect(e2eeApi.registerDevice).toHaveBeenCalledOnce());
+    publishAuthOwnerChange("user-2");
+    publishAuthGenerationChange(++authGeneration);
+    resolve({ success: true, data: { device_id: "server-device" } });
+    await expect(registering).rejects.toThrow("e2ee_account_scope_changed");
+    expect(await keyStorage.getMetadata("deviceId")).toBeNull();
+    expect(await keyStorage.getRegistrationData()).toBeNull();
   });
 });
 
@@ -246,7 +277,7 @@ describe("deviceManager — reRegisterDevice (existing keys)", () => {
     });
     await keyStorage.saveRegistrationData({
       registrationId: 777,
-      deviceId: "dev-existing",
+      deviceId: "dev-1",
       userId: "user-1",
       createdAt: 1000,
     });
@@ -345,6 +376,10 @@ describe("deviceManager — registerRestoredDevice", () => {
 // ──────────────────────────────────
 
 describe("deviceManager — refreshPreKeys", () => {
+  beforeEach(async () => {
+    await seedCurrentRegistration();
+  });
+
   it("returns early without uploading when the pool is at/above threshold", async () => {
     vi.mocked(e2eeApi.getPrekeyCount).mockResolvedValueOnce({
       success: true,
@@ -412,6 +447,18 @@ describe("deviceManager — refreshPreKeys", () => {
     expect(await keyStorage.getMetadata<number>("nextPrekeyId")).toBe(101);
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
+
+  it("does not upload keys if the account changes while the server count is pending", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof e2eeApi.getPrekeyCount>>) => void;
+    vi.mocked(e2eeApi.getPrekeyCount).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const refreshing = deviceManager.refreshPreKeys("dev-1");
+    await vi.waitFor(() => expect(e2eeApi.getPrekeyCount).toHaveBeenCalledOnce());
+    publishAuthOwnerChange("user-2");
+    publishAuthGenerationChange(++authGeneration);
+    resolve({ success: true, data: { count: 0 } });
+    await expect(refreshing).rejects.toThrow("e2ee_account_scope_changed");
+    expect(e2eeApi.uploadPrekeys).not.toHaveBeenCalled();
+  });
 });
 
 // ──────────────────────────────────
@@ -420,6 +467,7 @@ describe("deviceManager — refreshPreKeys", () => {
 
 describe("deviceManager — rotateSignedPreKey", () => {
   beforeEach(async () => {
+    await seedCurrentRegistration();
     // signalProtocol.rotateSignedPreKey signs with the dedicated Ed25519 key.
     await keyStorage.saveSigningKeyPair({
       publicKey: bytes(32, 3),

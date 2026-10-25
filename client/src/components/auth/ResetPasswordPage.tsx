@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import * as authApi from "../../api/auth";
 import { localizeAuthError } from "../../utils/authErrors";
+import { newPasswordError } from "../../utils/passwordPolicy";
 
 function ResetPasswordPage() {
   // ─── Hooks ───
@@ -32,21 +33,28 @@ function ResetPasswordPage() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError(t("passwordTooShort"));
+    const policyError = newPasswordError(newPassword);
+    if (policyError) {
+      setError(t(policyError));
       return;
     }
 
+    if (isLoading) return;
     setIsLoading(true);
-    const res = await authApi.resetPassword(token, newPassword);
-    setIsLoading(false);
-
-    if (res.error) {
-      setError(res.error);
-      return;
+    try {
+      const res = await authApi.resetPassword(token, newPassword);
+      if (!res.success) {
+        setError(res.error || t("resetPasswordError"));
+        return;
+      }
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsSuccess(true);
+    } catch {
+      setError(t("networkError"));
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsSuccess(true);
   }
 
   // ─── Render: No Token ───

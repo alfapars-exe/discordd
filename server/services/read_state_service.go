@@ -14,6 +14,7 @@ import (
 // GetUnreadCounts is server-scoped — returns unread counts for channels in a given server.
 type ReadStateService interface {
 	MarkRead(ctx context.Context, userID, channelID, messageID string) error
+	MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error)
 	GetUnreadCounts(ctx context.Context, userID, serverID string) ([]models.UnreadInfo, error)
 	MarkAllRead(ctx context.Context, userID, serverID string) error
 }
@@ -38,6 +39,20 @@ func (s *readStateService) MarkRead(ctx context.Context, userID, channelID, mess
 		return fmt.Errorf("%w: message_id is required", pkg.ErrBadRequest)
 	}
 	return s.readStateRepo.Upsert(ctx, userID, channelID, messageID)
+}
+
+func (s *readStateService) MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error) {
+	if strings.TrimSpace(messageID) == "" {
+		return 0, fmt.Errorf("%w: message_id is required", pkg.ErrBadRequest)
+	}
+	perms, err := s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)
+	if err != nil {
+		return 0, err
+	}
+	if !models.PermCanReadChannel(perms) {
+		return 0, pkg.ErrForbidden
+	}
+	return s.readStateRepo.MarkUnreadFrom(ctx, userID, channelID, messageID)
 }
 
 func (s *readStateService) MarkAllRead(ctx context.Context, userID, serverID string) error {

@@ -21,12 +21,17 @@ func NewSQLiteReportRepo(db database.TxQuerier) ReportRepository {
 
 func (r *sqliteReportRepo) Create(ctx context.Context, report *models.Report) error {
 	query := `
-		INSERT INTO reports (id, reporter_id, reported_user_id, reason, description)
-		VALUES (?, ?, ?, ?, ?)`
+		INSERT INTO reports (
+			id, reporter_id, reported_user_id, reason, description,
+			source_kind, source_server_id, source_channel_id, source_message_id,
+			evidence_content, evidence_shared
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	if _, err := r.db.ExecContext(ctx, query,
 		report.ID, report.ReporterID, report.ReportedUserID,
-		report.Reason, report.Description,
+		report.Reason, report.Description, report.SourceKind, report.SourceServerID,
+		report.SourceChannelID, report.SourceMessageID, report.EvidenceContent, report.EvidenceShared,
 	); err != nil {
 		return fmt.Errorf("failed to create report: %w", err)
 	}
@@ -40,17 +45,22 @@ func (r *sqliteReportRepo) Create(ctx context.Context, report *models.Report) er
 func (r *sqliteReportRepo) GetByID(ctx context.Context, id string) (*models.Report, error) {
 	query := `
 		SELECT id, reporter_id, reported_user_id, reason, description,
-		       status, resolved_by, resolved_at, created_at
+		       status, resolved_by, resolved_at, created_at,
+		       source_kind, source_server_id, source_channel_id, source_message_id,
+		       evidence_content, evidence_shared
 		FROM reports WHERE id = ?`
 
 	var report models.Report
 	var resolvedBy sql.NullString
 	var resolvedAt sql.NullString
+	var sourceKind, sourceServerID, sourceChannelID, sourceMessageID, evidenceContent sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&report.ID, &report.ReporterID, &report.ReportedUserID,
 		&report.Reason, &report.Description,
 		&report.Status, &resolvedBy, &resolvedAt, &report.CreatedAt,
+		&sourceKind, &sourceServerID, &sourceChannelID, &sourceMessageID,
+		&evidenceContent, &report.EvidenceShared,
 	)
 
 	if err == sql.ErrNoRows {
@@ -66,6 +76,11 @@ func (r *sqliteReportRepo) GetByID(ctx context.Context, id string) (*models.Repo
 	if resolvedAt.Valid {
 		report.ResolvedAt = &resolvedAt.String
 	}
+	report.SourceKind = reportNullStringPtr(sourceKind)
+	report.SourceServerID = reportNullStringPtr(sourceServerID)
+	report.SourceChannelID = reportNullStringPtr(sourceChannelID)
+	report.SourceMessageID = reportNullStringPtr(sourceMessageID)
+	report.EvidenceContent = reportNullStringPtr(evidenceContent)
 
 	return &report, nil
 }
@@ -108,6 +123,8 @@ func (r *sqliteReportRepo) listByStatus(ctx context.Context, status models.Repor
 	baseQuery := `
 		SELECT r.id, r.reporter_id, r.reported_user_id, r.reason, r.description,
 		       r.status, r.resolved_by, r.resolved_at, r.created_at,
+		       r.source_kind, r.source_server_id, r.source_channel_id, r.source_message_id,
+		       r.evidence_content, r.evidence_shared,
 		       reporter.username, reporter.display_name,
 		       reported.username, reported.display_name
 		FROM reports r
@@ -154,10 +171,13 @@ func scanReport(rows *sql.Rows) (models.ReportWithUsers, error) {
 	var resolvedBy sql.NullString
 	var resolvedAt sql.NullString
 	var reporterDisplay, reportedDisplay sql.NullString
+	var sourceKind, sourceServerID, sourceChannelID, sourceMessageID, evidenceContent sql.NullString
 
 	if err := rows.Scan(
 		&rw.ID, &rw.ReporterID, &rw.ReportedUserID, &rw.Reason, &rw.Description,
 		&rw.Status, &resolvedBy, &resolvedAt, &rw.CreatedAt,
+		&sourceKind, &sourceServerID, &sourceChannelID, &sourceMessageID,
+		&evidenceContent, &rw.EvidenceShared,
 		&rw.ReporterUsername, &reporterDisplay,
 		&rw.ReportedUsername, &reportedDisplay,
 	); err != nil {
@@ -176,6 +196,11 @@ func scanReport(rows *sql.Rows) (models.ReportWithUsers, error) {
 	if reportedDisplay.Valid {
 		rw.ReportedDisplay = &reportedDisplay.String
 	}
+	rw.SourceKind = reportNullStringPtr(sourceKind)
+	rw.SourceServerID = reportNullStringPtr(sourceServerID)
+	rw.SourceChannelID = reportNullStringPtr(sourceChannelID)
+	rw.SourceMessageID = reportNullStringPtr(sourceMessageID)
+	rw.EvidenceContent = reportNullStringPtr(evidenceContent)
 
 	return rw, nil
 }
@@ -214,6 +239,25 @@ func (r *sqliteReportRepo) HasPendingReport(ctx context.Context, reporterID, tar
 		return false, fmt.Errorf("failed to check pending report: %w", err)
 	}
 	return exists, nil
+}
+
+func (r *sqliteReportRepo) HasPendingMessageReport(ctx context.Context, reporterID, messageID string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(
+		SELECT 1 FROM reports
+		WHERE reporter_id = ? AND source_message_id = ? AND status = 'pending'
+	)`, reporterID, messageID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check pending message report: %w", err)
+	}
+	return exists, nil
+}
+
+func reportNullStringPtr(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	return &value.String
 }
 
 func (r *sqliteReportRepo) CreateAttachment(ctx context.Context, att *models.ReportAttachment) error {

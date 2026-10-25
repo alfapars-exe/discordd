@@ -16,6 +16,12 @@ export type ReportReason =
 export type CreateReportRequest = {
   reason: ReportReason;
   description: string;
+  source_kind?: "channel" | "dm" | "group";
+  source_server_id?: string;
+  source_channel_id?: string;
+  source_message_id?: string;
+  evidence_content?: string;
+  evidence_consent?: boolean;
 };
 
 export type ReportAttachment = {
@@ -45,6 +51,12 @@ export function reportUser(userId: string, req: CreateReportRequest, files?: Fil
     const formData = new FormData();
     formData.append("reason", req.reason);
     formData.append("description", req.description);
+    if (req.source_kind) formData.append("source_kind", req.source_kind);
+    if (req.source_server_id) formData.append("source_server_id", req.source_server_id);
+    if (req.source_channel_id) formData.append("source_channel_id", req.source_channel_id);
+    if (req.source_message_id) formData.append("source_message_id", req.source_message_id);
+    if (req.evidence_content) formData.append("evidence_content", req.evidence_content);
+    formData.append("evidence_consent", String(req.evidence_consent === true));
     for (const file of files) {
       formData.append("files", file);
     }

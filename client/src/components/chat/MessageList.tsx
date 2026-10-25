@@ -1,21 +1,21 @@
 /** MessageList — Scrollable message container with auto-scroll, infinite scroll, and compact mode. */
 
-import { useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatContext } from "../../hooks/useChatContext";
+import { useConversationPageShortcut } from "../../hooks/useConversationPageShortcut";
 import { useAuthStore } from "../../stores/authStore";
+import { composerKey, conversationScrollPositions as scrollPositions } from "../../stores/composerDraftStore";
 import { useActiveMembers } from "../../stores/memberStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { MessageSkeleton } from "../shared/Skeleton";
 import Message from "./Message";
 import JumpToPresentPill from "./JumpToPresentPill";
+import { SERVER_APPLICATIONS_CHANGED_EVENT, listServerApplicationActions, type ApplicationAction } from "../../api/applications";
 
 /** Compact threshold for consecutive messages from same author (ms) */
 const COMPACT_THRESHOLD = 5 * 60 * 1000;
-
-/** Per-channel scroll position cache. Survives component unmount/remount. */
-const scrollPositions = new Map<string, number>();
 
 function MessageList() {
   const { t } = useTranslation("chat");
@@ -46,8 +46,27 @@ function MessageList() {
     showRoleColors,
     members: ctxMembers,
   } = useChatContext();
+  const [applicationActions, setApplicationActions] = useState<ApplicationAction[]>([]);
+  useEffect(() => {
+    let current = true;
+    if (mode !== "channel" || !serverId) { setApplicationActions([]); return () => { current = false; }; }
+    const refresh = () => void listServerApplicationActions(serverId, () => current).then(result => {
+      if (current) setApplicationActions(result.success ? (result.data?.actions ?? []) : []);
+    }).catch(() => { if (current) setApplicationActions([]); });
+    const onApplicationsChanged = (event: Event) => {
+      const changedServerID = (event as CustomEvent<{ serverID?: string }>).detail?.serverID;
+      if (!changedServerID || changedServerID === serverId) refresh();
+    };
+    refresh();
+    window.addEventListener(SERVER_APPLICATIONS_CHANGED_EVENT, onApplicationsChanged);
+    return () => {
+      current = false;
+      window.removeEventListener(SERVER_APPLICATIONS_CHANGED_EVENT, onApplicationsChanged);
+    };
+  }, [mode, serverId]);
 
   const currentUser = useAuthStore((s) => s.user);
+  const scrollKey = composerKey(currentUser?.id, mode, channelId, serverId);
   const members = useActiveMembers();
 
   // Per-row props for the memoized Message rows. This component re-renders
@@ -60,6 +79,10 @@ function MessageList() {
   const currentMember = currentUser ? memberById.get(currentUser.id) : undefined;
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  useConversationPageShortcut(
+    mode === "dm" ? { kind: "dm", id: channelId } : { kind: "channel", id: channelId, serverId },
+    scrollRef,
+  );
   const contentRef = useRef<HTMLDivElement>(null);
   /**
    * "Should we stay pinned to the bottom?" — intent flag updated by user
@@ -92,9 +115,9 @@ function MessageList() {
       stickToBottomRef.current = false;
     } else if (wasDetached) {
       restoredForChannelRef.current = null;
-      scrollPositions.delete(channelId);
+      scrollPositions.delete(scrollKey);
     }
-  }, [hasMoreAfter, channelId]);
+  }, [hasMoreAfter, scrollKey]);
 
   /**
    * Virtualized rows — only the visible window (+overscan) mounts to the DOM.
@@ -174,7 +197,7 @@ function MessageList() {
     if (channelId) {
       fetchMessages();
     }
-  }, [channelId, fetchMessages]);
+  }, [channelId, fetchMessages, scrollKey]);
 
   // scrollToBottom lifted up (declaration moved here from below) so
   // the auto-scroll useEffect can call it without
@@ -254,12 +277,12 @@ function MessageList() {
    * useEffect above), allowing the next channel's restore to run.
    */
   useLayoutEffect(() => {
-    if (restoredForChannelRef.current === channelId) return;
+    if (restoredForChannelRef.current === scrollKey) return;
     if (isLoading || messages.length === 0 || !scrollRef.current) return;
 
-    restoredForChannelRef.current = channelId;
+    restoredForChannelRef.current = scrollKey;
 
-    const savedPos = scrollPositions.get(channelId);
+    const savedPos = scrollPositions.get(scrollKey);
     if (savedPos !== undefined) {
       scrollRef.current.scrollTop = savedPos;
       // Stick-to-bottom intent matches whatever position we restored to:
@@ -275,7 +298,7 @@ function MessageList() {
       prevScrollTopRef.current = scrollRef.current.scrollTop;
     }
     prevMessageCountRef.current = messages.length;
-  }, [isLoading, channelId, messages.length]);
+  }, [isLoading, channelId, messages.length, scrollKey]);
 
   /** Scroll-to-message effect — triggered when reply preview is clicked.
    *  Index-based: with virtualization the target row may not be in the DOM
@@ -323,7 +346,7 @@ function MessageList() {
     prevScrollTopRef.current = scrollTop;
 
     if (channelId) {
-      scrollPositions.set(channelId, scrollTop);
+      scrollPositions.set(scrollKey, scrollTop);
     }
 
     if (scrollTop < 100 && hasMore && !isLoadingMore && channelId) {
@@ -341,7 +364,7 @@ function MessageList() {
     if (distanceToBottom < 100 && hasMoreAfter && channelId) {
       void fetchNewerMessages();
     }
-  }, [hasMore, hasMoreAfter, isLoadingMore, channelId, fetchOlderMessages, fetchNewerMessages]);
+  }, [hasMore, hasMoreAfter, isLoadingMore, channelId, scrollKey, fetchOlderMessages, fetchNewerMessages]);
 
 
   /** Compact mode for consecutive messages from same author within 5min. Replies always show full header. */
@@ -422,7 +445,7 @@ function MessageList() {
                 const msg = messages[vi.index];
                 return (
                   <div
-                    key={String(vi.key)}
+                    key={`${scrollKey}:${String(vi.key)}`}
                     id={`msg-${msg.id}`}
                     data-index={vi.index}
                     ref={virtualizer.measureElement}
@@ -451,6 +474,8 @@ function MessageList() {
                       setScrollToMessageId={setScrollToMessageId}
                       pinMessage={pinMessage}
                       unpinMessage={unpinMessage}
+                      channelId={channelId}
+                      applicationActions={applicationActions}
                     />
                   </div>
                 );

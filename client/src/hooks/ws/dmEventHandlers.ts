@@ -4,17 +4,57 @@
  */
 
 import { useDMStore } from "../../stores/dmStore";
+import { useBlockStore } from "../../stores/blockStore";
 import { useAuthStore } from "../../stores/authStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import * as dmApi from "../../api/dm";
 import { decryptDMMessage, popSentPlaintext, popEditPlaintext } from "../../crypto/dmEncryption";
-import * as keyStorage from "../../crypto/keyStorage";
 import { playNotificationSound } from "../../utils/sounds";
 import { showNotification } from "../../utils/notifications";
 import type { WSMessage } from "../../types";
+import { useGroupDMStore } from "../../stores/groupDMStore";
+import { useUIStore } from "../../stores/uiStore";
+import { shouldFlashTaskbar } from "../../utils/notificationPreferences";
+import { speakIncomingMessage } from "../../utils/textToSpeech";
+import { isMessageFilteredAsSpam } from "../../utils/messageSpamPolicy";
+import { registerSpamMessage } from "../../utils/registerSpamMessage";
+import {cacheDMMessage,readDMMessageCache} from "../../crypto/dmMessageCache";
+import {useComposerDraftStore} from "../../stores/composerDraftStore";
+import {observeDMMessage} from "../../crypto/dmMessageVersions";
+import {deleteCachedDMMessage} from "../../crypto/keyStorage";
+import { notifyGroupDMPinsChanged } from "../../utils/groupDMPins";
 
-export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
+export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = () => true): Promise<boolean> {
   switch (msg.op) {
+    case "group_dm_create":
+    case "group_dm_update":
+      useGroupDMStore.getState().handleCreateOrUpdate(msg.d);
+      return true;
+    case "group_dm_delete":
+      useGroupDMStore.getState().handleDelete(msg.d.group_id);
+      return true;
+    case "group_dm_rekey": {
+      const group = useGroupDMStore.getState().groups.find((item) => item.id === msg.d.group_id);
+      if (group) useGroupDMStore.getState().handleCreateOrUpdate({ ...group, key_epoch: msg.d.key_epoch });
+      return true;
+    }
+    case "group_dm_message_create":
+      await useGroupDMStore.getState().handleMessage(msg.d);
+      if (useUIStore.getState().destination.type === "group-dm" && useUIStore.getState().destination.channelId === msg.d.group_id) void useGroupDMStore.getState().markRead(msg.d.group_id, msg.d.id);
+      else if (msg.d.user_id !== useAuthStore.getState().user?.id) {
+        const group=useGroupDMStore.getState().groups.find((item)=>item.id===msg.d.group_id);
+        if(group && group.read_revision===undefined) useGroupDMStore.getState().handleCreateOrUpdate({...group,unread_count:group.unread_count+1});
+      }
+      return true;
+    case "group_dm_message_update": await useGroupDMStore.getState().handleMessageUpdate(msg.d); notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
+    case "group_dm_message_delete": useGroupDMStore.getState().handleMessageDelete(msg.d.group_id,msg.d.id); notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
+    case "group_dm_pins_update": notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
+    case "group_dm_reaction_update": useGroupDMStore.getState().handleReactionUpdate(msg.d.group_id,msg.d.message_id,msg.d.reactions); return true;
+    case "group_dm_read": {
+      useGroupDMStore.getState().handleReadState(msg.d);
+      return true;
+    }
+    case "group_dm_refresh": void useGroupDMStore.getState().fetchGroups(); return true;
     case "dm_channel_create":
       useDMStore.getState().handleDMChannelCreate(msg.d);
       return true;
@@ -31,10 +71,14 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
     case "dm_message_create": {
       let dmMsg = msg.d;
       const dmCurrentUserId = useAuthStore.getState().user?.id;
+      const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+      const versionCurrent=observeDMMessage(dmMsg.dm_channel_id,dmMsg.id,false,dmMsg);
+      const current=()=>versionCurrent()&&Boolean(dmCurrentUserId)&&useAuthStore.getState().user?.id===dmCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
+      if(!current())return true;
 
       if (dmMsg.encryption_version === 1 && dmMsg.ciphertext && dmMsg.sender_device_id) {
         const isOwnMessage = dmMsg.user_id === dmCurrentUserId;
-        // The FIFO only holds sends from THIS device. An own message from a
+        // The pending source cache only holds sends from THIS device. An own message from a
         // sibling device (self-fanout envelope) must not pop it — that would
         // stamp an in-flight send's plaintext onto the wrong message. Unknown
         // local device id → never pop (decryption can't run either).
@@ -44,41 +88,38 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
 
         if (isOwnMessage) {
           try {
-            const cached = isFromThisDevice ? popSentPlaintext(dmMsg.dm_channel_id) : null;
+            const cached = isFromThisDevice ? popSentPlaintext(dmMsg.dm_channel_id,{ciphertext:dmMsg.ciphertext!,metadata:dmMsg.e2ee_metadata}) : null;
             if (cached) {
               dmMsg = { ...dmMsg, content: cached.content, e2ee_file_keys: cached.file_keys };
               decrypted = true;
-              keyStorage.cacheDecryptedMessage({
-                messageId: dmMsg.id, channelId: "", dmChannelId: dmMsg.dm_channel_id,
-                content: cached.content, timestamp: new Date(dmMsg.created_at).getTime(),
-              }).catch(() => {});
+              void cacheDMMessage(dmMsg,cached,current).catch(() => {});
             } else {
-              const idbCached = await keyStorage.getCachedDecryptedMessage(dmMsg.id);
+              const idbCached = await readDMMessageCache(dmMsg,current);
+              if(!current())return true;
               if (idbCached) {
-                dmMsg = { ...dmMsg, content: idbCached.content };
+                dmMsg = { ...dmMsg, content: idbCached.content,e2ee_file_keys:idbCached.file_keys };
                 decrypted = true;
               }
             }
           } catch (cacheErr) {
+            if(!current())return true;
             console.error("[ws] DM own message cache lookup failed:", cacheErr);
           }
         }
 
         if (!decrypted) {
+          if(!current())return true;
           try {
             const payload = await decryptDMMessage(dmMsg.user_id, dmMsg.ciphertext!, dmMsg.sender_device_id!);
+            if(!current())return true;
             if (payload) {
               dmMsg = { ...dmMsg, content: payload.content, e2ee_file_keys: payload.file_keys };
-              if (payload.content) {
-                keyStorage.cacheDecryptedMessage({
-                  messageId: dmMsg.id, channelId: "", dmChannelId: dmMsg.dm_channel_id,
-                  content: payload.content, timestamp: new Date(dmMsg.created_at).getTime(),
-                }).catch(() => {});
-              }
+              void cacheDMMessage(dmMsg,payload,current).catch(() => {});
             } else {
               dmMsg = { ...dmMsg, content: null };
             }
           } catch (err) {
+            if(!current())return true;
             console.error("[ws] DM decrypt failed:", err);
             dmMsg = { ...dmMsg, content: null };
             useE2EEStore.getState().addDecryptionError({
@@ -89,9 +130,16 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
         }
       }
 
+      if(!current())return true;
       useDMStore.getState().handleDMMessageCreate(dmMsg);
 
       if (dmMsg.user_id === dmCurrentUserId) return true;
+      if (isMessageFilteredAsSpam(dmMsg, "dm")) { void registerSpamMessage(dmMsg, "dm", dmMsg.dm_channel_id); return true; }
+
+      speakIncomingMessage(
+        dmMsg.author?.display_name || dmMsg.author?.username || "",
+        dmMsg.content,
+      );
 
       const dmState = useDMStore.getState();
       if (dmMsg.dm_channel_id === dmState.selectedDMId) {
@@ -109,7 +157,7 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
       const isMuted = dmChannel?.is_muted ?? false;
       if (!isMuted) {
         playNotificationSound();
-        window.electronAPI?.flashFrame();
+        if (shouldFlashTaskbar()) window.electronAPI?.flashFrame();
         // OS toast for the DM. Same gating contract as channel messages
         // (notifications.ts skips when the window is focused). Tag =
         // dm channel id so successive messages collapse.
@@ -122,6 +170,15 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
           body: dmMsg.content ?? "",
           icon: dmMsg.author?.avatar_url ?? null,
           tag: `dm:${dmMsg.dm_channel_id}`,
+          isStillEligible: () => {
+            const auth = useAuthStore.getState();
+            const state = useDMStore.getState();
+            const channel = state.channels.find((item) => item.id === dmMsg.dm_channel_id);
+            return auth.user?.id === dmCurrentUserId && state.selectedDMId !== dmMsg.dm_channel_id
+              && (state.dmUnreadCounts[dmMsg.dm_channel_id] ?? 0) > 0
+              && !!channel && channel.status === "accepted" && !channel.is_muted
+              && !(channel.other_user?.id && useBlockStore.getState().isBlocked(channel.other_user.id));
+          },
         });
       }
       return true;
@@ -130,6 +187,10 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
     case "dm_message_update": {
       let dmUpdateMsg = msg.d;
       const dmEditCurrentUserId = useAuthStore.getState().user?.id;
+      const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+      const versionCurrent=observeDMMessage(dmUpdateMsg.dm_channel_id,dmUpdateMsg.id,false,dmUpdateMsg);
+      const current=()=>versionCurrent()&&Boolean(dmEditCurrentUserId)&&useAuthStore.getState().user?.id===dmEditCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
+      if(!current())return true;
 
       if (dmUpdateMsg.encryption_version === 1 && dmUpdateMsg.ciphertext && dmUpdateMsg.sender_device_id) {
         const isOwnEdit = dmUpdateMsg.user_id === dmEditCurrentUserId;
@@ -137,59 +198,68 @@ export async function handleDMEvent(msg: WSMessage): Promise<boolean> {
 
         if (isOwnEdit) {
           try {
-            const cached = popEditPlaintext(dmUpdateMsg.id);
+            const cached = device&&dmUpdateMsg.sender_device_id===device?popEditPlaintext(dmUpdateMsg.id,{ciphertext:dmUpdateMsg.ciphertext!,metadata:dmUpdateMsg.e2ee_metadata}):null;
             if (cached) {
               dmUpdateMsg = { ...dmUpdateMsg, content: cached.content, e2ee_file_keys: cached.file_keys };
               editDecrypted = true;
+              void cacheDMMessage(dmUpdateMsg,cached,current).catch(()=>{});
             } else {
-              const idbCached = await keyStorage.getCachedDecryptedMessage(dmUpdateMsg.id);
+              const idbCached = await readDMMessageCache(dmUpdateMsg,current);
+              if(!current())return true;
               if (idbCached) {
-                dmUpdateMsg = { ...dmUpdateMsg, content: idbCached.content };
+                dmUpdateMsg = { ...dmUpdateMsg, content: idbCached.content,e2ee_file_keys:idbCached.file_keys };
                 editDecrypted = true;
               }
             }
           } catch (cacheErr) {
+            if(!current())return true;
             console.error("[ws] DM own edit cache lookup failed:", cacheErr);
           }
         }
 
         if (!editDecrypted) {
+          if(!current())return true;
           try {
             const payload = await decryptDMMessage(
               dmUpdateMsg.user_id, dmUpdateMsg.ciphertext!, dmUpdateMsg.sender_device_id!
             );
+            if(!current())return true;
             dmUpdateMsg = { ...dmUpdateMsg, content: payload?.content ?? null, e2ee_file_keys: payload?.file_keys };
 
-            if (payload?.content) {
-              keyStorage.cacheDecryptedMessage({
-                messageId: dmUpdateMsg.id, channelId: "", dmChannelId: dmUpdateMsg.dm_channel_id,
-                content: payload.content, timestamp: new Date(dmUpdateMsg.created_at).getTime(),
-              }).catch(() => {});
-            }
+            if (payload) void cacheDMMessage(dmUpdateMsg,payload,current).catch(()=>{});
           } catch (err) {
+            if(!current())return true;
             console.error("[ws] DM edit decrypt failed:", err);
             dmUpdateMsg = { ...dmUpdateMsg, content: null };
           }
         }
       }
 
+      if(!current())return true;
       useDMStore.getState().handleDMMessageUpdate(dmUpdateMsg);
       return true;
     }
 
     case "dm_message_delete": {
       const dmDelData = msg.d;
+      const owner=useAuthStore.getState().user?.id;
+      if (!owner) return true;
+      const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+      const deletionCurrent=observeDMMessage(dmDelData.dm_channel_id,dmDelData.id,true);
+      const current=()=>deletionCurrent()&&useAuthStore.getState().user?.id===owner&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
       const dmState = useDMStore.getState();
       const dmUnread = dmState.dmUnreadCounts[dmDelData.dm_channel_id] ?? 0;
       if (dmUnread > 0) {
         const dmMessages = dmState.messagesByChannel[dmDelData.dm_channel_id];
         const deletedDMMsg = dmMessages?.find((m) => m.id === dmDelData.id);
         const myId = useAuthStore.getState().user?.id;
-        if (deletedDMMsg?.user_id !== myId) {
+        if (deletedDMMsg && deletedDMMsg.user_id !== myId) {
           dmState.decrementDMUnread(dmDelData.dm_channel_id);
         }
       }
       dmState.handleDMMessageDelete(dmDelData);
+      try {await deleteCachedDMMessage(dmDelData.id,dmDelData.dm_channel_id,current);}
+      catch {if(current())console.warn("[ws] DM deleted-message cache cleanup failed");}
       return true;
     }
 

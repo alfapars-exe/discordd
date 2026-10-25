@@ -25,14 +25,20 @@ vi.mock("../crypto/keyBackup", () => ({
   createBackup: vi.fn(),
   restoreFromBackup: vi.fn(),
 }));
+vi.mock("../crypto/legacyKeyArchive", () => ({
+  inspectLegacyKeyArchive: vi.fn(async () => ({ status: "none" })),
+  importLegacyKeyArchive: vi.fn(async () => ({ success: false, code: "not-eligible" })),
+}));
 vi.mock("../crypto/keyStorage", () => ({
   hasLocalKeys: vi.fn(),
   getRegistrationData: vi.fn(),
+  getIdentityKeyPair: vi.fn(),
   clearAllE2EEData: vi.fn(),
   setMetadata: vi.fn(),
   getMetadata: vi.fn(),
 }));
 vi.mock("../crypto/signalProtocol", () => ({
+  toBase64: (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)),
   drainIdentityKeyChanges: signalMocks.drainIdentityKeyChanges,
   onIdentityKeyChange: signalMocks.onIdentityKeyChange,
 }));
@@ -56,6 +62,8 @@ import * as keyStorage from "../crypto/keyStorage";
 import * as keyBackup from "../crypto/keyBackup";
 import * as deviceManager from "../crypto/deviceManager";
 import * as e2eeApi from "../api/e2ee";
+import { inspectLegacyKeyArchive, importLegacyKeyArchive } from "../crypto/legacyKeyArchive";
+import { publishAuthOwnerChange, publishAuthGenerationChange } from "../api/authSessionEvents";
 import { WeakRecoveryPassphraseError } from "../crypto/recoveryPassphrase";
 import { useE2EEStore } from "./e2eeStore";
 import type { DecryptionError, PeerTrustAlert } from "./e2eeStore";
@@ -63,6 +71,7 @@ import type { DecryptionError, PeerTrustAlert } from "./e2eeStore";
 function resetStore() {
   useE2EEStore.setState({
     initStatus: "uninitialized",
+    legacyArchive: null,
     localDeviceId: null,
     devices: [],
     hasRecoveryBackup: false,
@@ -76,7 +85,9 @@ function resetStore() {
 describe("e2eeStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    publishAuthOwnerChange("userA");
     resetStore();
+    vi.mocked(inspectLegacyKeyArchive).mockResolvedValue({ status: "none" });
   });
 
   // ─── Decryption Error Management ───
@@ -434,6 +445,78 @@ describe("e2eeStore", () => {
   });
 
   // ─── Account Switch ───
+  describe("legacy archive recovery", () => {
+    const eligible = { status: "eligible" as const, deviceId: "legacy-device", identityFingerprint: "public-fingerprint" };
+    beforeEach(() => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(false);
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue(undefined);
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({ success: false });
+      vi.mocked(deviceManager.registerNewDevice).mockResolvedValue("new-device");
+      vi.mocked(inspectLegacyKeyArchive).mockResolvedValue(eligible);
+    });
+    it("requires an explicit choice without deleting or registering anything", async () => {
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).toBe("legacy-recovery");
+      expect(useE2EEStore.getState().legacyArchive).toEqual(eligible);
+      expect(deviceManager.registerNewDevice).not.toHaveBeenCalled();
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+      expect(importLegacyKeyArchive).not.toHaveBeenCalled();
+    });
+    it("keeps unverified archives blocked and refuses import without identity proof", async () => {
+      vi.mocked(inspectLegacyKeyArchive).mockResolvedValue({ status: "unverified", reason: "server-unavailable" });
+      await useE2EEStore.getState().initialize("userA");
+      expect(await useE2EEStore.getState().resolveLegacyArchive("import")).toBe(false);
+      expect(importLegacyKeyArchive).not.toHaveBeenCalled();
+      expect(useE2EEStore.getState().initStatus).toBe("legacy-recovery");
+    });
+    it("preserves the prompt and archive after import failure", async () => {
+      await useE2EEStore.getState().initialize("userA");
+      vi.mocked(importLegacyKeyArchive).mockResolvedValue({ success: false, code: "import-failed" });
+      expect(await useE2EEStore.getState().resolveLegacyArchive("import")).toBe(false);
+      expect(useE2EEStore.getState().initStatus).toBe("legacy-recovery");
+      expect(useE2EEStore.getState().legacyArchive).toEqual(eligible);
+    });
+    it("initializes imported keys without generating or deleting an identity", async () => {
+      await useE2EEStore.getState().initialize("userA");
+      vi.mocked(importLegacyKeyArchive).mockResolvedValue({ success: true, status: "imported", deviceId: "legacy-device", identityFingerprint: "public-fingerprint" });
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(true);
+      vi.mocked(keyStorage.getRegistrationData).mockResolvedValue({ userId: "userA", deviceId: "legacy-device", registrationId: 1, createdAt: 0 });
+      vi.mocked(deviceManager.getLocalDeviceId).mockResolvedValue("legacy-device");
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      expect(await useE2EEStore.getState().resolveLegacyArchive("import")).toBe(true);
+      expect(importLegacyKeyArchive).toHaveBeenCalledWith(true);
+      expect(deviceManager.registerNewDevice).not.toHaveBeenCalled();
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+      expect(useE2EEStore.getState().localDeviceId).toBe("legacy-device");
+    });
+    it("creates fresh keys only after an explicit choice while retaining the old archive", async () => {
+      await useE2EEStore.getState().initialize("userA");
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue("fresh");
+      expect(await useE2EEStore.getState().resolveLegacyArchive("fresh")).toBe(true);
+      expect(deviceManager.registerNewDevice).toHaveBeenCalledWith("userA", undefined);
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+      expect(importLegacyKeyArchive).not.toHaveBeenCalled();
+    });
+    it("restores the recovery prompt when explicit fresh-key setup fails", async () => {
+      await useE2EEStore.getState().initialize("userA");
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue("fresh");
+      vi.mocked(deviceManager.registerNewDevice).mockRejectedValue(new Error("offline"));
+      expect(await useE2EEStore.getState().resolveLegacyArchive("fresh")).toBe(false);
+      expect(useE2EEStore.getState().initStatus).toBe("legacy-recovery");
+      expect(useE2EEStore.getState().legacyArchive).toEqual(eligible);
+    });
+    it("does not commit a pending inspection into a different login generation", async () => {
+      let complete!: (value: typeof eligible) => void;
+      vi.mocked(inspectLegacyKeyArchive).mockReturnValue(new Promise((resolve) => { complete = resolve; }));
+      const pending = useE2EEStore.getState().initialize("userA");
+      await vi.waitFor(() => expect(inspectLegacyKeyArchive).toHaveBeenCalled());
+      publishAuthGenerationChange(42);
+      complete(eligible);
+      await pending;
+      expect(useE2EEStore.getState().initStatus).toBe("uninitialized");
+      expect(useE2EEStore.getState().legacyArchive).toBeNull();
+    });
+  });
   //
   // Trust alerts name the previous account's contacts and carry their identity
   // keys. Loading them concurrently with the different-user wipe lets the read
@@ -441,7 +524,8 @@ describe("e2eeStore", () => {
   // the next mark persists them straight back into B's cleared metadata store.
 
   describe("initialize (different user)", () => {
-    it("should drop the previous account's trust alerts", async () => {
+    it("rejects a foreign registration in the scoped database without deleting keys", async () => {
+      publishAuthOwnerChange("userB");
       useE2EEStore.setState({
         peerTrustAlerts: {
           "userA-contact:d1": {
@@ -468,11 +552,13 @@ describe("e2eeStore", () => {
 
       await useE2EEStore.getState().initialize("userB");
 
-      expect(keyStorage.clearAllE2EEData).toHaveBeenCalled();
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+      expect(useE2EEStore.getState().initStatus).toBe("error");
       expect(useE2EEStore.getState().peerTrustAlerts).toEqual({});
     });
 
-    it("should not start the alert load before the account wipe", async () => {
+    it("does not load private alerts or create a new device from a foreign scoped registration", async () => {
+      publishAuthOwnerChange("userB");
       vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(true);
       vi.mocked(keyStorage.getRegistrationData).mockResolvedValue({
         registrationId: 1,
@@ -487,11 +573,9 @@ describe("e2eeStore", () => {
 
       await useE2EEStore.getState().initialize("userB");
 
-      const wipedAt =
-        vi.mocked(keyStorage.clearAllE2EEData).mock.invocationCallOrder[0];
-      const loadedAt = vi.mocked(keyStorage.getMetadata).mock.invocationCallOrder[0];
-      expect(wipedAt).toBeDefined();
-      expect(loadedAt).toBeGreaterThan(wipedAt);
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+      expect(keyStorage.getMetadata).not.toHaveBeenCalled();
+      expect(deviceManager.registerNewDevice).not.toHaveBeenCalled();
     });
   });
 
@@ -560,6 +644,36 @@ describe("e2eeStore", () => {
   });
 
   // ─── Reset ───
+
+  describe("registered identity verification", () => {
+    beforeEach(() => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(true);
+      vi.mocked(keyStorage.getRegistrationData).mockResolvedValue({ registrationId: 1, deviceId: "verified-device", userId: "userA", createdAt: 0 });
+      vi.mocked(deviceManager.getLocalDeviceId).mockResolvedValue("verified-device");
+      vi.mocked(keyStorage.getIdentityKeyPair).mockResolvedValue({ publicKey: new Uint8Array(32), privateKey: new Uint8Array(32) });
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({ success: false });
+    });
+
+    it.each(["different-key", "foreign-owner", "matching"])("checks server identity: %s", async (scenario) => {
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [{
+        id: "row", user_id: scenario === "foreign-owner" ? "userB" : "userA", device_id: "verified-device", display_name: "Test",
+        identity_key: scenario === "different-key" ? "wrong" : btoa("\0".repeat(32)), signed_prekey: "", signed_prekey_id: 0,
+        signed_prekey_signature: "", registration_id: 1, last_seen_at: "", created_at: "",
+      }] });
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).toBe(scenario === "matching" ? "ready" : "error");
+      expect(deviceManager.reRegisterDevice).not.toHaveBeenCalled();
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+    });
+
+    it("preserves local decryption without re-registering when device lookup is offline", async () => {
+      vi.mocked(e2eeApi.listMyDevices).mockRejectedValue(new Error("offline"));
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+      expect(deviceManager.reRegisterDevice).not.toHaveBeenCalled();
+      expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
+    });
+  });
 
   describe("reset", () => {
     it("should reset all state to defaults", async () => {

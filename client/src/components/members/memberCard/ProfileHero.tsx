@@ -27,6 +27,7 @@ type Props = {
   avatarUrl?: string | null;
   animatedUrl?: string | null;
   bannerUrl?: string | null;
+  animatedBannerUrl?: string | null;
   accentColor?: string | null;
   animate?: boolean;
   size?: number;
@@ -41,6 +42,7 @@ function ProfileHero({
   avatarUrl,
   animatedUrl,
   bannerUrl,
+  animatedBannerUrl,
   accentColor,
   animate,
   size = 80,
@@ -71,7 +73,7 @@ function ProfileHero({
   return (
     <div className={`mc-hero${themeAsset ? " cos-hero--themed" : ""}`} style={heroStyle} data-testid="mc-hero">
       {bannerUrl ? (
-        <img className="mc-hero-banner" src={resolveAssetUrl(bannerUrl)} alt="" />
+        <img className="mc-hero-banner" src={resolveAssetUrl(!reduceMotion && animate && animatedBannerUrl ? animatedBannerUrl : bannerUrl)} alt="" />
       ) : themeAsset ? (
         <div className="mc-hero-banner cos-hero-theme" style={cssVarsForTheme(themeAsset)} />
       ) : accent ? (

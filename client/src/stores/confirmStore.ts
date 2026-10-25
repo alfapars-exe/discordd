@@ -34,6 +34,9 @@ export const useConfirmStore = create<ConfirmState>((set, get) => ({
   resolver: null,
 
   open: (options) => {
+    // Replacing a question must settle its caller rather than leave an action
+    // waiting forever for a dialog that no longer exists.
+    get().resolver?.(false);
     return new Promise<boolean>((resolve) => {
       set({ options, resolver: resolve });
     });

@@ -17,6 +17,7 @@ type Props = {
   avatarUrl: string | null;
   animatedUrl: string | null;
   bannerUrl: string | null;
+  animatedBannerUrl?: string | null;
   accentColor: string;
   bio: string;
   pronouns: string;
@@ -30,6 +31,7 @@ function ProfilePreviewCard({
   avatarUrl,
   animatedUrl,
   bannerUrl,
+  animatedBannerUrl,
   accentColor,
   bio,
   pronouns,
@@ -47,6 +49,7 @@ function ProfilePreviewCard({
           avatarUrl={avatarUrl}
           animatedUrl={animatedUrl}
           bannerUrl={bannerUrl}
+          animatedBannerUrl={animatedBannerUrl}
           accentColor={accentColor || null}
           animate
           frame={cosmetics?.avatar_frame}

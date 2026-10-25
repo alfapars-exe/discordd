@@ -1,11 +1,10 @@
 /**
- * sendWithRetryAndToast — Wraps a message-send API call with one retry
- * on transient network errors and a user-facing toast on final failure.
+ * sendWithRetryAndToast — Wraps a message-send API call
+ * with a user-facing toast on failure. The historical name is retained for callers.
  *
  * Retry policy:
- *   - Network error (fetch threw, offline, DNS): retry once after 1.5s.
- *   - HF cold-boot sentinel (502/503/504 → "service_unavailable:"): retry
- *     once after 2.5s — the Space is waking, not rejecting the request.
+ *   - Network error or gateway 502/503/504: NO retry. A lost response or
+ *     proxy error does not prove that the underlying write did not commit.
  *   - Timeout (isTimeout): NO retry. The POST may have been persisted
  *     server-side; without an idempotency key a retry risks a duplicate.
  *   - 429 rate limit: no retry, warning toast pointing at chat:tooManyMessages.
@@ -20,12 +19,11 @@ import i18n from "../../i18n";
 import { useToastStore } from "../toastStore";
 import type { APIResponse } from "../../types";
 
-const RETRY_DELAY_MS = 1500;
-const COLD_BOOT_RETRY_DELAY_MS = 2500;
-
 export type SendWithRetryOptions = {
   /** Suppress toast on final failure — caller wants to show its own UI. */
   silent?: boolean;
+  /** Fence abandoned sessions before dispatch and before user-visible effects. */
+  isCurrent?:()=>boolean;
 };
 
 function isRateLimited(res: APIResponse<unknown>): boolean {
@@ -33,36 +31,15 @@ function isRateLimited(res: APIResponse<unknown>): boolean {
   return typeof res.error === "string" && res.error.toLowerCase().includes("too many");
 }
 
-/**
- * HF Space asleep/booting: apiClient collapses edge 502/503/504 (HTML error
- * pages) into this stable sentinel. Transient infra state, not an app
- * rejection — a retry a couple of seconds later usually lands.
- */
-function isColdBoot(res: APIResponse<unknown>): boolean {
-  return typeof res.error === "string" && res.error.startsWith("service_unavailable:");
-}
-
-function shouldRetry(res: APIResponse<unknown>): boolean {
-  if (res.success) return false;
-  // Timed-out sends are deliberately NOT retried — the request may have
-  // been persisted server-side and there is no idempotency key to dedupe.
-  if (res.isTimeout) return false;
-  // Network failures and cold-boot 5xx are retryable. Other deterministic
-  // HTTP errors won't change on retry and would just double the latency.
-  return res.isNetworkError === true || isColdBoot(res);
-}
-
 export async function sendWithRetryAndToast<T>(
   send: () => Promise<APIResponse<T>>,
   options: SendWithRetryOptions = {}
 ): Promise<APIResponse<T>> {
-  let res = await send();
-
-  if (shouldRetry(res)) {
-    const delay = isColdBoot(res) ? COLD_BOOT_RETRY_DELAY_MS : RETRY_DELAY_MS;
-    await new Promise<void>((resolve) => setTimeout(resolve, delay));
-    res = await send();
-  }
+  // Only a persisted server-side idempotency contract can make retries safe.
+  // Keep the caller's draft on failure; never silently replay this write.
+  if(options.isCurrent&&!options.isCurrent())return {success:false,error:"send_context_changed"};
+  const res = await send();
+  if(options.isCurrent&&!options.isCurrent())return {success:false,error:"send_context_changed"};
 
   if (res.success) return res;
 

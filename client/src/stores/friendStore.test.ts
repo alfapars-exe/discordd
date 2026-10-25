@@ -24,6 +24,8 @@ vi.mock("../api/friends", () => ({
 import { useFriendStore } from "./friendStore";
 import * as friendsApi from "../api/friends";
 import type { FriendshipWithUser } from "../types";
+import {useBlockStore} from "./blockStore";
+import {useAuthStore} from "./authStore";
 
 function makeRow(overrides: Partial<FriendshipWithUser> = {}): FriendshipWithUser {
   return {
@@ -41,8 +43,62 @@ function makeRow(overrides: Partial<FriendshipWithUser> = {}): FriendshipWithUse
 }
 
 beforeEach(() => {
+  useAuthStore.setState({user:{id:"owner"} as never});
+  useBlockStore.setState({blockedUserIds:[]});
   vi.clearAllMocks();
   useFriendStore.setState({ friends: [], incoming: [], outgoing: [], isLoading: false });
+});
+
+it("uses canonical state for a late accept after reverse block",async()=>{
+  const row=makeRow();
+  useFriendStore.getState().handleFriendRemove({user_id:row.user_id});
+  useFriendStore.getState().handleFriendRequestAccept(row);
+  await vi.waitFor(()=>expect(friendsApi.listFriends).toHaveBeenCalledOnce());
+  expect(useFriendStore.getState().friends).toEqual([]);
+});
+it("rejects a list snapshot invalidated by a newer removal",async()=>{
+  const row=makeRow();let finish!:(result:{success:boolean;data:FriendshipWithUser[]})=>void;
+  vi.mocked(friendsApi.listFriends).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  const pending=useFriendStore.getState().fetchFriends();
+  useFriendStore.getState().handleFriendRemove({user_id:row.user_id});
+  finish({success:true,data:[row]});await pending;
+  expect(useFriendStore.getState().friends).toEqual([]);
+});
+
+it("does not resurrect an own-blocked peer from late request/accept events",()=>{
+  const row=makeRow({user_id:"blocked-peer"});
+  useFriendStore.setState({friends:[row],incoming:[row],outgoing:[row]});
+  useBlockStore.setState({blockedUserIds:[row.user_id]});
+  useFriendStore.getState().handleFriendRemove({user_id:row.user_id});
+  useFriendStore.getState().handleFriendRequestCreate(row);
+  useFriendStore.getState().handleFriendRequestAccept(row);
+  expect(useFriendStore.getState().friends).toEqual([]);
+  expect(useFriendStore.getState().incoming).toEqual([]);
+  expect(useFriendStore.getState().outgoing).toEqual([]);
+});
+it("filters a late accepted response after a local block",async()=>{
+  const row=makeRow({user_id:"blocked-peer"});
+  vi.mocked(friendsApi.acceptRequest).mockImplementationOnce(async()=>{
+    useBlockStore.setState({blockedUserIds:[row.user_id]});return {success:true,data:row};
+  });
+  expect(await useFriendStore.getState().acceptRequest(row.id)).toBe(false);
+  expect(useFriendStore.getState().friends).toEqual([]);
+});
+it("does not restore a peer from HTTP acceptance after a reverse removal",async()=>{
+  const row=makeRow();
+  vi.mocked(friendsApi.acceptRequest).mockImplementationOnce(async()=>{
+    useFriendStore.getState().handleFriendRemove({user_id:row.user_id});return {success:true,data:row};
+  });
+  expect(await useFriendStore.getState().acceptRequest(row.id)).toBe(false);
+  expect(useFriendStore.getState().friends).toEqual([]);
+});
+it("ignores HTTP mutation success after account switching",async()=>{
+  const row=makeRow();
+  vi.mocked(friendsApi.sendRequest).mockImplementationOnce(async()=>{
+    useAuthStore.setState({user:{id:"another"} as never});return {success:true,data:row};
+  });
+  expect(await useFriendStore.getState().sendRequest("alice")).toEqual({success:false,error:"request_cancelled"});
+  expect(useFriendStore.getState().friends).toEqual([]);expect(useFriendStore.getState().outgoing).toEqual([]);
 });
 
 describe("friendStore.handlePresenceUpdate", () => {

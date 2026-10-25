@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-24",
+  "scope": "P3 unclassified attachment visibility foundation",
+  "implemented": [
+    "Channel and one-to-one DM attachment groups containing image/video media are protected by the stricter sexual/disturbing preference for their source scope.",
+    "Unknown protected media is not mounted or decrypted before explicit per-message reveal. Block mode has no reveal control.",
+    "Reveal state is scoped to account, message attachments, source scope and policy. Own attachments remain visible.",
+    "The explanation states that media is unclassified; no safe classification is fabricated. A message's attachments are revealed together so its gallery cannot bypass an unapproved sibling attachment.",
+    "Group-DM encrypted visual attachments use private conversation preferences. Link preview components are not mounted or fetched until allowed/revealed; original message links remain available.",
+    "Open media viewers close and discard gallery items when media preferences, account identity or friendship membership changes."
+  ],
+  "verification": [
+    { "command": "vitest run UnclassifiedMediaGate MessageAttachments", "result": "passed", "tests": 19 },
+    { "command": "vitest run ImageLightbox UnclassifiedMediaGate", "result": "passed", "tests": 18 },
+    { "command": "targeted ESLint for changed media and notification runtime files", "result": "passed" },
+    { "command": "vitest run UnclassifiedMediaGate MessageAttachments EncryptedAttachment ImageLightbox systemEventHandlers reactionNotifications", "result": "passed", "tests": 51 }
+  ],
+  "remaining": [
+    "Real on-device media classification and user marking workflow.",
+    "Audit every standalone gallery entry point for source metadata and initial policy enforcement.",
+    "Server authorization policy and full two-client acceptance."
+  ],
+  "acceptance": "Not accepted. P3 classification items remain missing; this artifact proves only the mounted attachment guard."
+}

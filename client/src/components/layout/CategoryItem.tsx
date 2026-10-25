@@ -8,6 +8,10 @@ type CategoryItemProps = {
   canManageChannels: boolean;
   onToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onReorderKeyDown?: (e: React.KeyboardEvent<HTMLElement>) => void;
+  reorderPosition?: number;
+  reorderSize?: number;
+  isKeyboardDragging?: boolean;
   onCreateChannel: () => void;
   catDropClass: string;
   onCatDragStart: (e: React.DragEvent) => void;
@@ -43,6 +47,10 @@ function CategoryItem({
   canManageChannels,
   onToggle,
   onContextMenu,
+  onReorderKeyDown,
+  reorderPosition,
+  reorderSize,
+  isKeyboardDragging,
   onCreateChannel,
   catDropClass,
   onCatDragStart,
@@ -86,7 +94,14 @@ function CategoryItem({
         >
           <button
             className="ch-tree-cat-header"
+            data-keyboard-reorder-id={category.id}
+            aria-posinset={reorderPosition}
+            aria-setsize={reorderSize}
+            aria-keyshortcuts={canManageChannels ? "Control+D" : undefined}
+            aria-grabbed={Boolean(isKeyboardDragging)}
+            onKeyDown={onReorderKeyDown}
             onClick={onToggle}
+            aria-expanded={expanded}
             onContextMenu={onContextMenu}
           >
             <Chevron expanded={expanded} />

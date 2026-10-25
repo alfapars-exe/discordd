@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Added conversation/message-scoped local event versions. Each WS create/update observes its version before async cache/decrypt work; later events invalidate earlier work and its cache-write guard. Delete observations retain tombstones until the composer/account generation changes; delayed create/update cannot reuse a deleted ID.",
+    "All DM history paths capture their version boundary before requesting history and pass a per-message freshness guard through actual decryption/cache operations. Messages superseded while awaiting cache/decryption are omitted without dropping unaffected messages. Final history publication filters stale/deleted versions too.",
+    "Tail history preserves newer loaded live messages instead of replacing them with older response data. Around-message windows preserve newer loaded versions for IDs in that window and reject a target deleted during loading. Equal-timestamp response ordering is retained. This is local observation order, not a server revision, delivery guarantee or authentication mechanism."
+  ],
+  "verification": [
+    "Focused suites passed before the last history-decrypt test: 4 files / 107 tests. Additional real batch-decrypt regression passed in the 40-test crypto suite. Covers deferred create/delete, reversed asynchronous edit completion, deleted history exclusion, live edit preservation, original conversation identities and generation reset.",
+    "Full client suite passed: 232 files / 2281 tests in 47.55s; Vite build passed in 698ms with existing warnings. A subsequent type-only test annotation corrected a tsc diagnostic without changing runtime code. Final tsc -b, targeted ESLint and re-run affected crypto/version suites passed: 2 files / 43 tests. Targeted diff whitespace and coverage validation passed; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Late HTTP send/edit cache writes are not yet arbitrated against these WS observations. Cross-tab cache transactions and persisted server revision ordering remain open.",
+    "Live creates/edits arriving before any history window is loaded can still need explicit recovery/refetch if the existing WS slice has no loaded record to preserve. Pagination conservatively rejects replaced window identities. Browser and two-client acceptance remain required.",
+    "Event-version retention is session-scoped; long-session memory/performance and reconnect reconciliation require further testing. Overall P0-P11 remains incomplete; no GitHub or production release operation performed."
+  ]
+}

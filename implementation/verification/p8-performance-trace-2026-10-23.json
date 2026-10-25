@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P8 bounded and cancelable Electron performance trace capture.",
+  "implemented": [
+    "Diagnostics exposes a desktop-only capture control with a visible 30-second countdown and cancellation.",
+    "Electron permits only one capture at a time, records for at most 30 seconds, writes only after a native save choice, and removes temporary files.",
+    "Common query credentials, authorization values and WebSocket paths are scrubbed before the selected JSON file is written."
+  ],
+  "checks": [
+    { "command": "node node_modules/typescript/bin/tsc -p electron/tsconfig.json --pretty false", "result": "passed" },
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node --test dist-electron/performance-trace-scrub.test.js", "result": "passed", "tests": 1 }
+  ],
+  "remaining": [
+    "Packaged-Windows acceptance must capture and cancel real traces, inspect usefulness and confirm secrets from representative runtime events are absent."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

@@ -1,0 +1,60 @@
+{
+ "date": "2026-10-24",
+ "scope": "Spam inbox metadata persistence foundation",
+ "implemented": [
+   "Additive SQLite and PostgreSQL migrations store user-scoped source references, revision, bounded reason codes and decisions without message plaintext.",
+   "Atomic recording preserves restored/dismissed decisions for the same revision; a changed revision is quarantined again.",
+   "Decisions require matching owner and revision. Inbox listing is user-scoped.",
+   "SpamInboxService derives authenticated ownership, verifies channel read permission or private/group membership, rejects self-message records and stale revisions, and rechecks source access for listed references.",
+   "Authenticated non-bot HTTP routes expose list, record, restore and dismiss with bounded JSON bodies. User-scoped keyset pagination uses a timestamp/source/message cursor; no plaintext is returned.",
+   "Account anonymization and hard-delete remove owned spam decisions; personal exports include only owned decision metadata. SQLite and PostgreSQL guards reject writes for deleted owners, with PostgreSQL retirement write-barrier integration.",
+   "Client Inbox exposes paginated spam references, source navigation, restore and dismiss. Failed decisions retain their rows and display errors. Unavailable references can be dismissed without source access, while restoration still requires source authorization.",
+   "Rendered channel/DM messages register local spam findings without sending plaintext. Inline restore records the source and commits a server restore decision before updating visibility.",
+   "Live channel/DM spam and loaded DM history register metadata in the background. Batches run at most four requests concurrently, request account affinity is checked, and failures show a retry action without discarding messages.",
+   "Loaded channel history and group history/search/live messages register local findings. Group message content and attachments are gated with reasons, restore and failed-registration retry controls. Group edits are classified again.",
+   "Committed spam decisions broadcast only to the owner's sessions. Connected clients apply account/source/revision-scoped restore decisions to message visibility, attention policy and displayed spam rows.",
+   "Ready/reconnect loads paginated owned restore/dismiss decisions. Snapshot merges preserve live decisions received after loading starts, reject stale-account responses and flag repeated cursors. Inbox refresh retries failed decision synchronization.",
+   "Database insert guards bound references to 5000 per owner while allowing retries/updates of existing keys; PostgreSQL serializes quota checks on the owner row. Metadata validation rejects malformed references, revision timestamps and duplicate/unknown reason codes.",
+   "OpenAPI documents spam inbox, decisions, restore and dismiss routes, access/revision semantics, metadata limits and quota failure.",
+   "Inbox conversation previews, channel/DM search result bodies, channel/DM reply previews and group reply excerpts apply reactive spam visibility before rendering content.",
+   "Saved-message bodies and composer reply previews use the same spam guard. ForwardMessageModal was inspected: it does not render source-message text or attachment previews; explicit forwarding behavior remains unchanged.",
+   "Spam inbox initial loading is explicit; refresh aborts outstanding paging and ignores old generation responses, preventing stale pages from contaminating a refreshed list.",
+   "Spam rows expose the existing explicit user-report dialog with spam preselected. Source content is not automatically loaded/shared; empty source plaintext has no content-sharing checkbox. Group reports currently use user context only."
+ ],
+ "verification": [
+   {"command":"go test ./repository -run '^$'","result":"blocked","detail":"Windows Application Control prevented repository.test.exe from executing. Go compilation completed before execution was blocked."},
+   {"command":"TestSpamInboxOwnershipAndRevisionDecisions","result":"not run","detail":"Test added after the execution block; do not count it as passed."},
+   {"command":"go build ./services ./repository ./models","result":"passed"},
+   {"command":"TestSpamInboxDMSourceAuthorization","result":"not run","detail":"Regression scenarios added; awaiting an approved test execution environment."},
+   {"command":"go build ./...","result":"passed"},
+   {"command":"vitest run SpamInbox useSpamVisibility spamClassification","result":"passed","tests":9},
+   {"command":"client TypeScript project build and targeted ESLint","result":"passed"},
+   {"command":"vitest run registerSpamMessage dmEventHandlers dmStore","result":"passed","tests":18},
+   {"command":"vitest run messageStore groupDMStore registerSpamMessage useSpamVisibility","result":"passed","tests":28},
+   {"command":"vitest run spamDecisionStore SpamInbox useSpamVisibility systemEventHandlers","result":"passed","tests":17},
+   {"command":"vitest run spamDecisionStore SpamInbox systemEventHandlers after snapshot recovery","result":"passed","tests":16},
+   {"command":"OpenAPI YAML parsed using existing js-yaml dependency","result":"passed","paths":218},
+   {"command":"node --test scripts/verify-spam-migration.test.mjs","result":"passed","tests":2,"detail":"Runs actual SQLite migration and repository insert SQL in Node SQLite: rollback/reapply, 5000-owner quota boundary, independent owners, idempotent decisions, changed revisions and deleted-owner insert/update barriers. Does not execute blocked Go binaries or validate PostgreSQL."},
+   {"command":"vitest run SpamPreview SearchPanel and targeted ESLint","result":"passed","tests":4},
+   {"command":"vitest run SpamPreview ForwardMessageModal savedStore; TypeScript and targeted ESLint","result":"passed","tests":15},
+   {"command":"vitest run SpamInbox after loading/refresh race fix","result":"passed","tests":3},
+   {"command":"Linux Go 1.26.8 CGO_ENABLED=0 targeted tests for Spam, Preferences, ReactionNotification, PrivateReaction, GroupReaction, RoutePermissions, data export and account anonymization","result":"passed"},
+   {"command":"vitest run SpamInbox ReportModal after report integration","result":"passed","tests":5},
+   {"command":"Docker Linux Go 1.26.8 CGO_ENABLED=0 go test ./... -timeout=15m","result":"passed","detail":"Full server suite after route-golden correction; Windows Application Control was not changed."}
+ ],
+ "resume_verification": {
+   "date": "2026-10-24",
+   "repository": "Linux Go 1.26.8: go test ./repository -run SpamInbox -count=1 -timeout=3m passed on both SQLite and disposable PostgreSQL 16.9. Tests cover ownership/revisions, timestamp/source/message tie pagination, malformed cursors, decision isolation, and eight concurrent writers at 4999 records: exactly one accepted and 5000 total.",
+   "client": "SpamInbox and spamDecisionStore: 2 files / 9 tests passed; TypeScript project build and targeted ESLint passed. Successful HTTP decisions now update account-scoped decision state without requiring the socket event; stale refresh regression covered.",
+   "isolation": "PostgreSQL used an ephemeral container with no host ports or production mounts; source mounted read-only; test schemas cleaned by existing helper. Container stopped and removed after verification.",
+   "limits": "Targeted tests only, not full PostgreSQL compatibility, existing-database upgrade/rollback, real browser, or two-client acceptance."
+ },
+ "http_and_account_verification": {
+   "server": "Docker Linux Go: go test ./handlers ./services ./repository -run Spam -count=1 -timeout=3m passed. Added HTTP tests reject unauthenticated/bot access, malformed/null/unknown-field/oversized/trailing bodies before storage, verify authenticated list/decision scope, cursor forwarding and 403/404/409 decision errors.",
+   "client": "SpamInbox and spamDecisionStore: 10 tests passed; targeted ESLint and TypeScript project build passed. Account-keyed component resets rows, pending actions and report dialog on account changes; account-switch loading regression covered. A completed decision removes only the matching message revision, not an edited revision returned meanwhile.",
+   "limits": "Handler tests invoke real handler/service with a store test double; these are not browser/network or two-client acceptance."
+ },
+ "group_report_followup": "Group message report context and consent handling implemented; see p4-group-message-report-2026-10-24.json for tests and outstanding browser acceptance.",
+ "remaining": ["Full existing-database upgrade/rollback runtime verification and wider PostgreSQL regression", "Real two-client browser acceptance", "Representative spam-classifier quality evaluation"],
+ "acceptance":"Not accepted. HTTP routes compile but runtime acceptance is outstanding."
+}

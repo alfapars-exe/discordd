@@ -11,14 +11,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import type { ChatContextValue } from "../../hooks/useChatContext";
+import type { ChatContextValue, ChatMessage } from "../../hooks/useChatContext";
+import { CONVERSATION_COMMAND_EVENT, type ConversationCommand } from "../../utils/conversationCommands";
 
 // ─── Mock hooks + heavy child components ───
 
 const mockSendMessage = vi.fn();
 const mockSetReplyingTo = vi.fn();
 const mockSendTyping = vi.fn();
-const mockRunMusicCommand = vi.fn().mockResolvedValue(false);
+const mockRunMusicCommand = vi.fn().mockResolvedValue({ handled: false });
+const typingHook = vi.hoisted(() => ({ insert: null as null | ((key: string) => boolean), enabled: false }));
+vi.mock("../../hooks/useFocusComposerOnTyping", () => ({
+  useFocusComposerOnTyping: (_target: unknown, _ref: unknown, insert: (key: string) => boolean, enabled: boolean) => {
+    typingHook.insert = insert;
+    typingHook.enabled = enabled;
+  },
+}));
 
 function makeChatContext(overrides: Partial<ChatContextValue> = {}): ChatContextValue {
   return {
@@ -76,6 +84,7 @@ vi.mock("../shared/EmojiPicker", () => ({
 vi.mock("../shared/GifPicker", () => ({
   default: () => null,
 }));
+vi.mock("../shared/StickerPicker", () => ({ default: () => null }));
 vi.mock("./FilePreview", () => ({
   default: () => null,
 }));
@@ -96,21 +105,121 @@ vi.mock("react-i18next", () => ({
 }));
 
 import MessageInput from "./MessageInput";
+import { useComposerDraftStore } from "../../stores/composerDraftStore";
 
 function Wrapper({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
 beforeEach(() => {
+  useComposerDraftStore.getState().reset();
   mockSendMessage.mockReset();
   mockSetReplyingTo.mockReset();
   mockSendTyping.mockReset();
   mockRunMusicCommand.mockReset();
-  mockRunMusicCommand.mockResolvedValue(false);
+  mockRunMusicCommand.mockResolvedValue({ handled: false });
   currentContext = makeChatContext();
 });
 
 describe("MessageInput", () => {
+  it("inserts a background typing character once at the draft selection without sending", () => {
+    render(<MessageInput />);
+    const input = screen.getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "hello world" } });
+    input.setSelectionRange(6, 11);
+    expect(typingHook.enabled).toBe(true);
+    let inserted = false;
+    act(() => { inserted = typingHook.insert!("x"); });
+    expect(inserted).toBe(true);
+    expect(input).toHaveValue("hello x");
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+  it("does not mutate a draft from an unmounted background-typing callback", () => {
+    const view = render(<MessageInput />);
+    const insert = typingHook.insert!;
+    view.unmount();
+    expect(insert("x")).toBe(false);
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+  function command(command: ConversationCommand, channelId = "ch-1") {
+    const event = new CustomEvent(CONVERSATION_COMMAND_EVENT, { detail:{command,target:{kind:"channel",id:channelId,serverId:"s-1"}},cancelable:true });
+    act(()=>{window.dispatchEvent(event);});
+    return event.defaultPrevented;
+  }
+  it("scopes picker commands to the active composer and keeps one picker open", () => {
+    const {container}=render(<MessageInput />);
+    expect(command("emoji", "another-channel")).toBe(false);
+    expect(container.querySelector(".input-emoji-picker-wrap")).toBeNull();
+    expect(command("emoji")).toBe(true);
+    expect(container.querySelector(".input-emoji-picker-wrap")).not.toBeNull();
+    expect(command("gif")).toBe(true);
+    expect(container.querySelector(".input-emoji-picker-wrap")).toBeNull();
+    expect(container.querySelectorAll(".input-gif-picker-wrap")).toHaveLength(1);
+    expect(command("sticker")).toBe(true);
+    expect(container.querySelectorAll(".input-gif-picker-wrap")).toHaveLength(1);
+  });
+  it("uses the existing file chooser and refuses composer commands without send permission", () => {
+    let view=render(<MessageInput />);
+    const click=vi.spyOn(view.container.querySelector<HTMLInputElement>('input[type="file"]')!,"click").mockImplementation(()=>{});
+    expect(command("upload")).toBe(true);expect(click).toHaveBeenCalledOnce();
+    view.unmount();
+    currentContext=makeChatContext({canSend:false});
+    view=render(<MessageInput />);
+    expect(command("emoji")).toBe(false);expect(command("upload")).toBe(false);
+    expect(screen.getByTitle("attachFile")).toBeDisabled();
+    expect(view.container.querySelector(".input-emoji-picker-wrap")).toBeNull();
+  });
+  it("restores separate channel and DM drafts, including queued files, after unmount", async () => {
+    let view = render(<MessageInput />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "channel A draft" } });
+    const file = new File(["image"], "queued.png", { type: "image/png" });
+    act(() => currentContext.addFilesRef.current?.([file]));
+    view.unmount();
+    currentContext = makeChatContext({ channelId: "ch-2" });
+    view = render(<MessageInput />);
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "channel B draft" } });
+    view.unmount();
+    currentContext = makeChatContext({ mode: "dm", serverId: undefined });
+    view = render(<MessageInput />);
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "private DM draft" } });
+    view.unmount();
+    currentContext = makeChatContext();
+    view = render(<MessageInput />);
+    expect(screen.getByRole("textbox")).toHaveValue("channel A draft");
+    mockSendMessage.mockResolvedValue(true);
+    await act(async () => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" }));
+    expect(mockSendMessage).toHaveBeenCalledWith("channel A draft", [file], undefined);
+    view.unmount();
+    currentContext = makeChatContext({ mode: "dm", serverId: undefined });
+    render(<MessageInput />);
+    expect(screen.getByRole("textbox")).toHaveValue("private DM draft");
+  });
+
+  it("keeps the send lock across remount and does not clear another conversation on completion", async () => {
+    let resolve!: (success: boolean) => void;
+    mockSendMessage.mockImplementation(() => new Promise<boolean>((done) => { resolve = done; }));
+    let view = render(<MessageInput />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "send from A" } });
+    await act(async () => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" }));
+    view.unmount();
+    view = render(<MessageInput />);
+    expect(screen.getByRole("textbox")).toHaveAttribute("readonly");
+    await act(async () => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" }));
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    view.unmount();
+    currentContext = makeChatContext({ channelId: "ch-2" });
+    view = render(<MessageInput />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "B stays intact" } });
+    await act(async () => resolve(true));
+    expect(screen.getByRole("textbox")).toHaveValue("B stays intact");
+    view.unmount();
+    currentContext = makeChatContext();
+    render(<MessageInput />);
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
   it("Enter sends the trimmed content", async () => {
     mockSendMessage.mockResolvedValue(true);
     render(<MessageInput />, { wrapper: Wrapper });
@@ -223,6 +332,54 @@ describe("MessageInput", () => {
     });
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
+
+  it.each(["success", "failed", "pending"])("handles music %s without posting the command as chat", async (outcome) => {
+    mockRunMusicCommand.mockResolvedValue({ handled: true, outcome });
+    render(<MessageInput />);
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "/play https://youtu.be/example" } });
+    await act(async () => fireEvent.keyDown(textarea, { key: "Enter" }));
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue(outcome === "success" ? "" : "/play https://youtu.be/example");
+    expect(mockRunMusicCommand).toHaveBeenCalledTimes(1);
+    expect(textarea).not.toHaveAttribute("readonly");
+  });
+
+  it.each(["success", "pending"])("preserves unrelated files and reply after music %s", async (outcome) => {
+    mockRunMusicCommand.mockResolvedValueOnce({ handled: true, outcome });
+    render(<MessageInput />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "/skip" } });
+    const file = new File(["image"], "keep.png", { type: "image/png" });
+    const reply = { id: "reply-1" } as ChatMessage;
+    act(() => currentContext.addFilesRef.current?.([file]));
+    const draftKey = Object.keys(useComposerDraftStore.getState().drafts)[0]!;
+    act(() => useComposerDraftStore.getState().patch(draftKey, { replyingTo: reply }));
+    await act(async () => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" }));
+    expect(useComposerDraftStore.getState().drafts[draftKey]).toMatchObject({
+      content: outcome === "success" ? "" : "/skip", files: [file], replyingTo: reply, sending: null,
+    });
+    expect(mockRunMusicCommand).toHaveBeenCalledTimes(1);
+    expect(mockSendMessage).not.toHaveBeenCalled();
+
+    // Files and reply still belong to the next deliberate ordinary message.
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Here is the file" } });
+    mockSendMessage.mockResolvedValue(true);
+    await act(async () => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" }));
+    expect(mockSendMessage).toHaveBeenCalledWith("Here is the file", [file], reply.id);
+  });
+
+  it("preserves the new session draft when an old music command completes", async () => {
+    let complete!: (value: { handled: true; outcome: "success" }) => void;
+    mockRunMusicCommand.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+    render(<MessageInput />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "/skip" } });
+    await act(async () => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" }));
+    act(() => useComposerDraftStore.getState().reset());
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "new session draft" } });
+    await act(async () => complete({ handled: true, outcome: "success" }));
+    expect(screen.getByRole("textbox")).toHaveValue("new session draft");
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe("MessageInput — timeout gate (B5)", () => {
@@ -253,7 +410,7 @@ describe("MessageInput — timeout gate (B5)", () => {
     await act(async () => {
       fireEvent.change(textarea, { target: { value: "hello" } });
     });
-    expect(screen.getByTitle("sendMessage")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "common:sendMessage" })).toBeDisabled();
   });
 
   it("Enter does not call sendMessage", async () => {

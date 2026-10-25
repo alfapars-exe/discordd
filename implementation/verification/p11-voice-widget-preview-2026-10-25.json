@@ -1,0 +1,11 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Truthful visual voice-widget preview, not a game-window-aware overlay.",
+  "implementation": [
+    "VoiceSettings mounts a reusable preview with explicitly labeled sample participants and shared overlay row styles. Enabled, scale, corner, speaking/idle opacity and speaking-only settings have observable preview effects.",
+    "EN/TR text explicitly distinguishes the passive screen-positioned desktop floater from an overlay attached to a detected game window. No game process is launched or injected."
+  ],
+  "verification": ["Agent focused preview/audio/locale suites: 46 tests passed; TypeScript build and scoped ESLint passed.", "Parent subsequent complete client suite passed: 305 files, 2831 tests, zero failures (C:/Users/PARS/AppData/Local/Temp/hichat-widget-final-20261025.json). Client TypeScript and Vite production build passed; existing dynamic-import/chunk warnings remain."],
+  "open": ["Real-browser visual acceptance at required sizes/zoom", "Foreground game/window-mode detection and game-attached placement", "Remaining widget options and full P11 overlay acceptance"],
+  "release": "No production publication or actual in-game acceptance claim."
+}

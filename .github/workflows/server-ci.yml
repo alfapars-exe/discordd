@@ -310,8 +310,20 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
+          tags: hichat:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan production image with Trivy
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: hichat:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
 
   # ─── Migration filename hygiene ───
   # Migrations apply in lexicographic filename order (database.go sort.Strings).

@@ -6,6 +6,9 @@
   "author": "akinalpfdn",
   "main": "dist-electron/main.js",
   "scripts": {
+    "check:coverage": "node scripts/check-implementation-coverage.mjs",
+    "check:acceptance": "node scripts/check-implementation-coverage.mjs --strict",
+    "test:coverage": "node --test scripts/check-implementation-coverage.test.mjs",
     "electron:dev": "concurrently \"npm run dev --prefix client\" \"npx tsc -p electron/tsconfig.json && electron .\"",
     "clean:release": "node -e \"require('fs').rmSync('release',{recursive:true,force:true})\"",
     "electron:build": "npm run clean:release && npm run build --prefix client && npx tsc -p electron/tsconfig.json && electron-builder",
@@ -39,9 +42,8 @@
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
     "publish": {
-      "provider": "github",
-      "owner": "alfapars-exe",
-      "repo": "discordd"
+      "provider": "generic",
+      "url": "https://huggingface.co/datasets/infinayazilim/hichat-releases/resolve/main/"
     },
     "win": {
       "target": [
@@ -55,6 +57,10 @@
         {
           "from": "native/audio-capture.exe",
           "to": "native/audio-capture.exe"
+        },
+        {
+          "from": "native/game-window.exe",
+          "to": "native/game-window.exe"
         }
       ]
     },

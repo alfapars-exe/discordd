@@ -66,6 +66,9 @@ func (s *inviteService) Create(ctx context.Context, serverID, createdBy string, 
 		CreatedBy: createdBy,
 		MaxUses:   req.MaxUses,
 	}
+	if req.ChannelID != "" {
+		invite.ChannelID = &req.ChannelID
+	}
 
 	if req.ExpiresIn > 0 {
 		expiresAt := time.Now().Add(time.Duration(req.ExpiresIn) * time.Minute)

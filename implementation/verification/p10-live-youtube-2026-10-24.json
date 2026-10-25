@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "user_source": "User supplied https://www.youtube.com/watch?v=0KbRhUtFwkc&list=RD0KbRhUtFwkc&start_radio=1 for permitted testing. The single-video canonical URL was used; the radio playlist was not tested.",
+  "environment": {
+    "livekit": "Disposable livekit/livekit-server:v1.8.4 (repository compose pin), dev mode, loopback only inside container network namespace; no host ports.",
+    "code": "Current services Go test binary compiled from this checkout with CGO_ENABLED=0; executed in existing hichat-server-music-acceptance:local runtime image.",
+    "tools": "yt-dlp 2026.10.21; Deno 2.9.8; FFmpeg 5.1.9 with Opus. No account cookies, private credentials or restriction bypass."
+  },
+  "observations": [
+    "Actual YouTube metadata extraction succeeded for 0KbRhUtFwkc (164 seconds).",
+    "First live test timed out because the independent listener silently exited on a frame-decryption error.",
+    "Diagnostic run exposed missing SIF trailer: startup server-injected silence was mistaken for encrypted media (no key at index 114).",
+    "Listener now uses Room.SifTrailer via an atomic room pointer, letting SDK discard server-injected frames. Genuine read/decryption failures fail promptly; decrypted-packet and non-silence assertions remain intact.",
+    "Corrected live run passed in 25.46 seconds: 298 decrypted packets, decoded peak 0.2753. Real extraction, FFmpeg, GCM publication, independent decryption/Opus decode, pause/resume, duplicate enqueue, skip and stop passed.",
+    "Expected EOF is suppressed only after intentional publisher stop. The final test binary passed two consecutive live runs (-test.count=2); the last run took 25.19 seconds, received 301 decrypted packets and decoded peak 0.2753.",
+    "Post-fix expanded race selection (Music|Seek|Repeat|Stop|Enqueue|PlayLoop|GetOrCreateBot|Restore) passed three repetitions in 47.455 seconds."
+  ],
+  "follow_up": [
+    "Room-key rotation live run passed in 28.15 seconds: 395 decrypted packets, initial peak 0.2753, 295 rotated-key frames and rotated peak 0.4156. Independent listener key-index lookups distinguish the new-key stream from buffered old-key audio.",
+    "TestMusicYouTubeSearchLiveAcceptance passed in 5.61 seconds using real query Ouz BENDE; selected exact video 0KbRhUtFwkc (Ouz - BENDE), enqueued canonical URL and retained requester identity. Search test does not independently assert audible output.",
+    "Latest expanded services race selection (Music|Seek|Repeat|Stop|Enqueue|PlayLoop|GetOrCreateBot|Restore), two repetitions, passed in 41.595 seconds. Opt-in live cases are separately recorded above, not silently counted as executed in the offline race selection.",
+    "Disposable loopback LiveKit rotation/search container was stopped and removed after tests; persistent HiChat QA containers were left running."
+  ],
+  "open": [
+    "Two real HiChat clients and packaged Windows audible output acceptance, personal output volume/deafen and restart/reconnect remain unverified by this server-only test.",
+    "Radio playlist and live/age/region restrictions were not exercised in this video test.",
+    "No server image publication, installer, commit, push, merge or production rollout occurred."
+  ]
+}

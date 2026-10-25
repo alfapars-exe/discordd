@@ -9,12 +9,15 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import ImageLightbox from "./ImageLightbox";
 import { useLightboxStore } from "../../stores/lightboxStore";
 import { ensureFreshToken } from "../../api/client";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 
 vi.mock("../../api/client", () => ({
+  getAuthGeneration: () => 1,
   ensureFreshToken: vi.fn(async () => "fresh-token"),
 }));
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
@@ -50,6 +53,14 @@ function openRemote(over: Record<string, unknown> = {}) {
 }
 
 describe("ImageLightbox", () => {
+  it("revokes an open preview when media preferences change", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    act(() => usePreferencesStore.setState({ data: { privacy: { sensitiveMedia: { channels: "block" } } } }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(useLightboxStore.getState().items).toHaveLength(0);
+  });
   it("renders nothing while the store item is null", () => {
     const { container } = render(<ImageLightbox />);
     expect(container.firstChild).toBeNull();
@@ -75,6 +86,148 @@ describe("ImageLightbox", () => {
       "download",
       "photo.png"
     );
+  });
+
+  it("shows message author and timestamp metadata", () => {
+    render(<ImageLightbox />);
+    openRemote({ authorName: "Alice", authorAvatarUrl: "/avatars/alice.png", createdAt: "2026-07-18T12:30:00Z" });
+
+    expect(screen.getByText(/Alice/)).toBeInTheDocument();
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    expect(document.querySelector(".image-lightbox-avatar")).toHaveAttribute("src", "/avatars/alice.png");
+  });
+
+  it("exposes forward and contextual media actions when opened from a message", () => {
+    render(<ImageLightbox />);
+    openRemote({ message: { id: "m1", user_id: "u1", content: "photo", attachments: [], reactions: [], created_at: "2026-01-01T00:00:00Z", edited_at: null, reply_to_id: null, is_pinned: false, referenced_message: null, author: { id: "u1", username: "alice" } } });
+    expect(screen.getByRole("button", { name: "forwardMessage" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "mediaActions" }));
+    expect(screen.getByRole("menuitem", { name: "forwardMessage" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "lightboxOpenOriginal" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "lightboxDownload" })).toBeInTheDocument();
+  });
+
+  it("zooms with controls and resets when the image changes", async () => {
+    render(<ImageLightbox />);
+    openRemote();
+
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("125%");
+    expect(screen.getByRole("img", { name: "photo.png" }).getAttribute("style")).toContain("scale(1.25)");
+
+    act(() => {
+      useLightboxStore.getState().open({
+        kind: "remote",
+        src: "https://cdn.test/other.png",
+        href: "https://cdn.test/other.png",
+        filename: "other.png",
+      });
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("100%"));
+  });
+
+  it("clears image pan when zoom reaches 100% through the button or keyboard", () => {
+    render(<ImageLightbox />);
+    openRemote();
+    const image = screen.getByRole("img", { name: "photo.png" });
+    const stage = document.querySelector(".image-lightbox-stage")!;
+
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 40, clientY: 25 });
+    fireEvent.pointerUp(stage, { pointerId: 1, clientX: 40, clientY: 25 });
+    expect(image.getAttribute("style")).toContain("translate(30px, 15px)");
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomOut" }));
+    expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
+
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    fireEvent.pointerDown(stage, { pointerId: 2, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(stage, { pointerId: 2, clientX: 40, clientY: 25 });
+    fireEvent.pointerUp(stage, { pointerId: 2, clientX: 40, clientY: 25 });
+    fireEvent.keyDown(document, { key: "-" });
+    expect(image.getAttribute("style")).toContain("translate(0px, 0px)");
+  });
+
+  it("Escape closes the nested forward dialog and restores its trigger focus", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    render(<ImageLightbox />);
+    openRemote({ message: { id: "m1", user_id: "u1", content: "photo", attachments: [], reactions: [], created_at: "2026-01-01T00:00:00Z", edited_at: null, reply_to_id: null, is_pinned: false, referenced_message: null, author: { id: "u1", username: "alice" } } });
+    const trigger = screen.getByRole("button", { name: "forwardMessage" });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "close" })));
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "forwardMessage" })).toBeInTheDocument();
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+    expect(document.activeElement).toBe(document.querySelector(".forward-search"));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "forwardMessage" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "imagePreview" })).toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    opener.remove();
+  });
+
+  it("navigates a gallery with buttons and arrow keys", () => {
+    render(<ImageLightbox />);
+    act(() => {
+      useLightboxStore.getState().openGallery([
+        { kind: "remote", src: "https://cdn.test/one.png", href: "https://cdn.test/one.png", filename: "one.png" },
+        { kind: "remote", src: "https://cdn.test/two.png", href: "https://cdn.test/two.png", filename: "two.png" },
+      ]);
+    });
+
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "lightboxNext" }));
+    expect(screen.getByRole("img", { name: "two.png" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+    expect(screen.getByRole("img", { name: "one.png" })).toBeInTheDocument();
+  });
+
+  it("supports touch swipe navigation and pinch zoom", () => {
+    render(<ImageLightbox />);
+    act(() => {
+      useLightboxStore.getState().openGallery([
+        { kind: "remote", src: "https://cdn.test/one.png", href: "https://cdn.test/one.png", filename: "one.png" },
+        { kind: "remote", src: "https://cdn.test/two.png", href: "https://cdn.test/two.png", filename: "two.png" },
+      ]);
+    });
+    const stage = document.querySelector(".image-lightbox-stage")!;
+    fireEvent.pointerDown(stage, { pointerId: 1, pointerType: "touch", clientX: 180, clientY: 100 });
+    fireEvent.pointerMove(stage, { pointerId: 1, pointerType: "touch", clientX: 90, clientY: 104 });
+    fireEvent.pointerUp(stage, { pointerId: 1, pointerType: "touch", clientX: 90, clientY: 104 });
+    expect(screen.getByRole("img", { name: "two.png" })).toBeInTheDocument();
+
+    fireEvent.pointerDown(stage, { pointerId: 2, pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(stage, { pointerId: 3, pointerType: "touch", clientX: 200, clientY: 100 });
+    fireEvent.pointerMove(stage, { pointerId: 3, pointerType: "touch", clientX: 260, clientY: 100 });
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("160%");
+  });
+
+  it("keeps gallery shortcuts out of form fields and resets pan when zoom reaches 100%", () => {
+    render(<ImageLightbox />);
+    act(() => {
+      useLightboxStore.getState().openGallery([
+        { kind: "remote", src: "https://cdn.test/one.png", href: "https://cdn.test/one.png", filename: "one.png" },
+        { kind: "remote", src: "https://cdn.test/two.png", href: "https://cdn.test/two.png", filename: "two.png" },
+      ]);
+    });
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "ArrowRight" });
+    expect(screen.getByRole("img", { name: "one.png" })).toBeInTheDocument();
+    input.remove();
+
+    fireEvent.click(screen.getByRole("button", { name: "lightboxZoomIn" }));
+    fireEvent.wheel(document.querySelector(".image-lightbox-stage")!, { deltaY: 100 });
+    expect(screen.getByRole("button", { name: "lightboxResetZoom" })).toHaveTextContent("100%");
+    expect(screen.getByRole("img", { name: "one.png" }).getAttribute("style")).toContain("translate(0px, 0px)");
   });
 
   it("closes on backdrop click", () => {

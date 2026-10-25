@@ -5,7 +5,7 @@
 
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../../stores/voiceStore";
-import type { NoiseReductionEngine } from "../../../stores/slices/voiceSettingsSlice";
+import type { NoiseReductionEngine, NoiseSuppressionLevel } from "../../../stores/slices/voiceSettingsSlice";
 import VolumeSlider from "../VolumeSlider";
 
 function NoiseReductionSection() {
@@ -17,12 +17,17 @@ function NoiseReductionSection() {
   const setNoiseReductionEngine = useVoiceStore((s) => s.setNoiseReductionEngine);
   const deepfilterSuppression = useVoiceStore((s) => s.deepfilterSuppression);
   const setDeepfilterSuppression = useVoiceStore((s) => s.setDeepfilterSuppression);
+  const noiseSuppressionLevel = useVoiceStore((s) => s.noiseSuppressionLevel);
+  const setNoiseSuppressionLevel = useVoiceStore((s) => s.setNoiseSuppressionLevel);
+  const micProfile = useVoiceStore((s) => s.micProfile);
+  const micSensitivity = useVoiceStore((s) => s.micSensitivity);
+  const gateBypassed = micProfile === "muzik" || micSensitivity === 100;
 
   return (
     <div className="vs-section">
       <div className="vs-toggle-row">
         <div>
-          <div className="vs-label">{t("noiseReduction")}</div>
+          <div className="vs-label" data-settings-section="noise">{t("noiseReduction")}</div>
           <div className="vs-desc">{t("noiseReductionDesc")}</div>
         </div>
         <label className="vs-switch">
@@ -35,9 +40,7 @@ function NoiseReductionSection() {
         </label>
       </div>
 
-      {/* Engine picker — only meaningful while NR is on. Krisp falls back
-          to RNNoise automatically if the LiveKit Cloud project doesn't
-          have it enabled (paid plan feature). */}
+      {/* Only free engines are selectable. Legacy paid selections migrate on hydration. */}
       {noiseReduction && (
         <div className="vs-toggle-row" style={{ marginTop: 12 }}>
           <div>
@@ -45,6 +48,7 @@ function NoiseReductionSection() {
             <div className="vs-desc">{t("noiseReductionEngineDesc")}</div>
           </div>
           <select
+            aria-label={t("noiseReductionEngine")}
             value={noiseReductionEngine}
             onChange={(e) =>
               setNoiseReductionEngine(e.target.value as NoiseReductionEngine)
@@ -61,19 +65,23 @@ function NoiseReductionSection() {
             }}
           >
             <option value="rnnoise">{t("nrEngineRnnoise")}</option>
-            <option value="krisp">{t("nrEngineKrisp")}</option>
-            <option value="webrtc">{t("nrEngineWebrtc")}</option>
             <option value="deepfilter">{t("nrEngineDeepfilter")}</option>
+            <option value="gtcrn">{t("nrEngineGtcrn")}</option>
             <option value="dtln">{t("nrEngineDtln")}</option>
             <option value="speex">{t("nrEngineSpeex")}</option>
+            <option value="webrtc">{t("nrEngineWebrtc")}</option>
           </select>
         </div>
+      )}
+
+      {noiseReduction && (noiseReductionEngine === "gtcrn" || noiseReductionEngine === "dtln") && (
+        <p className="vs-desc">{t("nrNarrowbandCaveat")}</p>
       )}
 
       {/* DeepFilterNet3 suppression slider — only meaningful when DeepFilter
           is the active engine, since it's the engine whose ML model has a
           live-tunable strength dial (setSuppressionLevel 0-100). Other
-          engines (RNNoise, DTLN, Krisp, WebRTC, Speex) either have a
+          engines (RNNoise, GTCRN, DTLN, WebRTC, Speex) either have a
           built-in fixed strength or expose no equivalent runtime knob. */}
       {noiseReduction && noiseReductionEngine === "deepfilter" && (
         <div className="vs-section" style={{ marginTop: 12 }}>
@@ -91,6 +99,24 @@ function NoiseReductionSection() {
           </div>
         </div>
       )}
+
+      <div className="vs-section" style={{ marginTop: 12 }}>
+        <div className="vs-label">{t("noiseSuppressionLevel")}</div>
+        <p className="vs-desc">{t("noiseSuppressionLevelDesc")}</p>
+        <select
+          className="vs-select"
+          aria-label={t("noiseSuppressionLevel")}
+          value={noiseSuppressionLevel}
+          disabled={gateBypassed}
+          onChange={(e) => setNoiseSuppressionLevel(e.target.value as NoiseSuppressionLevel)}
+        >
+          <option value="low">{t("gatePresetLow")}</option>
+          <option value="medium">{t("gatePresetMedium")}</option>
+          <option value="high">{t("gatePresetHigh")}</option>
+          <option value="maximum">{t("gatePresetMaximum")}</option>
+        </select>
+        {gateBypassed && <p className="vs-desc">{t("gateBypassedDesc")}</p>}
+      </div>
     </div>
   );
 }

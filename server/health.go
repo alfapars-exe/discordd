@@ -17,6 +17,7 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/repository"
+	"github.com/argeinfina/hichat/services"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -44,7 +45,7 @@ func writeHealthJSON(w http.ResponseWriter, status int, v any) {
 // per-check detail) for monitors that read the body, while the restart gate
 // stays deliberately shallow. /api/ready remains the strict, request-time
 // probe that answers with 503.
-func healthHandler(cache *readinessCache) http.HandlerFunc {
+func healthHandler(cache *readinessCache, cleanup ...func() services.AccountAssetCleanupStatus) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status := "ok"
 		snap, polled := cache.load()
@@ -66,6 +67,13 @@ func healthHandler(cache *readinessCache) http.HandlerFunc {
 		// readinessCache.ReportLiveKitReachable), so it's read unconditionally
 		// here rather than gated behind `polled`.
 		checks["livekit_reachable"] = cache.liveKitReachableStatus()
+		if len(cleanup) > 0 && cleanup[0] != nil {
+			state := cleanup[0]()
+			checks["account_asset_cleanup"] = state
+			if !state.Running || state.LastCheckedAt == nil || time.Since(*state.LastCheckedAt) > 3*time.Minute || state.ConsecutiveFailures > 0 {
+				status = "degraded"
+			}
+		}
 		writeHealthJSON(w, http.StatusOK, map[string]any{
 			"status":         status,
 			"service":        "hichat",

@@ -1,0 +1,10 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Thread list/create/archive and group add/remove/leave request account affinity",
+  "client": "Optional expectedUserId/isCurrent context, captured authentication generation, 15-second request deadline, encoded URL path segments and expected_user_id query. Thread modal and group membership actions pass their original owner/lifetime guard. Legacy API call shapes remain supported.",
+  "server": "Thread Create/List/SetArchived and group AddMember/RemoveMember/Leave reject mismatched expected_user_id with 409 before parsing bodies, calling services or consuming action limiter. Query omission remains backward compatible. Typed-nil thread user fails closed.",
+  "verification": "Main ran 64 tests across thread/group APIs, thread modal and group store: passed. TypeScript passed. Main Docker full handlers package test passed (2.866s). Agent targeted guard tests, client tests and ESLint passed.",
+  "integratedRegression": "After request-affinity edits: full client suite passed, 258 files / 2484 tests, exit 0, 57.96s. Full Linux Docker Go test ./... -timeout=15m and go vet ./... passed. Existing frontend warning logs remain and automated results are not real-device acceptance.",
+  "remaining": ["Real browser account-switch and two-client membership/key-rotation acceptance"],
+  "release": "No commit, push, publication or production migration"
+}

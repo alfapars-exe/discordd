@@ -10,10 +10,10 @@ import (
 // method is nil-safe (no Fn set = no-op success) so services whose
 // notification writes are best-effort side effects need no setup.
 type MockNotificationRepo struct {
-	CreateFn            func(ctx context.Context, n *models.Notification) error
-	ListFn              func(ctx context.Context, userID, beforeID string, unreadOnly bool, limit int) ([]models.Notification, error)
-	MarkReadFn          func(ctx context.Context, userID, id string) (bool, error)
-	MarkAllReadFn       func(ctx context.Context, userID string) (int64, error)
+	CreateFn                func(ctx context.Context, n *models.Notification) error
+	ListFn                  func(ctx context.Context, userID, beforeID string, unreadOnly bool, limit int) ([]models.Notification, error)
+	MarkReadFn              func(ctx context.Context, userID, id string) (bool, error)
+	MarkAllReadFn           func(ctx context.Context, userID string) (int64, error)
 	CountUnreadFn           func(ctx context.Context, userID string) (int, error)
 	DeleteByMessageIDFn     func(ctx context.Context, messageID string) error
 	DeleteByChannelIDFn     func(ctx context.Context, channelID string) error
@@ -80,7 +80,15 @@ func (m *MockNotificationRepo) DeleteByMessageID(ctx context.Context, messageID 
 // MockDMReadRepo satisfies repository.DMReadRepository.
 type MockDMReadRepo struct {
 	MarkReadFn        func(ctx context.Context, userID, channelID string, messageID *string) error
+	MarkUnreadFromFn  func(ctx context.Context, userID, channelID, messageID string) (int, error)
 	IncrementUnreadFn func(ctx context.Context, userID, channelID string) error
+}
+
+func (m *MockDMReadRepo) MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error) {
+	if m.MarkUnreadFromFn != nil {
+		return m.MarkUnreadFromFn(ctx, userID, channelID, messageID)
+	}
+	return 0, nil
 }
 
 func (m *MockDMReadRepo) MarkRead(ctx context.Context, userID, channelID string, messageID *string) error {

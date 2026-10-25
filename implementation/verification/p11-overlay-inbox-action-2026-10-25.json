@@ -1,0 +1,26 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "A separate default-off device-local inbox-opening permission leaves the existing mute/deafen-only click consent unchanged. The generic inbox action is published only for connected, loaded, owned and currently eligible unread notification indicators.",
+    "A precisely shaped non-focusable native child surface sends only an opaque session intent. Native validates sender/frame, exact cursor region, consent and current ready rows; trusted main confirmation consumes a five-second one-shot intent before restoring/showing/focusing the application. Shape failure disables the action with a warning; the passive panel remains click-through.",
+    "The main renderer rechecks current owner/auth generation, consent and live notification ACL/preferences before native confirmation and again after awaiting confirmation. This generic action never forwards a notification target, decrypts message content or marks a notification read.",
+    "Manual notification navigation now rejects stale owner/generation, blocked actors and inaccessible server/channel/DM/group destinations before read mutations or navigation.",
+    "Online-friend and upcoming-event notices now carry additive explicit action metadata without removing old payload fields. Overlay opt-outs also cover historical online title/event_id payloads.",
+    "This remains partial P11 notification work: direct overlay replies, calls/invites and independent chat/video/stream widgets are not complete."
+  ],
+  "verification": [
+    "Root projector and live-access hook regressions passed: 10 tests, including immediate current opt-outs, blocked actors and read state.",
+    "Agent focused navigation tests passed: 6. Inbox-action hook consent/session/confirmation tests passed, including proof that mute/deafen consent alone grants no inbox action.",
+    "Device preference/account-filter/UI regressions passed: 77 tests; targeted ESLint passed.",
+    "Targeted Go tests passed for TestOnlineFriendNotifier and TestServerEventDeliveryCommitsDedupedNotificationWithoutChannelAssociation; additive action fields asserted. No QA services changed.",
+    "Root final Electron TypeScript and complete native suite passed: 152 passed, zero failed, one documented physical symlink permission skip. Native tests cover sender/frame, shape hit testing, expiry, one-shot confirmation/focus, session rotation and shape failure/retry.",
+    "Root final client TypeScript, scoped ESLint and production Vite build passed (existing ineffective-dynamic-import warnings remain). Latest renderer tests passed: 19. Coverage structure VALID and 32 validator tests passed.",
+    "Root reran the complete client suite after source stabilization: success, zero failed tests. Exact machine-readable results: C:/Users/PARS/AppData/Local/Temp/hichat-overlay-inbox-root-final-20261025.json. JSDOM logged its existing unimplemented cross-document navigation notices without test failures."
+  ],
+  "open": [
+    "Actual Windows shaped-region/focus behavior at 100% and scaled DPI, game/monitor changes and multi-client access revocation",
+    "Remaining seven-widget and full P0-P11 acceptance gates, installer/update verification and separate production publication approval"
+  ],
+  "release": "No commit, push, merge or production/Windows update publication. Overall goal remains incomplete."
+}

@@ -33,6 +33,7 @@ vi.mock("./api/auth", () => ({
 vi.mock("./api/client", () => ({
   setTokens: vi.fn(),
   clearTokens: vi.fn(),
+  getAuthGeneration: () => 1,
 }));
 vi.mock("./api/clientLog", () => ({
   logToServer: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock("./utils/serverProbe", () => ({
 }));
 vi.mock("./stores/preferencesStore", () => ({
   usePreferencesStore: {
-    getState: () => ({ fetchAndApply: vi.fn(), reset: vi.fn() }),
+    getState: () => ({ fetchAndApply: vi.fn(), reset: vi.fn(), bindAccount: vi.fn() }),
   },
 }));
 vi.mock("./stores/voiceStore", () => ({
@@ -70,12 +71,14 @@ vi.mock("./stores/settingsStore", async () => {
 // Chrome around the routes — irrelevant to guard behavior.
 vi.mock("./components/layout/CustomTitleBar", () => ({ default: () => null }));
 vi.mock("./components/shared/UpdateBanner", () => ({ default: () => null }));
+vi.mock("./hooks/usePreferencesSync", () => ({ usePreferencesSync: () => {} }));
 
 // The only lazy route chunks these tests can reach. Stubs resolve
 // instantly, so Suspense settles within findByText's waitFor.
 vi.mock("./components/auth/LoginPage", () => ({
   default: () => <div>login-page</div>,
 }));
+vi.mock("./components/auth/VerifyEmailPage", () => ({ default: () => <div>verify-email-page</div> }));
 vi.mock("./components/layout/AppLayout", () => ({
   default: () => <div>app-layout</div>,
 }));
@@ -108,6 +111,12 @@ beforeEach(() => {
 });
 
 describe("App — route guards", () => {
+  it("allows public email confirmation while an unrelated session restore is pending", async () => {
+    getMe.mockReturnValue(new Promise<never>(() => {}));
+    render(<MemoryRouter initialEntries={["/verify-email#token=fixture"]}><App /></MemoryRouter>);
+    expect(await screen.findByText("verify-email-page")).toBeInTheDocument();
+    expect(screen.queryByText("login-page")).not.toBeInTheDocument();
+  });
   it("shows the boot spinner while getMe is pending, without a /login bounce", () => {
     getMe.mockReturnValue(new Promise<never>(() => {})); // never resolves
     renderApp();

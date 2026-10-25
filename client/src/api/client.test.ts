@@ -315,3 +315,311 @@ describe("apiClient timeoutMs (send-path hang guard)", () => {
     expect(initOf(fetchMock.mock.calls[0])?.signal).toBeUndefined();
   });
 });
+
+describe("apiClient gateway error envelopes", () => {
+  it.each([502, 503, 504])("preserves structured API codes on HTTP %i", async (status) => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValue(jsonResponse({ success: false, error: "failed to resolve YouTube track", code: "MUSIC_BOT_CHECK" }, status));
+    expect(await apiClient("/servers/s/channels/c/music/play", { method: "POST" })).toEqual({
+      success: false, error: "failed to resolve YouTube track", code: "MUSIC_BOT_CHECK", status,
+    });
+  });
+
+  it.each([502, 503, 504])("keeps the infrastructure sentinel for an HTML HTTP %i", async (status) => {
+    const { apiClient } = await loadClient();
+    const response = jsonResponse({}, status);
+    response.headers.set("content-type", "text/html");
+    fetchMock.mockResolvedValue(response);
+    expect(await apiClient("/users/me")).toEqual({ success: false, error: `service_unavailable: HTTP ${status}`, status });
+  });
+
+  it("keeps the infrastructure sentinel when a gateway advertises invalid JSON", async () => {
+    const { apiClient } = await loadClient();
+    const response = jsonResponse({}, 502);
+    response.json = async () => { throw new SyntaxError("edge HTML mislabeled as JSON"); };
+    fetchMock.mockResolvedValue(response);
+    expect(await apiClient("/users/me")).toEqual({ success: false, error: "service_unavailable: HTTP 502", status: 502 });
+  });
+});
+
+describe("account-scoped request cancellation", () => {
+  it("does not dispatch an obsolete preference write", async () => {
+    const { apiClient } = await loadClient();
+    const result = await apiClient("/users/me/preferences", { method: "PATCH", isCurrent: () => false });
+    expect(result).toEqual({ success: false, error: "request_cancelled" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not retry under a new account after proactive refresh", async () => {
+    const { apiClient, setTokens, getAccessToken } = await loadClient();
+    setTokens("expired-token", "");
+    let resolve!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; }));
+    let current = true;
+    const request = apiClient("/users/me/preferences", { method: "PATCH", body: { data: { theme: "midnight" } }, isCurrent: () => current });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    current = false;
+    setTokens("new-account-token", "");
+    resolve(jsonResponse({ success: true, data: { access_token: "old-account-refresh" } }));
+    expect(await request).toEqual({ success: false, error: "request_cancelled" });
+    expect(getAccessToken()).toBe("new-account-token");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a 401 under a replacement account", async () => {
+    const { apiClient, setTokens, getAccessToken } = await loadClient();
+    let resolve!: (response: Response) => void;
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, 401));
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; }));
+    let current = true;
+    const request = apiClient("/users/me/preferences", { method: "PATCH", isCurrent: () => current });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    current = false;
+    setTokens("new-account-token", "");
+    resolve(jsonResponse({ success: false }, 401));
+    expect(await request).toEqual({ success: false, error: "request_cancelled" });
+    expect(getAccessToken()).toBe("new-account-token");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not restore credentials when a refresh finishes after logout", async () => {
+    const { apiClient, setTokens, clearTokens, getAccessToken } = await loadClient();
+    setTokens("expired-token", "");
+    let resolve!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; }));
+    const controller = new AbortController();
+    const request = apiClient("/users/me/preferences", { signal: controller.signal });
+    controller.abort();
+    clearTokens();
+    resolve(jsonResponse({ success: true, data: { access_token: "old-refreshed-token" } }));
+    expect((await request).error).toBe("request_cancelled");
+    expect(getAccessToken()).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("combines caller abort with timeout without labelling it a timeout", async () => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    }));
+    const controller = new AbortController();
+    const request = apiClient("/users/me/preferences", { signal: controller.signal, timeoutMs: 15000 });
+    controller.abort();
+    expect(await request).toEqual({ success: false, error: "request_cancelled" });
+  });
+});
+
+describe("bounded request and shared-refresh lifetimes", () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it.each(["proactive", "401"] as const)("settles caller abort while a %s refresh remains hung", async (mode) => {
+    const { apiClient, setTokens } = await loadClient();
+    if (mode === "proactive") setTokens("expired-token", "");
+    else fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, 401));
+    // Intentionally ignores AbortSignal: the caller must settle independently.
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    const controller = new AbortController();
+    const request = apiClient("/users/me/preferences", { signal: controller.signal });
+    await vi.advanceTimersByTimeAsync(0);
+    const refresh = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/auth/refresh"));
+    expect(refresh).toBeDefined();
+
+    controller.abort();
+    expect(await request).toEqual({ success: false, error: "request_cancelled" });
+    expect(initOf(refresh)?.signal?.aborted).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(mode === "proactive" ? 1 : 2);
+  });
+
+  it.each(["proactive", "401"] as const)("bounds the caller's wait for a hung %s refresh", async (mode) => {
+    const { apiClient, setTokens } = await loadClient();
+    if (mode === "proactive") setTokens("expired-token", "");
+    else fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, 401));
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    const request = apiClient("/users/me/preferences", { timeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await request).toEqual({ success: false, error: "timeout", isTimeout: true });
+    const refresh = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/auth/refresh"));
+    // Its own finite timeout still applies, but this caller cannot kill it.
+    expect(initOf(refresh)?.signal?.aborted).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(mode === "proactive" ? 1 : 2);
+  });
+
+  it.each(["abort", "timeout"] as const)("keeps a shared refresh alive for another consumer after one caller's %s", async (stop) => {
+    const { apiClient, setTokens, getAccessToken } = await loadClient();
+    setTokens("expired-token", "");
+    const refresh = deferred<Response>();
+    fetchMock.mockImplementation((url: string) => url.endsWith("/auth/refresh")
+      ? refresh.promise
+      : Promise.resolve(jsonResponse({ success: true, data: "second-consumer" })));
+    const controller = new AbortController();
+    const first = apiClient("/first", { signal: controller.signal, timeoutMs: 100 });
+    const second = apiClient("/second", { timeoutMs: 1000 });
+    if (stop === "abort") controller.abort();
+    else await vi.advanceTimersByTimeAsync(100);
+    expect(await first).toEqual(stop === "abort"
+      ? { success: false, error: "request_cancelled" }
+      : { success: false, error: "timeout", isTimeout: true });
+    expect(initOf(fetchMock.mock.calls[0])?.signal?.aborted).toBe(false);
+
+    refresh.resolve(jsonResponse({ success: true, data: { access_token: "fresh-shared-token" } }));
+    expect(await second).toEqual({ success: true, data: "second-consumer", status: 200 });
+    expect(getAccessToken()).toBe("fresh-shared-token");
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      `${API_BASE_URL}/auth/refresh`, `${API_BASE_URL}/second`,
+    ]);
+    expect((initOf(fetchMock.mock.calls[1])?.headers as Record<string, string>).Authorization).toBe("Bearer fresh-shared-token");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([200, 503])("bounds a stalled HTTP %i JSON body using the original request deadline", async (status) => {
+    const { apiClient } = await loadClient();
+    const response = jsonResponse({}, status);
+    response.json = vi.fn(() => new Promise(() => {}));
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => {
+      setTimeout(() => resolve(response), 40);
+    }));
+    let settled = false;
+    const request = apiClient("/users/me/preferences", { timeoutMs: 100 });
+    void request.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(99);
+    expect(response.json).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await request).toEqual({ success: false, error: "timeout", isTimeout: true });
+    expect(initOf(fetchMock.mock.calls[0])?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("settles caller abort after headers while JSON decoding is stalled", async () => {
+    const { apiClient } = await loadClient();
+    const response = jsonResponse({});
+    response.json = vi.fn(() => new Promise(() => {}));
+    fetchMock.mockResolvedValue(response);
+    const controller = new AbortController();
+    const request = apiClient("/users/me/preferences", { signal: controller.signal, timeoutMs: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(response.json).toHaveBeenCalledTimes(1);
+    controller.abort();
+    expect(await request).toEqual({ success: false, error: "request_cancelled" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("uses one deadline across initial fetch, refresh and retry instead of restarting the budget", async () => {
+    const { apiClient } = await loadClient();
+    const responses = [
+      jsonResponse({ success: false }, 401),
+      jsonResponse({ success: true, data: { access_token: "fresh" } }),
+      jsonResponse({ success: true, data: "too late" }),
+    ];
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => {
+      const next = responses.shift()!;
+      setTimeout(() => resolve(next), 40);
+    }));
+    let settled = false;
+    const request = apiClient("/users/me/preferences", { timeoutMs: 100 });
+    void request.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(99);
+    expect(settled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await request).toEqual({ success: false, error: "timeout", isTimeout: true });
+    expect(initOf(fetchMock.mock.calls[2])?.signal?.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(40);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(["headers", "body"] as const)("times out shared refresh %s, releases the lock, and ignores late credentials", async (phase) => {
+    const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
+    setTokens("expired-token", "");
+    const delayedHeaders = deferred<Response>();
+    const delayedBody = deferred<unknown>();
+    if (phase === "headers") fetchMock.mockReturnValueOnce(delayedHeaders.promise);
+    else {
+      const response = jsonResponse({});
+      response.json = () => delayedBody.promise;
+      fetchMock.mockResolvedValueOnce(response);
+    }
+    const first = ensureFreshToken();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await first).toBeNull();
+    expect(getAccessToken()).toBe("expired-token");
+    expect(initOf(fetchMock.mock.calls[0])?.signal?.aborted).toBe(true);
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, data: { access_token: "fresh-current-token" } }));
+    expect(await ensureFreshToken()).toBe("fresh-current-token");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const staleBody = { success: true, data: { access_token: "late-obsolete-token" } };
+    if (phase === "headers") delayedHeaders.resolve(jsonResponse(staleBody));
+    else delayedBody.resolve(staleBody);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getAccessToken()).toBe("fresh-current-token");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not replay credential or one-time-factor rejections through refresh", async () => {
+    const { apiClient, setTokens } = await loadClient();
+    setTokens("expired-token", "", "a");
+    fetchMock.mockResolvedValue(jsonResponse({ success: false, code: "MFA_REQUIRED" }, 401));
+    const result = await apiClient("/auth/login", { method: "POST", body: { username: "a", password: "test" }, skipAuthRefresh: true });
+    expect(result.code).toBe("MFA_REQUIRED"); expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock.mockClear(); setTokens(`x.${btoa(JSON.stringify({ exp: Date.now()/1000+3600 }))}.x`, "", "a");
+    await apiClient("/users/me/mfa/confirm", { method: "POST", body: { code: "123456" }, retryUnauthorized: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("binds refresh to the displayed account and rejects a different returned owner", async () => {
+    const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
+    setTokens("expired-token", "", "a");
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, data: { access_token: "b-token", user: { id: "b" } } }));
+    expect(await ensureFreshToken()).toBeNull();
+    expect(JSON.parse(initOf(fetchMock.mock.calls[0])!.body as string)).toEqual({ expected_user_id: "a" });
+    expect(getAccessToken()).toBe("expired-token");
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, data: { access_token: "a-token", user: { id: "a" } } }));
+    expect(await ensureFreshToken()).toBe("a-token");
+  });
+
+  it("learns cookie owner on cold restore and constrains later refreshes", async () => {
+    const { ensureFreshToken, getAccessToken, setTokens } = await loadClient();
+    setTokens("expired-token", "");
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, data: { access_token: "expired-token", user: { id: "restored" } } }));
+    expect(await ensureFreshToken()).toBe("expired-token");
+    expect(JSON.parse(initOf(fetchMock.mock.calls[0])!.body as string)).toEqual({});
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: false, code: "ACCOUNT_MISMATCH" }, 409));
+    expect(await ensureFreshToken()).toBeNull();
+    expect(JSON.parse(initOf(fetchMock.mock.calls[1])!.body as string)).toEqual({ expected_user_id: "restored" });
+    expect(getAccessToken()).toBe("expired-token");
+  });
+
+  it.each(["logout", "replacement"] as const)("does not apply stale credentials if %s happens during refresh JSON decoding", async (change) => {
+    const { ensureFreshToken, setTokens, clearTokens, getAccessToken } = await loadClient();
+    setTokens("expired-token", "");
+    const delayed = deferred<unknown>();
+    const response = jsonResponse({});
+    response.json = vi.fn(() => delayed.promise);
+    fetchMock.mockResolvedValueOnce(response);
+    const request = ensureFreshToken();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(response.json).toHaveBeenCalledTimes(1);
+    if (change === "logout") clearTokens();
+    else setTokens("replacement-account-token", "");
+    delayed.resolve({ success: true, data: { access_token: "old-account-token" } });
+    expect(await request).toBeNull();
+    expect(getAccessToken()).toBe(change === "logout" ? null : "replacement-account-token");
+  });
+});

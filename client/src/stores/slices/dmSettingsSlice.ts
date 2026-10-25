@@ -22,7 +22,7 @@ export type DMSettingsSlice = {
   /** Local clear + server read-cursor advance (best-effort). */
   clearDMUnread: (channelId: string) => void;
   /** `dm_read` from another of our sessions: local clear only, no API call. */
-  handleDMReadSync: (data: { dm_channel_id: string }) => void;
+  handleDMReadSync: (data: { dm_channel_id: string; unread_count?: number }) => void;
   /** Sum of unread counts, excluding muted channels. */
   getTotalDMUnread: () => number;
 };
@@ -167,6 +167,9 @@ export const createDMSettingsSlice: StateCreator<
 
   handleDMReadSync: (data) => {
     set((state) => {
+      if (typeof data.unread_count === "number" && data.unread_count > 0) {
+        return { dmUnreadCounts: { ...state.dmUnreadCounts, [data.dm_channel_id]: data.unread_count } };
+      }
       if (!state.dmUnreadCounts[data.dm_channel_id]) return state;
       const next = { ...state.dmUnreadCounts };
       delete next[data.dm_channel_id];

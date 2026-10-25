@@ -10,6 +10,7 @@ import (
 // ReadStateRepository defines data access for channel read states.
 type ReadStateRepository interface {
 	Upsert(ctx context.Context, userID, channelID, messageID string) error
+	MarkUnreadFrom(ctx context.Context, userID, channelID, messageID string) (int, error)
 	GetUnreadCounts(ctx context.Context, userID, serverID string) ([]models.UnreadInfo, error)
 	// MarkAllRead marks all text channels in a server as read (upserts each channel's latest message).
 	MarkAllRead(ctx context.Context, userID, serverID string) error
@@ -22,4 +23,7 @@ type ReadStateRepository interface {
 	// their watermark). Preserves the pre-denormalization behavior where unread
 	// counts reflected the current message set.
 	DecrementUnreadForDeleted(ctx context.Context, channelID, authorID string, deletedAt time.Time) error
+	// PrepareMessageDeletion must run before the parent DELETE in the same
+	// transaction. Preserves read anchors and decrements only truly unread rows.
+	PrepareMessageDeletion(ctx context.Context, messageID string) error
 }

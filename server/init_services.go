@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/crypto"
 	"github.com/argeinfina/hichat/pkg/email"
 	"github.com/argeinfina/hichat/pkg/ratelimit"
@@ -13,59 +17,90 @@ import (
 	"github.com/argeinfina/hichat/ws"
 )
 
+type gameActivityHubPresence interface{ IsVisibleOnline(string) (bool, error) }
+type gameActivityPresenceAdapter struct{ hub gameActivityHubPresence }
+
+func (a gameActivityPresenceAdapter) IsVisibleOnline(_ context.Context, userID string) (bool, error) {
+	if a.hub == nil {
+		return false, errors.New("hub presence reader unavailable")
+	}
+	return a.hub.IsVisibleOnline(userID)
+}
+
 // Services holds all service instances.
 type Services struct {
-	Auth              services.AuthService
-	Server            services.ServerService
-	Channel           services.ChannelService
-	Category          services.CategoryService
-	Message           services.MessageService
-	Upload            services.UploadService
-	DMUpload          services.DMUploadService
-	Member            services.MemberService
-	Role              services.RoleService
-	Voice             services.VoiceService
-	Invite            services.InviteService
-	Pin               services.PinService
-	Search            services.SearchService
-	ReadState         services.ReadStateService
-	DM                services.DMService
-	Reaction          services.ReactionService
-	ChannelPermission services.ChannelPermissionService
-	Friendship        services.FriendshipService
-	LiveKitAdmin      services.LiveKitAdminService
-	P2PCall           services.P2PCallService
-	MetricsHistory    services.MetricsHistoryService
-	ServerMute        services.ServerMuteService
-	ChannelMute       services.ChannelMuteService
-	DMSettings        services.DMSettingsService
-	Block             services.BlockService
-	Report            services.ReportService
-	ReportUpload      services.ReportUploadService
-	AdminUser         services.AdminUserService
-	AdminServer       services.AdminServerService
-	Device            services.DeviceService
-	E2EE              services.E2EEService
-	LinkPreview       services.LinkPreviewService
-	Badge             services.BadgeService
-	Preferences       services.PreferencesService
-	AppLog            services.AppLogService
-	Email             email.EmailSender
-	AuditLog          services.AuditLogService
-	Feedback          services.FeedbackService
-	FeedbackUpload    services.FeedbackUploadService
-	Soundboard        services.SoundboardService
-	Emoji             services.EmojiService
-	Sticker           services.StickerService
-	Entrance          services.EntranceService
-	Cosmetic          services.CosmeticService
-	ExpressionClone   services.ExpressionCloneService
-	MusicBot          services.MusicBotService
-	WSTicket          services.WSTicketService
-	Backup            *services.BackupService
-	Notification      services.NotificationService
-	Saved             services.SavedService
-	UserNote          services.UserNoteService
+	Auth                    services.AuthService
+	MFA                     *services.MFAService
+	EmailVerification       *services.EmailVerificationService
+	EmailCampaign           services.EmailCampaignService
+	AccountAssetCleanup     *services.AccountAssetCleanup
+	Server                  services.ServerService
+	Channel                 services.ChannelService
+	Thread                  services.ThreadService
+	Category                services.CategoryService
+	Message                 services.MessageService
+	Upload                  services.UploadService
+	DMUpload                services.DMUploadService
+	GroupDMUpload           services.GroupDMUploadService
+	Member                  services.MemberService
+	Role                    services.RoleService
+	Voice                   services.VoiceService
+	Invite                  services.InviteService
+	Pin                     services.PinService
+	Search                  services.SearchService
+	ReadState               services.ReadStateService
+	DM                      services.DMService
+	GroupDM                 services.GroupDMService
+	Reaction                services.ReactionService
+	ChannelPermission       services.ChannelPermissionService
+	Friendship              services.FriendshipService
+	LiveKitAdmin            services.LiveKitAdminService
+	P2PCall                 services.P2PCallService
+	MetricsHistory          services.MetricsHistoryService
+	ServerMute              services.ServerMuteService
+	ChannelMute             services.ChannelMuteService
+	DMSettings              services.DMSettingsService
+	Block                   services.BlockService
+	Report                  services.ReportService
+	ReportUpload            services.ReportUploadService
+	AdminUser               services.AdminUserService
+	AdminServer             services.AdminServerService
+	Device                  services.DeviceService
+	E2EE                    services.E2EEService
+	LinkPreview             services.LinkPreviewService
+	Badge                   services.BadgeService
+	Preferences             services.PreferencesService
+	AppLog                  services.AppLogService
+	Email                   email.EmailSender
+	AuditLog                services.AuditLogService
+	Feedback                services.FeedbackService
+	FeedbackUpload          services.FeedbackUploadService
+	Soundboard              services.SoundboardService
+	Emoji                   services.EmojiService
+	Sticker                 services.StickerService
+	Entrance                services.EntranceService
+	Cosmetic                services.CosmeticService
+	ExpressionClone         services.ExpressionCloneService
+	MusicBot                services.MusicBotService
+	WSTicket                services.WSTicketService
+	Backup                  *services.BackupService
+	Notification            services.NotificationService
+	Reminder                services.ReminderService
+	ReminderWorker          *services.MessageReminderWorker
+	Saved                   services.SavedService
+	SpamInbox               *services.SpamInboxService
+	MediaLabel              *services.MediaLabelService
+	UserNote                services.UserNoteService
+	ProfileAudience         services.ProfileAudiencePolicy
+	GameActivity            *services.GameActivityService
+	Personalization         services.PersonalizationService
+	ClipRecording           services.ClipRecordingService
+	ProfileShowcase         services.ProfileShowcaseService
+	ServerEvent             services.ServerEventService
+	ServerEventWorker       *services.ServerEventWorker
+	FriendAnniversaryWorker *services.FriendAnniversaryWorker
+	OnlineFriendNotifier    services.OnlineFriendNotifier
+	EmailDelivery           *services.EmailDeliveryService
 }
 
 type RateLimiters struct {
@@ -75,11 +110,13 @@ type RateLimiters struct {
 	// to share one per-user budget, so a busy DM conversation silently ate
 	// the channel-send allowance (and vice versa) — surfacing as "random"
 	// 429s in whichever surface the user touched second.
-	DMMessage *ratelimit.MessageRateLimiter
-	Register  *ratelimit.LoginRateLimiter
-	ForgotPwd *ratelimit.LoginRateLimiter
-	ResetPwd  *ratelimit.LoginRateLimiter
-	Feedback  *ratelimit.MessageRateLimiter
+	DMMessage        *ratelimit.MessageRateLimiter
+	Register         *ratelimit.LoginRateLimiter
+	ForgotPwd        *ratelimit.LoginRateLimiter
+	ResetPwd         *ratelimit.LoginRateLimiter
+	VerifyEmail      *ratelimit.LoginRateLimiter
+	EmailUnsubscribe *ratelimit.LoginRateLimiter
+	Feedback         *ratelimit.MessageRateLimiter
 	// WSTicket added 2026-05-27 (P1-BC-07): /api/auth/ws-ticket was
 	// unrate-limited, so an attacker could spam ticket issuance to
 	// exhaust ws_ticket_service's in-memory map and degrade legit logins.
@@ -144,6 +181,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	channelPermService := services.NewChannelPermissionService(
 		repos.ChannelPermission, repos.Role, repos.Channel, hub,
 	)
+	serverEventService := services.NewServerEventService(repos.ServerEvent, repos.Server, repos.Role, repos.Channel, channelPermService)
 	// auditLogService is constructed here, right after channelPermService,
 	// so it can be passed as a constructor parameter (not a post-construction
 	// setter) to every service that emits moderation audit events below —
@@ -169,9 +207,18 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 
 	// Remaining services (order-independent)
 	inviteService := services.NewInviteService(repos.Invite, repos.Server)
+	mfaService := services.NewMFAService(repos.MFA, repos.User, encryptionKey)
+	verificationSender, _ := emailSender.(email.VerificationSender)
+	categorySender, _ := emailSender.(email.CategorySender)
+	emailDeliveryService := services.NewEmailDeliveryService(repos.EmailDelivery, categorySender,
+		services.WithEmailUnsubscribe(repos.EmailUnsubscribe, cfg.Email.AppURL))
+	if communication, ok := p2pCallService.(interface{ SetEmailEnqueuer(services.EmailEnqueuer) }); ok {
+		communication.SetEmailEnqueuer(emailDeliveryService)
+	}
+	emailVerificationService := services.NewEmailVerificationService(repos.EmailVerification, verificationSender)
 	authService := services.NewAuthService(
 		repos.User, repos.Session, repos.ResetToken, hub, emailSender,
-		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry,
+		cfg.JWT.Secret, cfg.JWT.AccessTokenExpiry, cfg.JWT.RefreshTokenExpiry, services.WithMFA(mfaService), services.WithAuthSessions(repos.AuthSession), services.WithAccountLifecycle(repos.AccountLifecycle), services.WithAccountAnonymization(repos.AccountAnonymization), services.WithApplicationRemoval(repos.ApplicationRemoval), services.WithServerOwnership(repos.ServerOwnership),
 	)
 	// "Log out from all devices" / password change must also kick any live
 	// voice or screen-share session, mirroring adminUserService's ban/delete
@@ -179,6 +226,15 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// exists at this point (constructed above), so no ordering hazard.
 	authService.SetVoiceDisconnecter(voiceService)
 	channelService := services.NewChannelService(repos.Channel, repos.Category, hub, channelPermService, voiceService, auditLogService, repos.Notification)
+	channelDeletionSetter, setterOK := channelService.(interface {
+		SetVoiceChannelDeletionHandler(services.VoiceChannelDeletionHandler)
+	})
+	voiceDeletionHandler, handlerOK := voiceService.(services.VoiceChannelDeletionHandler)
+	if !setterOK || !handlerOK {
+		panic("channel/voice services must support deleted voice-channel cleanup")
+	}
+	channelDeletionSetter.SetVoiceChannelDeletionHandler(voiceDeletionHandler)
+	threadService := services.NewThreadService(repos.Channel, repos.Message, channelPermService, hub)
 	// Enables best-effort on-disk cleanup of attachment files on delete (see
 	// services/upload_cleanup.go) without widening the constructor signature
 	// — uploadDir stays a setter (unlike auditLogger above) because it's a
@@ -194,7 +250,9 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	)
 	messageService.SetUploadDir(cfg.Upload.Dir)
 	uploadService := services.NewUploadService(repos.Attachment, cfg.Upload.Dir, cfg.Upload.MaxSize)
-	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService, auditLogService)
+	profileUpdateNotifier := services.NewProfileUpdateNotifier(repos.Preferences, repos.Friendship, repos.Notification, hub)
+	onlineFriendNotifier := services.NewOnlineFriendNotifier(repos.User, repos.Preferences, repos.Friendship, repos.Notification, hub, hub)
+	memberService := services.NewMemberService(repos.User, repos.Role, repos.Ban, repos.MemberTimeout, repos.Server, hub, voiceService, auditLogService, profileUpdateNotifier)
 	roleService := services.NewRoleService(repos.Role, repos.User, hub, auditLogService)
 	// SetPermInvalidator for both is wired in main.go (after initRoutes),
 	// not here: it needs to fan out to middleware.PermissionMiddleware too,
@@ -206,9 +264,14 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 		repository.NewServerMembershipTxRunner(db),
 	)
 	serverService.SetUploadDir(cfg.Upload.Dir)
+	if setter, ok := serverService.(interface {
+		SetGameActivityPreferencesRepository(repository.PreferencesRepository)
+	}); ok {
+		setter.SetGameActivityPreferencesRepository(repos.Preferences)
+	}
 	livekitAdminService := services.NewLiveKitAdminService(
 		repos.LiveKit, repos.Server, repos.User, repos.Channel,
-		voiceService, encryptionKey, cfg.HetznerAPIToken,
+		voiceService, encryptionKey, cfg.HetznerAPIToken, cfg.AllowLiveKitInstanceCreation,
 	)
 	pinService := services.NewPinService(repos.Pin, repos.Message, repos.Channel, hub, channelPermService)
 	// H-05: search results are scoped to the channels the caller may
@@ -229,23 +292,75 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// message/DM/friendship services below (each takes repos.Notification).
 	notificationService := services.NewNotificationService(repos.Notification, hub)
 
-	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub)
+	friendRequestPolicy := services.NewFriendRequestPolicy(
+		repos.Preferences,
+		func(ctx context.Context, userID string) ([]string, error) {
+			friends, err := repos.Friendship.ListFriends(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
+			ids := make([]string, 0, len(friends))
+			for _, friend := range friends {
+				ids = append(ids, friend.UserID)
+			}
+			return ids, nil
+		},
+		func(ctx context.Context, userA, userB string) (bool, error) {
+			friendship, err := repos.Friendship.GetByPair(ctx, userA, userB)
+			if err != nil {
+				if errors.Is(err, pkg.ErrNotFound) {
+					return false, nil
+				}
+				return false, err
+			}
+			return friendship.Status == models.FriendshipStatusAccepted, nil
+		},
+		repos.Server,
+	)
+	friendshipService := services.NewFriendshipService(repos.Friendship, repos.User, repos.Notification, hub, friendRequestPolicy)
+	friendshipService.SetEmailEnqueuer(emailDeliveryService)
 	dmService := services.NewDMService(
 		repos.DM, repos.User, hub, blockService, friendshipService, dmSettingsService,
 		repos.DMRead, repos.Notification, repository.NewDMMessageTxRunner(db),
 	)
+	if communication, ok := dmService.(services.DMCommunicationEmailConfigurer); ok {
+		communication.SetCommunicationEmailEnqueuer(emailDeliveryService)
+	}
+	if concreteDMService, ok := dmService.(interface{ SetServerDMPolicy(services.ServerDMPolicy) }); ok {
+		concreteDMService.SetServerDMPolicy(services.NewServerDMPolicy(repos.Preferences, repos.Server))
+	}
+	if reactionDM, ok := dmService.(interface {
+		SetReactionPreferences(repository.PreferencesRepository)
+	}); ok {
+		reactionDM.SetReactionPreferences(repos.Preferences)
+	}
+	groupDMService := services.NewGroupDMService(repos.GroupDM, repos.User, repos.Friendship, hub, cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, encryptionKey, cfg.Upload.Dir)
+	if reactions, ok := groupDMService.(interface {
+		SetReactionDelivery(repository.NotificationRepository, repository.PreferencesRepository, services.BlockChecker)
+	}); ok {
+		reactions.SetReactionDelivery(repos.Notification, repos.Preferences, blockService)
+	}
 	dmService.SetUploadDir(cfg.Upload.Dir)
 	friendshipService.SetDMAcceptor(dmService) // auto-accept pending DMs when friendship is accepted
 	dmUploadService := services.NewDMUploadService(repos.DM, cfg.Upload.Dir, cfg.Upload.MaxSize)
+	groupDMUploadService := services.NewGroupDMUploadService(repos.GroupDM, cfg.Upload.Dir, cfg.Upload.MaxSize)
 	// Bookmarks (Faz C): saving a channel message is gated on the same
 	// per-channel read resolution the message list uses (channelPermService),
 	// a DM message on channel membership (repos.DM).
 	savedService := services.NewSavedService(repos.Saved, repos.Message, repos.Channel, repos.DM, channelPermService)
+	spamInboxService := services.NewSpamInboxService(repository.NewSpamInboxRepository(db), repos.Message, repos.Channel, repos.DM, repos.GroupDM, channelPermService)
+	spamInboxService.SetBroadcaster(hub)
+	mediaLabelService := services.NewMediaLabelService(repository.NewMediaLabelRepository(db), spamInboxService)
+	mediaLabelService.SetBroadcaster(hub)
+	reminderService := services.NewReminderService(repos.Reminder, repos.Message, repos.Channel, repos.DM, channelPermService)
 	userNoteService := services.NewUserNoteService(repos.UserNote, repos.User)
+	profileAudiencePolicy := services.NewProfileAudiencePolicy(repos.Preferences, repos.Friendship, repos.Server)
+	personalizationService := services.NewPersonalizationService(repos.Preferences, repos.User, repos.Server, repos.Friendship)
 	reactionService := services.NewReactionService(repos.Reaction, repos.Message, repos.Channel, hub, channelPermService, repos.MemberTimeout)
+	reactionService.SetNotificationDelivery(repos.Notification, repos.Preferences, repos.User)
 	serverMuteService := services.NewServerMuteService(repos.ServerMute)
 	channelMuteService := services.NewChannelMuteService(repos.ChannelMute)
-	reportService := services.NewReportService(repos.Report, repos.User)
+	reportService := services.NewReportService(repos.Report, repos.User, messageService, dmService, repos.GroupDM)
 	reportUploadService := services.NewReportUploadService(repos.Report, cfg.Upload.Dir, cfg.Upload.MaxSize)
 
 	deviceService := services.NewDeviceService(repos.Device, repository.NewDeviceTxRunner(db), hub, repos.Server)
@@ -262,7 +377,36 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	linkPreviewService := services.NewLinkPreviewService(repos.LinkPreview)
 	badgeService := services.NewBadgeService(repos.Badge, hub)
 	preferencesService := services.NewPreferencesService(repos.Preferences)
+	presenceHub, _ := hub.(gameActivityHubPresence)
+	gameActivityPolicy := services.NewGameActivityPrivacyPolicy(repos.Preferences, repos.Friendship, repos.Server, gameActivityPresenceAdapter{hub: presenceHub}, repos.Ban)
+	gameActivityService := services.NewGameActivityService(gameActivityPolicy, repos.Friendship, repos.Server, hub)
+	if setter, ok := blockService.(interface {
+		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
+	}); ok {
+		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
+	}
+	if setter, ok := friendshipService.(interface {
+		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
+	}); ok {
+		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
+	}
+	if setter, ok := memberService.(interface {
+		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
+	}); ok {
+		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
+	}
+	if setter, ok := serverService.(interface {
+		SetGameActivityPrivacyInvalidator(services.GameActivityPrivacyInvalidator)
+	}); ok {
+		setter.SetGameActivityPrivacyInvalidator(gameActivityService)
+	}
+	if setter, ok := preferencesService.(interface {
+		SetGameActivitySync(services.GameActivityPolicyInvalidator, ws.Broadcaster)
+	}); ok {
+		setter.SetGameActivitySync(gameActivityService, hub)
+	}
 	appLogService := services.NewAppLogService(repos.AppLog)
+	clipRecordingService := services.NewClipRecordingService(voiceService, repos.Preferences, appLogService)
 	// auditLogService itself was constructed earlier (right after
 	// channelPermService above) so it could be passed as a constructor
 	// parameter to voice/channel/message/member/role/server services.
@@ -291,7 +435,7 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	cosmeticService := services.NewCosmeticService(repos.Cosmetic, repos.Server,
 		services.NewEveryoneCosmeticEntitlements(repos.Cosmetic, repos.Server), hub)
 	musicBotService := services.NewMusicBotService(
-		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService,
+		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
 	)
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
@@ -315,9 +459,11 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	// channel sends (or vice versa).
 	messageLimiter := ratelimit.NewMessageRateLimiter(10, 5*time.Second, 0)
 	dmMessageLimiter := ratelimit.NewMessageRateLimiter(10, 5*time.Second, 0)
-	registerLimiter := ratelimit.NewLoginRateLimiter(3, 10*time.Minute)                  // 3 registrations per 10 min per IP
-	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute)                  // 3 forgot-password per 5 min per IP
-	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)                   // 5 reset attempts per 5 min per IP
+	registerLimiter := ratelimit.NewLoginRateLimiter(3, 10*time.Minute) // 3 registrations per 10 min per IP
+	forgotPwdLimiter := ratelimit.NewLoginRateLimiter(3, 5*time.Minute) // 3 forgot-password per 5 min per IP
+	resetPwdLimiter := ratelimit.NewLoginRateLimiter(5, 5*time.Minute)  // 5 reset attempts per 5 min per IP
+	verifyEmailLimiter := ratelimit.NewLoginRateLimiter(10, 5*time.Minute)
+	unsubscribeLimiter := ratelimit.NewLoginRateLimiter(20, 5*time.Minute)
 	feedbackLimiter := ratelimit.NewMessageRateLimiter(2, 1*time.Minute, 30*time.Second) // 2 feedback per min, 30s cooldown
 	// 30/min/IP: a normal client refreshes a ticket on reconnect (~1-3/min
 	// even on flaky mobile networks); 30 is generous enough to absorb
@@ -360,75 +506,98 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	cosmeticEquipLimiter := ratelimit.NewMessageRateLimiter(10, 1*time.Minute, 30*time.Second)
 
 	svcs := &Services{
-		Auth:              authService,
-		Server:            serverService,
-		Channel:           channelService,
-		Category:          categoryService,
-		Message:           messageService,
-		Upload:            uploadService,
-		DMUpload:          dmUploadService,
-		Member:            memberService,
-		Role:              roleService,
-		Voice:             voiceService,
-		Invite:            inviteService,
-		Pin:               pinService,
-		Search:            searchService,
-		ReadState:         readStateService,
-		DM:                dmService,
-		Reaction:          reactionService,
-		ChannelPermission: channelPermService,
-		Friendship:        friendshipService,
-		LiveKitAdmin:      livekitAdminService,
-		P2PCall:           p2pCallService,
-		MetricsHistory:    metricsHistoryService,
-		ServerMute:        serverMuteService,
-		ChannelMute:       channelMuteService,
-		DMSettings:        dmSettingsService,
-		Block:             blockService,
-		Report:            reportService,
-		ReportUpload:      reportUploadService,
-		AdminUser:         adminUserService,
-		AdminServer:       adminServerService,
-		Device:            deviceService,
-		E2EE:              e2eeService,
-		LinkPreview:       linkPreviewService,
-		Badge:             badgeService,
-		Preferences:       preferencesService,
-		AppLog:            appLogService,
-		Email:             emailSender,
-		AuditLog:          auditLogService,
-		Feedback:          feedbackService,
-		FeedbackUpload:    feedbackUploadService,
-		Soundboard:        soundboardService,
-		Emoji:             emojiService,
-		Sticker:           stickerService,
-		Entrance:          entranceService,
-		Cosmetic:          cosmeticService,
-		ExpressionClone:   expressionCloneService,
-		MusicBot:          musicBotService,
-		WSTicket:          services.NewWSTicketService(),
-		Backup:            services.NewBackupService(cfg.Backup),
-		Notification:      notificationService,
-		Saved:             savedService,
-		UserNote:          userNoteService,
+		Auth:                    authService,
+		MFA:                     mfaService,
+		Server:                  serverService,
+		Channel:                 channelService,
+		Thread:                  threadService,
+		Category:                categoryService,
+		Message:                 messageService,
+		Upload:                  uploadService,
+		DMUpload:                dmUploadService,
+		GroupDMUpload:           groupDMUploadService,
+		Member:                  memberService,
+		Role:                    roleService,
+		Voice:                   voiceService,
+		Invite:                  inviteService,
+		Pin:                     pinService,
+		Search:                  searchService,
+		ReadState:               readStateService,
+		DM:                      dmService,
+		GroupDM:                 groupDMService,
+		Reaction:                reactionService,
+		ChannelPermission:       channelPermService,
+		Friendship:              friendshipService,
+		LiveKitAdmin:            livekitAdminService,
+		P2PCall:                 p2pCallService,
+		MetricsHistory:          metricsHistoryService,
+		ServerMute:              serverMuteService,
+		ChannelMute:             channelMuteService,
+		DMSettings:              dmSettingsService,
+		Block:                   blockService,
+		Report:                  reportService,
+		ReportUpload:            reportUploadService,
+		AdminUser:               adminUserService,
+		AdminServer:             adminServerService,
+		Device:                  deviceService,
+		E2EE:                    e2eeService,
+		LinkPreview:             linkPreviewService,
+		Badge:                   badgeService,
+		Preferences:             preferencesService,
+		AppLog:                  appLogService,
+		Email:                   emailSender,
+		EmailDelivery:           emailDeliveryService,
+		EmailVerification:       emailVerificationService,
+		EmailCampaign:           services.NewEmailCampaignService(repos.EmailCampaign),
+		AccountAssetCleanup:     services.NewAccountAssetCleanup(repos.AccountAssetCleanup, cfg.Upload.Dir),
+		AuditLog:                auditLogService,
+		Feedback:                feedbackService,
+		FeedbackUpload:          feedbackUploadService,
+		Soundboard:              soundboardService,
+		Emoji:                   emojiService,
+		Sticker:                 stickerService,
+		Entrance:                entranceService,
+		Cosmetic:                cosmeticService,
+		ExpressionClone:         expressionCloneService,
+		MusicBot:                musicBotService,
+		WSTicket:                services.NewWSTicketService(),
+		Backup:                  services.NewBackupService(cfg.Backup),
+		Notification:            notificationService,
+		Reminder:                reminderService,
+		ReminderWorker:          services.NewMessageReminderWorker(repos.Reminder, hub),
+		Saved:                   savedService,
+		SpamInbox:               spamInboxService,
+		MediaLabel:              mediaLabelService,
+		UserNote:                userNoteService,
+		ProfileAudience:         profileAudiencePolicy,
+		GameActivity:            gameActivityService,
+		Personalization:         personalizationService,
+		ClipRecording:           clipRecordingService,
+		ProfileShowcase:         services.NewProfileShowcaseService(repos.ProfileShowcase, repos.Server, profileAudiencePolicy),
+		ServerEvent:             serverEventService,
+		ServerEventWorker:       services.NewServerEventWorker(repos.ServerEventDelivery, hub),
+		FriendAnniversaryWorker: services.NewFriendAnniversaryWorker(repos.FriendAnniversary, hub),
+		OnlineFriendNotifier:    onlineFriendNotifier,
 	}
 
 	limiters := &RateLimiters{
-		Login:         loginLimiter,
-		Message:       messageLimiter,
-		DMMessage:     dmMessageLimiter,
-		Register:      registerLimiter,
-		ForgotPwd:     forgotPwdLimiter,
-		ResetPwd:      resetPwdLimiter,
-		Feedback:      feedbackLimiter,
-		WSTicket:      wsTicketLimiter,
-		DeviceEnum:    deviceEnumLimiter,
-		Upload:        uploadLimiter,
-		GroupSession:  groupSessionLimiter,
-		Refresh:       refreshLimiter,
-		MusicPlay:     musicPlayLimiter,
-		SocialAction:  socialActionLimiter,
-		CosmeticEquip: cosmeticEquipLimiter,
+		Login:            loginLimiter,
+		Message:          messageLimiter,
+		DMMessage:        dmMessageLimiter,
+		Register:         registerLimiter,
+		ForgotPwd:        forgotPwdLimiter,
+		ResetPwd:         resetPwdLimiter,
+		VerifyEmail:      verifyEmailLimiter,
+		EmailUnsubscribe: unsubscribeLimiter,
+		Feedback:         feedbackLimiter,
+		WSTicket:         wsTicketLimiter,
+		DeviceEnum:       deviceEnumLimiter,
+		Upload:           uploadLimiter,
+		GroupSession:     groupSessionLimiter,
+		Refresh:          refreshLimiter,
+		MusicPlay:        musicPlayLimiter,
+		SocialAction:     socialActionLimiter,
+		CosmeticEquip:    cosmeticEquipLimiter,
 	}
 
 	return svcs, limiters, metricsCollector

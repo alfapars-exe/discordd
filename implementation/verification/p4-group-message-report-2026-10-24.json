@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-24",
+  "scope": "Group message context in existing moderation reports",
+  "implemented": [
+    "Report source kind group uses existing report context columns, without a parallel moderation store or schema replacement.",
+    "Server verifies current reporting-user group membership, source message existence and author equality before persisting any report. Private sources cannot claim a server ID.",
+    "Group chat exposes Report Message for other authors, including spam-gated messages. Existing report dialog sends source IDs without decrypted content by default; explicit opt-in permits sharing local plaintext.",
+    "Spam inbox group reports now retain source message context, while not automatically fetching or sharing plaintext.",
+    "Existing channel and direct-message report lookup handles nil pages as unavailable rather than panicking.",
+    "Admin report description cells expose expandable source references and consented plaintext. Non-consented text is never rendered; React escapes submitted text. Turkish/English provenance warns that reporter-supplied plaintext is not independently authenticated."
+  ],
+  "verification": [
+    "Linux Docker Go 1.26.8: go test ./services ./repository ./models -run 'Report|Evidence' -count=1 -timeout=3m passed; models package had no matching tests.",
+    "Added group report service cases: metadata-only, consented evidence, removed member, missing message and wrong author.",
+    "ReportModal and SpamInbox: 2 files, 8 tests passed. ReportModal covers both DM and group non-disclosure before consent.",
+    "Client TypeScript project build and targeted ESLint passed.",
+    "Server root package compilation via go test . -run '^$' passed; no root tests executed.",
+    "GroupDMChat, AdminReportEvidence and ReportModal: 3 files / 6 tests passed. Tests exercise report actions outside spam-hidden content, no own-message report action, exact source identifiers, consent on/off and inert rendering of HTML-like evidence. TypeScript and targeted ESLint passed.",
+    "SQLite repository report-context round trip now covers channel, dm and group, including consented plaintext in administrator listing and no private-source server ID. Targeted test passed.",
+    "Report OpenAPI JSON/multipart contract expanded with group context and evidence consent semantics; js-yaml parsed all 218 paths successfully.",
+    "Full client regression after report/admin changes: 208 test files and 1979 tests passed (Vitest, 43.30 seconds). This is not device or browser acceptance."
+  ],
+  "remaining": [
+    "Real browser flow from group message to report and admin review, including removed membership during submission.",
+    "Two-client E2EE acceptance and report evidence provenance limitations: submitted plaintext is reporter-supplied, not independently authenticated server plaintext."
+  ],
+  "acceptance": "Implemented, not accepted; no production deployment."
+}

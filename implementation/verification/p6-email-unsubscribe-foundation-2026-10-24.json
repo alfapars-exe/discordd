@@ -1,0 +1,37 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Category-scoped email unsubscribe token, public confirmation/opt-out HTTP flow, and queue footer integration.",
+  "code": [
+    "server/repository/email_unsubscribe_repository.go",
+    "server/repository/sqlite_email_unsubscribe.go",
+    "server/repository/sqlite_email_unsubscribe_test.go",
+    "server/database/migrations/125_email_unsubscribe_tokens.sql",
+    "server/handlers/email_unsubscribe.go",
+    "server/handlers/email_unsubscribe_test.go",
+    "server/handlers/email_unsubscribe_integration_test.go",
+    "server/services/email_delivery.go",
+    "server/services/email_delivery_test.go",
+    "server/init_services.go",
+    "server/init_routes_global.go"
+  ],
+  "implemented": "Opaque 32-byte URL-safe proofs are stored as hashes, expire after 30 days, bind to the current verified-email generation and queued recipient address, and consume idempotently for only the selected optional category. GET inspects and renders a confirmation without changing preferences; POST consumes the proof. Delivery adds a per-message escaped footer only after issuing a valid token. Invalid configuration, ineligible recipients, or token issuance failures fail closed before send; proof values are not persisted in jobs or emitted in logs.",
+  "verification": {
+    "status": "targeted evidence passed; latest full-suite state pending",
+    "passed": [
+      "Repository token tests cover hashing, category-scoped preference preservation, repeat consume, invalid/expired proofs, stale email generations, and expected-address matching.",
+      "Handler tests cover GET confirmation, POST opt-out, bounded/strict form input, duplicate tokens, generic errors, and response headers.",
+      "Real SQLite handler integration verifies GET is non-mutating and POST changes only the selected category while remaining idempotent.",
+      "Email delivery tests cover root unsubscribe URL construction, escaped proof/footer, exact queued-address token issuance, invalid configuration, issuance failure, and sanitized retry behavior.",
+      "Parent-reported PostgreSQL cast-fix validation completed three targeted runs; this record does not claim full PostgreSQL suite acceptance."
+    ],
+    "pending": [
+      "Latest full Go test suite and go vet results.",
+      "Latest PostgreSQL integration results after current changes."
+    ]
+  },
+  "remaining": [
+    "External SMTP/provider configuration and delivery acceptance are not verified.",
+    "No production send or cutover has been performed."
+  ],
+  "release": "Not accepted; production and external-provider validation remain open."
+}

@@ -6,7 +6,7 @@
  *   mention | reply   : { preview: string | null, channel_name: string }
  *   friend_request    : { friendship_id: string }
  *   dm_request        : {}
- *   system            : { title: string, body: string }
+ *   system            : { title: string, body: string } or { action: "profile_update" }
  * `preview` is plaintext only — null for E2EE / file-only messages.
  */
 

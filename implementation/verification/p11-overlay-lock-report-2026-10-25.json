@@ -1,0 +1,23 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Default-off device-local overlay lock command in the existing shared shortcut registry, recorder, conflict checking and persistence. Explicit enabling or recording opts in; reset returns to inactive. Windows globalShortcut registration uses bounded code/modifier projection, not additional raw uIOhook event collection.",
+    "Only the trusted main-window frame can configure the native binding. Modifier-only, unsupported keys and unmodified overlay chords are rejected. Registration failures are shown; recording, command disable, overlay master disable, unmount, main navigation/crash and quit release the owned reservation. PTT/global mute physical-key conflicts suspend overlay registration.",
+    "The chord unlocks an already-visible authorized voice widget for mouse dragging without activating/focusing its BrowserWindow. Lock restores whole-window click-through. Hiding clears interactive state. Main-process will-move clamps game-mode dragging to the authorized game bounds; changed bounds relock/reposition the widget. Manual position lasts only for the visible session and is not yet persisted.",
+    "Registered Games exposes a real issue-report action through the existing FeedbackCreateForm and API. It submits user-authored text and optional explicit attachments, never automatically collecting process paths, screenshots, duration or process data."
+  ],
+  "verification": [
+    "Electron TypeScript compile and complete native suite: 129/129 passed. Includes stale native callbacks, native-window adapter lifecycle test for hidden/visible lock, click-through reset, nonfocusable construction, game bounds movement clamp and game-rect-change relock; these mocked-window tests are not actual OS acceptance.",
+    "Final complete client regression run passed: 309 files, 2865 tests, zero failures. Report C:/Users/PARS/AppData/Local/Temp/hichat-overlay-lock-verified-20261025.json. Covers device opt-in persistence/reload, native code projection, recording suspension, disable/unmount cleanup, stale OS response and PTT physical-key conflict. Registered-games actual feedback-form submission test passed including no implicit files.",
+    "Client TypeScript and scoped ESLint passed after final source changes. Vite production build passed with existing ineffective-dynamic-import warnings. Coverage structure VALID with 44 missing, 172 implemented_unverified, 32 existing, 2 accepted and 11 excluded; all 32 coverage-validator regression tests passed. No item was promoted to accepted."
+  ],
+  "open": [
+    "Real Windows global chord delivery with game focus, OS conflicts, held-key behavior, dragging, physical click-through and no focus steal",
+    "Persisted per-game manual layout and reset, opt-in actionable regions, pin control and non-voice widgets",
+    "Separate compatibility implementation/profile and remaining P0-P11 acceptance",
+    "End-to-end feedback submission against a configured test server and authorized attachment handling",
+    "Clean installed Windows package, signing/update and explicit production release approval"
+  ],
+  "release": "No commit, push, merge, production deployment or published Windows update. Goal remains incomplete."
+}

@@ -21,6 +21,7 @@
 import { useEffect, useRef } from "react";
 import { useVoiceStore } from "../stores/voiceStore";
 import { isElectron } from "../utils/constants";
+import { useShortcutCaptureStore } from "../stores/shortcutCaptureStore";
 
 type UsePushToTalkParams = {
   setMicEnabled: (enabled: boolean) => void;
@@ -30,6 +31,7 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
   const inputMode = useVoiceStore((s) => s.inputMode);
   const pttKey = useVoiceStore((s) => s.pttKey);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
+  const capturing = useShortcutCaptureStore((state) => state.active);
 
   // Ref — no re-render needed, side-effect only
   const isPressedRef = useRef(false);
@@ -37,14 +39,16 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
   // ─── Electron: global PTT via uIOhook IPC ───
   useEffect(() => {
     if (!isElectron()) return;
-    if (inputMode !== "push_to_talk" || !currentVoiceChannelId) return;
+    if (inputMode !== "push_to_talk" || !currentVoiceChannelId || capturing) return;
 
     const api = window.electronAPI!;
+    let disposed = false;
 
     // Remove stale listeners from previous sessions
     api.removePTTListeners();
 
     api.onPTTGlobalDown(() => {
+      if (disposed || useShortcutCaptureStore.getState().active) return;
       if (isPressedRef.current) return;
       const { isMuted, isServerMuted } = useVoiceStore.getState();
       if (isMuted || isServerMuted) return;
@@ -53,6 +57,7 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
     });
 
     api.onPTTGlobalUp(() => {
+      if (disposed) return;
       if (!isPressedRef.current) return;
       isPressedRef.current = false;
       setMicEnabled(false);
@@ -62,6 +67,7 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
     api.registerPTTShortcut(pttKey);
 
     return () => {
+      disposed = true;
       api.unregisterPTTShortcut();
       api.removePTTListeners();
 
@@ -70,13 +76,13 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
         setMicEnabled(false);
       }
     };
-  }, [inputMode, pttKey, currentVoiceChannelId, setMicEnabled]);
+  }, [inputMode, pttKey, currentVoiceChannelId, setMicEnabled, capturing]);
 
   // ─── Browser: document-level keydown/keyup (focus required) ───
   useEffect(() => {
     // Skip in Electron — global hook handles everything
     if (isElectron()) return;
-    if (inputMode !== "push_to_talk" || !currentVoiceChannelId) return;
+    if (inputMode !== "push_to_talk" || !currentVoiceChannelId || capturing) return;
 
     function isTextInput(el: Element | null): boolean {
       if (!el) return false;
@@ -87,7 +93,7 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
     }
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.repeat) return;
+      if (e.repeat || e.defaultPrevented || e.isComposing || useShortcutCaptureStore.getState().active) return;
       if (e.code !== pttKey) return;
       if (isTextInput(document.activeElement)) return;
       if (isPressedRef.current) return;
@@ -129,5 +135,5 @@ export function usePushToTalk({ setMicEnabled }: UsePushToTalkParams): void {
         setMicEnabled(false);
       }
     };
-  }, [inputMode, pttKey, currentVoiceChannelId, setMicEnabled]);
+  }, [inputMode, pttKey, currentVoiceChannelId, setMicEnabled, capturing]);
 }

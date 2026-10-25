@@ -1,9 +1,11 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,6 +37,12 @@ type DB struct {
 	Conn *sql.DB
 }
 
+func IsPostgresDSN(dsn string) bool {
+	return strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://")
+}
+
+func IsRemoteDatabase(dsn string) bool { return IsPostgresDSN(dsn) || IsRemoteLibSQL(dsn) }
+
 // IsRemoteLibSQL reports whether the DSN points to a remote libSQL/Turso server
 // rather than a local SQLite file. URLs starting with libsql://, http://, https://,
 // ws://, or wss:// are treated as remote.
@@ -58,6 +66,23 @@ func IsRemoteLibSQL(dsn string) bool {
 // container logs, where anyone with log access then has full DB access. Always
 // pass a DSN through this before printing it.
 func RedactDSN(dsn string) string {
+	if IsPostgresDSN(dsn) {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return "postgres://[redacted]"
+		}
+		if u.User != nil {
+			u.User = url.UserPassword(u.User.Username(), "***")
+		}
+		q := u.Query()
+		for _, key := range []string{"password", "sslpassword", "authToken"} {
+			if q.Has(key) {
+				q.Set(key, "***")
+			}
+		}
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
 	i := strings.Index(dsn, "authToken=")
 	if i < 0 {
 		return dsn
@@ -72,6 +97,20 @@ func RedactDSN(dsn string) string {
 // New opens a database connection and runs pending migrations.
 // Supports both local SQLite (file path) and remote Turso/libSQL (libsql://...).
 func New(dbPath string, migrationsFS fs.FS) (*DB, error) {
+	if IsPostgresDSN(dbPath) {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		conn, err := OpenPostgres(ctx, dbPath)
+		if err != nil {
+			return nil, err
+		}
+		if err := MigratePostgres(ctx, conn); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		logger.Info("using PostgreSQL 18 backend; native migrations applied")
+		return &DB{Conn: conn}, nil
+	}
 	var conn *sql.DB
 	var err error
 

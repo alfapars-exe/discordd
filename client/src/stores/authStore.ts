@@ -3,6 +3,7 @@
  */
 
 import { create } from "zustand";
+import { publishAuthOwnerChange } from "../api/authSessionEvents";
 import * as authApi from "../api/auth";
 import { setTokens, clearTokens } from "../api/client";
 import { logToServer } from "../api/clientLog";
@@ -18,10 +19,49 @@ import { useEmojiStore } from "./emojiStore";
 import { useStickerStore } from "./stickerStore";
 import { useEntranceStore } from "./entranceStore";
 import { useCosmeticsStore } from "./cosmeticsStore";
+import { useUIStore } from "./uiStore";
+import { useComposerDraftStore } from "./composerDraftStore";
 import type { APIResponse, AuthTokens, User, UserStatus } from "../types";
-import { oneOf } from "../utils/validation";
 
 const MANUAL_STATUS_KEY = "mqvi_manual_status";
+const USER_STATUSES: readonly UserStatus[] = ["online", "idle", "dnd", "offline"];
+let authSessionEpoch = 0;
+
+function isUserStatus(value: unknown): value is UserStatus {
+  return typeof value === "string" && USER_STATUSES.includes(value as UserStatus);
+}
+
+function manualStatusStorageKey(userId: string): string {
+  return `${MANUAL_STATUS_KEY}:${encodeURIComponent(userId)}`;
+}
+
+function readManualStatus(userId: string): UserStatus | null {
+  try {
+    const stored = localStorage.getItem(manualStatusStorageKey(userId));
+    return isUserStatus(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeManualStatus(userId: string, status: UserStatus): void {
+  try {
+    localStorage.setItem(manualStatusStorageKey(userId), status);
+  } catch {
+    // Presence remains usable when browser storage is unavailable.
+  }
+}
+
+function manualStatusForUser(user: User): UserStatus {
+  // The authenticated user endpoint may include pref_status even though most
+  // public User payloads intentionally omit it. Only trust a known enum value.
+  const serverStatus = (user as User & { pref_status?: unknown }).pref_status;
+  if (isUserStatus(serverStatus)) {
+    writeManualStatus(user.id, serverStatus);
+    return serverStatus;
+  }
+  return readManualStatus(user.id) ?? "online";
+}
 
 /**
  * Transient infra failures (HF Space cold start → 502/503/504 sentinel from
@@ -51,6 +91,8 @@ type AuthState = {
   user: User | null;
   isLoading: boolean;
   error: string | null;
+  mfaRequired: boolean;
+  accountDisabled: boolean;
   isInitialized: boolean;
   /**
    * Boot-time session restore phase: "waking" while we wait out a transient
@@ -61,7 +103,7 @@ type AuthState = {
 
   // ─── Actions ───
   register: (username: string, password: string, displayName?: string, email?: string) => Promise<boolean>;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string, mfaCode?: string, reactivate?: boolean) => Promise<boolean>;
   /**
    * Applies an already-fetched login response. Exists so the Electron
    * "remember me" path can reuse this exact success/failure handling: that
@@ -69,7 +111,7 @@ type AuthState = {
    * the stored password (pentest 2026-07-26, H-09).
    */
   applyLoginResponse: (res: APIResponse<AuthTokens>) => boolean;
-  logout: () => Promise<void>;
+  logout: (options?: { localOnly?: boolean; expectedUserId?: string }) => Promise<void>;
   initialize: () => Promise<void>;
   clearError: () => void;
   updateUser: (partial: Partial<User>) => void;
@@ -88,17 +130,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: false,
   error: null,
+  mfaRequired: false,
+  accountDisabled: false,
   isInitialized: false,
   initPhase: "idle",
-  // localStorage values cross a trust boundary: an older version could have
-  // written a status string that's no longer valid (e.g. removed enum value).
-  // oneOf() narrows safely with "online" fallback so the store never holds
-  // an invalid UserStatus that would break downstream switch statements.
-  manualStatus: oneOf<UserStatus>(
-    localStorage.getItem(MANUAL_STATUS_KEY),
-    ["online", "idle", "dnd", "offline"],
-    "online",
-  ),
+  // Do not load the legacy global key here: before authentication there is no
+  // safe account to which that cached value can be attributed.
+  manualStatus: "online",
 
   register: async (username, password, displayName, email) => {
     set({ isLoading: true, error: null });
@@ -111,9 +149,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     if (res.success && res.data) {
-      setTokens(res.data.access_token, res.data.refresh_token);
+      authSessionEpoch++;
+      if (get().user?.id !== res.data.user.id) {
+        useUIStore.getState().resetNavigation();
+        useComposerDraftStore.getState().reset();
+      }
+      usePreferencesStore.getState().bindAccount(res.data.user.id);
+      setTokens(res.data.access_token, res.data.refresh_token, res.data.user.id);
       syncLanguageFromUser(res.data.user);
-      set({ user: res.data.user, isLoading: false });
+      set({ user: res.data.user, manualStatus: manualStatusForUser(res.data.user), isLoading: false, mfaRequired: false, accountDisabled: false });
       usePreferencesStore.getState().fetchAndApply();
       return true;
     }
@@ -122,16 +166,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return false;
   },
 
-  login: async (username, password) => {
+  login: async (username, password, mfaCode, reactivate) => {
     set({ isLoading: true, error: null });
-    return get().applyLoginResponse(await authApi.login({ username, password }));
+    return get().applyLoginResponse(await authApi.login({ username, password, mfa_code: mfaCode, ...(reactivate ? { reactivate: true } : {}) }));
   },
 
   applyLoginResponse: (res) => {
     if (res.success && res.data) {
-      setTokens(res.data.access_token, res.data.refresh_token);
+      authSessionEpoch++;
+      if (get().user?.id !== res.data.user.id) {
+        useUIStore.getState().resetNavigation();
+        useComposerDraftStore.getState().reset();
+      }
+      usePreferencesStore.getState().bindAccount(res.data.user.id);
+      setTokens(res.data.access_token, res.data.refresh_token, res.data.user.id);
       syncLanguageFromUser(res.data.user);
-      set({ user: res.data.user, isLoading: false });
+      set({ user: res.data.user, manualStatus: manualStatusForUser(res.data.user), isLoading: false, mfaRequired: false, accountDisabled: false });
       logToServer("info", "auth_login", { userId: res.data.user.id });
       // Fetch server-side preferences and apply to stores
       usePreferencesStore.getState().fetchAndApply();
@@ -140,13 +190,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Event + error message only — never the username/password.
     logToServer("warn", "auth_login_failed", { error: res.error ?? "" });
-    set({ error: res.error ?? "Login failed", isLoading: false });
+    set({ error: res.code === "MFA_REQUIRED" || res.code === "ACCOUNT_DISABLED" ? null : res.error ?? "Login failed", isLoading: false, mfaRequired: res.code === "MFA_REQUIRED" || res.code === "MFA_INVALID", accountDisabled: res.code === "ACCOUNT_DISABLED" });
     return false;
   },
 
-  logout: async () => {
+  logout: async (options) => {
+    const owner = get().user;
+    const epoch = authSessionEpoch;
+    if (options?.expectedUserId && owner?.id !== options.expectedUserId) return;
+    // Invalidate queued writes before any awaited cleanup or token change.
+    usePreferencesStore.getState().reset();
+    useUIStore.getState().resetNavigation();
+    useComposerDraftStore.getState().reset();
     // Leave voice channel first
     const voiceState = useVoiceStore.getState();
+    // Music snapshots and in-flight fetch revisions belong to this account.
+    // Reset even when the user already left voice before signing out.
+    voiceState.resetMusicBotStates();
     if (voiceState.currentVoiceChannelId) {
       if (voiceState._onLeaveCallback) {
         voiceState._onLeaveCallback();
@@ -156,8 +216,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     // Reset E2EE state (IndexedDB keys preserved)
-    await useE2EEStore.getState().reset();
-    usePreferencesStore.getState().reset();
+    void useE2EEStore.getState().reset().catch(() => { /* local state reset is synchronous */ });
     // Per-account private data (bookmarks, user notes) — SPA, no reload.
     useSavedStore.getState().reset();
     useUserNoteStore.getState().reset();
@@ -171,15 +230,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // still pass an empty string so the API signature stays compatible;
     // the server's extractRefreshToken() prefers the cookie.
     try {
-      await authApi.logout("");
+      if (!options?.localOnly) await authApi.logout("", owner?.id);
     } catch {
       /* Network errors during logout are benign — clear local state anyway */
     }
+    // A late logout response must not clear a newly signed-in account.
+    if (authSessionEpoch !== epoch || get().user?.id !== owner?.id) return;
     clearTokens();
     logToServer("info", "auth_logout", {});
     // Close settings modal if open (SPA doesn't reload between logout → login)
     useSettingsStore.getState().closeSettings();
-    set({ user: null });
+    set({ user: null, manualStatus: "online", mfaRequired: false, accountDisabled: false });
   },
 
   /** Restore session from stored token on app start. */
@@ -193,8 +254,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // backoff instead — the refresh cookie is still valid, destroying the
     // session over an infra hiccup was QA bug #1.
     const applySession = (user: User) => {
+      authSessionEpoch++;
+      if (get().user?.id !== user.id) {
+        useUIStore.getState().resetNavigation();
+        useComposerDraftStore.getState().reset();
+      }
+      usePreferencesStore.getState().bindAccount(user.id);
       syncLanguageFromUser(user);
-      set({ user, isInitialized: true, initPhase: "idle" });
+      set({ user, manualStatus: manualStatusForUser(user), isInitialized: true, initPhase: "idle" });
       usePreferencesStore.getState().fetchAndApply();
     };
 
@@ -224,8 +291,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
         if (!isTransientAuthError(retry.error)) {
           // Server is back and definitively rejected us — real logout.
+          usePreferencesStore.getState().reset();
           clearTokens();
-          set({ isInitialized: true, initPhase: "idle" });
+          set({ user: null, manualStatus: "online", isInitialized: true, initPhase: "idle" });
           return;
         }
         // Server answered the probe but the API is still flaky — keep backing off.
@@ -237,11 +305,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
+    usePreferencesStore.getState().reset();
     clearTokens();
-    set({ isInitialized: true, initPhase: "idle" });
+    set({ user: null, manualStatus: "online", isInitialized: true, initPhase: "idle" });
   },
 
-  clearError: () => set({ error: null }),
+  clearError: () => set({ error: null, mfaRequired: false, accountDisabled: false }),
 
   updateUser: (partial) =>
     set((state) => ({
@@ -249,10 +318,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     })),
 
   setManualStatus: (status) => {
-    localStorage.setItem(MANUAL_STATUS_KEY, status);
+    if (!isUserStatus(status)) return;
     set((state) => ({
       manualStatus: status,
       user: state.user ? { ...state.user, status } : null,
     }));
+    const userId = get().user?.id;
+    if (userId) writeManualStatus(userId, status);
   },
 }));
+
+// Publish only identity transitions, not profile/presence edits. Keeping this
+// seam outside the stores prevents crypto -> message -> auth ESM cycles.
+publishAuthOwnerChange(useAuthStore.getState().user?.id ?? null);
+useAuthStore.subscribe((next, previous) => {
+  if (next.user?.id !== previous.user?.id) publishAuthOwnerChange(next.user?.id ?? null);
+});

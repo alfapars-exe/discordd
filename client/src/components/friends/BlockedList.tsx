@@ -7,7 +7,9 @@ import * as blockApi from "../../api/block";
 import Avatar from "../shared/Avatar";
 import type { FriendshipWithUser } from "../../types";
 
-function BlockedList() {
+const BLOCKED_PAGE_SIZE = 20;
+
+function BlockedList({ searchQuery = "" }: { searchQuery?: string }) {
   const { t } = useTranslation("common");
   const unblockUser = useBlockStore((s) => s.unblockUser);
   // blockStore only holds ids; the full rows (name, avatar) come from the API.
@@ -16,6 +18,7 @@ function BlockedList() {
   const blockedIds = useBlockStore((s) => s.blockedUserIds);
   const [blockedUsers, setBlockedUsers] = useState<FriendshipWithUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(BLOCKED_PAGE_SIZE);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,17 +42,24 @@ function BlockedList() {
     }
   }
 
+  const query = searchQuery.trim().toLocaleLowerCase();
+  const filteredUsers = blockedUsers.filter((user) => {
+    if (!query) return true;
+    return (user.display_name ?? "").toLocaleLowerCase().includes(query) || user.username.toLocaleLowerCase().includes(query);
+  });
+  const visibleUsers = filteredUsers.slice(0, visibleCount);
+
   if (isLoading) {
     return <div className="fv-empty">{t("loading")}</div>;
   }
 
-  if (blockedUsers.length === 0) {
+  if (filteredUsers.length === 0) {
     return <div className="fv-empty">{t("noBlockedUsers")}</div>;
   }
 
   return (
     <div className="blocked-users-list">
-      {blockedUsers.map((user) => {
+      {visibleUsers.map((user) => {
         const name = user.display_name || user.username;
         return (
           <div key={user.user_id} className="blocked-user-item">
@@ -72,6 +82,11 @@ function BlockedList() {
           </div>
         );
       })}
+      {visibleCount < filteredUsers.length && (
+        <button type="button" className="settings-btn" onClick={() => setVisibleCount((count) => count + BLOCKED_PAGE_SIZE)}>
+          {t("showMore")} ({filteredUsers.length - visibleCount})
+        </button>
+      )}
     </div>
   );
 }

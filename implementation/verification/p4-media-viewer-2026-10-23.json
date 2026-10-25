@@ -1,0 +1,28 @@
+{
+  "items": [
+    "p4.media-author",
+    "p4.media-zoom",
+    "p4.media-gallery"
+  ],
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "metadata": "Plaintext and E2EE image previews carry the source message identifier, author display name, avatar and timestamp into the global viewer.",
+    "zoom": "Buttons, mouse wheel and keyboard controls support 100%-400% zoom, reset, and bounded pointer panning. Changing an image resets the viewport.",
+    "gallery": "Multiple plaintext image attachments on one message open as a navigable gallery with previous/next buttons, arrow keys, wrapping and a position counter.",
+    "lifecycle": "The viewer remains outside virtualized message rows, owns decrypted blob URLs, restores focus, locks body scrolling and preserves native modified-click behavior."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    },
+    {
+      "command": "vitest run src/components/shared/ImageLightbox.test.tsx src/components/chat/MessageAttachments.test.tsx src/components/chat/EncryptedAttachment.test.tsx",
+      "working_directory": "client",
+      "result": "32 passed"
+    }
+  ],
+  "remaining_acceptance": "Exercise touch panning and multi-image navigation at every target viewport, confirm focus restoration with the virtualized row removed, and verify access loss/deletion behavior against two real clients."
+}

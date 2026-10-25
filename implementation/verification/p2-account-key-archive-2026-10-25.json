@@ -1,0 +1,25 @@
+{
+  "phase": "P2",
+  "status": "implemented_unverified",
+  "scope": [
+    "Persistent E2EE storage is partitioned by canonical backend and authenticated account; unauthenticated access fails closed and pending transactions are fenced by login generation.",
+    "Legacy global storage remains untouched. A server-proven device/public-key match permits an explicit informed archive import; ambiguous archives require recovery or an explicit fresh-key choice. Import verifies the exact copied snapshot, bounded size, empty destination and atomic completion marker.",
+    "Account mismatch no longer clears stored keys. Existing registered devices require public identity-key and account equality; offline device lookup does not trigger re-registration.",
+    "Device registration, backup restore, Signal and sender-key operations preserve the originating account/generation across awaits. Backup owner mismatch is rejected before clearing or importing data.",
+    "This supersedes the implementation-state global-namespace blocker recorded at the earlier p11-chat-source-isolation checkpoint, but does not satisfy real-device migration acceptance or complete P2/P11."
+  ],
+  "verification": [
+    "Focused archive tests: 15 passed, including source swap/restore TOCTOU refusal without target creation.",
+    "Focused e2eeStore tests: 43 passed, including server identity mismatch, foreign owner, matching identity and offline lookup.",
+    "Settings section navigation regression: 12 passed. Full client TypeScript build passed after archive source stabilization.",
+    "Authenticated pending group send fixture regression: 15 passed. Group DM fixture ordering corrected without weakening production guards: 58 passed.",
+    "Final complete client regression: 321 files, 3015 tests passed, zero failed/pending. Report: C:/Users/PARS/AppData/Local/Temp/hichat-account-archive-verified-20261025.json.",
+    "Final client TypeScript and scoped ESLint passed. Vite production build passed with existing ineffective-dynamic-import warnings. Coverage structure VALID and validator tests 32/32 passed; overall acceptance remains incomplete."
+  ],
+  "open": [
+    "Real two-account/browser acceptance and preservation/recovery of representative legacy archives; no actual user archive was migrated or deleted by these tests.",
+    "Remaining P0-P11 acceptance and Windows release/update checks. Actual browser visual confirmation of the supplied screenshot remains open.",
+    "Live chat/video/stream overlay widgets remain incomplete; this prerequisite does not implement them."
+  ],
+  "release": "No commit, push, merge, deployment or publication."
+}

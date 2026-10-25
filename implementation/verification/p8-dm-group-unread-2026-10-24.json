@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "implementation": [
+    "DM and group list responses now return reader-specific optional oldest_unread_message_id. Read cursor tuple ordering, author exclusion, deleted cursor repair and current membership gates are preserved.",
+    "Existing group history endpoint supports bounded around windows with encryption metadata and hydrated message data intact.",
+    "Shift+PageUp resolves authoritative anchors for server text, DM and group conversations rather than guessing loaded history. Account/auth generation/navigation and newest-request fences reject stale results.",
+    "Group around-fetch preserves live edits/deletes, detaches and buffers newer live messages when needed, exposes return-to-present, and scrolls only its matching rendered target. Superseded initial fetch does not mark a jumped window read. DM around-fetch accepts navigation scope."
+  ],
+  "verification": [
+    "Parent focused client suite passed 4 files/184 tests; subsequent helper/panel suite 17 tests, including same-conversation older-response rejection.",
+    "Full client snapshot 292 files/2715 tests passed before the later panel-only stale-session guard.",
+    "Go full suite passed; actual PostgreSQL repository anchor/around/campaign selection passed; focused services/repository race checks passed. Handler tests compile, but new around-specific HTTP request acceptance remains open."
+  ],
+  "open": ["Real DM/group browser jumps over unloaded history and reconnect acceptance", "Remaining chat shortcut contexts; later Ctrl+U voice-text implementation is tracked in p8-voice-text-2026-10-24.json", "Windows/assistive technology/full P8 acceptance"],
+  "release": "No production publication."
+}

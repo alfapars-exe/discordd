@@ -10,6 +10,7 @@
  */
 
 import i18n from "../i18n";
+import { currentHour12 } from "../stores/timeFormatStore";
 
 /** SQLite timestamps lack the "Z" suffix — append it so they parse as UTC. */
 export function parseUTC(iso: string): number {
@@ -33,6 +34,7 @@ export function formatDateTime(iso: string, opts?: { assumeUTC?: boolean }): str
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      hour12: currentHour12(),
     });
   } catch {
     return iso;

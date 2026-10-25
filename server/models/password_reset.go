@@ -2,9 +2,8 @@ package models
 
 import (
 	"fmt"
-	"regexp"
+	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 // PasswordResetToken — only the SHA256 hash is stored; plaintext is sent via email.
@@ -18,17 +17,13 @@ type PasswordResetToken struct {
 }
 
 type ForgotPasswordRequest struct {
-	Email string `json:"email"`
+	Identifier string `json:"identifier"`
 }
 
-var resetEmailRegex = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
-
 func (r *ForgotPasswordRequest) Validate() error {
-	if r.Email == "" {
-		return fmt.Errorf("email is required")
-	}
-	if !resetEmailRegex.MatchString(r.Email) {
-		return fmt.Errorf("invalid email format")
+	r.Identifier = strings.TrimSpace(r.Identifier)
+	if r.Identifier == "" {
+		return fmt.Errorf("username or email is required")
 	}
 	return nil
 }
@@ -45,8 +40,5 @@ func (r *ResetPasswordRequest) Validate() error {
 	if r.NewPassword == "" {
 		return fmt.Errorf("new password is required")
 	}
-	if utf8.RuneCountInString(r.NewPassword) < 8 {
-		return fmt.Errorf("password must be at least 8 characters")
-	}
-	return nil
+	return ValidateNewPassword(r.NewPassword)
 }

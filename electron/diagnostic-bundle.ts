@@ -94,6 +94,7 @@ function redactedSettings(): Record<string, unknown> {
       startMinimized: s.startMinimized,
       closeToTray: s.closeToTray,
       transparentBackground: s.transparentBackground,
+      hardwareAcceleration: s.hardwareAcceleration,
     };
   } catch {
     return {};

@@ -36,6 +36,7 @@ type UserProfile struct {
 	AvatarURL         *string   `json:"avatar_url"`
 	AvatarAnimatedURL *string   `json:"avatar_animated_url"`
 	BannerURL         *string   `json:"banner_url"`
+	BannerAnimatedURL *string   `json:"banner_animated_url"`
 	Bio               *string   `json:"bio"`
 	Pronouns          *string   `json:"pronouns"`
 	AccentColor       *string   `json:"accent_color"`
@@ -57,6 +58,7 @@ func ToUserProfile(u *User) *UserProfile {
 		AvatarURL:         u.AvatarURL,
 		AvatarAnimatedURL: u.AvatarAnimatedURL,
 		BannerURL:         u.BannerURL,
+		BannerAnimatedURL: u.BannerAnimatedURL,
 		Bio:               u.Bio,
 		Pronouns:          u.Pronouns,
 		AccentColor:       u.AccentColor,

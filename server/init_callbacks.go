@@ -48,7 +48,10 @@ func registerHubCallbacks(
 	channelRepo repository.ChannelRepository,
 	serverRepo repository.ServerRepository,
 	channelPermResolver services.ChannelPermResolver,
+	gameActivity *services.GameActivityService,
+	onlineFriendNotifiers ...services.OnlineFriendNotifier,
 ) (stopPresenceDebounce func()) {
+	onlineFriendNotifier := firstOnlineFriendNotifier(onlineFriendNotifiers)
 	// presenceDebouncer delays the OFFLINE presence transition (DB write +
 	// broadcast) by presenceOfflineGrace so a brief reconnect never flaps
 	// every client's presence list. See presence_debounce.go's doc comment
@@ -59,11 +62,37 @@ func registerHubCallbacks(
 
 	// ─── Presence Callbacks ───
 
-	hub.OnUserFirstConnect(userFirstConnectCallback(hub, userRepo, presenceDebouncer))
+	hub.OnUserFirstConnect(userFirstConnectCallback(hub, userRepo, presenceDebouncer, onlineFriendNotifier))
 
-	hub.OnUserFullyDisconnected(userFullyDisconnectedCallback(hub, userRepo, voiceService, p2pCallService, presenceDebouncer))
+	hub.OnUserFullyDisconnected(userFullyDisconnectedCallback(hub, userRepo, voiceService, p2pCallService, presenceDebouncer, onlineFriendNotifier))
 
-	hub.OnPresenceManualUpdate(presenceUpdateCallback(hub, userRepo))
+	hub.OnPresenceManualUpdate(presenceUpdateCallback(hub, userRepo, onlineFriendNotifier))
+	if gameActivity != nil {
+		gameActivity.Start()
+		hub.OnGameActivityConnect(func(userID string, connectionID uint64) {
+			gameActivity.Connect(userID, connectionID)
+		})
+		hub.OnGameActivityUpdate(func(userID string, connectionID, sequence uint64, game *ws.GameActivityClientGame) {
+			ctx, cancel := services.BroadcastContext()
+			defer cancel()
+			gameActivity.Update(ctx, userID, connectionID, sequence, game)
+		})
+		hub.OnGameActivityDisconnect(func(userID string, connectionID uint64) {
+			ctx, cancel := services.BroadcastContext()
+			defer cancel()
+			gameActivity.Disconnect(ctx, userID, connectionID)
+		})
+		hub.OnGameActivitySnapshot(func(userID string) {
+			ctx, cancel := services.BroadcastContext()
+			defer cancel()
+			gameActivity.Snapshot(ctx, userID)
+		})
+		hub.OnGameActivityPresenceChange(func(userID string) {
+			ctx, cancel := services.BroadcastContext()
+			defer cancel()
+			gameActivity.PolicyChanged(ctx, userID)
+		})
+	}
 
 	// ─── Voice Callbacks ───
 
@@ -177,7 +206,12 @@ func registerHubCallbacks(
 
 	hub.OnDMTyping(dmTypingCallback(hub, dmRepo))
 
-	return presenceDebouncer.stopAll
+	return func() {
+		presenceDebouncer.stopAll()
+		if gameActivity != nil {
+			gameActivity.Stop()
+		}
+	}
 }
 
 // userFirstConnectCallback resolves a newly-connected user's persisted
@@ -193,7 +227,7 @@ func registerHubCallbacks(
 // directly — needed for the presence-offline debounce tests in
 // presence_debounce_test.go, which assert on both this callback and
 // userFullyDisconnectedCallback sharing one debouncer instance.
-func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer) ws.UserConnectionCallback {
+func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, onlineFriendNotifiers ...services.OnlineFriendNotifier) ws.UserConnectionCallback {
 	return func(userID, _ string) {
 		// A fresh first-connection this soon after the user's last
 		// connection fully closed means they reconnected within
@@ -201,7 +235,7 @@ func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRep
 		// actually leaving — cancel the pending OFFLINE transition before
 		// it fires. No-op (returns false) when nothing is pending, which is
 		// the common case (a genuinely new session, not a reconnect).
-		debouncer.cancel(userID)
+		wasReconnect := debouncer.cancel(userID)
 
 		ctx, cancel := services.BroadcastContext()
 		defer cancel()
@@ -212,6 +246,10 @@ func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRep
 			hubLogger.Error("failed to get user for first-connect presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(err))
 			return
 		}
+		if user == nil {
+			hubLogger.Error("user unavailable for first-connect presence", "area", "presence", "user_id", userID)
+			return
+		}
 
 		targetStatus := user.PrefStatus
 		if targetStatus == "" {
@@ -219,7 +257,7 @@ func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRep
 		}
 
 		if targetStatus == models.UserStatusOffline {
-			// Invisible — SetInvisible already called in handler.
+			// Invisible — addClient established the flag under the Hub lock.
 			hub.BroadcastToAll(ws.Event{
 				Op: ws.OpPresence,
 				Data: ws.PresenceData{
@@ -233,6 +271,7 @@ func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRep
 
 		if updateErr := userRepo.UpdateStatus(ctx, userID, targetStatus); updateErr != nil {
 			hubLogger.Error("failed to update status on first connect", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
+			return
 		}
 
 		hub.BroadcastToAll(ws.Event{
@@ -242,6 +281,14 @@ func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRep
 				Status: string(targetStatus),
 			},
 		})
+		if !wasReconnect && targetStatus != models.UserStatusOffline &&
+			containsPresenceUser(hub.GetVisibleOnlineUserIDs(), userID) {
+			if notifier := firstOnlineFriendNotifier(onlineFriendNotifiers); notifier != nil {
+				if notifyErr := notifier.NotifyOnline(ctx, userID); notifyErr != nil {
+					hubLogger.Error("failed to notify friends of online presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(notifyErr))
+				}
+			}
+		}
 		hubLogger.Info("user connected with status from pref_status", "area", "presence", "user_id", userID, "status", targetStatus)
 	}
 }
@@ -266,19 +313,15 @@ func userFullyDisconnectedCallback(
 	voiceService services.VoiceService,
 	p2pCallService services.P2PCallService,
 	debouncer *presenceOfflineDebouncer,
+	onlineFriendNotifiers ...services.OnlineFriendNotifier,
 ) ws.UserConnectionCallback {
 	return func(userID, _ string) {
-		// Invisibility is cleared SYNCHRONOUSLY, not inside the debounced
-		// transition (review 2026-08-13, MEDIUM): ws/handler.go sets
-		// SetInvisible(true) BEFORE `register <- client`, so a reconnecting
-		// invisible user exists in invisibleUsers while still absent from
-		// h.clients. A debounced fire in that handshake window would pass
-		// the GetOnlineUserIDs recheck and wipe the just-set flag for the
-		// rest of the session. Here, at real disconnect time, the user has
-		// just left h.clients and no reconnect handshake can predate us.
-		hub.SetInvisible(userID, false)
+		// Hub connection lifecycle owns the invisible flag. Do not clear it
+		// from this asynchronous callback: a reconnect can set the flag before
+		// this goroutine runs, even though the disconnect event was dispatched
+		// first. The Hub clears it when the final connection is truly removed.
 
-		scheduleOfflinePresenceTransition(debouncer, hub, userRepo, userID)
+		scheduleOfflinePresenceTransition(debouncer, hub, userRepo, userID, onlineFriendNotifiers...)
 
 		// Voice state is NOT cleaned here — WS disconnect != voice leave.
 		// LiveKit connection is separate; WS may reconnect shortly.
@@ -310,9 +353,9 @@ func userFullyDisconnectedCallback(
 // debounce interaction (schedule → cancel-on-reconnect → fire-time recheck)
 // is testable without constructing the voice/P2P service dependencies that
 // function ALSO drives synchronously (see presence_debounce_test.go).
-func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string) {
+func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub ws.EventPublisher, userRepo repository.UserRepository, userID string, onlineFriendNotifiers ...services.OnlineFriendNotifier) {
 	debouncer.schedule(userID, func(gen uint64) {
-		offlinePresenceTransition(hub, userRepo, debouncer, userID, gen)
+		offlinePresenceTransition(hub, userRepo, debouncer, userID, gen, onlineFriendNotifiers...)
 	})
 }
 
@@ -325,7 +368,7 @@ func scheduleOfflinePresenceTransition(debouncer *presenceOfflineDebouncer, hub 
 // debouncer's own mutex, so in the normal path cancel() always wins if the
 // reconnect happened before the timer fired; this is defense-in-depth, not
 // the primary mechanism.
-func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64) {
+func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRepository, debouncer *presenceOfflineDebouncer, userID string, gen uint64, onlineFriendNotifiers ...services.OnlineFriendNotifier) {
 	for _, connectedID := range hub.GetOnlineUserIDs() {
 		if connectedID == userID {
 			return
@@ -343,6 +386,7 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 	ctx, cancel := services.BroadcastContext()
 	defer cancel()
 
+	statusPersisted := false
 	if updateErr := userRepo.UpdateStatus(ctx, userID, models.UserStatusOffline); updateErr != nil {
 		if errors.Is(updateErr, pkg.ErrNotFound) {
 			// Expected after a hard delete: the row is gone by the time the
@@ -351,6 +395,8 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 		} else {
 			hubLogger.Error("failed to set offline status", "area", "presence", "user_id", userID, "err", pkg.ErrText(updateErr))
 		}
+	} else {
+		statusPersisted = true
 	}
 
 	// Post-write staleness check: a reconnect that landed DURING the write
@@ -368,6 +414,11 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 		}
 		return
 	}
+	if statusPersisted {
+		if notifier := firstOnlineFriendNotifier(onlineFriendNotifiers); notifier != nil {
+			notifier.ObserveOffline(userID)
+		}
+	}
 
 	hub.BroadcastToAll(ws.Event{
 		Op: ws.OpPresence,
@@ -379,38 +430,96 @@ func offlinePresenceTransition(hub ws.EventPublisher, userRepo repository.UserRe
 	hubLogger.Info("user disconnected, DB set to offline", "area", "presence", "user_id", userID, "grace", presenceOfflineGrace.String())
 }
 
+func firstOnlineFriendNotifier(notifiers []services.OnlineFriendNotifier) services.OnlineFriendNotifier {
+	if len(notifiers) == 0 {
+		return nil
+	}
+	return notifiers[0]
+}
+
+func containsPresenceUser(userIDs []string, userID string) bool {
+	for _, candidate := range userIDs {
+		if candidate == userID {
+			return true
+		}
+	}
+	return false
+}
+
 // presenceUpdateCallback persists a presence change and fans it out.
 // Fires on manual status changes and on auto-idle transitions alike.
-func presenceUpdateCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.PresenceManualUpdateCallback {
+type presenceStatePublisher interface {
+	ws.EventPublisher
+	IsInvisible(userID string) bool
+	CommitPresenceVisibility(userID, status string) bool
+}
+
+func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.UserRepository, onlineFriendNotifiers ...services.OnlineFriendNotifier) ws.PresenceManualUpdateCallback {
 	return func(userID string, status string, isAuto bool) {
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
+		// Auto updates include aggregate tab connect/disconnect and idle
+		// transitions. Do not let one of those clear a user's manually-set
+		// invisible state or broadcast an online-looking status.
+		wasInvisible := hubUserIsInvisible(hub, userID)
 		st := models.UserStatus(status)
-
-		if err := userRepo.UpdateStatus(ctx, userID, st); err != nil {
-			hubLogger.Error("failed to set status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+		if isAuto && wasInvisible && st != models.UserStatusOffline {
 			return
 		}
 
-		// Only persist pref_status for manual changes — auto-idle should not
-		// overwrite the user's preferred status, so idle detection can resume
-		// correctly after WS reconnect.
-		if !isAuto {
-			if err := userRepo.UpdatePrefStatus(ctx, userID, st); err != nil {
-				hubLogger.Error("failed to set pref_status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+		ctx, cancel := services.BroadcastContext()
+		defer cancel()
+		if isAuto {
+			user, err := userRepo.GetByID(ctx, userID)
+			if err != nil {
+				hubLogger.Error("failed to load preferred status for auto presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(err))
+				return
+			}
+			if user == nil {
+				hubLogger.Error("preferred status unavailable for auto presence", "area", "presence", "user_id", userID)
+				return
+			}
+			// Automatic idle/online transitions belong only to users whose
+			// persisted manual preference is online. This protects DND/idle
+			// selections from another tab's queued auto update. Empty is the
+			// legacy default and matches first-connect behavior (online).
+			if user.PrefStatus != "" && user.PrefStatus != models.UserStatusOnline {
+				return
 			}
 		}
 
-		hub.SetInvisible(userID, status == string(models.UserStatusOffline))
+		if isAuto {
+			if err := userRepo.UpdateStatus(ctx, userID, st); err != nil {
+				hubLogger.Error("failed to set status", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+				return
+			}
+		} else if err := userRepo.UpdateManualPresence(ctx, userID, st); err != nil {
+			hubLogger.Error("failed to set manual presence", "area", "presence", "status", status, "user_id", userID, "err", pkg.ErrText(err))
+			return
+		}
+
+		// Hub atomically applies a manual visibility transition only when this
+		// persisted preference is still current and the account is connected.
+		if !isAuto && !hub.CommitPresenceVisibility(userID, status) {
+			return
+		}
 
 		hub.BroadcastToAll(ws.Event{
 			Op: ws.OpPresence,
 			Data: ws.PresenceData{
 				UserID: userID,
 				Status: status,
+				IsAuto: isAuto,
 			},
 		})
+
+		if notifier := firstOnlineFriendNotifier(onlineFriendNotifiers); notifier != nil && !isAuto {
+			if st == models.UserStatusOffline {
+				notifier.ObserveOffline(userID)
+			} else if containsPresenceUser(hub.GetVisibleOnlineUserIDs(), userID) {
+				if notifyErr := notifier.NotifyOnline(ctx, userID); notifyErr != nil {
+					hubLogger.Error("failed to notify friends of online presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(notifyErr))
+				}
+			}
+		}
 
 		source := "manual"
 		if isAuto {
@@ -418,6 +527,10 @@ func presenceUpdateCallback(hub *ws.Hub, userRepo repository.UserRepository) ws.
 		}
 		hubLogger.Info("presence updated", "area", "presence", "user_id", userID, "status", status, "source", source)
 	}
+}
+
+func hubUserIsInvisible(hub presenceStatePublisher, userID string) bool {
+	return hub.IsInvisible(userID)
 }
 
 // channelTypingCallback validates the SENDER can read the channel before

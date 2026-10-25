@@ -1,0 +1,23 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Actual text composition from a focusable native child, enabled by a separate default-off device-local consent alongside preview/action consent. This is not merely navigation to the main application.",
+    "The child receives only a bounded verified channel label and opaque compose grant, never existing chat history, account keys or target identifiers. Explicit compose-button hit validation creates it; same-grant label updates do not steal focus.",
+    "The trusted application renderer revalidates owner, login generation, current target and SendMessages permission, then uses the normal messageStore encryption/send path with an explicit origin server. Source guards propagate through API options, including refresh redispatch; no plaintext fallback was introduced.",
+    "Drafts remain in child memory, clear only on confirmed sent or explicit discard/session teardown, and failures retain text with an unknown-delivery warning. Enter, Shift+Enter and IME behavior are covered. No automatic send retries occur.",
+    "Native correlation enforces exact composer/main frames, bounded text, one in-flight request, five-second timeout and 64 non-evicted request IDs per grant. Valid close events reach the app main renderer and rotate the grant/budget. Revocation, account/route changes and full-frame composer reload retire the old grant.",
+    "This slice covers currently viewed text server channels only; other conversation types and real-device acceptance remain open."
+  ],
+  "verification": [
+    "Final client regression: 327 files, 3084 tests passed, zero failed/pending. Report: C:/Users/PARS/AppData/Local/Temp/hichat-overlay-chat-compose-final-20261025.json.",
+    "Native TypeScript and complete native suite: 161 passed, one existing symlink-permission-dependent skip. Focused native composer contract/window checks: 19 passed.",
+    "Focused main controller tests: 17 passed. JSON/multipart API guard forwarding tests: four passed. Client production build passed with existing ineffective-dynamic-import warnings."
+  ],
+  "open": [
+    "Real Windows game, focus, click-through, DPI/multiple-monitor and two-client encrypted delivery acceptance; mocks do not prove an audible/visible device workflow.",
+    "DM, group and thread chat support, attachments and richer message tools in the overlay; independent widget placement; video and stream widgets.",
+    "Remaining P0-P11 requirements, final release review, Windows packaging/update delivery and explicit publication approval."
+  ],
+  "release": "No commit, push, merge, deployment or publication; overall acceptance remains incomplete."
+}

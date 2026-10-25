@@ -9,11 +9,12 @@ var (
 	ErrUnauthorized  = errors.New("unauthorized")
 	ErrForbidden     = errors.New("forbidden")
 	ErrAlreadyExists = errors.New("already exists")
+	ErrConflict      = errors.New("conflict")
 	ErrBadRequest    = errors.New("bad request")
 	ErrInternal      = errors.New("internal error")
 
 	// E2EE errors
-	ErrDeviceNotFound   = errors.New("device not found")
-	ErrPrekeyExhausted  = errors.New("prekey pool exhausted")
-	ErrInvalidKey       = errors.New("invalid cryptographic key")
+	ErrDeviceNotFound  = errors.New("device not found")
+	ErrPrekeyExhausted = errors.New("prekey pool exhausted")
+	ErrInvalidKey      = errors.New("invalid cryptographic key")
 )

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "verified_at": "2026-10-22T22:56:53Z",
+  "goal_turn_classification": "progress",
+  "scope": "Opt-in TOTP, recovery codes and login gating within P2. Not full P2, installed-Windows, physical-authenticator, P0-P11 or release acceptance.",
+  "implemented": [
+    "Additive migrations 090/091 persist account-bound encrypted TOTP secrets, expiring/supersedable setup state, replay counters, recovery hashes, replacement generation and a shared durable attempt budget.",
+    "Password-authenticated setup, current-code confirmation, server-side cancellation and password-plus-factor disabling. Recovery replacement uses a generation compare-and-swap to prevent two stale requests both succeeding.",
+    "Six-digit SHA-1 TOTP with 30-second steps and at most one adjacent step; successful enrollment and login verification consume the step atomically.",
+    "Ten independently random 128-bit recovery codes are displayed once. Account-separated SHA-256 hashes are stored; one atomic SQL operation consumes a code. Replacing or disabling invalidates old codes.",
+    "Login checks MFA only after password/account-state verification and before presence changes, session rows, access tokens or cookie issuance. MFA challenges do not create partial authenticated sessions.",
+    "Account-bound management requests reject stale account IDs. Secret-bearing responses use no-store and internal MFA records cannot serialize secrets through JSON.",
+    "TR/EN settings enrollment, one-time code presentation/acknowledgement, regeneration, explicit disable confirmation, errors/retry and unsaved-secret navigation guards. Manual authenticator-key entry is provided; QR scanning is not.",
+    "Login UI accepts an authenticator or recovery code and focuses the challenge. Changing identity clears the previous factor. A saved desktop password cannot bypass MFA; manual password/factor entry remains required.",
+    "Credential login does not auto-refresh/replay its 401 challenge. MFA writes can proactively refresh an expired session but do not retry a one-time-code rejection automatically.",
+    "Five security attempts per account per five-minute window are persisted in SQLite. A server restart does not reset the stored budget. Other P2 security-attempt limits still require implementation/acceptance.",
+    "User hard deletion explicitly removes MFA state even when remote database foreign keys are not enforced. Key preservation and the prohibition on rollback to an MFA-unaware server are documented in implementation/MFA_OPERATIONS.md."
+  ],
+  "standards": [
+    {"title": "RFC 6238: TOTP", "url": "https://www.rfc-editor.org/rfc/rfc6238", "use": "SHA-1 profile, time window, single-use requirement and Appendix B SHA-1 vectors"}
+  ],
+  "automated_checks": [
+    {"command": "go test ./... -count=1", "cwd": "server", "result": "passed", "note": "Complete Go packages passed after the final generation migration. This does not claim opt-in YouTube/LiveKit or remote-libSQL acceptance."},
+    {"command": "go test ./repository ./services ./handlers ./pkg/crypto . -run 'Test(SQLiteMFA|MFA|TOTP|InitRoutes)' -count=1", "cwd": "server", "result": "passed", "note": "Includes real SQLite setup CAS/expiry, 12 competing recovery consumers with one winner, cancellation, replay, replacement, disabling, persisted attempts, account-bound encryption, login gate and cookie-free challenge errors. A focused repository/service check also passed after adding generation CAS."},
+    {"command": "npm test", "cwd": "client", "result": "passed", "files": 158, "tests": 1724, "note": "Full run before the final identity-change challenge reset and its new test; those final changes were covered by the focused run below."},
+    {"command": "npx vitest run src/components/auth/LoginPage.mfa.test.tsx src/components/auth/LoginPage.test.tsx src/components/settings/MFASettings.test.tsx src/stores/authStore.test.ts src/api/client.test.ts", "cwd": "client", "result": "passed", "files": 5, "tests": 65},
+    {"command": "npx tsc -b", "cwd": "client", "result": "passed"},
+    {"command": "npx eslint src/api/client.ts src/api/auth.ts src/api/mfa.ts src/components/auth/LoginPage.tsx src/components/auth/LoginPage.mfa.test.tsx src/components/settings/MFASettings.tsx src/components/settings/MFASettings.test.tsx src/stores/authStore.ts", "cwd": "client", "result": "passed", "errors": 0},
+    {"command": "VITE_UI_SHELL_V2=true npm run build", "cwd": "client", "result": "passed", "modules": 1578, "note": "Web production build only; existing Vite loader, chunk, dependency eval and ineffective import warnings remain. Not an installer or update release."},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-mfa-final.exe .", "cwd": "server", "result": "passed"},
+    {"command": "git diff --check", "cwd": ".", "result": "passed", "note": "Line-ending conversion notices were emitted."}
+  ],
+  "local_runtime": {
+    "environment": "Reused Ego Lite task space 10, local web 127.0.0.1:3131 and isolated SQLite API 127.0.0.1:9191. Only throwaway fixtures were changed. A fixed throwaway encryption key was used across the restart; it is not a production key.",
+    "observations": [
+      "Browser: setup key was entered into the automation's independent Node HMAC generator, then confirmation displayed ten recovery codes.",
+      "Browser: acknowledging the recovery codes removed them from the view.",
+      "Browser: password-only login requested a factor; the consumed enrollment code was rejected; an unused recovery code completed login.",
+      "Browser: disabling required password, another unused recovery code and a separate confirmation. A later independent HTTP password-only login succeeded.",
+      "HTTP fixture B: enrolled before restart; the running process was observed stopping and returning. Enabled MFA remained required; a persisted recovery code completed login and another code disabled the fixture MFA.",
+      "After the restart/attempt probes, an independent authenticated request observed MFA disabled and received 429 MFA_RATE_LIMITED on another wrong-password setup attempt.",
+      "At 1440x900 and 390x844, the subsection selection and controls were reachable. Mobile document width was 390; no setup key or recovery codes were present in the captured images."
+    ],
+    "screenshots_visually_inspected": [
+      "implementation/verification/p2-mfa-1440.png",
+      "implementation/verification/p2-mfa-390.png"
+    ],
+    "execution_notes": [
+      "The first service-test fixture omitted the existing users.status constraint; the fixture was corrected to offline and the subsequent service and full-package checks passed.",
+      "An attempt-budget probe exited without captured console text. Its detailed fifth/sixth claims are not relied on; a separate request directly observed the final 429 state. Durable budget behavior is also tested against real SQLite.",
+      "Both throwaway fixtures were left with MFA disabled after the runtime checks. One remains temporarily subject to the intentional security-attempt window.",
+      "No physical authenticator application, second physical device, installed Windows shell, remote libSQL, live email delivery or live AV/music acceptance was performed."
+    ]
+  },
+  "remaining": [
+    "Actual authenticator interoperability, Windows/web independent-client acceptance, remote-libSQL, backup/restore and MFA-aware rollback acceptance.",
+    "P2 session list/revocation, email verification, account lifecycle/export/privacy and comprehensive sensitive-operation limits.",
+    "All other pending P0-P11 implementation and acceptance gates, followed by GitHub commit/push/conflict resolution/merge and Windows update build/publication."
+  ],
+  "delivery": {"commit_push_merge_performed": false, "windows_release_performed": false, "production_deployment_performed": false}
+}

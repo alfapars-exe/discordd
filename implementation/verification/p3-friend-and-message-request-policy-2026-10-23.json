@@ -1,0 +1,35 @@
+{
+  "items": ["p3.message-requests", "p3.friend-everyone", "p3.friend-mutual", "p3.friend-server"],
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "friend_request_rules": "The target account stores everyone, friends-of-friends and shared-server rules as validated preferences. The friendship service evaluates them before creating a new request, so direct API calls cannot bypass the controls.",
+    "mutual_source": "Mutual eligibility is derived from accepted friendship records for the target and a second accepted-pair lookup for the sender.",
+    "server_source": "Shared-server eligibility intersects server membership IDs read from the server repository; it does not trust client claims.",
+    "compatibility": "Accounts without the new preference retain the previous everyone-enabled behavior until they save a stricter rule.",
+    "message_requests": "A first message from a permitted nonfriend moves the channel atomically to pending, records the initiator and notification, limits the initiator to one message, and only lets the recipient accept or decline."
+  },
+  "automated_verification": [
+    {
+      "command": "go test ./services ./models -run 'Test(FriendRequestPolicy|Friendship|UpdatePreferences)' -count=1",
+      "working_directory": "server",
+      "result": "pass"
+    },
+    {
+      "command": "go test ./services -run 'Test(SendMessage_(pendingChannel|firstMessageToMessageRequestUser|secondMessageToMessageRequestUser|friendsOnly|acceptedFriends)|DMAcceptRequest|DMDeclineRequest|DMAcceptPendingChannels|FriendshipSendRequest)' -count=1 -v",
+      "working_directory": "server",
+      "result": "pass; covers direct-policy rejection, mutual auto-accept, pending state, friends-only enforcement and request settlement"
+    },
+    {
+      "command": "vitest run client/src/components/friends/sendIntroMessage.test.ts",
+      "working_directory": ".",
+      "result": "pass; 5 tests"
+    },
+    {
+      "command": "tsc -b client/tsconfig.json",
+      "working_directory": ".",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Use two signed-in browser clients to exercise each rule across reload, then accept and decline a message request while observing both clients."
+}

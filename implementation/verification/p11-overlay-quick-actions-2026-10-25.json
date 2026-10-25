@@ -1,0 +1,24 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Quick-actions visibility and locked-button click consent are separate default-off device preferences, validated/persisted in the existing voice settings slice and excluded from account synchronization/cache import. Only mute/deafen commands are exposed; remaining widget types are not represented as implemented.",
+    "Native Windows uses the existing voice overlay plus one owned nonfocusable 88x40 toolbar surface using the same local renderer entry. Native setShape restricts drawing and hit-testing to two fixed 40x40 DIP islands separated by an eight-DIP gap. The locked voice window remains wholly click-through. No pointer polling, raw mouse hook, screen capture or pointer history is used.",
+    "An initially attempted 50ms cursor polling policy was removed after review identified a fast-click race. The final native shape approach enforces the gap at the OS window-region boundary. Shapes are main-owned; the renderer cannot submit arbitrary regions. Shape failure hides the toolbar and surfaces an error; disabling/re-enabling the feature permits retry.",
+    "Action IPC accepts only the exact current toolbar renderer/main frame (or the voice renderer while explicitly unlocked), a visible authorized overlay, enabled quick actions, the current auth/join/channel session and an actual matching cursor target. A 250ms bound rejects duplicate actions. The main app rechecks current device consent/session and calls the existing real useVoice mute/deafen commands rather than directly inventing UI state.",
+    "Toolbar rendering uses fixed unscaled hit targets, actual self-muted/deafened status, disabled controls without consent, single-flight submission, explicit rejection errors and keyed session lifecycle fencing. Quick actions can remain visible during speaking-only silence while Off/no-call states still hide. Native hide/revoke/close/load callbacks are fenced against resurrecting stale surfaces."
+  ],
+  "verification": [
+    "Electron TypeScript compilation and full native suite passed: 145 passed, zero failed, one previously documented host symlink-permission skip. Includes fixed negative-coordinate regions, exclusive edges/gap, consent/frame/session/action/rate checks, native shape/window lifecycle configuration and toolbar geometry during silence.",
+    "Independent read-only follow-up confirmed the prior polling race was structurally removed and found no actionable new stale-session/focus/hit-region mismatch. Mocked shapes do not establish real Windows DPI or physical click-through behavior.",
+    "Final client TypeScript and scoped ESLint passed. Full client regression passed: 310 files, 2877 tests, zero failures; report C:/Users/PARS/AppData/Local/Temp/hichat-overlay-actions-20261025.json. Production Vite build passed with existing ineffective-dynamic-import warnings.",
+    "Native suite re-passed after adding shape creation failure/retry coverage and fencing a stale load callback from clearing a newer surface's pending-load state. All 32 coverage-validator regressions passed; structure VALID, with 41 missing and 175 implemented_unverified. No behavior was marked accepted."
+  ],
+  "open": [
+    "Physical Windows hit-testing at 100% and greater-than-100% DPI, fast pointer motion/clicks, focus preservation and actual microphone/playback effect in a real call",
+    "Quick actions are only one additional widget; notifications, chat, activity, video and streams widgets remain missing, so p11.overlay-widgets intentionally remains missing",
+    "Actual shape failure/retry and packaged renderer/helper support in a clean Windows installation",
+    "Remaining P0-P11 acceptance, signing/update verification and separate production release approval"
+  ],
+  "release": "No commit, push, merge, Windows update publication or production deployment. Goal remains incomplete."
+}

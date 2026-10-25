@@ -1,4 +1,9 @@
 {
+  "historyLoadFailed": "Messages could not be loaded. Please try again.",
+  "reportMessageContextLabel": "Message context",
+  "reportMessageHint": "The message reference is attached. Its text is shared only if you choose below.",
+  "reportEncryptedMessageHint": "This message is end-to-end encrypted. HiChat cannot read it unless you explicitly share the decrypted text.",
+  "reportShareMessageContent": "Share this message's text with the moderation team",
   "viewProfile": "View Profile",
   "closeDM": "Close DM",
   "markAsRead": "Mark as Read",

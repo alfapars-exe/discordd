@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Confirmed file receipts now traverse authenticated source manifests, validating the entire ancestry before writes. Ancestors are acknowledged first; interrupted local writes can be repeated idempotently without marking a descendant complete before its older source. Traversal is scoped to the account/group, bounded to 256 positions, and rejects cycles, missing records, malformed mappings and invalid source indices.",
+    "Both direct failed-file retries and manual review-to-composer sends preserve file-identity provenance. Provenance-aware direct retries retain their source records rather than deleting ancestry needed by subsequent partial retries. Legacy no-mapping operations keep their existing cleanup behavior.",
+    "Successful ancestor acknowledgements update all matching queued source snapshots. No message POST is introduced by ancestry traversal; attachment bytes and encrypted wire payloads remain unchanged."
+  ],
+  "verification": [
+    "Real IndexedDB/WebCrypto tests cover three-level transitive acknowledgements, repeated receipt application, cycle/missing-parent rejection before writes, and quota failure between ancestor and child acknowledgement followed by safe completion.",
+    "Store integration covers partial source send, partial reviewed send, then successful direct retry. Both retained source records contain the confirmed file acknowledgement; exactly three intended message POSTs occur.",
+    "The first affected-suite run exposed an old mock/test assumption that direct retries immediately delete the source. Updated the mocked confirmed attachment outcome, receipt dependency and assertion to match intentional ancestry retention; existing tests were not disabled.",
+    "Final tsc -b and targeted ESLint passed. Full client regression passed: 228 files / 2181 tests in 47.00s. Vite production web build passed in 701ms. Existing mocked API/React and build warning categories remain unsuppressed. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "Missing-source repair/discard UX, unknown-index review provenance, concurrent tab deletion, real browser/process restart, large-file pressure and two-client encrypted media acceptance remain open. Retained acknowledged ancestors are resolved through existing source-result restoration, not silently discarded.",
+    "This verifies local automated receipt behavior, not overall P4 or P0-P11 acceptance. No Windows installer/update acceptance, commit, push, merge, production migration or release was performed."
+  ]
+}

@@ -8,6 +8,8 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const cryptoState = vi.hoisted(() => ({ initStatus: "uninitialized" }));
+
 vi.mock("../api/saved", () => ({
   SAVED_LIMIT_REACHED: "saved_limit_reached",
   listSaved: vi.fn(),
@@ -23,7 +25,7 @@ vi.mock("../crypto/dmEncryption", () => ({
   decryptDMMessages: vi.fn(async (msgs: unknown[]) => msgs),
 }));
 vi.mock("./e2eeStore", () => ({
-  useE2EEStore: { getState: () => ({ initStatus: "uninitialized" }) },
+  useE2EEStore: { getState: () => cryptoState },
 }));
 const addToast = vi.fn();
 vi.mock("./toastStore", () => ({
@@ -36,6 +38,7 @@ vi.mock("../i18n", () => ({
 import { useSavedStore } from "./savedStore";
 import * as api from "../api/saved";
 import type { SavedMessage } from "../types";
+import { decryptChannelMessages } from "../crypto/channelEncryption";
 
 function makeRow(id: string, overrides: Partial<SavedMessage> = {}): SavedMessage {
   return {
@@ -84,8 +87,20 @@ function resetStore() {
 }
 
 beforeEach(() => {
+  cryptoState.initStatus = "uninitialized";
   resetStore();
   vi.clearAllMocks();
+});
+
+it("decrypts mixed-server bookmarks using each message's origin server", async () => {
+  cryptoState.initStatus = "ready";
+  const rows = [makeRow("A"), makeRow("B")];
+  rows[0].message = { ...rows[0].message!, server_id: "server-A", encryption_version: 1, ciphertext: "encrypted-A" };
+  rows[1].message = { ...rows[1].message!, server_id: "server-B", encryption_version: 1, ciphertext: "encrypted-B" };
+  vi.mocked(api.listSaved).mockResolvedValue({ success: true, data: { saved: rows, has_more: false, next_before: null } });
+  await useSavedStore.getState().fetchInitial();
+  expect(decryptChannelMessages).toHaveBeenCalledWith([expect.objectContaining({ id: "m-A" })], "server-A");
+  expect(decryptChannelMessages).toHaveBeenCalledWith([expect.objectContaining({ id: "m-B" })], "server-B");
 });
 
 describe("savedStore — id index", () => {

@@ -118,6 +118,9 @@ func (stubReportRepo) UpdateStatus(context.Context, string, models.ReportStatus,
 func (stubReportRepo) HasPendingReport(context.Context, string, string) (bool, error) {
 	return false, nil
 }
+func (stubReportRepo) HasPendingMessageReport(context.Context, string, string) (bool, error) {
+	return false, nil
+}
 func (stubReportRepo) CreateAttachment(context.Context, *models.ReportAttachment) error {
 	return nil
 }

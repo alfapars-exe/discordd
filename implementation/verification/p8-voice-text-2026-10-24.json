@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "implementation": [
+    "Ctrl+U and an accessible toggle switch the current voice destination between its voice visuals and existing encrypted channel ChatArea, not a new tab or split workspace. AppLayout VoiceProvider ownership remains unchanged.",
+    "Voice text mounting requires resolved ViewChannel and ReadMessages plus fetched overrides; ConnectVoice is not required merely to read. Revoked read hides text immediately. Click and shortcut handlers check captured account/auth generation and current voice destination.",
+    "Voice channel override editor now exposes ReadMessages and SendMessages; normal message-service permissions and encryption paths remain authoritative.",
+    "PageUp/PageDown, focus-on-typing, channel read/link actions and oldest-unread routing support the visible voice text surface. Server unread/read-all queries include text and voice, exclude audit, and unread responses retain per-channel read-permission filtering."
+  ],
+  "verification": [
+    "Agent DestinationView and permission editor suites: 17 tests passed; scoped lint and TypeScript passed.",
+    "Parent routing/oldest/page/focus suites: 4 files, 38 tests passed.",
+    "Repository/service focused checks passed for voice oldest unread, author exclusion, read-all reset, audit exclusion and View+Read without ConnectVoice; View-only and departed membership filtered.",
+    "Parent Vite production build passed; combined full client/server regression results are recorded in p8-actions-2026-10-24.json."
+  ],
+  "open": ["Real two-client voice connection and media continuity through text toggle", "Real browser/Windows voice text send/history and override revocation", "Complete P8 context coverage and accessibility acceptance"],
+  "release": "No installer or production publication. Visual ownership evidence and automated tests are not physical audio continuity acceptance."
+}

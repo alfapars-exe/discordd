@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 )
@@ -356,19 +357,52 @@ func (r *sqliteDMRepo) UpdateMessage(ctx context.Context, id string, req *models
 }
 
 func (r *sqliteDMRepo) DeleteMessage(ctx context.Context, id string) error {
+	db := database.RawDB(r.db)
+	if db == nil {
+		return fmt.Errorf("DM message deletion requires transaction-capable database")
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var channelID, authorID string
+	if err := tx.QueryRowContext(ctx, `SELECT dm_channel_id,user_id FROM dm_messages WHERE id=?`, id).Scan(&channelID, &authorID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: DM message not found", pkg.ErrNotFound)
+		}
+		return err
+	}
+	// Keep denormalized unread counts and read watermarks in sync with message
+	// deletion, including on deployments where SQLite foreign keys are off.
+	if _, err := tx.ExecContext(ctx, `UPDATE dm_reads SET
+	 unread_count=CASE WHEN user_id<>? AND (
+	   last_read_message_id IS NULL OR NOT EXISTS(SELECT 1 FROM dm_messages cursor WHERE cursor.id=dm_reads.last_read_message_id AND cursor.dm_channel_id=dm_reads.dm_channel_id) OR
+	   EXISTS(SELECT 1 FROM dm_messages candidate JOIN dm_messages seen ON seen.id=dm_reads.last_read_message_id
+	     WHERE candidate.id=? AND candidate.dm_channel_id=dm_reads.dm_channel_id AND
+	       (candidate.created_at>seen.created_at OR (candidate.created_at=seen.created_at AND candidate.id>seen.id)))
+	 ) THEN CASE WHEN unread_count>0 THEN unread_count-1 ELSE 0 END ELSE unread_count END,
+	 last_read_message_id=CASE WHEN last_read_message_id=? THEN (
+	   SELECT previous.id FROM dm_messages previous JOIN dm_messages target ON target.id=? AND target.dm_channel_id=previous.dm_channel_id
+	   WHERE previous.dm_channel_id=? AND (previous.created_at<target.created_at OR (previous.created_at=target.created_at AND previous.id<target.id))
+	   ORDER BY previous.created_at DESC,previous.id DESC LIMIT 1
+	 ) ELSE last_read_message_id END
+	 WHERE dm_channel_id=?`, authorID, id, id, id, channelID, channelID); err != nil {
+		return err
+	}
 	// Explicit child delete before the parent: prod's remote libSQL/Turso
 	// branch never enables the foreign_keys PRAGMA, so ON DELETE CASCADE
 	// does not fire there (same rule as DeleteChannel in
 	// sqlite_dm_channels.go).
-	if _, err := r.db.ExecContext(ctx, "DELETE FROM dm_attachments WHERE dm_message_id = ?", id); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM dm_attachments WHERE dm_message_id = ?", id); err != nil {
 		return fmt.Errorf("failed to delete DM message attachments: %w", err)
 	}
 	// saved_messages (migration 083): same unenforced cascade, same explicit
 	// delete — see sqliteMessageRepo.Delete.
-	if _, err := r.db.ExecContext(ctx, "DELETE FROM saved_messages WHERE dm_message_id = ?", id); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM saved_messages WHERE dm_message_id = ?", id); err != nil {
 		return fmt.Errorf("failed to delete saved references to DM message: %w", err)
 	}
-	result, err := r.db.ExecContext(ctx, "DELETE FROM dm_messages WHERE id = ?", id)
+	result, err := tx.ExecContext(ctx, "DELETE FROM dm_messages WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete DM message: %w", err)
 	}
@@ -380,12 +414,15 @@ func (r *sqliteDMRepo) DeleteMessage(ctx context.Context, id string) error {
 	if rows == 0 {
 		return fmt.Errorf("%w: DM message not found", pkg.ErrNotFound)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // SearchMessages performs FTS5 full-text search on DM messages.
 // Returns paginated results ranked by BM25, plus total count for pagination.
 func (r *sqliteDMRepo) SearchMessages(ctx context.Context, channelID string, searchQuery string, limit, offset int) ([]models.DMMessage, int, error) {
+	if database.IsPostgres(r.db) {
+		return r.searchPostgres(ctx, channelID, searchQuery, limit, offset)
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}

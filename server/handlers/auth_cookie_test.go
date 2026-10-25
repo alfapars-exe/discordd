@@ -35,10 +35,12 @@ import (
 // records nothing else. Following the testutil idiom of optional *Fn hooks
 // with inert defaults.
 type stubAuthService struct {
-	registerFn     func(ctx context.Context, req *models.CreateUserRequest) (*services.AuthTokens, error)
-	loginFn        func(ctx context.Context, req *models.LoginRequest) (*services.AuthTokens, error)
-	refreshTokenFn func(ctx context.Context, refreshToken string) (*services.AuthTokens, error)
-	logoutFn       func(ctx context.Context, refreshToken string) error
+	registerFn       func(ctx context.Context, req *models.CreateUserRequest) (*services.AuthTokens, error)
+	loginFn          func(ctx context.Context, req *models.LoginRequest) (*services.AuthTokens, error)
+	refreshTokenFn   func(ctx context.Context, refreshToken string) (*services.AuthTokens, error)
+	logoutFn         func(ctx context.Context, refreshToken string) error
+	changePasswordFn func(context.Context, string, string, string) error
+	changeEmailFn    func(context.Context, string, string, string) error
 }
 
 const (
@@ -91,8 +93,18 @@ func (s *stubAuthService) GenerateMediaToken(_ string) (string, error) {
 	return "stub-media-token", nil
 }
 
-func (s *stubAuthService) ChangePassword(_ context.Context, _, _, _ string) error { return nil }
-func (s *stubAuthService) ChangeEmail(_ context.Context, _, _, _ string) error    { return nil }
+func (s *stubAuthService) ChangePassword(ctx context.Context, id, current, next string) error {
+	if s.changePasswordFn != nil {
+		return s.changePasswordFn(ctx, id, current, next)
+	}
+	return nil
+}
+func (s *stubAuthService) ChangeEmail(ctx context.Context, id, password, email string) error {
+	if s.changeEmailFn != nil {
+		return s.changeEmailFn(ctx, id, password, email)
+	}
+	return nil
+}
 func (s *stubAuthService) ForgotPassword(_ context.Context, _ string) (int, error) {
 	return 0, nil
 }

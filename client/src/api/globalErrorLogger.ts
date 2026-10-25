@@ -55,6 +55,21 @@ function truncate(s: string, max: number): string {
 }
 
 /**
+ * Browsers reject the output-sink operation when a previously selected
+ * communications device disappears (USB/Bluetooth unplug, remote desktop,
+ * or a device switch in the OS). This is recoverable audio routing state,
+ * not an application failure; the voice output path falls back to default.
+ */
+export function isMissingAudioOutputDeviceRejection(reason: unknown): boolean {
+  if (!(reason instanceof Error)) return false;
+  const message = reason.message.toLowerCase();
+  return reason.name === "NotFoundError" &&
+    message.includes("audiocontext.setsinkid") &&
+    message.includes("device") &&
+    message.includes("not found");
+}
+
+/**
  * Reads navigator.connection live (not from clientLog's cache) so online/offline
  * events report the connection state at the moment of the event, not at the
  * moment the cache was first populated.
@@ -99,6 +114,10 @@ export function installGlobalErrorLogger(): void {
 
   window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
     const reason = event.reason;
+    if (isMissingAudioOutputDeviceRejection(reason)) {
+      event.preventDefault();
+      return;
+    }
     const isError = reason instanceof Error;
     logToServer("error", "client_unhandled_rejection", {
       reason: truncate(isError ? reason.message : String(reason), MAX_MESSAGE_LEN),

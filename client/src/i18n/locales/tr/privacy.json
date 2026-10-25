@@ -30,7 +30,7 @@
   "deletionDesc": "Uygulama ayarlarından hesap silme talebinde bulunabilirsiniz. 14 günlük bekleme süresinin ardından (bu süre içinde iptal edebilirsiniz) profil bilgileriniz, yüklediğiniz dosyalar ve kişisel verileriniz kalıcı olarak silinir. Mesajlarınız sohbet bütünlüğü için korunur ancak anonim olarak \"Silinmiş Kullanıcı\" şeklinde gösterilir. Direkt mesaj konuşmaları karşı taraf için görünür olmaya devam eder.",
 
   "contactTitle": "İletişim",
-  "contactDesc": "Gizlilikle ilgili sorularınız için GitHub deposunda bir issue açabilir veya uygulama üzerinden bize ulaşabilirsiniz.",
+  "contactDesc": "Gizlilikle ilgili sorularınız için uygulama içi geri bildirim özelliğini kullanabilirsiniz.",
 
-  "footerCopy": "© 2026 HiChat! — Açık kaynak, özgür iletişim."
+  "footerCopy": "© 2026 HiChat! — Özel iletişim."
 }

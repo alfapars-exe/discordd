@@ -19,6 +19,26 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
+func TestMusicErrorCode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"nil", nil, ""},
+		{"unclassified stays internal", errors.New("private provider details"), ""},
+		{"missing binary", fmt.Errorf("lookup: %w", errToolMissing), "MUSIC_TOOL_MISSING"},
+		{"classified provider rejection", &trackPlaybackError{Reason: reasonBotCheck, err: errors.New("private stderr")}, "MUSIC_BOT_CHECK"},
+		{"wrapped classified rejection", fmt.Errorf("resolve: %w", &trackPlaybackError{Reason: reasonUnavailable, err: errors.New("private stderr")}), "MUSIC_UNAVAILABLE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MusicErrorCode(tc.err); got != tc.want {
+				t.Fatalf("code = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestClassifyPlaybackFailure(t *testing.T) {
 	// The real pump error when yt-dlp dies before writing a byte.
 	oggEOF := errors.New("oggreader init: EOF")

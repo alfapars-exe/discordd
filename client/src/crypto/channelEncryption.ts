@@ -169,15 +169,21 @@ function withDistributionLock<T>(
  * @param userId - Sender user ID
  * @param deviceId - This device's ID
  * @param plaintext - Unencrypted message text
+ * @param explicitServerId - Origin server; captured before asynchronous work
  */
 export async function encryptChannelMessage(
   channelId: string,
   userId: string,
   deviceId: string,
-  plaintext: string
+  plaintext: string,
+  explicitServerId?: string
 ): Promise<SenderKeyMessage> {
+  // Navigation can change the active server while a file is encrypted or a
+  // distribution waits for its lock. Every roster/upload belongs to the origin.
+  const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
+  if (!serverId) throw new Error("No origin server");
   await withDistributionLock(channelId, () =>
-    ensureDistribution(channelId, userId, deviceId)
+    ensureDistribution(serverId, channelId, userId, deviceId)
   );
 
   // Encrypt with Sender Key — single ciphertext, all members decrypt
@@ -195,6 +201,7 @@ export async function encryptChannelMessage(
  * protects against.
  */
 async function ensureDistribution(
+  serverId: string,
   channelId: string,
   userId: string,
   deviceId: string
@@ -211,24 +218,22 @@ async function ensureDistribution(
   // rotation, since a rotation re-reads the roster anyway.
   let roster: LoadedRoster | null = null;
   if (!rotate && recipientsNeedRecheck(channelId)) {
-    const serverId = useServerStore.getState().activeServerId;
-    if (serverId) {
-      roster = await loadRoster(serverId, channelId, userId, deviceId);
-      const existing = await keyStorage.getSenderKey(
-        channelId,
-        userId,
-        deviceId
-      );
-      // A fingerprint mismatch means some device on the current roster holds
-      // no envelope for this key. An exact match means the roster only
-      // *looked* like it changed — keep ratcheting, no rotation cost.
-      rotate = !existing || existing.recipientFingerprint !== roster.fingerprint;
-      markRecipientsChecked(channelId);
-    }
+    roster = await loadRoster(serverId, channelId, userId, deviceId);
+    const existing = await keyStorage.getSenderKey(
+      channelId,
+      userId,
+      deviceId
+    );
+    // A fingerprint mismatch means some device on the current roster holds
+    // no envelope for this key. An exact match means the roster only
+    // *looked* like it changed — keep ratcheting, no rotation cost.
+    rotate = !existing || existing.recipientFingerprint !== roster.fingerprint;
+    markRecipientsChecked(channelId);
   }
 
   if (rotate) {
     const distributed = await createAndUploadDistribution(
+      serverId,
       channelId,
       userId,
       deviceId,
@@ -418,14 +423,12 @@ async function loadRoster(
  *          nobody to distribute to (see the empty-roster branch).
  */
 async function createAndUploadDistribution(
+  serverId: string,
   channelId: string,
   userId: string,
   deviceId: string,
   prefetched: LoadedRoster | null
 ): Promise<boolean> {
-  const serverId = useServerStore.getState().activeServerId;
-  if (!serverId) throw new Error("No active server");
-
   const roster =
     prefetched ?? (await loadRoster(serverId, channelId, userId, deviceId));
 
@@ -611,8 +614,12 @@ export async function decryptChannelMessage(
   senderUserId: string,
   channelId: string,
   ciphertext: string,
-  senderDeviceId: string
+  senderDeviceId: string,
+  explicitServerId?: string | null,
+  isCurrent: () => boolean = () => true
 ): Promise<E2EEPayload | null> {
+  if (!isCurrent()) return null;
+  const serverId = explicitServerId !== undefined ? explicitServerId : useServerStore.getState().activeServerId;
   // Parse the Sender Key message
   let senderKeyMsg: SenderKeyMessage;
   try {
@@ -625,28 +632,33 @@ export async function decryptChannelMessage(
   // If we don't have the sender's sender key, fetch it from the server
   try {
     await ensureSenderKeyForDecryption(
+      serverId,
       channelId,
       senderUserId,
       senderDeviceId,
-      senderKeyMsg.distributionId
+      senderKeyMsg.distributionId,
+      isCurrent
     );
   } catch (err) {
+    if (!isCurrent()) return null;
     console.error(
       `[channelEncryption] Failed to fetch sender key for ${senderUserId}:${senderDeviceId}:`,
       err
     );
     return null;
   }
+  if (!isCurrent()) return null;
 
   // Decrypt with Sender Key
   const plaintext = await senderKeyProtocol.decryptGroupMessage(
     channelId,
     senderUserId,
     senderDeviceId,
-    senderKeyMsg
+    senderKeyMsg,
+    isCurrent
   );
 
-  if (plaintext === null) return null;
+  if (plaintext === null || !isCurrent()) return null;
 
   // Parse structured payload — separate content + file_keys
   return decodePayload(plaintext);
@@ -668,17 +680,21 @@ export async function decryptChannelMessage(
  * leaving the key exactly as it was.
  */
 async function ensureSenderKeyForDecryption(
+  serverId: string | null,
   channelId: string,
   senderUserId: string,
   senderDeviceId: string,
-  distributionId: string
+  distributionId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  if (!isCurrent()) return;
   // Check whether a sender key exists and matches the correct distribution
   const existingKey = await keyStorage.getSenderKey(
     channelId,
     senderUserId,
     senderDeviceId
   );
+  if (!isCurrent()) return;
 
   // ⛔ Install only what we do not already have. Rotation is the SENDER's
   // decision and reaches us as a NEW distributionId; there is no such thing as
@@ -699,7 +715,6 @@ async function ensureSenderKeyForDecryption(
 
   if (!needsKey && !needsInitialKeyRepair) return;
 
-  const serverId = useServerStore.getState().activeServerId;
   if (!serverId) return;
 
   const myDeviceId = useE2EEStore.getState().localDeviceId;
@@ -707,6 +722,7 @@ async function ensureSenderKeyForDecryption(
 
   // Rows come back pre-filtered to this device by the server.
   const res = await e2eeApi.fetchGroupSessions(serverId, channelId, myDeviceId);
+  if (!isCurrent()) return;
   if (!res.success || !res.data) return;
 
   const row = res.data.find(
@@ -723,8 +739,10 @@ async function ensureSenderKeyForDecryption(
     const sealed = await signalProtocol.decryptMessage(
       senderUserId,
       senderDeviceId,
-      wireMessage
+      wireMessage,
+      isCurrent
     );
+    if (!isCurrent()) return;
     distribution = JSON.parse(sealed);
   } catch (err) {
     console.error(
@@ -741,7 +759,8 @@ async function ensureSenderKeyForDecryption(
       channelId,
       senderUserId,
       senderDeviceId,
-      distribution
+      distribution,
+      isCurrent
     );
     return;
   }
@@ -749,7 +768,8 @@ async function ensureSenderKeyForDecryption(
   if (needsInitialKeyRepair && existingKey) {
     // Preserve iteration/chainKey — only the rewind anchor is restored.
     existingKey.initialChainKey = fromBase64(distribution.chainKey);
-    await keyStorage.saveSenderKey(existingKey);
+    if (!isCurrent()) return;
+    await keyStorage.saveSenderKey(existingKey, isCurrent);
   }
 }
 
@@ -768,8 +788,15 @@ async function ensureSenderKeyForDecryption(
  * @returns Decrypted message array (same order)
  */
 export async function decryptChannelMessages(
-  messages: Message[]
+  messages: Message[],
+  explicitServerId?: string | null,
+  isCurrent: () => boolean = () => true
 ): Promise<Message[]> {
+  const staleProjection = () => messages.map((msg) =>
+    msg.encryption_version === 1 ? { ...msg, content: null, e2ee_file_keys: undefined } : msg
+  );
+  if (!isCurrent()) return staleProjection();
+  const serverId = explicitServerId !== undefined ? explicitServerId : useServerStore.getState().activeServerId;
   // Skip decryption if E2EE init is not complete (keys not yet generated).
   const e2eeStatus = useE2EEStore.getState().initStatus;
   if (e2eeStatus !== "ready") {
@@ -782,6 +809,7 @@ export async function decryptChannelMessages(
   const toCache: import("./types").CachedDecryptedMessage[] = [];
 
   for (const msg of messages) {
+    if (!isCurrent()) return staleProjection();
     if (
       msg.encryption_version === 1 &&
       msg.ciphertext &&
@@ -792,8 +820,11 @@ export async function decryptChannelMessages(
           msg.user_id,
           msg.channel_id,
           msg.ciphertext,
-          msg.sender_device_id
+          msg.sender_device_id,
+          serverId,
+          isCurrent
         );
+        if (!isCurrent()) return staleProjection();
 
         result.push({
           ...msg,
@@ -812,6 +843,7 @@ export async function decryptChannelMessages(
           });
         }
       } catch (err) {
+        if (!isCurrent()) return staleProjection();
         console.error(
           `[channelEncryption] Failed to decrypt msg ${msg.id}:`,
           err
@@ -833,8 +865,9 @@ export async function decryptChannelMessages(
 
   // Bulk cache write — performant via a single transaction
   if (toCache.length > 0) {
-    keyStorage.cacheDecryptedMessages(toCache).catch((err) => {
-      console.error("[channelEncryption] Failed to cache messages:", err);
+    if (!isCurrent()) return staleProjection();
+    keyStorage.cacheDecryptedMessages(toCache, isCurrent).catch((err) => {
+      if (isCurrent()) console.error("[channelEncryption] Failed to cache messages:", err);
     });
   }
 

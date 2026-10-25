@@ -55,10 +55,13 @@ func (r *sqliteFriendshipRepo) GetByID(ctx context.Context, id string) (*models.
 func (r *sqliteFriendshipRepo) GetByPair(ctx context.Context, userID, friendID string) (*models.Friendship, error) {
 	query := `SELECT id, user_id, friend_id, status, created_at, updated_at
 	          FROM friendships
-	          WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`
+	          WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+	          ORDER BY CASE WHEN status = 'blocked' THEN 0 ELSE 1 END,
+	                   CASE WHEN user_id = ? THEN 0 ELSE 1 END, id
+	          LIMIT 1`
 
 	var f models.Friendship
-	err := r.db.QueryRowContext(ctx, query, userID, friendID, friendID, userID).Scan(
+	err := r.db.QueryRowContext(ctx, query, userID, friendID, friendID, userID, userID).Scan(
 		&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -153,9 +156,14 @@ func (r *sqliteFriendshipRepo) ListOutgoing(ctx context.Context, userID string) 
 }
 
 func (r *sqliteFriendshipRepo) UpdateStatus(ctx context.Context, id string, status models.FriendshipStatus) error {
-	query := `UPDATE friendships SET status = ?, updated_at = ? WHERE id = ?`
+	now := time.Now().UTC()
+	acceptedAt := now.Format(time.RFC3339Nano)
+	query := `UPDATE friendships SET status = ?, updated_at = ?,
+		accepted_at = CASE WHEN ? = 'accepted' THEN COALESCE(accepted_at, ?) ELSE accepted_at END,
+		anniversary_day = CASE WHEN ? = 'accepted' THEN COALESCE(anniversary_day, ?) ELSE anniversary_day END
+		WHERE id = ?`
 
-	result, err := r.db.ExecContext(ctx, query, status, time.Now().UTC(), id)
+	result, err := r.db.ExecContext(ctx, query, status, now, status, acceptedAt, status, now.Format("01-02"), id)
 	if err != nil {
 		return fmt.Errorf("friendship update status: %w", err)
 	}
@@ -172,16 +180,24 @@ func (r *sqliteFriendshipRepo) UpdateStatus(ctx context.Context, id string, stat
 }
 
 func (r *sqliteFriendshipRepo) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM friendships WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query, id)
+	db := database.RawDB(r.db)
+	if db == nil {
+		return fmt.Errorf("friendship delete requires raw database connection")
+	}
+	var rows int64
+	err := database.WithTx(ctx, db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM friendship_anniversary_deliveries WHERE friendship_id=?`, id); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `DELETE FROM friendships WHERE id=?`, id)
+		if err != nil {
+			return err
+		}
+		rows, err = result.RowsAffected()
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("friendship delete: %w", err)
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("friendship delete rows affected: %w", err)
 	}
 	if rows == 0 {
 		return fmt.Errorf("%w: friendship %s", pkg.ErrNotFound, id)
@@ -192,17 +208,26 @@ func (r *sqliteFriendshipRepo) Delete(ctx context.Context, id string) error {
 
 // DeleteByPair deletes the friendship between two users (direction-agnostic).
 func (r *sqliteFriendshipRepo) DeleteByPair(ctx context.Context, userID, friendID string) error {
-	query := `DELETE FROM friendships
-	          WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`
-
-	result, err := r.db.ExecContext(ctx, query, userID, friendID, friendID, userID)
+	db := database.RawDB(r.db)
+	if db == nil {
+		return fmt.Errorf("friendship delete by pair requires raw database connection")
+	}
+	var rows int64
+	err := database.WithTx(ctx, db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM friendship_anniversary_deliveries WHERE friendship_id IN (
+			SELECT id FROM friendships WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?))`, userID, friendID, friendID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `DELETE FROM friendships
+			WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)`, userID, friendID, friendID, userID)
+		if err != nil {
+			return err
+		}
+		rows, err = result.RowsAffected()
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("friendship delete by pair: %w", err)
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("friendship delete by pair rows affected: %w", err)
 	}
 	if rows == 0 {
 		return fmt.Errorf("%w: friendship between %s and %s", pkg.ErrNotFound, userID, friendID)

@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Added a shared DM cache source tag using real SHA-256 over conversation/message/user/device/ciphertext/metadata. Cache reads require matching scope and version, retaining file keys for attachment-only history and refusing incomplete key arrays. This is cache identity, not sender authentication or at-rest encryption.",
+    "Integrated tagged writes into matching HTTP send results, DM create/update WS results and historical decryption. HTTP data that differs from the prepared source cannot receive that source's plaintext. Receive/cache work is fenced across asynchronous session/device changes; old records are not deleted on mismatch.",
+    "Preserved legacy unedited text-only history within its original DM scope. Untagged edited/attachment records are not silently treated as matching newer ciphertext. Existing cache storage/schema is reused; no plaintext is uploaded to the server.",
+    "Updated edit producers as part of cache integration: retain original attachment keys in encrypted payloads, reject missing keys/crypto readiness without plaintext downgrade, pass session guards to edit APIs, and source-bind overlapping own-edit cache entries. WS own-edit matching excludes sibling-device echoes."
+  ],
+  "verification": [
+    "Cache tests cover real hash/version distinction, cross-scope/user/device/metadata changes, attachment-only history with original key index, conservative legacy compatibility and stale lookup/write contexts. Store tests verify matching HTTP source writes, preserved edit keys, missing-key/readiness failure without plaintext fallback and abandoned edit dispatch.",
+    "Crypto tests verify overlapping edits are matched/removed by their own source. WS tests cover old-session decrypt results not reaching message/notification state and own edit attachment-key retention. Focused final suites passed: 4 files / 89 tests before the last incomplete-key regression was added.",
+    "Final tsc -b and targeted ESLint passed. Full client suite passed: 230 files / 2252 tests in 47.00s. Vite production web build passed in 729ms. Targeted git diff --check passed; existing warning categories remain visible."
+  ],
+  "remaining": [
+    "Legacy edited/attachment cache records lack enough source evidence for automatic promotion; data is retained, but controlled recovery/display UX is still required. This is not a claim that all old encrypted history is readable after migration.",
+    "Late older writes can still replace a newer cached version and cause a subsequent cache miss; source checks prevent applying the wrong body but do not yet provide monotonic cache-write arbitration. Network-before-decrypt fetch races, delete/edit ordering, atomic cache/session clearing and large-history performance need further work.",
+    "The existing messageCache remains plaintext at rest. Actual browser/process and two-client encrypted attachment/edit acceptance remain open. Overall P0-P11 is incomplete; no commit, push, merge, migration, Windows packaging or production release performed."
+  ]
+}

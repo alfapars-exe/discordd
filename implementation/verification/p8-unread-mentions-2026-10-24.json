@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Additive mention_count field in existing server unread-summary API. Counts persisted direct mentions and current-role/default-role mentions after the timestamp/id read cursor, deduplicated per message and excluding the reader's own messages. Does not inspect encrypted message bodies or page the notification inbox.",
+    "Existing read-state service filters every result through current ViewChannel and ReadMessages permissions. Server-scoped handler/membership middleware is unchanged.",
+    "Ctrl+Alt+Shift+Up/Down select previous/next unread mention server channel through the shared registry, help and custom assignment editor. Uses the same bounded, abortable snapshot navigation path. Missing mention_count on an older backend yields an error, not a false no-mentions result.",
+    "Message service delete now uses existing MessageTxRunner to preserve/decrement read state, delete persisted direct/role mentions and notifications, and delete the message as one transaction. File cleanup and broadcasts remain after successful commit.",
+    "PrepareMessageDeletion uses timestamp/id comparisons before removing the parent row. A deleted read anchor moves to its predecessor without lowering the reader's unread count; deleting a genuinely unread message lowers it once. Transaction rollback restores cursor, count, mentions and message."
+  ],
+  "verification": [
+    "Client targeted: 4 files / 38 tests passed; TypeScript and targeted ESLint passed. Initial invocation from the repository root used Vite instead of the client Vitest setup and failed with document undefined; rerunning from client with the existing Vitest configuration passed without suppressing any test.",
+    "SQLite repository and service targeted tests passed. Message/read-state regression selection also passed.",
+    "PostgreSQL 18 targeted repository and service tests passed (3.963s / 0.200s) in isolated disposable QA schemas. Covers 60 mentions beyond notification page size, timestamp/id boundary, role revocation, default role, edited-away mentions, own-message exclusion, deleted read anchor, unread deletion and injected late transaction rollback.",
+    "Service permission test proves denied/departed channels do not expose unread or mention counts.",
+    "OpenAPI parsed successfully with 218 paths; unread response now documents the additive field.",
+    "Full client regression: 218 files / 2028 tests passed in 45.92s; TypeScript passed afterward. Existing jsdom navigation warnings were not suppressed.",
+    "Full server regression: Linux Docker CGO_ENABLED=0 go test ./... -timeout=15m exited 0, including repository 53.694s and services 24.085s. This does not establish native Windows, CGO/libSQL, full PostgreSQL or real-device acceptance."
+  ],
+  "remaining": [
+    "Real two-client browser/Windows keyboard and revocation acceptance; browser space remains handed to the user.",
+    "Unread private conversations, remaining navigation/drag/drop and other P8 work are not accepted or represented as complete.",
+    "Previously corrupted/missing legacy read anchors are not reconstructed by this change. New application message deletion preserves anchors transactionally; historical repair still needs a policy and data validation.",
+    "Full PostgreSQL suite and distribution/real-device acceptance remain separate incomplete gates."
+  ],
+  "typecheck_correction": "The tsc --noEmit invocation here targeted a solution config with no root files and did not traverse references. It is not standalone proof of app typing. Correct tsc -b traversed both projects and passed in the subsequent group-copy/speech follow-up.",
+  "cleanup": "Stopped the temporary no-host-port PostgreSQL 18 QA container after targeted tests. Existing disposable browser backend remains running. No production data, release, commit or remote mutation."
+}

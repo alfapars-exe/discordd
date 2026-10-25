@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import i18n from "../i18n";
 import { formatDate, formatDateTime, formatTime, lastSeenLabel } from "./dateFormat";
+import { useTimeFormatStore } from "../stores/timeFormatStore";
 
 // Noon, local time — keeps the calendar day stable in every CI timezone.
 // December so the short month name differs between tr ("Ara") and en ("Dec").
@@ -17,6 +18,7 @@ const sample = new Date(2026, 11, 15, 12, 30);
 const originalLanguage = i18n.language;
 
 afterAll(async () => {
+  useTimeFormatStore.setState({ timeFormat: "auto" });
   await i18n.changeLanguage(originalLanguage);
 });
 
@@ -63,6 +65,15 @@ describe("with English active", () => {
   it("passes options through (en short month)", () => {
     const label = formatDate(sample, { year: "numeric", month: "short", day: "numeric" });
     expect(label).toContain("Dec");
+  });
+});
+
+describe("account time format", () => {
+  it("forces 12-hour and 24-hour output independently of locale defaults", () => {
+    useTimeFormatStore.setState({ timeFormat: "12" });
+    expect(formatTime(new Date(2026, 0, 1, 21, 5), { hour: "2-digit", minute: "2-digit" })).toMatch(/09:05.*PM/i);
+    useTimeFormatStore.setState({ timeFormat: "24" });
+    expect(formatTime(new Date(2026, 0, 1, 21, 5), { hour: "2-digit", minute: "2-digit" })).toBe("21:05");
   });
 });
 

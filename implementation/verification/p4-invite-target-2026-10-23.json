@@ -1,0 +1,21 @@
+{
+  "package": "P4",
+  "behaviors": ["p4.invite-target", "p4.invite-private-warning"],
+  "automated": {
+    "client_command": "vitest run InviteFriendsModal.test.tsx inviteStore.test.ts; tsc -b tsconfig.json",
+    "client_result": "passed",
+    "client_tests": 12,
+    "server_compile_command": "go test -c ./repository; go test -c ./services; go test -c .",
+    "server_compile_result": "passed",
+    "server_execution_result": "blocked by Windows Application Control before generated test executables could start"
+  },
+  "security": {
+    "scope_check": "Repository creates targeted invites through INSERT SELECT constrained by both channel ID and server ID",
+    "private_channel": "Targeting a private channel never grants channel permission; the UI states this explicitly",
+    "public_preview": "Unauthenticated invite preview does not expose the target channel ID"
+  },
+  "remaining_acceptance": [
+    "Run repository integration test once locally built Go test executables are permitted",
+    "Live join through a targeted public and private channel invite with two accounts"
+  ]
+}

@@ -284,8 +284,8 @@ func (r *sqliteEntranceRepo) PatchServerSettings(ctx context.Context, serverID s
 		`INSERT INTO server_entrance_settings (server_id, enabled, max_duration_ms, updated_at)
 		 VALUES (?, COALESCE(?, 1), COALESCE(?, 5000), ?)
 		 ON CONFLICT(server_id) DO UPDATE SET
-		   enabled = COALESCE(?, enabled),
-		   max_duration_ms = COALESCE(?, max_duration_ms),
+		   enabled = COALESCE(?, server_entrance_settings.enabled),
+		   max_duration_ms = COALESCE(?, server_entrance_settings.max_duration_ms),
 		   updated_at = excluded.updated_at`,
 		serverID, enabledArg, maxArg, entranceNowText(), enabledArg, maxArg); err != nil {
 		return fmt.Errorf("failed to save entrance settings: %w", err)

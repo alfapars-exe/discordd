@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -39,6 +40,18 @@ import (
 // list immediately after /play.
 func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance) error {
 	musicBotLogger.Info("connectBotToRoom: starting", "channel_id", bot.channelID, "server_id", bot.serverID)
+	if s.roomKeys == nil {
+		return fmt.Errorf("music room E2EE key source is unavailable")
+	}
+	keyProvider := &musicRoomKeyProvider{source: s.roomKeys, roomName: bot.roomName}
+	keyIndex := keyProvider.CurrentKeyIndex()
+	if _, err := keyProvider.GetKey(keyIndex); err != nil {
+		return fmt.Errorf("prepare music room E2EE key: %w", err)
+	}
+	frameEncryptor, err := lksdk.NewFrameEncryptor(keyProvider, lksdk.CodecOpus)
+	if err != nil {
+		return fmt.Errorf("prepare music Opus frame encryption: %w", err)
+	}
 	lkInstance, err := s.livekit.GetByServerID(ctx, bot.serverID)
 	if err != nil {
 		musicBotLogger.Error("connectBotToRoom: livekit instance lookup failed", "server_id", bot.serverID, "err", pkg.ErrText(err))
@@ -80,12 +93,23 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	}
 
 	musicBotLogger.Info("connectBotToRoom: dialing livekit", "url", lkInstance.URL, "room", bot.roomName)
-	room, err := lksdk.ConnectToRoomWithToken(lkInstance.URL, token, &lksdk.RoomCallback{
+	room := lksdk.NewRoom(&lksdk.RoomCallback{
 		OnDisconnected: func() {
 			musicBotLogger.Info("bot disconnected", "channel_id", bot.channelID)
+			if !bot.stopping.Load() {
+				// Preserve the interrupted track and pending queue. Rejoining and
+				// resuming is deliberately explicit: an unattended backend or
+				// LiveKit reconnect must never make the bot start playing again.
+				logx.Go("service.music_bot.disconnected", func() {
+					s.StopAllForChannel(bot.channelID)
+					s.recoverDisconnectedBot(bot.channelID)
+				})
+			}
 		},
 	})
+	err = room.JoinWithContextAndToken(ctx, lkInstance.URL, token, lksdk.WithConnectTimeout(10*time.Second))
 	if err != nil {
+		room.Disconnect()
 		musicBotLogger.Error("connectBotToRoom: livekit dial failed", "url", lkInstance.URL, "err", pkg.ErrText(err))
 		return fmt.Errorf("livekit connect: %w", err)
 	}
@@ -95,7 +119,7 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 		MimeType:  webrtc.MimeTypeOpus,
 		ClockRate: 48000,
 		Channels:  2,
-	})
+	}, lksdk.WithFrameEncryptor(frameEncryptor))
 	if err != nil {
 		room.Disconnect()
 		musicBotLogger.Error("connectBotToRoom: track create failed", "err", pkg.ErrText(err))
@@ -103,8 +127,11 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 	}
 
 	pub, err := room.LocalParticipant.PublishTrack(track, &lksdk.TrackPublicationOptions{
-		Name:   "music",
-		Source: livekitproto.TrackSource_MICROPHONE,
+		Name:       "music",
+		Source:     livekitproto.TrackSource_MICROPHONE,
+		Stereo:     true,
+		DisableDTX: true,
+		Encryption: livekitproto.Encryption_GCM,
 	})
 	if err != nil {
 		room.Disconnect()
@@ -190,6 +217,8 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 		bot.loopRunning = false
 		bot.currentTrack = nil
 		bot.startedAt = nil
+		bot.elapsed = 0
+		bot.isPaused = false
 		if !bot.stopFlag && !bot.stopping.Load() {
 			s.scheduleIdleLeaveLocked(bot)
 		}
@@ -212,11 +241,19 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 
 		s.broadcastState(bot)
 
-		err := s.safePlay(play, bot, &next)
+		var err error
+		for {
+			err = s.safePlay(play, bot, &next)
+			if !s.prepareSeekReplay(bot) {
+				break
+			}
+			s.broadcastState(bot)
+		}
 		if err == nil {
 			// Only CONSECUTIVE failures count — one good track means the
 			// pipeline works and the earlier errors were per-video duds.
 			consecutiveFailures = 0
+			s.repeatCompletedTrack(bot, next)
 			continue
 		}
 
@@ -249,6 +286,59 @@ func (s *musicBotService) playLoop(bot *botInstance) {
 	}
 }
 
+func (s *musicBotService) prepareSeekReplay(bot *botInstance) bool {
+	bot.sessionMu.Lock()
+	defer bot.sessionMu.Unlock()
+	bot.mu.Lock()
+	defer bot.mu.Unlock()
+	if !bot.seekRequested || bot.stopFlag || bot.stopping.Load() {
+		return false
+	}
+	bot.playbackOffset = bot.seekTarget
+	bot.elapsed = bot.seekTarget
+	bot.startedAt = nil
+	bot.isPaused = false
+	bot.skipFlag = false
+	bot.seekRequested = false
+	return true
+}
+
+// repeatCompletedTrack runs only after a successful track. Skip must advance,
+// and failures are never forced back into a loop.
+func (s *musicBotService) repeatCompletedTrack(bot *botInstance, track models.MusicTrack) {
+	bot.sessionMu.Lock()
+	bot.mu.Lock()
+	if bot.skipFlag || bot.stopFlag || bot.stopping.Load() {
+		bot.mu.Unlock()
+		bot.sessionMu.Unlock()
+		return
+	}
+	previousQueue := cloneMusicTracks(bot.queue)
+	previousRevision := bot.revision
+	changed := false
+	switch bot.repeatMode {
+	case "one":
+		bot.queue = append([]models.MusicTrack{track}, bot.queue...)
+		bot.revision++
+		changed = true
+	case "all":
+		bot.queue = append(bot.queue, track)
+		bot.revision++
+		changed = true
+	}
+	bot.mu.Unlock()
+	if changed {
+		if err := s.persistBot(bot); err != nil {
+			musicBotLogger.Error("persist repeated track", "channel_id", bot.channelID, "err", pkg.ErrText(err))
+			bot.mu.Lock()
+			bot.queue = previousQueue
+			bot.revision = previousRevision
+			bot.mu.Unlock()
+		}
+	}
+	bot.sessionMu.Unlock()
+}
+
 // loopStep is nextTrack's verdict for playLoop.
 type loopStep int
 
@@ -263,25 +353,40 @@ const (
 // what lets a later Enqueue start a new loop. The deferred unlock means a
 // panic in here cannot leave bot.mu held for playLoop's own cleanup.
 func (s *musicBotService) nextTrack(bot *botInstance) (models.MusicTrack, loopStep) {
+	bot.sessionMu.Lock()
+	defer bot.sessionMu.Unlock()
 	bot.mu.Lock()
-	defer bot.mu.Unlock()
 	if bot.stopFlag {
 		bot.loopRunning = false
+		bot.mu.Unlock()
 		return models.MusicTrack{}, loopStopped
 	}
 	if len(bot.queue) == 0 {
 		bot.loopRunning = false
 		bot.currentTrack = nil
 		bot.startedAt = nil
+		bot.elapsed = 0
+		bot.isPaused = false
 		s.scheduleIdleLeaveLocked(bot)
+		bot.mu.Unlock()
+		if err := s.persistBot(bot); err != nil {
+			musicBotLogger.Error("persist drained music playback state", "channel_id", bot.channelID, "err", pkg.ErrText(err))
+		}
 		return models.MusicTrack{}, loopDrained
 	}
 	next := bot.queue[0]
 	bot.queue = bot.queue[1:]
+	bot.revision++
 	bot.currentTrack = &next
-	now := time.Now()
-	bot.startedAt = &now
+	bot.startedAt = nil // Start the clock only when audio actually reaches LiveKit.
+	bot.elapsed = 0
+	bot.playbackOffset = 0
+	bot.isPaused = false
 	bot.skipFlag = false
+	bot.mu.Unlock()
+	if err := s.persistBot(bot); err != nil {
+		musicBotLogger.Error("persist music playback state", "channel_id", bot.channelID, "err", pkg.ErrText(err))
+	}
 	return next, loopPlay
 }
 
@@ -354,6 +459,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	bot.mu.Lock()
 	endedEarly := bot.killRequestedLocked()
 	audio := bot.audioTrack
+	room := bot.lkRoom
 	bot.mu.Unlock()
 	if endedEarly {
 		musicBotLogger.Info("playTrack: skipped or stopped before the pipeline started",
@@ -419,22 +525,18 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 		}
 		return fmt.Errorf("%w: yt-dlp not available: %w", errToolMissing, err)
 	}
-	yt := exec.CommandContext(ctx, ytBin, playTrackYtdlpArgs(track.URL)...) // #nosec G204 -- fixed argv; ytBin is an absolute path resolved once by ytDlpPath (see music_bot_metadata.go); track.URL passes validateMusicURLNetwork above (host allow-list + post-DNS private/reserved-IP check, see music_url_guard.go) and is isolated behind `--` in playTrackYtdlpArgs
-	ff := exec.CommandContext(ctx, "ffmpeg",
-		"-hide_banner", "-loglevel", "warning",
-		"-i", "pipe:0",
-		"-vn",
-		"-re",
-		"-ac", "2",
-		"-ar", "48000",
-		"-c:a", "libopus",
-		"-b:a", "64k",
-		"-application", "audio",
-		"-frame_duration", "20",
-		"-page_duration", "20000",
-		"-f", "ogg",
-		"pipe:1",
-	)
+	bot.mu.Lock()
+	seekOffset := bot.playbackOffset
+	bot.mu.Unlock()
+	yt := exec.CommandContext(ctx, ytBin, playTrackYtdlpArgs(track.URL, seekOffset)...) // #nosec G204 -- fixed argv; ytBin is an absolute path resolved once by ytDlpPath (see music_bot_metadata.go); track.URL passes validateMusicURLNetwork above (host allow-list + post-DNS private/reserved-IP check, see music_url_guard.go) and is isolated behind `--` in playTrackYtdlpArgs
+	ffBin, err := ffmpegPath()
+	if err != nil {
+		if endedOnPurpose() {
+			return nil
+		}
+		return fmt.Errorf("%w: ffmpeg not available: %w", errToolMissing, err)
+	}
+	ff := exec.CommandContext(ctx, ffBin, playTrackFFmpegArgs()...)
 
 	// stderr goes into bounded tail buffers: yt-dlp prints the reason a
 	// track failed (HTTP 403, bot check, ...) there and nowhere else. The
@@ -537,7 +639,7 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	// Skip/Stop. Cancelling the track context makes CommandContext kill the
 	// pair, which returns the read.
 	stallTimeout, stallPoll := s.stallThresholds()
-	// A paused ffmpeg (SIGSTOP) emits nothing by design; isPaused keeps the
+	// A paused pump emits nothing by design; isPaused keeps the
 	// watchdog from reading that as a wedge.
 	isPaused := func() bool {
 		bot.mu.Lock()
@@ -547,7 +649,19 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	watchdog := newStallWatchdog(ctx, cancel, stallTimeout, stallPoll, bot.channelID, isPaused)
 	defer watchdog.close()
 
-	pumpErr := pumpOggToTrack(ffOut, sink, watchdog.progress)
+	controller := &musicSampleController{
+		ctx: ctx, bot: bot, sink: sink, onStart: func() { s.broadcastState(bot) },
+		ready: func() bool {
+			if !audio.IsBound() || room == nil || room.ConnectionState() != lksdk.ConnectionStateConnected {
+				return false
+			}
+			// Room signaling can connect before the publishing transport is
+			// ready. The SDK silently drops samples in that interval.
+			publisher := room.LocalParticipant.GetPublisherPeerConnection()
+			return publisher != nil && publisher.ConnectionState() == webrtc.PeerConnectionStateConnected
+		},
+	}
+	pumpErr := pumpOggToTrack(ffOut, controller, watchdog.progress)
 
 	bot.mu.Lock()
 	killRequested := bot.killRequestedLocked()
@@ -580,12 +694,15 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 			Reason: reasonStalled,
 			err:    fmt.Errorf("%w: no audio progress for %s", errPlaybackStalled, stallTimeout),
 		}
-	case pumpErr != nil || ytErr != nil:
+	case pumpErr != nil || ytErr != nil || ffErr != nil:
 		cause := pumpErr
-		if pumpErr == nil {
+		if pumpErr == nil && ytErr != nil {
 			cause = fmt.Errorf("yt-dlp exit: %w", ytErr)
 		} else if ytErr != nil {
 			cause = fmt.Errorf("%w; yt-dlp exit: %w", pumpErr, ytErr)
+		}
+		if ffErr != nil {
+			cause = errors.Join(cause, fmt.Errorf("ffmpeg exit: %w", ffErr))
 		}
 		reason := classifyPlaybackFailure(cause, ytStderr)
 		// yt-dlp's own "ERROR:" line is the useful part of the server-side
@@ -613,10 +730,10 @@ func (s *musicBotService) playTrack(bot *botInstance, track *models.MusicTrack) 
 	return failErr
 }
 
-// killRequestedLocked reports whether Skip or a stop has asked the current
-// track to end. Caller holds bot.mu.
+// killRequestedLocked reports whether Skip, Seek, or a stop has asked the
+// current pipeline to end. Caller holds bot.mu.
 func (b *botInstance) killRequestedLocked() bool {
-	return b.skipFlag || b.stopFlag || b.stopping.Load()
+	return b.skipFlag || b.seekRequested || b.stopFlag || b.stopping.Load()
 }
 
 // playTrackYtdlpArgs builds playTrack's yt-dlp argv. Factored out (rather
@@ -630,13 +747,28 @@ func (b *botInstance) killRequestedLocked() bool {
 // audio-only one (ffmpeg drops the video stream with -vn). There is no
 // --no-warnings: yt-dlp's warnings land in playTrack's stderr tail, which is
 // only logged, and they often explain the ERROR that follows.
-func playTrackYtdlpArgs(url string) []string {
-	return []string{
+func playTrackYtdlpArgs(url string, seekOffset time.Duration) []string {
+	args := []string{
+		"--ignore-config", "--no-plugin-dirs", "--no-remote-components",
+		"--no-playlist", "--no-progress",
 		"-f", "bestaudio/best",
 		"--use-extractors", "Youtube.*",
-		"-o", "-",
-		"--",
-		url,
+	}
+	if seekOffset > 0 {
+		args = append(args, "--download-sections", fmt.Sprintf("*%d-inf", int(seekOffset/time.Second)))
+	}
+	return append(args, "-o", "-", "--", url)
+}
+
+// -re is an INPUT option: after -i FFmpeg rejects the entire command.
+// The sample controller also paces output so resuming after backpressure
+// cannot send a burst when FFmpeg tries to catch up with its input clock.
+func playTrackFFmpegArgs() []string {
+	return []string{
+		"-hide_banner", "-loglevel", "warning", "-nostdin",
+		"-re", "-i", "pipe:0", "-vn", "-ac", "2", "-ar", "48000",
+		"-c:a", "libopus", "-b:a", "128k", "-application", "audio",
+		"-frame_duration", "20", "-page_duration", "20000", "-f", "ogg", "pipe:1",
 	}
 }
 
@@ -743,6 +875,9 @@ func pumpOggToTrack(reader io.Reader, track sampleWriter, onPage func()) error {
 	for {
 		page, _, perr := ogg.ParseNextPage()
 		if errors.Is(perr, io.EOF) {
+			if samplesWritten == 0 {
+				return errors.New("audio stream ended without any Opus samples")
+			}
 			musicBotLogger.Info("pumpOggToTrack: clean EOF", "samples_written", samplesWritten)
 			return nil
 		}
@@ -754,10 +889,15 @@ func pumpOggToTrack(reader io.Reader, track sampleWriter, onPage func()) error {
 		if onPage != nil {
 			onPage()
 		}
-		if len(page) == 0 {
+		// NewWith consumes OpusHead, but the next page is OpusTags, not
+		// encoded audio. Publishing it creates an invalid RTP Opus packet.
+		if len(page) == 0 || bytes.HasPrefix(page, []byte("OpusTags")) || bytes.HasPrefix(page, []byte("OpusHead")) {
 			continue
 		}
 		if werr := track.WriteSample(media.Sample{Data: page, Duration: frameDuration}, nil); werr != nil {
+			if errors.Is(werr, context.Canceled) {
+				return werr
+			}
 			musicBotLogger.Error("pumpOggToTrack: WriteSample failed", "samples_written", samplesWritten, "err", pkg.ErrText(werr))
 			return fmt.Errorf("write sample: %w", werr)
 		}

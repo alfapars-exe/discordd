@@ -37,6 +37,12 @@ func (s *slowEnqueueMusicService) Skip(string) error                            
 func (s *slowEnqueueMusicService) Pause(string) error                           { return nil }
 func (s *slowEnqueueMusicService) Resume(string) error                          { return nil }
 func (s *slowEnqueueMusicService) Stop(string) error                            { return nil }
+func (s *slowEnqueueMusicService) RemoveQueueItem(string, string, uint64) error { return nil }
+func (s *slowEnqueueMusicService) ReorderQueue(string, []string, uint64) error  { return nil }
+func (s *slowEnqueueMusicService) ShuffleQueue(string, uint64) error            { return nil }
+func (s *slowEnqueueMusicService) SetRepeatMode(string, string) error           { return nil }
+func (s *slowEnqueueMusicService) Seek(string, int) error                       { return nil }
+func (s *slowEnqueueMusicService) Restore(context.Context, string) error        { return nil }
 func (s *slowEnqueueMusicService) GetState(string) *models.MusicBotChannelState { return nil }
 func (s *slowEnqueueMusicService) StopAllForChannel(string)                     {}
 

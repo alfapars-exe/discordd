@@ -45,9 +45,10 @@ type AuthService interface {
 	ChangeEmail(ctx context.Context, userID, password, newEmail string) error
 
 	// ForgotPassword sends a password reset email.
-	// Returns silently if email doesn't exist (email enumeration protection).
-	// Cooldown: 1 request per 90s per email. cooldownRemaining > 0 = seconds left.
-	ForgotPassword(ctx context.Context, email string) (cooldownRemaining int, err error)
+	// Returns silently if the identifier doesn't resolve to an account or the
+	// account has no recovery email (enumeration protection).
+	// Cooldown: 1 request per 90s per identifier. cooldownRemaining > 0 = seconds left.
+	ForgotPassword(ctx context.Context, identifier string) (cooldownRemaining int, err error)
 
 	// ResetPassword validates token, updates password, and deletes token (one-time use).
 	ResetPassword(ctx context.Context, token, newPassword string) error
@@ -56,11 +57,9 @@ type AuthService interface {
 	// WebSocket/voice connection for userID (see revokeAllSessions), then
 	// marks the user offline. Backs POST /api/auth/logout-all.
 	//
-	// Two credentials are NOT covered, both bounded and narrower-scoped than
-	// a full session: the scope=media cookie token (GenerateMediaToken, up
-	// to MediaTokenTTL) and, transitively, a LiveKit voice/screen-share JWT
-	// minted before the call (voiceTokenTTL, 15min) if the disconnect below
-	// doesn't reach the SFU in time — see revokeAllSessions.
+	// Production media cookies are bound to a logical session and lose private
+	// attachment access on revocation. Pre-issued LiveKit JWTs are independently
+	// valid until voiceTokenTTL if presented directly to the SFU.
 	LogoutAllDevices(ctx context.Context, userID string) error
 
 	SetAppLogger(logger AuthAppLogger)
@@ -87,6 +86,7 @@ type AuthService interface {
 }
 
 type AuthTokens struct {
+	SessionID   string `json:"-"`
 	AccessToken string `json:"access_token"`
 	// RefreshToken is delivered to clients exclusively via the
 	// HttpOnly+Secure+SameSite=Strict cookie set by setRefreshCookie.
@@ -104,15 +104,22 @@ type AuthTokens struct {
 }
 
 type authService struct {
-	userRepo    repository.UserRepository
-	sessionRepo repository.SessionRepository
-	resetRepo   repository.PasswordResetRepository // nil if email not configured
-	hub         ws.EventPublisher
-	emailSender email.EmailSender // nil if RESEND_API_KEY not set
-	appLogger   AuthAppLogger
-	jwtSecret   []byte
-	accessExp   time.Duration
-	refreshExp  time.Duration
+	authSessions         repository.AuthSessionRepository
+	accountLifecycle     repository.AccountLifecycleRepository
+	accountAnonymization repository.AccountAnonymizationRepository
+	applicationRemoval   repository.ApplicationRemovalRepository
+	serverOwnership      repository.ServerOwnershipRepository
+	ownershipInvalidator PermissionInvalidator
+	mfa                  *MFAService
+	userRepo             repository.UserRepository
+	sessionRepo          repository.SessionRepository
+	resetRepo            repository.PasswordResetRepository // nil if email not configured
+	hub                  ws.EventPublisher
+	emailSender          email.EmailSender // nil if RESEND_API_KEY not set
+	appLogger            AuthAppLogger
+	jwtSecret            []byte
+	accessExp            time.Duration
+	refreshExp           time.Duration
 
 	// userInvalidator drops the HTTP auth user-cache on a credential-
 	// lifecycle event. Optional (nil-safe): absent wiring, the change
@@ -140,6 +147,8 @@ type authService struct {
 // owning user ID so the reuse-detection path can blast all their sessions
 // without re-querying the DB (the token's session row is already gone).
 type usedRefreshEntry struct {
+	sessionID string
+	rotatedAt time.Time
 	userID    string
 	expiresAt time.Time
 }
@@ -181,6 +190,9 @@ func (s *authService) disconnectVoice(userID string) {
 
 // revokeAllSessions is the shared "kill every credential we can reach for
 // userID" step behind ChangePassword, ResetPassword, and LogoutAllDevices.
+// Production WithAuthSessions uses atomic durable revocation; production
+// password writes use UpdatePasswordAndRevoke instead. The best-effort legacy
+// behavior described below is retained only for unconfigured constructors.
 // It: deletes all refresh-session rows (kills the ability to mint new
 // access tokens), bumps token_version (kills every unscoped access token
 // and WS ticket already in the wild once their gate runs — see
@@ -213,6 +225,12 @@ func (s *authService) disconnectVoice(userID string) {
 // (changing/resetting the password, or an explicit "log out everywhere")
 // has already succeeded or is independent of these side effects.
 func (s *authService) revokeAllSessions(ctx context.Context, userID string) {
+	if s.authSessions != nil {
+		if err := s.revokeBoundSessions(ctx, userID); err != nil {
+			authLogger.Warn("failed to revoke logical sessions", "user_id", userID)
+		}
+		return
+	}
 	if err := s.sessionRepo.DeleteByUserID(ctx, userID); err != nil {
 		authLogger.Warn("revokeAllSessions: failed to delete sessions", "user_id", userID, "err", pkg.ErrText(err))
 	}
@@ -285,6 +303,7 @@ func NewAuthService(
 	jwtSecret string,
 	accessExpMinutes int,
 	refreshExpDays int,
+	options ...AuthOption,
 ) AuthService {
 	s := &authService{
 		userRepo:    userRepo,
@@ -296,6 +315,9 @@ func NewAuthService(
 		accessExp:   time.Duration(accessExpMinutes) * time.Minute,
 		refreshExp:  time.Duration(refreshExpDays) * 24 * time.Hour,
 		usedRefresh: make(map[string]usedRefreshEntry, 128),
+	}
+	for _, option := range options {
+		option(s)
 	}
 	// Background sweep so the used-refresh map can't grow unbounded if a
 	// large user base actively rotates tokens. Sweep cadence = refreshExp/4
@@ -387,6 +409,13 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 		RefreshToken: refreshString,
 		ExpiresAt:    time.Now().Add(s.refreshExp),
 	}
+	if s.authSessions != nil {
+		logical, err := newAuthSession(ctx, "", 0, session.ExpiresAt)
+		if err != nil {
+			return nil, err
+		}
+		session.AuthSession = logical
+	}
 
 	// A4: user row + session row commit atomically (see
 	// repository.sqliteUserRepo.CreateWithSession). Before this fix these
@@ -405,7 +434,7 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 		return nil, err
 	}
 
-	accessString, err := s.signAccessToken(user)
+	accessString, err := s.signAccessToken(user, session.AuthSessionID)
 	if err != nil {
 		// The user+session rows already committed at this point — this is
 		// the orphan case: the client sees an error, but the account (and a
@@ -424,6 +453,7 @@ func (s *authService) Register(ctx context.Context, req *models.CreateUserReques
 		AccessToken:  accessString,
 		RefreshToken: refreshString,
 		User:         *user,
+		SessionID:    session.AuthSessionID,
 	}, nil
 }
 
@@ -471,7 +501,38 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*Aut
 		})
 		return nil, fmt.Errorf("%w: account suspended", pkg.ErrForbidden)
 	}
+	var lifecycle *models.AccountLifecycle
+	if s.accountLifecycle != nil {
+		lifecycle, err = s.accountLifecycle.Get(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		if lifecycle.DisabledAt != nil && !req.Reactivate {
+			return nil, ErrAccountDisabled
+		}
+	}
 
+	if s.mfa != nil {
+		if err := s.mfa.CheckLogin(ctx, user.ID, req.MFACode); err != nil {
+			return nil, err
+		}
+	}
+	if lifecycle != nil && lifecycle.DisabledAt != nil {
+		if s.authSessions == nil {
+			return nil, fmt.Errorf("account restoration unavailable")
+		}
+		user.TokenVersion++
+		user.Status = models.UserStatusOnline
+		tokens, err := s.generateBoundTokens(ctx, user, lifecycle)
+		if err == nil {
+			s.invalidateUserCache(user.ID)
+		}
+		return tokens, err
+	}
+	if s.authSessions != nil {
+		user.Status = models.UserStatusOnline
+		return s.generateTokens(ctx, user)
+	}
 	if err := s.userRepo.UpdateStatus(ctx, user.ID, models.UserStatusOnline); err != nil {
 		return nil, fmt.Errorf("failed to update status: %w", err)
 	}
@@ -495,6 +556,21 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 			entry, wasUsed := s.usedRefresh[tokenHash]
 			s.usedRefreshMu.Unlock()
 			if wasUsed && time.Now().Before(entry.expiresAt) {
+				if err := checkExpectedAuthAccount(ctx, entry.userID); err != nil {
+					return nil, err
+				}
+				if entry.sessionID != "" {
+					if err := checkExpectedAuthSession(ctx, entry.sessionID); err != nil {
+						return nil, err
+					}
+					// Concurrent tabs may submit the same cookie before its
+					// replacement arrives. Never issue it twice, but do not
+					// mistake that bounded overlap for a compromise of every
+					// session. Later reuse retains the existing kill-all policy.
+					if time.Since(entry.rotatedAt) < 5*time.Second {
+						return nil, ErrRefreshSuperseded
+					}
+				}
 				// Reuse detected. The legitimate session already rotated
 				// away from this token; anyone presenting it now is
 				// almost certainly the attacker. Kill every session for
@@ -513,8 +589,12 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 					"reuse_window_at": time.Now().UTC().Format(time.RFC3339),
 					"original_used":   entry.expiresAt.Add(-s.refreshExp).UTC().Format(time.RFC3339),
 				})
-				_ = s.sessionRepo.DeleteByUserID(ctx, entry.userID)
-				_ = s.userRepo.IncrementTokenVersion(ctx, entry.userID)
+				if s.authSessions != nil {
+					s.revokeAllSessions(ctx, entry.userID)
+				} else {
+					_ = s.sessionRepo.DeleteByUserID(ctx, entry.userID)
+					_ = s.userRepo.IncrementTokenVersion(ctx, entry.userID)
+				}
 				return nil, fmt.Errorf("%w: token reuse detected, all sessions invalidated", pkg.ErrUnauthorized)
 			}
 			return nil, fmt.Errorf("%w: invalid refresh token", pkg.ErrUnauthorized)
@@ -522,11 +602,20 @@ func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (*A
 		return nil, err
 	}
 
+	if err := checkExpectedAuthAccount(ctx, session.UserID); err != nil {
+		return nil, err
+	}
+	if err := checkExpectedAuthSession(ctx, session.AuthSessionID); err != nil {
+		return nil, err
+	}
 	if time.Now().After(session.ExpiresAt) {
 		if delErr := s.sessionRepo.DeleteByID(ctx, session.ID); delErr != nil {
 			return nil, fmt.Errorf("failed to delete expired session: %w", delErr)
 		}
 		return nil, fmt.Errorf("%w: refresh token expired", pkg.ErrUnauthorized)
+	}
+	if s.authSessions != nil {
+		return s.refreshBoundTokens(ctx, session)
 	}
 
 	if err := s.sessionRepo.DeleteByID(ctx, session.ID); err != nil {
@@ -582,6 +671,16 @@ func (s *authService) Logout(ctx context.Context, refreshToken string) error {
 		return err
 	}
 
+	if err := checkExpectedAuthAccount(ctx, session.UserID); err != nil {
+		return err
+	}
+	if s.authSessions != nil && session.AuthSessionID != "" {
+		if _, err := s.authSessions.Revoke(ctx, session.UserID, session.AuthSessionID, time.Now().Unix()); err != nil {
+			return err
+		}
+		s.disconnectSession(session.UserID, session.AuthSessionID)
+		return s.sessionRepo.DeleteByID(ctx, session.ID)
+	}
 	if err := s.userRepo.UpdateStatus(ctx, session.UserID, models.UserStatusOffline); err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
@@ -690,16 +789,21 @@ const usedRefreshEmergencyThreshold = 10_000
 // Signed with the same key and method as the access token so the existing
 // ValidateAccessToken path verifies it with no extra plumbing.
 //
-// Note on revocation: the token carries no token_version, matching the
-// download handler, which has never applied a version gate. A media token
-// therefore survives a "logout from all devices" until it expires. That is
-// bounded by MediaTokenTTL and limited to attachment reads; the API and WS
-// surfaces still revoke immediately.
+// Production handlers mint GenerateSessionMediaToken with the authenticated
+// logical session ID. Private downloads validate that durable session, so
+// revocation also denies previously issued media cookies. This SID-less helper
+// is retained for legacy interfaces/tests; session-aware production denies its
+// use on private downloads rather than treating it as a revocation bypass.
 func (s *authService) GenerateMediaToken(userID string) (string, error) {
+	return s.GenerateSessionMediaToken(userID, "")
+}
+
+func (s *authService) GenerateSessionMediaToken(userID, sessionID string) (string, error) {
 	now := time.Now()
 	claims := &models.TokenClaims{
-		UserID: userID,
-		Scope:  models.TokenScopeMedia,
+		SessionID: sessionID,
+		UserID:    userID,
+		Scope:     models.TokenScopeMedia,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(MediaTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -720,7 +824,7 @@ func (s *authService) GenerateMediaToken(userID string) (string, error) {
 // I/O — shared by generateTokens (Login/RefreshToken) and Register, which
 // can't use generateTokens because its session row must be created
 // atomically with the user row, before the JWT is signed (see A4 in Register).
-func (s *authService) signAccessToken(user *models.User) (string, error) {
+func (s *authService) signAccessToken(user *models.User, sessionIDs ...string) (string, error) {
 	now := time.Now()
 	// Embed the current token_version so future "logout from all devices"
 	// can invalidate this token by bumping users.token_version above the
@@ -737,6 +841,9 @@ func (s *authService) signAccessToken(user *models.User) (string, error) {
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	if len(sessionIDs) > 0 {
+		accessClaims.SessionID = sessionIDs[0]
+	}
 	accessString, err := accessToken.SignedString(s.jwtSecret)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign access token: %w", err)
@@ -745,6 +852,9 @@ func (s *authService) signAccessToken(user *models.User) (string, error) {
 }
 
 func (s *authService) generateTokens(ctx context.Context, user *models.User) (*AuthTokens, error) {
+	if s.authSessions != nil {
+		return s.generateBoundTokens(ctx, user)
+	}
 	accessString, err := s.signAccessToken(user)
 	if err != nil {
 		return nil, err

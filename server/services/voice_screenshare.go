@@ -4,8 +4,20 @@
 package services
 
 import (
+	"sort"
+
 	"github.com/argeinfina/hichat/ws"
 )
+
+func (s *voiceService) screenShareViewerIDsLocked(streamerUserID string) []string {
+	viewers := s.screenShareViewers[streamerUserID]
+	ids := make([]string, 0, len(viewers))
+	for id := range viewers {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
 
 func (s *voiceService) WatchScreenShare(viewerUserID, streamerUserID string, watching bool) {
 	s.mu.Lock()
@@ -51,6 +63,10 @@ func (s *voiceService) WatchScreenShare(viewerUserID, streamerUserID string, wat
 	viewerCount := len(s.screenShareViewers[streamerUserID])
 	channelID := streamerState.ChannelID
 	serverID := streamerState.ServerID
+	voiceRevision := s.bumpVoiceRevisionLocked()
+	// Capture the full set under the mutation lock: the payload must describe
+	// this revision, and concurrent watchers may mutate the map after unlock.
+	viewerIDs := s.screenShareViewerIDsLocked(streamerUserID)
 	s.mu.Unlock()
 
 	action := "leave"
@@ -58,7 +74,7 @@ func (s *voiceService) WatchScreenShare(viewerUserID, streamerUserID string, wat
 		action = "join"
 	}
 
-	s.broadcastToServer(serverID, ws.Event{
+	s.broadcastToServerAtRevision(serverID, ws.Event{
 		Op: ws.OpScreenShareViewerUpdate,
 		Data: ws.ScreenShareViewerUpdateData{
 			StreamerUserID: streamerUserID,
@@ -66,8 +82,9 @@ func (s *voiceService) WatchScreenShare(viewerUserID, streamerUserID string, wat
 			ViewerCount:    viewerCount,
 			ViewerUserID:   viewerUserID,
 			Action:         action,
+			ViewerUserIDs:  viewerIDs,
 		},
-	})
+	}, voiceRevision)
 }
 
 func (s *voiceService) GetScreenShareViewerCount(streamerUserID string) int {
@@ -113,7 +130,10 @@ func (s *voiceService) GetScreenShareStats() (streamers int, viewers int) {
 func (s *voiceService) CleanupViewersForStreamer(streamerUserID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.screenShareViewers, streamerUserID)
+	if _, exists := s.screenShareViewers[streamerUserID]; exists {
+		delete(s.screenShareViewers, streamerUserID)
+		s.bumpVoiceRevisionLocked()
+	}
 }
 
 // closeOutScreenShareLocked closes out userID's screen-share involvement in
@@ -145,7 +165,7 @@ func (s *voiceService) CleanupViewersForStreamer(streamerUserID string) {
 func (s *voiceService) closeOutScreenShareLocked(userID, channelID, serverID string, wasStreaming bool) {
 	if wasStreaming {
 		delete(s.screenShareViewers, userID)
-		s.broadcastToServer(serverID, ws.Event{
+		s.broadcastToServerLocked(serverID, ws.Event{
 			Op: ws.OpScreenShareViewerUpdate,
 			Data: ws.ScreenShareViewerUpdateData{
 				StreamerUserID: userID,
@@ -153,6 +173,7 @@ func (s *voiceService) closeOutScreenShareLocked(userID, channelID, serverID str
 				ViewerCount:    0,
 				ViewerUserID:   "",
 				Action:         "leave",
+				ViewerUserIDs:  []string{},
 			},
 		})
 	}
@@ -164,7 +185,7 @@ func (s *voiceService) closeOutScreenShareLocked(userID, channelID, serverID str
 				delete(s.screenShareViewers, streamerID)
 			}
 			if streamerState, ok := s.states[streamerID]; ok {
-				s.broadcastToServer(streamerState.ServerID, ws.Event{
+				s.broadcastToServerLocked(streamerState.ServerID, ws.Event{
 					Op: ws.OpScreenShareViewerUpdate,
 					Data: ws.ScreenShareViewerUpdateData{
 						StreamerUserID: streamerID,
@@ -172,8 +193,13 @@ func (s *voiceService) closeOutScreenShareLocked(userID, channelID, serverID str
 						ViewerCount:    viewerCount,
 						ViewerUserID:   userID,
 						Action:         "leave",
+						ViewerUserIDs:  s.screenShareViewerIDsLocked(streamerID),
 					},
 				})
+			} else {
+				// The stale viewer entry still affects the snapshot even when
+				// its streamer has already left and no delta can be addressed.
+				s.bumpVoiceRevisionLocked()
 			}
 		}
 	}

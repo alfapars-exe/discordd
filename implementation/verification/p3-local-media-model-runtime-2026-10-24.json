@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-24",
+  "scope": "Real pinned local image model inference core and worker; not yet connected to chat media gates",
+  "implemented": [
+    "Vendored NSFWJS MobileNetV2 model.json, quantized weights and unchanged upstream MIT license from commit d55a54c51f14380670064cc129b2ea51029c5e46. Provenance includes exact byte counts, SHA-256 hashes, class order, preprocessing and limitations. No dependency was added; existing TensorFlow.js is reused.",
+    "Actual TensorFlow LayersModel loading verifies pinned manifest and weight sizes/hashes before deserialization. CPU execution is intended only in a dedicated worker, not the microphone/main-thread TensorFlow runtime.",
+    "Inference normalizes RGB to 0..1, uses TensorFlow bilinear 224x224 alignCorners=true, validates all five output probabilities and disposes prediction tensors. Sexual content output is positive/negative/uncertain; disturbing content is ALWAYS unknown because this model cannot classify violence/gore.",
+    "Worker accepts bounded raster blobs, decodes away from the UI, bounds pixel count, serializes jobs and returns generic errors without media/filename/exception text. Model fetches are same-origin with no credentials or redirects, bounded timeouts and exact-size streaming reads; no third-party runtime model service is used.",
+    "Container checks reject GIF/video, unsupported types, animated PNG/WebP and malformed chunk lengths before decoding. A single static frame is never treated as the verdict for an animation."
+  ],
+  "verification": [
+    {"command": "Targeted model/input tests", "result": "passed", "files": 2, "tests": 6, "detail": "Loads actual pinned weights and executes three synthetic RGB inputs on CPU; verifies finite outputs, disturbing unknown, stable tensor count, corrupt asset rejection, malformed score/shape rejection and animation-container checks. Synthetic inputs do not establish classifier accuracy."},
+    {"command": "Final client full Vitest suite", "result": "passed", "files": 240, "tests": 2365, "detail": "Includes exact-size asset streaming and oversized-body cancellation tests."},
+    {"command": "Client TypeScript project build and targeted ESLint src/media", "result": "passed"},
+    {"command": "Vite standalone worker entry build, write=false and publicDir=false", "result": "passed", "detail": "In-memory browser worker bundle assets/mediaClassifier.worker-xojK-Ipn.js, 881975 characters. This is a standalone compilation check, not proof that the application invokes the worker."},
+    {"command": "Application Vite production build", "result": "passed", "detail": "Public model manifest, weights and license present in dist with matching hashes and byte sizes. Worker is not yet imported/invoked by application media components."},
+    {"command": "Coverage structure validator", "result": "passed", "detail": "33 references / 261 behaviors; classifier and overall acceptance remain incomplete."}
+  ],
+  "sources": [
+    "https://github.com/infinitered/nsfwjs",
+    "https://github.com/infinitered/nsfwjs/blob/d55a54c51f14380670064cc129b2ea51029c5e46/src/core.ts",
+    "https://github.com/infinitered/nsfwjs/blob/d55a54c51f14380670064cc129b2ea51029c5e46/LICENSE"
+  ],
+  "remaining": [
+    "Connect a cancellable bounded worker client and local attachment decode/decryption pipeline to channel, DM and group gates; retain account/device/source affinity and fail-closed unknown states.",
+    "Choose, license, implement and evaluate a genuine disturbing-content classifier. The NSFW model's Neutral class must not substitute for it.",
+    "Representative model accuracy and threshold calibration, adversarial inputs, performance/long-session memory, real browser/Windows worker acceptance and accessibility/status UX.",
+    "Animation/video multi-frame analysis and external preview privacy. Currently unsupported content must remain unknown under existing media preferences."
+  ],
+  "followup": "Subsequent chat/worker integration is tracked in p3-local-media-chat-integration-2026-10-24.json; this file describes the earlier standalone-runtime snapshot.",
+  "acceptance": "Not accepted. This initial runtime snapshot did not yet invoke classification from chat. Subsequent partial integration does not establish classifier quality or real-device acceptance. No production release performed."
+}

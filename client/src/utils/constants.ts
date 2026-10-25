@@ -5,6 +5,10 @@
 
 import { Capacitor } from "@capacitor/core";
 
+// Single-server deployment: keep the TAYFA server as the only selectable
+// server until multi-server creation is intentionally enabled again.
+export const ALLOW_SERVER_CREATION = false;
+
 // ─── Platform Detection ───
 
 /**
@@ -174,14 +178,29 @@ export async function copyToClipboard(text: string): Promise<void> {
   }
 
   // execCommand fallback for file:// and older browsers
+  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const selected = focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement
+    ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
+  const selection = window.getSelection();
+  const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange()) : [];
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.style.position = "fixed";
   textarea.style.opacity = "0";
   document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  document.body.removeChild(textarea);
+  try {
+    textarea.select();
+    if (typeof document.execCommand !== "function" || !document.execCommand("copy")) throw new Error("Clipboard copy unavailable");
+  } finally {
+    textarea.remove();
+    if (focused?.isConnected) focused.focus({ preventScroll: true });
+    if (selected && (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement)) {
+      try { focused.setSelectionRange(selected.start, selected.end, selected.direction ?? undefined); } catch { /* Non-text inputs do not support selection. */ }
+    } else if (selection) {
+      selection.removeAllRanges();
+      for (const range of ranges) if (range.commonAncestorContainer.isConnected) selection.addRange(range);
+    }
+  }
 }
 
 // ─── Screen Share Identity ───

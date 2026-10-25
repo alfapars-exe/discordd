@@ -1,7 +1,7 @@
 /**
  * useAnchoredCard — positioning + dismissal plumbing for an anchored
  * popover card (MemberCard). Clamps the requested position into the
- * viewport (8px padding) and closes on outside mousedown. While a child
+ * viewport (8px padding) and closes on outside mousedown or Escape. While a child
  * modal is open (`childModalOpen`), the click-outside handler is
  * suppressed so clicks inside the modal don't dismiss the card under it.
  */
@@ -48,6 +48,13 @@ export function useAnchoredCard(
   }, [position]);
 
   useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || childModalOpenRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    }
+
     function handleClick(e: MouseEvent) {
       if (childModalOpenRef.current) return;
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
@@ -58,10 +65,12 @@ export function useAnchoredCard(
     const frameId = requestAnimationFrame(() => {
       document.addEventListener("mousedown", handleClick);
     });
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       cancelAnimationFrame(frameId);
       document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
 

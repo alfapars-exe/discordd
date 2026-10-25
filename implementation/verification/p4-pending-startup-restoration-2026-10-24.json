@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Authenticated DM sidebar startup now fetches fresh groups and invokes encrypted pending restoration only after groups and the device encryption runtime are ready. A dedicated hook reruns for account/device/membership-ID changes but not unread-only updates. New group sends are gated on ready encryption, current restored device/membership scope and absence of blocked records.",
+    "The existing encrypted read/dependency planner hydrates one active pending request plus a per-group queue. Exact original payload/files are retained, restored=true/stored=true and busy=false; no API send occurs during hydration. Current in-memory pending/recovery IDs and session-retired scopes are not duplicated by rereads. Stale account/device/group-list reads cannot apply their results.",
+    "Resolution promotes queued work without sending it. A committed child retires its source's durable scope before queue promotion, preventing its now-resolved original partial operation from resurfacing. Cancellation promotes a still-needed queued source rather than losing it.",
+    "Restored text prefills only an otherwise empty, idle composer; newer drafts remain untouched. Files stay in the pending card/recovery path rather than automatically entering a new message draft. Revision checks clear only unchanged restored text after confirmed completion. A deferred composer prefill handles promotion while the previous composer send ticket is still finishing.",
+    "Unreadable/cyclic/duplicate groups remain blocked with a reread action, not a discard/bypass. EN/TR UI distinguishes restored work, storage/read failures and encryption readiness. Restored request/file display does not claim that a message was sent."
+  ],
+  "verification": [
+    "Real IndexedDB/WebCrypto integration hydrates persisted requests after connection close/reopen without another POST, keeps files out of an automatic new-message draft, and resolves a stored child before its queued source. Explicit completed-result lookup deletes both resolved records without replaying the send. Signal fan-out and network are mocked; this is not a real process/two-client acceptance test.",
+    "Store tests verify fail-closed readiness/unreadable-group gates, retry after local read failure, account change during restore and mandatory new-device restoration before a new send. Startup hook tests verify authenticated group fetch, device-ready timing, unread-only deduplication, device rerun and replacement-account behavior.",
+    "An older test attempted a fresh send immediately after device change; it was updated to perform the now-required new-device restoration. A refactored unused useEffect import was caught by tsc and removed. No test was skipped or disabled.",
+    "Final full client regression passed: 228 files / 2165 tests in 46.54s. Final tsc -b, targeted ESLint and git diff --check passed. Final local Vite production web build passed: 1651 modules, 685ms; existing warnings remain unsuppressed."
+  ],
+  "remaining": [
+    "Actual browser/Electron process close/restart, real two-client encrypted media/reconnect, storage quota/large-file/cross-tab pressure and Windows packaging acceptance remain unperformed. Do not mark P4 or restart acceptance complete based only on fake-indexeddb connection restart.",
+    "Reviewed-to-draft provenance across subsequent manual sends and restart still needs completion so preserved partial records cannot offer already-forwarded files as fresh retries. Current supported failed-files-only child lineage is tested; broader manual-review paths are not certified.",
+    "A local device change with an already-committed old-device request remains fail-closed; read-only adoption/finalization in the replacement device context still needs integration. Corrupt record repair/export UI, inaccessible-group retention policy and full cross-tab lifecycle handling remain open.",
+    "The existing browser QA backend has not been restarted while its area is handed to the user; no live UI acceptance is claimed. No commit, push, merge, production migration or release performed. Overall P0-P11 remains incomplete."
+  ]
+}

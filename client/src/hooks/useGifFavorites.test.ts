@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { GifResult } from "../api/gif";
 
 vi.mock("../api/preferences", () => ({
-  getPreferences: vi.fn(),
+  getPreferences: vi.fn().mockResolvedValue({ success: true, data: { user_id: "gif-user", data: {} } }),
   updatePreferences: vi.fn().mockResolvedValue({ success: true }),
 }));
 
@@ -26,9 +26,14 @@ function gif(id: string, host = "static.klipy.com"): GifResult {
   };
 }
 
-beforeEach(() => {
-  usePreferencesStore.setState({ data: {}, isLoaded: true });
+beforeEach(async () => {
+  usePreferencesStore.getState().reset();
+  localStorage.clear();
+  usePreferencesStore.getState().bindAccount("gif-user");
+  await usePreferencesStore.getState().fetchAndApply();
 });
+
+afterEach(() => usePreferencesStore.getState().reset());
 
 describe("sanitizeGifFavorites", () => {
   it("rejects non-Klipy url or preview_url", () => {

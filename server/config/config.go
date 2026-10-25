@@ -12,18 +12,19 @@ import (
 )
 
 type Config struct {
-	Server          ServerConfig
-	Database        DatabaseConfig
-	JWT             JWTConfig
-	LiveKit         LiveKitConfig
-	Upload          UploadConfig
-	Email           EmailConfig
-	DiagSMTP        DiagSMTPConfig
-	Klipy           KlipyConfig
-	Backup          BackupConfig
-	Logging         LoggingConfig
-	EncryptionKey   string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
-	HetznerAPIToken string // Hetzner Cloud API token (read-only) — optional
+	Server                       ServerConfig
+	Database                     DatabaseConfig
+	JWT                          JWTConfig
+	LiveKit                      LiveKitConfig
+	Upload                       UploadConfig
+	Email                        EmailConfig
+	DiagSMTP                     DiagSMTPConfig
+	Klipy                        KlipyConfig
+	Backup                       BackupConfig
+	Logging                      LoggingConfig
+	EncryptionKey                string // AES-256 key (64 hex chars = 32 bytes) for LiveKit credential encryption
+	HetznerAPIToken              string // Hetzner Cloud API token (read-only) — optional
+	AllowLiveKitInstanceCreation bool
 	// AuditLogRetentionDays is how many days audit_logs rows are kept before
 	// the background purge deletes them (env AUDIT_LOG_RETENTION_DAYS,
 	// default 180). <= 0 disables the purge — audit history is kept forever,
@@ -393,11 +394,12 @@ func Load() (*Config, error) {
 			Environment: environment,
 			Release:     getEnv("RELEASE", ""),
 		},
-		EncryptionKey:          encKey,
-		HetznerAPIToken:        getEnv("HETZNER_API_TOKEN", ""),
-		TrustedProxies:         trustedProxies,
-		AuditLogRetentionDays:  auditLogRetentionDays,
-		TelemetryRetentionDays: telemetryRetentionDays,
+		EncryptionKey:                encKey,
+		HetznerAPIToken:              getEnv("HETZNER_API_TOKEN", ""),
+		AllowLiveKitInstanceCreation: getBoolEnv("ALLOW_LIVEKIT_INSTANCE_CREATION", false),
+		TrustedProxies:               trustedProxies,
+		AuditLogRetentionDays:        auditLogRetentionDays,
+		TelemetryRetentionDays:       telemetryRetentionDays,
 	}
 
 	return cfg, nil
@@ -413,6 +415,19 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+func getBoolEnv(key string, fallback bool) bool {
+	raw, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	v, err := strconv.ParseBool(strings.TrimSpace(raw))
+	if err != nil {
+		slog.Warn("invalid boolean environment value, using default", "key", key, "value", raw, "default", fallback)
+		return fallback
+	}
+	return v
 }
 
 // splitAndTrim parses a comma-separated env var into a non-empty trimmed

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"slices"
 	"testing"
 
@@ -30,11 +29,7 @@ func TestDeleteServerCascade_RemovesSoundboardSounds(t *testing.T) {
 	seedSoundboardSound(t, db, "sound-a", emojiSrvA, "/api/uploads/soundboard/aaaa_ding.ogg")
 	seedSoundboardSound(t, db, "sound-b", emojiSrvB, "/api/uploads/soundboard/bbbb_ding.ogg")
 
-	fkOff, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
-	if err != nil {
-		t.Fatalf("open fk-off conn: %v", err)
-	}
-	defer func() { _ = fkOff.Close() }()
+	fkOff := entranceFKOffConn(t, path)
 
 	if err := deleteServerCascade(context.Background(), fkOff, emojiSrvA); err != nil {
 		t.Fatalf("deleteServerCascade: %v", err)

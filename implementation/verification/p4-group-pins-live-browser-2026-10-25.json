@@ -1,0 +1,35 @@
+{
+  "phases": ["P2", "P4", "P6", "P8"],
+  "status": "implemented_unverified",
+  "environment": {
+    "browser": "Existing Ego Lite task space 0; only local HiChat p3/p4 operated, unrelated user/cloud tabs untouched.",
+    "origins": ["http://127.0.0.1:15174", "http://localhost:15174"],
+    "accounts": "Previously created synthetic QA Presence A/B accounts, isolated local QA database.",
+    "api": "hichat-presence-qa-current, loopback19192, current Go source, local QA bind mount only.",
+    "backup": "C:/Users/PARS/Desktop/PROJELER/HiChat/_qa_backups/presence-before-group-pins-20261025-0435"
+  },
+  "verified": [
+    "Created a two-member group through the actual UI. A sent formatted text through the real encrypted group store, then pinned and unpinned it through the panel; an unsent draft remained unchanged.",
+    "User explicitly resolved B's legacy-key archive consent prompt. B opened the group and decrypted A's earlier message using the resulting account-scoped device state.",
+    "After fixing Hub callback reservation order, both clients received ready and the connection banner cleared. The server sidebar reappeared.",
+    "B sent a new encrypted group message; A displayed its decrypted content live without reloading.",
+    "B pinned its message; A's already-open pin panel refreshed live. A unpinned it; B's panel became empty live. B repinned it; A's draft remained exactly 'keep live QA draft'.",
+    "B reloaded after the removal-order fix, reconnected successfully while A remained connected, and reopened the group. Encrypted history and the persisted pin decrypted successfully.",
+    "Geometry-only sampling at390,768,1024,1440,2560 CSS pixels observed document scrollWidth equal to viewport and composer right edge within viewport. This is not screenshot or full visual acceptance."
+  ],
+  "findings": [
+    "Initial live screenshot exposed unthemed group controls; targeted responsive theme CSS was added and pins/members panels made mutually exclusive.",
+    "Original callback ordering deadlocked WebSocket registration before ready, despite HTTP send working. Both registration/removal ordering were corrected with bounded red-to-green regressions.",
+    "Reloading a group route prematurely redirected to friends while group metadata was loading; the separate guarded routing correction is being verified."
+  ],
+  "artifacts": [
+    "implementation/verification/p4-group-pins-browser-2026-10-25.png (initial finding, before visual correction; not an accepted reference image)",
+    "implementation/verification/p4-group-pins-postgres-2026-10-25.json",
+    "implementation/verification/p6-ws-registration-callback-order-2026-10-25.json"
+  ],
+  "remaining": [
+    "Screenshot matrix remains blocked by Ego Lite reporting a minimized window even after the user reported opening it. No raw screenshot workaround was used and visual acceptance is not claimed.",
+    "Actual Windows overlay/device/audio tests, physical two-device tests, remaining P0-P11 requirements and full release acceptance remain open."
+  ],
+  "release": "Local fixture writes only; no production migration, commit, push, merge, deployment or publication."
+}

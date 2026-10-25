@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,7 @@ var musicHandlerLogger = logx.Component("handler.music")
 // playWriteDeadline is Play's per-response write deadline. The client gives
 // up at 50 s, so the server must be able to answer before that.
 const playWriteDeadline = 45 * time.Second
+const maxMusicQueueMutationItems = 200
 
 // MusicHandler — HTTP entry points for the per-channel music bot.
 //
@@ -36,10 +39,51 @@ type MusicHandler struct {
 	// rather than sharing one with the cheap skip/pause/resume/stop/state
 	// commands. See RateLimiters.MusicPlay for the sizing rationale.
 	playLimiter *ratelimit.MessageRateLimiter
+	search      func(context.Context, string) ([]models.MusicTrack, error)
 }
 
 func NewMusicHandler(music services.MusicBotService, perms services.ChannelPermResolver, playLimiter *ratelimit.MessageRateLimiter) *MusicHandler {
-	return &MusicHandler{music: music, perms: perms, playLimiter: playLimiter}
+	return &MusicHandler{music: music, perms: perms, playLimiter: playLimiter, search: services.SearchMusicTracks}
+}
+
+// Search — GET .../music/search?q=. Returns up to five selectable YouTube
+// results and never joins the voice room or mutates the queue.
+func (h *MusicHandler) Search(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	if h.playLimiter != nil && !h.playLimiter.Allow(user.ID) {
+		retryAfter := h.playLimiter.CooldownSeconds(user.ID)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		pkg.ErrorWithMessage(w, http.StatusTooManyRequests, "too many music searches, please wait")
+		return
+	}
+	channelID := r.PathValue("channelId")
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" || len([]rune(query)) > 100 {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "search query must be 1-100 characters")
+		return
+	}
+	tracks, err := h.search(r.Context(), query)
+	if err != nil {
+		if errors.Is(err, pkg.ErrBadRequest) {
+			pkg.Error(w, err)
+			return
+		}
+		if code := services.MusicErrorCode(err); code != "" {
+			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to search YouTube", code)
+			return
+		}
+		pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to search YouTube", err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string][]models.MusicTrack{"results": tracks})
 }
 
 type playRequest struct {
@@ -112,6 +156,11 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 
 	tracks, err := h.music.Enqueue(r.Context(), user.ID, channelID, req.URL)
 	if err != nil {
+		if code := services.MusicErrorCode(err); code != "" {
+			musicHandlerLogger.Warn("play: YouTube resolution failed", "code", code, "err", pkg.ErrText(err))
+			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to resolve YouTube track", code)
+			return
+		}
 		if errors.Is(err, pkg.ErrBadRequest) {
 			// URL guard rejection (music_url_guard.go) — client-caused, 400,
 			// message is already safe to echo (it never contains resolved
@@ -152,6 +201,160 @@ func (h *MusicHandler) Resume(w http.ResponseWriter, r *http.Request) {
 // it kicks the bot for everyone listening.
 func (h *MusicHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	h.simpleCommand(w, r, models.PermManageChannels, h.music.Stop)
+}
+
+type reorderMusicQueueRequest struct {
+	QueueItemIDs     []string `json:"queue_item_ids"`
+	ExpectedRevision uint64   `json:"expected_revision"`
+}
+
+type musicRevisionRequest struct {
+	ExpectedRevision uint64 `json:"expected_revision"`
+}
+
+type repeatMusicRequest struct {
+	Mode string `json:"mode"`
+}
+
+type seekMusicRequest struct {
+	Seconds int `json:"seconds"`
+}
+
+func (h *MusicHandler) RemoveQueueItem(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	channelID, itemID := r.PathValue("channelId"), r.PathValue("queueItemId")
+	if channelID == "" || itemID == "" {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "channel and queue item are required")
+		return
+	}
+	revision, err := strconv.ParseUint(r.URL.Query().Get("revision"), 10, 64)
+	if err != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "valid revision is required")
+		return
+	}
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.RemoveQueueItem(channelID, itemID, revision); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *MusicHandler) ReorderQueue(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	channelID := r.PathValue("channelId")
+	var req reorderMusicQueueRequest
+	if json.NewDecoder(r.Body).Decode(&req) != nil || len(req.QueueItemIDs) > maxMusicQueueMutationItems {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid queue order")
+		return
+	}
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.ReorderQueue(channelID, req.QueueItemIDs, req.ExpectedRevision); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *MusicHandler) ShuffleQueue(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	channelID := r.PathValue("channelId")
+	var req musicRevisionRequest
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid queue revision")
+		return
+	}
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.ShuffleQueue(channelID, req.ExpectedRevision); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *MusicHandler) SetRepeatMode(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	channelID := r.PathValue("channelId")
+	var req repeatMusicRequest
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid repeat mode")
+		return
+	}
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.SetRepeatMode(channelID, req.Mode); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *MusicHandler) Seek(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	channelID := r.PathValue("channelId")
+	var req seekMusicRequest
+	if json.NewDecoder(r.Body).Decode(&req) != nil || req.Seconds < 0 {
+		pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid seek position")
+		return
+	}
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.Seek(channelID, req.Seconds); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *MusicHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	if !ok {
+		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
+		return
+	}
+	channelID := r.PathValue("channelId")
+	if err := h.requirePerm(r, user.ID, channelID, models.PermSpeak); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.Restore(r.Context(), channelID); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	pkg.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // State — GET /api/servers/.../music/state. Returns the channel's current

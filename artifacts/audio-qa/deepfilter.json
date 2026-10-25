@@ -1,0 +1,161 @@
+{
+  "engine": "deepfilter",
+  "createdAt": "2026-10-23T01:41:00.564Z",
+  "parameters": {
+    "uiStrength": 70,
+    "attenuationLimitDb": 10,
+    "mapping": "src/audio/deepfilterSuppression.ts#strengthToAttenLimDb"
+  },
+  "sourceHashes": {
+    "benchmark": "afae39ee8ca8d6b09d376968b03551f3266d0a6f2fb280a540352f1e5c2d5f0b",
+    "dsp": "5033749713f35f73d2e9d0d83d0d70195ee0fbd12b190f9be2f574d35fbaff8e",
+    "suppressionMapping": "acbc5c6afb19097dc5bc089a7a146742f88c44aaf38e93bf2ad0e97ff304ebc7"
+  },
+  "results": [
+    {
+      "fixture": "clean",
+      "outputFile": "deepfilter-clean.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 403.43780000000004,
+      "inferenceWallMs": {
+        "p50": 1.1523000000001957,
+        "p95": 1.522399999999834,
+        "p99": 1.7386000000001332
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": null,
+      "outputLag": {
+        "samples": 1440,
+        "milliseconds": 30,
+        "normalizedCorrelation": 0.9237919403590479,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -36.253263304870146,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "fan",
+      "outputFile": "deepfilter-fan.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 351.9220999999998,
+      "inferenceWallMs": {
+        "p50": 1.3061999999999898,
+        "p95": 1.6166000000002896,
+        "p99": 2.0986999999995533
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -31.801171518596867,
+          "outputRmsDbfs": -41.81374837049427,
+          "attenuationDb": 10.0125768518974
+        },
+        "tail": {
+          "inputRmsDbfs": -32.43268685735202,
+          "outputRmsDbfs": -42.48239907930585,
+          "attenuationDb": 10.049712221953833
+        }
+      },
+      "outputLag": {
+        "samples": 1440,
+        "milliseconds": 30,
+        "normalizedCorrelation": 0.8420825664296588,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -34.679689525080576,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "keyboard",
+      "outputFile": "deepfilter-keyboard.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 344.28799999999956,
+      "inferenceWallMs": {
+        "p50": 0.7687999999998283,
+        "p95": 2.000300000000607,
+        "p99": 2.3083999999998923
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.17333244610398,
+          "outputRmsDbfs": -43.173332353444955,
+          "attenuationDb": 9.999999907340978
+        },
+        "tail": {
+          "inputRmsDbfs": -33.31342352961014,
+          "outputRmsDbfs": -43.31342346068385,
+          "attenuationDb": 9.99999993107371
+        }
+      },
+      "outputLag": {
+        "samples": 1440,
+        "milliseconds": 30,
+        "normalizedCorrelation": 0.8508127857779295,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.31830801365234,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "transient",
+      "outputFile": "deepfilter-transient.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 376.8804999999993,
+      "inferenceWallMs": {
+        "p50": 0.8698999999996886,
+        "p95": 2.179200000000492,
+        "p99": 2.3255000000008295
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.97000337466929,
+          "outputRmsDbfs": -43.97000322420003,
+          "attenuationDb": 9.999999849530738
+        },
+        "tail": {
+          "inputRmsDbfs": -33.84338417586975,
+          "outputRmsDbfs": -43.84338404570144,
+          "attenuationDb": 9.99999986983169
+        }
+      },
+      "outputLag": {
+        "samples": 1440,
+        "milliseconds": 30,
+        "normalizedCorrelation": 0.908176909339655,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -36.12189731700781,
+      "finite": true,
+      "clippedSamples": 0
+    }
+  ]
+}

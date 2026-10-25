@@ -12,6 +12,7 @@
  */
 
 import i18n from "../i18n";
+import { currentHour12 } from "../stores/timeFormatStore";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -20,7 +21,7 @@ function startOfDay(date: Date): Date {
 }
 
 function formatTimeOnly(date: Date, locale: string): string {
-  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: currentHour12() });
 }
 
 /**
@@ -87,6 +88,7 @@ export function formatFullDateTime(dateStr: string, locale: string): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: currentHour12(),
   });
 }
 
@@ -169,7 +171,7 @@ export function formatDateTime(
   iso: string | number | Date,
   options?: Intl.DateTimeFormatOptions
 ): string {
-  return new Date(iso).toLocaleString(i18n.language, options);
+  return new Date(iso).toLocaleString(i18n.language, { ...options, hour12: currentHour12() });
 }
 
 /** Time-only label in the current UI language. */
@@ -177,7 +179,7 @@ export function formatTime(
   iso: string | number | Date,
   options?: Intl.DateTimeFormatOptions
 ): string {
-  return new Date(iso).toLocaleTimeString(i18n.language, options);
+  return new Date(iso).toLocaleTimeString(i18n.language, { ...options, hour12: currentHour12() });
 }
 
 // ─── Offline "last seen" relative label ───

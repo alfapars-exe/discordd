@@ -17,6 +17,7 @@ import MemberItem from "../members/MemberItem";
 import { MemberSkeleton } from "../shared/Skeleton";
 import { IconMembers } from "../shared/Icons";
 import { partitionMembers } from "./memberGrouping";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 
 /** Member panel width bounds (px) */
 const MEMBERS_MIN = 160;
@@ -110,7 +111,7 @@ function MemberList() {
           onMouseDown={handleMouseDown}
         />
       )}
-      <div className="members-inner app-panel" style={{ width }}>
+      <div className="members-inner app-panel" style={{ width }} inert={UI_SHELL_V2 && !isMobile && !membersOpen ? true : undefined}>
         {/* ─── Header ─── */}
         <div className="members-header">
           <div className="members-header-left">
@@ -129,7 +130,7 @@ function MemberList() {
             ) : null}
             <h3>{t("members")}</h3>
           </div>
-          <button onClick={isMobile ? closeRightDrawer : toggleMembers}>✕</button>
+          <button onClick={isMobile ? closeRightDrawer : toggleMembers} aria-label={t("closeMembers")} title={t("closeMembers")}>✕</button>
         </div>
 
         {/* ─── Member List ─── */}

@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Channel listing adds optional response-only effective_permissions on text channels using the existing server-wide user/channel permission resolver. Metadata is assigned to response copies, not repository/cache values or shared broadcasts. Resolver failure does not produce a guessed permission map; legacy test/provider interfaces without the resolver omit metadata.",
+    "The forwarding picker requires known, valid view/read/send bits (or admin) for text targets. Voice/audit targets and denied targets remain excluded. Missing permission metadata is fail-closed and produces the existing reload warning, including against an older backend.",
+    "After attachment materialization, a selected channel is reloaded and checked again before destination send invocation. An accepted DM target is also rechecked against the current DM list. The normal send endpoint remains the final permission authority for races after this check.",
+    "Documented the additive optional response field in OpenAPI and the client Channel type. No database migration or new permission formula was introduced."
+  ],
+  "verification": [
+    "Service tests cover distinct users, role/channel send denial, response-only assignment without shared source mutation, absent non-text metadata and failed permission resolution. A model/contract test verifies explicit zero versus omitted metadata and parses the OpenAPI field as an optional integer.",
+    "Client tests cover required view/read/send bits, admin, invalid/unknown bits, read-only/unknown target exclusion and revocation between target selection and finished decryption with no send invocation.",
+    "Full Linux Docker Go suite passed before the final contract test was added: repository 45.970s, services 21.467s, handlers 2.917s. Final affected model/service contract tests passed afterward. Windows native/complete PostgreSQL acceptance is not implied.",
+    "Final client tsc -b and targeted ESLint passed. Full client suite passed: 229 files / 2200 tests in 47.13s. Vite production web build passed in 729ms. Targeted git diff --check passed; existing warnings remain visible.",
+    "Local Node/Python YAML parser attempts found no installed YAML module. Used the existing Go YAML dependency for a persistent contract test instead. Its initial fixture assumed scalar-only schema types; corrected it for OpenAPI 3.1 type arrays and reran successfully. No dependency was installed."
+  ],
+  "remaining": [
+    "Group forwarding destinations, richer DM eligibility/block rules, source access revocation races and real two-client re-encryption remain open. Permission lists are snapshots, not authority to bypass the send endpoint.",
+    "The existing browser QA backend has not been rebuilt/restarted by this step. Older servers without metadata intentionally do not expose forwardable server channels. Integrated Windows/web/device acceptance remains incomplete.",
+    "Overall P0-P11 remains incomplete. No commit, push, merge, production migration or release performed."
+  ]
+}

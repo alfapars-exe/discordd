@@ -39,7 +39,7 @@ function InviteSettings() {
   const deleteInvite = useInviteStore((s) => s.deleteInvite);
   const addToast = useToastStore((s) => s.addToast);
 
-  const [expiresIn, setExpiresIn] = useState(1440);
+  const [expiresIn, setExpiresIn] = useState(10080);
   const [maxUses, setMaxUses] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
 

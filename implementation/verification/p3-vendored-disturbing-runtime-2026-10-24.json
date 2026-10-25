@@ -1,0 +1,49 @@
+{
+  "status": "implemented_unverified",
+  "scope": "P3 local disturbing-media runtime, worker and category policy integration; not completed classifier acceptance",
+  "verification": {
+    "command": "node scripts/verify-vendored-disturbing-runtime.mjs",
+    "result": "passed",
+    "runtime": "onnxruntime-web 1.30.0 standalone ESM with local WASM, single thread, proxy disabled",
+    "assets": "Exact size and SHA-256 verified for model, SDK module, WASM loader and WASM binary",
+    "execution": "Actual model loaded and ran on synthetic constant RGB input; validated three finite normalized output probabilities; tensors and session released",
+    "lineEndings": "Scoped Git -text rule preserves hash-sensitive model/runtime artifacts without changing existing LFS filters"
+  },
+  "adapterProgress": {
+    "source": "client/src/media/disturbingModelRuntime.ts",
+    "behavior": "Same-origin v2 assets, bounded reads, pinned model/WASM SHA-256, local single-thread runtime, independent validated category output, tensor cleanup and session disposal",
+    "tests": "22 tests passed across runtime adapter, disturbingModelContract and Pillow preprocessing; targeted ESLint passed",
+    "faultCoverage": "Malformed scores and output shape reject; input/output tensors disposed on invalid output; input disposed on execution failure; invalid dimensions reject before inference; disposed adapter rejects reuse; session disposal idempotent; external/query/wrong-version roots reject before fetch",
+    "integration": "Worker invokes local adapter after sexual inference and returns independent validated evidence; failure returns disturbing unknown. Client contract rejects unsupported/inconsistent evidence. Batch aggregation preserves any positive, requires all negative for a negative, otherwise retains unknown or uncertain, without inventing probability evidence. UI independently applies both category preferences. No browser acceptance claim.",
+    "batchTests": "12 tests passed across conservative category aggregation and actual local-analysis hook; TypeScript check passed",
+    "uiIntegration": "Independent category policy now accepts only validated negative evidence; unknown/uncertain preserves preferences. Reveal identity includes both categories. Turkish/English hints distinguish partial from dual analysis and warn about model errors.",
+    "uiTests": "13 tests passed across category policy and React analysis gate; targeted ESLint passed; Vite production build passed with existing large-chunk/dynamic-import warnings",
+    "workerTests": "5 worker-handler tests passed with mocked models/decoder: common RGB inputs, local v2 root, independent load/inference failure remains unknown, load retry, unsupported media rejected before decode, generic sexual failure and bitmap cleanup followed by successful next job. These are not real browser/model joint execution tests. Targeted ESLint and TypeScript passed."
+  },
+  "regression": {
+    "command": "node node_modules/vitest/vitest.mjs run --reporter=dot (client directory)",
+    "result": "250 test files / 2421 tests passed; exit 0",
+    "durationSeconds": 49.59,
+    "warnings": "Existing mocked API URL, React act, Capacitor registration and intentional failure-path logging remain; a passing suite is not device acceptance",
+    "buildAssetIntegrity": "All four v2 model/runtime binary and JS asset SHA-256 values match client/public and client/dist",
+    "scopeRegistry": "33 references / 261 behaviors structurally valid; acceptance remains NO; no statuses promoted"
+  },
+  "actualAdapterTest": {
+    "source": "client/src/media/disturbingModelRuntime.actual.test.ts",
+    "result": "Passed: actual pinned standalone runtime and ONNX model through production createDisturbingPredictor on three synthetic RGB inputs; source size/hash assertions, output contract, pixel preprocessing, disposal and post-disposal rejection. TypeScript and targeted ESLint passed.",
+    "limitations": "Node execution, not browser decode/worker/CSP or representative classification accuracy",
+    "packagingCorrection": "Unchanged SDK source map copied from same pinned 1.30.0 npm package; removes missing-source-map warning without changing trusted JS artifact"
+  },
+  "float32ContractCorrection": {
+    "reproduction": "Float32Array([0.2, 0, 0.8]) passes model probability validation but previously failed the inter-thread contract because reconstructing 1 - NSFL - SFW produced a negative residual; regression failed before fix",
+    "fix": "Preserve original NSFW class probability as sexualClassProbability and validate all three original probabilities; never infer or renormalize missing evidence",
+    "verification": "72 tests across 15 media/policy/hook/React files passed, including actual pinned models and original float32 regression; TypeScript and targeted ESLint passed"
+  },
+  "remaining": [
+    "Browser execution and encoded-image decoder parity",
+    "Representative quality, false-negative and performance evaluation",
+    "Real-device and acceptance evidence",
+    "Final redistribution and license review"
+  ],
+  "release": "No commit, push, publication or production migration performed"
+}

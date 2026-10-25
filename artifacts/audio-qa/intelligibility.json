@@ -1,0 +1,573 @@
+{
+  "createdAt": "2026-10-23T01:51:47.148886+00:00",
+  "environment": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "numpy": "2.3.5",
+    "scipy": "1.15.3",
+    "pystoi": "0.4.1"
+  },
+  "sampleRate": 48000,
+  "metricInternalSampleRate": 10000,
+  "normalizationNoiseSeed": 20261023,
+  "alignment": "degraded[speechStart + round(savedLagMs * fs / 1000) : speechEnd + lag] vs clean[speechStart:speechEnd]",
+  "limitations": [
+    "One speaker reading one Turkish sentence, originally 16 kHz, with synthetic noises. Scores do not establish performance across speakers, languages, microphones or real environments.",
+    "STOI and ESTOI are reference-based objective intelligibility proxies, not word-recognition percentages, listening tests, overall sound quality or a release pass/fail criterion. Higher scores are not proof of universal superiority.",
+    "Only the original 14.16-second speech region is scored. The three-second leading and two-second trailing noise-only padding are excluded; pystoi additionally removes silent frames using the clean reference.",
+    "Alignment uses each output's existing waveform-correlation lag from report.json, rounded to the nearest sample. No per-metric lag search, amplitude normalization or favorable segment selection is applied.",
+    "pystoi internally resamples to 10 kHz and evaluates speech-band envelopes; these metrics cannot establish preservation of frequencies above 8 kHz or justify the 16 kHz modes' full-band fidelity.",
+    "All inputs and model outputs are saved PCM16 WAVs. These are model-only offline outputs, without the energy gate, microphone processing, browser queues or LiveKit/P2P encoding. Quantization may influence quiet frames.",
+    "All 20 engine/fixture combinations and unprocessed input baselines are reported, including degradation. Negative deltas are preserved; no score threshold is used to declare success."
+  ],
+  "provenance": {
+    "implementation": "https://github.com/mpariente/pystoi",
+    "pystoiRelease": "https://pypi.org/project/pystoi/0.4.1/",
+    "scipyRelease": "https://pypi.org/project/scipy/1.15.3/",
+    "sourceReport": {
+      "file": "report.json",
+      "sha256": "dba3558e306d0fc3e9d710a0e838b0004bf9eb66582079ebe846ad7259e49563"
+    },
+    "sourceRecording": {
+      "dataset": "google/fleurs",
+      "dataset_url": "https://huggingface.co/datasets/google/fleurs",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "source_archive_url": "https://huggingface.co/datasets/google/fleurs/resolve/70bb2e84b976b7e960aa89f1c648e09c59f894dd/data/tr_tr/audio/test.tar.gz",
+      "source_archive_member": "test/10000377651956138413.wav",
+      "source_filename": "10000377651956138413.wav",
+      "source_sha256": "e2efd9f3ce2fcc9e191126dcded8e674233a9ce83a9c2132541700e8f1bd57c3",
+      "source_bytes": 906298,
+      "archive_compressed_bytes_read": 747520,
+      "config": "tr_tr",
+      "split": "test",
+      "id": 2004,
+      "raw_transcription": "Aynı ay, başka bir yolcu uçağı Meşhed'deki bir pisti aşarak bir duvara çarptı ve on yedi kişinin ölümüne neden oldu.",
+      "transcription": "aynı ay başka bir yolcu uçağı meşhed'deki bir pisti aşarak bir duvara çarptı ve on yedi kişinin ölümüne neden oldu",
+      "num_samples": 226560,
+      "speaker_gender": "MALE",
+      "retrieved_utc": "2026-10-23",
+      "attribution": "FLEURS (2022), Alexis Conneau, Min Ma, Simran Khanuja, Yu Zhang, Vera Axelrod, Siddharth Dalmia, Jason Riesa, Clara Rivera, and Ankur Bapna; Google and dataset contributors.",
+      "paper_url": "https://arxiv.org/abs/2205.12446"
+    },
+    "files": {
+      "inputs/clean.wav": {
+        "bytes": 1839404,
+        "sha256": "cf308b05e9bccb309ab4951d30389fc04319c11905b670b27330a10686291868",
+        "samples": 919680
+      },
+      "inputs/fan.wav": {
+        "bytes": 1839404,
+        "sha256": "6ec9b1518b7b007d1fb087bed52d19489c78f6a34659d168b5e8c4d728ad84b3",
+        "samples": 919680
+      },
+      "inputs/keyboard.wav": {
+        "bytes": 1839404,
+        "sha256": "69f222fc01676879f077ddd3b33ded740da89d67386601006835f804ae9c28db",
+        "samples": 919680
+      },
+      "inputs/transient.wav": {
+        "bytes": 1839404,
+        "sha256": "acb16a3c6db5e9aaf29529d384553b535b47e52a30d0201167e5443863e9ea56",
+        "samples": 919680
+      },
+      "rnnoise-clean.wav": {
+        "bytes": 1839404,
+        "sha256": "016c17ddb346b3a0c09888e67a6674a109f796c97d71d53e5a2f6d575b0ec3d9",
+        "samples": 919680
+      },
+      "rnnoise-fan.wav": {
+        "bytes": 1839404,
+        "sha256": "28f80bb3185dff0945174dd650bd3b10b689de4bb6800ffc4fb537d3bc729f62",
+        "samples": 919680
+      },
+      "rnnoise-keyboard.wav": {
+        "bytes": 1839404,
+        "sha256": "46d951e4d9ed4c1574ddf49ac104c197c0a30322621629e839e7cda141a3f117",
+        "samples": 919680
+      },
+      "rnnoise-transient.wav": {
+        "bytes": 1839404,
+        "sha256": "d78ee6616724ef32fc9444bb2ad1c8953d4ad66146ce81311b9944eb772a2293",
+        "samples": 919680
+      },
+      "gtcrn-clean.wav": {
+        "bytes": 1839404,
+        "sha256": "48e05932d1805db8da92e1ac834fd16cf612072ed81b86ba588f109598ecdd72",
+        "samples": 919680
+      },
+      "gtcrn-fan.wav": {
+        "bytes": 1839404,
+        "sha256": "b75f4d9e1408277a2c55ccec8684943ecab9945d4672c72a40b24dafe30a669f",
+        "samples": 919680
+      },
+      "gtcrn-keyboard.wav": {
+        "bytes": 1839404,
+        "sha256": "6540217f2c1a5f8e915c1ed63f7861db9928b05b7aa1355c172f7ca20870aa5a",
+        "samples": 919680
+      },
+      "gtcrn-transient.wav": {
+        "bytes": 1839404,
+        "sha256": "2bded463906a3f50a1251e714fb704c4e340b7853b3100fb9f6a99d095967ddb",
+        "samples": 919680
+      },
+      "speex-clean.wav": {
+        "bytes": 1839404,
+        "sha256": "862083727238684bd2821f669a1aa2bbdf64726f85f83518d474d7c3ca2a53cd",
+        "samples": 919680
+      },
+      "speex-fan.wav": {
+        "bytes": 1839404,
+        "sha256": "0b1e48d01f792a49c7446426efe75612a038a0a4ac8e287086f04e38e90c9065",
+        "samples": 919680
+      },
+      "speex-keyboard.wav": {
+        "bytes": 1839404,
+        "sha256": "638ab6474cb94371eaa5c28952ac3990fb8fbece4650752390ef92863ba1b9a2",
+        "samples": 919680
+      },
+      "speex-transient.wav": {
+        "bytes": 1839404,
+        "sha256": "896a30aa508f44cee71b846ae486aabc1f837f53495ef4112db0b9731f957a97",
+        "samples": 919680
+      },
+      "deepfilter-clean.wav": {
+        "bytes": 1839404,
+        "sha256": "310b4cb3ef56ea23c086b1e5b80a80b50b6cb8549aefc5b80be3d8a8b58e4c49",
+        "samples": 919680
+      },
+      "deepfilter-fan.wav": {
+        "bytes": 1839404,
+        "sha256": "f6660be6ac1eaf943cee98683ec9bcf15c07b523ab57c0bd7dd3daa9c31650e4",
+        "samples": 919680
+      },
+      "deepfilter-keyboard.wav": {
+        "bytes": 1839404,
+        "sha256": "dc69007dfc01797931cce7ad067955c295bfa8b59bb969ae24baa6625c8223ee",
+        "samples": 919680
+      },
+      "deepfilter-transient.wav": {
+        "bytes": 1839404,
+        "sha256": "028cc20e2855e16beae7ab962d4b6e653da28a9a3ed2c29f4d82ecba0163fdc3",
+        "samples": 919680
+      },
+      "dtln-clean.wav": {
+        "bytes": 1839404,
+        "sha256": "537dee94fdf8c9bde2dad7bde07f143f6a7aca7950280d2b88ac539cba1617b0",
+        "samples": 919680
+      },
+      "dtln-fan.wav": {
+        "bytes": 1839404,
+        "sha256": "3efdca6dafd0b6a2cc102b9da3ac389edc81af0a55879c1a473b0f9ad3398ec8",
+        "samples": 919680
+      },
+      "dtln-keyboard.wav": {
+        "bytes": 1839404,
+        "sha256": "383c438d8dd110bdc76bc243256ca7c80b2bdf2605e6b38eeb975feeb59e884f",
+        "samples": 919680
+      },
+      "dtln-transient.wav": {
+        "bytes": 1839404,
+        "sha256": "89cbd89661b9daf7394432d6ef099c98309d37c095d066ac1589b8f5ff0c6607",
+        "samples": 919680
+      }
+    },
+    "packages": [
+      {
+        "name": "pystoi",
+        "version": "0.4.1",
+        "wheelUrl": "https://files.pythonhosted.org/packages/1a/22/60cd92bd3ec00948800984410f4cf5ded5bd8e9b715729f3642efe0edb3d/pystoi-0.4.1-py2.py3-none-any.whl",
+        "wheelSha256": "e277b671663d26d35a2416c9c8010a74084e6c3970354506398051a554896939"
+      },
+      {
+        "name": "scipy",
+        "version": "1.15.3",
+        "wheelUrl": "https://files.pythonhosted.org/packages/e6/eb/3bf6ea8ab7f1503dca3a10df2e4b9c3f6b3316df07f6c0ded94b281c7101/scipy-1.15.3-cp312-cp312-win_amd64.whl",
+        "wheelSha256": "52092bc0472cfd17df49ff17e70624345efece4e1a12b23783a1ac59a1b728ed"
+      }
+    ],
+    "pystoiSourceHashes": {
+      "stoi.py": "482b30bfa8e60f1453200315afcd5564fc9e9aa1d14aeb9710a58fd7a9f52658",
+      "utils.py": "0222df0354a248ccc7f8525eda9bda9da815e5d60106f611a5f4750d1ba7f321"
+    },
+    "numpyInstalledRecordSha256": "a330d221328f04d83e4cbb7de225768d0ba62c60c2566e1afce585ff8165a7d5",
+    "scriptSha256": "2d3675f2649b04c775eee2bf17a0ad52f914a03fbaa245049ea03531733b8d5f"
+  },
+  "baselines": [
+    {
+      "fixture": "clean",
+      "inputFile": "inputs/clean.wav",
+      "stoi": 0.9999999999999996,
+      "estoi": 1.0,
+      "lagMs": 0,
+      "lagSamples": 0,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144000,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": []
+    },
+    {
+      "fixture": "fan",
+      "inputFile": "inputs/fan.wav",
+      "stoi": 0.7158352023501623,
+      "estoi": 0.5237159813307511,
+      "lagMs": 0,
+      "lagSamples": 0,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144000,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": []
+    },
+    {
+      "fixture": "keyboard",
+      "inputFile": "inputs/keyboard.wav",
+      "stoi": 0.7671164006820375,
+      "estoi": 0.7709283139039871,
+      "lagMs": 0,
+      "lagSamples": 0,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144000,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": []
+    },
+    {
+      "fixture": "transient",
+      "inputFile": "inputs/transient.wav",
+      "stoi": 0.9995342740325359,
+      "estoi": 0.9968349063374247,
+      "lagMs": 0,
+      "lagSamples": 0,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144000,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": []
+    }
+  ],
+  "results": [
+    {
+      "engine": "rnnoise",
+      "fixture": "clean",
+      "outputFile": "rnnoise-clean.wav",
+      "stoi": 0.9944560459729785,
+      "estoi": 0.9787635582310541,
+      "lagMs": 10,
+      "lagSamples": 480,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144480,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.005543954027021014,
+      "deltaEstoiVsNoisyInput": -0.021236441768945902
+    },
+    {
+      "engine": "rnnoise",
+      "fixture": "fan",
+      "outputFile": "rnnoise-fan.wav",
+      "stoi": 0.8110026634003823,
+      "estoi": 0.5824498920760706,
+      "lagMs": 10,
+      "lagSamples": 480,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144480,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.09516746105022,
+      "deltaEstoiVsNoisyInput": 0.05873391074531942
+    },
+    {
+      "engine": "rnnoise",
+      "fixture": "keyboard",
+      "outputFile": "rnnoise-keyboard.wav",
+      "stoi": 0.8498980620567755,
+      "estoi": 0.8171729394762078,
+      "lagMs": 9.979166666666666,
+      "lagSamples": 479,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144479,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.08278166137473808,
+      "deltaEstoiVsNoisyInput": 0.046244625572220754
+    },
+    {
+      "engine": "rnnoise",
+      "fixture": "transient",
+      "outputFile": "rnnoise-transient.wav",
+      "stoi": 0.9926857642545728,
+      "estoi": 0.9727165939669621,
+      "lagMs": 10,
+      "lagSamples": 480,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144480,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.006848509777963141,
+      "deltaEstoiVsNoisyInput": -0.02411831237046258
+    },
+    {
+      "engine": "gtcrn",
+      "fixture": "clean",
+      "outputFile": "gtcrn-clean.wav",
+      "stoi": 0.9871750709062351,
+      "estoi": 0.9713951209603192,
+      "lagMs": 18.541666666666668,
+      "lagSamples": 890,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144890,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.012824929093764426,
+      "deltaEstoiVsNoisyInput": -0.028604879039680786
+    },
+    {
+      "engine": "gtcrn",
+      "fixture": "fan",
+      "outputFile": "gtcrn-fan.wav",
+      "stoi": 0.8274279750123519,
+      "estoi": 0.623280637331776,
+      "lagMs": 18.541666666666668,
+      "lagSamples": 890,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144890,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.11159277266218959,
+      "deltaEstoiVsNoisyInput": 0.09956465600102482
+    },
+    {
+      "engine": "gtcrn",
+      "fixture": "keyboard",
+      "outputFile": "gtcrn-keyboard.wav",
+      "stoi": 0.9509595111436084,
+      "estoi": 0.9024042236670444,
+      "lagMs": 18.541666666666668,
+      "lagSamples": 890,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144890,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.18384311046157098,
+      "deltaEstoiVsNoisyInput": 0.13147590976305734
+    },
+    {
+      "engine": "gtcrn",
+      "fixture": "transient",
+      "outputFile": "gtcrn-transient.wav",
+      "stoi": 0.9871400111214504,
+      "estoi": 0.9664625356385493,
+      "lagMs": 18.541666666666668,
+      "lagSamples": 890,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144890,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.012394262911085474,
+      "deltaEstoiVsNoisyInput": -0.03037237069887533
+    },
+    {
+      "engine": "speex",
+      "fixture": "clean",
+      "outputFile": "speex-clean.wav",
+      "stoi": 0.9969166707982039,
+      "estoi": 0.9872115082852335,
+      "lagMs": 10,
+      "lagSamples": 480,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144480,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.0030833292017956593,
+      "deltaEstoiVsNoisyInput": -0.012788491714766481
+    },
+    {
+      "engine": "speex",
+      "fixture": "fan",
+      "outputFile": "speex-fan.wav",
+      "stoi": 0.7657582008096961,
+      "estoi": 0.5884783317377235,
+      "lagMs": 10,
+      "lagSamples": 480,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144480,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.04992299845953385,
+      "deltaEstoiVsNoisyInput": 0.06476235040697231
+    },
+    {
+      "engine": "speex",
+      "fixture": "keyboard",
+      "outputFile": "speex-keyboard.wav",
+      "stoi": 0.7678895560463057,
+      "estoi": 0.7653097748130548,
+      "lagMs": 10,
+      "lagSamples": 480,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144480,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.000773155364268252,
+      "deltaEstoiVsNoisyInput": -0.00561853909093224
+    },
+    {
+      "engine": "speex",
+      "fixture": "transient",
+      "outputFile": "speex-transient.wav",
+      "stoi": 0.9956420722668667,
+      "estoi": 0.9811815072190402,
+      "lagMs": 9.979166666666666,
+      "lagSamples": 479,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 144479,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.0038922017656691787,
+      "deltaEstoiVsNoisyInput": -0.01565339911838448
+    },
+    {
+      "engine": "deepfilter",
+      "fixture": "clean",
+      "outputFile": "deepfilter-clean.wav",
+      "stoi": 0.9911503128025638,
+      "estoi": 0.9881758777836095,
+      "lagMs": 30,
+      "lagSamples": 1440,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145440,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.00884968719743573,
+      "deltaEstoiVsNoisyInput": -0.011824122216390509
+    },
+    {
+      "engine": "deepfilter",
+      "fixture": "fan",
+      "outputFile": "deepfilter-fan.wav",
+      "stoi": 0.8177617816853906,
+      "estoi": 0.6253399451425175,
+      "lagMs": 30,
+      "lagSamples": 1440,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145440,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.1019265793352283,
+      "deltaEstoiVsNoisyInput": 0.1016239638117663
+    },
+    {
+      "engine": "deepfilter",
+      "fixture": "keyboard",
+      "outputFile": "deepfilter-keyboard.wav",
+      "stoi": 0.8651791547160332,
+      "estoi": 0.8313473257905154,
+      "lagMs": 30,
+      "lagSamples": 1440,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145440,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.09806275403399578,
+      "deltaEstoiVsNoisyInput": 0.06041901188652832
+    },
+    {
+      "engine": "deepfilter",
+      "fixture": "transient",
+      "outputFile": "deepfilter-transient.wav",
+      "stoi": 0.9925472610473429,
+      "estoi": 0.986335198404324,
+      "lagMs": 30,
+      "lagSamples": 1440,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145440,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.006987012985192997,
+      "deltaEstoiVsNoisyInput": -0.010499707933100622
+    },
+    {
+      "engine": "dtln",
+      "fixture": "clean",
+      "outputFile": "dtln-clean.wav",
+      "stoi": 0.9962120921344128,
+      "estoi": 0.9834714346566188,
+      "lagMs": 24,
+      "lagSamples": 1152,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145152,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.0037879078655868037,
+      "deltaEstoiVsNoisyInput": -0.016528565343381207
+    },
+    {
+      "engine": "dtln",
+      "fixture": "fan",
+      "outputFile": "dtln-fan.wav",
+      "stoi": 0.8446832458371358,
+      "estoi": 0.6565519961394947,
+      "lagMs": 24,
+      "lagSamples": 1152,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145152,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.12884804348697354,
+      "deltaEstoiVsNoisyInput": 0.13283601480874352
+    },
+    {
+      "engine": "dtln",
+      "fixture": "keyboard",
+      "outputFile": "dtln-keyboard.wav",
+      "stoi": 0.9506422632317625,
+      "estoi": 0.9110119986684345,
+      "lagMs": 24,
+      "lagSamples": 1152,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145152,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": 0.18352586254972503,
+      "deltaEstoiVsNoisyInput": 0.14008368476444744
+    },
+    {
+      "engine": "dtln",
+      "fixture": "transient",
+      "outputFile": "dtln-transient.wav",
+      "stoi": 0.9963119607286489,
+      "estoi": 0.9859277093699217,
+      "lagMs": 24,
+      "lagSamples": 1152,
+      "referenceStartSample": 144000,
+      "degradedStartSample": 145152,
+      "comparedSamples": 679680,
+      "comparedSeconds": 14.16,
+      "warnings": [],
+      "deltaStoiVsNoisyInput": -0.0032223133038870033,
+      "deltaEstoiVsNoisyInput": -0.010907196967502975
+    }
+  ]
+}

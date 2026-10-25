@@ -56,7 +56,7 @@ export function useSpeakingDetection(
     // Persistent state for this effect: who's currently speaking + any
     // pending OFF timers awaiting the hold window.
     const heldSpeakers = new Map<string, boolean>();
-    const holdTimers = new Map<string, number>();
+    const holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     function updateStore() {
       const ids: string[] = [];
