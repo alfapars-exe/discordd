@@ -255,6 +255,10 @@ jobs:
         run: npm run build
         working-directory: client
 
+      - name: Microphone worklet CSP packaging
+        run: node --test scripts/audio-build-csp.test.mjs
+        working-directory: client
+
       # npm audit — dependency advisories. Advisory (continue-on-error):
       # transitive devDependency advisories are common and shouldn't block a
       # PR. Dependabot (.github/dependabot.yml) opens the actual bump PRs.
