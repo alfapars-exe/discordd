@@ -70,10 +70,6 @@ func (a *httpStatsAggregator) observeRouteLocked(route string, status int, d tim
 	}
 	r.counts[i]++
 }
-func (a *httpStatsAggregator) snapshotAndReset() (requests, serverErrs, maxLatencyMs int64, avgLatencyMs float64) {
-	requests, serverErrs, maxLatencyMs, avgLatencyMs, _ = a.snapshotWindow()
-	return
-}
 func (a *httpStatsAggregator) snapshotWindow() (requests, serverErrs, maxLatencyMs int64, avgLatencyMs float64, routes map[string]any) {
 	a.mu.Lock()
 	requests, serverErrs, maxLatencyMs = a.requests, a.serverErrs, a.maxLatency.Milliseconds()

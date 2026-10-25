@@ -90,7 +90,7 @@ func SafeLogString(s string, limit int) string {
 	s = RedactSecrets(s)
 	if len(s) > limit {
 		s = s[:limit]
-		for !utf8.ValidString(s) && len(s) > 0 {
+		for !utf8.ValidString(s) && s != "" {
 			s = s[:len(s)-1]
 		}
 	}

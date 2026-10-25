@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/argeinfina/hichat/models"
 )
 
 func TestClientErrorReserveSurvivesInfoBurstAndIdleBucketsExpire(t *testing.T) {
@@ -52,12 +50,6 @@ func TestMusicDeadlineKeepsExistingNetworkCodeAndUses504(t *testing.T) {
 	if !musicFailure(w, r.WithContext(ctx), context.Canceled, "play") || w.Body.Len() != 0 {
 		t.Fatal("canceled caller received server failure")
 	}
-}
-
-type failedPreviewService struct{ err error }
-
-func (s failedPreviewService) GetPreview(context.Context, string) (*models.LinkPreview, error) {
-	return nil, s.err
 }
 
 func TestLogAdminRejectsInvalidDateBeforeQuery(t *testing.T) {

@@ -332,8 +332,8 @@ func (s *appLogService) flush(parent context.Context, pending []pendingAppLog) {
 		appLogger.Error("failed to write log batch", "count", len(rows), "err", pkg.ErrText(err))
 		return
 	}
-	if written < int64(len(rows)) {
-		s.excludedDeleted.Add(uint64(int64(len(rows)) - written))
+	if written >= 0 && written < int64(len(rows)) {
+		s.excludedDeleted.Add(uint64(len(rows)) - uint64(written))
 	}
 	s.lastSuccess.Store(time.Now().UnixNano())
 }

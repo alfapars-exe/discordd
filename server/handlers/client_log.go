@@ -177,9 +177,7 @@ func categoryForMessage(message string) models.LogCategory {
 	}
 }
 
-// allow retains the ordinary budget for existing callers/tests. ERROR may
-// additionally consume its own reserve; INFO can never exhaust that reserve.
-func (h *ClientLogHandler) allow(userID string) bool { return h.allowLevel(userID, false) }
+// ERROR may consume its own reserve; INFO can never exhaust that reserve.
 func (h *ClientLogHandler) allowLevel(userID string, isError bool) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()

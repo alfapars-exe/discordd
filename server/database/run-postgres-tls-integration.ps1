@@ -47,7 +47,7 @@ printf 'extendedKeyUsage=clientAuth\n' > client.ext
 openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days 2 -sha256 -extfile client.ext >/dev/null 2>&1
 '@ -replace "`r`n", "`n"
 
-    docker run --rm --mount "type=bind,source=$tempDir,target=/out" golang:1.26.10-bookworm bash -lc $certScript | Out-Null
+    docker run --rm --mount "type=bind,source=$tempDir,target=/out" postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc bash -lc $certScript | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Test certificate generation failed." }
 
     $hba = @'
@@ -121,7 +121,7 @@ COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
 }
 finally {
     try {
-        docker rm --force $containerName *> $null
+        docker rm --force --volumes $containerName *> $null
         docker image rm --force $imageName *> $null
         if (Test-Path -LiteralPath $tempDir) {
             $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
