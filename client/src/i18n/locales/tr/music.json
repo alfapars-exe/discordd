@@ -64,5 +64,9 @@
   "reason_stalled": "Çalma takıldı",
   "reason_tool_missing": "Sunucudaki ses araçları kullanılamıyor",
   "reason_unknown": "Bilinmeyen hata",
-  "playTimeout": "İşlem beklenenden uzun sürüyor — şarkı yine de kuyrukta görünebilir. Yeniden denemeden önce kuyruğu kontrol et."
+  "playTimeout": "İşlem beklenenden uzun sürüyor — şarkı yine de kuyrukta görünebilir. Yeniden denemeden önce kuyruğu kontrol et.",
+  "protocolRequired": "Güvenli müzik kontrolleri için HiChat sunucusunu güncelleyin.",
+  "retryOriginal": "Aynı isteği yeniden dene",
+  "retryOriginalHint": "İşlemin sonucu bilinmiyor. Yeni komuttan önce aynı isteği güvenle yeniden deneyin.",
+  "conflictRefresh": "Kuyruk değişti. Durum yenilendi; işlemi yeniden seçin."
 }

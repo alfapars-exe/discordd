@@ -14,7 +14,8 @@
     "backend": "Native TestSoundboard passed 2.501s; Linux race passed 3.423s",
     "initial_static_checks": "TypeScript, scoped ESLint, Vite build and golangci-lint passed",
     "final_review": "Per-selection conversion/metadata fences; old draft cleared on replacement; file/name/emoji controls frozen during pending preview preparation or upload",
-    "final_focused_client": "29 tests passed in soundboardStore, soundboardPlayback and SoundUploadForm; TypeScript and scoped ESLint passed"
+    "final_focused_client": "29 tests passed in soundboardStore, soundboardPlayback and SoundUploadForm; TypeScript and scoped ESLint passed",
+    "final_source_ci": "b85c21a7925ed2676652088faad48603a3733cc1 / run 40175483260: all 21 jobs passed"
   },
   "remaining": [
     "Actual two-client audible soundboard playback, output hot unplug and installed Windows acceptance remain open.",

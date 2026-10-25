@@ -362,6 +362,9 @@ func (s *musicBotService) nextTrack(bot *botInstance) (models.MusicTrack, loopSt
 		return models.MusicTrack{}, loopStopped
 	}
 	if len(bot.queue) == 0 {
+		if bot.currentTrack != nil {
+			bot.revision++
+		}
 		bot.loopRunning = false
 		bot.currentTrack = nil
 		bot.startedAt = nil

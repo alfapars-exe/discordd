@@ -1,3 +1,4 @@
+vi.mock("../api/musicProtocol",()=>({captureMusicScope:(server:string,channel:string)=>({current:()=>{return fixture.currentVoiceServerId===server&&fixture.currentVoiceChannelId===channel;}})}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 

@@ -11,12 +11,14 @@
  * Unexpected failures are surfaced with localized copy, never provider text.
  */
 
-import { useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useToastStore } from "../stores/toastStore";
 import { showMusicRequestError } from "../utils/musicRequestError";
 import { playMusic, searchMusic, skipMusic, pauseMusic, resumeMusic, stopMusic } from "../api/music";
+
+import { captureMusicScope } from "../api/musicProtocol";
 
 const MUSIC_COMMANDS = new Set(["play", "skip", "pause", "resume", "stop"]);
 
@@ -26,6 +28,7 @@ export type MusicCommandResult =
 
 export function useMusicSlashCommand() {
   const { t } = useTranslation("music");
+  const pending=useRef(false);
   const addToast = useToastStore((s) => s.addToast);
 
   return useCallback(
@@ -42,6 +45,9 @@ export function useMusicSlashCommand() {
         return { handled: true, outcome: "failed" };
       }
 
+      const scope=captureMusicScope(serverId,voiceChannelId);
+      if(!scope.current()||pending.current)return {handled:true,outcome:"pending"};
+      pending.current=true;
       try {
         if (cmd === "play") {
           if (!arg) {
@@ -54,6 +60,7 @@ export function useMusicSlashCommand() {
           let target = arg;
           if (!/^https?:\/\//i.test(arg)) {
             const search = await searchMusic(serverId, voiceChannelId, arg);
+            if(!scope.current())return {handled:true,outcome:"failed"};
             const first = search.data?.results?.[0];
             if (!search.success || !first) {
               showMusicRequestError(search, "play");
@@ -62,6 +69,7 @@ export function useMusicSlashCommand() {
             target = first.url;
           }
           const res = await playMusic(serverId, voiceChannelId, target);
+          if(!scope.current())return {handled:true,outcome:"failed"};
           if (res.success) {
             const tracks = res.data?.added_tracks;
             if (!Array.isArray(tracks) || tracks.length === 0) {
@@ -74,7 +82,7 @@ export function useMusicSlashCommand() {
           showMusicRequestError(res, "play");
           // A timed-out POST may have succeeded. Preserve the draft without
           // automatic retry; the toast asks users to check the queue first.
-          return { handled: true, outcome: res.isTimeout ? "pending" : "failed" };
+          return { handled: true, outcome: (res.isTimeout||res.isNetworkError||res.code==="MUSIC_RETRY_REQUIRED") ? "pending" : "failed" };
         }
 
         const fn =
@@ -83,9 +91,10 @@ export function useMusicSlashCommand() {
           cmd === "resume" ? resumeMusic :
           stopMusic;
         const res = await fn(serverId, voiceChannelId);
+        if(!scope.current())return {handled:true,outcome:"failed"};
         if (!res.success) {
           showMusicRequestError(res, "control");
-          return { handled: true, outcome: res.isTimeout ? "pending" : "failed" };
+          return { handled: true, outcome: (res.isTimeout||res.isNetworkError||res.code==="MUSIC_RETRY_REQUIRED") ? "pending" : "failed" };
         }
         const successKey =
           cmd === "skip" ? "commandSkipped" :
@@ -96,9 +105,9 @@ export function useMusicSlashCommand() {
         return { handled: true, outcome: "success" };
       } catch {
         // Unexpected errors can contain internal provider text; never render it.
-        addToast("error", t(cmd === "play" ? "playError" : "controlError"));
+        if(scope.current())addToast("error", t(cmd === "play" ? "playError" : "controlError"));
         return { handled: true, outcome: "failed" };
-      }
+      } finally { pending.current=false; }
     },
     [addToast, t],
   );

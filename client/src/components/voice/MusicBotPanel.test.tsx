@@ -1,3 +1,4 @@
+vi.mock("../../api/musicProtocol",()=>({captureMusicScope:(server:string,channel:string)=>{const v=useVoiceStore.getState(),reset=v.musicBotResetRevision;return {current:()=>{const now=useVoiceStore.getState();return now.currentVoiceServerId===server&&now.currentVoiceChannelId===channel&&now.musicBotResetRevision===reset;}};}}));
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RoomEvent } from "livekit-client";
@@ -20,7 +21,7 @@ vi.mock("../../stores/voiceStore", async () => {
 });
 vi.mock("../../stores/toastStore", () => ({ useToastStore: { getState: () => ({ addToast: fixture.toast }) } }));
 vi.mock("../../utils/musicRequestError", () => ({ showMusicRequestError: fixture.showError }));
-vi.mock("../../api/music", () => ({ getMusicState: vi.fn(), pauseMusic: vi.fn(), resumeMusic: vi.fn(), skipMusic: vi.fn(), stopMusic: vi.fn(), searchMusic: vi.fn(), playMusic: vi.fn(), removeMusicQueueItem: vi.fn(), reorderMusicQueue: vi.fn(), shuffleMusicQueue: vi.fn(), setMusicRepeatMode: vi.fn(), restoreMusicSession: vi.fn(), seekMusic: vi.fn() }));
+vi.mock("../../api/music", () => ({ getMusicState: vi.fn(), retryMusicMutation:vi.fn(),subscribeMusicRetries:vi.fn(()=>()=>{}),hasPendingMusicMutation:vi.fn(()=>false), pauseMusic: vi.fn(), resumeMusic: vi.fn(), skipMusic: vi.fn(), stopMusic: vi.fn(), searchMusic: vi.fn(), playMusic: vi.fn(), removeMusicQueueItem: vi.fn(), reorderMusicQueue: vi.fn(), shuffleMusicQueue: vi.fn(), setMusicRepeatMode: vi.fn(), restoreMusicSession: vi.fn(), seekMusic: vi.fn() }));
 
 import MusicBotPanel from "./MusicBotPanel";
 import { useVoiceStore } from "../../stores/voiceStore";

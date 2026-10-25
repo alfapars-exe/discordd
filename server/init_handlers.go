@@ -132,7 +132,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Entrance:              handlers.NewEntranceHandler(svcs.Entrance, limiters.Upload),
 		Cosmetic:              handlers.NewCosmeticHandler(svcs.Cosmetic, limiters.CosmeticEquip),
 		ExpressionClone:       handlers.NewExpressionCloneHandler(svcs.ExpressionClone, limiters.Upload),
-		Music:                 handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay),
+		Music:                 handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay, handlers.MusicAccessDependencies{Channels: repos.Channel, Voice: svcs.Voice}),
 		LiveKitWebhook:        liveKitWebhook,
 		ClientLog:             handlers.NewClientLogHandler(svcs.AppLog),
 		UploadDownload: handlers.NewUploadDownloadHandler(cfg.Upload.Dir, services.NewMediaAccessService(

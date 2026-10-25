@@ -41,6 +41,11 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 			execSeed(t, db, []seedStmt{
 				{q: `INSERT INTO servers(id,name,owner_id) VALUES('preserved-server','Shared server','session-other')`},
 				{q: `INSERT INTO channels(id,name,type,server_id) VALUES('shared-delete-channel','shared','text','preserved-server')`},
+				{q: `INSERT INTO channels(id,name,type,server_id) VALUES('shared-music-channel','music','voice','preserved-server')`},
+				{q: `INSERT INTO music_control_heads(channel_id,server_id,session_id,revision,minimum_protocol) VALUES('shared-music-channel','preserved-server','preserved-session',1,2)`},
+				{q: `INSERT INTO music_operation_receipts(channel_id,actor_id,request_id,session_id,request_hash,expected_revision,result_json) VALUES
+					('shared-music-channel','session-user','retry','preserved-session',?,0,'{"added_tracks":[{"requester_name":"Original Name"}]}'),
+					('shared-music-channel','session-other','retry','preserved-session',?,0,'{"added_tracks":[{"requester_name":"Surviving Name"}]}')`, args: []any{strings.Repeat("a", 64), strings.Repeat("b", 64)}},
 				{q: `UPDATE users SET email='delete@example.invalid',display_name='Original Name',avatar_url='/api/uploads/avatars/personal.png',bio='personal bio' WHERE id='session-user'`},
 				{q: `INSERT INTO dm_channels(id,user1_id,user2_id) VALUES('shared-dm','session-other','session-user')`},
 				{q: `INSERT INTO dm_messages(id,dm_channel_id,user_id,content) VALUES('shared-message','shared-dm','session-user','opaque-ciphertext'),('other-message','shared-dm','session-other','other-ciphertext')`},
@@ -108,6 +113,9 @@ func TestSQLiteAccountAnonymizationPreservesSharedHistory(t *testing.T) {
 				t.Fatalf("identity not stripped: %s %s %s %d %d", name, display, status, deleted, personal)
 			}
 			for query, want := range map[string]int{
+				`SELECT COUNT(*) FROM music_operation_receipts WHERE actor_id='session-user'`:                                     0,
+				`SELECT COUNT(*) FROM music_operation_receipts WHERE actor_id='session-other'`:                                    1,
+				`SELECT COUNT(*) FROM music_control_heads WHERE channel_id='shared-music-channel'`:                                1,
 				`SELECT COUNT(*) FROM private_media_labels WHERE user_id='session-user'`:                                          0,
 				`SELECT COUNT(*) FROM private_media_labels WHERE user_id='session-other'`:                                         1,
 				`SELECT COUNT(*) FROM spam_inbox WHERE user_id='session-user'`:                                                    0,

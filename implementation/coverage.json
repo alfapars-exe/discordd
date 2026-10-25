@@ -6710,7 +6710,7 @@
         "server/services/music_bot_live_integration_test.go",
         "client/src/components/voice/MusicBotPanel.tsx"
       ],
-      "evidence": []
+      "evidence": ["implementation/verification/p10-music-control-protocol-2026-10-25.json"]
     },
     {
       "id": "p10.playlist",
@@ -6983,7 +6983,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
-        "implementation/verification/p10-persistence-failure-2026-10-24.json"
+        "implementation/verification/p10-persistence-failure-2026-10-24.json",
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
       ]
     },
     {
@@ -7011,7 +7012,8 @@
       ],
       "evidence": [
         "implementation/verification/p10-queue-persistence-2026-10-23.json",
-        "implementation/verification/p10-persistence-failure-2026-10-24.json"
+        "implementation/verification/p10-persistence-failure-2026-10-24.json",
+        "implementation/verification/p10-music-control-protocol-2026-10-25.json"
       ]
     },
     {
