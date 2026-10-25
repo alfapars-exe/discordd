@@ -124,8 +124,10 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 // already computes exactly these two values. nil is fine (e.g. existing
 // tests / callers that don't need the aggregation).
 //
-// The /ws WebSocket upgrade is skipped: those connections are long-lived and
-// the ws layer already logs per-message. This is intended as the OUTERMOST
+// WebSocket endpoints are skipped: those connections are long-lived, their
+// handlers own diagnostics, and statusRecorder does not implement Hijacker.
+// Only the exact registered paths qualify; other internal API paths retain
+// ordinary request logging. This is intended as the OUTERMOST
 // middleware so it observes the final status set by anything beneath it.
 func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) http.Handler {
 	if logger == nil {
@@ -133,7 +135,9 @@ func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) h
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/ws" {
+			if r.URL.Path == "/ws" ||
+				r.URL.Path == "/api/internal/music-worker/control" ||
+				r.URL.Path == "/api/internal/music-worker/job" {
 				next.ServeHTTP(w, r)
 				return
 			}

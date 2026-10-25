@@ -11,6 +11,7 @@ import (
 
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // stubHTTPStatsSink records every Observe call for assertions.
@@ -64,6 +65,66 @@ func TestRequestLogger_SkipsWebSocketPath(t *testing.T) {
 	}
 	if rec.Header().Get("X-Request-Id") != "" {
 		t.Error("X-Request-Id should not be set on /ws")
+	}
+}
+
+// A recorder-only test cannot exercise http.Hijacker. Use a real connection
+// so a new WebSocket endpoint cannot accidentally inherit statusRecorder
+// and fail its upgrade in production.
+func TestRequestLogger_PreservesWebSocketUpgrade(t *testing.T) {
+	for _, path := range []string{
+		"/ws",
+		"/api/internal/music-worker/control",
+		"/api/internal/music-worker/job",
+	} {
+		t.Run(path, func(t *testing.T) {
+			upgrader := websocket.Upgrader{}
+			h := RequestLogger(discardLogger(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := upgrader.Upgrade(w, r, nil)
+				if err != nil {
+					return
+				}
+				defer func() { _ = conn.Close() }()
+				_ = conn.WriteMessage(websocket.TextMessage, []byte("ready"))
+			}))
+			server := httptest.NewServer(h)
+			defer server.Close()
+			conn, response, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+path, nil)
+			if response != nil {
+				defer func() { _ = response.Body.Close() }()
+			}
+			if err != nil {
+				t.Fatalf("WebSocket upgrade through RequestLogger failed: %v", err)
+			}
+			defer func() { _ = conn.Close() }()
+			if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			kind, data, err := conn.ReadMessage()
+			if err != nil || kind != websocket.TextMessage || string(data) != "ready" {
+				t.Fatalf("WebSocket response = %d %q %v, want ready", kind, data, err)
+			}
+		})
+	}
+}
+
+func TestRequestLogger_OnlySkipsExactWebSocketPaths(t *testing.T) {
+	for _, path := range []string{
+		"/api/internal/music-worker/control/",
+		"/api/internal/music-worker/job/extra",
+		"/api/internal/music-worker/status",
+	} {
+		t.Run(path, func(t *testing.T) {
+			sink := &stubHTTPStatsSink{}
+			h := RequestLogger(discardLogger(), sink)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			}))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			if rec.Header().Get("X-Request-Id") == "" || sink.calls != 1 || sink.status != http.StatusNotFound {
+				t.Fatal("unregistered WebSocket-like path bypassed request logging")
+			}
+		})
 	}
 }
 

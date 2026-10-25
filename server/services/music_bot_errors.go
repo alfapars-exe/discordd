@@ -141,6 +141,16 @@ func classifyPlaybackFailure(err error, ytStderrTail string) musicBotErrorReason
 	if errors.Is(err, errPlaybackStalled) {
 		return reasonStalled
 	}
+	// The local remote-executor helper emits a fixed code instead of provider
+	// stderr. Accept only a complete final error line and existing wire values.
+	if code, ok := strings.CutPrefix(lastYtDlpErrorLine(ytStderrTail), "ERROR: HICHAT_MUSIC_ERROR:"); ok {
+		switch musicBotErrorReason(code) {
+		case reasonForbidden, reasonBotCheck, reasonUnavailable, reasonAgeRestricted,
+			reasonGeoBlocked, reasonRateLimited, reasonNetwork, reasonStalled,
+			reasonToolMissing, reasonUnknown:
+			return musicBotErrorReason(code)
+		}
+	}
 
 	sources := []string{lastYtDlpErrorLine(ytStderrTail), ytStderrTail, pkg.ErrText(err)}
 	for _, src := range sources {
