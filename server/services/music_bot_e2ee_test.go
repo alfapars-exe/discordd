@@ -77,3 +77,64 @@ func TestMusicRoomKeyProviderFollowsRotationAndRejectsStaleIndex(t *testing.T) {
 		t.Fatal("key source failure was ignored")
 	}
 }
+
+func TestMusicRoomKeyProviderWrapAndRecreatedRoom(t *testing.T) {
+	source := &mutableMusicRoomKey{passphrase: "hichat-cross-sdk-v1"}
+	provider := &musicRoomKeyProvider{source: source, roomName: "srv:voice"}
+	if provider.CurrentKeyIndex() != 0 {
+		t.Fatal("initial epoch is not zero")
+	}
+	first, err := provider.GetKey(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprintf("%x", first) != "e12cedbef126327d289b0359b8839926" {
+		t.Fatal("browser/Go derivation mismatch")
+	}
+	for _, epoch := range []uint32{256, 512} {
+		source.mu.Lock()
+		source.index = epoch
+		source.passphrase = fmt.Sprintf("epoch-%d", epoch)
+		source.mu.Unlock()
+		if got := provider.CurrentKeyIndex(); got != epoch {
+			t.Fatalf("missed rotations suppressed epoch %d: %d", epoch, got)
+		}
+		full, err := provider.GetKey(epoch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wire, err := provider.GetKey(epoch % 256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(full, wire) || bytes.Equal(first, wire) {
+			t.Fatal("wrapped slot did not use current material")
+		}
+	}
+	source.mu.Lock()
+	source.index = 0
+	source.passphrase = "recreated-room"
+	source.mu.Unlock()
+	recreated := provider.CurrentKeyIndex()
+	key, err := provider.GetKey(recreated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.mu.Lock()
+	source.passphrase = "second-recreated-room"
+	source.mu.Unlock()
+	replacement := provider.CurrentKeyIndex()
+	if replacement == recreated || replacement%256 != 0 {
+		t.Fatal("same-epoch replacement reused encryptor cache")
+	}
+	newer, err := provider.GetKey(replacement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(key, newer) {
+		t.Fatal("replacement retained stale material")
+	}
+	if provider.CurrentKeyIndex() != replacement {
+		t.Fatal("unchanged key cache token is unstable")
+	}
+}

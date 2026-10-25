@@ -384,6 +384,9 @@ type VoiceAFKKickData struct {
 type VoicePassphraseRotatedData struct {
 	ChannelID  string `json:"channel_id"`
 	Passphrase string `json:"passphrase"`
+	KeyIndex   uint32 `json:"key_index"`
+	KeyEpoch   uint64 `json:"key_epoch"`
+	KeyContext string `json:"key_context"`
 }
 
 // ─── P2P Call Event Data ───

@@ -9,12 +9,14 @@
  * This file keeps the core connection + controls (join/leave/mute/deafen/stream).
  *
  * Discord-like behaviors:
- * - Mute toggle: if deafened, deafen is disabled first
- * - Deafen toggle: enabling deafen also mutes; disabling deafen also unmutes
+ * - Deafen forces effective mute while preserving manual microphone intent
+ * - Mute changes while deafened are queued until explicit undeafen
  * - A user can only be in one voice channel at a time
  */
 
 import { create } from "zustand";
+import { normalizeVoiceMuteIntent, toggleVoiceMuteIntent, toggleVoiceDeafenIntent, type VoiceMuteIntent } from "../utils/voiceMuteIntent";
+import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 import type { VoiceState, VoiceStateUpdateData, VoiceTokenResponse } from "../types";
 import * as voiceApi from "../api/voice";
 import {
@@ -23,7 +25,7 @@ import {
   nativeVoiceSetMic, nativeVoiceSetDeafened,
 } from "../utils/nativePlugins";
 import { ensureMicPermission } from "../utils/devicePermissions";
-import { ensureFreshToken } from "../api/client";
+import { ensureFreshToken, getAuthGeneration } from "../api/client";
 import { useServerStore } from "./serverStore";
 import { useAuthStore } from "./authStore";
 import { useToastStore } from "./toastStore";
@@ -84,21 +86,12 @@ function getOwnUserId(): string | null {
 const MUTE_STATE_KEY = "mqvi_voice_mute_state";
 
 
-function loadMuteState(): { isMuted: boolean; isDeafened: boolean } {
-  try {
-    const raw = localStorage.getItem(MUTE_STATE_KEY);
-    if (!raw) return { isMuted: false, isDeafened: false };
-    const parsed = JSON.parse(raw) as { isMuted?: boolean; isDeafened?: boolean };
-    return {
-      isMuted: !!parsed.isMuted,
-      isDeafened: !!parsed.isDeafened,
-    };
-  } catch {
-    return { isMuted: false, isDeafened: false };
-  }
+function loadMuteState(): VoiceMuteIntent {
+  try { return normalizeVoiceMuteIntent(JSON.parse(localStorage.getItem(MUTE_STATE_KEY) ?? "null")); }
+  catch { return normalizeVoiceMuteIntent(null); }
 }
 
-function saveMuteState(state: { isMuted: boolean; isDeafened: boolean }): void {
+function saveMuteState(state: VoiceMuteIntent): void {
   try {
     localStorage.setItem(MUTE_STATE_KEY, JSON.stringify(state));
   } catch {
@@ -116,6 +109,8 @@ type VoiceCoreState = {
   currentVoiceServerId: string | null;
   isMuted: boolean;
   isDeafened: boolean;
+  /** Manual intent retained while effective microphone mute is forced by deafen. */
+  muteBeforeDeafen: boolean | null;
   isStreaming: boolean;
   /**
    * True when the local participant has published a camera (webcam) track to
@@ -131,6 +126,9 @@ type VoiceCoreState = {
   livekitToken: string | null;
   /** Room-level E2EE passphrase (SFrame) */
   e2eePassphrase: string | null;
+  e2eeKeyIndex: number | null;
+  e2eeKeyEpoch: number | null;
+  e2eeKeyContext: string | null;
   /** Monotonically increasing — discards stale API responses */
   _joinGeneration: number;
 
@@ -192,6 +190,8 @@ export type VoiceStore =
 // Re-export so legacy direct imports still resolve
 export type { VoiceStateUpdateData };
 
+let voiceTokenRefreshIntent = 0;
+
 export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   // ─── Slices ───
   ...createVoiceSettingsSlice(set, get, store),
@@ -205,6 +205,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   currentVoiceServerId: null,
   isMuted: initialMuteState.isMuted,
   isDeafened: initialMuteState.isDeafened,
+  muteBeforeDeafen: initialMuteState.muteBeforeDeafen,
   isStreaming: false,
   isCameraEnabled: false,
   isServerMuted: false,
@@ -212,6 +213,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   livekitUrl: null,
   livekitToken: null,
   e2eePassphrase: null,
+      e2eeKeyIndex: null,
+      e2eeKeyEpoch: null,
+      e2eeKeyContext: null,
   _joinGeneration: 0,
   activeSpeakers: {},
   rtt: 0,
@@ -314,6 +318,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         livekitUrl: response.data.url,
         livekitToken: response.data.token,
         e2eePassphrase: response.data.e2ee_passphrase ?? null,
+        e2eeKeyIndex: response.data.e2ee_key_index ?? null,
+        e2eeKeyEpoch: response.data.e2ee_key_epoch ?? null,
+        e2eeKeyContext: response.data.e2ee_key_context ?? null,
         isMuted: initialMuted,
         isStreaming: false,
       });
@@ -340,6 +347,10 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   },
 
   refreshVoiceToken: async (channelId: string) => {
+    const request = ++voiceTokenRefreshIntent;
+    const joinGeneration = get()._joinGeneration;
+    const authGeneration = getAuthGeneration();
+    const owner = useAuthStore.getState().user?.id ?? null;
     try {
       const serverId = get().currentVoiceServerId ?? useServerStore.getState().activeServerId;
       if (!serverId) return null;
@@ -358,7 +369,8 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       // left or switched channels while the token request was in flight.
       // Applying the stale credentials would re-mount LiveKitRoom for a
       // channel we're no longer in.
-      if (get().currentVoiceChannelId !== channelId) {
+      if (get().currentVoiceChannelId !== channelId || get()._joinGeneration !== joinGeneration || request !== voiceTokenRefreshIntent
+        || getAuthGeneration() !== authGeneration || (useAuthStore.getState().user?.id ?? null) !== owner) {
         console.warn("[voiceStore] refreshVoiceToken STALE — channel changed during fetch", {
           requestedChannelId: channelId,
           currentVoiceChannelId: get().currentVoiceChannelId,
@@ -377,7 +389,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       set({
         livekitUrl: response.data.url,
         livekitToken: response.data.token,
-        e2eePassphrase: response.data.e2ee_passphrase ?? null,
+        ...(get().e2eeKeyContext === response.data.e2ee_key_context && get().e2eeKeyEpoch !== null && response.data.e2ee_key_epoch !== undefined && response.data.e2ee_key_epoch < get().e2eeKeyEpoch!
+          ? {} : { e2eePassphrase: response.data.e2ee_passphrase ?? null,
+            e2eeKeyIndex: response.data.e2ee_key_index ?? null, e2eeKeyEpoch: response.data.e2ee_key_epoch ?? null, e2eeKeyContext: response.data.e2ee_key_context ?? null }),
       });
 
       console.warn("[voiceStore] refreshVoiceToken SUCCESS");
@@ -441,6 +455,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       livekitUrl: null,
       livekitToken: null,
       e2eePassphrase: null,
+      e2eeKeyIndex: null,
+      e2eeKeyEpoch: null,
+      e2eeKeyContext: null,
       // isMuted/isDeafened intentionally NOT reset — they persist across sessions
       isStreaming: false,
       isServerMuted: false,
@@ -530,42 +547,20 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   },
 
   toggleMute: () => {
-    const { isMuted, isDeafened } = get();
-
-    if (isDeafened) {
-      set({ isDeafened: false, isMuted: !isMuted });
-      if (isNativeVoice()) {
-        nativeVoiceSetDeafened(false);
-        nativeVoiceSetMic(isMuted); // was muted, now toggling
-      }
-    } else {
-      set({ isMuted: !isMuted });
-      if (isNativeVoice()) {
-        nativeVoiceSetMic(isMuted); // was muted → enable, was unmuted → disable
-      }
-    }
-    saveMuteState({ isMuted: get().isMuted, isDeafened: get().isDeafened });
+    const next = toggleVoiceMuteIntent(get());
+    set(next);
+    if (isNativeVoice()) nativeVoiceSetMic(!next.isMuted && !get().isServerMuted);
+    saveMuteState(next);
   },
 
   toggleDeafen: () => {
-    const { isDeafened } = get();
-
-    if (!isDeafened) {
-      // Deafen on -> mute also on (Discord behavior)
-      set({ isDeafened: true, isMuted: true });
-      if (isNativeVoice()) {
-        nativeVoiceSetDeafened(true);
-        nativeVoiceSetMic(false);
-      }
-    } else {
-      // Deafen off -> unmute too (Discord behavior)
-      set({ isDeafened: false, isMuted: false });
-      if (isNativeVoice()) {
-        nativeVoiceSetDeafened(false);
-        nativeVoiceSetMic(true);
-      }
+    const next = toggleVoiceDeafenIntent(get());
+    set(next);
+    if (isNativeVoice()) {
+      nativeVoiceSetDeafened(next.isDeafened);
+      nativeVoiceSetMic(!next.isMuted && !get().isServerMuted);
     }
-    saveMuteState({ isMuted: get().isMuted, isDeafened: get().isDeafened });
+    saveMuteState(next);
   },
 
   setStreaming: (isStreaming: boolean) => {
@@ -616,3 +611,16 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     set({ activeSpeakers: map });
   },
 }));
+
+// Do not carry a queued unmute across another account or login generation.
+// Same-account call/channel teardown retains the explicit device privacy state.
+function fenceQueuedUnmute(): void {
+  const state = useVoiceStore.getState();
+  if (!state.isDeafened) return;
+  const next: VoiceMuteIntent = { isMuted: true, isDeafened: true, muteBeforeDeafen: true };
+  useVoiceStore.setState(next);
+  if (isNativeVoice()) nativeVoiceSetMic(false);
+  saveMuteState(next);
+}
+subscribeAuthOwnerChanges(fenceQueuedUnmute);
+subscribeAuthGenerationChanges(fenceQueuedUnmute);

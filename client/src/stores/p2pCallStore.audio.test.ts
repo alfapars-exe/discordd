@@ -282,3 +282,23 @@ describe("processed P2P microphones", () => {
     expect(pc.close).toHaveBeenCalledOnce();
   });
 });
+
+it("gates private capture immediately for local deafen while retaining private manual mute intent",async()=>{
+ const output=track("deafen-output");mocks.capture.mockResolvedValue(new Stream([track("raw")]));mocks.createPipeline.mockResolvedValue(pipeline(output));const pc=peer();await useP2PCallStore.getState().startWebRTC(true);
+ expect(output.enabled).toBe(true);changeSettings({isDeafened:true});expect(output.enabled).toBe(false);expect(useP2PCallStore.getState().isMuted).toBe(false);
+ useP2PCallStore.getState().toggleMute();expect(output.enabled).toBe(false);useP2PCallStore.getState().toggleMute();expect(output.enabled).toBe(false);
+ changeSettings({isDeafened:false});expect(output.enabled).toBe(true);
+ useP2PCallStore.getState().toggleMute();changeSettings({isDeafened:true});changeSettings({isDeafened:false});expect(output.enabled).toBe(false);expect(useP2PCallStore.getState().isMuted).toBe(true);
+ useP2PCallStore.getState().toggleMute();changeSettings({isServerMuted:true});expect(output.enabled).toBe(true);expect(pc.addTrack).toHaveBeenCalled();
+});
+it("never publishes an enabled private microphone when local deafen arrives during preparation",async()=>{
+ const output=track("prepared-deaf"),ready=deferred<MicrophonePipeline>();mocks.capture.mockResolvedValue(new Stream([track("raw")]));mocks.createPipeline.mockReturnValueOnce(ready.promise);const pc=peer();const start=useP2PCallStore.getState().startWebRTC(true);
+ await vi.waitFor(()=>expect(mocks.createPipeline).toHaveBeenCalled());changeSettings({isDeafened:true});ready.resolve(pipeline(output));await start;
+ expect(pc.addTrack).toHaveBeenCalled();expect(output.enabled).toBe(false);expect(useP2PCallStore.getState().isMuted).toBe(false);
+});
+it("keeps both old and staged replacement output disabled when deafened during sender replacement",async()=>{
+ const first=pipeline(track("old"));mocks.capture.mockResolvedValueOnce(new Stream([track("raw-old")]));mocks.createPipeline.mockResolvedValueOnce(first);const pc=peer();await useP2PCallStore.getState().startWebRTC(true);
+ const next=pipeline(track("next"));mocks.capture.mockResolvedValueOnce(new Stream([track("raw-next")]));mocks.createPipeline.mockResolvedValueOnce(next);const replace=deferred<void>(),sender=pc.getSenders()[0];sender.replaceTrack.mockImplementationOnce(async(track:MediaStreamTrack)=>{await replace.promise;sender.track=track;});
+ changeSettings({inputDevice:"deaf-switch"});await vi.waitFor(()=>expect(sender.replaceTrack).toHaveBeenCalled());changeSettings({isDeafened:true});expect(first.processedTrack.enabled).toBe(false);expect(next.processedTrack.enabled).toBe(false);
+ replace.resolve();await vi.waitFor(()=>expect(useP2PCallStore.getState().localStream?.getAudioTracks()).toEqual([next.processedTrack]));expect(next.processedTrack.enabled).toBe(false);
+});

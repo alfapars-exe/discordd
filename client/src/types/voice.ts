@@ -35,6 +35,9 @@ export type VoiceTokenResponse = {
   channel_id: string;
   /** Room-level E2EE passphrase (SFrame). Generated server-side. */
   e2ee_passphrase?: string;
+  e2ee_key_index?: number;
+  e2ee_key_epoch?: number;
+  e2ee_key_context?: string;
 };
 
 /** voice_state_update WS event payload. */

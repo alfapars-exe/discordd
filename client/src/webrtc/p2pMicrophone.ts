@@ -80,8 +80,10 @@ export class P2PMicrophoneSession {
   /** Subscribe after the store has attached the initial output to its peer. */
   connect() {
     if (!this.current() || !this.resource || this.unsubscribe) return;
+    this.syncMute();
     this.unregister = registerMicrophonePipeline(this.resource.pipeline, "call");
     this.unsubscribe = useVoiceStore.subscribe(() => {
+      this.syncMute();
       const next = settingsNow();
       if (!settingsEqual(this.latest, next)) this.reconcile(next);
     });
@@ -146,6 +148,14 @@ export class P2PMicrophoneSession {
     }).finally(() => {
       if (id === this.generation) this.pendingKey = null;
     });
+  }
+
+  /** Effective mute only; never overwrite the private call's manual intent. */
+  syncMute() {
+    if (!this.current()) return;
+    const enabled = !this.options.isMuted();
+    if (this.resource) this.resource.pipeline.processedTrack.enabled = enabled;
+    for (const candidate of this.staged) candidate.pipeline.processedTrack.enabled = enabled;
   }
 
   dispose() {

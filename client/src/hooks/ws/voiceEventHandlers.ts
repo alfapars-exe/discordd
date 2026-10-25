@@ -4,6 +4,7 @@
  * passphrase rotation, music bot state/errors.
  */
 
+import { isMediaKeyVersion } from "../../audio/voiceEncryptionKeys";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useChannelStore } from "../../stores/channelStore";
 import { useServerStore } from "../../stores/serverStore";
@@ -252,12 +253,18 @@ export async function handleVoiceEvent(
         // Stale event for a channel we're no longer in — ignore.
         return true;
       }
-      useVoiceStore.setState({ e2eePassphrase: data.passphrase });
-      // useVoice hook subscribes to e2eePassphrase changes and rotates
-      // the LiveKit room's encryption key in place. If the LiveKit SDK
-      // does not support hot re-key (older versions), the hook falls back
-      // to a leave + rejoin cycle on the same channel — invisible to
-      // peers because the WS voice_state remains stable across the swap.
+      if (!data.key_context || data.key_context !== vs.e2eeKeyContext) return true;
+      if (!data.passphrase || !isMediaKeyVersion(data.key_index, data.key_epoch)) {
+        useVoiceStore.setState({ e2eePassphrase: null, e2eeKeyIndex: null, e2eeKeyEpoch: null, e2eeKeyContext: null });
+        return true;
+      }
+      if (vs.e2eeKeyEpoch !== null && data.key_epoch! < vs.e2eeKeyEpoch) return true;
+      if (vs.e2eeKeyEpoch === data.key_epoch && vs.e2eePassphrase !== data.passphrase) {
+        useVoiceStore.setState({ e2eePassphrase: null, e2eeKeyIndex: null, e2eeKeyEpoch: null, e2eeKeyContext: null }); return true;
+      }
+      useVoiceStore.setState({ e2eePassphrase: data.passphrase, e2eeKeyIndex: data.key_index, e2eeKeyEpoch: data.key_epoch!, e2eeKeyContext: data.key_context });
+      // Admission pauses current media, installs this authoritative epoch,
+      // and waits for the current owner's worker ACK before resuming.
       console.warn("[ws] voice_passphrase_rotated APPLIED", {
         channel: data.channel_id,
         timestamp: new Date().toISOString(),

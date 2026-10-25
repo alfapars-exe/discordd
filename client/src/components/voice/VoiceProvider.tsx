@@ -30,7 +30,7 @@
 import { useCallback, useMemo } from "react";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import StreamerPipPreview from "./StreamerPipPreview";
-import type { AudioCaptureOptions, AudioPreset, RoomOptions } from "livekit-client";
+import { Track, type AudioCaptureOptions, type AudioPreset, type RoomOptions } from "livekit-client";
 
 /**
  * Default Opus bitrate when the active voice channel can't be resolved
@@ -50,6 +50,7 @@ import { useChannelStore } from "../../stores/channelStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useTranslation } from "react-i18next";
 import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
+import { useEncryptedRoomAdmission } from "../../hooks/useEncryptedRoomAdmission";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useVoiceAutoRejoin } from "../../hooks/useVoiceAutoRejoin";
 import { logToServer } from "../../api/clientLog";
@@ -67,6 +68,9 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   const livekitToken = useVoiceStore((s) => s.livekitToken);
   const e2eePassphrase = useVoiceStore((s) => s.e2eePassphrase);
   const inputDevice = useVoiceStore((s) => s.inputDevice);
+  const keyIndex = useVoiceStore((s) => s.e2eeKeyIndex);
+  const keyEpoch = useVoiceStore((s) => s.e2eeKeyEpoch);
+  const keyContext = useVoiceStore((s) => s.e2eeKeyContext);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
 
   // Per-channel Opus bitrate (Track T1). Resolved from the channel store
@@ -110,9 +114,11 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     [tE2ee],
   );
 
-  const { keyProvider, e2eeWorker } = useE2EEKeyProvider(e2eePassphrase, {
-    onError: handleE2eeKeyError,
+  const encryption = useE2EEKeyProvider(e2eePassphrase, {
+    onError: handleE2eeKeyError, enabled: isConnected,
+    scope: JSON.stringify([currentVoiceChannelId, livekitUrl]), keyIndex, keyEpoch, keyContext,
   });
+  const { keyProvider, e2eeWorker } = encryption;
 
   const { handleDisconnected } = useVoiceAutoRejoin(isNativeVoice);
 
@@ -235,6 +241,20 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     e2eeWorker,
   ]);
 
+  const allowRestore = useCallback((source: Track.Source) => {
+    const current = useVoiceStore.getState();
+    if (source === Track.Source.Microphone) return current.inputMode !== "push_to_talk" && !current.isMuted && !current.isServerMuted && !current.isDeafened && !current.isServerDeafened;
+    if (source === Track.Source.Camera) return current.isCameraEnabled;
+    if (source === Track.Source.ScreenShare || source === Track.Source.ScreenShareAudio) return current.isStreaming;
+    return false;
+  }, []);
+  const admission = useEncryptedRoomAdmission({ enabled: isConnected, token: livekitToken ?? "", scope: encryption.ownerScope,
+    keyScope: encryption.keyScope, keyReady: encryption.keyReady, keyError: encryption.keyError,
+    keyProvider, worker: e2eeWorker, roomOptions: roomOptions ?? {}, onError: handleE2eeKeyError, allowRestore });
+  const leaveFailedEncryption = () => {
+    const current = useVoiceStore.getState();
+    if (current._onLeaveCallback) current._onLeaveCallback(); else current.leaveVoiceChannel();
+  };
   // Skip LiveKitRoom entirely when not in a voice session. Mounting it with
   // connect=false and then flipping the prop to true causes the SDK wrapper
   // to allocate a second Room instance during the transition; rendering it
@@ -245,14 +265,23 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     return <>{children}</>;
   }
 
+  if (!isNativeVoice && (!admission.room || (!admission.connect && !admission.error))) {
+    return <section role={admission.error ? "alert" : "status"}>
+      <p>{admission.error ? tE2ee("voiceE2eeError") : t("connecting")}</p>
+      <button type="button" onClick={leaveFailedEncryption}>{t("disconnect")}</button>
+    </section>;
+  }
+
   return (
     <LiveKitRoom
       serverUrl={livekitUrl || "wss://placeholder.invalid"}
       token={livekitToken || ""}
-      connect={isConnected}
+      room={isNativeVoice ? undefined : admission.room ?? undefined}
+      connect={isConnected && admission.connect}
       audio={false}
       video={false}
-      options={roomOptions}
+      screen={false}
+      options={isNativeVoice ? roomOptions : undefined}
       // Subscriptions are managed explicitly in VoiceStateManager.
       connectOptions={{ autoSubscribe: false }}
       onDisconnected={handleDisconnected}
@@ -260,12 +289,13 @@ function VoiceProvider({ children }: VoiceProviderProps) {
       onEncryptionError={handleEncryptionError}
       style={{ display: "contents" }}
     >
-      {isConnected && !isNativeVoice && <RoomAudioRenderer />}
-      {isConnected && !isNativeVoice && <VoiceStateManager />}
+      {isConnected && admission.publishReady && <RoomAudioRenderer />}
+      {isConnected && admission.publishReady && <VoiceStateManager />}
       {/* Floating broadcaster-self mini-preview. Lives inside LiveKitRoom
           so it can use useRoomContext / useLocalParticipant; renders only
           while isStreaming is true. Self-gated internally. */}
-      {isConnected && !isNativeVoice && <StreamerPipPreview />}
+      {isConnected && admission.publishReady && <StreamerPipPreview />}
+      {Boolean(admission.error) && <p role="alert">{tE2ee("voiceE2eeError")}</p>}
       {children}
     </LiveKitRoom>
   );

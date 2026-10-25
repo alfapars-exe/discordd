@@ -226,7 +226,7 @@ export interface WSPayloadMap {
   voice_force_disconnect: unknown;
   voice_afk_kick: { channel_name: string; server_name: string };
   voice_replaced: unknown;
-  voice_passphrase_rotated: { channel_id: string; passphrase: string };
+  voice_passphrase_rotated: { channel_id: string; passphrase: string; key_index?: number; key_epoch?: number; key_context?: string };
   music_bot_state: { channel_id?: string; state?: MusicBotChannelState };
   // `reason` stays `string` on the wire: it is untrusted and a newer server
   // may send a code this client doesn't know. Narrow with

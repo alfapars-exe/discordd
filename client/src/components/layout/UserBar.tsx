@@ -50,6 +50,8 @@ function UserBar({
   const openTab = useUIStore((s) => s.openTab);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
+  const muteBeforeDeafen = useVoiceStore((s) => s.muteBeforeDeafen);
+  const muteActionLabel = isDeafened ? t((muteBeforeDeafen ?? true) ? "unmuteAfterUndeafen" : "muteAfterUndeafen") : t(isMuted ? "unmute" : "mute");
   const isStreaming = useVoiceStore((s) => s.isStreaming);
   const isCameraEnabled = useVoiceStore((s) => s.isCameraEnabled);
   const setCameraEnabled = useVoiceStore((s) => s.setCameraEnabled);
@@ -324,8 +326,8 @@ function UserBar({
           <button
             className={`ub-ctrl${isMuted ? " active" : ""}`}
             onClick={onToggleMute}
-            title={isMuted ? t("unmute") : t("mute")}
-            aria-label={isMuted ? t("unmute") : t("mute")}
+            title={muteActionLabel}
+            aria-label={muteActionLabel}
             aria-pressed={isMuted}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

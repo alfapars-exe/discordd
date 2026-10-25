@@ -364,12 +364,15 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	// Tell remaining members of the source channel to re-key (excludes the
 	// moved user — they get a fresh passphrase on join via voice/token).
-	for _, newPassphrase := range movedSourceRotated {
+	for roomName, newPassphrase := range movedSourceRotated {
 		s.hub.BroadcastToUsers(sourceRemaining, ws.Event{
 			Op: ws.OpVoicePassphraseRotated,
 			Data: ws.VoicePassphraseRotatedData{
 				ChannelID:  sourceChannelID,
 				Passphrase: newPassphrase,
+				KeyIndex:   s.roomKeyVersions[roomName] % 256,
+				KeyEpoch:   uint64(s.roomKeyVersions[roomName]),
+				KeyContext: s.roomKeyContexts[roomName],
 			},
 		})
 	}
@@ -495,6 +498,12 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 	// dispatch below (after unlock) for the nil-guarded StopAllForChannel
 	// call this drives.
 	remaining := s.remainingChannelMembers(channelID)
+	rotationEpochs := make(map[string]uint32, len(rotatedRooms))
+	rotationContexts := make(map[string]string, len(rotatedRooms))
+	for roomName := range rotatedRooms {
+		rotationEpochs[roomName] = s.roomKeyVersions[roomName]
+		rotationContexts[roomName] = s.roomKeyContexts[roomName]
+	}
 
 	s.mu.Unlock()
 
@@ -504,12 +513,15 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 
 	// Push the new passphrase to remaining channel members so they re-key
 	// their LiveKit session. The just-kicked user is intentionally excluded.
-	for _, newPassphrase := range rotatedRooms {
+	for roomName, newPassphrase := range rotatedRooms {
 		s.hub.BroadcastToUsers(remaining, ws.Event{
 			Op: ws.OpVoicePassphraseRotated,
 			Data: ws.VoicePassphraseRotatedData{
 				ChannelID:  channelID,
 				Passphrase: newPassphrase,
+				KeyIndex:   rotationEpochs[roomName] % 256,
+				KeyEpoch:   uint64(rotationEpochs[roomName]),
+				KeyContext: rotationContexts[roomName],
 			},
 		})
 	}

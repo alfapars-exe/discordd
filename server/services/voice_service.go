@@ -154,10 +154,11 @@ const maxScreenShares = 0
 type voiceService struct {
 	states             map[string]*models.VoiceState // userID -> VoiceState
 	roomPassphrases    map[string]string             // roomName -> E2EE SFrame passphrase
-	roomKeyVersions    map[string]uint32             // roomName -> monotonic E2EE key index
-	screenShareViewers map[string]map[string]bool    // streamerUserID -> set of viewerUserIDs
-	forceMoveGrants    map[string]forceMoveGrant     // userID -> one-time bypass (consumed on token gen)
-	offlineSince       map[string]time.Time          // userID -> first seen offline (grace period tracking)
+	roomKeyContexts    map[string]string
+	roomKeyVersions    map[string]uint32          // roomName -> monotonic E2EE key index
+	screenShareViewers map[string]map[string]bool // streamerUserID -> set of viewerUserIDs
+	forceMoveGrants    map[string]forceMoveGrant  // userID -> one-time bypass (consumed on token gen)
+	offlineSince       map[string]time.Time       // userID -> first seen offline (grace period tracking)
 	mu                 sync.RWMutex
 	// voiceEpoch changes on process construction; voiceRevision is advanced
 	// under mu for every snapshot-visible state mutation. Together they let a
@@ -220,6 +221,7 @@ func NewVoiceService(
 		voiceEpoch:         uuid.NewString(),
 		roomPassphrases:    make(map[string]string),
 		roomKeyVersions:    make(map[string]uint32),
+		roomKeyContexts:    make(map[string]string),
 		screenShareViewers: make(map[string]map[string]bool),
 		forceMoveGrants:    make(map[string]forceMoveGrant),
 		offlineSince:       make(map[string]time.Time),

@@ -152,3 +152,9 @@ describe("live microphone publication ownership", () => {
     await releaseLiveMicrophone(h.sdkParticipant);
   });
 });
+
+it("never enables a deafened or server-muted microphone even with an explicit stale enable request",async()=>{
+ const h=harness();Object.assign(h.state,{isDeafened:true});await h.controller.setEnabled(true);expect(mock.createTrack).not.toHaveBeenCalled();
+ Object.assign(h.state,{isDeafened:false,isServerMuted:true});await h.controller.setEnabled(true);expect(mock.createTrack).not.toHaveBeenCalled();
+ await releaseLiveMicrophone(h.sdkParticipant);
+});

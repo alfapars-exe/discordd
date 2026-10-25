@@ -103,5 +103,7 @@
   "selectScreenShareSettings": "Ekran paylaşımı ayarları",
   "p2pAudioFailed": "Arama sesi başlatılamadı. Ses iznini ve seçtiğin hoparlörü kontrol edip tekrar dene.",
   "p2pAudioFallback": "Seçilen hoparlör kullanılamıyor. Arama sesi sistemin varsayılan çıkışını kullanıyor.",
-  "p2pAudioRetry": "Arama sesini tekrar dene"
+  "p2pAudioRetry": "Arama sesini tekrar dene",
+  "muteAfterUndeafen": "Sağırlaştırmayı kapattığında mikrofonu sessiz tut",
+  "unmuteAfterUndeafen": "Sağırlaştırmayı kapattığında mikrofonu aç"
 }

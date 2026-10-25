@@ -1,81 +1,56 @@
-/**
- * useE2EEKeyProvider — manage the LiveKit SFrame end-to-end encryption
- * key provider and its background worker as the passphrase changes.
- *
- * What this owns:
- *
- *   1. ExternalE2EEKeyProvider singleton — derives a CryptoKey from the
- *      server-issued passphrase via PBKDF2. Stable across the session;
- *      passphrase changes call `setKey()` to rotate the derived key
- *      without re-instantiating.
- *
- *   2. SFrame worker — runs the encryption/decryption off the main thread.
- *      Created when a passphrase exists, terminated when it disappears (or
- *      on unmount). The dependency uses `!!e2eePassphrase` so a passphrase
- *      *change* (one non-empty value to another) reuses the same worker —
- *      we only spin up a new worker when toggling between "encrypted" and
- *      "not encrypted" states.
- *
- *   3. Key derivation — calls `setKey(passphrase)` whenever the passphrase
- *      value changes. Errors surface as a toast via the provided callback.
- *
- * The hook returns both pieces so the caller can attach them to LiveKit's
- * RoomOptions.e2ee config:
- *
- *     const { keyProvider, e2eeWorker } = useE2EEKeyProvider(passphrase, ...);
- *     options.e2ee = { keyProvider, worker: e2eeWorker };
- *
- * Was previously ~30 lines inline in VoiceProvider.tsx.
- */
+import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { isE2EESupported } from "livekit-client";
+import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
+import { IndexedVoiceKeyProvider, isMediaKeyVersion } from "../audio/voiceEncryptionKeys";
 
-import { useEffect, useMemo } from "react";
-import { ExternalE2EEKeyProvider } from "livekit-client";
-
-type Options = {
-  /** Called with the SFrame error message when key derivation fails. */
-  onError: (err: unknown) => void;
+const subscribeSession = (changed: () => void) => {
+  const owner = subscribeAuthOwnerChanges(changed), generation = subscribeAuthGenerationChanges(changed);
+  return () => { owner(); generation(); };
 };
+const sessionSnapshot = () => JSON.stringify(getAuthSessionSnapshot());
+type Options = { onError: (error: unknown) => void; enabled?: boolean; scope?: string; keyIndex?: number | null; keyEpoch?: number | null; keyContext?: string | null };
 
-export function useE2EEKeyProvider(
-  e2eePassphrase: string | null | undefined,
-  { onError }: Options,
-): {
-  keyProvider: ExternalE2EEKeyProvider;
-  e2eeWorker: Worker | null;
-} {
-  // Stable singleton across the whole session — passphrase rotations call
-  // setKey() rather than instantiating a new provider.
-  const keyProvider = useMemo(() => new ExternalE2EEKeyProvider(), []);
-
-  // Worker lifecycle is bound to "is encryption on?" not "what passphrase?".
-  // Re-keying reuses the existing worker; only on/off transitions create or
-  // tear down the thread.
-  //
-  // The `e2eeOn` boolean is a separate local so the useMemo dependency
-  // array stays a simple expression — react-hooks/exhaustive-deps
-  // rejects the `!!e2eePassphrase` coercion shape that used to live
-  // inline. Functionally identical: on/off-only memoisation.
-  const e2eeOn = !!e2eePassphrase;
-  const e2eeWorker = useMemo(() => {
-    if (e2eeOn) {
-      return new Worker(
-        new URL("livekit-client/e2ee-worker", import.meta.url),
-      );
-    }
-    return null;
-  }, [e2eeOn]);
-
+/** Current SDK key material must be installed before room admission. Worker
+ * derivation can still be pending; enabled GCM fails closed without a key. */
+export function useE2EEKeyProvider(passphrase: string | null | undefined, options: Options) {
+  const { onError, enabled = Boolean(passphrase), scope = "", keyIndex, keyEpoch, keyContext } = options;
+  const scopedRoom = JSON.stringify([scope, keyContext]);
+  const authScope = useSyncExternalStore(subscribeSession, sessionSnapshot, sessionSnapshot);
+  const keyProvider = useMemo(() => new IndexedVoiceKeyProvider(JSON.stringify([authScope, scopedRoom])), [authScope, scopedRoom]);
+  const [workerState, setWorkerState] = useState<{ provider: IndexedVoiceKeyProvider; worker: Worker | null; error: unknown } | null>(null);
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    let worker: Worker | null = null;
+    let error: unknown = null;
+    try {
+      if (!isE2EESupported()) throw new Error("Encrypted media is unsupported");
+      worker = new Worker(new URL("livekit-client/e2ee-worker", import.meta.url));
+    } catch (failure) { error = failure; }
+    const next = { provider: keyProvider, worker, error };
+    queueMicrotask(() => { if (active) setWorkerState(next); });
+    return () => { active = false; worker?.terminate(); };
+  }, [enabled, keyProvider]);
+  const currentWorker = enabled && workerState?.provider === keyProvider ? workerState : null;
+  const fingerprint = JSON.stringify([authScope, scopedRoom, passphrase, keyIndex, keyEpoch]);
+  const [state, setState] = useState<{ fingerprint: string; ready: boolean; error: unknown; worker: Worker | null } | null>(null);
   useEffect(() => {
-    return () => {
-      e2eeWorker?.terminate();
+    if (!enabled || !currentWorker) return;
+    let active = true;
+    const current = () => active && sessionSnapshot() === authScope;
+    const fail = (error: unknown) => {
+      if (!current()) return;
+      setState({ fingerprint, ready: false, error, worker: currentWorker.worker }); onError(error);
     };
-  }, [e2eeWorker]);
-
-  // Derive and install the CryptoKey when the passphrase value changes.
-  useEffect(() => {
-    if (!e2eePassphrase) return;
-    keyProvider.setKey(e2eePassphrase).catch(onError);
-  }, [e2eePassphrase, keyProvider, onError]);
-
-  return { keyProvider, e2eeWorker };
+    if (currentWorker.error || !currentWorker.worker || !getAuthSessionSnapshot().ownerId || !passphrase || !keyContext || !isMediaKeyVersion(keyIndex, keyEpoch)) {
+      fail(currentWorker.error ?? new Error("Encrypted media key contract is unavailable"));
+      return () => { active = false; };
+    }
+    void keyProvider.setIndexedKey(passphrase, keyIndex, keyEpoch as number, current).then((installed) => {
+      if (installed && current()) setState({ fingerprint, ready: true, error: null, worker: currentWorker.worker });
+    }).catch(fail);
+    return () => { active = false; };
+  }, [enabled, fingerprint, authScope, passphrase, keyIndex, keyEpoch, keyContext, keyProvider, currentWorker, onError]);
+  return { keyProvider, e2eeWorker: currentWorker?.worker ?? null, keyReady: enabled && state?.fingerprint === fingerprint && state.worker === currentWorker?.worker && state.ready,
+    keyError: state?.fingerprint === fingerprint && state.worker === currentWorker?.worker ? state.error : null, keyScope: fingerprint, ownerScope: JSON.stringify([authScope, scopedRoom]) };
 }

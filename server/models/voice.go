@@ -39,4 +39,7 @@ type VoiceTokenResponse struct {
 	URL            string `json:"url"`
 	ChannelID      string `json:"channel_id"`
 	E2EEPassphrase string `json:"e2ee_passphrase,omitempty"`
+	E2EEKeyIndex   uint32 `json:"e2ee_key_index"`
+	E2EEKeyEpoch   uint64 `json:"e2ee_key_epoch"`
+	E2EEKeyContext string `json:"e2ee_key_context"`
 }

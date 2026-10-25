@@ -117,16 +117,16 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     microphone?.dispose();
     const session: P2PMicrophoneSession = new P2PMicrophoneSession({
       isCurrent: () => microphone === session && get().activeCall === call,
-      isMuted: () => get().isMuted,
+      isMuted: () => get().isMuted || useVoiceStore.getState().isDeafened,
       replaceTrack: async (previous, next) => {
         const { peerConnection, localStream } = get();
         if (microphone !== session || get().activeCall !== call || !peerConnection || !localStream) return false;
         const sender = peerConnection.getSenders().find((candidate) => candidate.track === previous);
         if (!sender) throw new Error("P2P microphone sender is unavailable");
-        next.enabled = !get().isMuted;
+        next.enabled = !get().isMuted && !useVoiceStore.getState().isDeafened;
         await sender.replaceTrack(next);
         if (microphone !== session || get().peerConnection !== peerConnection || get().activeCall !== call) return false;
-        next.enabled = !get().isMuted;
+        next.enabled = !get().isMuted && !useVoiceStore.getState().isDeafened;
         localStream.removeTrack(previous);
         localStream.addTrack(next);
         return true;
@@ -190,9 +190,10 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     toggleMute: () => {
       const { localStream, isMuted } = get();
       if (localStream) {
-        for (const track of localStream.getAudioTracks()) track.enabled = isMuted;
+        for (const track of localStream.getAudioTracks()) track.enabled = isMuted && !useVoiceStore.getState().isDeafened;
       }
       set({ isMuted: !isMuted });
+      microphone?.syncMute();
     },
 
     toggleVideo: () => {
@@ -277,6 +278,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
         const stream = await prepareMedia(activeCall);
         if (get().activeCall !== activeCall) { stopAllTracks(stream); return; }
         set({ localStream: stream, isVideoOn: activeCall.call_type === "video" });
+        microphone?.syncMute();
 
         const pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks());
         set({ peerConnection: pc });
@@ -414,6 +416,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
                   return;
                 }
                 set({ localStream: stream, isVideoOn: activeCall.call_type === "video" });
+        microphone?.syncMute();
               } catch (err) {
                 console.error("[p2p] Failed to get media in handleSignal:", err);
                 if (get().activeCall === activeCall) get().cleanup();

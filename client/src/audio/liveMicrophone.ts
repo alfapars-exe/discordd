@@ -40,7 +40,7 @@ class LiveMicrophone {
   }
   private shouldEnable() {
     const state = useVoiceStore.getState();
-    return this.enabled && !state.isMuted && !state.isServerMuted;
+    return this.enabled && !state.isMuted && !state.isDeafened && !state.isServerMuted;
   }
   refresh() {
     const id = ++this.generation;
