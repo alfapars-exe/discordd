@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-25",
+  "source": "8fb1e13e44816797dac80f3d7a3507b12a02029d",
+  "status": "scoped_http_pass",
+  "environment": "Immutable git archive server build; isolated existing loopback QA SQLite; same keys and accounts; online pre-upgrade backup integrity ok",
+  "checks_passed": 7,
+  "checks": [
+    "Real count endpoint exposes inbox and badge aggregates.",
+    "Three accepted sources add distinct inbox records without double-counting badges.",
+    "Persistent notifications contain only source metadata, no message body.",
+    "Acknowledging first monotonic source preserves two later unread messages and inbox records; channel list exposes matching unread count and oldest source.",
+    "Foreign source acknowledgement returns 404 and preserves counts.",
+    "Repeated older acknowledgement is idempotent.",
+    "Bodyless acknowledgement captures latest committed source."
+  ],
+  "test_harness_correction": "Initial updated helper incorrectly expected unread_counts from /dms/settings; actual contract exposes unread_count on GET /dms. Corrected helper asserts that projection and oldest unread source. Failed helper cleaned all created messages in finally; subsequent fresh execution passed. No product assertion was disabled.",
+  "regression": "Prior e90 real HTTP source-order failure receipt retained separately; fixed source uses authoritative decimal source_sequence rather than timestamp/random ID sorting.",
+  "limits": [
+    "Synthetic loopback plaintext fixture only; no Signal, websocket or physical-device proof from this test.",
+    "Created test messages removed; accepted synthetic conversation retained.",
+    "Group source sequence changes remain outside this immutable server build."
+  ]
+}

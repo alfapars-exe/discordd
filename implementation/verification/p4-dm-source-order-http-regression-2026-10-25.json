@@ -1,0 +1,12 @@
+{
+  "phase": "P4",
+  "status": "missing",
+  "source": "e90b7daf9262266d3a7181733480e6ee3faeb18a",
+  "test": "Actual loopback compiled API; owned synthetic owner/recipient; legacy plaintext metadata fixture only, no Signal/browser/device acceptance.",
+  "result": "reproduced_failure",
+  "expected": "After baseline read, three newly committed same-second messages and explicit first-source acknowledgement must leave two messages/notifications unread.",
+  "observed": "Stored tuple watermark retained lexically higher warmup ID; unread_count and inbox count became0 instead2. All message created_at values had second precision.",
+  "root_cause": "created_at/random-ID tuple is not durable append order; monotonic tuple watermark cannot represent new same-second lower-ID arrivals.",
+  "cleanup": "Created test messages removed in finally; synthetic accepted conversation retained; no production operations.",
+  "next": "Deterministic repository regression reproduced same failure; additive durable source sequence/counter/read watermark, history/client/cache/export consistency in progress. No sleep, test relaxation or acceptance claim."
+}
