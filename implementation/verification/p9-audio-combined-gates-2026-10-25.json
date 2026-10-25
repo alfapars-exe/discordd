@@ -19,10 +19,17 @@
     "cleanup": "Both calls explicitly left and generated sources stopped in round165. No raw audio recordings or credentials logged."
   },
   "open": [
-    "Physical microphone/headset/output switching and audible user confirmation",
+    "Physical user confirmation on one Windows host passed after round166; separate devices, output switching and sustained-call acceptance remain open",
     "Real packaged Windows system-audio capture and browser picker-returned audio",
     "P2P separate microphone/screen-audio sources and independent volume controls",
     "Multi-track decoding, background/sleep recovery, key rotation and reconnect acceptance",
     "Exact immutable source scan, CI and production/Windows publication of this change"
-  ]
+  ],
+  "physical_user_check": {
+    "setup": "User confirmed headset and microphone ready. Both HiChat origins reloaded without qaTone; no generated-input override installed. Actual microphone calls joined in round166.",
+    "observed": "Both connected with encrypted live local publications. Recipient receiver RMS0.002668 and decoded duration1.91s before requested speech. Both processing snapshots showed fallback/activeEngine none, so physical RNNoise operation is NOT accepted by this result.",
+    "user_response": "User answered Evet, sesimi duyuyorum to the request to speak5-10seconds and confirm own voice returning through the peer to the headset.",
+    "scope": "One-host physical microphone/headset audible private group loopback confirmed. Separate-device, device-switch, noise-engine, long-call and every other media acceptance gate remain open.",
+    "cleanup": "Browser control changed to user before round167, which hard-stopped before any action. Do not claim calls closed. User instructed to leave both calls when finished; agent cannot retake without explicit continuation. No raw audio retained."
+  }
 }
