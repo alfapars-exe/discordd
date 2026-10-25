@@ -304,6 +304,9 @@ func NewMusicBotService(
 // (1 for a single video URL, N for a playlist). Lazy-starts the bot on first
 // call per channel. PermSpeak is enforced by the HTTP handler.
 func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url string) ([]models.MusicTrack, error) {
+	if err := RecheckMusicAccess(ctx); err != nil {
+		return nil, err
+	}
 	if ctx.Value(musicCommandContextKey{}) == nil {
 		if err := s.CheckLegacyControl(ctx, channelID); err != nil {
 			return nil, err
@@ -371,6 +374,9 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	musicBotLogger.Info("enqueue: extracted tracks", "track_count", len(tracks), "channel_id", channelID, "duration_ms", extractMs)
 	if len(tracks) == 0 {
 		return nil, fmt.Errorf("%w: no playable tracks found at URL", pkg.ErrBadRequest)
+	}
+	if err := RecheckMusicAccess(ctx); err != nil {
+		return nil, err
 	}
 
 	// lockLiveBot returns with sessionMu and bot.mu held so the edit and save
@@ -460,7 +466,8 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 			s.scheduleIdleLeaveLocked(bot)
 		}
 		bot.mu.Unlock()
-		if repauseRestoredQueue {
+		s.cleanupMusicAttemptBotLocked(ctx, bot)
+		if repauseRestoredQueue && !bot.stopping.Load() {
 			s.mu.RLock()
 			_, hasRestoredSession := s.restored[channelID]
 			s.mu.RUnlock()
@@ -506,9 +513,19 @@ func (s *musicBotService) lockLiveBot(ctx context.Context, serverID, channelID s
 		if err != nil {
 			return nil, err
 		}
+		if err := RecheckMusicAccess(ctx); err != nil {
+			s.cleanupMusicAttemptBot(ctx, bot)
+			return nil, err
+		}
 		lifecycleLock := s.channelLifecycleLock(channelID)
 		lifecycleLock.Lock()
 		bot.sessionMu.Lock()
+		if err := RecheckMusicAccess(ctx); err != nil {
+			s.cleanupMusicAttemptBotLocked(ctx, bot)
+			bot.sessionMu.Unlock()
+			lifecycleLock.Unlock()
+			return nil, err
+		}
 		bot.mu.Lock()
 		if !bot.stopFlag && !bot.stopping.Load() {
 			// Caller must release the lifecycle stripe after finishing its
@@ -904,6 +921,10 @@ func (s *musicBotService) stopBot(bot *botInstance) {
 
 // stopBotLocked performs teardown while the caller holds sessionMu.
 func (s *musicBotService) stopBotLocked(bot *botInstance) {
+	s.stopBotLockedMode(bot, true)
+}
+
+func (s *musicBotService) stopBotLockedMode(bot *botInstance, broadcast bool) {
 	bot.stopping.Store(true)
 
 	s.mu.Lock()
@@ -938,6 +959,9 @@ func (s *musicBotService) stopBotLocked(bot *botInstance) {
 	// Outside bot.mu: Disconnect is a network round-trip.
 	if room != nil {
 		room.Disconnect()
+	}
+	if !broadcast {
+		return
 	}
 
 	// A replacement bot may already serve the channel (an Enqueue landed
@@ -1052,6 +1076,9 @@ func (s *musicBotService) rawMusicState(ctx context.Context, channelID string) (
 }
 
 func (s *musicBotService) Restore(ctx context.Context, channelID string) error {
+	if err := RecheckMusicAccess(ctx); err != nil {
+		return err
+	}
 	if ctx.Value(musicReconnectContextKey{}) == nil {
 		if err := s.CheckLegacyControl(ctx, channelID); err != nil {
 			return err
@@ -1092,6 +1119,14 @@ func (s *musicBotService) Restore(ctx context.Context, channelID string) error {
 		}
 	}
 	lifecycleLock = s.channelLifecycleLock(channelID) // returned held by lockLiveBot
+	bot.mu.Unlock()
+	if err := RecheckMusicAccess(ctx); err != nil {
+		s.cleanupMusicAttemptBotLocked(ctx, bot)
+		bot.sessionMu.Unlock()
+		lifecycleLock.Unlock()
+		return err
+	}
+	bot.mu.Lock()
 	s.mu.RLock()
 	_, stillRestored = s.restored[channelID]
 	s.mu.RUnlock()
@@ -1274,11 +1309,18 @@ func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelI
 				return nil, pkg.ErrConflict
 			}
 		}
+		if err := RecheckMusicAccess(ctx); err != nil {
+			lifecycleLock.Unlock()
+			return nil, err
+		}
 		s.mu.Lock()
 		if existing, ok := s.bots[channelID]; ok && !existing.stopping.Load() {
 			s.mu.Unlock()
 			lifecycleLock.Unlock()
 			if err = existing.waitReady(ctx); err == nil {
+				if err := RecheckMusicAccess(ctx); err != nil {
+					return nil, err
+				}
 				return existing, nil
 			}
 			if errors.Is(err, errBotStopping) {
@@ -1310,12 +1352,19 @@ func (s *musicBotService) getOrCreateBot(ctx context.Context, serverID, channelI
 		// Replaces a stopping bot, if any — stopBot's compare-and-delete
 		// then leaves this one alone.
 		s.bots[channelID] = bot
+		markMusicAttemptBot(ctx, bot)
 		s.mu.Unlock()
 		// The bot is now visible to concurrent callers, which can wait on
 		// ready rather than blocking behind the network connection itself.
 		lifecycleLock.Unlock()
 
-		cerr := s.connectBot(ctx, bot)
+		cerr := RecheckMusicAccess(ctx)
+		if cerr == nil {
+			cerr = s.connectBot(ctx, bot)
+		}
+		if cerr == nil {
+			cerr = RecheckMusicAccess(ctx)
+		}
 		if cerr == nil {
 			lifecycleLock.Lock()
 			s.mu.Lock()
@@ -1372,11 +1421,26 @@ func (s *musicBotService) connectBot(ctx context.Context, bot *botInstance) erro
 // waiter with err. Called exactly once per bot, before ready is closed.
 func (s *musicBotService) abandonConnectingBot(bot *botInstance, err error) {
 	bot.stopping.Store(true)
+	bot.sessionMu.Lock()
+	s.preserveMusicAttemptRestoredLocked(bot)
 	s.mu.Lock()
 	if s.bots[bot.channelID] == bot {
 		delete(s.bots, bot.channelID)
 	}
 	s.mu.Unlock()
+	bot.mu.Lock()
+	bot.stopFlag = true
+	if bot.cancelFn != nil {
+		bot.cancelFn()
+	}
+	room := bot.lkRoom
+	bot.lkRoom = nil
+	bot.audioTrack = nil
+	bot.mu.Unlock()
+	bot.sessionMu.Unlock()
+	if room != nil {
+		room.Disconnect()
+	}
 	bot.readyErr = err
 	close(bot.ready)
 }

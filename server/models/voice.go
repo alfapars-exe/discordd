@@ -23,9 +23,11 @@ type VoiceState struct {
 	// the session duration without a second instance lookup, and skip
 	// writing usage rows for self-hosted instances. All json:"-" because
 	// clients have no business seeing this.
-	JoinedAt          time.Time `json:"-"`
-	LiveKitInstanceID string    `json:"-"`
-	LiveKitIsCloud    bool      `json:"-"` // mirrors instance.IsPlatformManaged at join time
+	JoinedAt time.Time `json:"-"`
+	// ChannelGeneration fences pending channel work without resetting quota accounting.
+	ChannelGeneration uint64 `json:"-"`
+	LiveKitInstanceID string `json:"-"`
+	LiveKitIsCloud    bool   `json:"-"` // mirrors instance.IsPlatformManaged at join time
 }
 
 type VoiceTokenRequest struct {

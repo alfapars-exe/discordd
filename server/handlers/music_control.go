@@ -22,6 +22,8 @@ var errMusicPlayRateLimited = errors.New("music play resource budget exceeded")
 type MusicAccessDependencies struct {
 	Channels services.ChannelGetter
 	Voice    MusicVoicePresence
+	Sessions MusicSessionValidator
+	Members  MusicServerMembership
 }
 
 func musicControlError(w http.ResponseWriter, err error) {
@@ -129,7 +131,12 @@ func (h *MusicHandler) guardedCommand(w http.ResponseWriter, r *http.Request, ac
 		}
 	}
 	command.Action = action
-	result, err := guarded.ApplyMusicCommand(r.Context(), user.ID, r.PathValue("channelId"), command)
+	ctx, err := h.musicAccessContext(r, user.ID, r.PathValue("channelId"), permission)
+	if err != nil {
+		pkg.Error(w, err)
+		return true
+	}
+	result, err := guarded.ApplyMusicCommand(ctx, user.ID, r.PathValue("channelId"), command)
 	if err != nil {
 		if code := services.MusicErrorCode(err); code != "" {
 			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to resolve YouTube track", code)

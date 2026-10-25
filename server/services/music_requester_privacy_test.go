@@ -22,7 +22,7 @@ type musicRequesterObserverFunc func(string)
 
 func (f musicRequesterObserverFunc) AnonymizeMusicRequester(id string) { f(id) }
 
-func musicPrivacyFixture(t *testing.T) (*mfaHarness, *authService, *AuthTokens, *musicBotService) {
+func musicPrivacyFixture(t *testing.T, protocol2 ...bool) (*mfaHarness, *authService, *AuthTokens, *musicBotService) {
 	t.Helper()
 	h, auth, _ := boundAuthHarness(t)
 	auth.accountAnonymization = repository.NewSQLiteAccountAnonymizationRepo(h.db.Conn)
@@ -45,8 +45,10 @@ func musicPrivacyFixture(t *testing.T) (*mfaHarness, *authService, *AuthTokens, 
 	if err := svc.persistBot(bot); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.AdoptControl(context.Background(), "ch"); err != nil {
-		t.Fatal(err)
+	if len(protocol2) == 0 || protocol2[0] {
+		if _, err := svc.AdoptControl(context.Background(), "ch"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	auth.SetMusicRequesterRetirementObserver(svc)
 	return h, auth, login, svc

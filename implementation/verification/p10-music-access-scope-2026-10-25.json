@@ -1,0 +1,60 @@
+{
+  "phase": "P10",
+  "status": "implemented_unverified",
+  "date": "2026-10-25",
+  "scope": [
+    "Trusted Go-only authorization callback binds the authenticated actor and original auth session to current server membership, voice-channel identity, fresh View/Speak rights and the original voice incarnation.",
+    "Guarded and legacy enqueue/restore revalidate after extraction, before connection/publication, after connection readiness and before durable queue commit. Exact receipt replay stays ahead of new-work verification.",
+    "Internal non-serialized ChannelGeneration advances on actual voluntary/admin channel moves; same-channel reconnect, mute and unrelated joins preserve it. Admin moves retain JoinedAt and LiveKit quota attribution.",
+    "Denied operations do not cache success receipts or alter the durable queue/head. Cleanup is limited to the exact attempt-created unclaimed bot; accepted existing/shared publishers and replacement bots survive.",
+    "Remote moderator Stop remains authorized by fresh membership/View/ManageChannels without requiring voice membership."
+  ],
+  "verification": [
+    {
+      "command": "go test ./services ./handlers -run '^TestMusicAccess|^TestVoiceChannelGeneration|^TestGetOrCreateBot|^TestEnqueue' -count=1 -timeout=2m",
+      "result": "PASS services 5.954s; handlers 2.041s"
+    },
+    {
+      "command": "go test ./services ./handlers ./repository -count=1 -timeout=5m",
+      "result": "PASS services 39.773s; handlers 6.415s; repository 82.382s. Completed before the final one-line quiet-cleanup fallthrough correction; final targeted test/race/lint below include it."
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services ./handlers -run 'TestMusicAccess|TestGetOrCreateBot|TestEnqueue|TestMoveUser|TestVoiceChannelGeneration|TestCachingPermResolverFresh' -race -count=1 -timeout=4m",
+      "result": "PASS services 79.945s; handlers 3.426s before final quiet-cleanup correction; TestMusicAccess prefix includes fresh-permission coverage."
+    },
+    {
+      "command": "go test ./services -run '^TestMusicAccessScopeCommitDenialQuietlyDiscardsNewPublisher$' -count=1 -timeout=1m",
+      "result": "PASS services 2.895s on final source; paused newly connected publisher cleanup emits no event and retains exact original queue/head."
+    },
+    {
+      "command": "docker run --rm --mount type=bind,source=C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\discordd\\server,target=/work,readonly --mount type=volume,source=hichat-go-qa-modules,target=/go/pkg/mod --mount type=volume,source=hichat-go-qa-build,target=/root/.cache/go-build --workdir /work -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./services ./handlers -run 'TestMusicAccess|TestVoiceChannelGeneration|TestCachingPermResolverFresh' -race -count=1 -timeout=4m",
+      "result": "PASS final-source services 80.839s; handlers 3.298s"
+    },
+    {
+      "command": "GOTOOLCHAIN=go1.26.10 golangci-lint 2.12.2 run --config ../.golangci.yml --timeout 3m ./handlers/... ./services/... ./repository/...",
+      "result": "PASS final source: 0 issues; Windows executable from LOCALAPPDATA/Temp/hichat-golangci-lint-2.12.2/golangci-lint-2.12.2-windows-amd64/golangci-lint.exe"
+    },
+    {
+      "command": "go test . -run '^$' -count=1 -timeout=1m",
+      "result": "PASS final source: 2.742s, main/init wiring compiled; no tests selected"
+    },
+    {
+      "command": "git diff --check -- server/handlers server/services server/models server/init_handlers.go",
+      "result": "PASS, no whitespace errors"
+    }
+  ],
+  "test_evidence": [
+    "Actual SQLite auth-session, account retirement, server membership and channel repositories back the service race fixtures; extractor and LiveKit connection/playback are deterministic local stubs.",
+    "Checks include leave/rejoin, actual MoveUser out/back, session revocation/retirement, member removal, permission/channel changes, same-channel reconnect, invalid/nil/panicking verifier, connect/ready/commit denial, preservation of other actors accepted work, exact retry and remote moderator Stop.",
+    "Fresh permission tests bypass a previously positive cache and retry invalidation during the underlying permission read.",
+    "No new schema or SQL change; PostgreSQL was not rerun for this access slice."
+  ],
+  "lock_order": "No lifecycle/session locks across extraction or LiveKit dialing. Commit fences use lifecycle stripe then sessionMu then bounded authorization, never bot.mu during the callback. Voice state reads use voice RLock; voice leave/move music cleanup dispatch is asynchronous. Owned cleanup checks exact bot identity and currentTrack/loopRunning before teardown.",
+  "remaining": [
+    "Current local QA fixture binary source 2c35c8ef55b687cc9e664dc51e457b81f841aeaf does not contain or validate this access source. Its earlier HTTP results must not be counted for this slice.",
+    "Final committed-source CI, fresh compiled HTTP/WS flows and actual encrypted two-client audible YouTube playback remain pending; no production or external media call was made.",
+    "Server-side broadcast audience authorization is still pending: music state/error currently broadcast to all server clients. Client voice filtering is not a server permission boundary.",
+    "Quiet cleanup reconciliation remains pending when another actor received active=true after LiveKit room assignment and committed a paused queue edit before creator denial. Existing paused-edit test blocks before room assignment and cannot prove that UI reconciliation.",
+    "Windows installer/update, production backup/migration/rollback and real device acceptance remain separate gates. No deployment or release was performed."
+  ]
+}

@@ -162,8 +162,21 @@ func (h *MusicHandler) Play(w http.ResponseWriter, r *http.Request) {
 		musicHandlerLogger.Warn("play: extend write deadline failed", slog.String("err", pkg.ErrText(err)))
 	}
 
-	tracks, err := h.music.Enqueue(r.Context(), user.ID, channelID, req.URL)
+	ctx, err := h.musicAccessContext(r, user.ID, channelID, models.PermSpeak)
 	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	tracks, err := h.music.Enqueue(ctx, user.ID, channelID, req.URL)
+	if err != nil {
+		if errors.Is(err, services.ErrMusicProtocolRequired) {
+			musicControlError(w, err)
+			return
+		}
+		if errors.Is(err, pkg.ErrForbidden) || errors.Is(err, pkg.ErrUnauthorized) || errors.Is(err, pkg.ErrConflict) || errors.Is(err, pkg.ErrNotFound) {
+			pkg.Error(w, err)
+			return
+		}
 		if code := services.MusicErrorCode(err); code != "" {
 			musicHandlerLogger.Warn("play: YouTube resolution failed", "code", code, "err", pkg.ErrText(err))
 			pkg.ErrorWithCode(w, http.StatusBadGateway, "failed to resolve YouTube track", code)
@@ -388,7 +401,12 @@ func (h *MusicHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
-	if err := h.music.Restore(r.Context(), channelID); err != nil {
+	ctx, err := h.musicAccessContext(r, user.ID, channelID, models.PermSpeak)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+	if err := h.music.Restore(ctx, channelID); err != nil {
 		pkg.Error(w, err)
 		return
 	}

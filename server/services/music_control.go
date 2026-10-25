@@ -181,6 +181,9 @@ func (s *musicBotService) ApplyMusicCommand(ctx context.Context, actorID, channe
 	if head.SessionID != op.SessionID || head.Revision != op.ExpectedRevision {
 		return nil, pkg.ErrConflict
 	}
+	if err := RecheckMusicAccess(ctx); err != nil {
+		return nil, err
+	}
 	if command.BeforeNewWork != nil {
 		if err := command.BeforeNewWork(); err != nil {
 			return nil, err
@@ -197,6 +200,9 @@ func (s *musicBotService) ApplyMusicCommand(ctx context.Context, actorID, channe
 // persistEnqueue is called with the live bot session lock held. Its receipt and
 // queue snapshot commit together; failed extraction/connect never writes one.
 func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, tracks []models.MusicTrack, actor string) error {
+	if err := RecheckMusicAccess(ctx); err != nil {
+		return err
+	}
 	pending, _ := ctx.Value(musicCommandContextKey{}).(*musicPendingCommand)
 	if pending == nil {
 		if err := s.CheckLegacyControl(ctx, bot.channelID); err != nil {
@@ -251,6 +257,12 @@ func (s *musicBotService) applyImmediateMusicCommand(ctx context.Context, store 
 			return nil, err
 		}
 	}
+	if err := RecheckMusicAccess(ctx); err != nil {
+		if bot != nil {
+			s.cleanupMusicAttemptBot(ctx, bot)
+		}
+		return nil, err
+	}
 	lifecycle.Lock()
 	defer lifecycle.Unlock()
 	if bot == nil {
@@ -259,6 +271,14 @@ func (s *musicBotService) applyImmediateMusicCommand(ctx context.Context, store 
 	if bot != nil {
 		bot.sessionMu.Lock()
 		defer bot.sessionMu.Unlock()
+	}
+	if err := RecheckMusicAccess(ctx); err != nil {
+		if bot != nil {
+			s.cleanupMusicAttemptBotLocked(ctx, bot)
+		}
+		return nil, err
+	}
+	if bot != nil {
 		bot.mu.Lock()
 	}
 	if bot != nil && (bot.stopping.Load() || bot.sessionID != op.SessionID || bot.revision != op.ExpectedRevision) {
@@ -386,8 +406,17 @@ func (s *musicBotService) applyImmediateMusicCommand(ctx context.Context, store 
 		persisted = &next
 	}
 	result := json.RawMessage(`{"status":"ok"}`)
+	if err := RecheckMusicAccess(ctx); err != nil {
+		if bot != nil {
+			s.cleanupMusicAttemptBotLocked(ctx, bot)
+		}
+		return nil, err
+	}
 	receipt, replayed, err := store.CommitMusicOperation(ctx, models.MusicOperationCommit{Operation: op, NextHead: head, Session: persisted, Result: result})
 	if err != nil {
+		if bot != nil {
+			s.cleanupMusicAttemptBotLocked(ctx, bot)
+		}
 		return nil, err
 	}
 	if replayed {

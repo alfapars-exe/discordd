@@ -84,6 +84,11 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		panic("stream start notification dependencies are not wired")
 	}
 	liveKitWebhook.SetStreamStartNotifier(services.NewStreamStartNotifier(repos.StreamStartNotification, verifier, hub))
+	musicAccess := handlers.MusicAccessDependencies{Channels: repos.Channel, Voice: svcs.Voice, Members: repos.Server}
+	musicAccess.Sessions, _ = svcs.Auth.(handlers.MusicSessionValidator)
+	if musicAccess.Sessions == nil {
+		panic("music session validation dependency is not wired")
+	}
 	return &Handlers{
 		AccountStatus:         handlers.NewAccountStatusHandler(repos.AccountStatus),
 		AccountDeletionStatus: handlers.NewAccountDeletionStatusHandler(repos.AccountDeletionStatus),
@@ -132,7 +137,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Entrance:              handlers.NewEntranceHandler(svcs.Entrance, limiters.Upload),
 		Cosmetic:              handlers.NewCosmeticHandler(svcs.Cosmetic, limiters.CosmeticEquip),
 		ExpressionClone:       handlers.NewExpressionCloneHandler(svcs.ExpressionClone, limiters.Upload),
-		Music:                 handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay, handlers.MusicAccessDependencies{Channels: repos.Channel, Voice: svcs.Voice}),
+		Music:                 handlers.NewMusicHandler(svcs.MusicBot, svcs.ChannelPermission, limiters.MusicPlay, musicAccess),
 		LiveKitWebhook:        liveKitWebhook,
 		ClientLog:             handlers.NewClientLogHandler(svcs.AppLog),
 		UploadDownload: handlers.NewUploadDownloadHandler(cfg.Upload.Dir, services.NewMediaAccessService(

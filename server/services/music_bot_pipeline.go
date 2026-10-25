@@ -107,6 +107,11 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 			}
 		},
 	})
+	if err := RecheckMusicAccess(ctx); err != nil {
+		bot.stopping.Store(true)
+		room.Disconnect()
+		return err
+	}
 	err = room.JoinWithContextAndToken(ctx, lkInstance.URL, token, lksdk.WithConnectTimeout(10*time.Second))
 	if err != nil {
 		room.Disconnect()
@@ -114,6 +119,11 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 		return fmt.Errorf("livekit connect: %w", err)
 	}
 	musicBotLogger.Info("connectBotToRoom: livekit connected", "room", bot.roomName)
+	if err := RecheckMusicAccess(ctx); err != nil {
+		bot.stopping.Store(true)
+		room.Disconnect()
+		return err
+	}
 
 	track, err := lksdk.NewLocalSampleTrack(webrtc.RTPCodecCapability{
 		MimeType:  webrtc.MimeTypeOpus,
@@ -126,6 +136,11 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 		return fmt.Errorf("track create: %w", err)
 	}
 
+	if err := RecheckMusicAccess(ctx); err != nil {
+		bot.stopping.Store(true)
+		room.Disconnect()
+		return err
+	}
 	pub, err := room.LocalParticipant.PublishTrack(track, &lksdk.TrackPublicationOptions{
 		Name:       "music",
 		Source:     livekitproto.TrackSource_MICROPHONE,
@@ -137,6 +152,11 @@ func (s *musicBotService) connectBotToRoom(ctx context.Context, bot *botInstance
 		room.Disconnect()
 		musicBotLogger.Error("connectBotToRoom: publish track failed", "err", pkg.ErrText(err))
 		return fmt.Errorf("publish track: %w", err)
+	}
+	if err := RecheckMusicAccess(ctx); err != nil {
+		bot.stopping.Store(true)
+		room.Disconnect()
+		return err
 	}
 
 	// Publish under bot.mu. If stopBot ran while we were dialing, it found

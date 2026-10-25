@@ -300,6 +300,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	wasStreaming := state.IsStreaming
 	state.IsStreaming = false
 
+	state.ChannelGeneration++
 	state.ChannelID = targetChannelID
 	state.ServerID = targetServerID
 

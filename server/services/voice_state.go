@@ -290,6 +290,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// moderation, so it must not cross into a different server's voice
 	// channel that server's own moderators never applied it on.
 	var wasServerMuted, wasServerDeafened bool
+	channelGeneration := uint64(1)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -302,6 +303,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		oldChannelID = existing.ChannelID
 		oldServerID = existing.ServerID
 		oldJoinedAt = existing.JoinedAt
+		channelGeneration = existing.ChannelGeneration + 1
 		oldInstanceID = existing.LiveKitInstanceID
 		oldIsCloud = existing.LiveKitIsCloud
 		// A-37: snapshotted before the cross-channel branch below replaces
@@ -439,6 +441,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		IsServerDeafened:  wasServerDeafened,
 		LastActivity:      now,
 		JoinedAt:          now,
+		ChannelGeneration: channelGeneration,
 		LiveKitInstanceID: lkInstanceID,
 		LiveKitIsCloud:    lkIsCloud,
 	}
