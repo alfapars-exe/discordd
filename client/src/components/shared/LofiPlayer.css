@@ -1,0 +1,6 @@
+.lofi-player { box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--background-modifier-accent); border-radius: 12px; padding: 24px; background: var(--background-primary); color: var(--text-normal); }
+.lofi-player::backdrop { background: rgb(0 0 0 / 65%); }
+.lofi-player-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 20px; }
+.lofi-player-volume { display: grid; gap: 10px; margin-block: 20px; }
+.lofi-player-volume input { width: 100%; }
+.lofi-player button:focus-visible, .lofi-player input:focus-visible { outline: 2px solid var(--brand-experiment, #5865f2); outline-offset: 3px; }

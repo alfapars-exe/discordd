@@ -51,6 +51,7 @@ function isTextInput(el: Element | null): boolean {
 
 export function useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate, conversation, inbox, voice }: KeyboardShortcutActions) {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [lofiOpen, setLofiOpen] = useState(false);
   const capturing = useShortcutCaptureStore((state) => state.active);
   // Read via a ref inside both effects below — useVoice.ts's toggleMute
   // useCallback identity is unstable across renders, and putting it in the
@@ -168,6 +169,11 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate, conve
         e.preventDefault(); navigate(command); return;
       }
       if (command === "context-menu" && openFocusedContextMenu()) { e.preventDefault(); return; }
+      if (command === "lofi-player") {
+        e.preventDefault();
+        setLofiOpen(true);
+        return;
+      }
       if (command === "shortcut-help" || command === "app-help") {
         e.preventDefault();
         setShortcutHelpOpen((open) => !open);
@@ -226,5 +232,5 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate, conve
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleDeafen, navigate, conversation, inbox, voice]);
-  return { shortcutHelpOpen, closeShortcutHelp: () => setShortcutHelpOpen(false) };
+  return { shortcutHelpOpen, closeShortcutHelp: () => setShortcutHelpOpen(false), lofiOpen, closeLofi: () => setLofiOpen(false) };
 }

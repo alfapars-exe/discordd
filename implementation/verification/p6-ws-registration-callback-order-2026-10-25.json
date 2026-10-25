@@ -4,6 +4,7 @@
   "finding": "With both presence and game-activity callbacks enabled, addClient and removeClient reserved the game ticket first but submitted the presence ticket first. Dispatcher admission waits for the predecessor's submitted signal, so registration/removal blocked before ready or subsequent Hub work.",
   "change": "Reserve presence before game activity consistently with submission order, on first/additional connection and last/partial removal. No authentication, visibility or ready-payload guard was weakened.",
   "verification": [
+    "Final complete server go test ./... passed. After restarting the isolated local QA backend, both actual browser clients received ready; the banner cleared and server navigation restored. Reloading B after the removal fix left A connected and B reconnected successfully.",
     "New first/additional registration regression failed before the fix in both cases with a bounded one-second acknowledgement timeout, then passed after the ordering change.",
     "New last/partial removal regression failed before the follow-on fix in both cases with a bounded one-second completion timeout, then passed after the ordering change.",
     "Registration, removal, lifecycle and callback-dispatcher tests passed five repeats.",
@@ -16,7 +17,6 @@
     "client/src/hooks/ws/systemEventHandlers.ready-integration.test.ts"
   ],
   "remaining": [
-    "Final whole-server regression and two-client browser reload/disconnect acceptance after the removal change are tracked by the parent acceptance run.",
     "This does not establish complete voice/device/network-recovery acceptance or release readiness."
   ],
   "release": "No commit, push, merge, production migration, deployment or publication."

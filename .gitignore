@@ -129,6 +129,7 @@ server/static/dist/
 *.log
 *.tmp
 coverage/
+__pycache__/
 deploy.md
 
 

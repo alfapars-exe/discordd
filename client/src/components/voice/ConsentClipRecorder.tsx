@@ -31,6 +31,7 @@ export default function ConsentClipRecorder() {
   const channelId = useVoiceStore((s) => s.currentVoiceChannelId);
   const [recording, setRecording] = useState(false);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
+  const [clipName, setClipName] = useState("hichat-clip.webm");
   const [excludedCount, setExcludedCount] = useState(0);
   const active = useRef<ActiveRecording | null>(null);
 
@@ -77,6 +78,7 @@ export default function ConsentClipRecorder() {
     await current.context.close();
     active.current = null;
     setRecording(false);
+    setClipName(`hichat-clip-${Date.now()}.webm`);
     setClipUrl((previous) => {
       if (previous) URL.revokeObjectURL(previous);
       return URL.createObjectURL(blob);
@@ -127,7 +129,7 @@ export default function ConsentClipRecorder() {
         {t(recording ? "clipRecordingStop" : "clipRecordingStart")}
       </button>
       {recording && <span role="status">{t("clipRecordingActive", { count: excludedCount })}</span>}
-      {clipUrl && <div className="voice-clip-result"><audio controls src={clipUrl} /><a className="settings-btn" href={clipUrl} download={`hichat-clip-${Date.now()}.webm`}>{t("clipRecordingDownload")}</a></div>}
+      {clipUrl && <div className="voice-clip-result"><audio controls src={clipUrl} /><a className="settings-btn" href={clipUrl} download={clipName}>{t("clipRecordingDownload")}</a></div>}
     </div>
   );
 }

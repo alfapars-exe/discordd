@@ -69,6 +69,29 @@ function renderShortcuts() {
   return { ...utils, toggleMute, toggleDeafen };
 }
 
+it("opens lo-fi only from its explicit shortcut and respects input and modal ownership", () => {
+  const { result } = renderShortcuts();
+  const keys = { code: "KeyW", key: "w", ctrlKey: true, altKey: true, shiftKey: true };
+  const input = document.createElement("textarea");
+  const modal = document.createElement("div");
+  modal.setAttribute("aria-modal", "true");
+  document.body.append(input);
+  try {
+    act(() => { dispatchOn(input, keys); });
+    expect(result.current.lofiOpen).toBe(false);
+    document.body.append(modal);
+    act(() => { dispatchOn(document, keys); });
+    expect(result.current.lofiOpen).toBe(false);
+    modal.remove();
+    act(() => { dispatchOn(document, { ...keys, repeat: true }); });
+    expect(result.current.lofiOpen).toBe(false);
+    act(() => { expect(dispatchOn(document, keys).defaultPrevented).toBe(true); });
+    expect(result.current.lofiOpen).toBe(true);
+    act(() => { result.current.closeLofi(); });
+    expect(result.current.lofiOpen).toBe(false);
+  } finally { input.remove(); modal.remove(); }
+});
+
 it("opens and closes the shared shortcut help with Ctrl+/", () => {
   const { result } = renderShortcuts();
   expect(result.current.shortcutHelpOpen).toBe(false);

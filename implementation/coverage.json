@@ -5983,7 +5983,7 @@
       "id": "p8.other-shortcuts",
       "title": "Other default shortcuts",
       "phase": "P8",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R17",
         "R18"
@@ -5997,8 +5997,8 @@
       "acceptance": [
         "Help, search, context menu and lo-fi action each open or execute real functionality with permission and platform guards."
       ],
-      "code": [],
-      "evidence": [],
+      "code": ["client/src/utils/shortcutRegistry.ts", "client/src/hooks/useKeyboardShortcuts.ts", "client/src/utils/contextMenuShortcut.ts", "client/src/components/shared/LofiPlayer.tsx", "client/src/audio/lofiEngine.ts", "client/src/components/layout/AppLayout.tsx"],
+      "evidence": ["implementation/verification/p8-lofi-2026-10-25.json"],
       "actions": [
         "Help Ctrl+Shift+H",
         "Search Ctrl+F",
@@ -6340,8 +6340,8 @@
       "acceptance": [
         "Selected output and reset-to-default route real remote audio and preserve per-user volume."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useOutputDeviceSync.ts", "client/src/hooks/useOutputDeviceSync.test.ts"],
+      "evidence": ["implementation/verification/p9-output-event-safety-2026-10-25.json"]
     },
     {
       "id": "p9.microphone-level",
@@ -6578,8 +6578,8 @@
       "acceptance": [
         "Mute/unmute/deafen/join/leave sounds and previews respect individual and global mute settings."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/utils/sounds.ts", "client/src/utils/sounds.test.ts"],
+      "evidence": ["implementation/verification/p9-output-event-safety-2026-10-25.json"]
     },
     {
       "id": "p9.soundboard",

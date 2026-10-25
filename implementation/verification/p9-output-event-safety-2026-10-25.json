@@ -1,0 +1,23 @@
+{
+  "phase": "P9",
+  "status": "implemented_unverified",
+  "scope": [
+    "LiveKit output switches are serialized per Room with latest-request and effect-lifetime checks. Superseded failures cannot issue a default fallback over the new device selection. A new Room does not wait for a previous Room's stuck request.",
+    "Existing output fallback and reconnect behavior are retained. Tests cover selected/default output, currently missing output, stale failure, unmount and room replacement.",
+    "Synthesized event sounds route to the selected output before starting. Missing devices fall back to default, while unsupported/denied custom routing suppresses playback. Personal/server deafen and live voice-event master changes apply without losing fade envelopes. Entrance presets retain absolute volume semantics.",
+    "Passive store listeners install only on first playback to avoid the voiceStore import cycle. Account generation, owner and voice-session changes fence pending/scheduled tones; context close also invalidates them. Delayed second tones cannot escape cancellation.",
+    "Latest-request routing handles switching A to B and back to A while B is pending. Superseded failures cannot cancel the latest route; rejected context resume or asynchronous node creation is handled without an unhandled rejection."
+  ],
+  "verification": [
+    "LiveKit output routing: five focused tests passed; scoped ESLint passed.",
+    "Lo-fi follow-up: 15 tests passed, including permission/device error categorization and both personal/server deafen.",
+    "Final focused routing/preset/player run: 66 tests passed in four files (event sounds18, LiveKit output5, player15, existing entrance preset28). Scoped ESLint passed.",
+    "Full client regression before the last bounded route/resume follow-up: 336 files, 3247 tests passed, zero failed/pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-output-safety-final-20261025.json. The final follow-up passed the separate 66-test rerun.",
+    "Final client TypeScript and production Vite build passed (existing ineffective dynamic import warnings). Coverage structure remains valid and all32 validator tests passed; targeted git diff --check passed."
+  ],
+  "remaining": [
+    "Actual physical audio output, hot unplug, two-device listening and Windows acceptance remain open. These focused mocked tests are not device acceptance.",
+    "Composite output/effect ledger items retain missing status until the remaining behaviors and real acceptance are accounted for."
+  ],
+  "release": "No commit, push, merge, deployment or publication performed in this slice."
+}

@@ -12,35 +12,45 @@
  * Was previously ~30 lines inline in VoiceStateManager.tsx.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ConnectionState, RoomEvent, type Room } from "livekit-client";
 
 import { useVoiceStore } from "../stores/voiceStore";
 
 export function useOutputDeviceSync(room: Room): void {
   const outputDevice = useVoiceStore((s) => s.outputDevice);
+  const routing = useRef({ room, queue: Promise.resolve(), revision: 0 });
 
   useEffect(() => {
+    if (routing.current.room !== room) routing.current = { room, queue: Promise.resolve(), revision: 0 };
+    const route = routing.current;
+    let active = true;
     async function applyOutputDevice() {
-      try {
-        // The empty preference means the system default, not "leave the
-        // previously selected speaker active".
-        await room.switchActiveDevice("audiooutput", outputDevice || "default");
-      } catch (err) {
-        // A persisted USB/Bluetooth device can disappear between sessions.
-        // Restore the browser/system default so a stale sink never prevents
-        // the call from continuing with audio.
-        if (outputDevice && outputDevice !== "default") {
-          try {
-            await room.switchActiveDevice("audiooutput", "default");
-            return;
-          } catch {
-            // The browser may have no routable output at all; keep the call
-            // alive and let LiveKit use its normal fallback.
+      const revision = ++route.revision;
+      const current = () => active && routing.current === route && route.revision === revision;
+      const operation = route.queue.catch(() => {}).then(async () => {
+        if (!current()) return;
+        try {
+          // The empty preference means the system default, not "leave the
+          // previously selected speaker active".
+          await room.switchActiveDevice("audiooutput", outputDevice || "default");
+        } catch (err) {
+          // Queue the latest choice after an in-flight switch. A superseded
+          // failure must not restore the default over the new preference.
+          if (!current()) return;
+          if (outputDevice && outputDevice !== "default") {
+            try {
+              await room.switchActiveDevice("audiooutput", "default");
+              return;
+            } catch {
+              // Keep the call alive if no routable output exists.
+            }
           }
+          if (current()) console.warn("[useOutputDeviceSync] Output device unavailable; using browser default.", err);
         }
-        console.warn("[useOutputDeviceSync] Output device unavailable; using browser default.", err);
-      }
+      });
+      route.queue = operation;
+      await operation;
     }
 
     if (room.state === ConnectionState.Connected) {
@@ -55,6 +65,7 @@ export function useOutputDeviceSync(room: Room): void {
     room.on(RoomEvent.Reconnected, handleConnected);
 
     return () => {
+      active = false;
       room.off(RoomEvent.Connected, handleConnected);
       room.off(RoomEvent.Reconnected, handleConnected);
     };

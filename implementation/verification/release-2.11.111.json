@@ -1,0 +1,19 @@
+{
+  "version": "2.11.111",
+  "authorization": "User explicitly requested a current-work checkpoint commit/push, production HF update and Windows update on 2026-10-25; remaining P0-P11 implementation continues afterwards.",
+  "status": "release_preparation_not_published",
+  "verified": [
+    "Current local Go test ./..., go vet ./... and go build ./... passed using Go1.27.0 before CI baseline remediation.",
+    "Client final local regression: 337 files, 3249 passed, zero failed/pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-release-2.11.111-final.json.",
+    "Complete client ESLint passed with zero errors and five existing warnings after correcting animation-state reset and clip filename purity errors.",
+    "Electron TypeScript and 162 desktop tests: 161 passed, one pre-existing symlink-permission skip, zero failures.",
+    "Both Windows native helpers compiled with hardening checks. Local NSIS candidate and updater metadata were built and matched size/SHA512. Later clean-dependency fixes require rebuilding the final candidate before publication.",
+    "A separate coordinated task verified production WS first ready, heartbeat, reconnect and existing TAYFA server visibility after HF hotfix b8a626fb9d1a0e1c3531494b46f1c3be8cc4e8ab; no second release will be published by that task."
+  ],
+  "release_gates": [
+    "Existing main CI40152688980 was failing clean-dependency Docker/Sentry types, Go tidy/lint, Linux desktop native initialization, E2E registration fixture and static-policy checks. These are being corrected before tagging/publication; local success is not represented as clean CI success.",
+    "HF Space deployment uses tracked application sources only, a reviewed preview plan digest and expected-parent compare-and-swap. Space secrets/environment and persistent PG/Bucket volumes are not changed by the source publisher.",
+    "Installed2.11.110 clients still use the legacy GitHub feed. Publish the Windows bridge artifacts to GitHub as well as the configured generic HF Dataset feed.",
+    "Installer Authenticode is NotSigned. Real physical audio/device, clean installed update/rollback and remaining P0-P11 acceptance are not complete. No claim of error-free behavior follows from unit tests."
+  ]
+}

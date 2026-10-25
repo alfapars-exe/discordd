@@ -7,8 +7,8 @@
 //   - SQLite snapshot uses `sqlite3 VACUUM INTO` (CLI), not a file copy.
 //     VACUUM INTO produces a consistent file even while the app is
 //     actively writing; a plain `cp` of a WAL-mode DB risks a torn page.
-//   - Uploads are mirrored with `hf sync --delete` so the backup matches
-//     production exactly (deletions are mirrored).
+//   - Uploads are copied without remote deletion. A missing/unavailable
+//     mount must never turn into deletion of the retained Bucket contents.
 //   - Two prefixes are written. `latest/` is the mutable mirror (DB +
 //     uploads), overwritten every cycle. `daily/<YYYY-MM-DD>/hichat.db` is
 //     the versioned history — DB only, one copy per UTC day, pruned to

@@ -1,0 +1,26 @@
+{
+  "phase": "P8",
+  "status": "implemented_unverified",
+  "scope": [
+    "User selected an original local instrumental loop instead of YouTube for the lo-fi shortcut. This is separate from the YouTube music bot requirement.",
+    "Ctrl+Alt+Shift+W opens an accessible player through the shared registry. Input, shortcut capture, repeated keystrokes and modal ownership guards apply. No autoplay on opening.",
+    "Original procedural 72 BPM eight-bar instrumental loop with no downloads or new dependencies; play/pause/stop, position retention and bounded generated buffer.",
+    "Personal volume combines with master volume and deafen. Selected AudioContext output, missing-device fallback, unsupported/failed routing pause, serialized output changes and disposal fences are implemented.",
+    "Close, Escape, unmount and account owner/generation changes dispose the player. Focus returns on close. EN/TR strings identify the local source honestly."
+  ],
+  "verification": [
+    "Focused client suites after default-output correction: 63 tests passed across engine, player, keyboard hook and shortcut registry.",
+    "Full client regression: 336 files, 3229 tests passed, zero failed or pending. Report C:/Users/PARS/AppData/Local/Temp/hichat-lofi-final-20261025.json; subsequent focused tests cover final default-output correction.",
+    "Production Vite build passed with pre-existing ineffective dynamic import warnings. Coverage structure valid; validator 32 tests passed. Status totals: existing32, missing40, implemented_unverified176, accepted2, excluded11.",
+    "Client TypeScript and scoped ESLint passed.",
+    "Real Ego Lite test page: shortcut opened the translated player without autoplay; Escape closed it. Initial Play displayed a playback error rather than claiming success. Real audible playback is not accepted.",
+    "Follow-up error handling distinguishes denied permissions from unavailable/in-use devices using allowlisted exception names, never exposing raw platform device details. 15 player tests passed including four permission/device retry regressions and personal/server deafen gain coverage."
+  ],
+  "remaining": [
+    "Initial real browser playback failed. Default output now maps to Web Audio empty sink ID and avoids redundant selection; this is not proof of the failure cause. Recheck real playback, actual listening quality, selected physical output, device removal and Windows acceptance.",
+    "User reported they cannot perform the actual listening check now; this gate remains pending without requesting repeated browser/window intervention.",
+    "Corrected group theme screenshot still unavailable: Ego reports window minimized despite visible/focused page and user confirmation. No screenshot workaround used.",
+    "All P0-P11 full acceptance and release gates remain open."
+  ],
+  "release": "No commit, push, merge, deployment or publication."
+}

@@ -68,6 +68,7 @@ import ServerCreationLauncher from "../servers/ServerCreationLauncher";
 import P2PAudioSink from "../p2p/P2PAudioSink";
 import QuickSwitcher from "../shared/QuickSwitcher";
 import KeyboardShortcutHelp from "../shared/KeyboardShortcutHelp";
+import LofiPlayer from "../shared/LofiPlayer";
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
 import ConnectionBanner from "../shared/ConnectionBanner";
@@ -311,7 +312,7 @@ function AppLayout() {
   useOverlayVoiceActions(toggleMute, toggleDeafen);
 
   // Global keyboard shortcuts
-  const { shortcutHelpOpen, closeShortcutHelp } = useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate: executeNavigationShortcut, conversation: executeConversationShortcut, voice: executeVoiceShortcut, inbox: executeInboxShortcut });
+  const { shortcutHelpOpen, closeShortcutHelp, lofiOpen, closeLofi } = useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate: executeNavigationShortcut, conversation: executeConversationShortcut, voice: executeVoiceShortcut, inbox: executeInboxShortcut });
 
   // P2P call lifecycle
   useP2PCall();
@@ -404,6 +405,7 @@ function AppLayout() {
       <GroupConversationLauncher />
       <ServerCreationLauncher />
       {shortcutHelpOpen && <KeyboardShortcutHelp onClose={closeShortcutHelp} />}
+      {lofiOpen && <LofiPlayer onClose={closeLofi} />}
 
       {/* P2P incoming call overlay */}
       <IncomingCallOverlay />

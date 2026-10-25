@@ -1,5 +1,6 @@
 /** Runtime bindings and their display metadata share this command source. */
 export const shortcutRegistry = [
+  { id: "lofi-player", category: "other", code: "KeyW", key: "w", ctrl: true, alt: true, shift: true, allowInInput: false, customizable: false, labelKey: "shortcutLofi" },
   { id: "shortcut-help", category: "other", code: "Slash", key: "/", ctrl: true, shift: false, allowInInput: true, labelKey: "shortcutHelp" },
   { id: "overlay-lock", category: "other", code: "KeyO", key: "o", ctrl: true, alt: true, shift: false, optIn: true, allowInInput: false, labelKey: "shortcutOverlayLock" },
   { id: "app-help", category: "other", code: "KeyH", key: "h", ctrl: true, shift: true, allowInInput: true, customizable: false, labelKey: "shortcutAppHelp" },

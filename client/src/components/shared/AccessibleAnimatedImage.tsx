@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useAccessibilityStore } from "../../stores/accessibilityStore";
 
 type AccessibleAnimatedImageProps = {
@@ -32,12 +32,13 @@ export default function AccessibleAnimatedImage({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const shouldGate = animated && !autoplayGifs;
-  const playing = !shouldGate || intentToPlay;
-
-  useEffect(() => {
+  const [imageScope, setImageScope] = useState({ src, shouldGate });
+  if (imageScope.src !== src || imageScope.shouldGate !== shouldGate) {
+    setImageScope({ src, shouldGate });
     setPosterReady(false);
     setIntentToPlay(false);
-  }, [src, shouldGate]);
+  }
+  const playing = !shouldGate || intentToPlay;
 
   const capturePoster = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     if (!shouldGate) return;

@@ -12,7 +12,7 @@
     "Scoped ESLint and client TypeScript passed for the changed implementation. No full-regression or actual-device acceptance claim is made for this slice."
   ],
   "open": [
-    "Group emoji/GIF/sticker selection and rendering with privacy controls, persistent group pins, and lo-fi listening remain unimplemented.",
+    "Group expressions and persistent group pins were subsequently implemented; bounded live/PG evidence is in p4-p8-group-expressions-pins-2026-10-25.json and p4-group-pins-live-browser-2026-10-25.json. Local lo-fi implementation is tracked separately in p8-lofi-2026-10-25.json. Full acceptance remains open.",
     "Real browser/Windows keyboard, file-picker, accessibility and multiple-client acceptance remains pending, alongside the rest of P0-P11."
   ],
   "release": "No commit, push, merge, deployment or publication."

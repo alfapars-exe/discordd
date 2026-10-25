@@ -15,12 +15,19 @@
     "B sent a new encrypted group message; A displayed its decrypted content live without reloading.",
     "B pinned its message; A's already-open pin panel refreshed live. A unpinned it; B's panel became empty live. B repinned it; A's draft remained exactly 'keep live QA draft'.",
     "B reloaded after the removal-order fix, reconnected successfully while A remained connected, and reopened the group. Encrypted history and the persisted pin decrypted successfully.",
+    "After the route-restore and crypto-ready-history corrections, B reloaded the known group URL and remained at the exact same group URL; encrypted history restored without manually reopening the group.",
+    "The real shared emoji picker inserted a selected native emoji into B's existing 'QA draft' text and closed, preserving the draft prefix.",
     "Geometry-only sampling at390,768,1024,1440,2560 CSS pixels observed document scrollWidth equal to viewport and composer right edge within viewport. This is not screenshot or full visual acceptance."
+  ],
+  "verification": [
+    "Final client regression after the routing/history changes: 334 files, 3204 passed, zero failed/pending. Report: C:/Users/PARS/AppData/Local/Temp/hichat-live-acceptance-final-20261025.json.",
+    "Final complete Go suite passed after callback-order fixes. Scoped client lint, TypeScript and production Vite build passed. Coverage validator: 32 tests passed; whole acceptance remains incomplete."
   ],
   "findings": [
     "Initial live screenshot exposed unthemed group controls; targeted responsive theme CSS was added and pins/members panels made mutually exclusive.",
     "Original callback ordering deadlocked WebSocket registration before ready, despite HTTP send working. Both registration/removal ordering were corrected with bounded red-to-green regressions.",
-    "Reloading a group route prematurely redirected to friends while group metadata was loading; the separate guarded routing correction is being verified."
+    "Reloading a group route prematurely redirected to friends while group metadata was loading. Guarded routing now waits for the owned membership list; the live reload passed.",
+    "The early restored group route could mount before device crypto was ready, cancelling the only history request. History now observes account generation, key epoch, group readiness, crypto readiness and device identity; the deferred-ready unit regression and live reload passed."
   ],
   "artifacts": [
     "implementation/verification/p4-group-pins-browser-2026-10-25.png (initial finding, before visual correction; not an accepted reference image)",

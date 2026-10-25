@@ -4,6 +4,7 @@
   "finding": "A group deep link was resolved against an empty cold-start group cache as unavailable, immediately replacing its URL with friends. The router subscribed to servers but not asynchronous group readiness, so later group metadata could not restore the lost destination.",
   "change": "Defer group path resolution while owned group metadata is unresolved, subscribe to list/readiness/account-generation provenance, and bind applied locations to the authenticated scope. Only a current member in a current owned ready list resolves to a group; an authoritative missing/outsider group still falls back home.",
   "verification": [
+    "Actual local QA B browser reload retained the exact group URL and restored decrypted history after the companion crypto-ready history correction. See p4-group-pins-live-browser-2026-10-25.json.",
     "Deferred-membership and stale-owner/generation regressions failed before the change and passed after.",
     "Eight navigation-history tests passed, including known-group deferred restore, absent-group authoritative fallback, malformed URLs, back/forward and stale account/generation metadata.",
     "Twenty-four related conversation-command regressions passed in the same focused run; scoped ESLint and client TypeScript passed."
@@ -13,7 +14,7 @@
     "client/src/hooks/useNavigationHistory.test.tsx"
   ],
   "remaining": [
-    "Live group reload acceptance and final complete-client regression are tracked by the parent acceptance run.",
+    "Final complete-client regression passed (3204 tests); recorded in p4-group-pins-live-browser-2026-10-25.json. Broader device and visual coverage remains open.",
     "This is not complete visual/platform/navigation acceptance for all P0-P11 destinations."
   ],
   "release": "No commit, push, merge, deployment or publication."
