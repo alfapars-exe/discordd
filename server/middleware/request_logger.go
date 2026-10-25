@@ -79,8 +79,8 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	if r.status == 0 {
 		r.status = code
+		r.ResponseWriter.WriteHeader(code)
 	}
-	r.ResponseWriter.WriteHeader(code)
 }
 
 func (r *statusRecorder) Write(b []byte) (int, error) {

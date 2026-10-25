@@ -333,11 +333,11 @@ func TestGetAll_BulkLoadsTimeoutsViaListActive(t *testing.T) {
 			{ID: "b", Username: "b"},
 		}, nil
 	}
-	h.serverRepo.IsMemberFn = func(_ context.Context, _, _ string) (bool, error) {
-		return true, nil
+	h.serverRepo.ListMemberIDsFn = func(_ context.Context, _ string) ([]string, error) {
+		return []string{"a", "b"}, nil
 	}
-	h.roleRepo.GetByUserIDAndServerFn = func(_ context.Context, _, _ string) ([]models.Role, error) {
-		return nil, nil
+	h.roleRepo.GetRolesForUsersFn = func(_ context.Context, _ string, _ []string) (map[string][]models.Role, error) {
+		return map[string][]models.Role{}, nil
 	}
 
 	var listActiveCalls int

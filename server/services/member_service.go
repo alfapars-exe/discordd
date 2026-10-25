@@ -138,6 +138,20 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 		return nil, fmt.Errorf("failed to get all users: %w", err)
 	}
 
+	memberIDs, err := s.serverRepo.ListMemberIDs(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list server members: %w", err)
+	}
+	memberSet := make(map[string]struct{}, len(memberIDs))
+	for _, userID := range memberIDs {
+		memberSet[userID] = struct{}{}
+	}
+
+	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, serverID, memberIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get roles for server members: %w", err)
+	}
+
 	// One round-trip for all per-server nicknames — avoids the N+1 we'd
 	// get from calling GetNickname inside the loop.
 	nicknames, err := s.serverRepo.GetNicknamesForServer(ctx, serverID)
@@ -166,18 +180,11 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 
 	members := make([]models.MemberWithRoles, 0)
 	for i := range users {
-		isMember, err := s.serverRepo.IsMember(ctx, serverID, users[i].ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check membership: %w", err)
-		}
-		if !isMember {
+		if _, ok := memberSet[users[i].ID]; !ok {
 			continue
 		}
 
-		roles, err := s.roleRepo.GetByUserIDAndServer(ctx, users[i].ID, serverID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get roles for user %s: %w", users[i].ID, err)
-		}
+		roles := rolesByUser[users[i].ID]
 		m := models.ToMemberWithRoles(&users[i], roles)
 		if nick, ok := nicknames[users[i].ID]; ok && nick != "" {
 			n := nick
