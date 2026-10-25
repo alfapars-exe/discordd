@@ -17,9 +17,9 @@ permissions:
   contents: read
 
 jobs:
-  # ─── Go server: vet + test + build ───
+  # ─── Go server: vet + non-heavy tests + build ───
   server-test:
-    name: Go test & build
+    name: Go base tests & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,27 +53,82 @@ jobs:
           fi
         working-directory: server
 
-      - name: go test (race + cover)
-        # -timeout is per test binary, i.e. per package. The repository
-        # package alone measured 246s locally under -race -cover and hit the
-        # old 5m ceiling on CI hardware, failing with "test timed out" and no
-        # test listed as running -- the signature of a package that is simply
-        # long, not one that hangs.
-        #
-        # No single test dominates: the slowest is ~11s and the rest cluster
-        # around 3s, because each one builds a fresh SQLite database and runs
-        # the migrations. Cost therefore grows linearly with test count, and
-        # the suite crossed the line as tests were added rather than because
-        # anything got slower.
-        #
-        # 15m is headroom, not a mute button: a genuinely hung test still
-        # fails the job, just not one that is merely long.
-        run: go test -race -cover -timeout=15m ./...
+      - name: Go shard runner unit tests
+        run: python3 -m unittest scripts/test_go_test_shard.py
+
+      - name: go test (race + cover, remaining packages)
+        shell: bash
+        run: |
+          package_list=$(go list ./...)
+          mapfile -t packages < <(printf '%s\n' "$package_list" | grep -vE '/(repository|services)$')
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "::error::No non-sharded Go packages discovered"
+            exit 1
+          fi
+          printf 'Testing %s non-sharded packages\n' "${#packages[@]}"
+          go test -race -cover -timeout=15m "${packages[@]}"
         working-directory: server
 
       - name: go build
         run: go build -trimpath -o /tmp/mqvi-server .
         working-directory: server
+
+  # Repository and service packages dominate race+coverage runtime. Discover
+  # their Test* functions at runtime and assign them in deterministic SHA-256
+  # order, round-robin, so every test appears in exactly one balanced shard.
+  # Each shard retains the same race, coverage, and 15-minute timeout gates.
+  server-test-shards:
+    name: Go tests (${{ matrix.package }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { package: ./repository, shard: 0, shards: 4 }
+          - { package: ./repository, shard: 1, shards: 4 }
+          - { package: ./repository, shard: 2, shards: 4 }
+          - { package: ./repository, shard: 3, shards: 4 }
+          - { package: ./services, shard: 0, shards: 8 }
+          - { package: ./services, shard: 1, shards: 8 }
+          - { package: ./services, shard: 2, shards: 8 }
+          - { package: ./services, shard: 3, shards: 8 }
+          - { package: ./services, shard: 4, shards: 8 }
+          - { package: ./services, shard: 5, shards: 8 }
+          - { package: ./services, shard: 6, shards: 8 }
+          - { package: ./services, shard: 7, shards: 8 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10" # Patched crypto/x509: GO-2026-6809 / CVE-2026-111943.
+          cache: true
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: go test shard (race + cover)
+        run: python3 ../scripts/go-test-shard.py --package "${{ matrix.package }}" --shards "${{ matrix.shards }}" --shard "${{ matrix.shard }}"
+        working-directory: server
+
+  server-tests-gate:
+    name: Go test & build
+    if: always()
+    needs: [server-test, server-test-shards]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Go test and build job to succeed
+        env:
+          BASE_RESULT: ${{ needs.server-test.result }}
+          SHARDS_RESULT: ${{ needs.server-test-shards.result }}
+        run: |
+          if [ "$BASE_RESULT" != "success" ] || [ "$SHARDS_RESULT" != "success" ]; then
+            echo "::error::Go test gate blocked: base=$BASE_RESULT shards=$SHARDS_RESULT"
+            exit 1
+          fi
+          echo "All Go test shards, vet, tidy, and build succeeded."
 
   # ─── Go server: lint (hard gate — baseline cleaned 2026-06-11) ───
   # Version pinned to the exact binary the baseline was verified with;

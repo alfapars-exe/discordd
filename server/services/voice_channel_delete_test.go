@@ -42,7 +42,11 @@ func (h *deletionMusicBotHook) StopAllForChannel(channelID string) { h.stopped <
 func TestDeleteVoiceChannelClearsStateAndRejectsLateJoin(t *testing.T) {
 	permissionEntered := make(chan struct{})
 	continuePermission := make(chan struct{})
-	livekitLookups := &deletionCountingLiveKitGetter{servers: make(chan string, 2)}
+	// Two lookups evict the existing participant and their screen-share
+	// identity; the deliberately late JoinChannel performs one lookup before
+	// its final delete-epoch check. Leave room for all three so this recording
+	// mock cannot block the join whose error the test is awaiting.
+	livekitLookups := &deletionCountingLiveKitGetter{servers: make(chan string, 3)}
 	channelRepo := &testutil.MockChannelRepo{
 		GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
 			return &models.Channel{ID: id, ServerID: "server-1", Type: models.ChannelTypeVoice}, nil
@@ -108,15 +112,18 @@ func TestDeleteVoiceChannelClearsStateAndRejectsLateJoin(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("music bot was not stopped for the deleted voice channel")
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		select {
 		case serverID := <-livekitLookups.servers:
 			if serverID != "server-1" {
 				t.Fatalf("LiveKit eviction lookup used server %q, want server-1", serverID)
 			}
 		case <-time.After(time.Second):
-			t.Fatalf("received %d LiveKit eviction lookups, want occupant and screen-share participant", i)
+			t.Fatalf("received %d LiveKit lookups, want two evictions and the late join", i)
 		}
+	}
+	if got := livekitLookups.lookups.Load(); got != 3 {
+		t.Fatalf("LiveKit lookup count = %d, want 3 (two evictions and the late join)", got)
 	}
 
 	svc.mu.RLock()
