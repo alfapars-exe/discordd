@@ -211,6 +211,14 @@ jobs:
         if: matrix.platform == 'windows-latest'
         run: npx electron-builder --win nsis --prepackaged release/win-unpacked --publish never
 
+      # Exercise the real upgrade path on this clean GitHub-hosted Windows
+      # runner before publishing either updater feed. Never run installers on
+      # a developer workstation: NSIS replaces the installed application.
+      - name: Verify Windows install and upgrade
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.110"
+
       # macOS: DMG with code signing + notarization
       # electron-builder reads CSC_LINK/CSC_KEY_PASSWORD for signing.
       # @electron/notarize reads APPLE_API_KEY_ID, APPLE_API_ISSUER, APPLE_API_KEY_PATH, APPLE_TEAM_ID.
