@@ -40,6 +40,10 @@ set -eu
 cd /out
 openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.crt -days 2 -subj /CN=HiChat-Test-CA >/dev/null 2>&1
 openssl req -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj /CN=127.0.0.1 >/dev/null 2>&1
+# Use one explicit RSA PEM format and validate it inside the database image.
+openssl rsa -in server.key -traditional -out server-rsa.key >/dev/null 2>&1
+mv server-rsa.key server.key
+openssl rsa -in server.key -check -noout >/dev/null 2>&1
 printf 'subjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' > server.ext
 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 2 -sha256 -extfile server.ext >/dev/null 2>&1
 openssl req -newkey rsa:2048 -nodes -keyout client.key -out client.csr -subj /CN=hichat_tls_test >/dev/null 2>&1
@@ -63,6 +67,7 @@ COPY --chown=postgres:postgres --chmod=0644 server.crt /tls/server.crt
 COPY --chown=postgres:postgres --chmod=0644 ca.crt /tls/ca.crt
 COPY --chown=postgres:postgres --chmod=0600 server.key /tls/server.key
 COPY --chown=postgres:postgres --chmod=0644 pg_hba.conf /tls/pg_hba.conf
+RUN openssl rsa -in /tls/server.key -check -noout
 '@ -replace "`r`n", "`n"
     Write-Utf8NoBom (Join-Path $tempDir "Dockerfile") $dockerfile
     docker build --tag $imageName $tempDir | Out-Null
