@@ -6356,7 +6356,8 @@
       "evidence": [
         "implementation/verification/p9-runtime-path-audit-2026-10-25.json",
         "implementation/verification/p9-device-enumeration-2026-10-25.json",
-        "implementation/verification/p9-private-group-audio-2026-10-25.json"
+        "implementation/verification/p9-private-group-audio-2026-10-25.json",
+        "implementation/verification/p9-p2p-microphone-recovery-focused-ptt-2026-10-25.json"
       ]
     },
     {
@@ -6458,7 +6459,7 @@
       "id": "p9.ptt",
       "title": "Voice activity and push-to-talk",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6472,8 +6473,19 @@
       "acceptance": [
         "Selected mode gates actual publication; key release, focus loss and disconnect never leave microphone unintentionally live."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "electron/ptt-leases.ts",
+        "electron/ptt-ipc.ts",
+        "electron/hotkey-router.ts",
+        "client/src/audio/nativePTT.ts",
+        "client/src/hooks/usePushToTalk.ts",
+        "client/src/components/dm/GroupDMCallAudio.tsx",
+        "client/src/webrtc/p2pMicrophone.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p9-native-ptt-leases-2026-10-25.json",
+        "implementation/verification/p9-p2p-microphone-recovery-focused-ptt-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.camera-preview",
@@ -6668,8 +6680,16 @@
       "acceptance": [
         "Two clients reconnect after interruption while preserving active destination, device settings and current-call binding."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/stores/groupCallStore.ts",
+        "client/src/components/dm/GroupCallProvider.tsx",
+        "client/src/hooks/useEncryptedRoomAdmission.ts",
+        "client/src/components/dm/GroupCallProvider.admission.test.tsx"
+      ],
+      "evidence": [
+        "implementation/verification/p9-persistent-group-call-2026-10-25.json",
+        "implementation/verification/p9-group-media-browser-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.device-acceptance",

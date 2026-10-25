@@ -43,5 +43,14 @@
     ],
     "conclusion": "Initial production-defect classification was premature. Reproduce from a frozen or immutable client build before prescribing a runtime fix; peer-audible media acceptance remains open."
   },
-  "next": "Explain same-Room admission rechecks and repeat two-client encrypted media/navigation on a frozen build."
+  "frozen_build_follow_up": {
+    "revision": "9f01982ec3578b0f4ed67668a0e3562b98cfaa1a",
+    "build": "tsc -b and Vite PASS, 1691 modules; 10 WASM files checked without Git LFS pointers",
+    "harness_correction": "Vite preview omitted server/main.go's web index rewrite. Nested-route reload requested /channels/group/assets/*.js and returned 404. Frozen dist index was rewritten with the exact production quote-dot-slash to quote-slash replacement; original preserved outside repository.",
+    "websocket_observed": "After corrected reload: synthetic owner socket constructed/opened, ready and voice_states_sync received, ws-ticket HTTP200. No ticket/token values recorded.",
+    "media_observed": "Both full clients subsequently reached localized connected group controls on frozen code. Peer-audible output and decoded receiver samples remain unproven.",
+    "cleanup": "First client explicitly left and panel absence verified. Second page became unresponsive; navigation to root then completed, discarding the old execution and call page. No browser-owned permission bypass.",
+    "remaining": "Browser unresponsiveness still needs diagnosis; no general call stability or production runtime acceptance claim."
+  },
+  "next": "Diagnose browser unresponsiveness and complete peer-audible two-client acceptance from a frozen build."
 }
