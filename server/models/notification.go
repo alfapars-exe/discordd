@@ -30,18 +30,19 @@ const (
 // Actor is the LEFT JOINed public view of actor_id — nil when the actor
 // was deleted (or the row has no actor).
 type Notification struct {
-	ID          string          `json:"id"`
-	UserID      string          `json:"user_id"`
-	Kind        string          `json:"kind"`
-	ActorID     *string         `json:"actor_id"`
-	Actor       *PublicUser     `json:"actor"`
-	ServerID    *string         `json:"server_id"`
-	ChannelID   *string         `json:"channel_id"`
-	MessageID   *string         `json:"message_id"`
-	DMChannelID *string         `json:"dm_channel_id"`
-	Payload     json.RawMessage `json:"payload"`
-	ReadAt      *string         `json:"read_at"`
-	CreatedAt   string          `json:"created_at"`
+	ID               string          `json:"id"`
+	UserID           string          `json:"user_id"`
+	Kind             string          `json:"kind"`
+	ActorID          *string         `json:"actor_id"`
+	Actor            *PublicUser     `json:"actor"`
+	ServerID         *string         `json:"server_id"`
+	ChannelID        *string         `json:"channel_id"`
+	MessageID        *string         `json:"message_id"`
+	DMChannelID      *string         `json:"dm_channel_id"`
+	GroupDMChannelID *string         `json:"group_dm_channel_id,omitempty"`
+	Payload          json.RawMessage `json:"payload"`
+	ReadAt           *string         `json:"read_at"`
+	CreatedAt        string          `json:"created_at"`
 }
 
 // NotificationPage is the GET /api/users/me/notifications response.

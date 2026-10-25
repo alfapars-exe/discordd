@@ -85,6 +85,11 @@ func (r *sqliteGroupDMRepo) setReadCursor(ctx context.Context, groupID, userID s
 	if _, err := tx.ExecContext(ctx, query, watermark, groupID, watermark, groupID, userID, watermark, groupID, userID); err != nil {
 		return nil, err
 	}
+	if !unread {
+		if err := markGroupNotificationsRead(ctx, tx, groupID, userID, watermark); err != nil {
+			return nil, err
+		}
+	}
 	state, err := groupReadState(ctx, tx, groupID, userID)
 	if err != nil {
 		return nil, err

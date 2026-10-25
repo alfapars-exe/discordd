@@ -329,6 +329,7 @@ func (s *groupDMService) RemoveMember(ctx context.Context, groupID, actorID, use
 		}
 	}
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpGroupDMDelete, Data: map[string]string{"group_id": groupID}})
+	s.refreshGroupInbox(ctx, userID)
 	g, err = s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate, actorID)
 	if err == nil {
 		s.hub.BroadcastToUsers(remaining, ws.Event{Op: ws.OpGroupDMRekey, Data: map[string]any{"group_id": groupID, "key_epoch": epoch}})
@@ -352,6 +353,7 @@ func (s *groupDMService) Leave(ctx context.Context, groupID, userID string) erro
 		}
 		removeUploadFilesByURL(s.uploadDir, urls)
 		s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpGroupDMDelete, Data: map[string]string{"group_id": groupID}})
+		s.refreshGroupInbox(ctx, userID)
 		return nil
 	}
 	if g.OwnerID == userID {
@@ -370,6 +372,7 @@ func (s *groupDMService) Leave(ctx context.Context, groupID, userID string) erro
 	}
 	remaining := slices.DeleteFunc(slices.Clone(ids), func(id string) bool { return id == userID })
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpGroupDMDelete, Data: map[string]string{"group_id": groupID}})
+	s.refreshGroupInbox(ctx, userID)
 	if _, err := s.broadcastGroup(ctx, groupID, ws.OpGroupDMUpdate); err != nil {
 		return err
 	}
@@ -533,6 +536,8 @@ func (s *groupDMService) BroadcastMessage(ctx context.Context, m *models.GroupDM
 		return nil
 	}
 	s.hub.BroadcastToUsers(ids, ws.Event{Op: ws.OpGroupDMMessageCreate, Data: m})
+	s.deliverGroupIncomingNotifications(ctx, m)
+	s.refreshGroupInbox(ctx, m.UserID)
 	return s.broadcastReadStates(ctx, m.GroupID, ids)
 }
 
@@ -618,6 +623,9 @@ func (s *groupDMService) DeleteMessage(ctx context.Context, groupID, messageID, 
 		return nil
 	}
 	s.hub.BroadcastToUsers(ids, ws.Event{Op: ws.OpGroupDMMessageDelete, Data: map[string]string{"group_id": groupID, "id": messageID}})
+	for _, id := range ids {
+		s.refreshGroupInbox(ctx, id)
+	}
 	return s.broadcastReadStates(ctx, groupID, ids)
 }
 func (s *groupDMService) ToggleReaction(ctx context.Context, groupID, messageID, userID, emoji string) error {
@@ -680,6 +688,7 @@ func (s *groupDMService) MarkRead(ctx context.Context, groupID, userID string, m
 		return nil, err
 	}
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpGroupDMRead, Data: state})
+	s.refreshGroupInbox(ctx, userID)
 	return state, nil
 }
 

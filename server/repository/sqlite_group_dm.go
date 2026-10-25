@@ -255,6 +255,12 @@ func (r *sqliteGroupDMRepo) CreateMessage(ctx context.Context, m *models.GroupDM
 	if err = tx.QueryRowContext(ctx, `SELECT created_at,source_sequence FROM group_dm_messages WHERE id=?`, m.ID).Scan(&m.CreatedAt, &m.SourceSequence); err != nil {
 		return err
 	}
+	if err := insertGroupMessageNotifications(ctx, tx, m); err != nil {
+		return err
+	}
+	if err := markGroupNotificationsRead(ctx, tx, m.GroupID, m.UserID, m.SourceSequence); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `UPDATE group_dm_reads SET last_read_source_sequence=CASE WHEN last_read_source_sequence<? THEN ? ELSE last_read_source_sequence END WHERE group_id=? AND user_id=?`, m.SourceSequence, m.SourceSequence, m.GroupID, m.UserID); err != nil {
 		return err
 	}

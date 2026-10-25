@@ -116,7 +116,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "07d5358145b94a1718778707bd15188a494c8f7f0fb48d9c2df306a92c1fa275",
+      "file_sha256": "4b5c1a5a2fad574555e1f09047ff54c02e94873027718c458d80e3f05d9d3f8c",
       "line_sha256": "7c8f35c7ab1143e7ce941b75912d6549057a6489e5b5ff88fc5186b31a600746",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
@@ -124,7 +124,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_group_dm.go",
-      "file_sha256": "07d5358145b94a1718778707bd15188a494c8f7f0fb48d9c2df306a92c1fa275",
+      "file_sha256": "4b5c1a5a2fad574555e1f09047ff54c02e94873027718c458d80e3f05d9d3f8c",
       "line_sha256": "947be30c7ec80d463d9bb7a1f6be1fa6fc2a38536edecc2adfb58ec5006e5fe0",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
