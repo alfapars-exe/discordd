@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-25",
+  "status": "runtime_defect_reproduced_not_accepted",
+  "scope": "Two full HiChat web clients against isolated local API and LiveKit",
+  "environment": {
+    "api": "http://127.0.0.1:18181",
+    "clients": ["http://127.0.0.1:15173", "http://localhost:15173"],
+    "media": "Local LiveKit 1.8.4, loopback-only ports, synthetic accounts",
+    "server_source": "ddfc8fad0191af15de07bdb9e4a873a92459c741",
+    "client_source": "6d136901 plus concurrent uncommitted audio pipeline changes; not an immutable release test"
+  },
+  "observed": [
+    "Both separate-origin full clients signed in with different synthetic human accounts and explicitly joined the same group call through UI.",
+    "User handled each origin's browser-owned microphone permission prompt. No browser permission bypass was used.",
+    "Both identities reached participant-active state and each published audio/opus with trackInfo.encryption GCM in local SFU logs.",
+    "Connected controls appeared in both clients. Friends navigation retained the app-level group call panel.",
+    "Call admission repeatedly returned to connecting and SFU logs showed multiple distinct participant sessions for each identity without explicit leave/join. Connection continuity is defective and is being investigated.",
+    "Both clients explicitly left through the persistent panel after reproduction. First client's panel absence was checked. Test microphone capture is no longer intentionally running."
+  ],
+  "visual": {
+    "screenshot": "C:/Users/PARS/AppData/Local/Temp/hichat-browser-20261025-1140/group-media-two-client.png",
+    "inspected": true,
+    "findings": "Persistent panel renders, but raw camera/disconnect localization labels and compact default-looking controls remain visual gaps. Screenshot is not full visual acceptance."
+  },
+  "not_proven": [
+    "Peer-audible output or successful receiver GCM decryption",
+    "Stable long call, navigation continuity, rekey continuity",
+    "Physical device removal/recovery, Windows packaged runtime",
+    "YouTube music playback or production readiness"
+  ],
+  "automated_checks": {
+    "client_suite": "381 files, 3725 tests PASS, 73.72 seconds; current combined worktree at 6d136901, not immutable release evidence",
+    "client_build": "npm run build PASS: tsc -b and Vite, 1691 modules; existing chunk-size/config warnings remain"
+  },
+  "next": "Fix repeated admission/session churn, then repeat two-client encrypted media and navigation tests."
+}
