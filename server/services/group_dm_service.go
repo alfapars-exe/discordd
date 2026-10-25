@@ -25,6 +25,7 @@ import (
 var groupDMLogger = logx.Component("service.group_dm")
 
 type GroupDMService interface {
+	SetMuted(context.Context, string, string, bool) (*models.GroupDMReadState, error)
 	SetMessagePinned(context.Context, string, string, string, bool) error
 	ListPinnedMessages(context.Context, string, string) ([]models.GroupDMMessage, error)
 	PrepareSend(context.Context, string, string, *models.CreateGroupDMMessageRequest, string, int) (*models.GroupSendOperation, error)
@@ -82,6 +83,9 @@ func (s *groupDMService) GenerateCallToken(ctx context.Context, groupID, userID 
 	if s.liveKitURL == "" || s.liveKitAPIKey == "" || s.liveKitAPISecret == "" || len(s.mediaKey) == 0 {
 		return nil, fmt.Errorf("%w: group calls are not configured", pkg.ErrInternal)
 	}
+	if g.KeyEpoch < 0 || g.KeyEpoch > 9007199254740991 {
+		return nil, fmt.Errorf("%w: invalid group media key epoch", pkg.ErrInternal)
+	}
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -100,7 +104,9 @@ func (s *groupDMService) GenerateCallToken(ctx context.Context, groupID, userID 
 	mac := hmac.New(sha256.New, s.mediaKey)
 	_, _ = fmt.Fprintf(mac, "group-dm-media-v1:%s:%d", groupID, g.KeyEpoch)
 	passphrase := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-	return &models.VoiceTokenResponse{Token: token, URL: s.liveKitURL, ChannelID: groupID, E2EEPassphrase: passphrase}, nil
+	contextMAC := hmac.New(sha256.New, s.mediaKey)
+	_, _ = fmt.Fprintf(contextMAC, "group-dm-media-context-v1:%s:%s", groupID, g.CallRoomKey)
+	return &models.VoiceTokenResponse{Token: token, URL: s.liveKitURL, ChannelID: groupID, E2EEPassphrase: passphrase, E2EEKeyIndex: uint32(uint64(g.KeyEpoch) % 256), E2EEKeyEpoch: uint64(g.KeyEpoch), E2EEKeyContext: base64.RawURLEncoding.EncodeToString(contextMAC.Sum(nil))}, nil
 }
 
 func randomGroupToken(prefix string) (string, error) {
@@ -222,6 +228,7 @@ func (s *groupDMService) List(ctx context.Context, userID string) ([]models.Grou
 		}
 		groups[i].UnreadCount, groups[i].ReadRevision = readState.UnreadCount, readState.Revision
 		groups[i].OldestUnreadMessageID = readState.OldestUnreadMessageID
+		groups[i].IsMuted, groups[i].SettingsRevision = readState.IsMuted, readState.SettingsRevision
 	}
 	return groups, nil
 }
@@ -238,6 +245,7 @@ func (s *groupDMService) Get(ctx context.Context, groupID, userID string) (*mode
 	if err == nil {
 		g.UnreadCount, g.ReadRevision = readState.UnreadCount, readState.Revision
 		g.OldestUnreadMessageID = readState.OldestUnreadMessageID
+		g.IsMuted, g.SettingsRevision = readState.IsMuted, readState.SettingsRevision
 	}
 	return g, err
 }
@@ -382,6 +390,7 @@ func (s *groupDMService) broadcastGroup(ctx context.Context, groupID, op string)
 			return nil, err
 		}
 		copy.UnreadCount, copy.ReadRevision = readState.UnreadCount, readState.Revision
+		copy.IsMuted, copy.SettingsRevision = readState.IsMuted, readState.SettingsRevision
 		s.hub.BroadcastToUser(member.ID, ws.Event{Op: op, Data: &copy})
 	}
 	return g, nil

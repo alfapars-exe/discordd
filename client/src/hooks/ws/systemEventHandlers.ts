@@ -74,7 +74,7 @@ function notificationTargetStillAvailable(n: { server_id: string | null; channel
     const group = useGroupDMStore.getState().groups.find((item) => item.id === groupId);
     // Group membership is an eligibility boundary, not just navigation state:
     // fail closed while the list is absent/stale after account or membership changes.
-    if (!userId || !group?.members.some((member) => member.id === userId)) return false;
+    if (!userId || group?.is_muted || !group?.members.some((member) => member.id === userId)) return false;
   }
   return true;
 }

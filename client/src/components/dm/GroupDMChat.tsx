@@ -103,6 +103,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   const expressionNavigationRevision = useUIStore((state) => state.navigationRevision);
   const expressionScope = JSON.stringify([currentUserId, getAuthGeneration(), groupId, group?.key_epoch, expressionNavigationRevision]);
   const [pinsScope, setPinsScope] = useState<string | null>(null);
+  const [mutePendingScope,setMutePendingScope]=useState<string|null>(null);
   const showPins = pinsScope === expressionScope;
   const togglePins = () => {
     if (!showPins) setShowMembers(false);
@@ -128,6 +129,13 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
     return expressionCurrent() && !currentDraft.groupEditingId && !currentDraft.sending
       && state.restoreStatus === "ready" && !state.restoreBlocked.includes(groupId) && !state.pendingSends[groupId]
       && !(state.uploadRecoveries[groupId] ?? []).some((item) => item.retrying);
+  };
+  const toggleMute=async()=>{
+    if(!expressionCurrent()||mutePendingScope===expressionScope)return;
+    setMutePendingScope(expressionScope);
+    const ok=await useGroupDMStore.getState().setMuted(groupId,!group?.is_muted);
+    if(!ok&&expressionCurrent())useToastStore.getState().addToast("error",t("somethingWentWrong"));
+    setMutePendingScope(current=>current===expressionScope?null:current);
   };
   const openExpressionPicker = (kind: "emoji" | "gif" | "sticker") => {
     if (!canAttach || !expressionAvailable()) return false;
@@ -380,6 +388,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
       <button disabled={callPending} onClick={() => call ? setCall(null) : void joinCall()}>{t(call ? "leaveCall" : "startCall")}</button>
       <button onClick={toggleMembers} aria-expanded={showMembers}>{t("members")}</button>
       <button type="button" aria-expanded={showPins} onClick={togglePins}>{t("chat:pinnedMessages")}</button>
+      <button type="button" aria-pressed={!!group.is_muted} disabled={mutePendingScope===expressionScope} onClick={()=>void toggleMute()}>{t(group.is_muted?"dm:unmuteDM":"dm:muteDM")}</button>
       <input ref={searchInput} type="search" value={search} onChange={(e)=>setSearch(e.target.value)} onKeyDown={(e)=>{if(e.key==="Enter"){e.preventDefault();void useGroupDMStore.getState().searchMessages(groupId,search)}}} placeholder={t("search")} aria-label={t("search")} />
     </header>
     {call && <GroupDMCall credentials={call} onLeave={() => setCall(null)} />}

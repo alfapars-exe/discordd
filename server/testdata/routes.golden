@@ -91,6 +91,7 @@ GET /api/dms/{channelId}/search
 PATCH /api/dms/channels/{channelId}/e2ee
 POST /api/dms/{channelId}/read
 POST /api/dms/{channelId}/unread
+PATCH /api/group-dms/{groupId}/settings
 GET /api/group-dms
 POST /api/group-dms
 GET /api/group-dms/{groupId}

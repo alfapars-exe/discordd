@@ -6,6 +6,7 @@ import (
 )
 
 type GroupDMRepository interface {
+	SetMuted(context.Context, string, string, bool) (*models.GroupDMReadState, error)
 	SetMessagePinned(ctx context.Context, groupID, messageID, userID string, pinned bool) error
 	ListPinnedMessages(ctx context.Context, groupID, userID string) ([]models.GroupDMMessage, error)
 	PrepareSend(ctx context.Context, groupID, userID, requestID, requestHash string, fileCount int) (*models.GroupSendOperation, bool, error)

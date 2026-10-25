@@ -108,7 +108,9 @@ describe("useOverlayNotifications", () => {
       notification({ id: "blocked", actor_id: "blocked-actor" }),
       notification({ id: "deleted-channel", server_id: "server-1", channel_id: "gone-channel" }),
       notification({ id: "inaccessible-group", payload: { group_id: "not-a-member" } }),
+      notification({ id: "private-muted-group", payload: { group_id: "muted-group" } }),
     ];
+    useGroupDMStore.setState({groups:[{id:"muted-group",is_muted:true,members:[{id:owner}]} as never]});
     makeReadyFeed(rows);
 
     const { result } = renderHook(() => useOverlayNotifications(true, true));

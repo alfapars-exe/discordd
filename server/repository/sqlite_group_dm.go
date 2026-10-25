@@ -107,6 +107,9 @@ func (r *sqliteGroupDMRepo) changeMember(ctx context.Context, groupID, userID st
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := lockGroupDM(ctx, tx, groupID); err != nil {
+		return 0, err
+	}
 	var result sql.Result
 	if add {
 		result, err = tx.ExecContext(ctx, `INSERT INTO group_dm_members(group_id,user_id) VALUES(?,?) ON CONFLICT(group_id,user_id) DO NOTHING`, groupID, userID)
@@ -210,6 +213,20 @@ func (r *sqliteGroupDMRepo) CreateMessage(ctx context.Context, m *models.GroupDM
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// Every send path, including legacy requests, validates membership/epoch
+	// while holding the same group-first lock as member and read changes.
+	allowed, lockErr := tx.ExecContext(ctx, `UPDATE group_dm_channels SET key_epoch=key_epoch WHERE id=? AND key_epoch=? AND EXISTS(SELECT 1 FROM group_dm_members WHERE group_id=? AND user_id=?)`, m.GroupID, m.KeyEpoch, m.GroupID, m.UserID)
+	if lockErr != nil {
+		return lockErr
+	}
+	n, lockErr := allowed.RowsAffected()
+	if lockErr != nil {
+		return lockErr
+	}
+	if n != 1 {
+		return pkg.ErrConflict
+	}
+
 	if m.SendRequestID != "" {
 		locked, lockErr := tx.ExecContext(ctx, `UPDATE group_dm_send_operations SET phase=phase WHERE group_id=? AND user_id=? AND request_id=? AND phase='prepared' AND cancelled_at IS NULL`, m.GroupID, m.UserID, m.SendRequestID)
 		if lockErr != nil {
@@ -230,18 +247,7 @@ func (r *sqliteGroupDMRepo) CreateMessage(ctx context.Context, m *models.GroupDM
 			return pkg.ErrConflict
 		}
 		m.ID = op.MessageID
-		// Serialize key/membership changes against the operation's actual write.
-		allowed, lockErr := tx.ExecContext(ctx, `UPDATE group_dm_channels SET key_epoch=key_epoch WHERE id=? AND key_epoch=? AND EXISTS(SELECT 1 FROM group_dm_members WHERE group_id=? AND user_id=?)`, m.GroupID, m.KeyEpoch, m.GroupID, m.UserID)
-		if lockErr != nil {
-			return lockErr
-		}
-		n, lockErr = allowed.RowsAffected()
-		if lockErr != nil {
-			return lockErr
-		}
-		if n != 1 {
-			return pkg.ErrConflict
-		}
+
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO group_dm_messages(id,group_id,user_id,content,encryption_version,ciphertext,sender_device_id,e2ee_metadata,key_epoch,reply_to_id) VALUES(?,?,?,?,?,?,?,?,?,?)`, m.ID, m.GroupID, m.UserID, m.Content, m.EncryptionVersion, m.Ciphertext, m.SenderDeviceID, m.E2EEMetadata, m.KeyEpoch, m.ReplyToID); err != nil {
 		return err
@@ -388,6 +394,9 @@ func (r *sqliteGroupDMRepo) DeleteMessage(ctx context.Context, groupID, messageI
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := lockGroupDM(ctx, tx, groupID); err != nil {
+		return err
+	}
 	var created time.Time
 	if err = tx.QueryRowContext(ctx, `SELECT created_at FROM group_dm_messages WHERE id=? AND group_id=? AND user_id=?`, messageID, groupID, userID).Scan(&created); errors.Is(err, sql.ErrNoRows) {
 		return pkg.ErrNotFound
@@ -494,14 +503,14 @@ func (r *sqliteGroupDMRepo) GetReadState(ctx context.Context, groupID, userID st
 func groupReadState(ctx context.Context, db database.TxQuerier, groupID, userID string) (*models.GroupDMReadState, error) {
 	state := &models.GroupDMReadState{GroupID: groupID}
 	var oldestUnread sql.NullString
-	err := db.QueryRowContext(ctx, `SELECT r.last_read_message_id,r.unread_count,r.revision,
+	err := db.QueryRowContext(ctx, `SELECT r.last_read_message_id,r.unread_count,r.revision,m.is_muted,m.settings_revision,
 	 (SELECT unread.id FROM group_dm_messages unread
 	  WHERE unread.group_id=r.group_id AND unread.user_id<>? AND r.unread_count>0
 	    AND (r.last_read_message_id IS NULL OR EXISTS (
 	      SELECT 1 FROM group_dm_messages cursor WHERE cursor.id=r.last_read_message_id AND cursor.group_id=r.group_id
 	        AND (unread.created_at>cursor.created_at OR (unread.created_at=cursor.created_at AND unread.id>cursor.id))))
 	  ORDER BY unread.created_at ASC,unread.id ASC LIMIT 1)
-	 FROM group_dm_reads r WHERE r.group_id=? AND r.user_id=?`, userID, groupID, userID).Scan(&state.LastReadMessageID, &state.UnreadCount, &state.Revision, &oldestUnread)
+	 FROM group_dm_reads r JOIN group_dm_members m ON m.group_id=r.group_id AND m.user_id=r.user_id WHERE r.group_id=? AND r.user_id=?`, userID, groupID, userID).Scan(&state.LastReadMessageID, &state.UnreadCount, &state.Revision, &state.IsMuted, &state.SettingsRevision, &oldestUnread)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pkg.ErrNotFound
 	}
@@ -521,6 +530,9 @@ func (r *sqliteGroupDMRepo) setReadCursor(ctx context.Context, groupID, userID s
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := lockGroupDM(ctx, tx, groupID); err != nil {
+		return nil, err
+	}
 	// Acquire the per-reader write lock before taking the message snapshot.
 	// A concurrent sender then increments after this commit, or is visible to
 	// the following COUNT; it cannot be silently lost by an older snapshot.

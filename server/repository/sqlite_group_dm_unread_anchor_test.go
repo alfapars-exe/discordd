@@ -73,7 +73,7 @@ func TestGroupDMGetMessagesAroundIsBoundedScopedAndOrdered(t *testing.T) {
 	ctx := context.Background()
 	repo := NewSQLiteGroupDMRepo(wrapForRepo(db))
 	for _, groupID := range []string{"around-group", "other-around-group"} {
-		if err := repo.Create(ctx, &models.GroupDM{ID: groupID, OwnerID: dmAlice, Name: groupID, KeyEpoch: 1, CallRoomKey: groupID + "-room"}, []string{dmAlice, dmBob}); err != nil {
+		if err := repo.Create(ctx, &models.GroupDM{ID: groupID, OwnerID: dmAlice, Name: groupID, KeyEpoch: 7, CallRoomKey: groupID + "-room"}, []string{dmAlice, dmBob}); err != nil {
 			t.Fatal(err)
 		}
 	}

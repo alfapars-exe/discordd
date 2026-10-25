@@ -12,6 +12,7 @@ import * as notificationsApi from "../api/notifications";
 import { clearTokens, getAuthGeneration, setTokens } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { useDMStore } from "../stores/dmStore";
+import { useGroupDMStore } from "../stores/groupDMStore";
 import { useNotificationStore } from "../stores/notificationStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import { useReadStateStore } from "../stores/readStateStore";
@@ -78,6 +79,7 @@ beforeEach(() => {
     ownerId: owner, authGeneration: getAuthGeneration(),
   });
   useDMStore.setState({ channels: [], dmUnreadCounts: {} });
+  useGroupDMStore.setState({ownerId:owner,authGeneration:getAuthGeneration(),groups:[],groupsReady:true});
   useReadStateStore.setState({ unreadCounts: {}, unreadRevisions: {}, channelServerMap: {}, seenMentions: {} });
   useServerStore.setState({ activeServerId: "server", mutedServerIds: new Set() });
   usePreferencesStore.setState({ accountId: owner, isLoaded: true, data: {} });
@@ -93,6 +95,14 @@ afterEach(() => {
   useAuthStore.setState({ user: null });
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+it("includes authoritative cold group unread only once, excluding private muted and stale-owner groups",()=>{
+  const group={id:"group",owner_id:owner,name:"Group",key_epoch:1,call_room_key:"room",icon_url:null,created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",members:[user(owner)],unread_count:3,read_revision:4,is_muted:false,settings_revision:0};
+  useGroupDMStore.setState({groups:[group,{...group,id:"muted",unread_count:20,is_muted:true}]});renderHook(()=>useNotificationBadge());expectBadge(3,"(3+) HiChat!");
+  act(()=>useGroupDMStore.getState().handleReadState({group_id:"group",last_read_message_id:null,unread_count:3,revision:4,is_muted:true,settings_revision:1}));expectBadge(0,"HiChat!");
+  act(()=>useGroupDMStore.getState().handleReadState({group_id:"group",last_read_message_id:null,unread_count:2,revision:5,is_muted:false,settings_revision:2}));expectBadge(2,"(2+) HiChat!");
+  act(()=>useGroupDMStore.setState({authGeneration:getAuthGeneration()-1}));expectBadge(0,"HiChat!");
 });
 
 describe("useNotificationBadge aggregate integration", () => {

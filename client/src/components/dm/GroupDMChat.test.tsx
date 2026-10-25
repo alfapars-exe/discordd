@@ -44,6 +44,16 @@ const message = (id: string, author: string): GroupDMMessage => ({
   e2ee_metadata: null, key_epoch: 1, reply_to_id: null, edited_at: null,
   created_at: "2026-10-24T00:00:00Z", reactions: [], attachments: [],
 });
+
+it("saves a private group mute from the header and reflects authoritative saved state",async()=>{
+  const save=vi.fn(async(_id:string,muted:boolean)=>{
+    useGroupDMStore.getState().handleReadState({group_id:"group",last_read_message_id:null,unread_count:0,revision:0,is_muted:muted,settings_revision:1});return true;
+  });
+  useGroupDMStore.setState({setMuted:save});render(<GroupDMChat groupId="group"/>);
+  fireEvent.click(screen.getByRole("button",{name:"dm:muteDM"}));
+  await waitFor(()=>expect(save).toHaveBeenCalledExactlyOnceWith("group",true));
+  expect(screen.getByRole("button",{name:"dm:unmuteDM"})).toHaveAttribute("aria-pressed","true");
+});
 beforeEach(() => {
   vi.clearAllMocks();
   expressionCallbacks.emoji = undefined; expressionCallbacks.gif = undefined; expressionCallbacks.sticker = undefined;
@@ -59,7 +69,7 @@ beforeEach(() => {
   useAuthStore.setState({ user: { id: "me" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]> });
   useE2EEStore.setState({ initStatus: "ready", localDeviceId: "test-device" });
   const group: GroupDM = { id: "group", name: "Test group", owner_id: "me", members: [], icon_url: null, key_epoch: 1, call_room_key: "room", unread_count: 0, created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z" };
-  useGroupDMStore.setState({ groups: [group], messages: { group: [message("own", "me"), message("other-message", "other")] },hasMoreAfterByGroup:{},scrollTarget:null, error: null,uploadRecoveries:{},pendingSends:{},groupsReady:true,restoreStatus:"ready",restoreBlocked:[],restoredQueue:{}, fetchMessages: vi.fn(async () => true),jumpToPresent:vi.fn(), markRead: vi.fn(async () => {}),markUnread:vi.fn(async()=>true) });
+  useGroupDMStore.setState({ groups: [group], messages: { group: [message("own", "me"), message("other-message", "other")] },hasMoreAfterByGroup:{},scrollTarget:null, error: null,uploadRecoveries:{},pendingSends:{},groupsReady:true,setMuted:vi.fn(async()=>false),restoreStatus:"ready",restoreBlocked:[],restoredQueue:{}, fetchMessages: vi.fn(async () => true),jumpToPresent:vi.fn(), markRead: vi.fn(async () => {}),markUnread:vi.fn(async()=>true) });
 });
 it("loads group history when account crypto becomes ready after the route mounts", async () => {
   const fetchMessages = vi.fn(async () => true);

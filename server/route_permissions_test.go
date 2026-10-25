@@ -88,6 +88,7 @@ var noRouteLevelGate = map[string]string{
 // permission bit doesn't fit a check that's actually per-channel, or an
 // ownership comparison that isn't a role permission at all).
 var handlerInternalGates = map[string]string{
+	"PATCH /api/group-dms/{groupId}/settings":                     "auth requires an authenticated caller; groupDMService.SetMuted requires current active group membership, expected_user_id rejects account switches, and sqliteGroupDMRepo.SetMuted updates only the caller's own member row under the group lock",
 	"GET /api/servers/{serverId}/channels/{channelId}/threads":    "threadService.List validates parent server/type and requires per-channel view plus read permission",
 	"POST /api/servers/{serverId}/channels/{channelId}/threads":   "threadService.Create validates parent server/type and starter-message scope; requires per-channel view, read and send permissions",
 	"GET /api/servers/{serverId}/threads/{threadId}":              "threadService.Get validates same-server thread and text-parent scope, then requires current parent-channel view/read permission; archived threads remain readable",

@@ -258,6 +258,18 @@ describe("handleSystemEvent — ready reconnect refetch", () => {
     const options = vi.mocked(showNotification).mock.calls[0]?.[0];
     expect(options?.isStillEligible?.()).toBe(false);
   });
+  it("suppresses a delayed group reaction when that member mutes the group",async()=>{
+    const {handleSystemEvent}=await loadFresh();const {useGroupDMStore}=await import("../../stores/groupDMStore");
+    const {showNotification}=await import("../../utils/notifications");const {useNotificationStore}=await import("../../stores/notificationStore");
+    const {useBlockStore}=await import("../../stores/blockStore");vi.spyOn(useBlockStore,"getState").mockReturnValue({...useBlockStore.getState(),isBlocked:()=>false});
+    const group={id:"group-one",members:[{id:"me"}],is_muted:false};
+    vi.spyOn(useGroupDMStore,"getState").mockReturnValue({...useGroupDMStore.getState(),groups:[group as never]});
+    const items:AppNotification[]=[];vi.spyOn(useNotificationStore,"getState").mockReturnValue({...useNotificationStore.getState(),items,handleCreate:n=>{items.push(n)}});
+    const notice:AppNotification={id:"private-muted-group",user_id:"me",kind:"system",actor_id:"other",actor:null,server_id:null,channel_id:null,message_id:"message",dm_channel_id:null,payload:{subtype:"reaction",group_id:group.id,emoji:"ok"},read_at:null,created_at:"2026-01-01T00:00:00Z"};
+    await handleSystemEvent({op:"notification_create",d:notice},ctx,vi.fn());
+    const options=vi.mocked(showNotification).mock.calls[0]?.[0];expect(options?.isStillEligible?.()).toBe(true);
+    group.is_muted=true;expect(options?.isStillEligible?.()).toBe(false);
+  });
   it("server updates force a fresh role list for the originating server", async () => {
     const { handleSystemEvent } = await loadFresh();
     const { useMemberStore } = await import("../../stores/memberStore");

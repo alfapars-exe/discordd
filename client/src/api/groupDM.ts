@@ -11,6 +11,10 @@ function membershipScope(context:GroupDMMembershipRequestScope={}){
     options:{timeoutMs:15_000,isCurrent:()=>generation===getAuthGeneration()&&(!context.isCurrent||context.isCurrent())},
   };
 }
+export const setGroupDMMuted = (groupId:string,muted:boolean,context:GroupDMMembershipRequestScope={})=>{
+  const request=membershipScope(context);
+  return apiClient<GroupDMReadState>(`/group-dms/${encodeURIComponent(groupId)}/settings${request.query}`,{...request.options,method:"PATCH",body:{is_muted:muted}});
+};
 
 export const listGroupDMs = (scope?:GroupDMRequestScope) => apiClient<{ group_dms: GroupDM[] }>("/group-dms",scope);
 export const createGroupDM = (name: string, userIds: string[],scope?:GroupDMRequestScope) => apiClient<GroupDM>("/group-dms", { method: "POST", body: { name, user_ids: userIds },...scope });

@@ -10,6 +10,8 @@ import (
 )
 
 type GroupDM struct {
+	IsMuted               bool         `json:"is_muted"`
+	SettingsRevision      int64        `json:"settings_revision"`
 	ID                    string       `json:"id"`
 	OwnerID               string       `json:"owner_id"`
 	Name                  string       `json:"name"`
@@ -25,6 +27,8 @@ type GroupDM struct {
 }
 
 type GroupDMReadState struct {
+	IsMuted               bool    `json:"is_muted"`
+	SettingsRevision      int64   `json:"settings_revision"`
 	GroupID               string  `json:"group_id"`
 	LastReadMessageID     *string `json:"last_read_message_id"`
 	UnreadCount           int     `json:"unread_count"`

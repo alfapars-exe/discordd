@@ -173,6 +173,7 @@ func (d *routeDeps) registerDMRoutes() {
 }
 
 func (d *routeDeps) registerGroupDMRoutes() {
+	d.mux.Handle("PATCH /api/group-dms/{groupId}/settings", d.auth(d.h.GroupDM.SetMuted))
 	d.mux.Handle("GET /api/group-dms", d.auth(d.h.GroupDM.List))
 	d.mux.Handle("POST /api/group-dms", d.auth(d.h.GroupDM.Create))
 	d.mux.Handle("GET /api/group-dms/{groupId}", d.auth(d.h.GroupDM.Get))

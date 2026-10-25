@@ -40,14 +40,17 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       if (group) useGroupDMStore.getState().handleCreateOrUpdate({ ...group, key_epoch: msg.d.key_epoch });
       return true;
     }
-    case "group_dm_message_create":
-      await useGroupDMStore.getState().handleMessage(msg.d);
-      if (useUIStore.getState().destination.type === "group-dm" && useUIStore.getState().destination.channelId === msg.d.group_id) void useGroupDMStore.getState().markRead(msg.d.group_id, msg.d.id);
-      else if (msg.d.user_id !== useAuthStore.getState().user?.id) {
-        const group=useGroupDMStore.getState().groups.find((item)=>item.id===msg.d.group_id);
+    case "group_dm_message_create": {
+      const receipt=await useGroupDMStore.getState().handleMessage(msg.d);
+      if(!isCurrent()||receipt.status!=="accepted"||!receipt.isCurrent()||receipt.message.user_id===receipt.ownerId)return true;
+      if (receipt.storage==="visible"&&receipt.previewReady&&getMessageSpamDisposition(receipt.message,"group")==="allow"
+        &&useUIStore.getState().destination.type === "group-dm" && useUIStore.getState().destination.channelId === receipt.groupId) void useGroupDMStore.getState().markRead(receipt.groupId,receipt.messageId);
+      else {
+        const group=useGroupDMStore.getState().groups.find((item)=>item.id===receipt.groupId);
         if(group && group.read_revision===undefined) useGroupDMStore.getState().handleCreateOrUpdate({...group,unread_count:group.unread_count+1});
       }
       return true;
+    }
     case "group_dm_message_update": await useGroupDMStore.getState().handleMessageUpdate(msg.d); notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
     case "group_dm_message_delete": useGroupDMStore.getState().handleMessageDelete(msg.d.group_id,msg.d.id); notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;
     case "group_dm_pins_update": notifyGroupDMPinsChanged(msg.d.group_id, isCurrent); return true;

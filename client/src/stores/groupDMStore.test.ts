@@ -3,7 +3,7 @@ import type { GroupDM, GroupDMMessage } from "../types/groupDM";
 import type { GroupSendOutcome } from "../types/groupDM";
 
 vi.mock("../api/groupDM", () => ({
-  listGroupDMs: vi.fn(), createGroupDM: vi.fn(), listGroupDMMessages: vi.fn(),getGroupDMMessagesAround:vi.fn(),
+  setGroupDMMuted:vi.fn(), listGroupDMs: vi.fn(), createGroupDM: vi.fn(), listGroupDMMessages: vi.fn(),getGroupDMMessagesAround:vi.fn(),
   sendGroupDMMessage: vi.fn(), leaveGroupDM: vi.fn(), addGroupDMMember: vi.fn(),
   getGroupSendOutcome:vi.fn(),reconcileGroupSend:vi.fn(),cancelGroupSend:vi.fn(),
   removeGroupDMMember: vi.fn(),
@@ -30,17 +30,20 @@ import {savePendingGroupSend,removePendingGroupSend,markPendingGroupSendConfirme
 import {loadGroupSendRestorePlan} from "./shared/groupSendRestoreQueue";
 import { encryptFilesForE2EE } from "./shared/messageUtils";
 import { composerKey,useComposerDraftStore } from "./composerDraftStore";
+import { handleDMEvent } from "../hooks/ws/dmEventHandlers";
+import { useUIStore } from "./uiStore";
 
 const group = (id: string, epoch = 1): GroupDM => ({
   id, owner_id: "me", name: `Group ${id}`, icon_url: null, key_epoch: epoch,
   call_room_key: `room-${id}`, created_at: "2026-10-23T00:00:00Z",
-  updated_at: "2026-10-23T00:00:00Z", members: [],
+  updated_at: "2026-10-23T00:00:00Z", members: [publicMember("me")],
   unread_count: 0,
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(decryptGroupDMMessages).mockImplementation(async messages=>messages);
+  useGroupDMStore.getState().handleDelete("g1");
+  vi.mocked(decryptGroupDMMessages).mockReset().mockImplementation(async messages=>messages);
   vi.mocked(encryptGroupDMMessage).mockResolvedValue([]);
   vi.mocked(cacheDecryptedMessage).mockResolvedValue(undefined);
   vi.mocked(savePendingGroupSend).mockReset().mockResolvedValue(undefined);vi.mocked(removePendingGroupSend).mockReset().mockResolvedValue(undefined);
@@ -61,6 +64,68 @@ beforeEach(() => {
 function outcome(id:string,phase:GroupSendOutcome["operation"]["phase"],message?:GroupDMMessage):GroupSendOutcome{return {operation:{request_id:id,group_id:"g1",message_id:message?.id??"saved",file_count:0,phase,failed_indices:[],created_at:"2026-10-24T00:00:00Z",updated_at:"2026-10-24T00:00:00Z"},message}}
 const publicMember=(id:string)=>({id,username:id,display_name:id,avatar_url:null,status:"online" as const,custom_status:null,created_at:"2026-10-24T00:00:00Z"});
 const groupMessage=(id:string,createdAt:string,userId="other"):GroupDMMessage=>({id,group_id:"g1",user_id:userId,content:`body-${id}`,encryption_version:1,ciphertext:`cipher-${id}`,sender_device_id:"device",e2ee_metadata:null,key_epoch:1,reply_to_id:null,edited_at:null,created_at:createdAt,reactions:[],attachments:[]});
+
+it("returns one fenced acceptance for a detached source and rejects later duplicates without invalidating that receipt",async()=>{
+  useGroupDMStore.setState({groups:[group("g1")],hasMoreAfterByGroup:{g1:true}});
+  const message=groupMessage("detached-source","2026-01-01T00:00:00Z");
+  const receipt=await useGroupDMStore.getState().handleMessage(message);
+  expect(receipt).toMatchObject({status:"accepted",groupId:"g1",messageId:message.id,storage:"detached",previewReady:true,deviceId:"device"});
+  expect(useGroupDMStore.getState().messages.g1).toBeUndefined();
+  expect(await useGroupDMStore.getState().handleMessage(message)).toEqual({status:"rejected"});
+  if(receipt.status!=="accepted")throw new Error("receipt missing");expect(receipt.isCurrent()).toBe(true);
+  useGroupDMStore.getState().handleMessageDelete("g1",message.id);expect(receipt.isCurrent()).toBe(false);
+  expect(await useGroupDMStore.getState().handleMessage(message)).toEqual({status:"rejected"});
+});
+it("does not accept a replayed visible source after its history window was replaced",async()=>{
+  useGroupDMStore.setState({groups:[group("g1")]});const message=groupMessage("seen-live","2026-01-01T00:00:00Z");
+  expect(await useGroupDMStore.getState().handleMessage(message)).toMatchObject({status:"accepted",storage:"visible"});
+  useGroupDMStore.setState({messages:{g1:[]}});
+  expect(await useGroupDMStore.getState().handleMessage(message)).toEqual({status:"rejected"});expect(useGroupDMStore.getState().messages.g1).toEqual([]);
+});
+it.each(["account","membership","rekey","device"])("rejects live source acceptance after %s changes while decrypting",async reason=>{
+  useGroupDMStore.setState({groups:[group("g1")]});
+  let finish!:(messages:GroupDMMessage[])=>void;vi.mocked(decryptGroupDMMessages).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  const message=groupMessage("delayed-live","2026-01-01T00:00:00Z"),pending=useGroupDMStore.getState().handleMessage(message);
+  if(reason==="account")publishAuthOwnerChange("new-owner");
+  if(reason==="membership")useGroupDMStore.getState().handleDelete("g1");
+  if(reason==="rekey")useGroupDMStore.getState().handleCreateOrUpdate(group("g1",2));
+  if(reason==="device")useE2EEStore.setState({localDeviceId:"new-device"});
+  finish([message]);expect(await pending).toEqual({status:"rejected"});expect(useGroupDMStore.getState().messages.g1??[]).toEqual([]);
+});
+it("accepts encrypted metadata without claiming failed decryption is preview-ready, and rejects wrong epochs/memberless groups",async()=>{
+  useGroupDMStore.setState({groups:[group("g1")]});const message={...groupMessage("undecrypted","2026-01-01T00:00:00Z"),content:null};
+  expect(await useGroupDMStore.getState().handleMessage(message)).toMatchObject({status:"accepted",previewReady:false});
+  expect(await useGroupDMStore.getState().handleMessage({...message,id:"wrong-epoch",key_epoch:2})).toEqual({status:"rejected"});
+  useGroupDMStore.setState({groups:[{...group("g1"),members:[]}]});
+  expect(await useGroupDMStore.getState().handleMessage({...message,id:"no-membership"})).toEqual({status:"rejected"});
+});
+it("applies private mute revisions independently of stale read revisions and persists them across an older list response",async()=>{
+  useGroupDMStore.setState({groups:[{...group("g1"),unread_count:3,read_revision:10,is_muted:false,settings_revision:1}]});
+  vi.mocked(api.setGroupDMMuted).mockResolvedValueOnce({success:true,data:{group_id:"g1",last_read_message_id:null,unread_count:99,revision:9,is_muted:true,settings_revision:2}});
+  expect(await useGroupDMStore.getState().setMuted("g1",true)).toBe(true);
+  expect(api.setGroupDMMuted).toHaveBeenCalledWith("g1",true,expect.objectContaining({expectedUserId:"me",isCurrent:expect.any(Function)}));
+  expect(useGroupDMStore.getState().groups[0]).toMatchObject({unread_count:3,read_revision:10,is_muted:true,settings_revision:2});
+  vi.mocked(api.listGroupDMs).mockResolvedValueOnce({success:true,data:{group_dms:[{...group("g1"),settings_revision:1,is_muted:false}]}});
+  await useGroupDMStore.getState().fetchGroups();expect(useGroupDMStore.getState().groups[0].is_muted).toBe(true);
+});
+it("ignores a late mute response after account or membership loss and never treats errors as saved",async()=>{
+  useGroupDMStore.setState({groups:[group("g1")]});let finish!:(result:Awaited<ReturnType<typeof api.setGroupDMMuted>>)=>void;
+  vi.mocked(api.setGroupDMMuted).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));const pending=useGroupDMStore.getState().setMuted("g1",true);
+  useGroupDMStore.getState().handleDelete("g1");finish({success:true,data:{group_id:"g1",last_read_message_id:null,unread_count:0,revision:0,is_muted:true,settings_revision:1}});
+  expect(await pending).toBe(false);expect(useGroupDMStore.getState().groups).toEqual([]);
+  useGroupDMStore.setState({groups:[group("g1")]});vi.mocked(api.setGroupDMMuted).mockResolvedValueOnce({success:false,error:"denied"});
+  expect(await useGroupDMStore.getState().setMuted("g1",true)).toBe(false);expect(useGroupDMStore.getState().groups[0].is_muted).not.toBe(true);
+});
+it("does not auto-read detached, undecrypted, rejected or duplicate group events",async()=>{
+  useGroupDMStore.setState({groups:[{...group("g1"),read_revision:1}],hasMoreAfterByGroup:{g1:true}});
+  useUIStore.setState({destination:{type:"group-dm",channelId:"g1",label:"Group"}});
+  const event={op:"group_dm_message_create",d:groupMessage("detached-event","2026-01-01T00:00:00Z")} as Parameters<typeof handleDMEvent>[0];
+  await handleDMEvent(event);await handleDMEvent(event);
+  useGroupDMStore.setState({hasMoreAfterByGroup:{}});
+  await handleDMEvent({...event,d:{...groupMessage("locked-event","2026-01-01T00:00:00Z"),content:null}} as Parameters<typeof handleDMEvent>[0]);
+  await handleDMEvent({...event,d:{...groupMessage("wrong-event-epoch","2026-01-01T00:00:00Z"),key_epoch:99}} as Parameters<typeof handleDMEvent>[0]);
+  expect(api.markGroupDMRead).not.toHaveBeenCalled();
+});
 
 it("fetches a scoped group around window, preserves order, exposes scroll target, and does not mark read",async()=>{
   useGroupDMStore.setState({groups:[group("g1")],messages:{g1:[groupMessage("old","2026-01-01T00:00:00Z")]}});
@@ -400,7 +465,7 @@ it.each(["account","membership","rekey"])("discards loaded history after %s chan
   expect(decryptGroupDMMessages).not.toHaveBeenCalled();
 });
 it("merges history without erasing live messages or resurrecting edits/deletions",async()=>{
-  const message=(id:string,content:string)=>({id,group_id:"g1",user_id:"other",content,created_at:"2026-10-24T00:00:00Z"} as GroupDMMessage);
+  const message=(id:string,content:string)=>({id,group_id:"g1",user_id:"other",key_epoch:1,content,created_at:"2026-10-24T00:00:00Z"} as GroupDMMessage);
   useGroupDMStore.setState({groups:[group("g1")],messages:{g1:[message("edited","old"),message("deleted","old")]}});
   let finish!:(value:Awaited<ReturnType<typeof api.listGroupDMMessages>>)=>void;
   vi.mocked(api.listGroupDMMessages).mockReturnValueOnce(new Promise(resolve=>{finish=resolve}));
@@ -416,7 +481,7 @@ it("does not resurrect a deleted message when pending decryption finishes",async
   useGroupDMStore.setState({groups:[group("g1")]});
   let finish!:(messages:GroupDMMessage[])=>void;
   vi.mocked(decryptGroupDMMessages).mockReturnValueOnce(new Promise(resolve=>{finish=resolve}));
-  const message={id:"pending",group_id:"g1",content:"body"} as GroupDMMessage;
+  const message={...groupMessage("pending","2026-01-01T00:00:00Z"),content:"body"};
   const pending=useGroupDMStore.getState().handleMessage(message);
   useGroupDMStore.getState().handleMessageDelete("g1","pending");
   finish([message]);await pending;
@@ -545,7 +610,7 @@ describe("group DM store", () => {
   });
 
   it("deduplicates websocket message echoes", async () => {
-    const message = { id: "m1", group_id: "g1", user_id: "u1", content: "hello" } as GroupDMMessage;
+    const message = {...groupMessage("m1","2026-01-01T00:00:00Z","u1"),content:"hello"};
     useGroupDMStore.setState({groups:[group("g1")]});
     await useGroupDMStore.getState().handleMessage(message);
     await useGroupDMStore.getState().handleMessage(message);

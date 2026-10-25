@@ -60,16 +60,23 @@ type GroupDMState = {
   toggleReaction: (groupId: string, messageId: string, emoji: string) => Promise<boolean>;
   markRead: (groupId: string, messageId?: string) => Promise<void>;
   markUnread: (groupId:string,messageId:string)=>Promise<boolean>;
+  setMuted:(groupId:string,muted:boolean)=>Promise<boolean>;
   handleReadState: (state:GroupDMReadState)=>void;
   leave: (groupId: string) => Promise<boolean>;
   addMember: (groupId: string, userId: string) => Promise<boolean>;
   removeMember: (groupId: string, userId: string) => Promise<boolean>;
   handleCreateOrUpdate: (group: GroupDM) => void;
   handleDelete: (groupId: string) => void;
-  handleMessage: (message: GroupDMMessage) => Promise<void>;
+  handleMessage: (message: GroupDMMessage) => Promise<GroupMessageAcceptance>;
   handleMessageUpdate: (message: GroupDMMessage) => Promise<void>;
   handleMessageDelete: (groupId: string, messageId: string) => void;
   handleReactionUpdate: (groupId: string, messageId: string, reactions: GroupDMMessage["reactions"]) => void;
+};
+
+export type GroupMessageAcceptance = {status:"rejected"} | {
+  status:"accepted"; ownerId:string; authGeneration:number; groupId:string; messageId:string;
+  keyEpoch:number; deviceId:string; lifetime:number|undefined; sourceVersion:number;
+  storage:"visible"|"detached"; message:GroupDMMessage; previewReady:boolean; isCurrent:()=>boolean;
 };
 
 /** Optional caller snapshot prevents callbacks retained by an old render from sending in a new session. */
@@ -119,7 +126,7 @@ function rememberRecoveryFiles(groupId:string,recovery:GroupUploadRecovery){
   const scope=recovery.durable,account=captureAccount(),lifetime=groupLifetimes.get(groupId);
   recovery.files.forEach((file,index)=>reviewedFileSources.set(file,{groupId,accountId:scope.accountId,source:{deviceId:scope.deviceId,id:scope.id,sourceIndex:recovery.sourceIndices![index]},current:()=>account()&&groupLifetimes.get(groupId)===lifetime&&useGroupDMStore.getState().groups.some(g=>g.id===groupId)}));
 }
-function captureGroup(groupId:string){
+function captureGroup(groupId:string):()=>boolean{
   const account=captureAccount(), lifetime=groupLifetimes.get(groupId), epoch=useGroupDMStore.getState().groups.find(g=>g.id===groupId)?.key_epoch;
   const {ownerId, generation}=getAuthSessionSnapshot();
   return ()=>account() && useGroupDMStore.getState().ownerId===ownerId && useGroupDMStore.getState().authGeneration===generation && epoch!==undefined && groupLifetimes.get(groupId)===lifetime && useGroupDMStore.getState().groups.some(g=>g.id===groupId&&g.key_epoch===epoch);
@@ -135,11 +142,14 @@ function mergeHistory(groupId:string,fresh:GroupDMMessage[],current:GroupDMMessa
 function sortGroupMessages(messages:GroupDMMessage[]):GroupDMMessage[]{return messages.sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()||a.id.localeCompare(b.id))}
 function mergeUniqueGroupMessages(...lists:GroupDMMessage[][]):GroupDMMessage[]{return sortGroupMessages([...new Map(lists.flat().map(message=>[message.id,message])).values()])}
 function validReadState(read:GroupDMReadState):boolean {
-  return Boolean(read.group_id) && Number.isSafeInteger(read.unread_count) && read.unread_count>=0 && (read.revision===undefined || (Number.isSafeInteger(read.revision)&&read.revision>=0));
+  return Boolean(read.group_id) && Number.isSafeInteger(read.unread_count) && read.unread_count>=0 && (read.revision===undefined || (Number.isSafeInteger(read.revision)&&read.revision>=0))
+    && (read.settings_revision===undefined||(Number.isSafeInteger(read.settings_revision)&&read.settings_revision>=0&&typeof read.is_muted==="boolean"));
 }
 function preserveNewerReadState(group:GroupDM,current:GroupDM|undefined):GroupDM {
-  return current?.read_revision !== undefined && (group.read_revision === undefined || group.read_revision < current.read_revision)
-    ? {...group,unread_count:current.unread_count,read_revision:current.read_revision} : group;
+  let merged=group;
+  if(current?.read_revision !== undefined && (group.read_revision === undefined || group.read_revision < current.read_revision))merged={...merged,unread_count:current.unread_count,read_revision:current.read_revision};
+  if(current?.settings_revision!==undefined&&(group.settings_revision===undefined||group.settings_revision<current.settings_revision))merged={...merged,is_muted:current.is_muted,settings_revision:current.settings_revision};
+  return merged;
 }
 
 export const useGroupDMStore = create<GroupDMState>((set, get) => ({
@@ -580,9 +590,19 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
   handleReadState: read=>{
     if(!validReadState(read))return;
     set(state=>({groups:state.groups.map(group=>{
-      if(group.id!==read.group_id || (group.read_revision!==undefined && (read.revision===undefined||read.revision<=group.read_revision)))return group;
-      return {...group,unread_count:read.unread_count,read_revision:read.revision};
+      if(group.id!==read.group_id)return group;
+      const next=group.read_revision!==undefined&&(read.revision===undefined||read.revision<=group.read_revision)?group:{...group,unread_count:read.unread_count,read_revision:read.revision};
+      return read.settings_revision!==undefined&&(group.settings_revision===undefined||read.settings_revision>group.settings_revision)
+        ?{...next,is_muted:read.is_muted,settings_revision:read.settings_revision}:next;
     })}));
+  },
+  setMuted:async(groupId,muted)=>{
+    const current=captureGroup(groupId),ownerId=getAuthSessionSnapshot().ownerId;
+    if(!ownerId||!current())return false;
+    try{const res=await api.setGroupDMMuted(groupId,muted,{expectedUserId:ownerId,isCurrent:current});
+      if(!current()||!res.success||!res.data||res.data.group_id!==groupId||!validReadState(res.data)||res.data.settings_revision===undefined||res.data.is_muted!==muted)return false;
+      get().handleReadState(res.data);return true;
+    }catch{return false}
   },
   leave: async (groupId) => {
     const currentUserId=useAuthStore.getState().user?.id,groupCurrent=captureGroup(groupId),authGeneration=getAuthGeneration(),lock=`${accountEpoch}:${groupId}`;
@@ -631,12 +651,18 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
     groupLifetimes.set(groupId,(groupLifetimes.get(groupId)??0)+1);messageVersions.delete(groupId);messageCreateVersions.delete(groupId);historyRequests.delete(groupId);aroundPending.get(groupId)?.abort();aroundPending.delete(groupId);aroundLoaded.delete(groupId);detachedWsMessages.delete(groupId);pendingAroundUpdates.delete(groupId);
     set((state) => { const messages = { ...state.messages },hasMoreAfterByGroup={...state.hasMoreAfterByGroup},uploadRecoveries={...state.uploadRecoveries},pendingSends={...state.pendingSends},restoredQueue={...state.restoredQueue}; delete messages[groupId];delete hasMoreAfterByGroup[groupId];delete uploadRecoveries[groupId];delete pendingSends[groupId];delete restoredQueue[groupId]; return { groups: state.groups.filter((item) => item.id !== groupId), messages,hasMoreAfterByGroup,scrollTarget:state.scrollTarget?.groupId===groupId?null:state.scrollTarget,uploadRecoveries,pendingSends,restoredQueue }; });
   },
-  handleMessage: async (message) => {
+  handleMessage: async (message):Promise<GroupMessageAcceptance> => {
+    const rejected={status:"rejected"} as const;
     const current=captureGroup(message.group_id),key=JSON.stringify([accountEpoch,message.group_id,message.id]);
-    if(!current() || pendingCreates.has(key) || get().messages[message.group_id]?.some(m=>m.id===message.id))return;
+    const group=get().groups.find(g=>g.id===message.group_id),deviceId=useE2EEStore.getState().localDeviceId;
+    const {ownerId,generation}=getAuthSessionSnapshot(),lifetime=groupLifetimes.get(message.group_id);
+    if(!current()||!ownerId||!get().groupsReady||!group?.members.some(member=>member.id===ownerId)||!deviceId||useE2EEStore.getState().initStatus!=="ready"
+      ||message.key_epoch!==group.key_epoch||typeof message.id!=="string"||!message.id||message.id.length>128||typeof message.user_id!=="string"||!message.user_id||message.user_id.length>128
+      ||pendingCreates.has(key)||messageVersions.get(message.group_id)?.has(message.id)||get().messages[message.group_id]?.some(m=>m.id===message.id)||detachedWsMessages.get(message.group_id)?.some(m=>m.id===message.id))return rejected;
     const version=mutateMessage(message.group_id,message.id);
     const created=messageCreateVersions.get(message.group_id)??new Map<string,number>();created.set(message.id,version);messageCreateVersions.set(message.group_id,created);
-    const isCurrent=()=>current()&&messageVersions.get(message.group_id)?.get(message.id)===version;
+    const isCurrent=():boolean=>current()&&useE2EEStore.getState().localDeviceId===deviceId&&useE2EEStore.getState().initStatus==="ready"
+      &&get().groupsReady&&get().groups.some(g=>g.id===message.group_id&&g.members.some(member=>member.id===ownerId))&&messageVersions.get(message.group_id)?.get(message.id)===version;
     pendingCreates.add(key);
     let decrypted:GroupDMMessage|undefined;
     try{
@@ -645,19 +671,21 @@ export const useGroupDMStore = create<GroupDMState>((set, get) => ({
         try{await cacheGroupMessage(message,{content:pending.content,file_keys:pending.encrypted?.metas},isCurrent)}catch{console.warn("[groupDM] committed message cache write failed")}
         decrypted={...message,content:pending.content,e2ee_file_keys:pending.encrypted?.metas};
       }else [decrypted]=await decryptGroupDMMessages([message],isCurrent);
-    }finally{pendingCreates.delete(key)}
-    if(!isCurrent() || !decrypted)return;
+    }catch{return rejected}finally{pendingCreates.delete(key)}
+    if(!isCurrent() || !decrypted||decrypted.id!==message.id||decrypted.group_id!==message.group_id||decrypted.user_id!==message.user_id||decrypted.key_epoch!==message.key_epoch)return rejected;
+    const accepted=(storage:"visible"|"detached"):GroupMessageAcceptance=>({status:"accepted",ownerId,authGeneration:generation,groupId:message.group_id,messageId:message.id,keyEpoch:group.key_epoch,deviceId,lifetime,sourceVersion:version,storage,message:decrypted!,previewReady:typeof decrypted!.content==="string"&&!decrypted!.decryption_error,isCurrent});
     if (decrypted) void registerSpamMessage({ ...decrypted, content: decrypted.content ?? null }, "group", message.group_id);
     if(get().hasMoreAfterByGroup[message.group_id]){
       const held=detachedWsMessages.get(message.group_id)??[];
       if(!held.some(item=>item.id===message.id))detachedWsMessages.set(message.group_id,[...held,decrypted]);
-      return;
+      return accepted("detached");
     }
     set((state) => {
       const current = state.messages[message.group_id] ?? [];
       if (current.some((item) => item.id === message.id)) return state;
       return { messages: { ...state.messages, [message.group_id]: mergeUniqueGroupMessages(current,[decrypted]) } };
     });
+    return isCurrent()?accepted("visible"):rejected;
   },
   handleMessageUpdate: async (message) => {
     const current=captureGroup(message.group_id);if(!current())return;

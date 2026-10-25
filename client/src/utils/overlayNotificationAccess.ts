@@ -45,7 +45,7 @@ export function isOverlayNotificationVisible(n: AppNotification, context: Visibi
     if (!dm || dm.is_muted || blocked.includes(dm.other_user.id)
       || (dm.status !== "accepted" && !(n.kind === "dm_request" && dm.status === "pending"))) return false;
   }
-  if (typeof n.payload.group_id === "string" && !groups.some((g) => g.id === n.payload.group_id && g.members.some((m) => m.id === userId))) return false;
+  if (typeof n.payload.group_id === "string" && !groups.some((g) => g.id === n.payload.group_id && !g.is_muted && g.members.some((m) => m.id === userId))) return false;
   return true;
 }
 
