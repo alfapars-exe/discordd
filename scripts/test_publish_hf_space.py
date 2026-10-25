@@ -32,6 +32,14 @@ class PublishSafetyTests(unittest.TestCase):
             self.assertIn(f"COPY {path} /app/{path}", dockerfile)
             self.assertIn(f"!{path}", exclusions)
 
+    def test_frontend_sources_are_valid_utf8_for_rolldown(self):
+        root = Path(__file__).resolve().parents[1]
+        sources = (root / "client/src").rglob("*")
+        for path in sources:
+            if path.suffix in {".ts", ".tsx", ".json", ".css"}:
+                with self.subTest(path=str(path.relative_to(root))):
+                    path.read_bytes().decode("utf-8", errors="strict")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
