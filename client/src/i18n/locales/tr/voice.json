@@ -111,5 +111,7 @@
   "groupMicrophoneFailed": "Grup mikrofonu başlatılamadı. Giriş cihazını ve izni kontrol edip yeniden dene.",
   "microphoneCaptureStopped": "Mikrofon yakalaması durdu. Kendiliğinden yeniden başlamayacak. Cihazı kontrol edip yeniden dene.",
   "microphoneCaptureRetry": "Mikrofonu yeniden dene",
-  "microphoneUseDefault": "Varsayılan mikrofonu kullan"
+  "microphoneUseDefault": "Varsayılan mikrofonu kullan",
+  "p2pMicrophoneUnavailable": "Mikrofon kaydı kullanılamıyor ve kendiliğinden yeniden başlamaz. Cihazı ve izni kontrol edip yeniden dene.",
+  "p2pFocusedPTT": "Bas-konuş, bu HiChat penceresinde klavye odağı varken çalışır."
 }

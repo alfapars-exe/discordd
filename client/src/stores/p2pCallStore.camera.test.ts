@@ -1,4 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import {setTokens} from "../api/client";
+import {useAuthStore} from "./authStore";
 import { useP2PCallStore } from "./p2pCallStore";
 
 vi.mock("./voiceStore", () => ({ useVoiceStore: { getState: () => ({ cameraDevice: "usb", cameraQuality: "360p", cameraFps: 15 }) } }));
@@ -14,7 +16,7 @@ function setup(previous?: MediaStreamTrack) {
   const sender = { track: oldTrack, replaceTrack: vi.fn().mockResolvedValue(undefined) };
   const pc = { getSenders: () => oldTrack ? [sender] : [], addTrack: vi.fn() };
   type State = ReturnType<typeof useP2PCallStore.getState>;
-  useP2PCallStore.setState({ activeCall: { id: "call" } as State["activeCall"], localStream: stream as unknown as MediaStream,
+  useP2PCallStore.setState({ activeCall: { id: "call",caller_id:"owner",receiver_id:"peer", status:"active" } as State["activeCall"], localStream: stream as unknown as MediaStream,
     peerConnection: pc as unknown as RTCPeerConnection, isVideoOn: false });
   return { stream, pc, sender };
 }
@@ -46,6 +48,8 @@ it("replaces the disabled camera on reopening so changed settings take effect", 
 });
 
 it("releases initial camera and microphone capture after a cancelled outgoing call", async () => {
+  useP2PCallStore.setState({activeCall:null,localStream:null,peerConnection:null});
+  setTokens("local-camera-test","","owner");useAuthStore.setState({user:{id:"owner"} as never});
   setup();
   useP2PCallStore.setState({ _sendWS: vi.fn() });
   let resolve!: (value: unknown) => void;

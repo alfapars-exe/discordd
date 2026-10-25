@@ -14,6 +14,7 @@
  *   - webrtc/p2pScreenShare.ts    → startScreenShare, stopScreenShare
  */
 
+import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 import { create } from "zustand";
 import i18n from "../i18n";
 import type { P2PCall, P2PCallType, P2PSignalPayload } from "../types";
@@ -73,6 +74,9 @@ type P2PCallStore = {
    */
   _pendingCandidates: RTCIceCandidateInit[];
 
+  microphoneFailure: {call:P2PCall;ownerId:string;generation:number} | null;
+  microphoneRetrying: boolean;
+  retryMicrophone: (expectedCall:P2PCall,useDefault?:boolean)=>Promise<boolean>;
   isMuted: boolean;
   isVideoOn: boolean;
   isScreenSharing: boolean;
@@ -110,30 +114,44 @@ type P2PCallStore = {
 export const useP2PCallStore = create<P2PCallStore>((set, get) => {
   let cameraPending = false;
   let microphone: P2PMicrophoneSession | null = null;
-  let startingCall: P2PCall | null = null;
+  const microphoneNow=():P2PMicrophoneSession|null=>microphone;
+  let audioSender: {pc:RTCPeerConnection;sender:RTCRtpSender}|null=null;
+  let initialRetry: {call:P2PCall;offer?:P2PSignalPayload}|null=null;
+  let startingCall: {call:P2PCall;ticket:symbol} | null = null;
   let preparation: { call: P2PCall; promise: Promise<MediaStream> } | null = null;
   const prepareMedia = (call: P2PCall) => {
     if (preparation?.call === call) return preparation.promise;
     microphone?.dispose();
+    const auth=getAuthSessionSnapshot();
+    const owner=useAuthStore.getState().user?.id;
+    const current=()=>!!owner&&auth.ownerId===owner&&useAuthStore.getState().user?.id===owner
+      &&getAuthSessionSnapshot().ownerId===owner&&getAuthSessionSnapshot().generation===auth.generation&&get().activeCall===call&&call.status==="active"&&(call.caller_id===owner||call.receiver_id===owner);
+    if(!current())return Promise.reject(new DOMException("Call session expired","AbortError"));
     const session: P2PMicrophoneSession = new P2PMicrophoneSession({
-      isCurrent: () => microphone === session && get().activeCall === call,
+      isCurrent: () => microphone === session && current(),
+      subscribeScope: retire=>useP2PCallStore.subscribe(state=>{if(state.activeCall!==call)retire();}),
       isMuted: () => get().isMuted || useVoiceStore.getState().isDeafened,
-      replaceTrack: async (previous, next) => {
+      replaceTrack: async (previous, next, candidateCurrent=()=>true) => {
         const { peerConnection, localStream } = get();
-        if (microphone !== session || get().activeCall !== call || !peerConnection || !localStream) return false;
-        const sender = peerConnection.getSenders().find((candidate) => candidate.track === previous);
+        if (microphone !== session || !current() || !candidateCurrent() || !peerConnection || !localStream) return false;
+        const sender = peerConnection.getSenders().find((candidate) => candidate.track === previous)
+          ?? (audioSender?.pc===peerConnection && peerConnection.getSenders().includes(audioSender.sender) ? audioSender.sender : undefined);
         if (!sender) throw new Error("P2P microphone sender is unavailable");
-        next.enabled = !get().isMuted && !useVoiceStore.getState().isDeafened;
+        next.enabled = false;
         await sender.replaceTrack(next);
-        if (microphone !== session || get().peerConnection !== peerConnection || get().activeCall !== call) return false;
-        next.enabled = !get().isMuted && !useVoiceStore.getState().isDeafened;
-        localStream.removeTrack(previous);
-        localStream.addTrack(next);
+        if (microphone !== session || get().peerConnection !== peerConnection || !current() || !candidateCurrent()) {next.enabled=false;return false;}
         return true;
       },
+      commitTrack:(previous,next)=>{
+        const {peerConnection,localStream}=get();
+        if(microphone!==session||!current()||!peerConnection||!localStream||audioSender?.pc!==peerConnection||audioSender.sender.track!==next)return false;
+        localStream.removeTrack(previous);localStream.addTrack(next);return true;
+      },
       onError: (error) => {
-        console.error("[p2p] Microphone settings update failed:", error);
-        useToastStore.getState().addToast("error", i18n.t("settings:microphoneUpdateFailed"));
+        if(microphone!==session||!current())return;
+        set({microphoneFailure:{call,ownerId:owner!,generation:auth.generation}});
+        console.error("[p2p] Microphone capture unavailable:", error);
+        useToastStore.getState().addToast("error", i18n.t("voice:p2pMicrophoneUnavailable"));
       },
     });
     microphone = session;
@@ -142,13 +160,15 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     return promise;
   };
   /** Build the callbacks object that webrtc/p2pPeerConnection wires up. */
-  const pcCallbacks = () => ({
-    onRemoteStream: (s: MediaStream) => set({ remoteStream: s }),
-    getRemoteStream: () => get().remoteStream,
-    onTerminated: () => {
-      if (get().activeCall) get().endCall();
-    },
-  });
+  const pcCallbacks = (call:P2PCall) => {
+    const auth=JSON.stringify(getAuthSessionSnapshot());
+    const current=()=>get().activeCall===call&&JSON.stringify(getAuthSessionSnapshot())===auth;
+    return {
+      onRemoteStream:(stream:MediaStream)=>{if(current())set({remoteStream:stream});},
+      getRemoteStream:()=>current()?get().remoteStream:null,
+      onTerminated:()=>{if(current())get().endCall();},
+    };
+  };
 
   return {
     activeCall: null,
@@ -157,6 +177,8 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     remoteStream: null,
     peerConnection: null,
     _screenSender: null,
+    microphoneFailure:null,
+    microphoneRetrying:false,
     isMuted: false,
     isVideoOn: false,
     isScreenSharing: false,
@@ -187,12 +209,32 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
       get().cleanup();
     },
 
+    retryMicrophone: async (expectedCall,useDefault=false) => {
+      const failure=get().microphoneFailure,session=microphone,auth=getAuthSessionSnapshot();
+      const current=()=>get().activeCall===expectedCall&&get().activeCall?.status==="active"
+        &&!!failure&&failure.call===expectedCall&&auth.ownerId===failure.ownerId&&getAuthSessionSnapshot().ownerId===failure.ownerId
+        &&auth.generation===failure.generation&&getAuthSessionSnapshot().generation===failure.generation
+        &&useAuthStore.getState().user?.id===failure.ownerId;
+      if(!current()||get().microphoneRetrying||!session)return false;
+      set({microphoneRetrying:true});
+      try {
+        if(useDefault){if(!current())return false;useVoiceStore.getState().setInputDevice("");}
+        if(!current())return false;
+        let success=false;
+        if(get().peerConnection&&get().localStream) success=await session.retry();
+        else {
+          const retry=initialRetry;if(!retry||retry.call!==expectedCall)return false;
+          session.dispose();microphone=null;preparation=null;startingCall=null;
+          if(retry.offer)await get().handleSignal(retry.offer);else await get().startWebRTC(true);
+          const recovered=microphoneNow();success=!!get().peerConnection&&!!get().localStream&&!!recovered&&!recovered.hasFailed;
+        }
+        if(!current())return false;
+        if(success)set({microphoneFailure:null});
+        return success;
+      }finally{if(get().activeCall===expectedCall&&getAuthSessionSnapshot().ownerId===auth.ownerId&&getAuthSessionSnapshot().generation===auth.generation)set({microphoneRetrying:false});}
+    },
     toggleMute: () => {
-      const { localStream, isMuted } = get();
-      if (localStream) {
-        for (const track of localStream.getAudioTracks()) track.enabled = isMuted && !useVoiceStore.getState().isDeafened;
-      }
-      set({ isMuted: !isMuted });
+      set({ isMuted: !get().isMuted });
       microphone?.syncMute();
     },
 
@@ -266,31 +308,37 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     startWebRTC: async (isCaller) => {
       const { activeCall, _sendWS } = get();
-      if (!activeCall || !_sendWS) return;
+      if (!activeCall || activeCall.status!=="active" || !_sendWS) return;
 
       // Receiver defers media acquisition to handleSignal("offer") to avoid
       // racing with concurrent getUserMedia calls.
       if (!isCaller) return;
-      if (startingCall === activeCall) return;
-      startingCall = activeCall;
+      if (startingCall?.call === activeCall) return;
+      const authScope=JSON.stringify(getAuthSessionSnapshot());
+      let preparedSession:P2PMicrophoneSession|null=null;
+      const currentStart=()=>get().activeCall===activeCall&&JSON.stringify(getAuthSessionSnapshot())===authScope&&(!preparedSession||microphone===preparedSession);
+      const startTicket={call:activeCall,ticket:Symbol("p2p-start")};
+      startingCall = startTicket;
+      initialRetry={call:activeCall};
 
       try {
-        const stream = await prepareMedia(activeCall);
-        if (get().activeCall !== activeCall) { stopAllTracks(stream); return; }
+        const media=prepareMedia(activeCall);preparedSession=microphone;
+        const stream = await media;
+        if (!currentStart()) { stopAllTracks(stream); return; }
         set({ localStream: stream, isVideoOn: activeCall.call_type === "video" });
         microphone?.syncMute();
 
-        const pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks());
+        const pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks(activeCall));
         set({ peerConnection: pc });
         // addTrack triggers onnegotiationneeded; PC's handler creates the offer.
-        for (const track of stream.getTracks()) pc.addTrack(track, stream);
+        for (const track of stream.getTracks()) {const sender=pc.addTrack(track, stream);if(track.kind==="audio")audioSender={pc,sender};}
         applyDegradationPreference(pc);
         microphone?.connect();
       } catch (err) {
         console.error("[p2p] WebRTC start error:", err);
-        if (get().activeCall === activeCall) get().cleanup();
+        if (currentStart() && get().microphoneFailure?.call!==activeCall) get().cleanup();
       } finally {
-        if (startingCall === activeCall) startingCall = null;
+        if (startingCall === startTicket) startingCall = null;
       }
     },
 
@@ -300,6 +348,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
       microphone = null;
       preparation = null;
       startingCall = null;
+      audioSender=null;initialRetry=null;
 
       // Stop all PC sender/receiver tracks first (covers screen-share track
       // not present in localStream).
@@ -317,6 +366,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
       set({
         activeCall: null,
+        microphoneFailure:null,microphoneRetrying:false,
         incomingCall: null,
         localStream: null,
         remoteStream: null,
@@ -347,7 +397,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     handleCallAccept: (data) => {
       const { activeCall } = get();
-      if (!activeCall || activeCall.id !== data.call_id) return;
+      if (!activeCall || activeCall.id !== data.call_id || activeCall.status==="active") return;
 
       set({ activeCall: { ...activeCall, status: "active" }, incomingCall: null });
 
@@ -393,7 +443,10 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     handleSignal: async (data) => {
       const { peerConnection, activeCall, _sendWS } = get();
-      if (!activeCall || data.call_id !== activeCall.id) return;
+      if (!activeCall || activeCall.status!=="active" || data.call_id !== activeCall.id) return;
+      const authScope=JSON.stringify(getAuthSessionSnapshot());
+      let signalSession:P2PMicrophoneSession|null=microphone;
+      const currentSignal=()=>get().activeCall===activeCall&&JSON.stringify(getAuthSessionSnapshot())===authScope&&(!signalSession||microphone===signalSession);
 
       switch (data.type) {
         case "offer": {
@@ -410,8 +463,10 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
             let stream = get().localStream;
             if (!stream) {
               try {
-                stream = await prepareMedia(activeCall);
-                if (get().activeCall !== activeCall) {
+                initialRetry={call:activeCall,offer:{...data}};
+                const media=prepareMedia(activeCall);signalSession=microphone;
+                stream = await media;
+                if (!currentSignal()) {
                   stopAllTracks(stream);
                   return;
                 }
@@ -419,18 +474,18 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
         microphone?.syncMute();
               } catch (err) {
                 console.error("[p2p] Failed to get media in handleSignal:", err);
-                if (get().activeCall === activeCall) get().cleanup();
+                if (currentSignal() && get().microphoneFailure?.call!==activeCall) get().cleanup();
                 return;
               }
             }
             // Another offer may have completed the shared media acquisition first.
             pc = get().peerConnection;
             if (!pc) {
-              pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks());
+              pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks(activeCall));
               set({ peerConnection: pc });
               try {
                 if (stream) {
-                  for (const track of stream.getTracks()) pc.addTrack(track, stream);
+                  for (const track of stream.getTracks()) {const sender=pc.addTrack(track, stream);if(track.kind==="audio")audioSender={pc,sender};}
                 }
                 applyDegradationPreference(pc);
                 microphone?.connect();
@@ -452,7 +507,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
           const call = get().activeCall;
           const ws = get()._sendWS;
-          if (ws && call === activeCall && get().peerConnection === pc) {
+          if (ws && currentSignal() && call === activeCall && get().peerConnection === pc) {
             ws("p2p_signal", { call_id: call.id, type: "answer", sdp: answer.sdp });
           }
           break;
@@ -496,6 +551,14 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
       }
     },
   };
+});
+
+// Authentication replacement retires capture immediately, including pending GUM.
+const retirePrivateCall=()=>{if(useP2PCallStore.getState().activeCall)useP2PCallStore.getState().cleanup();};
+subscribeAuthOwnerChanges(retirePrivateCall);subscribeAuthGenerationChanges(retirePrivateCall);
+useP2PCallStore.subscribe((state,previous)=>{
+  if(state.activeCall!==previous.activeCall&&state.microphoneFailure&&state.microphoneFailure.call!==state.activeCall)
+    useP2PCallStore.setState({microphoneFailure:null,microphoneRetrying:false});
 });
 
 /** Drain the queued ICE candidates after remoteDescription is set. */

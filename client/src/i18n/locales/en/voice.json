@@ -111,5 +111,7 @@
   "groupMicrophoneFailed": "Group microphone could not start. Check the input device and permission, then retry.",
   "microphoneCaptureStopped": "Microphone capture stopped. It will not restart automatically. Check the device and retry.",
   "microphoneCaptureRetry": "Retry microphone",
-  "microphoneUseDefault": "Use default microphone"
+  "microphoneUseDefault": "Use default microphone",
+  "p2pMicrophoneUnavailable": "Microphone capture is unavailable and will not restart automatically. Check the device and permission, then retry.",
+  "p2pFocusedPTT": "Push-to-talk works while this HiChat window has keyboard focus."
 }

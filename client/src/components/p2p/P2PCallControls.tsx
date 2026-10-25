@@ -18,7 +18,13 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
   const isDeafened = useVoiceStore(s => s.isDeafened);
   const activeCall = useP2PCallStore((s) => s.activeCall);
   const isMuted = useP2PCallStore((s) => s.isMuted);
-  const effectiveMuted = isMuted || isDeafened;
+  const failure = useP2PCallStore(s=>s.microphoneFailure);
+  const retrying = useP2PCallStore(s=>s.microphoneRetrying);
+  const retryMicrophone = useP2PCallStore(s=>s.retryMicrophone);
+  const inputDevice = useVoiceStore(s=>s.inputDevice);
+  const inputMode = useVoiceStore(s=>s.inputMode);
+  const failed = !!activeCall && failure?.call===activeCall;
+  const effectiveMuted = isMuted || isDeafened || failed;
   const muteActionLabel = isDeafened ? tv(isMuted ? "unmuteAfterUndeafen" : "muteAfterUndeafen") : t("toggleMic");
   const isVideoOn = useP2PCallStore((s) => s.isVideoOn);
   const isScreenSharing = useP2PCallStore((s) => s.isScreenSharing);
@@ -40,7 +46,7 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
   }
 
   return (
-    <div className="p2p-controls">
+    <div className="p2p-controls" style={{flexWrap:"wrap"}}>
       {!minimal && (
         <>
           <button
@@ -91,6 +97,12 @@ function P2PCallControls({ minimal = false }: P2PCallControlsProps) {
         </>
       )}
 
+      {!minimal && failed && activeCall && <div role="alert" style={{flexBasis:"100%",minWidth:0,order:1}}>
+        <p>{tv("p2pMicrophoneUnavailable")}</p>
+        <button type="button" className="btn-secondary" style={{width:"auto",height:"auto",minHeight:44,padding:"8px 12px"}} disabled={retrying} onClick={()=>void retryMicrophone(activeCall)}>{tv("microphoneCaptureRetry")}</button>
+        {inputDevice && <button type="button" className="btn-secondary" style={{width:"auto",height:"auto",minHeight:44,padding:"8px 12px"}} disabled={retrying} onClick={()=>void retryMicrophone(activeCall,true)}>{tv("microphoneUseDefault")}</button>}
+      </div>}
+      {!minimal && inputMode==="push_to_talk" && <p role="status" style={{flexBasis:"100%",order:2}}>{tv("p2pFocusedPTT")}</p>}
       <button
         className="p2p-ctrl-btn end-call"
         onClick={handleEnd}

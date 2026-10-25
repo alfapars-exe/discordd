@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-25",
+  "scope": "P9 P2P microphone failure recovery and focused private push-to-talk",
+  "status": "implemented_focused_verified_runtime_acceptance_pending",
+  "owned_paths": [
+    "client/src/webrtc/p2pMicrophone.ts",
+    "client/src/stores/p2pCallStore.ts",
+    "client/src/stores/p2pCallStore.audio.test.ts",
+    "client/src/stores/p2pCallStore.camera.test.ts",
+    "client/src/components/p2p/P2PCallControls.tsx",
+    "client/src/components/p2p/P2PCallControls.test.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json",
+    "implementation/verification/p9-p2p-microphone-recovery-focused-ptt-2026-10-25.json"
+  ],
+  "behavior": [
+    "One exact accepted call/auth owner/generation owns pending GUM, raw-ended listeners from before processor initialization, published and staged processed tracks, and settings/PTT subscriptions. Auth/call retirement stops obsolete capture and late streams.",
+    "Capture/update/raw-ended failure latches persistent call-scoped failure, immediately disables processed output and stops raw capture. Settings, mute, deafen and key changes cannot silently reacquire or revive failed audio.",
+    "Recovery buttons use exact active-call object plus auth scope. Retry preserves manual mute/deafen/PTT intent; default-device preference changes only inside the explicitly clicked guarded action. Concurrent retry is bounded.",
+    "Every pending replacement output stays disabled through uncancellable replaceTrack await. Stable owned audio sender enables later recovery; synchronous post-guard commitTrack bookkeeping makes resource/localStream ownership one exact commit and prevents stopped stale candidates entering localStream.",
+    "Initial failure retains accepted call/error state with no fake peer connection or completed offer. Explicit retry can retire a stuck initializer, preserves the exact receiver offer, and late old continuations cannot clear a recovered or replacement call.",
+    "Capture/signaling requires authoritative active status; ringing does not acquire microphone. Duplicate acceptance is idempotent rather than retiring a working exact-call microphone.",
+    "Focused PTT starts silent and rejects background/editor/composition/shortcut-recording key capture; release on key up, blur, visibility loss, editable focus, composition and key/mode change. Failure clears held state; recovery requires a fresh hold. Foreground-only limitation is shown.",
+    "Only P2P files and two isolated voice locale keys changed. No LiveKit helper, shared microphone processor/pipeline, group provider, native lease or server schema changes."
+  ],
+  "verification": [
+    {
+      "kind": "focused Vitest",
+      "command": "vitest run src/stores/p2pCallStore.audio.test.ts src/stores/p2pCallStore.camera.test.ts src/stores/p2pCallStore.end.test.ts src/components/p2p/P2PCallControls.test.tsx",
+      "result": "4 files,42 tests PASS on final shared worktree; includes raw-ended microtask gap between actual sender replacement and resource/localStream commit"
+    },
+    {
+      "kind": "scoped ESLint",
+      "result": "PASS clean on all6 owned TS/TSX source/test paths"
+    },
+    {
+      "kind": "app TypeScript",
+      "command": "tsc --noEmit -p tsconfig.app.json",
+      "result": "PASS current combined worktree"
+    },
+    {
+      "kind": "diff check",
+      "result": "PASS; locale changes are only2 new keys per language, preserving existing source formatting/duplicate entries"
+    }
+  ],
+  "remaining": [
+    "Real Windows/web hardware microphone unplug/device permission failure, peer-audible silence/recovery, physical keyboard focus and two-client long-call acceptance are not claimed by focused tests.",
+    "Background native PTT lease remains separate and unsupported by this focused-keyboard implementation.",
+    "Parent coordinates full client/build/self-scan after peer predicate source freeze. No push or production update claimed by this receipt."
+  ]
+}
