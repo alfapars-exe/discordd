@@ -30,6 +30,9 @@ func (r *sqliteApplicationRemovalRepo) Remove(ctx context.Context, actor, sid, h
 		return fmt.Errorf("application removal requires a transactional database")
 	}
 	return database.WithTx(ctx, raw, func(tx *sql.Tx) error {
+		if err := lockMusicIdentityTx(ctx, tx, database.IsPostgres(raw)); err != nil {
+			return err
+		}
 		// Conditional no-op acquires the writer boundary before any cleanup.
 		// No administrative or server-role permission overrides bot ownership.
 		res, err := tx.ExecContext(ctx, `UPDATE users SET status=status WHERE id=?1 AND owner_user_id=?2

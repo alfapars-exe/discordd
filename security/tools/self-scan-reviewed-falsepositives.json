@@ -28,7 +28,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/sqlite_account_anonymization.go",
-      "file_sha256": "3a4d7f6f5e9073a009c9ebb265801ef4bab2ed47df5d1ad5bfb06a8810876ef1",
+      "file_sha256": "e6490cb11efefc5cb804dbde8570e36388bc8d7d33b97a02e051d182367f32eb",
       "line_sha256": "d2e9044224e8e7f5a8f01f8a9f4b1290be8d6ba35155739655b714e2fd42231a",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"

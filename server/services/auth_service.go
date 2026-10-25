@@ -104,22 +104,23 @@ type AuthTokens struct {
 }
 
 type authService struct {
-	authSessions         repository.AuthSessionRepository
-	accountLifecycle     repository.AccountLifecycleRepository
-	accountAnonymization repository.AccountAnonymizationRepository
-	applicationRemoval   repository.ApplicationRemovalRepository
-	serverOwnership      repository.ServerOwnershipRepository
-	ownershipInvalidator PermissionInvalidator
-	mfa                  *MFAService
-	userRepo             repository.UserRepository
-	sessionRepo          repository.SessionRepository
-	resetRepo            repository.PasswordResetRepository // nil if email not configured
-	hub                  ws.EventPublisher
-	emailSender          email.EmailSender // nil if RESEND_API_KEY not set
-	appLogger            AuthAppLogger
-	jwtSecret            []byte
-	accessExp            time.Duration
-	refreshExp           time.Duration
+	authSessions             repository.AuthSessionRepository
+	accountLifecycle         repository.AccountLifecycleRepository
+	accountAnonymization     repository.AccountAnonymizationRepository
+	musicRequesterRetirement MusicRequesterRetirementObserver
+	applicationRemoval       repository.ApplicationRemovalRepository
+	serverOwnership          repository.ServerOwnershipRepository
+	ownershipInvalidator     PermissionInvalidator
+	mfa                      *MFAService
+	userRepo                 repository.UserRepository
+	sessionRepo              repository.SessionRepository
+	resetRepo                repository.PasswordResetRepository // nil if email not configured
+	hub                      ws.EventPublisher
+	emailSender              email.EmailSender // nil if RESEND_API_KEY not set
+	appLogger                AuthAppLogger
+	jwtSecret                []byte
+	accessExp                time.Duration
+	refreshExp               time.Duration
 
 	// userInvalidator drops the HTTP auth user-cache on a credential-
 	// lifecycle event. Optional (nil-safe): absent wiring, the change

@@ -34,6 +34,18 @@ func (r *sqliteMusicSessionRepo) SaveMusicTransition(ctx context.Context, next m
 		return fmt.Errorf("music transition requires a transaction-capable store")
 	}
 	return database.WithTx(ctx, db, func(tx *sql.Tx) error {
+		if err := lockMusicIdentityTx(ctx, tx, r.postgres); err != nil {
+			return err
+		}
+		if session != nil {
+			cleaned, err := sanitizeMusicTracks(ctx, tx, r.postgres, session.Queue)
+			if err != nil {
+				return err
+			}
+			copy := *session
+			copy.Queue = cleaned
+			session = &copy
+		}
 		// Serialize even equal-revision checks; an equal revision may only
 		// confirm exactly the already stored snapshot, never overwrite it.
 		_, err := tx.ExecContext(ctx, `UPDATE music_control_heads SET revision=revision WHERE channel_id=?`, next.ChannelID)
@@ -62,7 +74,11 @@ func (r *sqliteMusicSessionRepo) SaveMusicTransition(ctx context.Context, next m
 				if marshalErr != nil {
 					return marshalErr
 				}
-				if string(expected) == raw && mode == session.RepeatMode && revision == session.Revision {
+				equal, err := equalMusicQueueJSON(expected, []byte(raw))
+				if err != nil {
+					return err
+				}
+				if equal && mode == session.RepeatMode && revision == session.Revision {
 					return nil
 				}
 			}
@@ -79,7 +95,7 @@ func (r *sqliteMusicSessionRepo) SaveMusicTransition(ctx context.Context, next m
 		if n != 1 {
 			return pkg.ErrConflict
 		}
-		store := &sqliteMusicSessionRepo{db: tx}
+		store := &sqliteMusicSessionRepo{db: tx, postgres: r.postgres}
 		if session == nil {
 			return store.Delete(ctx, next.ChannelID)
 		}
@@ -118,6 +134,9 @@ func (r *sqliteMusicSessionRepo) AdoptMusicControl(ctx context.Context, proposed
 	}
 	var result models.MusicControlHead
 	err := database.WithTx(ctx, db, func(tx *sql.Tx) error {
+		if err := lockMusicIdentityTx(ctx, tx, r.postgres); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO music_control_heads(channel_id,server_id,session_id,revision,minimum_protocol) VALUES(?,?,?,?,2) ON CONFLICT(channel_id) DO NOTHING`, proposed.ChannelID, proposed.ServerID, proposed.SessionID, proposed.Revision); err != nil {
 			return err
 		}
@@ -181,6 +200,12 @@ func (r *sqliteMusicSessionRepo) CommitMusicOperation(ctx context.Context, commi
 	var result models.MusicOperationReceipt
 	replayed := false
 	err := database.WithTx(ctx, db, func(tx *sql.Tx) error {
+		if err := lockMusicIdentityTx(ctx, tx, r.postgres); err != nil {
+			return err
+		}
+		if err := requireLiveMusicActor(ctx, tx, op.ActorID); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `UPDATE music_control_heads SET revision=revision WHERE channel_id=?`, op.ChannelID); err != nil {
 			return err
 		}
@@ -210,7 +235,7 @@ func (r *sqliteMusicSessionRepo) CommitMusicOperation(ctx context.Context, commi
 		if rows != 1 {
 			return pkg.ErrConflict
 		}
-		store := &sqliteMusicSessionRepo{db: tx}
+		store := &sqliteMusicSessionRepo{db: tx, postgres: r.postgres}
 		if commit.Session == nil {
 			err = store.Delete(ctx, op.ChannelID)
 		} else {

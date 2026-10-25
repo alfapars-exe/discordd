@@ -437,6 +437,13 @@ func initServices(db *sql.DB, repos *Repositories, hub ws.EventPublisher, cfg *c
 	musicBotService := services.NewMusicBotService(
 		repos.Channel, repos.LiveKit, channelPermService, hub, repos.User, encryptionKey, appLogService, repos.MusicSession, voiceService,
 	)
+	if observer, ok := musicBotService.(services.MusicRequesterRetirementObserver); ok {
+		if setter, yes := authService.(interface {
+			SetMusicRequesterRetirementObserver(services.MusicRequesterRetirementObserver)
+		}); yes {
+			setter.SetMusicRequesterRetirementObserver(observer)
+		}
+	}
 	// Wire the channel-empty hook — when the last human leaves, voice service
 	// asks music bot to stop so it doesn't keep playing to nobody.
 	voiceService.SetMusicBotHook(musicBotService)

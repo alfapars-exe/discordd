@@ -72,6 +72,9 @@ func (r *sqliteAccountAnonymizationRepo) Anonymize(ctx context.Context, owner, s
 // must acquire a write boundary and verify credentials/ownership before entry.
 // This helper never deletes a shared conversation or authored message.
 func anonymizeIdentityTx(ctx context.Context, tx *sql.Tx, owner, expectedHash string, now int64) error {
+	if err := anonymizeMusicRequesterTx(ctx, tx, owner); err != nil {
+		return fmt.Errorf("anonymize music requester metadata: %w", err)
+	}
 	// Capture only personal assets; shared attachment rows/URLs are untouched.
 	_, err := tx.ExecContext(ctx, `INSERT INTO account_asset_cleanup(file_url,requested_at)
 		 SELECT file_url,? FROM (

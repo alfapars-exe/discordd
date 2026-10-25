@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 )
@@ -89,11 +91,11 @@ func TestMusicControlReceiptFailureRollsBackQueueAndHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := musicCommit(0, "request", "session")
-	// Queue save succeeds first; the unknown actor then violates the receipt
-	// FK. The transaction must roll back both the queue and head update.
-	command.Operation.ActorID = "missing-actor"
+	// Queue save succeeds first; an injected receipt trigger then fails. Actor
+	// liveness is checked earlier, so an unknown actor no longer exercises this.
+	dropFailure := injectMusicReceiptFailure(t, database.RawDB(repo.(*sqliteMusicSessionRepo).db))
 	if _, _, err := repo.CommitMusicOperation(ctx, command); err == nil {
-		t.Fatal("missing receipt actor accepted")
+		t.Fatal("receipt insert failure accepted")
 	}
 	got, err := repo.MusicControlHead(ctx, head.ChannelID)
 	if err != nil || *got != head {
@@ -103,9 +105,36 @@ func TestMusicControlReceiptFailureRollsBackQueueAndHead(t *testing.T) {
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("queue survived failed receipt: %#v %v", rows, err)
 	}
-	command.Operation.ActorID = "music-actor"
+	dropFailure()
 	if _, replay, err := repo.CommitMusicOperation(ctx, command); err != nil || replay {
 		t.Fatalf("retry after rollback: %v %v", replay, err)
+	}
+}
+
+func injectMusicReceiptFailure(t *testing.T, db *sql.DB) func() {
+	t.Helper()
+	if database.IsPostgres(db) {
+		if _, err := db.Exec(`CREATE FUNCTION fail_music_receipt_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected receipt failure'; END $$`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`CREATE TRIGGER fail_music_receipt_fixture BEFORE INSERT ON music_operation_receipts FOR EACH ROW EXECUTE FUNCTION fail_music_receipt_fixture()`); err != nil {
+			t.Fatal(err)
+		}
+		return func() {
+			t.Helper()
+			if _, err := db.Exec(`DROP TRIGGER fail_music_receipt_fixture ON music_operation_receipts`); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := db.Exec(`CREATE TRIGGER fail_music_receipt_fixture BEFORE INSERT ON music_operation_receipts BEGIN SELECT RAISE(ABORT,'injected receipt failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	return func() {
+		t.Helper()
+		if _, err := db.Exec(`DROP TRIGGER fail_music_receipt_fixture`); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

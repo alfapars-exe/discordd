@@ -157,3 +157,39 @@ func TestMusicControlStateStoreFailureIsNotEmptySuccess(t *testing.T) {
 		t.Fatalf("failed state lookup became empty success: status=%d body=%s", w.Code, w.Body.String())
 	}
 }
+
+type publicMusicStateStub struct {
+	musicControlStub
+	lookupErr error
+	deliver   func(func(*models.MusicBotChannelState))
+}
+
+func (s *publicMusicStateStub) WithPublicMusicState(_ context.Context, _ string, consume func(*models.MusicBotChannelState)) error {
+	if s.lookupErr != nil {
+		return s.lookupErr
+	}
+	s.deliver(consume)
+	return nil
+}
+
+func TestMusicControlStateSerializesWithinPublicPrivacyFence(t *testing.T) {
+	w := httptest.NewRecorder()
+	svc := &publicMusicStateStub{}
+	svc.deliver = func(consume func(*models.MusicBotChannelState)) {
+		consume(&models.MusicBotChannelState{ChannelID: "ch", ServerID: "srv", Queue: []models.MusicTrack{}})
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"channel_id":"ch"`) {
+			t.Fatal("HTTP serialization escaped publication callback")
+		}
+	}
+	h := NewMusicHandler(svc, stubPermResolver{}, nil)
+	h.State(w, musicControlRequest(http.MethodGet, ""))
+	if svc.stateReads != 0 || svc.adoptions != 0 {
+		t.Fatal("public state path used an unfenced fallback")
+	}
+	svc.lookupErr = errors.New("private identity lookup failed")
+	w = httptest.NewRecorder()
+	h.State(w, musicControlRequest(http.MethodGet, ""))
+	if w.Code != 500 || strings.Contains(w.Body.String(), "private identity") {
+		t.Fatalf("identity lookup failure leaked/returned success: %d %s", w.Code, w.Body.String())
+	}
+}

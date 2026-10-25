@@ -196,11 +196,18 @@ func (s *musicBotService) ApplyMusicCommand(ctx context.Context, actorID, channe
 
 // persistEnqueue is called with the live bot session lock held. Its receipt and
 // queue snapshot commit together; failed extraction/connect never writes one.
-func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, tracks []models.MusicTrack) error {
+func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, tracks []models.MusicTrack, actor string) error {
 	pending, _ := ctx.Value(musicCommandContextKey{}).(*musicPendingCommand)
 	if pending == nil {
 		if err := s.CheckLegacyControl(ctx, bot.channelID); err != nil {
 			return err
+		}
+		if writer, ok := s.sessions.(musicLegacyEnqueueStore); ok {
+			if err := writer.SaveMusicEnqueue(ctx, s.sessionSnapshot(bot), actor); err != nil {
+				return err
+			}
+			s.refreshMusicRequesterCache(bot)
+			return nil
 		}
 		return s.persistBot(bot)
 	}
@@ -222,6 +229,7 @@ func (s *musicBotService) persistEnqueue(ctx context.Context, bot *botInstance, 
 		return pkg.ErrConflict
 	} // outer request lock prevents this; never duplicate side effects.
 	pending.result = receipt.Result
+	s.refreshMusicRequesterCache(bot)
 	return nil
 }
 
@@ -408,6 +416,7 @@ func (s *musicBotService) applyImmediateMusicCommand(ctx context.Context, store 
 		apply()
 	}
 	bot.mu.Unlock()
+	s.refreshMusicRequesterCache(bot)
 	if command.Action == "restore" {
 		s.mu.Lock()
 		delete(s.restored, op.ChannelID)

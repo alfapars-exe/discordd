@@ -42,5 +42,8 @@ func (s *authService) RemoveApplication(ctx context.Context, actor, sid, botID, 
 	// connections/caches; the owner's sign-in and other applications survive.
 	s.ownershipInvalidator.InvalidateUser(botID)
 	s.afterBoundSessionRevocation(botID)
+	if s.musicRequesterRetirement != nil {
+		s.musicRequesterRetirement.AnonymizeMusicRequester(botID)
+	}
 	return nil
 }

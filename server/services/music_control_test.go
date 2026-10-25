@@ -197,7 +197,8 @@ func TestMusicControlTransientFailureHasNoSuccessReceipt(t *testing.T) {
 }
 
 func TestMusicControlFailedReceiptDoesNotApplyPlaybackEffect(t *testing.T) {
-	svc, _ := guardedMusicFixture(t)
+	svc, store := guardedMusicFixture(t)
+	svc.sessions = failedMusicCommandStore{svc.sessions, store}
 	bot := svc.bots["ch"]
 	var cancellations atomic.Int32
 	bot.cancelFn = func() { cancellations.Add(1) }
@@ -205,8 +206,7 @@ func TestMusicControlFailedReceiptDoesNotApplyPlaybackEffect(t *testing.T) {
 		command := guardedCommand(t, svc, action)
 		command.Seconds = 12
 		before := svc.GetState("ch")
-		// The unknown actor fails the receipt FK after its queue/head writes.
-		if _, err := svc.ApplyMusicCommand(context.Background(), "missing-actor", "ch", command); err == nil {
+		if _, err := svc.ApplyMusicCommand(context.Background(), "actor", "ch", command); err == nil {
 			t.Fatalf("%s ignored receipt failure", action)
 		}
 		after := svc.GetState("ch")
@@ -214,6 +214,15 @@ func TestMusicControlFailedReceiptDoesNotApplyPlaybackEffect(t *testing.T) {
 			t.Fatalf("%s applied effect before atomic commit", action)
 		}
 	}
+}
+
+type failedMusicCommandStore struct {
+	MusicSessionStore
+	musicControlStore
+}
+
+func (failedMusicCommandStore) CommitMusicOperation(context.Context, models.MusicOperationCommit) (models.MusicOperationReceipt, bool, error) {
+	return models.MusicOperationReceipt{}, false, errors.New("injected atomic music commit failure")
 }
 
 type adoptDuringLegacyCheckStore struct {

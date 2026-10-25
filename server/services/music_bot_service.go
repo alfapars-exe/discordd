@@ -190,9 +190,10 @@ type requesterMeta struct {
 }
 
 type musicBotService struct {
-	mu       sync.RWMutex
-	bots     map[string]*botInstance // channelID → bot
-	restored map[string]models.MusicSession
+	musicPublicationMu sync.RWMutex
+	mu                 sync.RWMutex
+	bots               map[string]*botInstance // channelID → bot
+	restored           map[string]models.MusicSession
 	// lifecycleLocks serialize channel creation/resume against stop/delete.
 	// A fixed stripe set avoids an unbounded per-channel lock registry.
 	lifecycleLocks [64]sync.Mutex
@@ -445,7 +446,7 @@ func (s *musicBotService) Enqueue(ctx context.Context, userID, channelID, url st
 	bot.cancelIdleTimer()
 	queueLen := len(bot.queue)
 	bot.mu.Unlock()
-	if err := s.persistEnqueue(ctx, bot, accepted); err != nil {
+	if err := s.persistEnqueue(ctx, bot, accepted, userID); err != nil {
 		bot.mu.Lock()
 		bot.queue = previousQueue
 		bot.revision = previousRevision
@@ -955,18 +956,7 @@ func (s *musicBotService) stopBotLocked(bot *botInstance) {
 	// Broadcast a final state with IsActive=false so the frontend can hide
 	// the panel without waiting for the next state push. broadcastState
 	// skips stopping bots, so this is the last state this bot sends.
-	final := s.GetState(bot.channelID)
-	if final == nil {
-		final = &models.MusicBotChannelState{ChannelID: bot.channelID, ServerID: bot.serverID, IsActive: false, Queue: []models.MusicTrack{}}
-	}
-	s.hub.BroadcastToServer(bot.serverID, ws.Event{
-		Op: "music_bot_state",
-		Data: map[string]any{
-			"channel_id": bot.channelID,
-			"server_id":  bot.serverID,
-			"state":      *final,
-		},
-	})
+	s.broadcastPrivateMusicState(bot, true)
 	musicBotLogger.Info("bot stopped", "channel_id", bot.channelID)
 }
 
@@ -995,18 +985,7 @@ func (s *musicBotService) StopAllForChannel(channelID string) {
 	s.stopBotLocked(bot)
 	bot.sessionMu.Unlock()
 	if len(session.Queue) > 0 && s.hub != nil {
-		s.hub.BroadcastToServer(session.ServerID, ws.Event{
-			Op: "music_bot_state",
-			Data: map[string]any{
-				"channel_id": session.ChannelID,
-				"server_id":  session.ServerID,
-				"state": models.MusicBotChannelState{
-					ChannelID: session.ChannelID, ServerID: session.ServerID,
-					IsActive: false, IsPaused: true, Queue: append([]models.MusicTrack(nil), session.Queue...),
-					Revision: session.Revision, RepeatMode: session.RepeatMode,
-				},
-			},
-		})
+		s.broadcastPrivateMusicState(bot, true)
 	}
 }
 
@@ -1041,6 +1020,12 @@ func (s *musicBotService) GetState(channelID string) *models.MusicBotChannelStat
 }
 
 func (s *musicBotService) GetStateWithError(ctx context.Context, channelID string) (*models.MusicBotChannelState, error) {
+	var result *models.MusicBotChannelState
+	err := s.WithPublicMusicState(ctx, channelID, func(state *models.MusicBotChannelState) { result = state })
+	return result, err
+}
+
+func (s *musicBotService) rawMusicState(ctx context.Context, channelID string) (*models.MusicBotChannelState, error) {
 	bot := s.lookupBot(channelID)
 	if bot == nil {
 		s.mu.RLock()
@@ -1236,7 +1221,11 @@ func (s *musicBotService) saveSession(session models.MusicSession) error {
 }
 
 func (s *musicBotService) persistBot(bot *botInstance) error {
-	return s.saveSession(s.sessionSnapshot(bot))
+	if err := s.saveSession(s.sessionSnapshot(bot)); err != nil {
+		return err
+	}
+	s.refreshMusicRequesterCache(bot)
+	return nil
 }
 
 // persistMutation writes a session snapshot while the caller holds sessionMu.
@@ -1436,21 +1425,7 @@ func (b *botInstance) cancelIdleTimer() {
 // check and the send can still slip one through; the next state push or the
 // client's GET /music/state corrects it.
 func (s *musicBotService) broadcastState(bot *botInstance) {
-	bot.mu.Lock()
-	state := bot.snapshotLocked()
-	bot.mu.Unlock()
-	if bot.stopping.Load() {
-		return
-	}
-
-	s.hub.BroadcastToServer(bot.serverID, ws.Event{
-		Op: "music_bot_state",
-		Data: map[string]any{
-			"channel_id": bot.channelID,
-			"server_id":  bot.serverID,
-			"state":      state,
-		},
-	})
+	s.broadcastPrivateMusicState(bot, false)
 }
 
 // broadcastPlaybackError — tell clients that a track failed and why, as a

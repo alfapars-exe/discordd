@@ -413,6 +413,13 @@ func (h *MusicHandler) State(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+	if reader, ok := h.music.(services.PublicMusicStateReader); ok {
+		err := reader.WithPublicMusicState(r.Context(), channelID, func(state *models.MusicBotChannelState) { pkg.JSON(w, http.StatusOK, state) })
+		if err != nil {
+			pkg.ErrorCtx(r.Context(), w, http.StatusInternalServerError, "failed to read music state", err)
+		}
+		return
+	}
 	if reader, ok := h.music.(services.ErrorAwareMusicState); ok {
 		state, err := reader.GetStateWithError(r.Context(), channelID)
 		if err != nil {

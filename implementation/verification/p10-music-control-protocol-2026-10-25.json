@@ -20,6 +20,12 @@
     "backend_race": "Linux Go1.26.10 CGO race: services 57.319s, handlers 3.205s, repository 82.066s passed",
     "backend_lint": "Pinned Go1.26.10 golangci-lint: zero issues",
     "route_contract_follow_up": "CI40177037782 exposed missing control-session route golden/declared-handler gate registration. Added the exact route and documented the existing ViewChannel/Speak/current-voice checks, without weakening guards. Route golden/permission/no-duplicate tests then passed locally in 2.919s; new-source CI still required.",
+    "route_fixed_source_ci": {
+      "source": "56bf33b3ddd5eab73ce3b1235a779eea390bde82",
+      "run": 40177894501,
+      "jobs_passed": 21,
+      "scope": "Committed protocol plus Inbox/welcome checkpoint only; subsequent requester privacy, expression filters and Go Live follow-ups require separate final-source CI."
+    },
     "actual_local_http": {
       "source": "2c35c8ef55b687cc9e664dc51e457b81f841aeaf",
       "checks_passed": 14,
@@ -31,9 +37,9 @@
     "source_self_scan": "0 blocking matches, 344 review rows; reviewed added non-security shuffle randomness and synthetic local cookie/file fixtures. Existing path containment remains SafeJoin-protected. This is not an exhaustive security acceptance."
   },
   "remaining": [
-    "Integrated final-source CI must pass.",
+    "Subsequent requester privacy, expression-filter and Go Live changes require their own final-source CI.",
     "Actual two-client HTTP/WS behavior and audible encrypted YouTube playback remain acceptance gates; mocked media tests do not satisfy them.",
-    "Existing durable queue requester metadata privacy requires a separate audit; receipt cleanup does not assert all historical music metadata is anonymized.",
+    "Queue requester privacy follow-up is recorded in p2-music-requester-privacy-2026-10-25.json; historical at-rest backfill and real device acceptance remain open.",
     "Installed Windows update, migrations on a restored production backup and rollback verification remain separate gates. Music must be quiesced and a coherent backup restored for binary rollback: older binaries do not maintain the new durable control heads. No automatic queue-dropping reconciliation is provided.",
     "No new production or Windows publication; release 2.11.111 is unchanged."
   ]
