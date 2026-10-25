@@ -81,6 +81,13 @@ function Assert-InstalledVersion {
 function Assert-CurrentPackage {
     param([Parameter(Mandatory = $true)][string] $InstallPath)
 
+    $expectedCopyright = [string][char]0x00A9 + ' 2026 HiChat!'
+    $actualCopyright = (Get-Item -LiteralPath (Join-Path $InstallPath 'HiChat.exe')).VersionInfo.LegalCopyright
+    if ($actualCopyright -ne $expectedCopyright) {
+        throw 'Installed executable copyright metadata is not valid UTF-8 source text.'
+    }
+    Write-Host 'Installed copyright metadata verified.'
+
     $resourceRoot = Join-Path $InstallPath 'resources'
     $updateConfig = Join-Path $resourceRoot 'app-update.yml'
     if (-not (Test-Path -LiteralPath $updateConfig -PathType Leaf)) {
