@@ -6659,7 +6659,7 @@
       "id": "p9.voice-effects",
       "title": "Voice event sounds",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6668,13 +6668,23 @@
         "windows",
         "web"
       ],
-      "persistence": "device media preferences and live call state",
+      "persistence": "Account-synced event preferences and live controller commits; device-local output selection",
       "authorization": "Device consent and current channel/call membership",
       "acceptance": [
         "Mute/unmute/deafen/join/leave sounds and previews respect individual and global mute settings."
       ],
-      "code": ["client/src/utils/sounds.ts", "client/src/utils/sounds.test.ts"],
-      "evidence": ["implementation/verification/p9-output-event-safety-2026-10-25.json"]
+      "code": [
+        "client/src/utils/sounds.ts",
+        "client/src/utils/sounds.test.ts",
+        "client/src/utils/voiceEventSounds.ts",
+        "client/src/components/settings/NotificationSettings.tsx",
+        "server/models/preferences.go"
+      ],
+      "evidence": [
+        "implementation/verification/p9-output-event-safety-2026-10-25.json",
+        "implementation/verification/p9-voice-event-catalog-2026-10-25.json",
+        "implementation/verification/p9-voice-event-api-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.soundboard",
@@ -7520,7 +7530,7 @@
       "id": "p11.overlay-compatibility",
       "title": "Compatibility overlay mode",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R23"
       ],
@@ -7532,8 +7542,14 @@
       "acceptance": [
         "Compatibility implementation is selectable and its focus/click limitations are described truthfully."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "electron/voice-overlay.ts",
+        "electron/voice-overlay-contract.ts",
+        "client/src/components/settings/VoiceSettings.tsx"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-compatibility-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.overlay-report",
@@ -7577,7 +7593,7 @@
       "id": "p11.overlay-focus",
       "title": "Compatibility focus behavior",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R23"
       ],
@@ -7589,8 +7605,14 @@
       "acceptance": [
         "Compatibility mode avoids stealing game focus and reports unsupported integration."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "electron/voice-overlay.ts",
+        "electron/overlay-shortcut.ts",
+        "client/src/hooks/useOverlayShortcut.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-compatibility-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.overlay-click-through",

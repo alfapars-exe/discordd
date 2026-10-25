@@ -1,0 +1,14 @@
+{
+  "status": "local_api_verified_physical_acceptance_open",
+  "source": "3a353c3520a094fcfe0bf8272bd8d326b7b227c7",
+  "scope": "Two existing synthetic local accounts;8 voice-event preferences",
+  "checks": {
+    "persist_and_readback": 8,
+    "invalid_string_type": 400,
+    "cross_account_expected_id": 409,
+    "rejected_write_did_not_mutate": true,
+    "other_account_unchanged": true,
+    "previous_effective_values_restored": true
+  },
+  "qualification": "Existing API/SQLite fixture upgraded after consistent backup; credentials/keys unchanged. No audible/device/browser/restart persistence or production claim."
+}
