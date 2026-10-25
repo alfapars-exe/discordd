@@ -57,7 +57,7 @@ export default function GroupDMCall({ credentials, onLeave, callSessionNonce, in
     keyReady: encryption.keyReady && currentMediaEpoch, keyError: encryption.keyError, keyProvider, worker: e2eeWorker,
     roomOptions: options ?? {}, isCurrentSource: isCurrentSession, onError: onEncryptionError, allowRestore: (source) => source !== Track.Source.Microphone });
   const groupVideoLabel=useGroupDMStore(state=>state.groups.find(group=>group.id===credentials.channel_id)?.name);
-  useAuthorizedRoomVideos({room:admission.room,nonce:controlNonce,owner:"group",label:groupVideoLabel??`${t("voiceConnected")} · ${credentials.channel_id}`,
+  useAuthorizedRoomVideos({room:admission.room,nonce:controlNonce,owner:"group",label:groupVideoLabel??`${t("voiceConnected")} Â· ${credentials.channel_id}`,
     keyContext:credentials.e2ee_key_context??"",keyEpoch:credentials.e2ee_key_epoch??0,admitted:admission.publishReady,current:()=>{const auth=getAuthSessionSnapshot(),state=useGroupDMStore.getState(),group=state.groups.find(group=>group.id===credentials.channel_id);
       if(auth.ownerId!==controlOwner.ownerId||auth.generation!==controlOwner.generation||state.ownerId!==controlOwner.ownerId||state.authGeneration!==controlOwner.generation||!state.groupsReady||!group||group.key_epoch!==credentials.e2ee_key_epoch||!group.members.some(member=>member.id===auth.ownerId)||isCurrentSession?.()===false)return false;
       if(!callSessionNonce)return true;const session=useGroupCallStore.getState().session,live=session?.credentials;

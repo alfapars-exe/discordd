@@ -259,7 +259,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     keyProvider, worker: e2eeWorker, roomOptions: roomOptions ?? {}, onError: handleE2eeKeyError, allowRestore });
   const videoAuth=getAuthSessionSnapshot();
   const videoIdentity=useMemo(()=>({room:admission.room,nonce:crypto.randomUUID()}),[admission.room]);
-  const videoLabel=useChannelStore(state=>state.categories.flatMap(category=>category.channels).find(channel=>channel.id===currentVoiceChannelId)?.name)??`${t("voiceConnected")} · ${currentVoiceChannelId??""}`;
+  const videoLabel=useChannelStore(state=>state.categories.flatMap(category=>category.channels).find(channel=>channel.id===currentVoiceChannelId)?.name)??`${t("voiceConnected")} Â· ${currentVoiceChannelId??""}`;
   useAuthorizedRoomVideos({room:admission.room,nonce:videoIdentity.nonce,owner:"guild",label:videoLabel,keyContext:keyContext??"",keyEpoch:keyEpoch??0,admitted:admission.publishReady,
     current:()=>{const state=useVoiceStore.getState(),auth=getAuthSessionSnapshot();return !!currentVoiceChannelId&&state.currentVoiceChannelId===currentVoiceChannelId&&state._joinGeneration===videoJoinGeneration
       &&state.livekitToken===livekitToken&&state.livekitUrl===livekitUrl&&state.e2eeKeyContext===keyContext&&state.e2eeKeyEpoch===keyEpoch&&state.e2eeKeyIndex===keyIndex&&state.e2eePassphrase===e2eePassphrase
