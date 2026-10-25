@@ -1,0 +1,33 @@
+{
+  "status": "automated_gates_verified_runtime_acceptance_open",
+  "source_commit": "4b0e196d2cb3066142692d8ccb6e96bbc6f4937d",
+  "scope": "Immutable git archive; excludes unrelated dirty logging/overlay changes and subsequent game-notice work.",
+  "client": "427files4131tests ALLPASS108.23s; session28925 exit0.",
+  "server": "Go1.26.10 GOMAXPROCS3 go test -p3 ./... ALLPASS; session68731 exit0. Root18.222s database18.798s handlers11.030s repository124.695s services61.707s ws6.739s.",
+  "electron": "Actual tsc +237tests236PASS1existingSKIP0fail988.51ms; full suite from immutable source. Working-tree native receipt240 includes three foreign overlay tests and is not the immutable count.",
+  "build": "Actual tsc-b +Vite production PASS1.49s session95344 exit0.",
+  "lint": "Complete immutable client ESLint exit0,0errors5existingwarnings session89122.",
+  "postgres": "Own disposable loopback PostgreSQL18: exact frozen repository TestServerCommunityDefaultsAndRoundTrip PASS0.85s session64083 exit0; additive PG045 migration/create/update/get restore roundtrip. No production DB used.",
+  "http_admission": "10 actual HTTP handler scenarios (9admission+late-session revocation) root tests PASS; included again in full immutable Go suite.",
+  "real_windows_observation": {
+    "cs2_process_visible": true,
+    "steam_process_visible": true,
+    "production_scanner_could_read_cs2_executable_path": false,
+    "independent_CIM_and_GetProcess_path_readable": false,
+    "outcome": "Real detection acceptance NOT passed. No basename-only identity substitution, elevation or game launch attempted; no user registry changed.",
+    "probe": "Own temporary registry probe exited safely before registration because production scanner could not obtain exact CS2 executable path."
+  },
+  "remaining": [
+    "Actual two-client Steam/CS2 join and web external-protocol dispatch are unverified; pending optional user-provided lobby link.",
+    "No new installer, updater publication, HF production deployment or CS2 commit push yet."
+  ],
+  "docker": {
+    "build": "Actual full Dockerfile image PASS session53368 exit0",
+    "image": "hichat-cs2-4b0e196d-qa:latest",
+    "manifest": "sha256:89475f546b8be570bc4544229848c35142dfb96e3d4dd7c5b9a2bb0a7f8510b3",
+    "runtime": "Own fresh synthetic secrets, networknone, no user volumes: /api/ready200 statusready database:true livekit_configured:false; index200; joinroute401 without auth; SQLite integrityok and is_community columnpresent. Own container and PostgreSQLfixture stopped exit0.",
+    "limitations": "No configured LiveKit/SFU/media, mail, YouTube or production runtime acceptance claimed."
+  },
+  "http_ws_runtime": "Actual two synthetic accounts on a consistent isolated SQLite copy and exact4b0 API: typedofferACK,friendstatus,mint201,no recipebeforeconsume,consume200/replay404,expectedaccount409/crossaccount403,preferencewithdraw403,hostdisconnect404,normalvoiceallowed/communityrevoke403/leave403. Frozen nativecontroller consumes actualHTTPticket and invokes only strict syntheticURI stub once, replaydeniedwithoutfetch/server404. See p11-cs2-http-ws-runtime-2026-10-25.json.",
+  "environment_cleanup": "All owned Docker/PG fixtures stopped exit0; isolated API stopped with0voiceStates,18183notlistening. Older18181QA alsoobservedunavailable, no restart/mutation attempted. No Steam/ElectronUI/protocol/physicaldevice acceptance claimed."
+}

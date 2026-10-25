@@ -1058,7 +1058,7 @@
       "persistence": "repository",
       "authorization": "Maintainer; no account mutation",
       "acceptance": [
-        "Validator accounts for all 33 named screenshots and every P0–P11 package; unfinished work is never reported accepted."
+        "Validator accounts for all 33 named screenshots and every P0â€“P11 package; unfinished work is never reported accepted."
       ],
       "code": [
         "implementation/coverage.json",
@@ -5115,7 +5115,7 @@
       "persistence": "account preferences with device-local runtime adaptation",
       "authorization": "Signed-in owner; screen reader and speech start by user action",
       "acceptance": [
-        "12–24px control changes actual channel/DM text and preview while preserving usable layout."
+        "12â€“24px control changes actual channel/DM text and preview while preserving usable layout."
       ],
       "code": ["client/src/components/settings/AccessibilitySettings.tsx", "client/src/stores/accessibilityStore.ts", "client/src/styles/globals.css"],
       "evidence": ["implementation/verification/p7-accessibility-foundation-2026-10-23.json"]
@@ -5235,7 +5235,7 @@
       "persistence": "account preferences with device-local runtime adaptation",
       "authorization": "Signed-in owner; screen reader and speech start by user action",
       "acceptance": [
-        "0–24px control changes actual inter-group message spacing and survives reload."
+        "0â€“24px control changes actual inter-group message spacing and survives reload."
       ],
       "code": ["client/src/styles/accessibility.ts", "client/src/styles/globals.css"],
       "evidence": ["implementation/verification/p7-accessibility-foundation-2026-10-23.json"]
@@ -5259,7 +5259,7 @@
       "persistence": "account preferences with device-local runtime adaptation",
       "authorization": "Signed-in owner; screen reader and speech start by user action",
       "acceptance": [
-        "50–200% zoom adjusts application and preserves keyboard navigation; Windows/Web limitations are explicit."
+        "50â€“200% zoom adjusts application and preserves keyboard navigation; Windows/Web limitations are explicit."
       ],
       "code": ["client/src/components/settings/AppearanceSettings.tsx", "client/src/stores/settingsStore.ts", "client/src/styles/globals.css"],
       "evidence": ["implementation/verification/p7-accessibility-foundation-2026-10-23.json"]
@@ -5283,7 +5283,7 @@
       "persistence": "account preferences with device-local runtime adaptation",
       "authorization": "Signed-in owner; screen reader and speech start by user action",
       "acceptance": [
-        "0–100% changes application UI colors without unintentionally desaturating user media."
+        "0â€“100% changes application UI colors without unintentionally desaturating user media."
       ],
       "code": ["client/src/components/settings/AccessibilitySettings.tsx", "client/src/styles/accessibility.ts", "client/src/styles/globals.css"],
       "evidence": ["implementation/verification/p7-accessibility-foundation-2026-10-23.json"]
@@ -7429,7 +7429,7 @@
       "id": "p11.friend-join",
       "title": "Allow friends to join game",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R21",
         "R22"
@@ -7443,14 +7443,26 @@
       "acceptance": [
         "Eligible friend receives scoped expiring join action; denied preference or revoked session prevents joining."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_join_service.go",
+        "server/services/game_join_policy.go",
+        "server/handlers/game_join.go",
+        "client/src/components/shared/GameJoinButton.tsx",
+        "electron/cs2-join-controller.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-cs2-native-2026-10-25.json",
+        "implementation/verification/p11-cs2-client-2026-10-25.json",
+        "implementation/verification/p11-cs2-game-join-backend-2026-10-25.json",
+        "implementation/verification/p11-cs2-combined-4b0e196d-2026-10-25.json",
+        "implementation/verification/p11-cs2-http-ws-runtime-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.voice-join",
       "title": "Allow voice participants to join game",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R21",
         "R22"
@@ -7464,14 +7476,26 @@
       "acceptance": [
         "Shared voice membership and allowed server type gate join permission at invocation time."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_join_service.go",
+        "server/services/game_join_policy.go",
+        "server/handlers/game_join.go",
+        "client/src/components/shared/GameJoinButton.tsx",
+        "electron/cs2-join-controller.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-cs2-native-2026-10-25.json",
+        "implementation/verification/p11-cs2-client-2026-10-25.json",
+        "implementation/verification/p11-cs2-game-join-backend-2026-10-25.json",
+        "implementation/verification/p11-cs2-combined-4b0e196d-2026-10-25.json",
+        "implementation/verification/p11-cs2-http-ws-runtime-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.join-protocol",
       "title": "Authorized game join adapter",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R21",
         "R22"
@@ -7485,8 +7509,20 @@
       "acceptance": [
         "Only declared supported game protocols/first-party adapters launch; arbitrary executable or URL payload is rejected."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "server/services/game_join_service.go",
+        "server/services/game_join_policy.go",
+        "server/handlers/game_join.go",
+        "client/src/components/shared/GameJoinButton.tsx",
+        "electron/cs2-join-controller.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-cs2-native-2026-10-25.json",
+        "implementation/verification/p11-cs2-client-2026-10-25.json",
+        "implementation/verification/p11-cs2-game-join-backend-2026-10-25.json",
+        "implementation/verification/p11-cs2-combined-4b0e196d-2026-10-25.json",
+        "implementation/verification/p11-cs2-http-ws-runtime-2026-10-25.json"
+      ]
     },
     {
       "id": "p11.overlay-current-game",
@@ -7806,7 +7842,7 @@
       "persistence": "Device voice widget preferences",
       "authorization": "Explicit activity consent, server audience and authorized join checks",
       "acceptance": [
-        "Off and 5–25 scale control visible participants; overflow handling stays reachable."
+        "Off and 5â€“25 scale control visible participants; overflow handling stays reachable."
       ],
       "code": ["client/src/components/settings/VoiceSettings.tsx", "client/src/components/voice/VoiceOverlayContent.tsx", "electron/voice-overlay-geometry.ts", "electron/voice-overlay-geometry.test.ts"],
       "evidence": ["implementation/verification/p11-voice-widget-controls-2026-10-25.json"]
