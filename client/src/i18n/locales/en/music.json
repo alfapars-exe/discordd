@@ -59,7 +59,7 @@
   "reason_unavailable": "Video is unavailable",
   "reason_age_restricted": "Video is age-restricted",
   "reason_geo_blocked": "Video is not available in this region",
-  "reason_rate_limited": "YouTube is rate-limiting requests, try again later",
+  "reason_rate_limited": "The music service is busy. Please try again shortly.",
   "reason_network": "The HiChat server could not connect to YouTube. Please try again shortly.",
   "reason_stalled": "Playback stalled",
   "reason_tool_missing": "Server audio tools are unavailable",

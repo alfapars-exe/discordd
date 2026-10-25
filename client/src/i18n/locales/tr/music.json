@@ -59,7 +59,7 @@
   "reason_unavailable": "Video kullanılamıyor",
   "reason_age_restricted": "Video yaş sınırlamalı",
   "reason_geo_blocked": "Video bu bölgede kullanılamıyor",
-  "reason_rate_limited": "YouTube istekleri sınırlıyor, daha sonra tekrar dene",
+  "reason_rate_limited": "Müzik hizmeti şu anda yoğun. Lütfen biraz sonra tekrar dene.",
   "reason_network": "HiChat sunucusu YouTube'a bağlanamadı. Lütfen biraz sonra tekrar dene.",
   "reason_stalled": "Çalma takıldı",
   "reason_tool_missing": "Sunucudaki ses araçları kullanılamıyor",

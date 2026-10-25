@@ -1,0 +1,50 @@
+name: hichat-music-worker
+services:
+  worker:
+    image: ${HICHAT_MUSIC_WORKER_IMAGE:?Set a locally verified immutable image tag}
+    command: ["/usr/local/bin/hichat-music-worker"]
+    user: "61150:61150"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # No inbound ports. The worker establishes authenticated WSS to the app.
+    environment:
+      HICHAT_MUSIC_WORKER_ENDPOINT: ${HICHAT_MUSIC_WORKER_ENDPOINT:?Set the HTTPS app origin}
+      HICHAT_MUSIC_WORKER_TOKEN_FILE: /run/secrets/worker.token
+      HICHAT_MUSIC_WORKER_COOKIES_FILE: /run/secrets/youtube.cookies.txt
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/cache
+      GOMEMLIMIT: 96MiB
+      GOMAXPROCS: "1"
+    volumes:
+      - type: bind
+        source: ./secrets/worker.token
+        target: /run/secrets/worker.token
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./secrets/youtube.cookies.txt
+        target: /run/secrets/youtube.cookies.txt
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=0700,uid=61150,gid=61150
+    mem_limit: 320m
+    mem_reservation: 224m
+    memswap_limit: 320m
+    cpus: 0.50
+    pids_limit: 64
+    oom_score_adj: 500
+    stop_grace_period: 10s
+    # The app image's HTTP healthcheck does not apply to this outbound worker.
+    healthcheck:
+      disable: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
