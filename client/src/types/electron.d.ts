@@ -43,6 +43,7 @@ export interface ElectronRegisteredGame {
   displayName: string;
   executableName: string;
   shareAllowed: boolean;
+  joinAdapter?: "none" | "cs2-steam";
   /** Local opt-in for a voice overlay over this game's foreground window. */
   overlayAllowed: boolean;
   availability: "available" | "missing" | "unreadable";
@@ -62,7 +63,7 @@ export interface ElectronRegisteredGamesSnapshot {
 /** Path-free local activity projection; process detection is never triggered by its getter. */
 export interface ElectronRegisteredGameActivity {
   enabled: boolean;
-  game: { id: string; name: string } | null;
+  game: { id: string; name: string; canonicalGameId?: "steam:730" } | null;
 }
 
 /**
@@ -165,6 +166,9 @@ interface ElectronAPI {
   onOverlayOpenChat?: (callback: (value: { session: string }) => void) => (() => void);
   /** Read local Windows registered-game state; no executable paths are exposed. */
   getRegisteredGames?: () => Promise<ElectronRegisteredGamesSnapshot>;
+  syncGameJoinContext?: (context: { origin: string; ownerId: string; generation: number; nonce: string } | null) => Promise<{ accepted: boolean; scopeNonce: string | null }>;
+  launchCS2GameJoin?: (request: { scopeNonce: string; ticketId: string; ticket: string; targetUserId: string; offerRevision: number; accessToken: string; requestId: string }) => Promise<"forwarded" | "denied" | "expired" | "busy" | "unavailable" | "error">;
+  setRegisteredGameJoinAdapter?: (id: string, adapter: "none" | "cs2-steam") => Promise<boolean>;
   getRegisteredGameActivity?: () => Promise<ElectronRegisteredGameActivity>;
   setRegisteredGamesBackgroundDetection?: (enabled: boolean) => Promise<boolean>;
   /** Ask the main process to select and register a local .exe; paths never cross IPC. */

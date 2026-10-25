@@ -18,6 +18,7 @@ export interface RegisteredGameRecord {
   executablePath: string;
   displayName: string;
   shareAllowed: boolean;
+  joinAdapter: "none" | "cs2-steam";
   overlayAllowed: boolean;
   lastSeenAt: string | null;
 }
@@ -27,6 +28,7 @@ export interface PublicRegisteredGame {
   displayName: string;
   executableName: string;
   shareAllowed: boolean;
+  joinAdapter: "none" | "cs2-steam";
   overlayAllowed: boolean;
   availability: "available" | "missing" | "unreadable";
   running: boolean | null;
@@ -42,7 +44,7 @@ export interface RegisteredGamesSnapshot {
 
 export interface RegisteredGameActivity {
   enabled: boolean;
-  game: { id: string; name: string } | null;
+  game: { id: string; name: string; canonicalGameId?: "steam:730" } | null;
 }
 
 export interface RegisteredGamesOptions {
@@ -176,6 +178,7 @@ function normalizeRecord(value: unknown): RegisteredGameRecord | null {
     executablePath,
     displayName: (() => { try { return validateGameDisplayName(row.displayName); } catch { return safeDisplayName(filename); } })(),
     shareAllowed: row.shareAllowed === true,
+    joinAdapter: row.joinAdapter === "cs2-steam" ? "cs2-steam" : "none",
     overlayAllowed: row.overlayAllowed === true,
     lastSeenAt,
   };
@@ -422,7 +425,7 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       const previous = cloneRecords(games);
       const record: RegisteredGameRecord = {
         id: makeId(), executablePath: resolved, displayName: safeDisplayName(filename),
-        shareAllowed: false, overlayAllowed: false, lastSeenAt: null,
+        shareAllowed: false, joinAdapter: "none", overlayAllowed: false, lastSeenAt: null,
       };
       games.push(record);
       try {
@@ -442,6 +445,7 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       displayName: record.displayName,
       executableName: path.win32.basename(record.executablePath),
       shareAllowed: record.shareAllowed,
+      joinAdapter: record.joinAdapter,
       overlayAllowed: record.overlayAllowed,
       availability,
       running,
@@ -478,7 +482,8 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       const selected = cached.games
         .filter((game) => game.running === true && game.availability === "available" && currentRecords.get(game.id)?.shareAllowed === true)
         .sort((left, right) => left.id.localeCompare(right.id))[0];
-      return { enabled: true, game: selected ? { id: selected.id, name: selected.name } : null };
+      return { enabled: true, game: selected ? { id: selected.id, name: selected.name,
+        ...(currentRecords.get(selected.id)?.joinAdapter === "cs2-steam" ? { canonicalGameId: "steam:730" as const } : {}) } : null };
     },
     async setBackgroundDetectionEnabled(enabled: boolean): Promise<boolean> {
       if (typeof enabled !== "boolean") throw new TypeError("background detection setting must be boolean");
@@ -515,6 +520,21 @@ export function createRegisteredGamesService(options: RegisteredGamesOptions) {
       clearBackgroundActivity();
     },
     addExecutable,
+    async setJoinAdapter(id: string, adapter: unknown): Promise<boolean> {
+      if (adapter !== "none" && adapter !== "cs2-steam") throw new TypeError("Unsupported game join adapter.");
+      if (disposed || platform !== "win32") return false;
+      return serialize(async () => {
+        const games = await load();
+        const game = games.find(row => row.id === id);
+        if (!game) return false;
+        if (game.joinAdapter === adapter) return true;
+        const previous = cloneRecords(games);
+        game.joinAdapter = adapter;
+        try { await persist(); } catch (error) { records = previous; throw error; }
+        clearBackgroundActivity();
+        return true;
+      });
+    },
     async setDisplayName(id: string, value: unknown): Promise<boolean> {
       const displayName = validateGameDisplayName(value);
       if (disposed || platform !== "win32") return false;

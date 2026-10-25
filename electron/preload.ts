@@ -6,6 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer } from "electron";
+import type { GameJoinContext, GameJoinContextAck, CS2JoinRequest, CS2JoinStatus } from "./cs2-join-controller";
 import type {
   PublicRegisteredGame as ElectronRegisteredGame,
   RegisteredGameActivity as ElectronRegisteredGameActivity,
@@ -13,6 +14,9 @@ import type {
 } from "./registered-games";
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  syncGameJoinContext: (context: GameJoinContext | null): Promise<GameJoinContextAck> => ipcRenderer.invoke("sync-game-join-context", context),
+  launchCS2GameJoin: (request: CS2JoinRequest): Promise<CS2JoinStatus> => ipcRenderer.invoke("launch-cs2-game-join", request),
+  setRegisteredGameJoinAdapter: (id: string, adapter: "none" | "cs2-steam"): Promise<boolean> => ipcRenderer.invoke("set-registered-game-join-adapter", id, adapter),
   // ─── Invoke-style IPC (renderer → main → response) ───
 
   /** App version from package.json */

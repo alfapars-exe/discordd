@@ -1,0 +1,257 @@
+[
+  {
+    "name": "public lobby",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851",
+    "valid": true
+  },
+  {
+    "name": "MMS lobby flag",
+    "invite": "steam://joinlobby/730/109775240917155963/76561197960265851",
+    "valid": true
+  },
+  {
+    "name": "lobby instance lower bits",
+    "invite": "steam://joinlobby/730/109229883149778943/76561202255233023",
+    "valid": true
+  },
+  {
+    "name": "decimal0",
+    "invite": "steam://joinlobby/730/0/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal1",
+    "invite": "steam://joinlobby/730/00/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal2",
+    "invite": "steam://joinlobby/730/0109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal3",
+    "invite": "steam://joinlobby/730/+109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal4",
+    "invite": "steam://joinlobby/730/-109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal5",
+    "invite": "steam://joinlobby/730/1e17/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal6",
+    "invite": "steam://joinlobby/730/18446744073709551616/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal7",
+    "invite": "steam://joinlobby/730/999999999999999999999999999999/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal8",
+    "invite": "steam://joinlobby/730/109212290963734651\n/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal9",
+    "invite": "steam://joinlobby/730/\uff11\uff12\uff13/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "decimal10",
+    "invite": "steam://joinlobby/730/%3109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind0",
+    "invite": "steam://joinlobby/730/76561197960265851/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind1",
+    "invite": "steam://joinlobby/730/103582791429521531/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind2",
+    "invite": "steam://joinlobby/730/108086391056892027/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind3",
+    "invite": "steam://joinlobby/730/110338190870577275/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind4",
+    "invite": "steam://joinlobby/730/108649341010313339/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind5",
+    "invite": "steam://joinlobby/730/109229883149779067/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind6",
+    "invite": "steam://joinlobby/730/109212290963734528/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind7",
+    "invite": "steam://joinlobby/730/37154696925806593/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind8",
+    "invite": "steam://joinlobby/730/181269885001662465/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "lobby kind9",
+    "invite": "steam://joinlobby/730/18411841176597430273/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "inviter kind0",
+    "invite": "steam://joinlobby/730/109212290963734651/109212290963734651",
+    "valid": false
+  },
+  {
+    "name": "inviter kind1",
+    "invite": "steam://joinlobby/730/109212290963734651/85568397215006843",
+    "valid": false
+  },
+  {
+    "name": "inviter kind2",
+    "invite": "steam://joinlobby/730/109212290963734651/103582791429521531",
+    "valid": false
+  },
+  {
+    "name": "inviter kind3",
+    "invite": "steam://joinlobby/730/109212290963734651/76561193665298555",
+    "valid": false
+  },
+  {
+    "name": "inviter kind4",
+    "invite": "steam://joinlobby/730/109212290963734651/76561202255233147",
+    "valid": false
+  },
+  {
+    "name": "inviter kind5",
+    "invite": "steam://joinlobby/730/109212290963734651/76561210845167739",
+    "valid": false
+  },
+  {
+    "name": "inviter kind6",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265728",
+    "valid": false
+  },
+  {
+    "name": "inviter kind7",
+    "invite": "steam://joinlobby/730/109212290963734651/148618791998193665",
+    "valid": false
+  },
+  {
+    "name": "grammar0",
+    "invite": "https://joinlobby/730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar1",
+    "invite": "STEAM://joinlobby/730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar2",
+    "invite": "steam://JoinLobby/730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar3",
+    "invite": "steam://joinlobby/570/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar4",
+    "invite": "steam://joinlobby/0730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar5",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851/",
+    "valid": false
+  },
+  {
+    "name": "grammar6",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851?x=1",
+    "valid": false
+  },
+  {
+    "name": "grammar7",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851#x",
+    "valid": false
+  },
+  {
+    "name": "grammar8",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851 --exec",
+    "valid": false
+  },
+  {
+    "name": "grammar9",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851\n",
+    "valid": false
+  },
+  {
+    "name": "grammar10",
+    "invite": " steam://joinlobby/730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar11",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851 ",
+    "valid": false
+  },
+  {
+    "name": "grammar12",
+    "invite": "steam://user:pass@joinlobby/730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar13",
+    "invite": "steam://joinlobby%2F730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar14",
+    "invite": "steam:\\joinlobby/730/109212290963734651/76561197960265851",
+    "valid": false
+  },
+  {
+    "name": "grammar15",
+    "invite": "file:///steam.exe",
+    "valid": false
+  },
+  {
+    "name": "grammar16",
+    "invite": "C:\\steam.exe --join",
+    "valid": false
+  },
+  {
+    "name": "grammar17",
+    "invite": "steam://run/730",
+    "valid": false
+  },
+  {
+    "name": "grammar18",
+    "invite": "steam://joinlobby/730/109212290963734651/76561197960265851/other",
+    "valid": false
+  }
+]

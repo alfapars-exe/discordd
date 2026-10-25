@@ -1,4 +1,5 @@
 import { createOverlayMediaBroker } from "./overlay-media-broker";
+import { registerCS2JoinIPC } from "./cs2-join-ipc";
 import { registerGameNameIPC } from "./registered-game-name-ipc";
 import {registerSystemAudioLeaseIPC}from "./system-audio-ipc";
 import {registerPTTLeaseHandlers}from "./ptt-ipc";
@@ -105,6 +106,11 @@ function diagStamp(): string {
 }
 
 export function registerIpcHandlers(): void {
+  const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
+    fetch: (url, init) => net.fetch(url, init), openExternal: url => shell.openExternal(url),
+    allowLoopback: !app.isPackaged, supported: process.platform === "win32",
+  });
+  app.once("before-quit", () => gameJoin.dispose());
   const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout.json") });
   configureVoiceOverlayLayout(overlayLayouts);
   ipcMain.handle("reset-overlay-layout", (event) => {
@@ -240,6 +246,11 @@ export function registerIpcHandlers(): void {
     return removed;
   });
   registerGameNameIPC(ipcMain, assertTrustedMainWindowSender, registeredGames);
+  ipcMain.handle("set-registered-game-join-adapter", (event, id: unknown, adapter: unknown) => {
+    assertTrustedMainWindowSender(event);
+    assertString(id, "registered game id", 64);
+    return registeredGames.setJoinAdapter(id, adapter);
+  });
 
   ipcMain.handle("set-registered-game-sharing", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);
