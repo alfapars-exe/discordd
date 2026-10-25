@@ -310,6 +310,10 @@ func main() {
 	// test (init_routes_test.go) stays stable for every deployment that
 	// doesn't set the env var. See pprof_debug.go for the full rationale.
 	registerPprofRoutes(mux, authMw)
+	musicBridge, err := startMusicWorkerBridge(mux)
+	if err != nil {
+		logx.Fatal("boot", "music worker setup failed", err)
+	}
 
 	// Wire the auth user-cache invalidator into the admin user service so a
 	// platform ban / hard-delete / admin-status change drops the cached user
@@ -379,7 +383,7 @@ func main() {
 
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// WebSocket upgrade bypasses CORS middleware — ws.CheckOrigin handles its own origin validation
-		if r.URL.Path == "/ws" {
+		if r.URL.Path == "/ws" || isMusicWorkerSocketPath(r.URL.Path) {
 			mux.ServeHTTP(w, r)
 			return
 		}
@@ -484,6 +488,7 @@ func main() {
 	if stopper, ok := svcs.MusicBot.(services.MusicBotStopper); ok {
 		stopper.StopAll()
 	}
+	musicBridge.Close()
 
 	stopRuntimeStats()
 	stopMaintenance()

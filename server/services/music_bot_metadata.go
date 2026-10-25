@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -62,6 +63,9 @@ func (b *musicMetadataBuffer) Write(p []byte) (int, error) {
 // installs keep working. ffmpegPath uses the same cached resolution for the
 // audio conversion pipeline.
 var ytDlpPath = sync.OnceValues(func() (string, error) {
+	if os.Getenv("HICHAT_MUSIC_EXECUTOR_SOCKET") != "" {
+		return exec.LookPath("hichat-media-exec")
+	}
 	return exec.LookPath("yt-dlp")
 })
 

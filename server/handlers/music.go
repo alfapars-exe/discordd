@@ -24,8 +24,8 @@ var musicHandlerLogger = logx.Component("handler.music")
 // up at 50 s, so the server must be able to answer before that.
 const playWriteDeadline = 45 * time.Second
 
-// Search extraction can take 20 s; retain bounded time to return its JSON
-// result beyond the global 15 s socket write limit.
+// Search extraction can take 20 s; leave bounded time to return its JSON
+// result or classified failure beyond the server's global 15 s write limit.
 const searchWriteDeadline = 25 * time.Second
 const maxMusicQueueMutationItems = 200
 

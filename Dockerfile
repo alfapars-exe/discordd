@@ -75,7 +75,9 @@ COPY --from=frontend /app/client/dist ./server/static/dist
 WORKDIR /app/server
 RUN CGO_ENABLED=1 GOOS=linux \
     go build -trimpath -ldflags="-s -w" -o /out/hichat-server . && \
-    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-pgprobe ./cmd/pgprobe
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-pgprobe ./cmd/pgprobe && \
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-media-exec ./cmd/hichat-media-exec && \
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-music-worker ./cmd/music-worker
 
 # YouTube challenge solving requires a JS runtime. Use the official Deno
 # binary image, pinned to a multiarch manifest (amd64 + arm64).
@@ -186,6 +188,8 @@ RUN ffmpeg -hide_banner -loglevel error -f lavfi -i anullsrc=r=48000:cl=stereo \
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server
 COPY --from=backend /out/hichat-pgprobe /app/hichat-pgprobe
+COPY --from=backend /out/hichat-media-exec /usr/local/bin/hichat-media-exec
+COPY --from=backend /out/hichat-music-worker /usr/local/bin/hichat-music-worker
 # HF exposes existing secrets through ephemeral BuildKit mounts. Validate the
 # actual PostgreSQL TLS endpoint before accepting a new production image. No
 # database writes, secret ARG/ENV layer, or certificate files are retained.
