@@ -7,6 +7,8 @@
 
 import { useCallback } from "react";
 import { useVoiceStore } from "../stores/voiceStore";
+import { useP2PCallStore } from "../stores/p2pCallStore";
+import { useGroupCallAudioControlStore, toggleGroupCallMicrophone } from "../stores/groupCallAudioControlStore";
 
 type VoiceActions = {
   joinVoice: (channelId: string) => Promise<void>;
@@ -31,6 +33,10 @@ export function useVoice({
   sendVoiceLeave,
   sendVoiceStateUpdate,
 }: UseVoiceParams): VoiceActions {
+  const groupNonce = useGroupCallAudioControlStore(state => state.control?.nonce ?? null);
+  const guildChannel = useVoiceStore(state => state.currentVoiceChannelId);
+  const p2pCall = useP2PCallStore(state => state.activeCall?.id ?? null);
+  const groupOnlyNonce = !guildChannel && !p2pCall ? groupNonce : null;
   const joinVoiceChannel = useVoiceStore((s) => s.joinVoiceChannel);
   const leaveVoiceChannel = useVoiceStore((s) => s.leaveVoiceChannel);
   const storeToggleMute = useVoiceStore((s) => s.toggleMute);
@@ -104,11 +110,18 @@ export function useVoice({
   }, [leaveVoiceChannel, sendVoiceLeave]);
 
   const toggleMute = useCallback(() => {
+    const activeGroup = useGroupCallAudioControlStore.getState().control;
+    const guild = useVoiceStore.getState().currentVoiceChannelId, privateCall = useP2PCallStore.getState().activeCall;
+    if (groupOnlyNonce) {
+      if (!guild && !privateCall && activeGroup?.nonce === groupOnlyNonce) toggleGroupCallMicrophone(groupOnlyNonce);
+      return; // A retained group command must never fall through to another call.
+    }
+    if (!guild && !privateCall && activeGroup) return; // Await the current owner-bound callback render.
     storeToggleMute();
 
     const { isMuted, isDeafened } = useVoiceStore.getState();
     sendVoiceStateUpdate({ is_muted: isMuted, is_deafened: isDeafened });
-  }, [storeToggleMute, sendVoiceStateUpdate]);
+  }, [storeToggleMute, sendVoiceStateUpdate, groupOnlyNonce]);
 
   const toggleDeafen = useCallback(() => {
     storeToggleDeafen();

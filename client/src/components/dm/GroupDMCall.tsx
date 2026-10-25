@@ -9,12 +9,16 @@ import GroupDMCallAudio from "./GroupDMCallAudio";
 import { privateCaptureConflict } from "../../audio/privateCallState";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
+import { bindGroupCallAudioControl, releaseGroupCallAudioControl } from "../../stores/groupCallAudioControlStore";
 import { useGroupDMStore } from "../../stores/groupDMStore";
 import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 import { useTranslation } from "react-i18next";
 
 export default function GroupDMCall({ credentials, onLeave }: { credentials: VoiceTokenResponse; onLeave: () => void }) {
   const { t } = useTranslation("voice");
+  const [controlNonce] = useState(() => crypto.randomUUID());
+  const [controlOwner] = useState(() => getAuthSessionSnapshot());
+  const deafened = useVoiceStore(state => state.isDeafened);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(() => !useVoiceStore.getState().isMuted);
   const guildCapture = useVoiceStore(state => !!state.currentVoiceChannelId);
   const privateCapture = useP2PCallStore(state => !!state.activeCall);
@@ -40,6 +44,14 @@ export default function GroupDMCall({ credentials, onLeave }: { credentials: Voi
   const admission = useEncryptedRoomAdmission({ enabled: true, token: credentials.token, scope: encryption.ownerScope, keyScope: encryption.keyScope,
     keyReady: encryption.keyReady && currentMediaEpoch, keyError: encryption.keyError, keyProvider, worker: e2eeWorker,
     roomOptions: options ?? {}, onError: onEncryptionError, allowRestore: (source) => source !== Track.Source.Microphone });
+  useLayoutEffect(() => {
+    const auth = controlOwner;
+    if (!auth.ownerId) return;
+    bindGroupCallAudioControl({ nonce: controlNonce, accountId: auth.ownerId, generation: auth.generation, groupId: credentials.channel_id,
+      manualMuted: !microphoneEnabled, effectiveMuted: !microphoneEnabled || deafened || conflict || !admission.publishReady, blocked: conflict,
+      toggle: () => { if (!privateCaptureConflict()) setMicrophoneEnabled(value => !value); } });
+  }, [controlNonce, controlOwner, credentials.channel_id, microphoneEnabled, deafened, conflict, admission.publishReady]);
+  useLayoutEffect(() => () => releaseGroupCallAudioControl(controlNonce), [controlNonce]);
   if (!admission.room || (!admission.connect && !admission.error)) return <section role={admission.error ? "alert" : "status"}>
     <p>{admission.error ? tE2ee("voiceE2eeError") : t("connecting")}</p><button type="button" onClick={onLeave}>{t("disconnect")}</button>
   </section>;
