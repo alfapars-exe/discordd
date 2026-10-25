@@ -13,8 +13,15 @@ let latest: VoiceOverlaySnapshot | null = null;
 let latestArea: VoiceOverlayWorkArea | null = null;
 const lifecycle = new VoiceOverlayLifecycle();
 const welcomeLifecycle = new OverlayWelcomeLifecycle();
+const goLiveLifecycle = new OverlayWelcomeLifecycle();
+let goLiveTimer: ReturnType<typeof setTimeout> | null = null;
+let goLiveNoticeSession: string | null = null;
 let welcomeTimer: ReturnType<typeof setTimeout> | null = null;
 function clearWelcome(): void {
+  goLiveLifecycle.hide();
+  goLiveNoticeSession = null;
+  if (goLiveTimer) clearTimeout(goLiveTimer);
+  goLiveTimer = null;
   welcomeLifecycle.hide();
   if (welcomeTimer) clearTimeout(welcomeTimer);
   welcomeTimer = null;
@@ -28,6 +35,19 @@ function publishWelcomeAfterShow(win: BrowserWindow): void {
     if (win === overlayWindow && !win.isDestroyed() && win.isVisible() && latest) win.webContents.send("voice-overlay-update", voiceOverlayPayload());
   }, Math.max(0, notice.expiresAt - Date.now()));
   welcomeTimer.unref?.();
+}
+function publishGoLiveAfterShow(win: BrowserWindow): void {
+  if (!latest || win.isDestroyed() || !win.isVisible()) return;
+  const eligible = process.platform === "win32" && latest.voiceOverlayMode === "game"
+    && layoutContext.startsWith("game:") && latest.voiceOverlayGoLive === true && latest.goLiveEligible === true && !!latest.goLiveSession;
+  const notice = goLiveLifecycle.shown(layoutContext, eligible, Date.now(), latest.overlayNotificationDurationMs);
+  if (!notice || goLiveTimer) return;
+  goLiveNoticeSession = latest.goLiveSession ?? null;
+  goLiveTimer = setTimeout(() => {
+    goLiveTimer = null;
+    if (win === overlayWindow && !win.isDestroyed() && win.isVisible() && latest) win.webContents.send("voice-overlay-update", voiceOverlayPayload());
+  }, Math.max(0, notice.expiresAt - Date.now()));
+  goLiveTimer.unref?.();
 }
 let unlocked = false;
 let layoutPoint: OverlayLayoutPoint | null = null;
@@ -62,7 +82,9 @@ let lastChatComposeActionAt = 0;
 function voiceOverlayPayload() {
   if (!latest) return null;
   const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return { ...latest, welcomeHeight: geometry?.welcomeHeight ?? 0,
+  return { ...latest, goLiveHeight: geometry?.goLiveHeight ?? 0,
+    goLive: geometry?.goLiveHeight && latest.voiceOverlayGoLive && latest.goLiveEligible && latest.goLiveSession === goLiveNoticeSession ? goLiveLifecycle.current(Date.now()) : null,
+    welcomeHeight: geometry?.welcomeHeight ?? 0,
     welcome: geometry?.welcomeHeight && latest.voiceOverlayWelcome ? welcomeLifecycle.current(Date.now()) : null,
     voiceOverlayMaxParticipants: geometry?.effectiveMaxParticipants ?? 0,
     voiceOverlayActivity: geometry?.activityVisible ?? false,
@@ -624,6 +646,12 @@ function ensureOverlay(): BrowserWindow {
 }
 
 export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceOverlayWorkArea, context?: string): void {
+  if (process.platform !== "win32") snapshot = { ...snapshot, goLiveEligible: false };
+  if (!snapshot.voiceOverlayGoLive || !snapshot.goLiveEligible || !snapshot.goLiveSession || (latest !== null && latest.goLiveSession !== snapshot.goLiveSession)) {
+    goLiveLifecycle.dismiss();
+    if (goLiveTimer) clearTimeout(goLiveTimer);
+    goLiveTimer = null;
+  }
   if (!snapshot.enabled) clearWelcome();
   if (!snapshot.enabled || !snapshot.voiceOverlayQuickActions) actionShapeFailed = false;
   if (!snapshot.enabled || !snapshot.voiceOverlayNotifications || !snapshot.voiceOverlayNotificationActions || !snapshot.notificationActionSession) notificationActionShapeFailed = false;
@@ -701,6 +729,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
       win.showInactive();
       publishWelcomeAfterShow(win);
+      publishGoLiveAfterShow(win);
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
       updateMousePolicy();
       updateNotificationActionWindow();

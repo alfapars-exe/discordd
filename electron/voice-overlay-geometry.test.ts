@@ -191,3 +191,15 @@ test("welcome reserves a bounded row without creating an overlay or displacing a
   assert.equal(tiny.shouldShow, true);
   assert.ok(tiny.height <= 115);
 });
+
+
+test("Go Live guidance reserves bounded room only for an eligible game overlay and never creates content", () => {
+  const source = snapshot({ voiceOverlayMode: "game", voiceOverlayGoLive: true, goLiveEligible: true, voiceOverlayWelcome: true, participants: [{ id: "one", name: "One", avatarUrl: "", speaking: true, muted: false, deafened: false }] });
+  const area = { x: 0, y: 0, width: 900, height: 700 };
+  const geometry = calculateVoiceOverlayGeometry(source, area)!;
+  assert.equal(geometry.goLiveHeight, 64); assert.equal(geometry.welcomeHeight, 32);
+  assert.equal(calculateVoiceOverlayGeometry({ ...source, goLiveEligible: false }, area)?.goLiveHeight, 0);
+  assert.equal(calculateVoiceOverlayGeometry({ ...source, voiceOverlayMode: "desktop" }, area)?.goLiveHeight, 0);
+  assert.equal(calculateVoiceOverlayGeometry(source, { ...area, height: 180 })?.goLiveHeight, 0);
+  assert.equal(calculateVoiceOverlayGeometry({ ...source, participants: [], voiceOverlayMaxParticipants: 0 }, area)?.shouldShow, false);
+});

@@ -20,5 +20,7 @@ export class OverlayWelcomeLifecycle {
     return this.notice ? { ...this.notice } : null;
   }
 
+  dismiss(): void { this.notice = null; }
+
   hide(): void { this.context = null; this.notice = null; }
 }

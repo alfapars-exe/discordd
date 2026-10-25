@@ -30,6 +30,7 @@ import { useRttPolling } from "../../hooks/useRttPolling";
 import { useConnectionQualitySync } from "../../hooks/useConnectionQualitySync";
 import { useVolumeSync } from "../../hooks/useVolumeSync";
 import { useAudioPlayoutTuning } from "../../hooks/useAudioPlayoutTuning";
+import { useOverlayGoLiveReadiness } from "../../hooks/useOverlayGoLiveReadiness";
 import { useScreenShareToggle } from "../../hooks/useScreenShareToggle";
 import { useScreenShareStats } from "../../hooks/useScreenShareStats";
 import { useScreenShareReceiverStats } from "../../hooks/useScreenShareReceiverStats";
@@ -47,6 +48,7 @@ import "../../audio/audioDoctor";
 function VoiceStateManager() {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
+  useOverlayGoLiveReadiness(room, localParticipant);
   useCameraDeviceSync(room);
 
   // Skip effects until initial connection sync is done

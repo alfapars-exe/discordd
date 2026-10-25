@@ -330,6 +330,8 @@
   "voiceOverlayClickableActionsDesc": "Kilitliyken yalnız sustur ve sağırlaştır düğmeleri tıklama alır; diğer alanlar tıklamaları geçirir. Düğme tıklamaları cihazda doğrulanır; imleç geçmişi kaydedilmez.",
   "voiceOverlayActivity": "Paylaşılan arkadaş etkinliğini göster",
   "voiceOverlayActivityDesc": "Yalnızca arkadaşlarının seninle zaten paylaştığı ve burada görünür olan etkinliği gösterir. Bu cihazın işlem listesini okumaz veya sahte oyun katılımları üretmez. Canlı etkinlik gösterimi Windows masaüstü katmanında desteklenir; web önizlemesi canlı etkinlik göstermez.",
+  "voiceOverlayGoLive": "Yayın rehberini göster",
+  "voiceOverlayGoLiveDesc": "Windows oyun katmanı gerçekten açıldığında, bağlı ses kanalında yayın izni ve ekran yakalama desteği varsa gösterir. Yayın başlatmaz.",
   "voiceOverlayWelcome": "Arayüz açılış bildirimini göster",
   "voiceOverlayWelcomeDesc": "Desteklenen yerel katman gerçekten görünür olduğunda bir kez gösterir. Açık katmanda tercihi değiştirmek yeni bildirim üretmez.",
   "voiceOverlayNotifications": "Okunmamış bildirim göstergelerini göster",

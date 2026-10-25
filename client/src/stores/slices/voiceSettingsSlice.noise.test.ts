@@ -96,6 +96,7 @@ describe("device-local voice overlay presentation preferences", () => {
     store.getState().setVoiceOverlayClickableActions(true);
     store.getState().setVoiceOverlayActivity(true);
     store.getState().setVoiceOverlayWelcome(true);
+    store.getState().setVoiceOverlayGoLive(true);
     store.getState().setVoiceOverlayNotifications(true);
     store.getState().setVoiceOverlayNotificationActions(true);
     store.getState().setVoiceOverlayChat(true);
@@ -111,6 +112,7 @@ describe("device-local voice overlay presentation preferences", () => {
       voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
       voiceOverlayActivity: true,
       voiceOverlayWelcome: true,
+      voiceOverlayGoLive: true,
       voiceOverlayNotifications: true,
       voiceOverlayNotificationActions: true,
       voiceOverlayChat: true,
@@ -135,6 +137,7 @@ describe("device-local voice overlay presentation preferences", () => {
     store.getState().setVoiceOverlayClickableActions(true);
     store.getState().setVoiceOverlayActivity(true);
     store.getState().setVoiceOverlayWelcome(true);
+    store.getState().setVoiceOverlayGoLive(true);
     store.getState().setVoiceOverlayNotifications(true);
     store.getState().setVoiceOverlayNotificationActions(true);
     store.getState().setVoiceOverlayChat(true);
@@ -152,6 +155,7 @@ describe("device-local voice overlay presentation preferences", () => {
       voiceOverlayQuickActions: true, voiceOverlayClickableActions: true,
       voiceOverlayActivity: true,
       voiceOverlayWelcome: true,
+      voiceOverlayGoLive: true,
       voiceOverlayNotifications: true,
       voiceOverlayNotificationActions: true,
       voiceOverlayChat: true,

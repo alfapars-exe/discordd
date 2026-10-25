@@ -299,3 +299,9 @@ test("welcome accepts a boolean preference and bounded accessibility duration, n
   for (const patch of [{ voiceOverlayWelcome: 1 }, { overlayNotificationDurationMs: 0 }, { overlayNotificationDurationMs: 20001 }, { overlayNotificationDurationMs: 3000.5 }, { welcome: { id: 1, expiresAt: 999999 } }, { welcomeHeight: 32 }]) assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), ...patch }), null);
   assert.equal(parseVoiceOverlaySnapshot(validSnapshot())?.voiceOverlayWelcome, undefined);
 });
+
+
+test("Go Live is optional bounded booleans only; renderer cannot author a native activation", () => {
+  assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), voiceOverlayGoLive: true, goLiveEligible: true, goLiveSession: "room-a" })?.goLiveEligible, true);
+  for (const patch of [{ voiceOverlayGoLive: 1 }, { goLiveEligible: "true" }, { voiceOverlayGoLive: true, goLiveEligible: true }, { goLiveSession: "bad\nroom" }, { goLive: { id: 1, expiresAt: 99999 } }, { goLiveHeight: 64 }]) assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), ...patch }), null);
+});

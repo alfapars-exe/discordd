@@ -330,6 +330,8 @@
   "voiceOverlayClickableActionsDesc": "When locked, only its mute and deafen buttons receive clicks; other areas pass clicks through. Button clicks are validated locally; no pointer history is recorded.",
   "voiceOverlayActivity": "Show shared friend activity",
   "voiceOverlayActivityDesc": "Shows only activity friends have already shared with you and that is visible here. It never reads this device's process list or invents game joins. Live activity display is supported by the Windows desktop overlay; the web preview does not show live activity.",
+  "voiceOverlayGoLive": "Show Go Live guidance",
+  "voiceOverlayGoLiveDesc": "Shows when the Windows game overlay actually opens, if the connected voice channel permits publishing and screen capture is supported. Does not start a stream.",
   "voiceOverlayWelcome": "Show overlay welcome notice",
   "voiceOverlayWelcomeDesc": "Shows once when the supported native overlay actually becomes visible. Changing this preference in an open overlay does not create a notice.",
   "voiceOverlayNotifications": "Show unread notification indicators",

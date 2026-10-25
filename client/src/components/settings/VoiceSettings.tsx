@@ -43,6 +43,8 @@ function VoiceSettings() {
   const overlayPinned = useVoiceStore((s) => s.voiceOverlayPinned);
   const overlayQuickActions = useVoiceStore((s) => s.voiceOverlayQuickActions);
   const overlayClickableActions = useVoiceStore((s) => s.voiceOverlayClickableActions);
+  const overlayGoLive = useVoiceStore(s => s.voiceOverlayGoLive);
+  const setOverlayGoLive = useVoiceStore(s => s.setVoiceOverlayGoLive);
   const overlayWelcome = useVoiceStore((s) => s.voiceOverlayWelcome);
   const setOverlayWelcome = useVoiceStore((s) => s.setVoiceOverlayWelcome);
   const overlayActivity = useVoiceStore((s) => s.voiceOverlayActivity);
@@ -410,6 +412,7 @@ function VoiceSettings() {
           {overlayResetResult === "success" && <p className="vs-desc" role="status">{t("voiceOverlayResetSuccess")}</p>}
         </div>
         <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayWelcome")}</div><div className="vs-desc">{t("voiceOverlayWelcomeDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayWelcome")} checked={overlayWelcome} onChange={(e) => setOverlayWelcome(e.target.checked)} /><span className="vs-switch-slider" /></label></div>
+        <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayGoLive")}</div><div className="vs-desc">{t("voiceOverlayGoLiveDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayGoLive")} checked={overlayGoLive} onChange={(e) => setOverlayGoLive(e.target.checked)} /><span className="vs-switch-slider" /></label></div>
         {overlayEnabled && (
           <>
             <div className="vs-label">{t("voiceOverlaySpeakingOpacity", { defaultValue: "Konuşan opaklığı" })} ({overlaySpeakingOpacity}%)</div>

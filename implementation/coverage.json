@@ -7738,7 +7738,7 @@
       "id": "p11.overlay-live",
       "title": "Overlay Go Live notification",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
@@ -7750,8 +7750,8 @@
       "acceptance": [
         "Shows actual stream availability/start guidance and opens working share flow."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useOverlayGoLiveReadiness.ts", "client/src/stores/overlayGoLiveStore.ts", "client/src/components/voice/VoiceStateManager.tsx", "electron/voice-overlay.ts", "electron/voice-overlay-contract.ts"],
+      "evidence": ["implementation/verification/p11-overlay-golive-guidance-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-game-activity",

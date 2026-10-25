@@ -83,6 +83,7 @@ import { useMemberStore } from "../../stores/memberStore";
 import { useRoleStore } from "../../stores/roleStore";
 import { useUIStore, type TabServerInfo } from "../../stores/uiStore";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { useOverlayGoLiveStore } from "../../stores/overlayGoLiveStore";
 import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useReadStateStore } from "../../stores/readStateStore";
@@ -105,6 +106,9 @@ function AppLayout() {
     useWebSocket();
   useThreadReconnectRefresh(connectionStatus === "connected");
   const overlayNotificationDurationMs = useAccessibilityStore(s => s.notificationDuration * 1000);
+  const overlayGoLive = useVoiceStore(s => s.voiceOverlayGoLive);
+  const goLiveSession = useOverlayGoLiveStore(s => s.session);
+  const goLiveEligible = useOverlayGoLiveStore(s => s.eligible) && connectionStatus === "connected";
   const overlayWelcome = useVoiceStore((s) => s.voiceOverlayWelcome);
   const overlayEnabled = useVoiceStore((s) => s.voiceOverlayEnabled);
   const overlayChatEnabled = useVoiceStore((s) => s.voiceOverlayChat);
@@ -149,8 +153,8 @@ function AppLayout() {
     }));
     const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, ...(notificationActionSession ? { notificationActionSession } : {}) };
     const chatSnapshot = { voiceOverlayChat: overlayChatEnabled, ...(overlayChatEnabled ? { ...overlayChat, voiceOverlayChatActions: overlayChatActions, ...(chatActionSession ? { chatActionSession } : {}), voiceOverlayChatCompose: overlayChatCompose, ...(chatComposeSession ? { chatComposeSession, chatComposeLabel } : {}) } : {}) };
-    window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
-  }, [overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+    window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, voiceOverlayWelcome: overlayWelcome, voiceOverlayGoLive: overlayGoLive, goLiveEligible, ...(goLiveEligible && goLiveSession ? { goLiveSession } : {}), overlayNotificationDurationMs, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
+  }, [overlayRenderOwner, overlayRenderGeneration, overlayWelcome, overlayGoLive, goLiveEligible, goLiveSession, overlayNotificationDurationMs, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
   useNavigationHistory();
 
   // Idle detection — auto-set "idle" after 5min inactivity

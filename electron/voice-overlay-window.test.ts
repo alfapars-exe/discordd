@@ -24,12 +24,12 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   class FakeWindow extends EventEmitter {
     visible = false; destroyed = false; ignored = true;
     x = 0; y = 0; width = 300; height = 420;
-    sent: Array<{ welcome?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
+    sent: Array<{ welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
     shape: Array<{ x: number; y: number; width: number; height: number }> = [];
     webContents = Object.assign(new EventEmitter(), {
       mainFrame: {},
       isLoading: () => false,
-      send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
+      send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; goLive?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
     });
     focusCount = 0;
     constructor(public options: Record<string, unknown>) { super(); if (options.width === 360 && options.height === 180) chatComposerWin = this; else if (options.width === 88 && options.height === 40) actionWin = this; else if (options.width !== 88 || options.height !== 20) win = this; }
@@ -382,5 +382,33 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(win.sent[win.sent.length - 1]!.welcome, null);
   exports.updateVoiceOverlay(welcomeSnapshot, area);
   assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "turning on a preference in an already visible overlay is not a show");
+  exports.closeVoiceOverlay();
+  const goLiveSnapshot = { ...snapshot, voiceOverlayGoLive: true, goLiveEligible: false };
+  exports.updateVoiceOverlay(goLiveSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "unready room cannot advertise sharing");
+  exports.updateVoiceOverlay({ ...goLiveSnapshot, goLiveEligible: true }, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "late readiness is not another real overlay activation");
+  exports.updateVoiceOverlay({ ...goLiveSnapshot, enabled: false }, area, context);
+  const readyGoLive = { ...goLiveSnapshot, goLiveEligible: true, goLiveSession: "room-a" };
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  const firstGoLive = win.sent[win.sent.length - 1].goLive!;
+  assert.ok(firstGoLive && firstGoLive.expiresAt === now + 5000);
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive!.id, firstGoLive.id);
+  exports.updateVoiceOverlay({ ...readyGoLive, goLiveSession: "replacement-room" }, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "a room replacement cannot inherit the previous activation guide");
+  exports.updateVoiceOverlay(goLiveSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "losing readiness dismisses the active guide immediately");
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "regaining readiness never replays the same activation");
+  exports.updateVoiceOverlay({ ...readyGoLive, enabled: false }, area, context);
+  exports.updateVoiceOverlay(readyGoLive, area, context);
+  assert.ok(win.sent[win.sent.length - 1].goLive!.id > firstGoLive.id);
+  now += 5001;
+  for (const timeout of Array.from(timeouts)) timeout();
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "guide expires without starting a stream");
+  exports.closeVoiceOverlay();
+  exports.updateVoiceOverlay({ ...readyGoLive, voiceOverlayMode: "desktop" }, area, "desktop");
+  assert.equal(win.sent[win.sent.length - 1].goLive, null, "desktop-only overlay does not claim a detected game");
   exports.closeVoiceOverlay();
 });

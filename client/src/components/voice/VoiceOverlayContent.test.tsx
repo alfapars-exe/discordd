@@ -409,3 +409,15 @@ it("renders only an actual native welcome notice and expires locally without ano
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   } finally { vi.useRealTimers(); }
 });
+
+
+it("shows Go Live guidance without any capture action and removes it on readiness loss", () => {
+  const source = snapshot("top-left", { voiceOverlayGoLive: true, goLiveEligible: true, goLiveHeight: 64, goLive: { id: 1, expiresAt: Date.now() + 5000 } });
+  const view = render(<VoiceOverlayContent snapshot={source} />);
+  expect(screen.getByRole("status")).toHaveTextContent("overlayGoLiveGuidance");
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  view.rerender(<VoiceOverlayContent snapshot={{ ...source, goLiveEligible: false }} />);
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  view.rerender(<VoiceOverlayContent snapshot={{ ...source, goLive: null }} />);
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
