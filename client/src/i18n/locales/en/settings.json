@@ -1,4 +1,8 @@
 {
+  "audioDevicePermissionHint": "Opening settings does not activate your microphone. Start the microphone test or a call to grant access and reveal device names.",
+  "audioDevicesUnsupported": "Audio device listing is unavailable in this browser or connection.",
+  "audioDevicesFailed": "Audio devices could not be listed. Reconnect the device and try again.",
+  "audioDevicesRefresh": "Refresh audio devices",
   "gamesGroup": "Games",
   "activityPrivacyTitle": "Game activity privacy",
   "activityPrivacyDescription": "Manage game activity sharing with friends and people in selected servers.",

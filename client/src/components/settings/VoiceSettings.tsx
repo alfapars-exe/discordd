@@ -117,7 +117,7 @@ function VoiceSettings() {
   };
 
   // ─── Device list + mic test (pipelines live in the hooks) ───
-  const { audioInputs, audioOutputs } = useAudioDevices();
+  const { audioInputs, audioOutputs, error: deviceError, loading: devicesLoading, refresh: refreshDevices } = useAudioDevices();
   const { isTesting, toggleTesting, micLevel, error: micTestError } = useMicTest();
   const microphoneStatus = useMicrophoneStatus();
   const engineLabel = (engine: string | null) => t(engine ? engineLabels[engine] ?? "audioPipelineUnknown" : "audioPipelineNoEngine");
@@ -132,6 +132,11 @@ function VoiceSettings() {
   return (
     <div className="voice-settings">
       <h2 className="settings-section-title">{t("voiceSettings")}</h2>
+      <div className="vs-section">
+        <p className="vs-desc">{t("audioDevicePermissionHint")}</p>
+        {deviceError && <p role="alert">{t(deviceError === "unsupported" ? "audioDevicesUnsupported" : "audioDevicesFailed")}</p>}
+        <button type="button" disabled={devicesLoading || deviceError === "unsupported"} onClick={() => { void refreshDevices(); }}>{t("audioDevicesRefresh")}</button>
+      </div>
 
       {/* ─── Input Mode ─── */}
       <div className="vs-section">

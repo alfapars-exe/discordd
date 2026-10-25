@@ -1,4 +1,8 @@
 {
+  "audioDevicePermissionHint": "Ayarları açmak mikrofonunu etkinleştirmez. Erişim izni vermek ve cihaz adlarını görmek için mikrofon testini veya bir aramayı başlat.",
+  "audioDevicesUnsupported": "Bu tarayıcıda veya bağlantıda ses cihazları listelenemiyor.",
+  "audioDevicesFailed": "Ses cihazları listelenemedi. Cihazı yeniden bağlayıp tekrar dene.",
+  "audioDevicesRefresh": "Ses cihazlarını yenile",
   "gamesGroup": "Oyunlar",
   "activityPrivacyTitle": "Oyun etkinliği gizliliği",
   "activityPrivacyDescription": "Oyun etkinliğini arkadaşlarınla ve seçtiğin sunuculardaki kişilerle paylaşmayı yönet.",
