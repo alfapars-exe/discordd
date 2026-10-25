@@ -1,4 +1,5 @@
 {
+  "overlayWelcomeNotice": "HiChat oyun arayüzü açık",
   "shortcutLofi": "Yerel lo-fi oynatıcısını aç",
   "lofiTitle": "HiChat Lo-fi",
   "lofiPermissionError": "Ses izni reddedildi. Tarayıcı veya sistem ayarlarından HiChat için sese izin verip Oynat ile yeniden deneyin.",

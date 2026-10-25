@@ -1,4 +1,5 @@
 {
+  "overlayWelcomeNotice": "HiChat overlay is active",
   "shortcutLofi": "Open the local lo-fi player",
   "lofiTitle": "HiChat Lo-fi",
   "lofiPermissionError": "Audio permission was denied. Allow audio for HiChat in your browser or system settings, then retry Play.",

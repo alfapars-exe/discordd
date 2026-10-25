@@ -5916,7 +5916,7 @@
       "id": "p8.chat-shortcuts",
       "title": "Default chat shortcuts",
       "phase": "P8",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R17"
       ],
@@ -5931,7 +5931,9 @@
       ],
       "code": ["client/src/utils/shortcutRegistry.ts", "client/src/utils/conversationCommands.ts", "client/src/utils/oldestUnreadShortcut.ts", "client/src/hooks/useConversationPageShortcut.ts", "client/src/hooks/useFocusComposerOnTyping.ts", "client/src/hooks/useInboxReadTopShortcut.ts", "client/src/components/layout/DestinationView.tsx"],
       "evidence": ["implementation/verification/p8-actions-2026-10-24.json", "implementation/verification/p8-dm-group-unread-2026-10-24.json", "implementation/verification/p8-voice-text-2026-10-24.json", "implementation/verification/p8-private-read-upload-2026-10-25.json", "implementation/verification/p4-p8-group-expressions-pins-2026-10-25.json",
-        "implementation/verification/p8-read-shortcut-refresh-2026-10-25.json"
+        "implementation/verification/p8-read-shortcut-refresh-2026-10-25.json",
+        "implementation/verification/p8-inbox-read-bounds-2026-10-25.json",
+        "implementation/verification/p8-inbox-toggle-2026-10-25.json"
       ],
       "actions": [
         "Mark server read Shift+Escape",
@@ -7717,7 +7719,7 @@
       "id": "p11.overlay-welcome",
       "title": "Overlay welcome notification",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R25"
       ],
@@ -7729,8 +7731,8 @@
       "acceptance": [
         "Shows once per real overlay activation only when enabled."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["electron/overlay-welcome.ts", "electron/voice-overlay.ts", "electron/voice-overlay-contract.ts", "client/src/components/voice/VoiceOverlayContent.tsx", "client/src/stores/slices/voiceSettingsSlice.ts"],
+      "evidence": ["implementation/verification/p11-overlay-welcome-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-live",

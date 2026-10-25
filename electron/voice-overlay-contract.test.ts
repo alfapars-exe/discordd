@@ -292,3 +292,10 @@ test("voice overlay IPC trusts only the live main window main frame", () => {
   assert.equal(isTrustedVoiceOverlaySender({ sender: webContents, senderFrame: webContents.mainFrame }, { ...mainWindow, isDestroyed: () => true }), false);
   assert.equal(isTrustedVoiceOverlaySender({ sender: webContents, senderFrame: webContents.mainFrame }, null), false);
 });
+
+
+test("welcome accepts a boolean preference and bounded accessibility duration, never a renderer-authored activation", () => {
+  assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), voiceOverlayWelcome: true, overlayNotificationDurationMs: 20000 })?.voiceOverlayWelcome, true);
+  for (const patch of [{ voiceOverlayWelcome: 1 }, { overlayNotificationDurationMs: 0 }, { overlayNotificationDurationMs: 20001 }, { overlayNotificationDurationMs: 3000.5 }, { welcome: { id: 1, expiresAt: 999999 } }, { welcomeHeight: 32 }]) assert.equal(parseVoiceOverlaySnapshot({ ...validSnapshot(), ...patch }), null);
+  assert.equal(parseVoiceOverlaySnapshot(validSnapshot())?.voiceOverlayWelcome, undefined);
+});

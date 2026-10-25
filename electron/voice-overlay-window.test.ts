@@ -15,6 +15,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   let chatActionWin!: FakeWindow;
   let chatComposerWin!: FakeWindow;
   let failShape = false;
+  let suppressShow = false;
   let cursor = { x: 0, y: 0 };
   let now = 1000;
   const timers = new Set<() => void>();
@@ -23,12 +24,12 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   class FakeWindow extends EventEmitter {
     visible = false; destroyed = false; ignored = true;
     x = 0; y = 0; width = 300; height = 420;
-    sent: Array<{ unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
+    sent: Array<{ welcome?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }> = [];
     shape: Array<{ x: number; y: number; width: number; height: number }> = [];
     webContents = Object.assign(new EventEmitter(), {
       mainFrame: {},
       isLoading: () => false,
-      send: (channel: string, value: { unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
+      send: (channel: string, value: { welcome?: { id: number; expiresAt: number } | null; unlocked?: boolean; layoutSaveFailed?: boolean; quickActionsUnavailable?: boolean; notificationActionsUnavailable?: boolean; activities?: Array<{ userId: string }>; notifications?: Array<{ id: string; category: string }>; voiceOverlayNotifications?: boolean; notificationActionSession?: string; voiceOverlayChat?: boolean; voiceOverlayChatActions?: boolean; voiceOverlayChatCompose?: boolean; chatStatus?: string; chatMessages?: Array<{ id: string; author: string; text: string }>; chatActionSession?: string; chatComposeSession?: string; chatComposeLabel?: string; participants?: unknown[] }) => { this.sent.push(value); if (channel === "overlay-chat-send" || channel === "overlay-chat-composer-closed") forwarded.push({ channel, value }); },
     });
     focusCount = 0;
     constructor(public options: Record<string, unknown>) { super(); if (options.width === 360 && options.height === 180) chatComposerWin = this; else if (options.width === 88 && options.height === 40) actionWin = this; else if (options.width !== 88 || options.height !== 20) win = this; }
@@ -39,7 +40,7 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
     setIgnoreMouseEvents(ignored: boolean) { this.ignored = ignored; }
     loadURL(url: string) { if (url.includes("surface=notification-actions")) notificationActionWin = this; if (url.includes("surface=chat-actions")) chatActionWin = this; if (url.includes("surface=chat-composer")) chatComposerWin = this; return Promise.resolve(); }
     hide() { this.visible = false; this.emit("hide"); }
-    showInactive() { this.visible = true; }
+    showInactive() { if (!suppressShow) this.visible = true; }
     show() { this.visible = true; }
     focus() { this.focusCount++; }
     setSize(width: number, height: number) { this.width = width; this.height = height; }
@@ -354,5 +355,32 @@ test("native overlay lock toggles only visible widgets and bounds unlocked game 
   assert.equal(win.sent[win.sent.length - 1].activities!.length, visibleCards, "unlock delivery preserves physical row limits");
   exports.lockVoiceOverlay();
   assert.equal(win.sent[win.sent.length - 1].activities!.length, visibleCards);
+  exports.closeVoiceOverlay();
+  const welcomeSnapshot = { ...snapshot, voiceOverlayWelcome: true };
+  suppressShow = true;
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1]?.welcome, null, "attempted but invisible native show cannot invent a welcome");
+  suppressShow = false;
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  const firstWelcome = win.sent[win.sent.length - 1]!.welcome!;
+  assert.ok(firstWelcome && firstWelcome.expiresAt === now + 5000);
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome!.id, firstWelcome.id, "routine snapshots do not replay welcome");
+  now += 5001;
+  for (const timeout of Array.from(timeouts)) timeout();
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "expiry updates the same native window");
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "expired welcome remains consumed for this activation");
+  exports.updateVoiceOverlay({ ...welcomeSnapshot, enabled: false }, area, context);
+  assert.equal(win.visible, false);
+  exports.updateVoiceOverlay(welcomeSnapshot, area, context);
+  assert.ok(win.sent[win.sent.length - 1]!.welcome!.id > firstWelcome.id, "real hidden-to-shown activation gets one fresh welcome");
+  const priorContextNotice = win.sent[win.sent.length - 1]!.welcome!.id;
+  exports.updateVoiceOverlay(welcomeSnapshot, area, "game:87654321-1234-1234-1234-123456789abc");
+  assert.ok(win.sent[win.sent.length - 1]!.welcome!.id > priorContextNotice, "new authorized game context gets a separate activation");
+  exports.updateVoiceOverlay({ ...welcomeSnapshot, voiceOverlayWelcome: false }, area);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null);
+  exports.updateVoiceOverlay(welcomeSnapshot, area);
+  assert.equal(win.sent[win.sent.length - 1]!.welcome, null, "turning on a preference in an already visible overlay is not a show");
   exports.closeVoiceOverlay();
 });

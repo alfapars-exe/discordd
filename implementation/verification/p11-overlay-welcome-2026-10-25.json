@@ -1,0 +1,16 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": "Default-off device preference displays a bounded welcome only after actual native overlay visibility. Main owns activation/context identity, deduplication and expiry; renderer cannot inject a notice. Existing window and privacy cleanup remain in use.",
+  "verification": [
+    "34 focused native tests and 41 focused client tests passed; native/client TypeScript and scoped ESLint passed.",
+    "Full native suite: 165 passed, zero failed, one existing physical-symlink case unavailable on this Windows host.",
+    "Readonly-source, network-disabled disposable Linux Node22 run executed all 9 overlay layout-store tests, including the actual symlink case, with zero skips.",
+    "Integrated client regression: 345 files, 3347 tests passed; integrated production Vite build passed."
+  ],
+  "remaining": [
+    "Actual Windows visibility, DPI/multiple monitors and account-switch acceptance remain open. Linux filesystem checks do not replace Windows device acceptance.",
+    "Video/stream widgets, independent widget geometry, correct-conversation notification reply and the other four reference notification types remain separate gaps."
+  ],
+  "release": "No new installer or production publication; 2.11.111 is unchanged."
+}

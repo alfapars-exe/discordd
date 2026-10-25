@@ -176,3 +176,18 @@ test("all four corners and negative-coordinate/tiny workareas stay inside bounds
   assert.equal(narrow.shouldShow, false);
   assert.equal(calculateVoiceOverlayGeometry(snapshot(), { x: 0, y: 0, width: Number.NaN, height: 10 }), null);
 });
+
+
+test("welcome reserves a bounded row without creating an overlay or displacing actions on tiny workareas", () => {
+  const area = { x: 0, y: 0, width: 900, height: 700 };
+  const original = snapshot({ voiceOverlayQuickActions: true, voiceActionSession: "call", participants: [{ id: "one", name: "One", avatarUrl: "", speaking: true, muted: false, deafened: false }] });
+  const base = calculateVoiceOverlayGeometry(original, area)!;
+  const withWelcome = calculateVoiceOverlayGeometry({ ...original, voiceOverlayWelcome: true }, area)!;
+  assert.equal(withWelcome.welcomeHeight, 32);
+  assert.equal(withWelcome.height, base.height + 32);
+  assert.equal(calculateVoiceOverlayGeometry({ ...original, voiceOverlayWelcome: true, participants: [], voiceOverlayMaxParticipants: 0, voiceOverlayQuickActions: false }, area)?.shouldShow, false);
+  const tiny = calculateVoiceOverlayGeometry({ ...original, voiceOverlayWelcome: true }, { ...area, height: 115 })!;
+  assert.equal(tiny.welcomeHeight, 0);
+  assert.equal(tiny.shouldShow, true);
+  assert.ok(tiny.height <= 115);
+});

@@ -8,6 +8,9 @@ export type VoiceOverlaySnapshot = {
   voiceOverlayClickableActions?: boolean;
   voiceOverlayNotificationActions?: boolean;
   voiceOverlayActivity?: boolean;
+  voiceOverlayWelcome?: boolean;
+  welcome?: { id: number; expiresAt: number } | null;
+  welcomeHeight?: number;
   activities?: Array<{ userId: string; label: string; gameName: string }>;
   voiceOverlayNotifications?: boolean;
   voiceOverlayChat?: boolean;
@@ -205,6 +208,16 @@ function ChatComposer({ session, label }: { session: string; label?: string }) {
   </section>;
 }
 
+function OverlayWelcomeNotice({ notice, bottom }: { notice: { id: number; expiresAt: number }; bottom: number }) {
+  const { t } = useTranslation("common");
+  const [visible, setVisible] = useState(() => notice.expiresAt > Date.now() && notice.expiresAt <= Date.now() + 20000);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(false), Math.max(0, notice.expiresAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [notice.expiresAt]);
+  return visible ? <div role="status" className="voice-overlay-welcome" style={{ position: "absolute", bottom, left: 8, right: 8, height: 32, boxSizing: "border-box", overflow: "hidden", padding: "6px", borderRadius: 6, background: "rgba(12, 14, 20, .96)", color: "#f4f6fb", fontSize: 12, lineHeight: "20px", pointerEvents: "none" }}>{t("overlayWelcomeNotice")}</div> : null;
+}
+
 export default function VoiceOverlayContent({ snapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
   const { t } = useTranslation("common");
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -252,6 +265,8 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const notificationRows = snapshot.notificationStatus === "ready" ? Math.max(1, notifications.length) : 1;
   const notificationHeight = showNotifications ? 20 + notificationRows * 32 : 0;
   const actionHeight = showActions ? 48 : 0;
+  const welcomeHeight = snapshot.voiceOverlayWelcome === true && snapshot.welcomeHeight === 32 ? 32 : 0;
+  const welcome = welcomeHeight && snapshot.welcome && Number.isSafeInteger(snapshot.welcome.id) && snapshot.welcome.id > 0 && Number.isFinite(snapshot.welcome.expiresAt) ? snapshot.welcome : null;
   const notificationLabels = {
     mention: "overlayNotificationMention",
     reply: "overlayNotificationReply",
@@ -265,8 +280,9 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
   const chatHasRows = snapshot.chatStatus === "ready" && chatMessages.length > 0;
   const chatHeight = showChat ? CHAT_HEADER_HEIGHT + (chatHasRows ? chatMessages.length : 1) * CHAT_ROW_MAX_HEIGHT : 0;
   return <div className="voice-overlay-root" data-position={snapshot.position} data-unlocked={snapshot.unlocked === true} data-actions={showActions}
-    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight }}>
+    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight }}>
     {toolbar}
+    {welcome && <OverlayWelcomeNotice key={welcome.id} notice={welcome} bottom={8 + actionHeight + activityHeight + notificationHeight} />}
     {showChat && <section className="voice-overlay-chat" aria-label={t("overlayChatTitle")}
       style={{ position: "absolute", top: 8, left: 8, right: 8, height: chatHeight, maxHeight: CHAT_MAX_HEIGHT, overflow: "hidden", boxSizing: "border-box", borderRadius: 6, background: "rgba(12, 14, 20, .94)", color: "#f4f6fb", zIndex: 2, pointerEvents: "none" }}>
       <header style={{ boxSizing: "border-box", height: CHAT_HEADER_HEIGHT, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, padding: "2px 6px", overflow: "hidden" }}>

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, screen } from "electron";
+import { OverlayWelcomeLifecycle } from "./overlay-welcome";
 import path from "node:path";
 import { isTrustedVoiceOverlaySender, VoiceOverlayLifecycle, type VoiceOverlaySnapshot } from "./voice-overlay-contract";
 import { INBOX_ACTION_HEIGHT, INBOX_ACTION_WIDTH, overlayActionAt, overlayNotificationActionAt, type OverlayAction as OverlayVoiceAction } from "./overlay-action-regions";
@@ -11,6 +12,23 @@ let overlayWindow: BrowserWindow | null = null;
 let latest: VoiceOverlaySnapshot | null = null;
 let latestArea: VoiceOverlayWorkArea | null = null;
 const lifecycle = new VoiceOverlayLifecycle();
+const welcomeLifecycle = new OverlayWelcomeLifecycle();
+let welcomeTimer: ReturnType<typeof setTimeout> | null = null;
+function clearWelcome(): void {
+  welcomeLifecycle.hide();
+  if (welcomeTimer) clearTimeout(welcomeTimer);
+  welcomeTimer = null;
+}
+function publishWelcomeAfterShow(win: BrowserWindow): void {
+  if (!latest || win.isDestroyed() || !win.isVisible()) return;
+  const notice = welcomeLifecycle.shown(layoutContext, latest.voiceOverlayWelcome === true, Date.now(), latest.overlayNotificationDurationMs);
+  if (!notice || welcomeTimer) return;
+  welcomeTimer = setTimeout(() => {
+    welcomeTimer = null;
+    if (win === overlayWindow && !win.isDestroyed() && win.isVisible() && latest) win.webContents.send("voice-overlay-update", voiceOverlayPayload());
+  }, Math.max(0, notice.expiresAt - Date.now()));
+  welcomeTimer.unref?.();
+}
 let unlocked = false;
 let layoutPoint: OverlayLayoutPoint | null = null;
 let layoutContext: OverlayLayoutContext = "desktop";
@@ -44,7 +62,9 @@ let lastChatComposeActionAt = 0;
 function voiceOverlayPayload() {
   if (!latest) return null;
   const geometry = calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return { ...latest, voiceOverlayMaxParticipants: geometry?.effectiveMaxParticipants ?? 0,
+  return { ...latest, welcomeHeight: geometry?.welcomeHeight ?? 0,
+    welcome: geometry?.welcomeHeight && latest.voiceOverlayWelcome ? welcomeLifecycle.current(Date.now()) : null,
+    voiceOverlayMaxParticipants: geometry?.effectiveMaxParticipants ?? 0,
     voiceOverlayActivity: geometry?.activityVisible ?? false,
     activities: geometry?.activityVisible ? (latest.activities ?? []).slice(0, geometry.activityRows) : [],
     voiceOverlayNotifications: geometry?.notificationsVisible ?? false,
@@ -575,10 +595,11 @@ function ensureOverlay(): BrowserWindow {
     }
   });
   createdWindow.on("move", () => { updateMousePolicy(); updateNotificationActionWindow(); updateChatActionWindow(); });
-  createdWindow.on("hide", () => { hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
+  createdWindow.on("hide", () => { clearWelcome(); hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow(); });
   createdWindow.on("closed", () => {
     if (overlayWindow === createdWindow) {
       lifecycle.close();
+      clearWelcome();
       latest = null;
       unlocked = false;
       layoutPoint = null;
@@ -603,6 +624,7 @@ function ensureOverlay(): BrowserWindow {
 }
 
 export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceOverlayWorkArea, context?: string): void {
+  if (!snapshot.enabled) clearWelcome();
   if (!snapshot.enabled || !snapshot.voiceOverlayQuickActions) actionShapeFailed = false;
   if (!snapshot.enabled || !snapshot.voiceOverlayNotifications || !snapshot.voiceOverlayNotificationActions || !snapshot.notificationActionSession) notificationActionShapeFailed = false;
   if (!snapshot.enabled || !snapshot.voiceOverlayChat || !snapshot.voiceOverlayChatActions || !snapshot.chatActionSession) chatActionShapeFailed = false;
@@ -610,6 +632,7 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
   const contextChanged = nextContext !== layoutContext;
   const cornerChanged = latest !== null && latest.position !== snapshot.position;
   const nextGeometry = calculateVoiceOverlayGeometry(snapshot, area ?? screen.getPrimaryDisplay().workArea);
+  if (contextChanged) clearWelcome();
   if (contextChanged || cornerChanged || snapshot.voiceOverlayPinned || !nextGeometry?.shouldShow) lockVoiceOverlay();
   if (contextChanged || latest === null) {
     layoutContext = nextContext;
@@ -674,8 +697,11 @@ export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceO
         const { x, y } = layoutPoint ? restoreOverlayPosition(layoutPoint, currentGeometry, bounds) : constrainOverlayPosition(currentGeometry, currentGeometry, bounds);
         win.setPosition(x, y, false);
       }
+      // Paint the current privacy-scoped snapshot before re-showing a hidden window.
       win.webContents.send("voice-overlay-update", voiceOverlayPayload());
       win.showInactive();
+      publishWelcomeAfterShow(win);
+      win.webContents.send("voice-overlay-update", voiceOverlayPayload());
       updateMousePolicy();
       updateNotificationActionWindow();
       updateChatActionWindow();
@@ -699,6 +725,7 @@ export function closeVoiceOverlay(): void {
   pendingOpenChat = null;
   layoutPoint = null;
   lifecycle.close();
+  clearWelcome();
   latest = null;
   latestArea = null;
   if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.close();

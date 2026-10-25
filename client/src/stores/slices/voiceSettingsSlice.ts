@@ -236,6 +236,7 @@ export type VoiceSettings = {
   voiceOverlayClickableActions: boolean;
   /** Device-local display of activity already shared by friends. */
   voiceOverlayActivity: boolean;
+  voiceOverlayWelcome: boolean;
   /** Device-local opt-in to show read-only genuine unread notification indicators. */
   voiceOverlayNotifications: boolean;
   /** Device-local opt-in to open the main app from the overlay notification panel. */
@@ -327,6 +328,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   voiceOverlayQuickActions: false,
   voiceOverlayClickableActions: false,
   voiceOverlayActivity: false,
+  voiceOverlayWelcome: false,
   voiceOverlayNotifications: false,
   voiceOverlayNotificationActions: false,
   voiceOverlayChat: false,
@@ -375,6 +377,7 @@ export function loadSettings(): VoiceSettings {
     if (typeof merged.voiceOverlayPinned !== "boolean") merged.voiceOverlayPinned = DEFAULT_SETTINGS.voiceOverlayPinned;
     if (typeof merged.voiceOverlayQuickActions !== "boolean") merged.voiceOverlayQuickActions = DEFAULT_SETTINGS.voiceOverlayQuickActions;
     if (typeof merged.voiceOverlayClickableActions !== "boolean") merged.voiceOverlayClickableActions = DEFAULT_SETTINGS.voiceOverlayClickableActions;
+    if (typeof merged.voiceOverlayWelcome !== "boolean") merged.voiceOverlayWelcome = DEFAULT_SETTINGS.voiceOverlayWelcome;
     if (typeof merged.voiceOverlayActivity !== "boolean") merged.voiceOverlayActivity = DEFAULT_SETTINGS.voiceOverlayActivity;
     if (typeof merged.voiceOverlayNotifications !== "boolean") merged.voiceOverlayNotifications = DEFAULT_SETTINGS.voiceOverlayNotifications;
     if (typeof merged.voiceOverlayNotificationActions !== "boolean") merged.voiceOverlayNotificationActions = DEFAULT_SETTINGS.voiceOverlayNotificationActions;
@@ -430,7 +433,7 @@ const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
   "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
   "voiceOverlayPinned",
   "voiceOverlayQuickActions", "voiceOverlayClickableActions",
-  "voiceOverlayActivity",
+  "voiceOverlayActivity", "voiceOverlayWelcome",
   "voiceOverlayNotifications",
   "voiceOverlayNotificationActions",
   "voiceOverlayChat",
@@ -553,6 +556,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     voiceOverlayQuickActions: s.voiceOverlayQuickActions,
     voiceOverlayClickableActions: s.voiceOverlayClickableActions,
     voiceOverlayActivity: s.voiceOverlayActivity,
+    voiceOverlayWelcome: s.voiceOverlayWelcome,
     voiceOverlayNotifications: s.voiceOverlayNotifications,
     voiceOverlayNotificationActions: s.voiceOverlayNotificationActions,
     voiceOverlayChat: s.voiceOverlayChat,
@@ -602,6 +606,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setVoiceOverlayQuickActions: (enabled: boolean) => void;
   setVoiceOverlayClickableActions: (enabled: boolean) => void;
   setVoiceOverlayActivity: (enabled: boolean) => void;
+  setVoiceOverlayWelcome: (enabled: boolean) => void;
   setVoiceOverlayNotifications: (enabled: boolean) => void;
   setVoiceOverlayNotificationActions: (enabled: boolean) => void;
   setVoiceOverlayChat: (enabled: boolean) => void;
@@ -668,6 +673,7 @@ export const createVoiceSettingsSlice: StateCreator<
     voiceOverlayQuickActions: initial.voiceOverlayQuickActions,
     voiceOverlayClickableActions: initial.voiceOverlayClickableActions,
     voiceOverlayActivity: initial.voiceOverlayActivity,
+    voiceOverlayWelcome: initial.voiceOverlayWelcome,
     voiceOverlayNotifications: initial.voiceOverlayNotifications,
     voiceOverlayNotificationActions: initial.voiceOverlayNotificationActions,
     voiceOverlayChat: initial.voiceOverlayChat,
@@ -805,6 +811,7 @@ export const createVoiceSettingsSlice: StateCreator<
     setVoiceOverlayPinned: (pinned) => { set({ voiceOverlayPinned: pinned === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayQuickActions: (enabled) => { set({ voiceOverlayQuickActions: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayClickableActions: (enabled) => { set({ voiceOverlayClickableActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayWelcome: (enabled) => { set({ voiceOverlayWelcome: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayActivity: (enabled) => { set({ voiceOverlayActivity: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayNotifications: (enabled) => { set({ voiceOverlayNotifications: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayNotificationActions: (enabled) => { set({ voiceOverlayNotificationActions: enabled === true }); saveSettings(currentSettings(get())); },
@@ -944,6 +951,7 @@ export const createVoiceSettingsSlice: StateCreator<
         voiceOverlayQuickActions: merged.voiceOverlayQuickActions,
         voiceOverlayClickableActions: merged.voiceOverlayClickableActions,
         voiceOverlayActivity: merged.voiceOverlayActivity,
+        voiceOverlayWelcome: merged.voiceOverlayWelcome,
         voiceOverlayNotifications: merged.voiceOverlayNotifications,
         voiceOverlayNotificationActions: merged.voiceOverlayNotificationActions,
         voiceOverlayChat: merged.voiceOverlayChat,
@@ -974,6 +982,7 @@ export const createVoiceSettingsSlice: StateCreator<
         voiceOverlayQuickActions: current.voiceOverlayQuickActions,
         voiceOverlayClickableActions: current.voiceOverlayClickableActions,
         voiceOverlayActivity: current.voiceOverlayActivity,
+        voiceOverlayWelcome: current.voiceOverlayWelcome,
         voiceOverlayNotifications: current.voiceOverlayNotifications,
         voiceOverlayNotificationActions: current.voiceOverlayNotificationActions,
         voiceOverlayChat: current.voiceOverlayChat,

@@ -393,3 +393,19 @@ describe("VoiceOverlayContent", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
   });
 });
+
+
+it("renders only an actual native welcome notice and expires locally without another snapshot", () => {
+  vi.useFakeTimers();
+  try {
+    const source = snapshot("top-left", { voiceOverlayWelcome: true, welcomeHeight: 32 });
+    const view = render(<VoiceOverlayContent snapshot={source} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    view.rerender(<VoiceOverlayContent snapshot={{ ...source, welcome: { id: 1, expiresAt: Date.now() + 5000 } }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("overlayWelcomeNotice");
+    act(() => { vi.advanceTimersByTime(5000); });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    view.rerender(<VoiceOverlayContent snapshot={{ ...source, enabled: false, welcome: { id: 2, expiresAt: Date.now() + 5000 } }} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  } finally { vi.useRealTimers(); }
+});

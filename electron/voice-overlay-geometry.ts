@@ -20,6 +20,7 @@ export interface VoiceOverlayWindowGeometry extends VoiceOverlayWorkArea {
   notificationRows: number;
   actionsHeight: number;
   notificationHeight: number;
+  welcomeHeight: number;
 }
 
 const WINDOW_MARGIN = 24;
@@ -73,31 +74,33 @@ export function calculateVoiceOverlayGeometry(
   const maxWidth = Math.max(1, Math.floor(workArea.width - marginX * 2));
   const maxHeight = Math.max(1, Math.floor(workArea.height - marginY * 2));
 
+  const welcomeHeight = snapshot.voiceOverlayWelcome === true && maxWidth >= 196 && maxHeight >= 128 ? 32 : 0;
+  const contentMaxHeight = maxHeight - welcomeHeight;
   const scale = snapshot.scale / 100;
   const rowHeight = snapshot.voiceOverlayAvatarSize === "large" ? LARGE_ROW_HEIGHT : SMALL_ROW_HEIGHT;
   const minimumUsableWidth = Math.ceil(WIDGET_MIN_WIDTH * scale + ROOT_PADDING * 2);
   const hasUsableWidth = maxWidth >= minimumUsableWidth;
   const matchingParticipants = snapshot.participants.filter((participant) => !snapshot.speakingOnly || participant.speaking);
   const requestedCount = Math.min(matchingParticipants.length, snapshot.voiceOverlayMaxParticipants);
-  const actionsHeight = snapshot.voiceOverlayQuickActions && snapshot.voiceActionSession && maxWidth >= 112 && maxHeight >= 64 ? 48 : 0;
+  const actionsHeight = snapshot.voiceOverlayQuickActions && snapshot.voiceActionSession && maxWidth >= 112 && contentMaxHeight >= 64 ? 48 : 0;
   const notificationRequestedRows = snapshot.notificationStatus === "ready"
     ? Math.max(1, Math.min(3, snapshot.notifications?.length ?? 0))
     : 1;
-  const notificationCapacity = Math.floor((maxHeight - ROOT_PADDING * 2 - actionsHeight - 20) / NOTIFICATION_ROW_HEIGHT);
+  const notificationCapacity = Math.floor((contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - 20) / NOTIFICATION_ROW_HEIGHT);
   const notificationRows = snapshot.voiceOverlayNotifications && maxWidth >= 196 && notificationCapacity >= 1
     ? Math.min(notificationRequestedRows, notificationCapacity)
     : 0;
   const notificationHeight = notificationRows > 0 ? 20 + notificationRows * NOTIFICATION_ROW_HEIGHT : 0;
   const activityCandidate = snapshot.voiceOverlayActivity && maxWidth >= 196;
-  const activityMinimum = activityCandidate && maxHeight >= ROOT_PADDING * 2 + actionsHeight + notificationHeight + 60 ? 60 : 0;
+  const activityMinimum = activityCandidate && contentMaxHeight >= ROOT_PADDING * 2 + actionsHeight + notificationHeight + 60 ? 60 : 0;
   const chatCandidate = snapshot.voiceOverlayChat === true && snapshot.chatStatus !== undefined && maxWidth >= 196;
   const requestedChatRows = snapshot.chatStatus === "ready"
     ? Math.max(1, Math.min(5, snapshot.chatMessages?.length ?? 0))
     : 1;
-  const chatCapacity = Math.floor((maxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - 20) / CHAT_ROW_HEIGHT);
+  const chatCapacity = Math.floor((contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - 20) / CHAT_ROW_HEIGHT);
   const chatRows = chatCandidate ? Math.min(requestedChatRows, Math.max(0, chatCapacity)) : 0;
   const chatHeight = chatRows > 0 ? 20 + chatRows * CHAT_ROW_HEIGHT : 0;
-  const contentHeightAvailable = Math.max(0, maxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - chatHeight);
+  const contentHeightAvailable = Math.max(0, contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - chatHeight);
   const rowCapacity = Math.max(0, Math.floor((contentHeightAvailable / scale + ROW_GAP) / (rowHeight + ROW_GAP)));
   const effectiveMaxParticipants = hasUsableWidth
     ? Math.min(snapshot.voiceOverlayMaxParticipants, rowCapacity)
@@ -106,11 +109,11 @@ export function calculateVoiceOverlayGeometry(
   const contentHeight = visibleParticipants === 0
     ? 0
     : (visibleParticipants * rowHeight + (visibleParticipants - 1) * ROW_GAP) * scale;
-  const activityRows = activityMinimum > 0 ? Math.max(1, Math.min(Math.max(1, snapshot.activities?.length ?? 0), Math.floor((maxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - chatHeight - contentHeight - 20) / 40))) : 0;
+  const activityRows = activityMinimum > 0 ? Math.max(1, Math.min(Math.max(1, snapshot.activities?.length ?? 0), Math.floor((contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - chatHeight - contentHeight - 20) / 40))) : 0;
   const activityHeight = activityRows > 0 ? 20 + activityRows * 40 : 0;
   const widgetWidth = Math.max(WIDGET_MIN_WIDTH, ROW_MAX_WIDTH) * scale;
   const desiredWidth = Math.ceil(widgetWidth + ROOT_PADDING * 2);
-  const desiredHeight = Math.ceil(contentHeight + ROOT_PADDING * 2 + actionsHeight + notificationHeight + activityHeight + chatHeight);
+  const desiredHeight = Math.ceil(contentHeight + ROOT_PADDING * 2 + actionsHeight + notificationHeight + activityHeight + chatHeight + welcomeHeight);
   const width = clamp(desiredWidth, 1, maxWidth);
   const height = clamp(desiredHeight, 1, maxHeight);
 
@@ -142,5 +145,6 @@ export function calculateVoiceOverlayGeometry(
     notificationRows,
     actionsHeight,
     notificationHeight,
+    welcomeHeight,
   };
 }
