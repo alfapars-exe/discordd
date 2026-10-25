@@ -14,7 +14,8 @@ function viewport(value: VideoViewport): VideoViewport | null {
  if (!value || (value.surface !== "main" && value.surface !== "overlay") || typeof value.visible !== "boolean") return null;
  if (!value.visible) return { surface: value.surface, visible: false, width: 0, height: 0, fps: 0 };
  if (![value.width, value.height, value.fps].every(number => Number.isFinite(number) && number > 0)) return null;
- return { surface: value.surface, visible: true, width: Math.min(1920, Math.ceil(value.width)), height: Math.min(1080, Math.ceil(value.height)), fps: Math.min(60, Math.max(1, Math.floor(value.fps))) };
+ const overlay = value.surface === "overlay";
+ return { surface: value.surface, visible: true, width: Math.min(overlay ? 1920 : 8192, Math.ceil(value.width)), height: Math.min(overlay ? 1080 : 8192, Math.ceil(value.height)), fps: Math.min(overlay ? 60 : 120, Math.max(1, Math.floor(value.fps))) };
 }
 
 /** Public-SDK manual video policy only. No room options, subscriptions, audio,
