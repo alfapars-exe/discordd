@@ -14,10 +14,11 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY client ./
-# The frontend typechecks its overlay lifecycle contract in a regression
-# test. Keep the single shared source file at the same relative location it
-# has in the repository so `tsc -b` sees the same project graph as CI.
+# Pure contracts are shared with the web build. Keep their repository-relative
+# locations without shipping Electron's privileged runtime into this stage.
 COPY electron/voice-overlay-contract.ts /app/electron/voice-overlay-contract.ts
+COPY electron/overlay-media-contract.ts /app/electron/overlay-media-contract.ts
+COPY electron/cs2-join-contract.ts /app/electron/cs2-join-contract.ts
 # Root package.json carries the canonical app version. vite.config.ts reads
 # it via `readFileSync(resolve(__dirname, "../package.json"))` and inlines
 # the version into the bundle as __APP_VERSION__ so client logs can be

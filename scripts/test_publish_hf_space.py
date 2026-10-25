@@ -16,10 +16,21 @@ spec.loader.exec_module(release)
 
 
 class PublishSafetyTests(unittest.TestCase):
-    def test_only_the_frontend_contract_is_managed_from_electron(self):
-        self.assertTrue(release.managed("electron/voice-overlay-contract.ts"))
+    def test_only_pure_frontend_contracts_are_managed_from_electron(self):
+        for path in release.FRONTEND_CONTRACTS:
+            self.assertTrue(release.managed(path))
         self.assertFalse(release.managed("electron/main.ts"))
+        self.assertFalse(release.managed("electron/cs2-join-controller.ts"))
         self.assertFalse(release.managed("data/uploads/user.png"))
+
+    def test_contracts_are_available_in_the_clean_docker_frontend_stage(self):
+        root = Path(__file__).resolve().parents[1]
+        dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+        exclusions = (root / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        for path in release.FRONTEND_CONTRACTS:
+            self.assertTrue((root / path).is_file())
+            self.assertIn(f"COPY {path} /app/{path}", dockerfile)
+            self.assertIn(f"!{path}", exclusions)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

@@ -8,7 +8,8 @@ import subprocess
 
 from huggingface_hub import HfApi, CommitOperationAdd, CommitOperationDelete
 
-ROOT_FILES = {"Dockerfile", ".dockerignore", "README.md", "package.json", "package-lock.json", "electron/voice-overlay-contract.ts"}
+FRONTEND_CONTRACTS = {"electron/voice-overlay-contract.ts", "electron/overlay-media-contract.ts", "electron/cs2-join-contract.ts"}
+ROOT_FILES = {"Dockerfile", ".dockerignore", "README.md", "package.json", "package-lock.json"} | FRONTEND_CONTRACTS
 
 
 def managed(path):
