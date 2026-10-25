@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P8 owned application manifests, scoped server grants, message actions and owner-only test invocation.",
+  "implemented": [
+    "Migration 102 persists manifests, ordered message actions, scoped server installations and bounded invocation results.",
+    "Application owners can replace validated manifests with up to ten uniquely named actions and explicitly enable test mode.",
+    "A dedicated Manage Applications role permission gates server installation, grant updates and revocation without requiring full administrator access.",
+    "Grant scopes independently control message-content disclosure and response completion. Revocation removes membership/runtime routing and immediately blocks new and pending non-test invocations.",
+    "Server members discover only actions from active installations. Invocation additionally requires channel view and read permission and validates the message belongs to that server and channel.",
+    "Bot gateway delivery carries a bounded application-action invocation; only the target bot may complete it and callers poll only their own invocation.",
+    "Account settings expose manifest/action editing and owner-only test delivery. Server settings expose scoped installation/revocation. Channel message menus expose active application actions."
+  ],
+  "checks": [
+    "Service integration verifies owner isolation, invalid-scope rejection, content minimization, response-scope enforcement, bot completion isolation, runtime membership changes and immediate revocation.",
+    "Route permission census documents membership-only discovery and per-channel invocation checks; the route golden and OpenAPI include the new endpoints.",
+    "Full client Vitest passed 180 files and 1875 tests; TypeScript project checking passed.",
+    "Full Go packages passed after the new route gate declarations and server-cascade coverage were added.",
+    "Ego Lite task space 12 accepted account manifest editing, scoped server installation, real message-menu invocation, localized queued/error feedback and immediate action removal after revocation; see p8-application-browser-acceptance-2026-10-23.json."
+  ],
+  "remaining": [
+    "A real separately connected bot process must complete an invocation in two-client acceptance; installed-Windows acceptance also remains open.",
+    "Developer-mode ID affordances, linked-game messaging, helper installation, keybindings and performance capture remain separate P8 work."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

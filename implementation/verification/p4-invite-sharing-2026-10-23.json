@@ -1,0 +1,34 @@
+{
+  "items": [
+    "p4.invite-search",
+    "p4.invite-per-recipient",
+    "p4.invite-link",
+    "p4.invite-expiry"
+  ],
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "search": "The modal filters real accepted friends by display name or username and distinguishes an empty result.",
+    "delivery": "Each recipient creates or reuses a real DM, awaits the actual encrypted send result, shows sending/sent/failed state, and permits retry only after failure without duplicating successful sends.",
+    "link": "The exact share URL displayed and copied is also sent in DMs; server-scoped request deduplication prevents create races and stale server data is rejected.",
+    "expiry": "User-facing share links and the invite settings editor default to seven days. Settings retain explicit duration and use-limit choices; server validation enforces expiry and exhaustion."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    },
+    {
+      "command": "vitest run src/stores/inviteStore.test.ts src/components/servers/InviteFriendsModal.test.tsx",
+      "working_directory": "client",
+      "result": "11 passed"
+    },
+    {
+      "command": "go test ./services ./handlers -run Test.*Invite -count=1",
+      "working_directory": "server",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Verify two-client DM delivery, rate-limit recovery, exhausted/revoked links and keyboard/zoom behavior. Target-channel and private-channel warning remain separate missing coverage items."
+}

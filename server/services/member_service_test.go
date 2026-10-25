@@ -26,33 +26,44 @@ import (
 // after wiring. Keeps the constructor signature short and lets us
 // inspect captured broadcasts via the same struct.
 type memberServiceHarness struct {
-	svc         MemberService
-	userRepo    *testutil.MockUserRepo
-	roleRepo    *testutil.MockRoleRepo
-	banRepo     *testutil.MockBanRepo
-	timeoutRepo *testutil.MockMemberTimeoutRepo
-	serverRepo  *testutil.MockServerRepo
-	hub         *testutil.MockEventPublisher
-	voiceKick   *testutil.MockVoiceDisconnecter
-	broadcasts  []ws.Event // captured server broadcasts (in order)
+	svc            MemberService
+	userRepo       *testutil.MockUserRepo
+	roleRepo       *testutil.MockRoleRepo
+	banRepo        *testutil.MockBanRepo
+	timeoutRepo    *testutil.MockMemberTimeoutRepo
+	serverRepo     *testutil.MockServerRepo
+	hub            *testutil.MockEventPublisher
+	voiceKick      *testutil.MockVoiceDisconnecter
+	profileUpdates *stubProfileUpdateNotifier
+	broadcasts     []ws.Event // captured server broadcasts (in order)
+}
+
+type stubProfileUpdateNotifier struct {
+	actors []string
+}
+
+func (s *stubProfileUpdateNotifier) NotifyProfileUpdated(_ context.Context, actorID string) error {
+	s.actors = append(s.actors, actorID)
+	return nil
 }
 
 func newMemberHarness() *memberServiceHarness {
 	h := &memberServiceHarness{
-		userRepo:    &testutil.MockUserRepo{},
-		roleRepo:    &testutil.MockRoleRepo{},
-		banRepo:     &testutil.MockBanRepo{},
-		timeoutRepo: &testutil.MockMemberTimeoutRepo{},
-		serverRepo:  &testutil.MockServerRepo{},
-		hub:         &testutil.MockEventPublisher{},
-		voiceKick:   &testutil.MockVoiceDisconnecter{},
+		userRepo:       &testutil.MockUserRepo{},
+		roleRepo:       &testutil.MockRoleRepo{},
+		banRepo:        &testutil.MockBanRepo{},
+		timeoutRepo:    &testutil.MockMemberTimeoutRepo{},
+		serverRepo:     &testutil.MockServerRepo{},
+		hub:            &testutil.MockEventPublisher{},
+		voiceKick:      &testutil.MockVoiceDisconnecter{},
+		profileUpdates: &stubProfileUpdateNotifier{},
 	}
 	h.hub.BroadcastToServerFn = func(_ string, e ws.Event) {
 		h.broadcasts = append(h.broadcasts, e)
 	}
 	h.svc = NewMemberService(
 		h.userRepo, h.roleRepo, h.banRepo, h.timeoutRepo,
-		h.serverRepo, h.hub, h.voiceKick, nil, // auditLogger — not under test here
+		h.serverRepo, h.hub, h.voiceKick, nil, h.profileUpdates, // auditLogger — not under test here
 	)
 	return h
 }
@@ -484,6 +495,25 @@ func TestUpdateProfile_RefreshesHubUserInfoCache(t *testing.T) {
 	if gotDisplay != display || gotAvatar != avatar {
 		t.Errorf("UpdateUserInfo display/avatar = %q/%q, want %q/%q", gotDisplay, gotAvatar, display, avatar)
 	}
+	if len(h.profileUpdates.actors) != 1 || h.profileUpdates.actors[0] != uid {
+		t.Errorf("profile update notifications = %v, want [%s]", h.profileUpdates.actors, uid)
+	}
+}
+
+func TestUpdateProfile_PrivacyOnlyEditDoesNotNotifyFriends(t *testing.T) {
+	h := newMemberHarness()
+	h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+		return &models.User{ID: id, Username: "alice"}, nil
+	}
+	h.userRepo.UpdateFn = func(_ context.Context, _ *models.User) error { return nil }
+	h.serverRepo.GetUserServersFn = func(_ context.Context, _ string) ([]models.ServerListItem, error) { return nil, nil }
+	privacy := "friends_only"
+	if _, err := h.svc.UpdateProfile(context.Background(), "u1", &models.UpdateProfileRequest{DMPrivacy: &privacy}); err != nil {
+		t.Fatalf("UpdateProfile error: %v", err)
+	}
+	if len(h.profileUpdates.actors) != 0 {
+		t.Fatalf("privacy-only edit emitted profile update notification: %v", h.profileUpdates.actors)
+	}
 }
 
 func TestUpdateProfile_NoCacheRefreshWhenUpdateFails(t *testing.T) {
@@ -579,12 +609,12 @@ func TestModifyRoles_AvoidsN_Plus_1_UsesSingleGetAllByServer(t *testing.T) {
 // files in different packages, and both suites test different services
 // with slightly different assertions.
 type memberInvalidator struct {
-	allCount    int
-	userCalls   []string
+	allCount  int
+	userCalls []string
 }
 
-func (m *memberInvalidator) InvalidateAll()             { m.allCount++ }
-func (m *memberInvalidator) InvalidateUser(uid string)  { m.userCalls = append(m.userCalls, uid) }
+func (m *memberInvalidator) InvalidateAll()            { m.allCount++ }
+func (m *memberInvalidator) InvalidateUser(uid string) { m.userCalls = append(m.userCalls, uid) }
 
 func TestKick_InvalidatesTargetPermissions(t *testing.T) {
 	// A kicked user's cached permissions must drop within milliseconds,

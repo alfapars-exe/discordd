@@ -7,6 +7,7 @@ import ContextMenu from "../shared/ContextMenu";
 import MemberCard from "../members/MemberCard";
 import { useContextMenu, type ContextMenuItem } from "../../hooks/useContextMenu";
 import type { FriendshipWithUser, User } from "../../types";
+import GameActivityLabel from "../shared/GameActivityLabel";
 
 type FriendItemProps = {
   friendship: FriendshipWithUser;
@@ -110,6 +111,7 @@ function FriendItem({ friendship, type, onAccept, onDecline, onRemove, onSendMes
                 {friendship.user_custom_status && ` — ${friendship.user_custom_status}`}
               </span>
             )}
+            {type === "friend" && <GameActivityLabel userId={friendship.user_id} visible={friendship.user_status !== "offline"} className="fi-status" />}
           </div>
         </div>
 

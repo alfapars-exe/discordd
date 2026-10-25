@@ -4,7 +4,11 @@
 
 import { create } from "zustand";
 import * as channelApi from "../api/channels";
+import { getAuthGeneration } from "../api/client";
+import { useAuthStore } from "./authStore";
 import { useServerStore } from "./serverStore";
+import { useUIStore } from "./uiStore";
+import { UI_SHELL_V2 } from "../utils/uiShell";
 import type {
   Channel,
   Category,
@@ -27,8 +31,8 @@ type ChannelState = {
   mutedChannelIds: Set<string>;
 
   // ─── Actions ───
-  fetchChannels: () => Promise<void>;
-  selectChannel: (channelId: string) => void;
+  fetchChannels: (serverId?: string) => Promise<void>;
+  selectChannel: (channelId: string | null) => void;
   /** Snapshot outgoing server's tree, then paint incoming from cache. */
   switchToServer: (serverId: string | null) => void;
   /** Paint current activeServer from cache — used when setActiveServer was
@@ -59,6 +63,10 @@ type ChannelState = {
   clearForServerSwitch: () => void;
 };
 
+// An older response must never restore a tree superseded by a permission/CRUD
+// refresh, even if both requests concern the same currently visible server.
+const channelFetchTokens = new Map<string, symbol>();
+
 export const useChannelStore = create<ChannelState>((set, get) => ({
   categories: [],
   categoriesByServer: {},
@@ -66,17 +74,20 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   isLoading: false,
   mutedChannelIds: new Set<string>(),
 
-  fetchChannels: async () => {
-    const serverId = useServerStore.getState().activeServerId;
+  fetchChannels: async (explicitServerId) => {
+    const serverId = explicitServerId ?? useServerStore.getState().activeServerId;
     if (!serverId) return;
+    const token = Symbol();
+    channelFetchTokens.set(serverId, token);
 
     // Only show the loading state if we don't already have cached data to
     // paint — otherwise the user sees a spinner briefly before the cached
     // tree pops in, which is jarring for a revalidation.
     const cached = get().categoriesByServer[serverId];
-    if (!cached) set({ isLoading: true });
+    if (!cached && useServerStore.getState().activeServerId === serverId) set({ isLoading: true });
 
     const res = await channelApi.getChannels(serverId);
+    if (channelFetchTokens.get(serverId) !== token) return;
     if (res.success && res.data) {
       // Always update the cache — even if the user has already switched to
       // another server by the time the response arrives. Next time they come
@@ -88,6 +99,19 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
         },
       }));
 
+      const allVisible = res.data.flatMap((cg) => cg.channels);
+      if (UI_SHELL_V2) {
+        const ui = useUIStore.getState();
+        const remembered = ui.lastChannelByServer[serverId];
+        if (remembered && !allVisible.some((channel) => channel.id === remembered.channelId)) {
+          ui.closeDestination(remembered.channelId);
+        }
+        const destination = useUIStore.getState().destination;
+        if (destination.serverInfo?.serverId === serverId && destination.type !== "server-home" && !allVisible.some((channel) => channel.id === destination.channelId)) {
+          ui.closeDestination(destination.channelId);
+        }
+      }
+
       // Guard against a stale response clobbering the live categories.
       // If the user switched away mid-flight, activeServerId has moved on
       // — writing to `categories` now would paint the wrong server's tree.
@@ -96,8 +120,6 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
 
       const state = get();
       let selectedChannelId = state.selectedChannelId;
-
-      const allVisible = res.data.flatMap((cg) => cg.channels);
 
       // Drop the selection if the channel is no longer visible (deleted,
       // permission revoked, etc.). DO NOT auto-pick a "first text channel"
@@ -110,7 +132,7 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
       }
 
       set({ categories: res.data, isLoading: false, selectedChannelId });
-    } else {
+    } else if (useServerStore.getState().activeServerId === serverId) {
       set({ isLoading: false });
     }
   },
@@ -152,6 +174,8 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   },
 
   evictServerCache: (serverId) => {
+    // Invalidate responses already in flight when a server is left/deleted.
+    channelFetchTokens.delete(serverId);
     set((state) => {
       if (!(serverId in state.categoriesByServer)) return state;
       const next = { ...state.categoriesByServer };
@@ -219,11 +243,14 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
         const firstTextChannel = categories
           .flatMap((cg) => cg.channels)
           .find((ch) => ch.type === "text");
-        selectedChannelId = firstTextChannel?.id ?? null;
+        selectedChannelId = UI_SHELL_V2 ? null : firstTextChannel?.id ?? null;
       }
 
-      return { categories, selectedChannelId };
+      const categoriesByServer = Object.fromEntries(Object.entries(state.categoriesByServer).map(([serverId, groups]) => [serverId,
+        groups?.map((group) => ({ ...group, channels: group.channels.filter((channel) => channel.id !== channelId) }))]));
+      return { categories, selectedChannelId, categoriesByServer };
     });
+    if (UI_SHELL_V2) useUIStore.getState().closeDestination(channelId);
   },
 
   handleCategoryCreate: (category) => {
@@ -258,6 +285,12 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   reorderChannels: async (items) => {
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return false;
+    const ownerId = useAuthStore.getState().user?.id ?? null;
+    const authGeneration = getAuthGeneration();
+    const isCurrentContext = () =>
+      getAuthGeneration() === authGeneration &&
+      (useAuthStore.getState().user?.id ?? null) === ownerId &&
+      useServerStore.getState().activeServerId === serverId;
 
     const prevCategories = get().categories;
 
@@ -323,19 +356,26 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
         })),
       }));
     }
+    const optimisticCategories = get().categories;
 
     const res = await channelApi.reorderChannels(serverId, items);
-    if (!res.success) {
+    if (!res.success && isCurrentContext() && get().categories === optimisticCategories) {
       set({ categories: prevCategories });
       return false;
     }
 
-    return true;
+    return res.success;
   },
 
   reorderCategories: async (items) => {
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return false;
+    const ownerId = useAuthStore.getState().user?.id ?? null;
+    const authGeneration = getAuthGeneration();
+    const isCurrentContext = () =>
+      getAuthGeneration() === authGeneration &&
+      (useAuthStore.getState().user?.id ?? null) === ownerId &&
+      useServerStore.getState().activeServerId === serverId;
 
     const prevCategories = get().categories;
 
@@ -351,14 +391,15 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
         })
         .sort((a, b) => a.category.position - b.category.position),
     }));
+    const optimisticCategories = get().categories;
 
     const res = await channelApi.reorderCategories(serverId, items);
-    if (!res.success) {
+    if (!res.success && isCurrentContext() && get().categories === optimisticCategories) {
       set({ categories: prevCategories });
       return false;
     }
 
-    return true;
+    return res.success;
   },
 
   handleChannelReorder: (categories) => {

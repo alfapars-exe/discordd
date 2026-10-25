@@ -1,0 +1,81 @@
+{
+  "checkedAt": "2026-10-23T01:29:58.289Z",
+  "results": [
+    {
+      "url": "https://cdn.mezon.ai/AI/models/datas/noise_suppression/deepfilternet3/v2/pkg/df_bg.wasm",
+      "status": 200,
+      "bytes": 9622975,
+      "sha256": "e133417d08bee384d8e60de27efa91da3d858920ed800d4794d490a177300600",
+      "etag": "\"9bdc12340a91b2a0c27e228f8061a8d7\"",
+      "lastModified": "Fri, 13 Feb 2026 01:40:13 GMT",
+      "matchesLocalWasm": true,
+      "matchesLocalModel": false
+    },
+    {
+      "url": "https://cdn.mezon.ai/AI/models/datas/noise_suppression/deepfilternet3/v2/models/DeepFilterNet3_onnx.tar.gz",
+      "status": 200,
+      "bytes": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "etag": "\"f37cd201a575b61685c002fd915d1183\"",
+      "lastModified": "Tue, 10 Feb 2026 02:00:10 GMT",
+      "matchesLocalWasm": false,
+      "matchesLocalModel": true
+    },
+    {
+      "url": "https://cdn.mezon.ai/AI/models/datas/noise_suppression/deepfilternet3/v3/pkg/df_bg.wasm",
+      "status": 200,
+      "bytes": 16418651,
+      "sha256": "440b5d12b6ea7d95008736f844221d7874ee15de5cb10d3015002470fdba0432",
+      "etag": "\"2af29ab14a098ab297ae83bbaebdb7dd\"",
+      "lastModified": "Fri, 26 Jun 2026 09:43:59 GMT",
+      "matchesLocalWasm": false,
+      "matchesLocalModel": false
+    },
+    {
+      "url": "https://cdn.mezon.ai/AI/models/datas/noise_suppression/deepfilternet3/v3/models/DeepFilterNet3_onnx.tar.gz",
+      "status": 200,
+      "bytes": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "etag": "\"f37cd201a575b61685c002fd915d1183\"",
+      "lastModified": "Fri, 26 Jun 2026 09:43:58 GMT",
+      "matchesLocalWasm": false,
+      "matchesLocalModel": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/Rikorose/DeepFilterNet/84d57ec2c08fe08e68a13fb32a58cd7092060a0f/models/DeepFilterNet3_onnx.tar.gz",
+      "status": 200,
+      "bytes": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "etag": "W/\"77a60a2ef36287d5086a9cba34f816beccb9ef6decbf2c5a39072e451ecf81b5\"",
+      "lastModified": null,
+      "matchesLocalWasm": false,
+      "matchesLocalModel": true
+    }
+  ],
+  "localAssets": {
+    "wasm": {
+      "bytes": 9622975,
+      "sha256": "e133417d08bee384d8e60de27efa91da3d858920ed800d4794d490a177300600"
+    },
+    "model": {
+      "bytes": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616"
+    }
+  },
+  "immutableLoaderSources": {
+    "v1_2_1": "https://github.com/mezonai/mezon-noise-suppression/blob/f5178ce858aa634b4bf46f27f5684d02828043ae/src/asset-loader/AssetLoader.ts",
+    "v1_3_0": "https://github.com/mezonai/mezon-noise-suppression/blob/a5212661245a2184370fc3c3dd1f52dc4dffb2a5/src/asset-loader/AssetLoader.ts"
+  },
+  "findings": [
+    "The immutable v1.2.1 source loads CDN v2/pkg/df_bg.wasm and v2/models/DeepFilterNet3_onnx.tar.gz. Both current official CDN v2 responses are byte-identical to the bundled assets.",
+    "The immutable v1.3.0 loader selects CDN v3, despite README saying versions >=1.2.0 use v2. Its WASM differs from bundled v2; the model is identical.",
+    "The model matches immutable Rikorose/DeepFilterNet commit84d57ec2c08fe08e68a13fb32a58cd7092060a0f. The WASM has a versioned-generation CDN URL, but no immutable upstream binary release artifact or build attestation was found.",
+    "GitHub releases v1.1.2 throughv1.3.0 have zero attached assets; v1.2.1/v1.3.0 full commit trees omit WASM/model. npm1.3.0 metadata identifies commit a521266 and seven files totaling72687 unpacked bytes, excluding binaries."
+  ],
+  "primaryMetadataSources": [
+    "https://api.github.com/repos/mezonai/mezon-noise-suppression/releases?per_page=20",
+    "https://api.github.com/repos/mezonai/mezon-noise-suppression/git/trees/v1.2.1?recursive=1",
+    "https://api.github.com/repos/mezonai/mezon-noise-suppression/git/trees/v1.3.0?recursive=1",
+    "https://registry.npmjs.org/deepfilternet3-noise-filter/1.3.0"
+  ]
+}

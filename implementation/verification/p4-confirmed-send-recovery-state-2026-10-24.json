@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "After a validated committed message result, the retained live attempt records resultConfirmed and permanently switches to lookupOnly. Local receipt/cleanup failure no longer leaves it eligible for another POST when a later lookup returns missing/prepared.",
+    "Group chat distinguishes known server completion from uncertain delivery, offers result-only checking and does not offer cancellation for a known committed result. EN/TR text differentiates source-chain update failure from generic copy removal failure and explains that records are retained.",
+    "A temporarily unavailable lookup of an already confirmed live attempt has a specific localized retained-copy message instead of the old-device replay warning. No automatic deletion, source repair, discard or network resend was added."
+  ],
+  "verification": [
+    "Store tests confirm missing/prepared result lookups after local cleanup failure cannot cause an additional message POST. A source receipt failure retains the confirmed child, then a successful result lookup completes bookkeeping with no retransmission.",
+    "Component test verifies known-completion status and result-only action, with uncertainty/cancellation UI absent. Initial focused store/component/persistence/locale suites passed: 4 files / 108 tests before the final receipt-failure regression was added.",
+    "Final tsc -b and targeted ESLint passed. Full client regression passed: 228 files / 2184 tests in 47.27s. Vite production web build passed in 690ms. Existing warning categories remain visible. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "resultConfirmed is currently a live-memory fence, not a newly persisted committed-outcome receipt. Real process restart still uses the existing durable operation lookup/idempotency flow and requires browser/two-client acceptance.",
+    "Missing-source repair/discard UX is not implemented by these status messages. Corrupt/unknown source handling, concurrent tab deletion and end-to-end device tests remain open. Overall P0-P11 is incomplete.",
+    "No commit, push, merge, production migration, Windows packaging or release was performed."
+  ]
+}

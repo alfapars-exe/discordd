@@ -21,6 +21,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/ws"
+	"github.com/google/uuid"
 )
 
 // voiceLogger is shared by every voice_*.go file in this package — they all
@@ -109,6 +110,7 @@ type VoiceService interface {
 	// handlers.LiveKitWebhookHandler participant_joined callback (A-29a)
 	// that is its only caller.
 	EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string)
+	MusicRoomKey(roomName string) (passphrase string, keyIndex uint32, err error)
 }
 
 // AuditWriter — narrow ISP interface for audit log writes from services.
@@ -152,10 +154,16 @@ const maxScreenShares = 0
 type voiceService struct {
 	states             map[string]*models.VoiceState // userID -> VoiceState
 	roomPassphrases    map[string]string             // roomName -> E2EE SFrame passphrase
+	roomKeyVersions    map[string]uint32             // roomName -> monotonic E2EE key index
 	screenShareViewers map[string]map[string]bool    // streamerUserID -> set of viewerUserIDs
 	forceMoveGrants    map[string]forceMoveGrant     // userID -> one-time bypass (consumed on token gen)
 	offlineSince       map[string]time.Time          // userID -> first seen offline (grace period tracking)
 	mu                 sync.RWMutex
+	// voiceEpoch changes on process construction; voiceRevision is advanced
+	// under mu for every snapshot-visible state mutation. Together they let a
+	// client reconcile delayed live events with an atomic voice snapshot.
+	voiceEpoch    string
+	voiceRevision uint64
 
 	channelGetter    ChannelGetter
 	livekitGetter    LiveKitInstanceGetter
@@ -181,7 +189,11 @@ type voiceService struct {
 	timeoutChecker MemberTimeoutChecker
 	// banChecker backs EnforceModerationOnJoin's ban half (the timeout half
 	// reuses timeoutChecker above). Same wiring/nil-guard rationale.
-	banChecker BanChecker
+	banChecker  BanChecker
+	voiceFanout *voiceStateFanout
+	// channelDeleteEpoch rejects a JoinChannel operation that began before a
+	// channel deletion but reaches the state mutation after its cleanup pass.
+	channelDeleteEpoch uint64
 }
 
 // MemberTimeoutChecker — narrow ISP interface so voiceService doesn't
@@ -203,9 +215,11 @@ func NewVoiceService(
 	banChecker BanChecker,
 	auditLogger AuditWriter,
 ) VoiceService {
-	return &voiceService{
+	service := &voiceService{
 		states:             make(map[string]*models.VoiceState),
+		voiceEpoch:         uuid.NewString(),
 		roomPassphrases:    make(map[string]string),
+		roomKeyVersions:    make(map[string]uint32),
 		screenShareViewers: make(map[string]map[string]bool),
 		forceMoveGrants:    make(map[string]forceMoveGrant),
 		offlineSince:       make(map[string]time.Time),
@@ -219,6 +233,16 @@ func NewVoiceService(
 		timeoutChecker:     timeoutChecker,
 		banChecker:         banChecker,
 		auditLogger:        auditLogger,
+	}
+	service.voiceFanout = newVoiceStateFanout(service)
+	return service
+}
+
+// ShutdownVoiceStateFanout drains/cancels queued voice events and waits for
+// the bounded resolver worker. Call before shutting down the hub or DB.
+func (s *voiceService) ShutdownVoiceStateFanout() {
+	if s.voiceFanout != nil {
+		s.voiceFanout.shutdown()
 	}
 }
 

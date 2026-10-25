@@ -4,8 +4,10 @@ import MessageAttachments from "./MessageAttachments";
 import { ensureFreshToken } from "../../api/client";
 import { useLightboxStore } from "../../stores/lightboxStore";
 import type { ChatMessage, ChatAttachment } from "../../hooks/useChatContext";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 
-vi.mock("../../api/client", () => ({
+vi.mock("../../api/client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../api/client")>(),
   ensureFreshToken: vi.fn(async () => "fresh-token"),
 }));
 
@@ -15,9 +17,7 @@ vi.mock("./EncryptedAttachment", () => ({
   ),
 }));
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
-}));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (k: string) => k }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 vi.mock("../../utils/constants", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("../../utils/constants");
@@ -57,6 +57,7 @@ function makeMessage(over: Partial<ChatMessage> = {}): ChatMessage {
 
 describe("MessageAttachments", () => {
   beforeEach(() => {
+    usePreferencesStore.setState({ data: { privacy: { sensitiveMedia: { channels: "show" }, disturbingMedia: { channels: "show" } } } });
     vi.mocked(ensureFreshToken).mockClear();
   });
 
@@ -192,11 +193,19 @@ describe("MessageAttachments", () => {
     expect(screen.getByText("example.png")).toBeInTheDocument();
     expect(screen.getByText(/e2eeKeyMissing/)).toBeInTheDocument();
   });
+  it("gates encrypted video even when the outer attachment MIME is opaque",()=>{
+    usePreferencesStore.setState({data:{privacy:{sensitiveMedia:{channels:"block"},disturbingMedia:{channels:"block"}}}});
+    const message=makeMessage({encryption_version:1,attachments:[makeAttachment({filename:"encrypted_0.bin",mime_type:"application/octet-stream"})],e2ee_file_keys:[{key:"k",iv:"i",digest:"d",filename:"video.mp4",mimeType:"video/mp4",originalSize:3}]});
+    render(<MessageAttachments message={message}/>);
+    expect(screen.getByText("mediaSafetyBlocked")).toBeInTheDocument();
+    expect(screen.queryByTestId("encrypted-attachment")).not.toBeInTheDocument();
+  });
 });
 
 describe("MessageAttachments — lightbox integration", () => {
   beforeEach(() => {
     useLightboxStore.getState().close();
+    usePreferencesStore.setState({ data: { privacy: { sensitiveMedia: { channels: "show" }, disturbingMedia: { channels: "show" } } } });
   });
 
   it("plain left-click on an image opens the lightbox instead of navigating", () => {
@@ -211,7 +220,25 @@ describe("MessageAttachments — lightbox integration", () => {
       href: "https://cdn.test//files/example.png",
       filename: "example.png",
       authRetry: true,
+      authorName: "Alice",
+      createdAt: "2026-07-18T00:00:00Z",
+      messageId: "msg-1",
     });
+  });
+
+  it("opens every plaintext image in the message as one gallery", () => {
+    const msg = makeMessage({
+      attachments: [
+        makeAttachment({ id: "att-1", filename: "one.png", file_url: "/files/one.png" }),
+        makeAttachment({ id: "att-2", filename: "two.jpg", file_url: "/files/two.jpg", mime_type: "image/jpeg" }),
+      ],
+    });
+    render(<MessageAttachments message={msg} />);
+    fireEvent.click(screen.getByRole("img", { name: "two.jpg" }).closest("a")!);
+
+    expect(useLightboxStore.getState().items).toHaveLength(2);
+    expect(useLightboxStore.getState().index).toBe(1);
+    expect(useLightboxStore.getState().item?.filename).toBe("two.jpg");
   });
 
   it("ctrl-click keeps the anchor's native new-tab behavior (no lightbox)", () => {

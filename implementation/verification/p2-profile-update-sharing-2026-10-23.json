@@ -1,0 +1,24 @@
+{
+  "item": "p2.profile-update-sharing",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "event": "Saving a user-visible profile field creates a persisted notification for each accepted friend and publishes the committed row over the existing notification WebSocket event.",
+    "consent": "shareProfileUpdates defaults on for compatibility; an explicit false prevents all new profile-update notifications.",
+    "separation": "Language and DM privacy-only edits do not create profile-update notifications, and notification fan-out failure does not falsely report that the already-committed profile edit failed.",
+    "client": "The Data and privacy switch is account-synced, and inbox system rows with action=profile_update render a localized actor headline."
+  },
+  "automated_verification": [
+    {
+      "command": "go test ./services -run 'Test(Profile|UpdateProfile)' -count=1",
+      "working_directory": "server",
+      "result": "pass"
+    },
+    {
+      "command": "tsc -b client/tsconfig.json",
+      "working_directory": ".",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Use two accepted-friend browser accounts to confirm on/off delivery, persistence after reload, and that disabled sharing does not affect saved profile edits."
+}

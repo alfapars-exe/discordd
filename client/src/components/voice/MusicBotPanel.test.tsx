@@ -1,0 +1,212 @@
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { RoomEvent } from "livekit-client";
+import type { VoiceStore } from "../../stores/voiceStore";
+import type { MusicBotChannelState } from "../../types/music";
+
+const fixture = vi.hoisted(() => ({ room: { on: vi.fn(), off: vi.fn() }, toast: vi.fn(), showError: vi.fn() }));
+vi.mock("@livekit/components-react", () => ({ useRoomContext: () => fixture.room }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }), initReactI18next: { type: "3rdParty", init: () => {} } }));
+vi.mock("../../stores/voiceStore", async () => {
+  const { create } = await import("zustand");
+  const { createMusicBotSlice } = await import("../../stores/slices/musicBotSlice");
+  return { useVoiceStore: create<VoiceStore>((set, get, store) => ({
+    ...createMusicBotSlice(set, get, store),
+    currentVoiceChannelId: "a",
+    currentVoiceServerId: "server-a",
+    userVolumes: {},
+    setUserVolume: (userId: string, volume: number) => set((state) => ({ userVolumes: { ...state.userVolumes, [userId]: volume } })),
+  }) as VoiceStore) };
+});
+vi.mock("../../stores/toastStore", () => ({ useToastStore: { getState: () => ({ addToast: fixture.toast }) } }));
+vi.mock("../../utils/musicRequestError", () => ({ showMusicRequestError: fixture.showError }));
+vi.mock("../../api/music", () => ({ getMusicState: vi.fn(), pauseMusic: vi.fn(), resumeMusic: vi.fn(), skipMusic: vi.fn(), stopMusic: vi.fn(), searchMusic: vi.fn(), playMusic: vi.fn(), removeMusicQueueItem: vi.fn(), reorderMusicQueue: vi.fn(), shuffleMusicQueue: vi.fn(), setMusicRepeatMode: vi.fn(), restoreMusicSession: vi.fn(), seekMusic: vi.fn() }));
+
+import MusicBotPanel from "./MusicBotPanel";
+import { useVoiceStore } from "../../stores/voiceStore";
+import { getMusicState, pauseMusic, resumeMusic, skipMusic, stopMusic, searchMusic, playMusic, removeMusicQueueItem, reorderMusicQueue, shuffleMusicQueue, setMusicRepeatMode, restoreMusicSession, seekMusic } from "../../api/music";
+
+function song(overrides: Partial<MusicBotChannelState> = {}): MusicBotChannelState {
+  return { channel_id: "a", server_id: "server-a", is_active: true, is_paused: false, queue: [], elapsed_seconds: 30,
+    started_at: new Date(Date.now() - 90_000).toISOString(),
+    current_track: { video_id: "v", title: "A song", duration_seconds: 180, url: "https://youtube.com/watch?v=v", requested_by_user_id: "me", requested_by_name: "Me" }, ...overrides };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useVoiceStore.setState({ currentVoiceChannelId: "a", currentVoiceServerId: "server-a", musicBotStates: {}, musicBotRevisions: {}, musicBotUpdatedAt: {}, musicBotResetRevision: 0, userVolumes: {} });
+  useVoiceStore.getState().setMusicBotState("a", song());
+  vi.mocked(getMusicState).mockImplementation(async () => ({ success: true, data: useVoiceStore.getState().musicBotStates.a }));
+  for (const fn of [pauseMusic, resumeMusic, skipMusic, stopMusic]) vi.mocked(fn).mockResolvedValue({ success: true });
+  vi.mocked(searchMusic).mockResolvedValue({ success: true, data: { results: [] } });
+  vi.mocked(playMusic).mockResolvedValue({ success: true, data: { added_tracks: [song().current_track!] } });
+  vi.mocked(removeMusicQueueItem).mockResolvedValue({ success: true, data: { status: "ok" } });
+  vi.mocked(reorderMusicQueue).mockResolvedValue({ success: true, data: { status: "ok" } });
+  vi.mocked(shuffleMusicQueue).mockResolvedValue({ success: true, data: { status: "ok" } });
+  vi.mocked(setMusicRepeatMode).mockResolvedValue({ success: true, data: { status: "ok" } });
+  vi.mocked(restoreMusicSession).mockResolvedValue({ success: true, data: { status: "ok" } });
+  vi.mocked(seekMusic).mockResolvedValue({ success: true, data: { status: "ok" } });
+});
+
+describe("MusicBotPanel", () => {
+  it("searches by name and queues the selected YouTube result", async () => {
+    const result = { ...song().current_track!, video_id: "abcdefghijk", title: "Search result" };
+    vi.mocked(searchMusic).mockResolvedValue({ success: true, data: { results: [result] } });
+    render(<MusicBotPanel channelId="a" />);
+    fireEvent.change(screen.getByRole("textbox", { name: "searchPlaceholder" }), { target: { value: "daft punk" } });
+    fireEvent.click(screen.getByRole("button", { name: "search" }));
+    await screen.findByText("Search result");
+    fireEvent.click(screen.getByRole("button", { name: "add" }));
+    await waitFor(() => expect(playMusic).toHaveBeenCalledWith("server-a", "a", result.url));
+  });
+
+  it("removes exactly one duplicate track using its queue identity and revision", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ revision: 9, queue: [
+      { ...song().current_track!, queue_item_id: "item-one", title: "Duplicate" },
+      { ...song().current_track!, queue_item_id: "item-two", title: "Duplicate" },
+    ] }));
+    render(<MusicBotPanel channelId="a" />);
+    const buttons = await screen.findAllByRole("button", { name: "removeTrack" });
+    fireEvent.click(buttons[1]!);
+    await waitFor(() => expect(removeMusicQueueItem).toHaveBeenCalledWith("server-a", "a", "item-two", 9));
+  });
+
+  it("offers a keyboard-operable queue reorder action", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ revision: 3, queue: [
+      { ...song().current_track!, queue_item_id: "first", title: "First" },
+      { ...song().current_track!, queue_item_id: "second", title: "Second" },
+    ] }));
+    render(<MusicBotPanel channelId="a" />);
+    const moveUp = await screen.findAllByRole("button", { name: "moveTrackUp" });
+    fireEvent.click(moveUp[1]!);
+    await waitFor(() => expect(reorderMusicQueue).toHaveBeenCalledWith("server-a", "a", ["second", "first"], 3));
+  });
+
+  it("shuffles pending tracks and cycles repeat mode", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ revision: 4, repeat_mode: "one", queue: [
+      { ...song().current_track!, queue_item_id: "first", title: "First" },
+      { ...song().current_track!, queue_item_id: "second", title: "Second" },
+    ] }));
+    render(<MusicBotPanel channelId="a" />);
+    fireEvent.click(await screen.findByRole("button", { name: "shuffle" }));
+    await waitFor(() => expect(shuffleMusicQueue).toHaveBeenCalledWith("server-a", "a", 4));
+    fireEvent.click(screen.getByRole("button", { name: "repeat_one" }));
+    await waitFor(() => expect(setMusicRepeatMode).toHaveBeenCalledWith("server-a", "a", "all"));
+  });
+
+  it("changes only this listener's music-bot participant volume", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    const slider = await screen.findByRole("slider", { name: "personalVolume" });
+    fireEvent.change(slider, { target: { value: "45" } });
+    expect(useVoiceStore.getState().userVolumes["__music_bot__:a"]).toBe(45);
+    expect(useVoiceStore.getState().userVolumes.other).toBeUndefined();
+  });
+
+  it("seeks a finite track from the accessible timeline", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    const slider = await screen.findByRole("slider", { name: "seek" });
+    fireEvent.change(slider, { target: { value: "75" } });
+    fireEvent.pointerUp(slider, { target: { value: "75" } });
+    await waitFor(() => expect(seekMusic).toHaveBeenCalledWith("server-a", "a", 75));
+  });
+
+  it("shows a restarted queue as paused and resumes only after explicit action", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ is_active: false, is_paused: true, current_track: null, queue: [
+      { ...song().current_track!, queue_item_id: "saved", title: "Saved track" },
+    ] }));
+    render(<MusicBotPanel channelId="a" />);
+    expect(await screen.findByText("restoredTitle")).toBeVisible();
+    expect(restoreMusicSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "restorePlayback" }));
+    await waitFor(() => expect(restoreMusicSession).toHaveBeenCalledWith("server-a", "a"));
+  });
+
+  it("uses the connected voice server and actual sample position", async () => {
+    render(<MusicBotPanel channelId="a" />);
+    await screen.findByText("0:30");
+    expect(getMusicState).toHaveBeenCalledWith("server-a", "a");
+    fireEvent.click(screen.getByRole("button", { name: "pause" }));
+    await waitFor(() => expect(pauseMusic).toHaveBeenCalledWith("server-a", "a"));
+  });
+
+  it("does not replace a newer WS stop with an older HTTP snapshot", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof getMusicState>>) => void;
+    const stale = song();
+    vi.mocked(getMusicState).mockReturnValue(new Promise((done) => { resolve = done; }));
+    render(<MusicBotPanel channelId="a" />);
+    act(() => useVoiceStore.getState().setMusicBotState("a", song({ is_active: false, current_track: null })));
+    await act(async () => resolve({ success: true, data: stale }));
+    expect(screen.queryByText("A song")).not.toBeInTheDocument();
+    expect(useVoiceStore.getState().musicBotStates.a.is_active).toBe(false);
+  });
+
+  it("clears stale bot state when the server reports no active bot", async () => {
+    vi.mocked(getMusicState).mockResolvedValue({ success: true });
+    render(<MusicBotPanel channelId="a" />);
+    await waitFor(() => expect(useVoiceStore.getState().musicBotStates.a).toBeUndefined());
+    expect(screen.queryByText("A song")).not.toBeInTheDocument();
+  });
+
+  it("does not restore a previously unseen channel after account reset", async () => {
+    useVoiceStore.setState({ musicBotStates: {}, musicBotRevisions: {}, musicBotUpdatedAt: {} });
+    let resolve!: (value: Awaited<ReturnType<typeof getMusicState>>) => void;
+    vi.mocked(getMusicState).mockReturnValue(new Promise((done) => { resolve = done; }));
+    render(<MusicBotPanel channelId="a" />);
+    act(() => useVoiceStore.getState().resetMusicBotStates());
+    await act(async () => resolve({ success: true, data: song() }));
+    expect(useVoiceStore.getState().musicBotStates).toEqual({});
+    expect(screen.queryByText("A song")).not.toBeInTheDocument();
+  });
+
+  it("does not accept a mismatched server snapshot and offers retry", async () => {
+    vi.mocked(getMusicState).mockResolvedValue({ success: true, data: song({ server_id: "wrong" }) });
+    render(<MusicBotPanel channelId="a" />);
+    await screen.findByText("stateError");
+    vi.mocked(getMusicState).mockResolvedValue({ success: true });
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    await waitFor(() => expect(screen.queryByText("stateError")).not.toBeInTheDocument());
+  });
+
+  it("contains rejected controls and blocks concurrent clicks", async () => {
+    let reject!: (reason: Error) => void;
+    vi.mocked(pauseMusic).mockReturnValue(new Promise((_resolve, fail) => { reject = fail; }));
+    render(<MusicBotPanel channelId="a" />);
+    await screen.findByText("0:30");
+    fireEvent.click(screen.getByRole("button", { name: "pause" }));
+    fireEvent.click(screen.getByRole("button", { name: "skip" }));
+    expect(skipMusic).not.toHaveBeenCalled();
+    await act(async () => reject(new Error("network")));
+    expect(fixture.toast).toHaveBeenCalledWith("error", "controlError");
+    expect(screen.getByRole("button", { name: "skip" })).toBeEnabled();
+  });
+
+  it("keeps paused time and distinguishes buffering from playing", async () => {
+    useVoiceStore.getState().setMusicBotState("a", song({ is_paused: true, elapsed_seconds: 45 }));
+    render(<MusicBotPanel channelId="a" />);
+    await screen.findByText("0:45");
+    expect(screen.getByText("paused")).toBeInTheDocument();
+    act(() => useVoiceStore.getState().setMusicBotState("a", song({ started_at: null, elapsed_seconds: 0 })));
+    await screen.findByText("0:00");
+    expect(screen.getByText("buffering")).toBeInTheDocument();
+  });
+
+  it("resyncs after reconnect and removes its listeners on unmount", async () => {
+    const { unmount } = render(<MusicBotPanel channelId="a" />);
+    await screen.findByText("0:30");
+    const callback = fixture.room.on.mock.calls.find(([event]) => event === RoomEvent.Reconnected)?.[1];
+    await act(async () => callback());
+    expect(getMusicState).toHaveBeenCalledTimes(2);
+    unmount();
+    expect(fixture.room.off).toHaveBeenCalledWith(RoomEvent.Reconnected, callback);
+  });
+
+  it("ignores a response after the voice session changes", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof getMusicState>>) => void;
+    vi.mocked(getMusicState).mockReturnValue(new Promise((done) => { resolve = done; }));
+    render(<MusicBotPanel channelId="a" />);
+    act(() => useVoiceStore.setState({ currentVoiceChannelId: "b", currentVoiceServerId: "server-b" }));
+    await act(async () => resolve({ success: true, data: song({ is_paused: true }) }));
+    expect(useVoiceStore.getState().musicBotStates.a.is_paused).toBe(false);
+    expect(screen.queryByText("A song")).not.toBeInTheDocument();
+  });
+});

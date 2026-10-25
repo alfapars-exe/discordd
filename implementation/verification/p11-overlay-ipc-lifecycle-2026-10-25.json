@@ -1,0 +1,13 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Bounded IPC and lifecycle prerequisite for the existing passive desktop voice floater; not a complete in-game overlay.",
+  "implementation": [
+    "Overlay snapshots are explicitly projected and validated for finite settings, known corner, bounded text/URLs, unique participants and a maximum of 64 participants. The client producer caps the list at the same bound. Malformed frames do not mutate the overlay.",
+    "Only the main application window's main frame can send overlay snapshots or invoke the six registered-game IPC operations; other frames cannot trigger the executable picker or registry operations.",
+    "The BrowserWindow starts hidden. Deferred delivery reads the latest snapshot, cannot resurrect a disabled/closed window and reuses one load listener even through repeated enable/disable cycles.",
+    "The overlay entry explicitly loads its stylesheet. Its content fills the fixed viewport and aligns the widget and scale origin to the selected corner. Renderer subscriptions now return a cleanup callback that removes their exact IPC listener on unmount."
+  ],
+  "verification": ["Agent and parent Electron TypeScript compilation and all 97 native tests passed, including parser, trusted-frame and fake-window lifecycle regressions.", "Parent focused actual-renderer, subscription cleanup and preview tests passed: 3 files, 11 tests. Follow-up client typecheck caught an incomplete Electron bridge test mock; it was replaced by a scoped global stub, then client typecheck and scoped lint passed.", "Follow-up parent Electron compilation and all 103 tests passed after adding optional widget controls and screen-workarea geometry. Size/position are computed before display; zero capacity hides the window, and physical capacity changes only the outgoing snapshot rather than saved preferences."],
+  "open": ["Real Windows display/window lifecycle and multi-monitor acceptance", "Actual game-aware overlay, remaining widget controls and full P11 acceptance"],
+  "release": "No process injection, game launch, production publication or actual game-window acceptance claim."
+}

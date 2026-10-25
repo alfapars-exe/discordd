@@ -1,154 +1,75 @@
-/**
- * VadGateProcessor — Hysteresis-based voice activity gate (AudioWorklet).
- *
- * Inserted after RNNoise in the pipeline. Computes RMS energy per block,
- * runs it through a CLOSED → OPEN → CLOSING → CLOSED state machine, and
- * outputs silence when the gate is closed. Two thresholds (dB) prevent
- * flickering on borderline speech:
- *
- *   openThreshold   — gate transitions CLOSED → OPEN above this RMS level
- *   closeThreshold  — gate transitions OPEN → CLOSING below this; then waits
- *                     holdMs at silence before becoming fully CLOSED
- *
- * Pattern adapted from @sapphi-red/web-noise-suppressor's noiseGate but
- * extended with port.postMessage updates so the main thread can switch
- * "Gürültü Engelleme Seviyesi" without recreating the worklet.
- *
- * Backwards-compat: a legacy `{ threshold }` message switches the gate to
- * single-threshold mode (close = open) so existing call sites that haven't
- * been migrated keep working.
- *
- * Pipeline: RNNoise → [VadGateProcessor] → Destination
- */
-
-const State = { CLOSED: 0, OPEN: 1, CLOSING: 2 };
-const BLOCK_SIZE = 128;
-
-function dbToLinear(db) {
-  return Math.pow(10, db / 20);
-}
-
+/** Energy gate, not speaker recognition. All timing is measured in samples. */
 class VadGateProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-
-    // null = gate disabled (pass-through). Two thresholds in dB; close < open
-    // gives hysteresis. holdMs is how long we stay CLOSING before fully closing —
-    // prevents word-ending clipping.
-    this._openLinear = null;   // RMS level for CLOSED → OPEN
-    this._closeLinear = null;  // RMS level for OPEN → CLOSING
-    this._holdBlocks = 0;      // number of blocks the silent state must persist before CLOSED
-    this._state = State.CLOSED;
-    this._holdCounter = 0;
-
-    // Smoothing for output (avoids click on state transitions). Block-level
-    // gain envelope rather than per-sample to keep CPU low.
-    this._gainCurrent = 0;
-    this._gainAttack = 0.6;     // ~3 blocks to fully open (≈8 ms at 48 kHz)
-    this._gainRelease = 0.05;   // ~80 ms ramp to silence
-
-    this.port.onmessage = (event) => this.handleMessage(event.data);
+    this.enabled = false;
+    this.open = false;
+    this.gain = 0;
+    this.hold = 0;
+    this.position = 0;
+    this.meterSamples = 0;
+    this.lookahead = Math.round(sampleRate * 0.01);
+    this.delay = [];
+    this.energy = new Float32Array(Math.max(1, Math.round(sampleRate * 0.01)));
+    this.energyPosition = 0;
+    this.energySum = 0;
+    this.attack = 1 / Math.max(1, sampleRate * 0.005);
+    this.release = 1 / Math.max(1, sampleRate * 0.08);
+    this.destroyed = false;
+    this.port.onmessage = ({ data }) => {
+      if (data?.type === "DESTROY") { this.destroyed = true; return; }
+      this.enabled = data?.disabled !== true;
+      if (!this.enabled) { this.open = true; this.gain = 1; this.hold = 0; }
+      this.openThreshold = 10 ** ((data?.openThresholdDb ?? -52) / 20);
+      this.closeThreshold = 10 ** ((data?.closeThresholdDb ?? -58) / 20);
+      this.holdSamples = Math.round(sampleRate * (data?.holdMs ?? 300) / 1000);
+    };
   }
-
-  handleMessage(data) {
-    if (data == null) return;
-
-    if (data.disabled === true) {
-      this._openLinear = null;
-      this._closeLinear = null;
-      this._holdBlocks = 0;
-      return;
-    }
-
-    if (typeof data.openThresholdDb === "number" && typeof data.closeThresholdDb === "number") {
-      this._openLinear = dbToLinear(data.openThresholdDb);
-      this._closeLinear = dbToLinear(data.closeThresholdDb);
-      const holdMs = typeof data.holdMs === "number" ? data.holdMs : 200;
-      const blocksPerSecond = sampleRate / BLOCK_SIZE;
-      this._holdBlocks = Math.max(1, Math.ceil((holdMs / 1000) * blocksPerSecond));
-      return;
-    }
-
-    // Legacy linear RMS threshold (kept for backwards-compat with the
-    // sensitivityToThreshold curve in RNNoiseProcessor).
-    if (typeof data.threshold === "number") {
-      if (data.threshold <= 0) {
-        this._openLinear = null;
-        this._closeLinear = null;
-        this._holdBlocks = 0;
-      } else {
-        this._openLinear = data.threshold;
-        // 6 dB hysteresis below open — equivalent to ratio 0.5
-        this._closeLinear = data.threshold * 0.5;
-        const blocksPerSecond = sampleRate / BLOCK_SIZE;
-        this._holdBlocks = Math.max(1, Math.ceil(0.2 * blocksPerSecond)); // 200 ms
-      }
-    }
-  }
-
   process(inputs, outputs) {
+    if (this.destroyed) return false;
     const input = inputs[0];
     const output = outputs[0];
-
-    if (!input || !input[0]) return true;
-
-    // Pass-through when gate disabled.
-    if (this._openLinear == null) {
-      for (let ch = 0; ch < input.length; ch++) {
-        output[ch]?.set(input[ch]);
-      }
-      return true;
-    }
-
-    // RMS across the first channel (mono mic). Cheaper than averaging all
-    // channels and the result is the same for typical mono inputs.
-    const samples = input[0];
-    let sumSq = 0;
-    for (let i = 0; i < samples.length; i++) {
-      sumSq += samples[i] * samples[i];
-    }
-    const rms = Math.sqrt(sumSq / samples.length);
-
-    switch (this._state) {
-      case State.CLOSED:
-        if (rms > this._openLinear) this._state = State.OPEN;
-        break;
-      case State.OPEN:
-        if (rms < this._closeLinear) {
-          this._state = State.CLOSING;
-          this._holdCounter = 0;
+    if (!output?.[0]) return true;
+    const count = output[0].length;
+    while (this.delay.length < output.length) this.delay.push(new Float32Array(this.lookahead + 1));
+    let inputPower = 0;
+    let outputPower = 0;
+    for (let i = 0; i < count; i++) {
+      const sample = input?.[0]?.[i] ?? 0;
+      const finite = Number.isFinite(sample) ? sample : 0;
+      const squared = finite * finite;
+      this.energySum += squared - this.energy[this.energyPosition];
+      this.energy[this.energyPosition] = squared;
+      this.energyPosition = (this.energyPosition + 1) % this.energy.length;
+      const rms = Math.sqrt(Math.max(0, this.energySum) / this.energy.length);
+      if (this.enabled) {
+        if (!this.open && rms >= this.openThreshold) { this.open = true; this.hold = this.holdSamples; }
+        if (this.open) {
+          if (rms >= this.closeThreshold) this.hold = this.holdSamples;
+          else if (this.hold > 0) this.hold--;
+          else this.open = false;
         }
-        break;
-      case State.CLOSING:
-        if (rms > this._closeLinear) {
-          this._state = State.OPEN;
-        } else if (this._holdCounter >= this._holdBlocks) {
-          this._state = State.CLOSED;
-        } else {
-          this._holdCounter++;
-        }
-        break;
-      default:
-        break;
-    }
-
-    const gateOpen = this._state === State.OPEN || this._state === State.CLOSING;
-    const targetGain = gateOpen ? 1.0 : 0.0;
-    const coeff = targetGain > this._gainCurrent ? this._gainAttack : this._gainRelease;
-    this._gainCurrent += coeff * (targetGain - this._gainCurrent);
-    if (this._gainCurrent < 0.001) this._gainCurrent = 0.0;
-
-    for (let ch = 0; ch < input.length; ch++) {
-      if (!output[ch]) continue;
-      const inp = input[ch];
-      const out = output[ch];
-      for (let i = 0; i < inp.length; i++) {
-        out[i] = inp[i] * this._gainCurrent;
+        this.gain = this.open ? Math.min(1, this.gain + this.attack) : Math.max(0, this.gain - this.release);
       }
+      for (let ch = 0; ch < output.length; ch++) {
+        const value = input?.[ch]?.[i] ?? 0;
+        const buffer = this.delay[ch];
+        buffer[this.position] = Number.isFinite(value) ? value : 0;
+        output[ch][i] = this.enabled
+          ? buffer[(this.position + 1) % buffer.length] * this.gain
+          : buffer[this.position];
+      }
+      this.position = (this.position + 1) % (this.lookahead + 1);
+      inputPower += squared;
+      outputPower += output[0][i] ** 2;
     }
-
+    this.meterSamples += count;
+    if (this.meterSamples >= sampleRate / 10) {
+      this.meterSamples = 0;
+      this.port.postMessage({ type: "METER", inputDb: 10 * Math.log10(Math.max(1e-12, inputPower / count)),
+        outputDb: 10 * Math.log10(Math.max(1e-12, outputPower / count)), gateOpen: this.open });
+    }
     return true;
   }
 }
-
 registerProcessor("vad-gate-processor", VadGateProcessor);

@@ -22,6 +22,7 @@ import type { AdminReportListItem } from "../../types";
 import { resolveAssetUrl } from "../../utils/constants";
 import type { ContextMenuItem } from "../../hooks/useContextMenu";
 import AdminTable from "./AdminTable";
+import AdminReportEvidence from "./AdminReportEvidence";
 import type { ColumnDef } from "./adminTableTypes";
 import { useTableFilter } from "../../hooks/useTableFilter";
 import { useTableSort } from "../../hooks/useTableSort";
@@ -163,7 +164,7 @@ function AdminReportList() {
       showApiError(res, { fallbackKey: "settings:platformReportLoadError" });
     }
     setIsLoading(false);
-  }, [statusFilter, addToast, t]);
+  }, [statusFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -341,9 +342,9 @@ function AdminReportList() {
 
       case "description":
         return (
-          <span className="admin-report-desc-cell" title={report.description}>
+          <div><span className="admin-report-desc-cell" title={report.description}>
             {report.description}
-          </span>
+          </span><AdminReportEvidence report={report} /></div>
         );
 
       case "attachments": {

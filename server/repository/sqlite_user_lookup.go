@@ -16,7 +16,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
 			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id, last_seen_at,
-			avatar_animated_url, banner_url, bio, pronouns, accent_color
+			avatar_animated_url, banner_url, banner_animated_url, bio, pronouns, accent_color
 		FROM users WHERE id = ?`
 
 	user := &models.User{}
@@ -28,7 +28,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id string) (*models.User, 
 		&user.TokenVersion,
 		&user.CreatedAt,
 		&user.IsBot, &user.OwnerUserID, &user.LastSeenAt,
-		&user.AvatarAnimatedURL, &user.BannerURL, &user.Bio, &user.Pronouns, &user.AccentColor,
+		&user.AvatarAnimatedURL, &user.BannerURL, &user.BannerAnimatedURL, &user.Bio, &user.Pronouns, &user.AccentColor,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -46,7 +46,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
 			platform_ban_reason, platform_banned_by, platform_banned_at, token_version, created_at, is_bot, owner_user_id,
-			avatar_animated_url, banner_url, bio, pronouns, accent_color
+			avatar_animated_url, banner_url, banner_animated_url, bio, pronouns, accent_color
 		FROM users WHERE username = ? COLLATE NOCASE`
 
 	user := &models.User{}
@@ -58,7 +58,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 		&user.TokenVersion,
 		&user.CreatedAt,
 		&user.IsBot, &user.OwnerUserID,
-		&user.AvatarAnimatedURL, &user.BannerURL, &user.Bio, &user.Pronouns, &user.AccentColor,
+		&user.AvatarAnimatedURL, &user.BannerURL, &user.BannerAnimatedURL, &user.Bio, &user.Pronouns, &user.AccentColor,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -76,7 +76,7 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
 			platform_ban_reason, platform_banned_by, platform_banned_at, created_at, is_bot, owner_user_id, last_seen_at,
-			avatar_animated_url, banner_url, bio, pronouns, accent_color
+			avatar_animated_url, banner_url, banner_animated_url, bio, pronouns, accent_color
 		FROM users ORDER BY username`
 
 	rows, err := r.db.QueryContext(ctx, query)
@@ -92,7 +92,7 @@ func (r *sqliteUserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 			&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 			&user.CreatedAt,
 			&user.IsBot, &user.OwnerUserID, &user.LastSeenAt,
-			&user.AvatarAnimatedURL, &user.BannerURL, &user.Bio, &user.Pronouns, &user.AccentColor,
+			&user.AvatarAnimatedURL, &user.BannerURL, &user.BannerAnimatedURL, &user.Bio, &user.Pronouns, &user.AccentColor,
 		)
 		return user, err
 	})
@@ -103,7 +103,7 @@ func (r *sqliteUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 		SELECT id, username, display_name, avatar_url, wallpaper_url, password_hash, status, pref_status, custom_status,
 			email, language, dm_privacy, is_platform_admin, is_platform_banned, has_seen_download_prompt, has_seen_welcome,
 			platform_ban_reason, platform_banned_by, platform_banned_at, created_at, is_bot, owner_user_id,
-			avatar_animated_url, banner_url, bio, pronouns, accent_color
+			avatar_animated_url, banner_url, banner_animated_url, bio, pronouns, accent_color
 		FROM users WHERE email = ?`
 
 	user := &models.User{}
@@ -114,7 +114,7 @@ func (r *sqliteUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 		&user.PlatformBanReason, &user.PlatformBannedBy, &user.PlatformBannedAt,
 		&user.CreatedAt,
 		&user.IsBot, &user.OwnerUserID,
-		&user.AvatarAnimatedURL, &user.BannerURL, &user.Bio, &user.Pronouns, &user.AccentColor,
+		&user.AvatarAnimatedURL, &user.BannerURL, &user.BannerAnimatedURL, &user.Bio, &user.Pronouns, &user.AccentColor,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HiChat ses karşılaştırması</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background:#10141c; color:#ecf1fa }
+  body { max-width:1100px; margin:40px auto; padding:0 24px 48px; line-height:1.6 }
+  h1 { margin-bottom:8px; font-size:30px } p { max-width:850px; color:#b9c6db }
+  a { color:#9fc7ff } label { display:block; margin-bottom:12px; font-weight:600 }
+  select { font:inherit; color:inherit; background:#1c2637; padding:10px 14px; border:1px solid #52647f; border-radius:6px; margin-left:10px }
+  main { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-top:24px }
+  article { padding:18px; border:1px solid #344156; border-radius:10px; background:#18202d }
+  h2 { margin:0 0 8px; font-size:18px } article p { margin:0 0 16px; min-height:52px; font-size:14px }
+  audio { width:100% } footer { margin-top:28px; font-size:14px; color:#b9c6db }
+</style>
+<h1>HiChat ses karşılaştırması</h1>
+<p>Aynı Türkçe konuşma kaydı, aynı gürültü ve beş ücretsiz motor. Model çıktıları ile gerçek tarayıcıda LiveKit ve P2P alıcılarından alınan kayıtları karşılaştırabilirsiniz. Kaynak dosyadan verilir; fiziksel mikrofon kullanılmaz. Karşılaştırmada enerji kapısı kapalıdır.</p>
+<label>Örnek
+  <select id="fixture">
+    <option value="clean">Temiz konuşma</option>
+    <option value="fan">Konuşma + fan</option>
+    <option value="keyboard">Konuşma + klavye</option>
+    <option value="transient">Konuşma + ani gürültü</option>
+  </select>
+</label>
+<label>Kayıt
+  <select id="path">
+    <option value="offline">Model çıktısı</option>
+    <option value="livekit">LiveKit alıcısı</option>
+    <option value="p2p">P2P alıcısı</option>
+  </select>
+</label>
+<main id="players"></main>
+<footer>
+  <p>DFN3 uygulama varsayılanı: %70 güç → 10 dB bastırma sınırı. Kaynak kayıt 16 kHz olduğundan 8 kHz üzerindeki ses korunmasını bu örnekle değerlendirmeyin. Bir kaydı başlatmak diğerlerini durdurur.</p>
+  <p><a href="report.md">Gürültü ve işlem süresi</a> · <a href="intelligibility.md">STOI / ESTOI karşılaştırması</a> · <a href="report.json">Ölçüm verileri ve kaynak bilgileri</a> · <a href="implementation-validation.md">Uygulama ve doğrulama raporu</a> · <a href="dfn-transient-paired-audit.md">Konuşma başlangıcı incelemesi</a></p>
+  <p>Konuşma: Google FLEURS (2022), Conneau ve çalışma arkadaşları; CC BY 4.0. Örnekler yeniden örnekleme, seviye ayarı ve sentetik gürültü ekleme ile türetilmiştir. Kaynak ve değişiklikler report.json dosyasında kayıtlıdır.</p>
+</footer>
+<script>
+const entries = [
+  ['input', 'İşlenmemiş giriş', 'Diğer bütün motorlara verilen aynı kayıt.'],
+  ['rnnoise', 'Standart · RNNoise', '48 kHz işleme; uygulamanın varsayılan motoru.'],
+  ['deepfilter', 'Güçlü · DeepFilterNet3', '48 kHz model; uygulamadaki varsayılan güç ayarı.'],
+  ['gtcrn', 'GTCRN', '16 kHz model; 8 kHz üzerindeki içerik korunmaz.'],
+  ['dtln', 'DTLN', '16 kHz model; 8 kHz üzerindeki içerik korunmaz.'],
+  ['speex', 'Speex', 'Hafif DSP tabanlı gürültü azaltma.'],
+];
+const players = document.getElementById('players');
+for (const [id, title, detail] of entries) {
+  const card = document.createElement('article');
+  const heading = document.createElement('h2'); heading.textContent = title;
+  const note = document.createElement('p'); note.textContent = detail;
+  const player = document.createElement('audio');
+  player.controls = true; player.preload = 'none'; player.dataset.engine = id;
+  player.setAttribute('aria-label', title);
+  player.addEventListener('play', () => document.querySelectorAll('audio').forEach(other => { if (other !== player) other.pause(); }));
+  card.append(heading, note, player); players.append(card);
+}
+function selectFixture() {
+  const fixture = document.getElementById('fixture').value;
+  const path = document.getElementById('path').value;
+  for (const player of document.querySelectorAll('audio')) {
+    player.pause();
+    player.src = player.dataset.engine === 'input' ? `inputs/${fixture}.wav`
+      : path === 'offline' ? `${player.dataset.engine}-${fixture}.wav`
+      : `remote-${player.dataset.engine}-${fixture}-${path}.webm`;
+  }
+}
+document.getElementById('fixture').addEventListener('change', selectFixture);
+document.getElementById('path').addEventListener('change', selectFixture);
+selectFixture();
+</script>
+</html>

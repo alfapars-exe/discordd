@@ -1,0 +1,15 @@
+{
+  "phase": "P6",
+  "status": "implemented_unverified",
+  "implemented": [
+    "Profile-update producer rejects nil, null, non-object and malformed actor preferences instead of panicking or assuming sharing consent.",
+    "Invalid recipient preferences are skipped with an error while other recipients may still be processed."
+  ],
+  "verification": [
+    "TestProfileUpdateNotifier* passed five repetitions (0.187s), including existing enabled/disabled/default cases and invalid actor/recipient cases."
+  ],
+  "open": [
+    "No live two-client profile notification acceptance in this change.",
+    "Full services/ws race run passed before these profile-preference edits (services 208.24s, ws 4.623s); it is not a final-source verification for these edits."
+  ]
+}

@@ -27,6 +27,8 @@ export interface AppSettings {
   closeToTray: boolean;
   /** Transparent window background — desktop shows through (requires restart) */
   transparentBackground: boolean;
+  /** Use Chromium GPU acceleration (requires restart after changing) */
+  hardwareAcceleration: boolean;
   /** Verbose diagnostic logging — captures extra detail in the rolling log */
   diagnosticVerbose: boolean;
   /** Persisted window position and size */
@@ -38,6 +40,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   startMinimized: false,
   closeToTray: true,
   transparentBackground: false,
+  hardwareAcceleration: true,
   diagnosticVerbose: false,
 };
 

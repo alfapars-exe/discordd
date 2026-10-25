@@ -1,0 +1,31 @@
+{
+  "package": "P5",
+  "behaviors": [
+    "p5.three-columns", "p5.scope", "p5.theme-colors", "p5.free-cosmetics",
+    "p5.board-tabs", "p5.widget-library", "p5.widget-order", "p5.favorite-game",
+    "p5.liked-games", "p5.rotation-games", "p5.wishlist", "p5.game-link-widgets",
+    "p5.watching-status", "p5.manual-links", "p5.link-cards", "p5.animated-banner", "p5.badges-tags"
+  ],
+  "status": "implemented_unverified",
+  "implementation": [
+    "Migration 113 and PostgreSQL migration 014 persist one optimistic-concurrency profile document per account and optional server scope.",
+    "The service requires current membership for server-scoped owner writes and both viewer and target membership for server-scoped public reads.",
+    "Public reads enforce the target account profile-audience policy and strip hidden manual links.",
+    "The model bounds document, widget, game-list and link sizes; rejects duplicate identifiers, unknown widget types, credential-bearing URLs and non-HTTP(S) schemes.",
+    "The settings editor provides responsive customization, preview and summary columns, global/current-server switching, board/activity/wishlist tabs, two-color theme editing, self-reported activity, widget add/edit/order/remove and manual link visibility.",
+    "Member profile cards fetch authorized showcase data and label outbound links as user-provided; no OAuth or verified-account claim is made."
+    ,"Animated GIF profile banners are decoded under frame, pixel, time and output-size budgets; a static poster is stored separately and reduced-motion viewers always receive the poster."
+    ,"Member cards continue to render real granted badges, persisted account creation time and the current authorized server member identity without seeding reference data."
+  ],
+  "verification": [
+    { "command": "go test -c . && go test -c ./models && go test -c ./repository && go test -c ./services && go test -c ./handlers", "cwd": "server", "result": "compiled" },
+    { "command": "tsc --noEmit", "cwd": "client", "result": "passed" },
+    { "command": "vitest run src/api/profileShowcase.test.ts src/api/groupDM.test.ts src/stores/groupDMStore.test.ts", "cwd": "client", "result": "3 files, 9 tests passed" },
+    { "command": "vitest run src/components/members/memberCard/ProfileHero.test.tsx src/api/profileShowcase.test.ts", "cwd": "client", "result": "2 files, 8 tests passed" }
+  ],
+  "limitations": [
+    "New Go test executables cannot be executed on this Windows host because Application Control blocks newly linked binaries; compilation is not recorded as runtime acceptance.",
+    "Independent-client, installed-Windows, keyboard, screen-reader and responsive visual acceptance remain open.",
+    "Animated banner server runtime, real badge/server-identity, independent-client and installed-Windows acceptance remain open."
+  ]
+}

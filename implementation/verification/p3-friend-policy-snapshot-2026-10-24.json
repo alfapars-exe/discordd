@@ -1,0 +1,9 @@
+{
+  "status": "implemented_unverified",
+  "scope": "P3 server enforcement of shared-server friend requests",
+  "issue": "Friend request eligibility loaded friend-request preferences, then separately reloaded DM defaults/overrides. Concurrent changes could combine criteria from different revisions and allow a request that neither complete revision allowed.",
+  "change": "Parse server-DM rules from the already-loaded preference snapshot; existing DM creation path reuses the same parser.",
+  "regression": "TestFriendRequestPolicy_UsesOnePreferenceSnapshot switches between two individually denying snapshots; assert request denied and repository read exactly once.",
+  "verification": "Linux Go service tests matching TestFriendRequestPolicy|TestServerDMPolicy passed with -count=1; complete go test ./services passed in 20.976s; gofmt applied",
+  "limitations": "Does not claim transaction-wide serializability for independent membership/friendship changes or real multi-client acceptance. No migration or production write."
+}

@@ -13,6 +13,7 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useAccessibilityStore } from "../../stores/accessibilityStore";
 import { resolveAssetUrl } from "../../utils/constants";
 import { EMOJI_ID, emojiAnimatedUrl, emojiStaticUrl } from "../../utils/expressionTokens";
 
@@ -30,6 +31,7 @@ type CustomEmojiProps = {
 function CustomEmoji({ id, name, animated, size = "inline", still = false }: CustomEmojiProps) {
   const { t } = useTranslation("expressions");
   const reducedMotion = useReducedMotion();
+  const disableAnimatedEmoji = useAccessibilityStore((state) => state.disableAnimatedEmoji);
   const [failed, setFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
 
@@ -37,8 +39,11 @@ function CustomEmoji({ id, name, animated, size = "inline", still = false }: Cus
     return <span className="msg-custom-emoji-fallback">{`:${name}:`}</span>;
   }
 
-  const hoverToPlay = animated && !still && reducedMotion;
-  const playing = animated && !still && (!reducedMotion || hovered);
+  // The explicit animated-emoji preference is stronger than reduced motion:
+  // it must never fetch/play the GIF, including on hover. Reduced motion keeps
+  // the existing deliberate hover-to-preview behavior.
+  const hoverToPlay = animated && !still && reducedMotion && !disableAnimatedEmoji;
+  const playing = animated && !still && !disableAnimatedEmoji && (!reducedMotion || hovered);
   const src = resolveAssetUrl(playing ? emojiAnimatedUrl(id) : emojiStaticUrl(id));
 
   return (

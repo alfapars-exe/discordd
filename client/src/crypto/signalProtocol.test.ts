@@ -134,6 +134,13 @@ import {
   toBase64,
   fromBase64,
 } from "./signalProtocol";
+import * as keyStorage from "./keyStorage";
+import { getAuthSessionSnapshot, publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  return { promise: new Promise<T>((done) => { resolve = done; }), resolve };
+}
 
 // ──────────────────────────────────
 // Fixtures + helpers
@@ -236,6 +243,8 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const unsub of activeUnsubs.splice(0)) unsub();
+  publishAuthOwnerChange(null);
+  publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
 });
 
 // ──────────────────────────────────
@@ -243,6 +252,46 @@ afterEach(() => {
 // ──────────────────────────────────
 
 describe("signalProtocol — X3DH handshake + core ratchet", () => {
+  it("does not continue key writes after auth changes during an identity-key save", async () => {
+    publishAuthOwnerChange("scope-a");
+    publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+    const savePending = deferred<void>();
+    vi.mocked(keyStorage.saveIdentityKeyPair).mockImplementationOnce(async (keyPair) => {
+      h.active.identity = keyPair;
+      await savePending.promise;
+    });
+    vi.mocked(keyStorage.saveSigningKeyPair).mockClear();
+
+    const generating = generateAllKeys();
+    await vi.waitFor(() => expect(keyStorage.saveIdentityKeyPair).toHaveBeenCalledOnce());
+    publishAuthOwnerChange("scope-b");
+    publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+    savePending.resolve();
+
+    await expect(generating).rejects.toThrow("Auth session changed");
+    expect(keyStorage.saveSigningKeyPair).not.toHaveBeenCalled();
+  });
+
+  it("does not advance an old session after auth changes while the ratchet row is loading", async () => {
+    await establishSession();
+    const first = await aliceEncrypt("establish receiver session");
+    expect(await bobDecrypt(first)).toBe("establish receiver session");
+    const next = await aliceEncrypt("late ratchet");
+
+    const pendingSession = deferred<StoredSession | null>();
+    vi.mocked(keyStorage.getSession).mockReturnValueOnce(pendingSession.promise);
+    vi.mocked(keyStorage.saveSession).mockClear();
+    h.active = h.bob;
+    let current = true;
+    const decrypting = decryptMessage(ALICE.userId, ALICE.deviceId, next, () => current);
+    await vi.waitFor(() => expect(keyStorage.getSession).toHaveBeenCalled());
+    current = false;
+    pendingSession.resolve(h.bob.sessions.get(compositeKey(ALICE.userId, ALICE.deviceId)) ?? null);
+
+    await expect(decrypting).rejects.toThrow("Auth session changed");
+    expect(keyStorage.saveSession).not.toHaveBeenCalled();
+  });
+
   it("derives a mutual secret via the 4-DH (with one-time prekey) path", async () => {
     await establishSession({ withOtp: true });
 

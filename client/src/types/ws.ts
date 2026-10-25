@@ -31,6 +31,7 @@ import type { Channel, Category, ChannelPermissionOverride } from "./channel";
 import type { Message, PinnedMessage } from "./message";
 import type { ReactionGroup } from "./common";
 import type { DMChannelWithUser, DMMessage } from "./dm";
+import type { GroupDM, GroupDMMessage } from "./groupDM";
 import type { VoiceState, VoiceStateUpdateData } from "./voice";
 import type { MusicBotChannelState } from "./music";
 import type { AppNotification } from "./notification";
@@ -60,8 +61,12 @@ export interface WSPayloadMap {
     muted_server_ids: string[];
     muted_channel_ids: string[];
     pref_status: string;
+    voice_epoch?: string;
+    game_activity_epoch?: string;
   };
-  presence_update: { user_id: string; status: UserStatus };
+  game_activity_update: import("../stores/gameActivityStore").GameActivityUpdate;
+  preferences_changed: { user_id: string };
+  presence_update: { user_id: string; status: UserStatus; is_auto?: boolean };
   member_join: MemberWithRoles;
   audit_event: AuditLog;
   member_leave: { user_id: string };
@@ -138,11 +143,13 @@ export interface WSPayloadMap {
   // Persisted activity feed (mentions / replies / friend + DM requests).
   // Sent only to the recipient's own sessions.
   notification_create: AppNotification;
+  spam_decision: import("../stores/spamDecisionStore").SpamDecision;
+  media_label_changed: import("../utils/mediaLabelSync").MediaLabelChange;
   // Read-cursor sync across the recipient's devices (after a REST read call).
   notification_read: { ids: string[]; all: boolean; unread_count: number };
 
   // ─── Channel ───
-  channel_create: unknown;
+  channel_create: Channel;
   channel_update: Channel;
   channel_delete: { id: string };
   channel_reorder: unknown;
@@ -192,6 +199,17 @@ export interface WSPayloadMap {
   // Echoed to the reader's own sessions after POST /dms/{id}/read so other
   // devices drop their local unread count for that channel.
   dm_read: { dm_channel_id: string; user_id: string; last_read_message_id: string | null };
+  group_dm_create: GroupDM;
+  group_dm_update: GroupDM;
+  group_dm_delete: { group_id: string };
+  group_dm_rekey: { group_id: string; key_epoch: number };
+  group_dm_message_create: GroupDMMessage;
+  group_dm_message_update: GroupDMMessage;
+  group_dm_message_delete: { group_id: string; id: string };
+  group_dm_pins_update: { group_id: string; message_id: string; pinned: boolean };
+  group_dm_reaction_update: { group_id: string; message_id: string; reactions: ReactionGroup[] };
+  group_dm_read: { group_id: string; last_read_message_id: string | null; unread_count: number; revision?: number };
+  group_dm_refresh: { reason: string };
 
   // ─── Voice ───
   voice_state_update: VoiceStateUpdateData;
@@ -200,9 +218,10 @@ export interface WSPayloadMap {
     channel_id: string;
     viewer_count: number;
     viewer_user_id: string;
+    viewer_user_ids?: string[] | null;
     action: string;
   };
-  voice_states_sync: { states: VoiceState[] };
+  voice_states_sync: { states: VoiceState[]; voice_epoch?: string; voice_revision?: number };
   voice_force_move: { channel_id: string; channel_name?: string };
   voice_force_disconnect: unknown;
   voice_afk_kick: { channel_name: string; server_name: string };
@@ -230,6 +249,9 @@ export interface WSPayloadMap {
 export interface WSEnvelope {
   seq?: number;
   server_id?: string;
+  /** Voice-domain mutation fence, separate from the transport sequence. */
+  voice_epoch?: string;
+  voice_revision?: number;
 }
 
 /**

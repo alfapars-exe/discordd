@@ -19,6 +19,42 @@ import type { DMStore } from "../dmStore";
  */
 const detachedDMMessages = new Map<string, DMMessage[]>();
 
+type DMMetadataPatch = Partial<Pick<DMMessage,"reactions"|"is_pinned">>;
+type HistoryBuffer = {readers:Set<symbol>; messages:Map<string,DMMessage>; metadata:Map<string,DMMetadataPatch>};
+const historyBuffers = new Map<string,HistoryBuffer>();
+
+/** Hold completed live events only while a history window is being loaded.
+ * Multiple overlapping readers share events but release only their own lease. */
+export function beginDMHistoryBuffer(channelId:string) {
+  const buffer=historyBuffers.get(channelId)??{readers:new Set<symbol>(),messages:new Map<string,DMMessage>(),metadata:new Map<string,DMMetadataPatch>()};
+  const reader=Symbol();buffer.readers.add(reader);historyBuffers.set(channelId,buffer);
+  return {
+    read:()=>historyBuffers.get(channelId)===buffer?[...buffer.messages.values()]:[],
+    apply:(message:DMMessage):DMMessage=>historyBuffers.get(channelId)===buffer&&message.dm_channel_id===channelId
+      ? {...message,...buffer.metadata.get(message.id)} : message,
+    release:()=>{
+      buffer.readers.delete(reader);
+      if (!buffer.readers.size && historyBuffers.get(channelId)===buffer) historyBuffers.delete(channelId);
+    },
+  };
+}
+
+export function bufferDMHistoryEvent(message:DMMessage) {
+  const buffer=historyBuffers.get(message.dm_channel_id);
+  buffer?.messages.set(message.id,{...message,...buffer.metadata.get(message.id)});
+}
+
+function bufferDMMetadata(channelId:string,messageId:string,patch:DMMetadataPatch) {
+  const buffer=historyBuffers.get(channelId);
+  if(buffer){
+    buffer.metadata.set(messageId,{...buffer.metadata.get(messageId),...patch});
+    const message=buffer.messages.get(messageId);
+    if(message)buffer.messages.set(messageId,{...message,...patch});
+  }
+  const held=detachedDMMessages.get(channelId);
+  if(held)detachedDMMessages.set(channelId,held.map(message=>message.id===messageId?{...message,...patch}:message));
+}
+
 /** Remove and return the held messages for a channel. */
 export function takeDetachedDMMessages(channelId: string): DMMessage[] {
   const held = detachedDMMessages.get(channelId) ?? [];
@@ -28,8 +64,8 @@ export function takeDetachedDMMessages(channelId: string): DMMessage[] {
 
 /** Drop held messages for one channel, or all channels when omitted. */
 export function clearDetachedDMMessages(channelId?: string): void {
-  if (channelId === undefined) detachedDMMessages.clear();
-  else detachedDMMessages.delete(channelId);
+  if (channelId === undefined) {detachedDMMessages.clear();historyBuffers.clear();}
+  else {detachedDMMessages.delete(channelId);historyBuffers.delete(channelId);}
 }
 
 export type DMWsSlice = {
@@ -70,6 +106,7 @@ export const createDMWsSlice: StateCreator<
   },
 
   handleDMMessageCreate: (message) => {
+    bufferDMHistoryEvent(message);
     set((state) => {
       const updatedChannels = state.channels.map((ch) =>
         ch.id === message.dm_channel_id
@@ -127,6 +164,9 @@ export const createDMWsSlice: StateCreator<
   },
 
   handleDMMessageUpdate: (message) => {
+    bufferDMHistoryEvent(message);
+    const held=detachedDMMessages.get(message.dm_channel_id);
+    if(held)detachedDMMessages.set(message.dm_channel_id,held.map(item=>item.id===message.id?message:item));
     set((state) => ({
       messagesByChannel: updateMessageInRecord(
         state.messagesByChannel, message.dm_channel_id, message
@@ -135,6 +175,8 @@ export const createDMWsSlice: StateCreator<
   },
 
   handleDMMessageDelete: (data) => {
+    historyBuffers.get(data.dm_channel_id)?.messages.delete(data.id);
+    historyBuffers.get(data.dm_channel_id)?.metadata.delete(data.id);
     const held = detachedDMMessages.get(data.dm_channel_id);
     if (held) detachedDMMessages.set(data.dm_channel_id, held.filter((m) => m.id !== data.id));
     set((state) => ({
@@ -152,6 +194,8 @@ export const createDMWsSlice: StateCreator<
   },
 
   handleDMReactionUpdate: (data) => {
+    bufferDMMetadata(data.dm_channel_id,data.dm_message_id,{reactions:data.reactions});
+    if(!get().messagesByChannel[data.dm_channel_id]?.some(message=>message.id===data.dm_message_id))return;
     set((state) => ({
       messagesByChannel: updateReactionInRecord(
         state.messagesByChannel, data.dm_channel_id, data.dm_message_id, data.reactions
@@ -162,9 +206,10 @@ export const createDMWsSlice: StateCreator<
   handleDMTypingStart: createTypingHandler(set),
 
   handleDMMessagePin: (data) => {
+    bufferDMMetadata(data.dm_channel_id,data.message.id,{is_pinned:true});
     set((state) => {
       const channelMessages = state.messagesByChannel[data.dm_channel_id];
-      if (!channelMessages) return state;
+      if (!channelMessages?.some(message=>message.id===data.message.id)) return state;
 
       return {
         messagesByChannel: {
@@ -178,9 +223,10 @@ export const createDMWsSlice: StateCreator<
   },
 
   handleDMMessageUnpin: (data) => {
+    bufferDMMetadata(data.dm_channel_id,data.message_id,{is_pinned:false});
     set((state) => {
       const channelMessages = state.messagesByChannel[data.dm_channel_id];
-      if (!channelMessages) return state;
+      if (!channelMessages?.some(message=>message.id===data.message_id)) return state;
 
       return {
         messagesByChannel: {

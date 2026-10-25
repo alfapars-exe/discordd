@@ -1,0 +1,33 @@
+{
+  "item": "p2.profile-audience",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "server_enforcement": "GET /api/users/{userId}/profile applies the target account's audience before loading the profile and returns 404 when denied.",
+    "policies": [
+      "friends plus people in any shared server",
+      "friends plus people in shared servers with at most 200 members",
+      "friends only"
+    ],
+    "default": "friends plus people in any shared server",
+    "client": "Account-scoped profile audience selector in Data and privacy settings."
+  },
+  "automated_verification": [
+    {
+      "command": "go test ./services ./models ./handlers",
+      "working_directory": "server",
+      "result": "pass"
+    },
+    {
+      "command": "tsc -b client/tsconfig.json",
+      "working_directory": ".",
+      "result": "pass"
+    },
+    {
+      "command": "vitest run src/stores/preferencesStore.test.ts src/components/settings/SecuritySettings.test.tsx",
+      "working_directory": "client",
+      "result": "46 tests passed"
+    }
+  ],
+  "remaining_acceptance": "Run two-account browser acceptance for all three audience policies and verify the settings persistence after reload."
+}

@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Auth-store account changes synchronously clear group list/history/error/loading and shared plaintext drafts. Pending account work is invalidated by an account epoch, including logout/re-login to the same account. Existing sidebar read-affinity guards are retained.",
+    "Group history/search and incoming decryption capture current membership/key epoch and group lifetime. Late replies after account change, membership removal or rekey are discarded. Optional transport guards also prevent stale requests from being retried after token refresh.",
+    "History loads merge instead of replacing live state. Per-message mutation clocks prevent delayed history/decryption from resurrecting a deletion or erasing a newer edit/arrival. Pending duplicate create decryptions are suppressed. A membership removal invalidates old group lifetimes.",
+    "Send/edit check group scope and device before HTTP and after asynchronous encryption/cache stages. Confirmed plaintext is not added under a changed account/group. Cache writes accept a guard and recheck after IndexedDB opening. Group batch decryption discards stale cached/decrypted plaintext and passes the same guard to cache writes.",
+    "Text editing retains original encrypted attachment keys in the payload and local message. A local cache-write failure after a confirmed send/edit no longer reports the committed operation as failed.",
+    "Group composer now uses the existing memory-only, account/conversation-keyed draft store and send tickets. Navigation restores each group's draft; a pending response cannot clear newer typing or a failed send's draft. Group reply/edit context fields are scoped with the draft.",
+    "Synchronous account cleanup exposed an existing unstable empty-array selector in GroupDMChat; replaced it with a stable empty message list to prevent a maximum-update-depth failure after logout/account switch."
+  ],
+  "verification": [
+    "6 focused files / 116 tests passed, covering store races, composer drafts, group decryption, real fake-indexeddb cache semantics and existing Signal/DM encryption regressions.",
+    "Full client regression: 221 files / 2076 tests passed in 45.26s. Existing jsdom navigation warnings were not suppressed. Correct tsc -b and targeted ESLint passed before this run.",
+    "New cases include account/member/rekey/device changes during encryption, late history, live edit/delete merge, pending decryption vs deletion, stale cache read/write, attachment-key preservation, cache failure after commit, draft navigation, newer typing during send and failed-send draft retention.",
+    "Initial component regression caught the unstable empty-array selector during account cleanup; fixed the actual selector rather than bypassing the account-change assertion.",
+    "Inspection confirms apiClient checks isCurrent before the initial request, after proactive token refresh and after a 401 refresh before retry. No server schema or production data changed in this follow-up.",
+    "Local Vite production web build succeeded (1645 modules). Existing config-loader, large-chunk and ineffective-dynamic-import warnings remain; no warning suppression or publication occurred."
+  ],
+  "remaining": [
+    "Group edited-message cache versioning was subsequently implemented (p4-group-cache-versions-2026-10-24.json). Real two-client edited-message acceptance remains pending; unverifiable edited legacy caches are retained but not displayed as the latest version.",
+    "Low-level Signal ratchet/session writes during account switch are not proven isolated by these plaintext/UI guards. Broader cryptographic lifecycle cancellation and actual multi-device tests remain required; no end-to-end account isolation acceptance is claimed.",
+    "Membership/profile mutation responses and group-call component lifetime still need broader stale-response hardening outside the covered load/send/edit paths.",
+    "Pre-edit draft backup/restore was subsequently implemented (p4-group-edit-drafts-2026-10-24.json). Real navigation/keyboard and recovery acceptance still remains; group drafts do not close all composer acceptance.",
+    "Search still has a 100-page bound/partial-failure behavior; complete-search signaling and real two-client/browser/Windows acceptance remain open. Browser space is still handed to the user."
+  ]
+}

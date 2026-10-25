@@ -233,7 +233,7 @@ func (b *BackupService) Shutdown(ctx context.Context) {
 		backupLogger.Info("shutdown backup skipped: disabled (HF_TOKEN not set)")
 		return
 	}
-	if database.IsRemoteLibSQL(b.cfg.DBPath) {
+	if database.IsRemoteDatabase(b.cfg.DBPath) {
 		backupLogger.Info("shutdown backup skipped: remote DSN, already persistent")
 		return
 	}

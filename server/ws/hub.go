@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/google/uuid"
 )
 
 // hubLogger tags every Hub-lifecycle log line ("ws.hub"). Shared
@@ -57,13 +58,16 @@ type Hub struct {
 	// Protected by mu (same lock as clients).
 	serverClients map[string]map[*Client]bool
 
-	mu sync.RWMutex
+	mu           sync.RWMutex
+	shuttingDown bool // protected by mu; closes client/presence admission
 
 	register   chan *Client
 	unregister chan *Client
 
 	// seq: monotonic counter for outbound event ordering
-	seq atomic.Int64
+	seq               atomic.Int64
+	connectionSeq     atomic.Uint64
+	gameActivityEpoch string
 
 	// userInfos: cached user info for typing/voice broadcasts
 	userInfos map[string]cachedUserInfo
@@ -73,11 +77,15 @@ type Hub struct {
 	// Protected by mu (same lock as clients).
 	invisibleUsers map[string]bool
 
-	// Presence callbacks — set in main.go.
-	// Called in separate goroutines to avoid deadlock (callback may call Broadcast
-	// which needs RLock, but add/removeClient holds Lock).
-	onUserFirstConnect      UserConnectionCallback
-	onUserFullyDisconnected UserConnectionCallback
+	// Presence callbacks — set in main.go. The dispatcher runs them after the
+	// Hub lock is released and preserves per-user state-transition order.
+	onUserFirstConnect           UserConnectionCallback
+	onUserFullyDisconnected      UserConnectionCallback
+	onGameActivitySnapshot       GameActivitySnapshotCallback
+	onGameActivityConnect        GameActivityConnectionCallback
+	onGameActivityDisconnect     GameActivityConnectionCallback
+	onGameActivityUpdate         GameActivityUpdateCallback
+	onGameActivityPresenceChange GameActivitySnapshotCallback
 
 	// Voice callbacks — set in main.go
 	onVoiceJoin             VoiceJoinCallback
@@ -120,9 +128,10 @@ type Hub struct {
 	// them behind the same lock that guards the clients map would add
 	// contention to the hottest path in the hub for a metric nobody reads
 	// per-request.
-	dispatchCount  atomic.Uint64 // successfully routed to a registered handler (client_dispatch.go)
-	rateLimitDrops atomic.Uint64 // dropped by the per-(client,op) rate limiter (client_dispatch.go)
-	queueDrops     atomic.Uint64 // queueUnregister's buffer-full default branch, below
+	dispatchCount     atomic.Uint64 // successfully routed to a registered handler (client_dispatch.go)
+	rateLimitDrops    atomic.Uint64 // dropped by the per-(client,op) rate limiter (client_dispatch.go)
+	queueDrops        atomic.Uint64 // queueUnregister's buffer-full default branch, below
+	presenceCallbacks *presenceCallbackDispatcher
 }
 
 func NewHub() *Hub {
@@ -137,9 +146,11 @@ func NewHub() *Hub {
 		// blocked on a synchronous send. 256 is enough headroom for a
 		// thundering-herd disconnect (server restart, network blip) and
 		// still bounded so it can't grow without limit.
-		unregister:     make(chan *Client, 256),
-		userInfos:      make(map[string]cachedUserInfo),
-		invisibleUsers: make(map[string]bool),
+		unregister:        make(chan *Client, 256),
+		userInfos:         make(map[string]cachedUserInfo),
+		invisibleUsers:    make(map[string]bool),
+		presenceCallbacks: newPresenceCallbackDispatcher(),
+		gameActivityEpoch: uuid.NewString(),
 	}
 }
 
@@ -220,6 +231,14 @@ func (h *Hub) Stats() HubStats {
 // doesn't panic), so this is safe even if a client just disconnected.
 func (h *Hub) Shutdown() {
 	h.mu.Lock()
+	h.shuttingDown = true
+	h.mu.Unlock()
+	// Presence callback workers may use the database and other services.
+	// Stop and join them before the caller closes those dependencies.
+	if h.presenceCallbacks != nil {
+		h.presenceCallbacks.shutdown()
+	}
+	h.mu.Lock()
 	clientList := make([]*Client, 0)
 	for _, clients := range h.clients {
 		for client := range clients {
@@ -238,7 +257,9 @@ func (h *Hub) Shutdown() {
 		// Not deferred — this is a loop over up to 10k+ connections; a
 		// defer here would pin every connection's handle open until
 		// Shutdown itself returns instead of closing each one as we go.
-		_ = client.conn.Close() // already-closed is acceptable
+		if client.conn != nil {
+			_ = client.conn.Close() // already-closed is acceptable
+		}
 	}
 	hubLogger.Info("hub shut down", "connections_closed", len(clientList))
 }

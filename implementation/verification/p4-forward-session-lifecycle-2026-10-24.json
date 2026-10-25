@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Forwarding captures its opening account and composer session generation. Attachment preparation cannot proceed into a destination send after account/session replacement, source-message replacement, explicit modal close or unmount. Stale completion does not show success/error toasts or close a replacement context.",
+    "A synchronous in-flight guard prevents overlapping forward actions. Destination loading checks the same lifecycle/session scope before continuing requests and before installing results. Accepted DM targets use the subscribed channel list rather than an unrelated imperative snapshot.",
+    "Extracted the existing pure attribution formatter into a component-independent helper to satisfy Fast Refresh lint without suppressions. Source tracking uses a layout effect rather than render-time ref mutation."
+  ],
+  "verification": [
+    "Six new component tests cover account replacement, same-account session-generation replacement, close-before-unmount, unmount, source replacement, and exactly-once successful forwarding. Attachment decryption and destination sends are mocked; this does not prove real two-client re-encryption.",
+    "Initial focused tests passed but lint exposed the existing mixed-export Fast Refresh error and a new render-time ref assignment. Corrected both, then reran checks without disabling lint rules.",
+    "Final tsc -b and targeted ESLint passed. Full client regression passed: 229 files / 2193 tests in 46.19s. Vite production web build passed in 702ms. Existing warning categories remain visible. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "This fences work before destination send invocation; it cannot retract an already accepted server write. Destination stores retain their own session/network guards.",
+    "Complete send-permission filtering, deleted/restricted source races, group destination integration, target-load failure UX and real two-client encrypted forwarding still require acceptance/work. No broad P4 completion is claimed.",
+    "Overall P0-P11 remains incomplete. No commit, push, merge, Windows packaging or production release performed."
+  ]
+}

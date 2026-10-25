@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Server authorization contract and account preference persistence for forthcoming game activity integration; not a working publisher.",
+  "implementation": [
+    "Account privacy fields shareGameActivity (default false), gameActivityNewServerAudience (all/small/none, default none) and gameActivityServerOverrides (boolean map up to 1024 entries) have additive server validation and client account cache/pending-write support.",
+    "GameActivityPrivacyPolicy checks explicit master consent, visible online state, two-way blocking and accepted friendship. Server-context queries additionally require both users' current membership, then enforce server audience/overrides for nonfriends. Small-server threshold is 200 members; global context is accepted friends only. Self-view remains allowed.",
+    "Dependency and malformed stored preference errors return denial with error. Callers must deny on error; channel-specific access and trustworthy activity provenance are separate requirements. No path/process inventory is accepted by this policy."
+  ],
+  "verification": [
+    "Agent go test ./models ./services passed. Parent reran GameActivity/Preferences tests in existing Go Docker toolchain: models 0.014s, services 0.195s, both passed. Parent strengthened the >200-member fixture to include actual memberships so it tests the size boundary rather than an unrelated membership denial.",
+    "Client preferencesStore suite passed 44/44, including queued game privacy patches, sibling-map preservation and malformed cache filtering. Final combined client suite passed 299 files/2798 tests, zero failures; client TypeScript, scoped lint and Vite build passed. Report: C:/Users/PARS/AppData/Local/Temp/hichat-games-privacy-final-20261024.json."
+  ],
+  "open": [
+    "Wire trusted account/device activity lifecycle into WS/API without global broadcast",
+    "Audience-filtered recipients, initial snapshots, revocation, offline/disconnect clearing and multi-device ownership",
+    "Persist new-server initialization without retroactively widening existing server sharing",
+    "User-facing activity privacy controls and real two-client acceptance",
+    "Complete P11 and release acceptance"
+  ],
+  "release": "No production publication, automatic activity transmission or claim of end-to-end game sharing."
+}

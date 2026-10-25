@@ -11,6 +11,8 @@ import SidebarHeader from "./SidebarHeader";
 import ChannelTree from "./ChannelTree";
 import CollapsedSidebar from "./CollapsedSidebar";
 import UserBar from "./UserBar";
+import ServerRail from "./ServerRail";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 /** Sidebar width bounds (px) — default matches Discord's --custom-guild-sidebar-width */
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 500;
@@ -35,17 +37,27 @@ function Sidebar({
   const isMobile = useIsMobile();
 
   const { width, handleMouseDown, isDragging } = useResizeHandle({
-    initialWidth: SIDEBAR_DEFAULT,
-    minWidth: SIDEBAR_MIN,
-    maxWidth: SIDEBAR_MAX,
+    initialWidth: UI_SHELL_V2 ? 280 : SIDEBAR_DEFAULT,
+    minWidth: UI_SHELL_V2 ? 240 : SIDEBAR_MIN,
+    maxWidth: UI_SHELL_V2 ? 360 : SIDEBAR_MAX,
     direction: "right",
-    storageKey: "mqvi_sidebar_width",
+    storageKey: UI_SHELL_V2 ? "hichat_context_sidebar_width_v2" : "mqvi_sidebar_width",
   });
 
   // Always expanded on mobile (inside drawer)
-  if (!isExpanded && !isMobile) {
+  if (!UI_SHELL_V2 && !isExpanded && !isMobile) {
     return <CollapsedSidebar />;
   }
+
+  if (UI_SHELL_V2) return <aside className="shell-navigation" style={{ "--context-width": `${width}px` } as CSSProperties}>
+    <ServerRail />
+    <div className="shell-context-sidebar">
+      <SidebarHeader />
+      <ChannelTree onJoinVoice={onJoinVoice} />
+      {!isMobile && <div role="separator" aria-orientation="vertical" className={`resize-handle resize-handle-v${isDragging ? " active" : ""}`} onMouseDown={handleMouseDown} />}
+    </div>
+    <div className="shell-user-dock"><UserBar onToggleMute={onToggleMute} onToggleDeafen={onToggleDeafen} onToggleScreenShare={onToggleScreenShare} onDisconnect={onDisconnect} /></div>
+  </aside>;
 
   return (
     <div className="sidebar" style={{ width, "--guild-sidebar-width": `${width}px` } as CSSProperties}>

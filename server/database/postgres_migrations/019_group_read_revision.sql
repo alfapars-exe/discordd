@@ -1,0 +1,1 @@
+ALTER TABLE group_dm_reads ADD COLUMN revision BIGINT NOT NULL DEFAULT 0;

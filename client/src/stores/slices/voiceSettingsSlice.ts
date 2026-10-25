@@ -47,12 +47,13 @@ export type CameraQuality = "360p" | "720p" | "1080p";
  * useful on weak uplinks or laptop encoders.
  */
 export type CameraFps = 15 | 30;
+export type VoiceOverlayPosition = "top-left" | "bottom-left" | "top-right" | "bottom-right";
 
 /**
  * Microphone profile — picks the whole capture + publish + processor chain.
  *
- *   - "konusma" (speech, default): mono capture, browser AEC/NS/AGC on, the
- *     RNNoise-family processor attached, Opus DTX + RED on.
+ *   - "konusma" (speech, default): mono capture, browser AEC/AGC on,
+ *     browser NS only for the WebRTC engine, Opus DTX + RED on.
  *   - "muzik" (music): stereo capture, all voice DSP off, noise-suppression
  *     processor bypassed, Opus DTX + RED off with forced stereo.
  *
@@ -63,7 +64,7 @@ export type CameraFps = 15 | 30;
 export type MicProfile = "konusma" | "muzik";
 
 /**
- * Noise suppression level — controls the post-RNNoise VAD gate's open/close
+ * Noise suppression level — controls the post-denoiser energy gate's open/close
  * dB thresholds + hold time. Layered with the existing micSensitivity slider:
  * the level sets a base curve, sensitivity offsets it ±6 dB. sensitivity=100
  * still disables the gate entirely (legacy "off" semantic preserved).
@@ -83,9 +84,9 @@ export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
  *  - "dpdfnet" was a label-only impersonation of DeepFilterNet3 (UI lied:
  *    selecting it ran the same engine as "deepfilter"). Removed in v2.11.81;
  *    stale localStorage entries are migrated to "rnnoise" by loadSettings.
- *  - "deepfilter" and "dtln" are now both fully wired to their real
- *    underlying models (DeepFilterNet3 via deepfilternet3-noise-filter,
- *    DTLN via @sapphi-red/dtln-web). No more BETA fallbacks.
+ *  - "krisp" remains in the compatibility type, but is hidden from the picker;
+ *    old local and account preferences are migrated to the free "rnnoise" default.
+ *  - "gtcrn" uses a 16 kHz model with a 48 kHz host-rate adapter.
  *
  * On werman/noise-suppression-for-voice (not exposed as an engine):
  * That popular project is a native VST/LV2/AU plugin (C++), not a
@@ -98,6 +99,7 @@ export type NoiseReductionEngine =
   | "krisp"
   | "webrtc"
   | "deepfilter"
+  | "gtcrn"
   | "dtln"
   | "speex";
 
@@ -114,20 +116,10 @@ export type VoiceSettings = {
   localMutedUsers: Record<string, boolean>;
   noiseReduction: boolean;
   /**
-   * Engine used when noiseReduction is on. Three real options:
-   *
-   *   Custom-processor pipeline (LiveKit TrackProcessor + AudioWorklet):
-   *    - "rnnoise"     — bundled OSS ML denoiser, free, default.
-   *                      Uses Xiph's RNNoise via @sapphi-red/web-noise-
-   *                      suppressor (the same model that werman's
-   *                      native VST/LV2 plugin wraps).
-   *    - "krisp"       — LiveKit Cloud's Krisp filter. Paid plan; falls
-   *                      back to RNNoise on init failure.
-   *
-   *   Browser-native pipeline (track constraint):
-   *    - "webrtc"      — getUserMedia({ noiseSuppression: true }). No
-   *                      AudioWorklet, no WASM, no model file. Works on
-   *                      every Chromium/Electron build.
+   * Selected noise-reduction engine. Free choices: RNNoise (48 kHz default),
+   * DeepFilterNet3 (48 kHz), GTCRN and DTLN (16 kHz models), SpeexDSP,
+   * and browser-native WebRTC. The shared microphone pipeline reports the
+   * actual engine separately when a fallback is needed.
    */
   noiseReductionEngine: NoiseReductionEngine;
   noiseSuppressionLevel: NoiseSuppressionLevel;
@@ -190,6 +182,8 @@ export type VoiceSettings = {
    */
   cameraQuality: CameraQuality;
   cameraFps: CameraFps;
+  /** Hardware IDs are local to this browser/device and never synced to the server. */
+  cameraDevice: string;
   /**
    * Microphone profile. "muzik" disables noise suppression entirely — see
    * audio/micProfile.ts. Changing it triggers a mic republish cycle in
@@ -220,16 +214,43 @@ export type VoiceSettings = {
    * behavior before this field existed. Has no effect on web; the settings
    * row for it is hidden there.
    *
-   * Device-local by design: persisted to localStorage and included in the
-   * OUTBOUND preferences sync payload (currentSettings(), for other devices
-   * to display read-only), but `applyFromServer()` deliberately ignores it
-   * on the way IN (see that function). A synced value would let one device
+   * Device-local by design: persisted only to localStorage and excluded from
+   * both inbound and outbound account preferences. A synced value would let one device
    * silently arm a system-wide keyboard hook on another — the hook itself
    * only ever compares one keycode (see hotkey-router.ts's privacy note),
    * but "which device is watching every keystroke" must never be decided
    * remotely.
    */
   muteHotkeyGlobal: boolean;
+  voiceOverlayEnabled: boolean;
+  voiceOverlayMode: "desktop" | "game";
+  voiceOverlaySpeakingOpacity: number;
+  voiceOverlayIdleOpacity: number;
+  voiceOverlayScale: number;
+  voiceOverlayPosition: VoiceOverlayPosition;
+  /** Device-local movement lock; topmost behavior is independent of pinning. */
+  voiceOverlayPinned: boolean;
+  /** Device-local opt-in to show native widget quick-action controls. */
+  voiceOverlayQuickActions: boolean;
+  /** Device-local opt-in for mute/deafen button input while widget is click-through locked. */
+  voiceOverlayClickableActions: boolean;
+  /** Device-local display of activity already shared by friends. */
+  voiceOverlayActivity: boolean;
+  /** Device-local opt-in to show read-only genuine unread notification indicators. */
+  voiceOverlayNotifications: boolean;
+  /** Device-local opt-in to open the main app from the overlay notification panel. */
+  voiceOverlayNotificationActions: boolean;
+  /** Device-local opt-in to show a short read-only chat excerpt in the overlay. */
+  voiceOverlayChat: boolean;
+  /** Separate device-local opt-in to open the current chat in the main app. */
+  voiceOverlayChatActions: boolean;
+  /** Device-local opt-in to compose a message from the dedicated overlay surface. */
+  voiceOverlayChatCompose: boolean;
+  voiceOverlaySpeakingOnly: boolean;
+  /** Device-local presentation preferences for the desktop voice widget. */
+  voiceOverlayAvatarSize: "small" | "large";
+  voiceOverlayNameDisplay: "always" | "speaking" | "never";
+  voiceOverlayMaxParticipants: number;
 };
 
 /** Display profile that shapes encoder degradation + content hint. */
@@ -258,8 +279,9 @@ const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudi
  * of these values get quietly migrated to "rnnoise" on load:
  *  - "dpdfnet" (v2.11.81): was an alias for "deepfilter" with a different
  *    label — UI lie, removed alongside DTLN/DeepFilter real-engine wiring.
+ *  - "krisp": paid integration retained internally, removed from the picker.
  */
-const REMOVED_ENGINES = new Set<string>(["dpdfnet"]);
+const REMOVED_ENGINES = new Set<string>(["dpdfnet", "krisp"]);
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
   inputMode: "voice_activity",
@@ -290,11 +312,39 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   screenShareMode: "motion",
   cameraQuality: "720p",
   cameraFps: 30,
+  cameraDevice: "",
   micProfile: "konusma",
   muteHotkeyEnabled: false,
   muteHotkey: "KeyL",
   muteHotkeyGlobal: false,
+  voiceOverlayEnabled: true,
+  voiceOverlayMode: "desktop",
+  voiceOverlaySpeakingOpacity: 100,
+  voiceOverlayIdleOpacity: 35,
+  voiceOverlayScale: 100,
+  voiceOverlayPosition: "bottom-left",
+  voiceOverlayPinned: false,
+  voiceOverlayQuickActions: false,
+  voiceOverlayClickableActions: false,
+  voiceOverlayActivity: false,
+  voiceOverlayNotifications: false,
+  voiceOverlayNotificationActions: false,
+  voiceOverlayChat: false,
+  voiceOverlayChatActions: false,
+  voiceOverlayChatCompose: false,
+  voiceOverlaySpeakingOnly: false,
+  voiceOverlayAvatarSize: "small",
+  voiceOverlayNameDisplay: "always",
+  voiceOverlayMaxParticipants: 25,
 };
+
+function boundedOverlayNumber(value: number, min: number, max: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+}
+
+function validOverlayPosition(value: unknown): value is VoiceOverlayPosition {
+  return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
+}
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
 export function loadSettings(): VoiceSettings {
@@ -316,6 +366,34 @@ export function loadSettings(): VoiceSettings {
         ? (parsedRaw as Partial<VoiceSettings>)
         : {};
     const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...parsed };
+    if (typeof merged.cameraDevice !== "string") merged.cameraDevice = "";
+    if (typeof merged.voiceOverlayEnabled !== "boolean") merged.voiceOverlayEnabled = false;
+    if (merged.voiceOverlayMode !== "desktop" && merged.voiceOverlayMode !== "game") {
+      merged.voiceOverlayMode = DEFAULT_SETTINGS.voiceOverlayMode;
+    }
+    if (typeof merged.voiceOverlaySpeakingOnly !== "boolean") merged.voiceOverlaySpeakingOnly = false;
+    if (typeof merged.voiceOverlayPinned !== "boolean") merged.voiceOverlayPinned = DEFAULT_SETTINGS.voiceOverlayPinned;
+    if (typeof merged.voiceOverlayQuickActions !== "boolean") merged.voiceOverlayQuickActions = DEFAULT_SETTINGS.voiceOverlayQuickActions;
+    if (typeof merged.voiceOverlayClickableActions !== "boolean") merged.voiceOverlayClickableActions = DEFAULT_SETTINGS.voiceOverlayClickableActions;
+    if (typeof merged.voiceOverlayActivity !== "boolean") merged.voiceOverlayActivity = DEFAULT_SETTINGS.voiceOverlayActivity;
+    if (typeof merged.voiceOverlayNotifications !== "boolean") merged.voiceOverlayNotifications = DEFAULT_SETTINGS.voiceOverlayNotifications;
+    if (typeof merged.voiceOverlayNotificationActions !== "boolean") merged.voiceOverlayNotificationActions = DEFAULT_SETTINGS.voiceOverlayNotificationActions;
+    if (typeof merged.voiceOverlayChat !== "boolean") merged.voiceOverlayChat = DEFAULT_SETTINGS.voiceOverlayChat;
+    if (typeof merged.voiceOverlayChatActions !== "boolean") merged.voiceOverlayChatActions = DEFAULT_SETTINGS.voiceOverlayChatActions;
+    if (typeof merged.voiceOverlayChatCompose !== "boolean") merged.voiceOverlayChatCompose = DEFAULT_SETTINGS.voiceOverlayChatCompose;
+    merged.voiceOverlaySpeakingOpacity = boundedOverlayNumber(merged.voiceOverlaySpeakingOpacity, 20, 100, DEFAULT_SETTINGS.voiceOverlaySpeakingOpacity);
+    merged.voiceOverlayIdleOpacity = boundedOverlayNumber(merged.voiceOverlayIdleOpacity, 0, 100, DEFAULT_SETTINGS.voiceOverlayIdleOpacity);
+    merged.voiceOverlayScale = boundedOverlayNumber(merged.voiceOverlayScale, 75, 150, DEFAULT_SETTINGS.voiceOverlayScale);
+    if (!validOverlayPosition(merged.voiceOverlayPosition)) merged.voiceOverlayPosition = DEFAULT_SETTINGS.voiceOverlayPosition;
+    if (merged.voiceOverlayAvatarSize !== "small" && merged.voiceOverlayAvatarSize !== "large") {
+      merged.voiceOverlayAvatarSize = DEFAULT_SETTINGS.voiceOverlayAvatarSize;
+    }
+    if (!(["always", "speaking", "never"] as const).includes(merged.voiceOverlayNameDisplay)) {
+      merged.voiceOverlayNameDisplay = DEFAULT_SETTINGS.voiceOverlayNameDisplay;
+    }
+    merged.voiceOverlayMaxParticipants = Number.isFinite(merged.voiceOverlayMaxParticipants)
+      ? Math.max(0, Math.min(25, Math.round(merged.voiceOverlayMaxParticipants)))
+      : DEFAULT_SETTINGS.voiceOverlayMaxParticipants;
 
     // One-time migration: previous default was false; users had it saved as
     // false from before the default flipped. Override once to true.
@@ -326,11 +404,10 @@ export function loadSettings(): VoiceSettings {
       }
     } catch { /* localStorage unavailable */ }
 
-    // Engine cleanup: if the persisted engine is one of the removed BETA
-    // placeholders, snap to "rnnoise". Audio behaviour is unchanged
-    // (those engines were already falling back to RNNoise at runtime).
+    // Hidden paid and obsolete engines migrate to the free default.
     if (REMOVED_ENGINES.has(merged.noiseReductionEngine as string)) {
       merged.noiseReductionEngine = "rnnoise";
+      persistNow(merged);
     }
 
     return merged;
@@ -345,22 +422,60 @@ function persistNow(settings: VoiceSettings): void {
   } catch {
     /* localStorage full or inaccessible */
   }
-  usePreferencesStore.getState().set({ voice_settings: settings });
+}
+
+const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
+  "inputDevice", "outputDevice", "cameraDevice", "muteHotkeyGlobal",
+  "voiceOverlayEnabled", "voiceOverlayMode", "voiceOverlaySpeakingOpacity", "voiceOverlayIdleOpacity",
+  "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
+  "voiceOverlayPinned",
+  "voiceOverlayQuickActions", "voiceOverlayClickableActions",
+  "voiceOverlayActivity",
+  "voiceOverlayNotifications",
+  "voiceOverlayNotificationActions",
+  "voiceOverlayChat",
+  "voiceOverlayChatActions",
+  "voiceOverlayChatCompose",
+  "voiceOverlayAvatarSize", "voiceOverlayNameDisplay", "voiceOverlayMaxParticipants",
+]);
+let observedSettings = loadSettings();
+
+/** Register edits immediately, before a concurrent hydration can apply. */
+function syncChangedSettings(settings: VoiceSettings): void {
+  const patch: Record<string, unknown> = {};
+  for (const key of Object.keys(settings) as (keyof VoiceSettings)[]) {
+    if (DEVICE_LOCAL_KEYS.has(key)) continue;
+    const value = settings[key];
+    const old = observedSettings[key];
+    if (JSON.stringify(value) === JSON.stringify(old)) continue;
+    if (key === "userVolumes" || key === "screenShareVolumes" || key === "localMutedUsers") {
+      const before = old as Record<string, number | boolean>;
+      const after = value as Record<string, number | boolean>;
+      const changed: Record<string, number | boolean> = {};
+      for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
+        if (before[id] !== after[id]) changed[id] = after[id] ?? (key === "localMutedUsers" ? false : 100);
+      }
+      patch[key] = changed;
+    } else {
+      patch[key] = value;
+    }
+  }
+  observedSettings = settings;
+  if (Object.keys(patch).length) usePreferencesStore.getState().set({ voice_settings: patch });
 }
 
 /**
- * Persistence is debounced: a slider drag fires a setter per pointer move,
- * and each save used to do a synchronous localStorage JSON.stringify of the
- * full settings object PLUS a second store update (preferences sync) — per
- * pixel. A trailing debounce coalesces a whole drag into one write. The
- * in-memory zustand state stays immediate, so live consumers (mic test
- * gain, volume sync) are unaffected.
+ * Debounce the device cache to avoid serializing it on every slider movement.
+ * Register account leaf edits immediately with the preferences queue so an
+ * incoming hydration cannot erase a still-debounced local change. That queue
+ * independently coalesces network writes; live voice consumers stay immediate.
  */
 const SAVE_DEBOUNCE_MS = 400;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSave: VoiceSettings | null = null;
 
 function saveSettings(settings: VoiceSettings): void {
+  syncChangedSettings(settings);
   pendingSave = settings;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -371,7 +486,7 @@ function saveSettings(settings: VoiceSettings): void {
   }, SAVE_DEBOUNCE_MS);
 }
 
-/** Drop a not-yet-written save — used when server data is authoritative. */
+/** Drop a device-cache write superseded by a reconciled snapshot or account reset. */
 function cancelPendingSave(): void {
   if (saveTimer) {
     clearTimeout(saveTimer);
@@ -423,10 +538,30 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     screenShareMode: s.screenShareMode,
     cameraQuality: s.cameraQuality,
     cameraFps: s.cameraFps,
+    cameraDevice: s.cameraDevice,
     micProfile: s.micProfile,
     muteHotkeyEnabled: s.muteHotkeyEnabled,
     muteHotkey: s.muteHotkey,
     muteHotkeyGlobal: s.muteHotkeyGlobal,
+    voiceOverlayEnabled: s.voiceOverlayEnabled,
+    voiceOverlayMode: s.voiceOverlayMode,
+    voiceOverlaySpeakingOpacity: s.voiceOverlaySpeakingOpacity,
+    voiceOverlayIdleOpacity: s.voiceOverlayIdleOpacity,
+    voiceOverlayScale: s.voiceOverlayScale,
+    voiceOverlayPosition: s.voiceOverlayPosition,
+    voiceOverlayPinned: s.voiceOverlayPinned,
+    voiceOverlayQuickActions: s.voiceOverlayQuickActions,
+    voiceOverlayClickableActions: s.voiceOverlayClickableActions,
+    voiceOverlayActivity: s.voiceOverlayActivity,
+    voiceOverlayNotifications: s.voiceOverlayNotifications,
+    voiceOverlayNotificationActions: s.voiceOverlayNotificationActions,
+    voiceOverlayChat: s.voiceOverlayChat,
+    voiceOverlayChatActions: s.voiceOverlayChatActions,
+    voiceOverlayChatCompose: s.voiceOverlayChatCompose,
+    voiceOverlaySpeakingOnly: s.voiceOverlaySpeakingOnly,
+    voiceOverlayAvatarSize: s.voiceOverlayAvatarSize,
+    voiceOverlayNameDisplay: s.voiceOverlayNameDisplay,
+    voiceOverlayMaxParticipants: s.voiceOverlayMaxParticipants,
   };
 }
 
@@ -452,16 +587,37 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setScreenShareMode: (mode: ScreenShareMode) => void;
   setCameraQuality: (quality: CameraQuality) => void;
   setCameraFps: (fps: CameraFps) => void;
+  setCameraDevice: (deviceId: string) => void;
   setMicProfile: (profile: MicProfile) => void;
   setMuteHotkeyEnabled: (enabled: boolean) => void;
   setMuteHotkey: (key: string) => void;
   setMuteHotkeyGlobal: (enabled: boolean) => void;
+  setVoiceOverlayEnabled: (enabled: boolean) => void;
+  setVoiceOverlayMode: (mode: "desktop" | "game") => void;
+  setVoiceOverlaySpeakingOpacity: (value: number) => void;
+  setVoiceOverlayIdleOpacity: (value: number) => void;
+  setVoiceOverlayScale: (value: number) => void;
+  setVoiceOverlayPosition: (position: VoiceOverlayPosition) => void;
+  setVoiceOverlayPinned: (pinned: boolean) => void;
+  setVoiceOverlayQuickActions: (enabled: boolean) => void;
+  setVoiceOverlayClickableActions: (enabled: boolean) => void;
+  setVoiceOverlayActivity: (enabled: boolean) => void;
+  setVoiceOverlayNotifications: (enabled: boolean) => void;
+  setVoiceOverlayNotificationActions: (enabled: boolean) => void;
+  setVoiceOverlayChat: (enabled: boolean) => void;
+  setVoiceOverlayChatActions: (enabled: boolean) => void;
+  setVoiceOverlayChatCompose: (enabled: boolean) => void;
+  setVoiceOverlaySpeakingOnly: (enabled: boolean) => void;
+  setVoiceOverlayAvatarSize: (size: "small" | "large") => void;
+  setVoiceOverlayNameDisplay: (mode: "always" | "speaking" | "never") => void;
+  setVoiceOverlayMaxParticipants: (value: number) => void;
   setNoiseReduction: (enabled: boolean) => void;
   setNoiseReductionEngine: (engine: NoiseReductionEngine) => void;
   setNoiseSuppressionLevel: (level: NoiseSuppressionLevel) => void;
   setDeepfilterSuppression: (value: number) => void;
   toggleLocalMute: (userId: string) => void;
   applyFromServer: (settings: Record<string, unknown>) => void;
+  resetAccountPreferences: (preserveSessionState?: boolean) => void;
 };
 
 export const createVoiceSettingsSlice: StateCreator<
@@ -471,6 +627,7 @@ export const createVoiceSettingsSlice: StateCreator<
   VoiceSettingsSlice
 > = (set, get) => {
   const initial = loadSettings();
+  observedSettings = initial;
 
   return {
     inputMode: initial.inputMode,
@@ -496,10 +653,30 @@ export const createVoiceSettingsSlice: StateCreator<
     screenShareMode: initial.screenShareMode,
     cameraQuality: initial.cameraQuality,
     cameraFps: initial.cameraFps,
+    cameraDevice: initial.cameraDevice,
     micProfile: initial.micProfile,
     muteHotkeyEnabled: initial.muteHotkeyEnabled,
     muteHotkey: initial.muteHotkey,
     muteHotkeyGlobal: initial.muteHotkeyGlobal,
+    voiceOverlayEnabled: initial.voiceOverlayEnabled,
+    voiceOverlayMode: initial.voiceOverlayMode,
+    voiceOverlaySpeakingOpacity: initial.voiceOverlaySpeakingOpacity,
+    voiceOverlayIdleOpacity: initial.voiceOverlayIdleOpacity,
+    voiceOverlayScale: initial.voiceOverlayScale,
+    voiceOverlayPosition: initial.voiceOverlayPosition,
+    voiceOverlayPinned: initial.voiceOverlayPinned,
+    voiceOverlayQuickActions: initial.voiceOverlayQuickActions,
+    voiceOverlayClickableActions: initial.voiceOverlayClickableActions,
+    voiceOverlayActivity: initial.voiceOverlayActivity,
+    voiceOverlayNotifications: initial.voiceOverlayNotifications,
+    voiceOverlayNotificationActions: initial.voiceOverlayNotificationActions,
+    voiceOverlayChat: initial.voiceOverlayChat,
+    voiceOverlayChatActions: initial.voiceOverlayChatActions,
+    voiceOverlayChatCompose: initial.voiceOverlayChatCompose,
+    voiceOverlaySpeakingOnly: initial.voiceOverlaySpeakingOnly,
+    voiceOverlayAvatarSize: initial.voiceOverlayAvatarSize,
+    voiceOverlayNameDisplay: initial.voiceOverlayNameDisplay,
+    voiceOverlayMaxParticipants: initial.voiceOverlayMaxParticipants,
     preMuteVolumes: {},
 
     setInputMode: (mode) => {
@@ -592,6 +769,11 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
+    setCameraDevice: (deviceId: string) => {
+      set({ cameraDevice: deviceId });
+      saveSettings(currentSettings(get()));
+    },
+
     setMicProfile: (profile: MicProfile) => {
       set({ micProfile: profile });
       saveSettings(currentSettings(get()));
@@ -611,6 +793,37 @@ export const createVoiceSettingsSlice: StateCreator<
       set({ muteHotkeyGlobal: enabled });
       saveSettings(currentSettings(get()));
     },
+    setVoiceOverlayEnabled: (enabled) => { set({ voiceOverlayEnabled: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayMode: (mode) => {
+      set({ voiceOverlayMode: mode === "game" ? "game" : "desktop" });
+      saveSettings(currentSettings(get()));
+    },
+    setVoiceOverlaySpeakingOpacity: (value) => { set({ voiceOverlaySpeakingOpacity: boundedOverlayNumber(value, 20, 100, DEFAULT_SETTINGS.voiceOverlaySpeakingOpacity) }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayIdleOpacity: (value) => { set({ voiceOverlayIdleOpacity: boundedOverlayNumber(value, 0, 100, DEFAULT_SETTINGS.voiceOverlayIdleOpacity) }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayScale: (value) => { set({ voiceOverlayScale: boundedOverlayNumber(value, 75, 150, DEFAULT_SETTINGS.voiceOverlayScale) }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayPosition: (position) => { set({ voiceOverlayPosition: validOverlayPosition(position) ? position : DEFAULT_SETTINGS.voiceOverlayPosition }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayPinned: (pinned) => { set({ voiceOverlayPinned: pinned === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayQuickActions: (enabled) => { set({ voiceOverlayQuickActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayClickableActions: (enabled) => { set({ voiceOverlayClickableActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayActivity: (enabled) => { set({ voiceOverlayActivity: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayNotifications: (enabled) => { set({ voiceOverlayNotifications: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayNotificationActions: (enabled) => { set({ voiceOverlayNotificationActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayChat: (enabled) => { set({ voiceOverlayChat: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayChatActions: (enabled) => { set({ voiceOverlayChatActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayChatCompose: (enabled) => { set({ voiceOverlayChatCompose: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlaySpeakingOnly: (enabled) => { set({ voiceOverlaySpeakingOnly: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayAvatarSize: (size) => {
+      set({ voiceOverlayAvatarSize: size === "large" ? "large" : "small" });
+      saveSettings(currentSettings(get()));
+    },
+    setVoiceOverlayNameDisplay: (mode) => {
+      set({ voiceOverlayNameDisplay: mode === "speaking" || mode === "never" ? mode : "always" });
+      saveSettings(currentSettings(get()));
+    },
+    setVoiceOverlayMaxParticipants: (value) => {
+      set({ voiceOverlayMaxParticipants: Number.isFinite(value) ? Math.max(0, Math.min(25, Math.round(value))) : DEFAULT_SETTINGS.voiceOverlayMaxParticipants });
+      saveSettings(currentSettings(get()));
+    },
 
     setNoiseReduction: (enabled) => {
       set({ noiseReduction: enabled });
@@ -618,7 +831,7 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     setNoiseReductionEngine: (engine) => {
-      set({ noiseReductionEngine: engine });
+      set({ noiseReductionEngine: REMOVED_ENGINES.has(engine) ? "rnnoise" : engine });
       saveSettings(currentSettings(get()));
     },
 
@@ -669,28 +882,31 @@ export const createVoiceSettingsSlice: StateCreator<
     },
 
     applyFromServer: (settings) => {
-      // Server payload is authoritative at this moment (login/preferences
-      // sync) — a debounced local save racing it would resurrect stale
-      // values, so drop it instead of flushing.
+      // The preferences store has already overlaid pending local edits on the
+      // server snapshot. Persist that reconciled result, not an older timer.
       cancelPendingSave();
-      const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...loadSettings() };
+      const merged: VoiceSettings = currentSettings(get());
       const keys = Object.keys(settings) as (keyof VoiceSettings)[];
       for (const key of keys) {
-        // muteHotkeyGlobal is device-local (see its doc comment on
-        // VoiceSettings) — skip it here so an inbound sync can neither
-        // overwrite the persisted localStorage snapshot below nor the
-        // in-memory state further down. currentSettings() still writes it
-        // OUTBOUND; only the inbound direction is blocked.
-        if (key === "muteHotkeyGlobal") continue;
+        // Hardware IDs and native hotkey scope remain local in both directions.
+        if (DEVICE_LOCAL_KEYS.has(key)) continue;
         if (key in merged) {
-          (merged as Record<string, unknown>)[key] = settings[key];
+          if (key === "userVolumes" || key === "screenShareVolumes" || key === "localMutedUsers") {
+            (merged as Record<string, unknown>)[key] = { ...merged[key], ...(settings[key] as Record<string, unknown>) };
+          } else {
+            (merged as Record<string, unknown>)[key] = settings[key];
+          }
         }
+      }
+      if (REMOVED_ENGINES.has(merged.noiseReductionEngine)) {
+        merged.noiseReductionEngine = "rnnoise";
       }
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       } catch {
         /* ignore */
       }
+      observedSettings = merged;
       set({
         inputMode: merged.inputMode,
         pttKey: merged.pttKey,
@@ -705,6 +921,8 @@ export const createVoiceSettingsSlice: StateCreator<
         screenShareQuality: merged.screenShareQuality,
         screenShareFps: merged.screenShareFps,
         screenShareShowCursor: merged.screenShareShowCursor,
+        screenShareLowLatency: merged.screenShareLowLatency,
+        screenShareMode: merged.screenShareMode,
         localMutedUsers: merged.localMutedUsers,
         noiseReduction: merged.noiseReduction,
         noiseReductionEngine: merged.noiseReductionEngine,
@@ -716,9 +934,59 @@ export const createVoiceSettingsSlice: StateCreator<
         micProfile: merged.micProfile,
         muteHotkeyEnabled: merged.muteHotkeyEnabled,
         muteHotkey: merged.muteHotkey,
+        voiceOverlayEnabled: merged.voiceOverlayEnabled,
+        voiceOverlayMode: merged.voiceOverlayMode,
+        voiceOverlaySpeakingOpacity: merged.voiceOverlaySpeakingOpacity,
+        voiceOverlayIdleOpacity: merged.voiceOverlayIdleOpacity,
+        voiceOverlayScale: merged.voiceOverlayScale,
+        voiceOverlayPosition: merged.voiceOverlayPosition,
+        voiceOverlayPinned: merged.voiceOverlayPinned,
+        voiceOverlayQuickActions: merged.voiceOverlayQuickActions,
+        voiceOverlayClickableActions: merged.voiceOverlayClickableActions,
+        voiceOverlayActivity: merged.voiceOverlayActivity,
+        voiceOverlayNotifications: merged.voiceOverlayNotifications,
+        voiceOverlayNotificationActions: merged.voiceOverlayNotificationActions,
+        voiceOverlayChat: merged.voiceOverlayChat,
+        voiceOverlayChatActions: merged.voiceOverlayChatActions,
+        voiceOverlayChatCompose: merged.voiceOverlayChatCompose,
+        voiceOverlaySpeakingOnly: merged.voiceOverlaySpeakingOnly,
+        voiceOverlayAvatarSize: merged.voiceOverlayAvatarSize,
+        voiceOverlayNameDisplay: merged.voiceOverlayNameDisplay,
+        voiceOverlayMaxParticipants: merged.voiceOverlayMaxParticipants,
         // muteHotkeyGlobal intentionally omitted — device-local, see the
         // field's doc comment and the `continue` above.
       });
+    },
+    resetAccountPreferences: (preserveSessionState = false) => {
+      cancelPendingSave();
+      const current = get();
+      const defaults: VoiceSettings = {
+        ...DEFAULT_SETTINGS, userVolumes: {}, screenShareVolumes: {}, localMutedUsers: {},
+        inputDevice: current.inputDevice, outputDevice: current.outputDevice,
+        cameraDevice: current.cameraDevice, muteHotkeyGlobal: current.muteHotkeyGlobal,
+        voiceOverlayEnabled: current.voiceOverlayEnabled,
+        voiceOverlayMode: current.voiceOverlayMode,
+        voiceOverlaySpeakingOpacity: current.voiceOverlaySpeakingOpacity,
+        voiceOverlayIdleOpacity: current.voiceOverlayIdleOpacity,
+        voiceOverlayScale: current.voiceOverlayScale,
+        voiceOverlayPosition: current.voiceOverlayPosition,
+        voiceOverlayPinned: current.voiceOverlayPinned,
+        voiceOverlayQuickActions: current.voiceOverlayQuickActions,
+        voiceOverlayClickableActions: current.voiceOverlayClickableActions,
+        voiceOverlayActivity: current.voiceOverlayActivity,
+        voiceOverlayNotifications: current.voiceOverlayNotifications,
+        voiceOverlayNotificationActions: current.voiceOverlayNotificationActions,
+        voiceOverlayChat: current.voiceOverlayChat,
+        voiceOverlayChatActions: current.voiceOverlayChatActions,
+        voiceOverlayChatCompose: current.voiceOverlayChatCompose,
+        voiceOverlaySpeakingOnly: current.voiceOverlaySpeakingOnly,
+        voiceOverlayAvatarSize: current.voiceOverlayAvatarSize,
+        voiceOverlayNameDisplay: current.voiceOverlayNameDisplay,
+        voiceOverlayMaxParticipants: current.voiceOverlayMaxParticipants,
+      };
+      observedSettings = defaults;
+      persistNow(defaults);
+      set({ ...defaults, preMuteVolumes: preserveSessionState ? current.preMuteVolumes : {} });
     },
   };
 };

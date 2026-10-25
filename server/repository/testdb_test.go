@@ -15,6 +15,7 @@ package repository
 import (
 	"database/sql"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -48,6 +49,9 @@ func newTestDB(t testing.TB) *database.DB {
 // signature widening with no behavior change.
 func newTestDBWithPath(t testing.TB) (*database.DB, string) {
 	t.Helper()
+	if dsn := os.Getenv("HICHAT_TEST_POSTGRES_DSN"); dsn != "" {
+		return newPostgresTestDB(t, dsn)
+	}
 	// runMigrations expects the FS rooted at the migrations dir (main.go does
 	// the same fs.Sub before calling database.New).
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
@@ -82,6 +86,10 @@ func wrapForRepo(db *database.DB) database.TxQuerier {
 // production: through a path where enforcement was not in effect.
 func execWithoutFKs(t testing.TB, path string, stmts ...string) {
 	t.Helper()
+	if database.IsPostgresDSN(path) {
+		postgresFixtureWithoutFKs(t, path, stmts)
+		return
+	}
 	conn, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatalf("open fk-off conn: %v", err)

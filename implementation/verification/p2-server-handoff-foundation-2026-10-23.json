@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Atomic server-ownership repository foundation, not a registered handoff API or available client workflow.",
+  "implemented": [
+    "Distinct ownership repository requires actual current server owner, active generation-bound sign-in, matching password hash and MFA state. Generic platform-admin status is not an ownership override.",
+    "Recipient must be an existing server member, human, not deleted/disabled/platform-banned/server-banned. Self-transfer and malformed identity inputs are rejected.",
+    "One transaction moves server owner_id, removes prior owner-role assignments, grants exactly the one owner role to the target and persists a server_ownership_transfer audit entry. Missing/ambiguous role or any failed write rolls everything back.",
+    "Other roles, memberships, channels and history are preserved. Platform-managed hosting quota follows the existing create-server policy including its current platform-admin exemption; transfer does not silently bypass normal quota.",
+    "No runtime action or production server ownership changed. Service, cache invalidation, audit rendering, route and client workflow remain to wire before exposure."
+  ],
+  "focused_checks": [
+    {"command": "go test ./repository -run TestServerOwnershipTransfer -count=1", "result": "passed foreign keys on/off, wrong password/MFA proof, role/audit rollback, twelve concurrent requests with one winner, ordinary roles/membership preservation and ineligible-recipient/admin-override rejection"},
+    {"command": "go test ./repository -json", "result": "full repository package passed, including hosted-quota/exemption test and final handoff implementation"}
+  ],
+  "remaining": [
+    "Wire current-password/MFA attempt limits and separate typed confirmation, immediate permission-cache invalidation across relevant caches, server/member events, localized audit rendering and real owner UI.",
+    "Exercise actual local handoff followed by deletion and retained encrypted history/attachments; independent-client/distributed/Windows acceptance and application handoff/removal remain outstanding.",
+    "The full P0-P11 goal remains active/incomplete; no commit/push/merge, Windows update or production release occurred."
+  ]
+}

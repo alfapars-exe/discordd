@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "In-process permission-cache invalidation versus database reads already in flight, including ownership changes. Not distributed authorization or full P2 acceptance.",
+  "implemented": [
+    "Server middleware and channel single/bulk caches capture an invalidation revision before lookup. Cache publication and revision checks are serialized with invalidation; no cache mutex is held over database IO.",
+    "All/user/server/channel invalidation increments the relevant local resolver revision even when no cache row yet exists. A pre-invalidation database result cannot refill that cleared generation or be returned as a successful fresh grant.",
+    "Superseded lookups retry at most three times with context checks. Continuous mutation fails closed, rather than looping indefinitely or publishing stale permissions.",
+    "Bulk retries discard both cached and freshly fetched halves of a superseded snapshot; invalidated cached users are included in the fresh retry."
+  ],
+  "checks": [
+    { "command": "go test ./middleware ./services -run 'Permission|Invalidate' -count=1 -json", "result": "passed existing permission/cache/invalidation coverage" },
+    { "command": "go test ./middleware ./services -run 'Invalidation(Supersedes|Churn|Discards)' -count=10 -json", "result": "passed deterministic blocked-query single/bulk invalidation, mixed warm/cold bulk snapshot, cancellation and bounded-churn cases" },
+    { "command": "go test ./... -json", "result": "all Go packages passed after final implementation and tests" },
+    { "command": "git diff --check -- targeted permission files", "result": "passed; existing Windows line-ending warnings only" },
+    { "command": "go test ./middleware ./services -race -run 'Invalidation(Supersedes|Churn|Discards)' -count=3 -json", "result": "not run: Go rejected -race because CGO is disabled; gcc/clang were not available on PATH. This is not a race-detector pass." }
+  ],
+  "remaining": [
+    "Cross-process invalidation/consistency remains unverified and is not solved by a process-local revision. Existing TTL behavior is not claimed to provide immediate distributed revocation.",
+    "A request that has already completed authorization before a mutation is a separate check/use boundary; these guards do not retroactively cancel such requests.",
+    "Race-detector execution needs a supported CGO toolchain. No compiler was installed or global environment configuration changed.",
+    "Application ownership handoff/removal and remaining P0-P11 implementation/acceptance/release gates remain active."
+  ],
+  "runtime": "Source/tests changed only. Existing local acceptance API was not restarted for this patch; no production deployment, commit, push, merge or Windows update occurred."
+}

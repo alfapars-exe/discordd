@@ -10,11 +10,16 @@ import (
 )
 
 type MemberHandler struct {
-	memberService services.MemberService
+	memberService   services.MemberService
+	profileAudience services.ProfileAudiencePolicy
 }
 
-func NewMemberHandler(memberService services.MemberService) *MemberHandler {
-	return &MemberHandler{memberService: memberService}
+func NewMemberHandler(memberService services.MemberService, policies ...services.ProfileAudiencePolicy) *MemberHandler {
+	h := &MemberHandler{memberService: memberService}
+	if len(policies) > 0 {
+		h.profileAudience = policies[0]
+	}
+	return h
 }
 
 // List handles GET /api/servers/{serverId}/members
@@ -310,9 +315,8 @@ func (h *MemberHandler) Unban(w http.ResponseWriter, r *http.Request) {
 // UpdateProfile handles PATCH /api/users/me/profile
 // Global endpoint (not server-scoped).
 func (h *MemberHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	user, ok := profileAccountUser(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
 
@@ -335,6 +339,7 @@ func (h *MemberHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// here keeps the guard independent of that tag.
 	req.AvatarAnimatedURL = nil
 	req.BannerURL = nil
+	req.BannerAnimatedURL = nil
 	req.ClearBanner = false
 
 	member, err := h.memberService.UpdateProfile(r.Context(), user.ID, &req)
@@ -346,15 +351,30 @@ func (h *MemberHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, http.StatusOK, member)
 }
 
-// GetUserProfile handles GET /api/users/{userId}/profile — the public
-// profile card (models.UserProfile) of any user. Authenticated only, no
-// shared-context requirement: every field is public by design and already
-// visible in member lists (same access model as GET /api/users/{userId}/badges).
+// GetUserProfile handles GET /api/users/{userId}/profile. Production wiring
+// applies the target user's profile audience before loading the profile.
 func (h *MemberHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("userId")
 	if userID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "user id is required")
 		return
+	}
+	if h.profileAudience != nil {
+		viewer, ok := r.Context().Value(UserContextKey).(*models.User)
+		if !ok || viewer == nil || viewer.IsBot {
+			pkg.Error(w, pkg.ErrUnauthorized)
+			return
+		}
+		allowed, err := h.profileAudience.CanView(r.Context(), viewer.ID, userID)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		if !allowed {
+			// Do not reveal whether a hidden profile exists.
+			pkg.Error(w, pkg.ErrNotFound)
+			return
+		}
 	}
 
 	profile, err := h.memberService.GetPublicProfile(r.Context(), userID)

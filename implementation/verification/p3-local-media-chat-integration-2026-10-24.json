@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-24",
+  "scope": "Local sexual-content inference integrated with channel, DM and group attachment visibility; partial classifier coverage",
+  "implemented": [
+    "Chat image attachment gates invoke the actual pinned model worker after private annotation lookup succeeds with no manual label. Manual labels take precedence. Failed/loading/conflicting annotation lookups cannot be bypassed by an automatic negative result.",
+    "Plain uploads are downloaded only from the selected HiChat origin's uploads paths, with credentials, redirects rejected and streamed byte limits. External previews, data/blob URLs and arbitrary API paths are not automatically fetched. Encrypted attachments are downloaded with bounded ciphertext and decrypted/integrity-checked on device before a Blob is passed to the worker; encryption keys are not sent to the worker or a classifier server.",
+    "Four pipeline permits bound download/decrypt/inference work, with at most twelve queued descriptor consumers. The worker client serializes inference, bounds pending blobs, rejects unsupported types, correlates replies by job id, terminates cancelled/timed-out/error workers and reclaims idle model resources after ten seconds.",
+    "Inputs/results are memory-only. Owner, authentication generation, device and serialized source identity guard asynchronous results. Same-account reauthentication remounts annotations and restarts analysis. Clearing the encryption device prevents old encrypted descriptors being decrypted again.",
+    "Only a negative sexual result can relax the sexual preference; the disturbing category remains unknown and retains its independent policy. Unsupported animation/video, source/decode/model failures, partial batches and timeouts retain unknown-media preferences. UI provides loading, partial-coverage, failure and retry text in Turkish/English without claiming a general safety verdict.",
+    "Opaque encrypted video attachments now pass through the media visibility gate instead of bypassing it because only the outer MIME was inspected. Stable original attachment indices retain the correct encryption metadata.",
+    "Model assets and the actual worker are emitted in the application production build. No dependency, server classifier, analytics event or external model service was added."
+  ],
+  "verification": [
+    {"command": "Targeted worker-client, bounded response, crypto and gate tests", "result": "passed", "detail": "Worker queue/cancellation/timeouts/idle cleanup and malformed response rejection; real AES-GCM bounded decrypt and abort; source-origin rejection, local blob submission, device/source replacement, unknown disturbing policy and UI gating."},
+    {"command": "Same-account authentication and gate regression tests", "result": "passed", "files": 2, "tests": 15},
+    {"command": "Earlier full client snapshot after initial fixture fixes", "result": "passed", "files": 245, "tests": 2391},
+    {"command": "Final full client Vitest suite", "result": "passed", "files": 245, "tests": 2393, "detail": "Includes same-account reauthentication and all fixture corrections. No runtime/test source changes after the final run began."},
+    {"command": "TypeScript project build and targeted ESLint", "result": "passed", "detail": "No lint checks disabled. Final test-only mock reset correction followed."},
+    {"command": "Application production build", "result": "passed", "detail": "1.01s final runtime snapshot. Actual worker mediaClassifier.worker-C9cMUp2d.js is emitted (1622889 bytes); copied model manifest and weights match their pinned hashes. Existing dynamic-import/chunk-size warnings remain."}
+  ],
+  "regression_fixes": [
+    "Full-suite execution exposed eleven attachment tests with an API mock missing the newly used getAuthGeneration export. Converted the mock to preserve real module exports while mocking token refresh; tests were not skipped.",
+    "New encrypted-video protection test exposed lightbox test dependence on privacy state left by the preceding suite. Lightbox tests now initialize their intended show preferences explicitly.",
+    "A deliberately unused one-shot classifier mock from an annotation-error test leaked into the next authentication test. Per-test mockReset now removes queued mock implementations; no runtime behavior was weakened to pass it."
+  ],
+  "remaining": [
+    "Real browser and packaged Windows worker/decode acceptance, two-client/private-room acceptance, model asset delivery/CSP checks and representative long-session resource testing.",
+    "Representative sexual classifier accuracy/threshold calibration and a genuine licensed disturbing-content classifier. The current model does not detect violence/gore and its Neutral class is never used as that verdict.",
+    "Animation/video multi-frame analysis and external preview privacy behavior; unsupported inputs currently remain unknown rather than using a misleading first frame.",
+    "Updated Docker/Windows QA artifacts and complete P0-P11 release/rollback acceptance. Previously built installer/backend images predate these additions."
+  ],
+  "acceptance": "Not accepted. Static raster sexual inference is connected and automatically tested, but full classification, real-device acceptance and the broader goal remain incomplete. No production release or data migration performed."
+}

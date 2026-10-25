@@ -45,6 +45,7 @@ const DEFAULT_VOICE_BITRATE = 384_000;
 
 import { useVoiceStore } from "../../stores/voiceStore";
 import { micCaptureFor, micPublishFor } from "../../audio/micProfile";
+import { microphoneSettings } from "../../audio/microphoneSettings";
 import { useChannelStore } from "../../stores/channelStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useTranslation } from "react-i18next";
@@ -155,17 +156,20 @@ function VoiceProvider({ children }: VoiceProviderProps) {
   // republishes the track with explicit options (room-level defaults are
   // captured at connect() and never re-applied).
   //
-  // Speech profile: mono capture with AEC/NS/AGC on, Opus DTX + RED on.
+  // Speech profile: mono capture with AEC/AGC on, Opus DTX + RED on.
+  // Browser NS follows the selected engine and is off for software denoisers.
   // Mono matters beyond the profile — some USB / virtual mics expose two
   // channels with one silent, and without channelCount:1 that silent channel
   // feeds half the playback graph on remotes ("audio only in one ear").
   // Music profile inverts all of it; see audio/micProfile.ts.
   const micProfile = useVoiceStore((s) => s.micProfile);
+  const noiseReduction = useVoiceStore((s) => s.noiseReduction);
+  const noiseReductionEngine = useVoiceStore((s) => s.noiseReductionEngine);
 
   // Stable reference — LiveKitRoom uses identity comparison on its props.
   const audioCaptureDefaults: AudioCaptureOptions = useMemo(
-    () => micCaptureFor(micProfile, inputDevice),
-    [micProfile, inputDevice],
+    () => micCaptureFor({ ...microphoneSettings(useVoiceStore.getState()), micProfile, inputDevice, noiseReduction, noiseReductionEngine }),
+    [micProfile, inputDevice, noiseReduction, noiseReductionEngine],
   );
 
   // dtx / red / forceStereo, explicit rather than inherited from the SDK's

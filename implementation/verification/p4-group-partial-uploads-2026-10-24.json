@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Group send API types/store now unwrap both 201 message and 207 {message,upload_failures}. Known 207 results are committed sends, including all-files-failed results; they no longer leave the original text as an apparently failed send.",
+    "Additive SQLite migration 118 and PostgreSQL migration 020 preserve nullable original file_key_index (0..9). Handler records success/failure indices from multipart order, and repository list/file-URL readers return them. Legacy encrypted_N.bin filenames also resolve original key positions rather than compacted/tied database order; other legacy names retain positional fallback.",
+    "Group attachment rendering and exact-version cache checks use the same key resolver. A failed earlier upload or changed row ordering cannot silently select a different modern file key. Missing/invalid indices fail closed.",
+    "Failed original File objects are kept in an account/group-owned in-memory recovery list. Explicit retry re-encrypts only these files into a new current-membership message with empty original text. Duplicate retry clicks are locked; another partial result creates a new recovery entry, while a failed retry retains the original one.",
+    "Unverifiable failure positions are not automatically retried. Explicit review restores files alongside a newer composer draft, with per-file removal and a warning about already-uploaded files. Recovery dismiss is explicit; account change and membership removal clear recovery references. No disk plaintext persistence or automatic retry was added.",
+    "Upload service bounds bytes actually copied, records actual ciphertext size and removes new test/upload files on failure. Attachment insert timestamp read-back is best-effort after a committed row, preventing false partial failure and removal of a successfully persisted file.",
+    "Group recovery/file UI has localized labels and fixed grid rows so optional call/error/recovery sections do not consume the message area's minmax track. Send/edit/review clear superseded error state."
+  ],
+  "verification": [
+    "Full Linux Docker server CGO_ENABLED=0 go test ./... -timeout=15m passed, including repository 43.851s / services 21.292s. Covers both new embedded migrations on fresh SQLite test databases.",
+    "PostgreSQL 18 affected repository/handler/service tests passed (1.500s / 0.239s / 0.247s) with fresh disposable schemas. Tests cover nullable legacy rows, explicit/sparse index round-trip, file-URL lookup, CHECK constraint and a committed insert with deliberately failed timestamp read-back.",
+    "HTTP tests cover first-file failure, all-files failure and full success: exactly one message save/broadcast, original success/failure key indices and 201/207 envelopes. Upload service tests cover actual bytes vs header hints, hard size limit, invalid index and metadata failure cleanup.",
+    "Full client regression: 223 files / 2112 tests passed in 46.76s before the final superseded-error cleanup and added real-crypto case. Final tsc -b and targeted ESLint passed; 5 affected files / 79 tests passed afterward (4.24s).",
+    "Client cases verify 207 commit interpretation, failed-files-only empty-text retry, retry locking/failure retention, unknown-index review, newer draft preservation, individual file removal, account cleanup, sparse cached keys and legacy filename resolution.",
+    "Real WebCrypto AES-GCM/SHA-256 test opens the successful second file through its original index, rejects the wrong first key, re-encrypts the failed first file with a different key/IV, opens that retry and rejects its old key. This is local crypto integration, not real two-client/media acceptance.",
+    "OpenAPI parses with 221 paths and zero unresolved internal refs; group message multipart, 201/207 envelopes and index bounds are documented. An initially mistyped rate-limit response reference was fixed to the existing TooManyRequestsError.",
+    "Final local Vite production web build passed (1647 modules, 686ms); existing config-loader/chunk/dynamic-import warnings remain unsuppressed. Temporary no-host-port PostgreSQL QA container was stopped; existing browser QA backend was left running."
+  ],
+  "remaining": [
+    "Network timeout/connection-loss outcomes are not solved by parsing a known 207 result. Group send idempotency/outcome reconciliation is still required before promising duplicate-free unknown-outcome retries.",
+    "A changed composer revision during an original pending send deliberately preserves the newer draft; its submitted-file reconciliation still needs acceptance against partial recovery actions. No newer text is silently replaced.",
+    "Actual two-client Windows/web upload/decrypt/reconnect, real disk-full and membership-rekey acceptance, 390px/200% layout and screen-reader/touch checks remain unperformed. Ego Lite space is still handed to the user.",
+    "Full PostgreSQL regression and production backup/upgrade/rollback rehearsal remain incomplete. Only isolated test schemas applied these migrations. Group partial-upload work does not close P4 or the overall goal."
+  ]
+}

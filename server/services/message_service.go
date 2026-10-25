@@ -41,9 +41,8 @@ type messageService struct {
 	hub             ws.BroadcastAndOnline
 	permResolver    ChannelPermResolver
 	auditLogger     AuditWriter
-	// notificationRepo is only used outside the create transaction (Delete's
-	// best-effort cleanup); Create writes inbox rows through the tx-bound
-	// MessageTxRepos.Notification instead.
+	// Retained constructor dependency for compatibility; create/delete writes
+	// use the transaction-bound MessageTxRepos.Notification.
 	notificationRepo repository.NotificationRepository
 	// uploadDir enables best-effort disk cleanup on message delete (see
 	// upload_cleanup.go). Blank (the zero value, and every existing test's
@@ -163,6 +162,9 @@ func (s *messageService) Create(ctx context.Context, serverID, channelID, userID
 	channel, err := s.validateChannelScope(ctx, serverID, channelID)
 	if err != nil {
 		return nil, err
+	}
+	if channel.Type == models.ChannelTypeThread && channel.ArchivedAt != nil {
+		return nil, fmt.Errorf("%w: archived threads are read-only", pkg.ErrForbidden)
 	}
 
 	// Timeout gate — moderators apply Discord-style timeouts via
@@ -530,7 +532,21 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 		messageLogger.Error("failed to fetch attachments before message delete", "message_id", id, "err", pkg.ErrText(attErr))
 	}
 
-	if err := s.messageRepo.Delete(ctx, id); err != nil {
+	if err := s.txRunner.InTx(ctx, func(r *repository.MessageTxRepos) error {
+		if err := r.ReadState.PrepareMessageDeletion(ctx, id); err != nil {
+			return err
+		}
+		if err := r.Mention.DeleteByMessageID(ctx, id); err != nil {
+			return err
+		}
+		if err := r.RoleMention.DeleteByMessageID(ctx, id); err != nil {
+			return err
+		}
+		if err := r.Notification.DeleteByMessageID(ctx, id); err != nil {
+			return err
+		}
+		return r.Message.Delete(ctx, id)
+	}); err != nil {
 		return err
 	}
 
@@ -542,18 +558,6 @@ func (s *messageService) Delete(ctx context.Context, serverID, id, userID string
 			fileURLs[i] = a.FileURL
 		}
 		removeUploadFilesByURL(s.uploadDir, fileURLs)
-	}
-
-	// Decrement unread_count for every user who had this message as unread.
-	// Uses the message's CreatedAt (captured before delete) as the watermark.
-	if err := s.readStateRepo.DecrementUnreadForDeleted(ctx, message.ChannelID, message.UserID, message.CreatedAt); err != nil {
-		messageLogger.Error("failed to decrement unread counts on delete", "channel_id", message.ChannelID, "err", pkg.ErrText(err))
-	}
-
-	// Best-effort: mention/reply inbox rows for this message would otherwise
-	// deep-link to a deleted message.
-	if err := s.notificationRepo.DeleteByMessageID(ctx, id); err != nil {
-		messageLogger.Error("failed to delete notifications for message", "message_id", id, "err", pkg.ErrText(err))
 	}
 
 	// Fail-closed on resolve failure (ok ignored) — same rationale as the

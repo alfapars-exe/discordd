@@ -1,0 +1,993 @@
+{
+  "createdAt": "2026-10-23T01:29:35.646Z",
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 7950X3D 16-Core Processor          "
+  },
+  "sampleRate": 48000,
+  "sourceRate": 16000,
+  "source": {
+    "dataset": "google/fleurs",
+    "dataset_url": "https://huggingface.co/datasets/google/fleurs",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "source_archive_url": "https://huggingface.co/datasets/google/fleurs/resolve/70bb2e84b976b7e960aa89f1c648e09c59f894dd/data/tr_tr/audio/test.tar.gz",
+    "source_archive_member": "test/10000377651956138413.wav",
+    "source_filename": "10000377651956138413.wav",
+    "source_sha256": "e2efd9f3ce2fcc9e191126dcded8e674233a9ce83a9c2132541700e8f1bd57c3",
+    "source_bytes": 906298,
+    "archive_compressed_bytes_read": 747520,
+    "config": "tr_tr",
+    "split": "test",
+    "id": 2004,
+    "raw_transcription": "Aynı ay, başka bir yolcu uçağı Meşhed'deki bir pisti aşarak bir duvara çarptı ve on yedi kişinin ölümüne neden oldu.",
+    "transcription": "aynı ay başka bir yolcu uçağı meşhed'deki bir pisti aşarak bir duvara çarptı ve on yedi kişinin ölümüne neden oldu",
+    "num_samples": 226560,
+    "speaker_gender": "MALE",
+    "retrieved_utc": "2026-10-23",
+    "attribution": "FLEURS (2022), Alexis Conneau, Min Ma, Simran Khanuja, Yu Zhang, Vera Axelrod, Siddharth Dalmia, Jason Riesa, Clara Rivera, and Ankur Bapna; Google and dataset contributors.",
+    "paper_url": "https://arxiv.org/abs/2205.12446"
+  },
+  "seed": 270737446,
+  "fixtureFiles": {
+    "clean": {
+      "path": "inputs/clean.wav",
+      "bytes": 1839404,
+      "sha256": "cf308b05e9bccb309ab4951d30389fc04319c11905b670b27330a10686291868",
+      "seconds": 19.16
+    },
+    "fan": {
+      "path": "inputs/fan.wav",
+      "bytes": 1839404,
+      "sha256": "6ec9b1518b7b007d1fb087bed52d19489c78f6a34659d168b5e8c4d728ad84b3",
+      "seconds": 19.16
+    },
+    "keyboard": {
+      "path": "inputs/keyboard.wav",
+      "bytes": 1839404,
+      "sha256": "69f222fc01676879f077ddd3b33ded740da89d67386601006835f804ae9c28db",
+      "seconds": 19.16
+    },
+    "transient": {
+      "path": "inputs/transient.wav",
+      "bytes": 1839404,
+      "sha256": "acb16a3c6db5e9aaf29529d384553b535b47e52a30d0201167e5443863e9ea56",
+      "seconds": 19.16
+    }
+  },
+  "engineManifest": {
+    "version": 1,
+    "sampleRate": 48000,
+    "provenance": {
+      "rnnoise": "@shiguredo/rnnoise-wasm@2022.2.0 via @sapphi-red/web-noise-suppressor@0.4.1 source map (patched upstream distribution)",
+      "gtcrn": "@sapphi-red/gtcrn-wasm@0.0.3 via @sapphi-red/web-noise-suppressor@0.4.1 source map",
+      "speex": "@sapphi-red/speex-preprocess-wasm@0.4.0 via @sapphi-red/web-noise-suppressor@0.4.1 source map",
+      "deepfilter": "Binding: https://github.com/mezonai/mezon-noise-suppression/tree/f5178ce858aa634b4bf46f27f5684d02828043ae (v1.2.1), src/df3/df.js. Binary/model: existing HiChat v2 assets, exact hashes pinned and ABI verified by real inference; upstream binary build provenance not available in the Git tree, release or npm package. Do not claim all artifacts came from that release."
+    },
+    "files": {
+      "rnnoise.wasm": {
+        "bytes": 152656,
+        "sha256": "8b60a2ab88fdae2d1a9f940249d0eb072f28ba8e796f7304347b4e07839c8853"
+      },
+      "rnnoise_simd.wasm": {
+        "bytes": 157234,
+        "sha256": "378fd17c294db15ee4e818ba5ef072242a21c8ad7445b483f7f46d7dc4f2c253"
+      },
+      "gtcrn.wasm": {
+        "bytes": 196884,
+        "sha256": "01a5286ddaa1ce6d0dd5510bd9241f3bf0cc727a05d5767ae6881d85d9983719"
+      },
+      "speex.wasm": {
+        "bytes": 56268,
+        "sha256": "bdd0a587bd7b0054589c3585b6b74390784d11265e43360bb3d1d09bf34ad788"
+      },
+      "../../deepfilter/v2/pkg/df_bg.wasm": {
+        "bytes": 9622975,
+        "sha256": "e133417d08bee384d8e60de27efa91da3d858920ed800d4794d490a177300600"
+      },
+      "vendor/deepfilter-upstream.js": {
+        "bytes": 12231,
+        "sha256": "1f358c846d3cf826b0bf51f57349c5c7f16f08ea20546d83882c02cf1eb2ec55"
+      },
+      "vendor/deepfilter.js": {
+        "bytes": 12477,
+        "sha256": "c8643793ac446fef7b49a8f52fa3fc8f76c2bf42ab8e1e8a457bbcdee5da86d4"
+      },
+      "deepfilter-model.bin": {
+        "bytes": 7983136,
+        "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616"
+      }
+    }
+  },
+  "dspSourceSha256": "5033749713f35f73d2e9d0d83d0d70195ee0fbd12b190f9be2f574d35fbaff8e",
+  "speechSeconds": 14.16,
+  "leadingNoiseOnlySeconds": 3,
+  "trailingNoiseOnlySeconds": 2,
+  "fixtureGeneration": "32-tap Hamming-windowed sinc 16-to-48 kHz interpolation; speech peak 0.45; deterministic LCG; fan RMS 0.025; decaying keyboard bursts and transients",
+  "limitations": [
+    "One read Turkish sentence, originally 16 kHz: cannot evaluate full-band speech above 8 kHz or represent all speakers.",
+    "Synthetic noise is controlled and repeatable; no subjective quality verdict or target-speaker isolation is measured.",
+    "Engine-only synchronous DSP: excludes FrameQueue, AudioWorklet/Worker queues, resampling transport, energy gate, LiveKit, device and browser latency.",
+    "Process CPU time has coarse OS accounting and can be zero per frame; inference wall-time percentiles are useful CPU-budget proxies, not end-to-end latency.",
+    "Output lag is waveform cross-correlation against clean speech over a bounded 0-250 ms search, not an acoustic latency measurement.",
+    "DTLN uses its real TFLite Worker VM with offline 64-tap anti-alias 48-to-16-to-48 kHz resampling. Inference times exclude resampling, and attenuation includes its bandwidth restriction.",
+    "WebRTC capture noise suppression is unmeasured: this offline harness does not emulate browser microphone DSP."
+  ],
+  "results": [
+    {
+      "engine": "rnnoise",
+      "results": [
+        {
+          "fixture": "clean",
+          "outputFile": "rnnoise-clean.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 3.4646000000000186,
+          "inferenceWallMs": {
+            "p50": 0.13449999999988904,
+            "p95": 0.2056999999999789,
+            "p99": 0.26969999999982974
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": null,
+          "outputLag": {
+            "samples": 480,
+            "milliseconds": 10,
+            "normalizedCorrelation": 0.8020834759454513,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.223069114456706,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "fan",
+          "outputFile": "rnnoise-fan.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 2.294800000000123,
+          "inferenceWallMs": {
+            "p50": 0.13930000000004839,
+            "p95": 0.2142999999998665,
+            "p99": 0.2840000000001055
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 15
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -31.801171518596867,
+              "outputRmsDbfs": -81.20018573998726,
+              "attenuationDb": 49.399014221390395
+            },
+            "tail": {
+              "inputRmsDbfs": -32.43268685735202,
+              "outputRmsDbfs": -83.17413380663089,
+              "attenuationDb": 50.741446949278874
+            }
+          },
+          "outputLag": {
+            "samples": 480,
+            "milliseconds": 10,
+            "normalizedCorrelation": 0.7114576188693216,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -36.27640004728013,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "keyboard",
+          "outputFile": "rnnoise-keyboard.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 2.4486000000001695,
+          "inferenceWallMs": {
+            "p50": 0.12329999999997199,
+            "p95": 0.16689999999994143,
+            "p99": 0.23520000000007713
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.17333244610398,
+              "outputRmsDbfs": -37.04677602679196,
+              "attenuationDb": 3.873443580687983
+            },
+            "tail": {
+              "inputRmsDbfs": -33.31342352961014,
+              "outputRmsDbfs": -48.583503593158326,
+              "attenuationDb": 15.270080063548185
+            }
+          },
+          "outputLag": {
+            "samples": 479,
+            "milliseconds": 9.979166666666666,
+            "normalizedCorrelation": 0.7587605051355117,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -34.54335805929809,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "transient",
+          "outputFile": "rnnoise-transient.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 2.4980000000000473,
+          "inferenceWallMs": {
+            "p50": 0.12579999999979918,
+            "p95": 0.17229999999972279,
+            "p99": 0.25309999999990396
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.97000337466929,
+              "outputRmsDbfs": -46.70740955730913,
+              "attenuationDb": 12.737406182639837
+            },
+            "tail": {
+              "inputRmsDbfs": -33.84338417586975,
+              "outputRmsDbfs": -38.74630902383246,
+              "attenuationDb": 4.9029248479627086
+            }
+          },
+          "outputLag": {
+            "samples": 480,
+            "milliseconds": 10,
+            "normalizedCorrelation": 0.7947601491179032,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.285454395596446,
+          "finite": true,
+          "clippedSamples": 0
+        }
+      ]
+    },
+    {
+      "engine": "gtcrn",
+      "results": [
+        {
+          "fixture": "clean",
+          "outputFile": "gtcrn-clean.wav",
+          "frameSamples": 768,
+          "frameBudgetMs": 16,
+          "frames": 1198,
+          "initializationMs": 7.164800000000014,
+          "inferenceWallMs": {
+            "p50": 0.7377000000001317,
+            "p95": 2.0832000000000335,
+            "p99": 3.6260999999999513
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": null,
+          "outputLag": {
+            "samples": 890,
+            "milliseconds": 18.541666666666668,
+            "normalizedCorrelation": 0.8706079499631215,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.33419855068905,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "fan",
+          "outputFile": "gtcrn-fan.wav",
+          "frameSamples": 768,
+          "frameBudgetMs": 16,
+          "frames": 1198,
+          "initializationMs": 7.027799999999843,
+          "inferenceWallMs": {
+            "p50": 0.7128999999999905,
+            "p95": 1.7662000000000262,
+            "p99": 2.470600000000104
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -31.801171518596867,
+              "outputRmsDbfs": -62.219989994334064,
+              "attenuationDb": 30.418818475737197
+            },
+            "tail": {
+              "inputRmsDbfs": -32.43268685735202,
+              "outputRmsDbfs": -63.87160006755841,
+              "attenuationDb": 31.438913210206394
+            }
+          },
+          "outputLag": {
+            "samples": 890,
+            "milliseconds": 18.541666666666668,
+            "normalizedCorrelation": 0.7741568370336568,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -38.774544712147765,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "keyboard",
+          "outputFile": "gtcrn-keyboard.wav",
+          "frameSamples": 768,
+          "frameBudgetMs": 16,
+          "frames": 1198,
+          "initializationMs": 6.041099999999915,
+          "inferenceWallMs": {
+            "p50": 0.7224000000005617,
+            "p95": 1.6417999999998756,
+            "p99": 2.0738000000001193
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.17333244610398,
+              "outputRmsDbfs": -89.89038601302542,
+              "attenuationDb": 56.71705356692144
+            },
+            "tail": {
+              "inputRmsDbfs": -33.31342352961014,
+              "outputRmsDbfs": -74.3599075633628,
+              "attenuationDb": 41.046484033752655
+            }
+          },
+          "outputLag": {
+            "samples": 890,
+            "milliseconds": 18.541666666666668,
+            "normalizedCorrelation": 0.8337621129974051,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.78276970505294,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "transient",
+          "outputFile": "gtcrn-transient.wav",
+          "frameSamples": 768,
+          "frameBudgetMs": 16,
+          "frames": 1198,
+          "initializationMs": 6.6796000000003914,
+          "inferenceWallMs": {
+            "p50": 0.7371000000002823,
+            "p95": 1.7917999999999665,
+            "p99": 2.263400000000729
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.97000337466929,
+              "outputRmsDbfs": -90.36520502072588,
+              "attenuationDb": 56.39520164605659
+            },
+            "tail": {
+              "inputRmsDbfs": -33.84338417586975,
+              "outputRmsDbfs": -82.63172185314832,
+              "attenuationDb": 48.78833767727857
+            }
+          },
+          "outputLag": {
+            "samples": 890,
+            "milliseconds": 18.541666666666668,
+            "normalizedCorrelation": 0.8418076535300396,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.432514341463886,
+          "finite": true,
+          "clippedSamples": 0
+        }
+      ]
+    },
+    {
+      "engine": "speex",
+      "results": [
+        {
+          "fixture": "clean",
+          "outputFile": "speex-clean.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 2.8152999999999793,
+          "inferenceWallMs": {
+            "p50": 0.03690000000005966,
+            "p95": 0.07129999999983738,
+            "p99": 0.0966000000000804
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": null,
+          "outputLag": {
+            "samples": 480,
+            "milliseconds": 10,
+            "normalizedCorrelation": 0.9996010953873646,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -33.61993613156413,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "fan",
+          "outputFile": "speex-fan.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 2.1786999999999352,
+          "inferenceWallMs": {
+            "p50": 0.041600000000016735,
+            "p95": 0.07359999999994216,
+            "p99": 0.12049999999999272
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -31.801171518596867,
+              "outputRmsDbfs": -42.12626021817569,
+              "attenuationDb": 10.32508869957882
+            },
+            "tail": {
+              "inputRmsDbfs": -32.43268685735202,
+              "outputRmsDbfs": -42.3725798643757,
+              "attenuationDb": 9.939893007023684
+            }
+          },
+          "outputLag": {
+            "samples": 480,
+            "milliseconds": 10,
+            "normalizedCorrelation": 0.8908694494556826,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -33.54450597143309,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "keyboard",
+          "outputFile": "speex-keyboard.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 2.337600000000066,
+          "inferenceWallMs": {
+            "p50": 0.033100000000104046,
+            "p95": 0.07209999999986394,
+            "p99": 0.11419999999998254
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.17333244610398,
+              "outputRmsDbfs": -33.49985017214585,
+              "attenuationDb": 0.326517726041871
+            },
+            "tail": {
+              "inputRmsDbfs": -33.31342352961014,
+              "outputRmsDbfs": -33.65612355501748,
+              "attenuationDb": 0.3427000254073391
+            }
+          },
+          "outputLag": {
+            "samples": 480,
+            "milliseconds": 10,
+            "normalizedCorrelation": 0.7503597736456923,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -30.503789022120152,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "transient",
+          "outputFile": "speex-transient.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 1.620200000000068,
+          "inferenceWallMs": {
+            "p50": 0.03089999999997417,
+            "p95": 0.05640000000016698,
+            "p99": 0.07369999999991705
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 0
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.97000337466929,
+              "outputRmsDbfs": -34.221402513403596,
+              "attenuationDb": 0.25139913873430686
+            },
+            "tail": {
+              "inputRmsDbfs": -33.84338417586975,
+              "outputRmsDbfs": -34.08855817745395,
+              "attenuationDb": 0.24517400158419633
+            }
+          },
+          "outputLag": {
+            "samples": 479,
+            "milliseconds": 9.979166666666666,
+            "normalizedCorrelation": 0.920258729064434,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -32.40371928428224,
+          "finite": true,
+          "clippedSamples": 0
+        }
+      ]
+    },
+    {
+      "engine": "deepfilter",
+      "createdAt": "2026-10-23T01:41:00.564Z",
+      "parameters": {
+        "uiStrength": 70,
+        "attenuationLimitDb": 10,
+        "mapping": "src/audio/deepfilterSuppression.ts#strengthToAttenLimDb"
+      },
+      "sourceHashes": {
+        "benchmark": "afae39ee8ca8d6b09d376968b03551f3266d0a6f2fb280a540352f1e5c2d5f0b",
+        "dsp": "5033749713f35f73d2e9d0d83d0d70195ee0fbd12b190f9be2f574d35fbaff8e",
+        "suppressionMapping": "acbc5c6afb19097dc5bc089a7a146742f88c44aaf38e93bf2ad0e97ff304ebc7"
+      },
+      "results": [
+        {
+          "fixture": "clean",
+          "outputFile": "deepfilter-clean.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 403.43780000000004,
+          "inferenceWallMs": {
+            "p50": 1.1523000000001957,
+            "p95": 1.522399999999834,
+            "p99": 1.7386000000001332
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": null,
+          "outputLag": {
+            "samples": 1440,
+            "milliseconds": 30,
+            "normalizedCorrelation": 0.9237919403590479,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -36.253263304870146,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "fan",
+          "outputFile": "deepfilter-fan.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 351.9220999999998,
+          "inferenceWallMs": {
+            "p50": 1.3061999999999898,
+            "p95": 1.6166000000002896,
+            "p99": 2.0986999999995533
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -31.801171518596867,
+              "outputRmsDbfs": -41.81374837049427,
+              "attenuationDb": 10.0125768518974
+            },
+            "tail": {
+              "inputRmsDbfs": -32.43268685735202,
+              "outputRmsDbfs": -42.48239907930585,
+              "attenuationDb": 10.049712221953833
+            }
+          },
+          "outputLag": {
+            "samples": 1440,
+            "milliseconds": 30,
+            "normalizedCorrelation": 0.8420825664296588,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -34.679689525080576,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "keyboard",
+          "outputFile": "deepfilter-keyboard.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 344.28799999999956,
+          "inferenceWallMs": {
+            "p50": 0.7687999999998283,
+            "p95": 2.000300000000607,
+            "p99": 2.3083999999998923
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.17333244610398,
+              "outputRmsDbfs": -43.173332353444955,
+              "attenuationDb": 9.999999907340978
+            },
+            "tail": {
+              "inputRmsDbfs": -33.31342352961014,
+              "outputRmsDbfs": -43.31342346068385,
+              "attenuationDb": 9.99999993107371
+            }
+          },
+          "outputLag": {
+            "samples": 1440,
+            "milliseconds": 30,
+            "normalizedCorrelation": 0.8508127857779295,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.31830801365234,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "transient",
+          "outputFile": "deepfilter-transient.wav",
+          "frameSamples": 480,
+          "frameBudgetMs": 10,
+          "frames": 1916,
+          "initializationMs": 376.8804999999993,
+          "inferenceWallMs": {
+            "p50": 0.8698999999996886,
+            "p95": 2.179200000000492,
+            "p99": 2.3255000000008295
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.97000337466929,
+              "outputRmsDbfs": -43.97000322420003,
+              "attenuationDb": 9.999999849530738
+            },
+            "tail": {
+              "inputRmsDbfs": -33.84338417586975,
+              "outputRmsDbfs": -43.84338404570144,
+              "attenuationDb": 9.99999986983169
+            }
+          },
+          "outputLag": {
+            "samples": 1440,
+            "milliseconds": 30,
+            "normalizedCorrelation": 0.908176909339655,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -36.12189731700781,
+          "finite": true,
+          "clippedSamples": 0
+        }
+      ]
+    },
+    {
+      "engine": "dtln",
+      "createdAt": "2026-10-23T01:29:35.624Z",
+      "environment": {
+        "node": "v24.19.0",
+        "platform": "win32",
+        "arch": "x64",
+        "cpu": "AMD Ryzen 9 7950X3D 16-Core Processor          ",
+        "ffmpeg": "ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers"
+      },
+      "sampleRate": 48000,
+      "modelSampleRate": 16000,
+      "resampling": "FFmpeg swresample, float32, filter_size=64, phase_shift=10, cutoff=0.95, exact_rational=1, 48-to-16-to-48 kHz; inference timings exclude resampling.",
+      "limitations": [
+        "One Turkish sentence, originally 16 kHz; synthetic noise; cannot rank full-band speech quality, target-speaker isolation or all speakers.",
+        "Inputs are the exported PCM16 WAV fixtures, shared with the other engine comparisons; input hashes are recorded per fixture.",
+        "Real shipped TFLite model in classic Worker VM with one interpreter thread and 12-hop warmup, state reset before each fixture. Initialization includes loading and warmup.",
+        "No energy gate, live browser bridge/queue, microphone, LiveKit or P2P. Offline resampler compensates filter delay, so output lag is model-only correlation, not end-to-end latency.",
+        "Noise attenuation includes the 16 kHz bandwidth restriction; per-frame process CPU accounting is coarse and may be zero on Windows.",
+        "Float output drives metrics; exported listening files are PCM16. Values below PCM16 resolution cannot be assessed from the listening files."
+      ],
+      "results": [
+        {
+          "fixture": "clean",
+          "inputSha256": "cf308b05e9bccb309ab4951d30389fc04319c11905b670b27330a10686291868",
+          "outputFile": "dtln-clean.wav",
+          "modelSampleRate": 16000,
+          "frameSamples": 128,
+          "frameBudgetMs": 8,
+          "frames": 2395,
+          "initializationMs": 168.2288000000001,
+          "inferenceWallMs": {
+            "p50": 0.48730000000000473,
+            "p95": 0.5839000000000851,
+            "p99": 0.7286000000000286
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 0,
+            "p99": 16
+          },
+          "noiseOnly": null,
+          "outputLag": {
+            "samples": 1152,
+            "milliseconds": 24,
+            "normalizedCorrelation": 0.9155638735325032,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.24330389073259,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "fan",
+          "inputSha256": "6ec9b1518b7b007d1fb087bed52d19489c78f6a34659d168b5e8c4d728ad84b3",
+          "outputFile": "dtln-fan.wav",
+          "modelSampleRate": 16000,
+          "frameSamples": 128,
+          "frameBudgetMs": 8,
+          "frames": 2395,
+          "initializationMs": 62.5306999999998,
+          "inferenceWallMs": {
+            "p50": 0.7049999999999272,
+            "p95": 0.938600000000406,
+            "p99": 1.0330000000003565
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 31
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -31.801171518596867,
+              "outputRmsDbfs": -57.56444515412059,
+              "attenuationDb": 25.763273635523724
+            },
+            "tail": {
+              "inputRmsDbfs": -32.43268685735202,
+              "outputRmsDbfs": -58.7174934405615,
+              "attenuationDb": 26.28480658320948
+            }
+          },
+          "outputLag": {
+            "samples": 1152,
+            "milliseconds": 24,
+            "normalizedCorrelation": 0.9465770305089849,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -34.08402451915283,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "keyboard",
+          "inputSha256": "69f222fc01676879f077ddd3b33ded740da89d67386601006835f804ae9c28db",
+          "outputFile": "dtln-keyboard.wav",
+          "modelSampleRate": 16000,
+          "frameSamples": 128,
+          "frameBudgetMs": 8,
+          "frames": 2395,
+          "initializationMs": 70.84699999999975,
+          "inferenceWallMs": {
+            "p50": 0.6868999999996959,
+            "p95": 0.9309000000002925,
+            "p99": 1.0181999999995242
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.17333244610398,
+              "outputRmsDbfs": -70.01711911616515,
+              "attenuationDb": 36.84378667006117
+            },
+            "tail": {
+              "inputRmsDbfs": -33.31342352961014,
+              "outputRmsDbfs": -71.7128179453616,
+              "attenuationDb": 38.399394415751466
+            }
+          },
+          "outputLag": {
+            "samples": 1152,
+            "milliseconds": 24,
+            "normalizedCorrelation": 0.8985777292811822,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.325730501756716,
+          "finite": true,
+          "clippedSamples": 0
+        },
+        {
+          "fixture": "transient",
+          "inputSha256": "acb16a3c6db5e9aaf29529d384553b535b47e52a30d0201167e5443863e9ea56",
+          "outputFile": "dtln-transient.wav",
+          "modelSampleRate": 16000,
+          "frameSamples": 128,
+          "frameBudgetMs": 8,
+          "frames": 2395,
+          "initializationMs": 66.17920000000049,
+          "inferenceWallMs": {
+            "p50": 0.6826999999993859,
+            "p95": 0.9328000000004977,
+            "p99": 1.0064000000002125
+          },
+          "processCpuMs": {
+            "p50": 0,
+            "p95": 15,
+            "p99": 16
+          },
+          "noiseOnly": {
+            "lead": {
+              "inputRmsDbfs": -33.97000337466929,
+              "outputRmsDbfs": -68.64914443993274,
+              "attenuationDb": 34.67914106526345
+            },
+            "tail": {
+              "inputRmsDbfs": -33.84338417586975,
+              "outputRmsDbfs": -64.54864060478782,
+              "attenuationDb": 30.70525642891807
+            }
+          },
+          "outputLag": {
+            "samples": 1152,
+            "milliseconds": 24,
+            "normalizedCorrelation": 0.8731736572043182,
+            "searchLimitMs": 250
+          },
+          "outputRmsDbfs": -35.33728831301974,
+          "finite": true,
+          "clippedSamples": 0
+        }
+      ],
+      "assetProvenance": {
+        "tfjs": "4.22.0",
+        "tflite": "0.0.1-alpha.10",
+        "dtln": "@sapphi-red/dtln-web 0.1.4",
+        "files": {
+          "dtln-core.js": {
+            "bytes": 3700,
+            "sha256": "53c3f6861eefc5d61fae6a43b7bf13815ebea365524e2032ede2dddfc4449ea4"
+          },
+          "fft.js": {
+            "bytes": 13299,
+            "sha256": "25499cf7312ce94bd694ae2de0ed08096453e7159f44ec3df900ad0d6b5bd100"
+          },
+          "inference-worker.js": {
+            "bytes": 2861,
+            "sha256": "9319e1141b83f7768678dea42f3a415c4f8e3d3b4799e2b54c53fe3efb45e2b6"
+          },
+          "model_quant_f16_1.tflite": {
+            "bytes": 736000,
+            "sha256": "350fcbbca37510233e153961ff59a5a9d64939f4397a3d39ec9277233b98c2b3"
+          },
+          "model_quant_f16_2.tflite": {
+            "bytes": 1266336,
+            "sha256": "c89983204598b047fac0e2e6132db4f085c93064c4a081119f69a5496db3ca8d"
+          },
+          "tf-tflite.min.js": {
+            "bytes": 1219490,
+            "sha256": "2fb09bf069728bf4b63c51c72a3a6bcf415f3732c28e85624a0fd9bb8edabd2e"
+          },
+          "tf.min.js": {
+            "bytes": 1469843,
+            "sha256": "300dfae273d20b4046f46a06d735688f03675a807561e9bcb5f664eb2f3d2831"
+          },
+          "tflite_web_api_cc.js": {
+            "bytes": 78792,
+            "sha256": "08e963fcde11dc041feeac97ff711b3a157614edc98ff8bfa309557189b7368d"
+          },
+          "tflite_web_api_cc.wasm": {
+            "bytes": 3592067,
+            "sha256": "f1eb42f96ae91e5ef34e2f833f011373ca1c40fdc9d4062ec21eb07b886ea54f"
+          },
+          "tflite_web_api_cc_simd.js": {
+            "bytes": 78797,
+            "sha256": "d5c71816525140d7a35b59a908d3b07d42741576630e647d246c19c6fa72d63d"
+          },
+          "tflite_web_api_cc_simd.wasm": {
+            "bytes": 3689633,
+            "sha256": "40f49cc2d458ec09bb43db160e9e55f4b3c790a4c1d1fa280f8a61796296cf8e"
+          },
+          "tflite_web_api_cc_simd_threaded.js": {
+            "bytes": 96161,
+            "sha256": "c6cbb6a47fb2b1fb663951d16f10c5f4a4445e521d53dc4f5d50a6d6ca8e3f63"
+          },
+          "tflite_web_api_cc_simd_threaded.wasm": {
+            "bytes": 3723481,
+            "sha256": "6f7aa370b3fd3660ffa50c5028b95283640f6e6f0c79381f456f35c83b40903f"
+          },
+          "tflite_web_api_cc_simd_threaded.worker.js": {
+            "bytes": 2302,
+            "sha256": "9ace3794b3e648b9c3f89f9af44d44708425fd20c3417466a9a98696fa6d1603"
+          },
+          "tflite_web_api_cc_threaded.js": {
+            "bytes": 96151,
+            "sha256": "93eddbbe9abc2d7f9785a7314e36639b6c2479396fa18e07067f874c3db39558"
+          },
+          "tflite_web_api_cc_threaded.wasm": {
+            "bytes": 3626387,
+            "sha256": "e1d4ceaa44a28336d46b30317d23cc3a26ed788bb7c5b2ca70e41bff4f83d57e"
+          },
+          "tflite_web_api_cc_threaded.worker.js": {
+            "bytes": 2302,
+            "sha256": "9ace3794b3e648b9c3f89f9af44d44708425fd20c3417466a9a98696fa6d1603"
+          }
+        }
+      }
+    }
+  ],
+  "updatedAt": "2026-10-23T01:41:00.599Z",
+  "benchmarkSourceSha256": "afae39ee8ca8d6b09d376968b03551f3266d0a6f2fb280a540352f1e5c2d5f0b",
+  "parameters": {
+    "deepfilter": {
+      "uiStrength": 70,
+      "attenuationLimitDb": 10,
+      "mapping": "src/audio/deepfilterSuppression.ts#strengthToAttenLimDb"
+    }
+  }
+}

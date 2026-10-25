@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "stage": "encrypted local storage primitive; not yet wired to send/restore/recovery lifecycle",
+  "changes": [
+    "Added pendingGroupSendStorage with AES-256-GCM sealed manifests and separately sealed original/transmitted files. Content, remote payload, file keys, names, MIME types and timestamps are inside authenticated envelopes. AAD binds account, device, group, request and manifest/file role/index; fresh 96-bit IVs are used per part.",
+    "Reuses the existing mqvi_e2ee metadata store under exact JSON-scoped v1 namespaces; no new database, dependency or schema migration. Non-exportable local CryptoKeys are created under a read-write transaction so concurrent tabs cannot overwrite each other's key. Missing keys with existing records fail closed rather than regenerating and orphaning data.",
+    "Pending records are write-once per operation key; conflicting writes are rejected. Context guards surround asynchronous crypto/file/IDB steps. Failed/stale writes are surfaced, not reported as durable success. Conditional cleanup uses a unique write token so it cannot remove a replacement record.",
+    "Restore validates scope, payload/device/request identity, key algorithm, file-count/descriptor/key metadata and authenticated file sizes. Corrupt/tampered records are reported by scope without automatic deletion. Exact-key removal and existing logout metadata cleanup cover records and keys.",
+    "Existing portable backup collection does not include these local metadata namespaces. Existing local restore rollback snapshots the metadata store, preserving non-exportable pending keys and sealed records on failed restore. Storage comments now correctly disclose that older identity/session/message-cache records remain unencrypted by this wrapper and do not assume OS full-disk encryption is enabled.",
+    "Initial tests exposed a genuine cross-realm ArrayBuffer rejection; validation now uses the native brand-checking byteLength getter rather than instanceof or spoofable toString tags."
+  ],
+  "verification": [
+    "Real WebCrypto plus fake-indexeddb tests verify connection close/reopen restore of exact original/transmitted bytes and metadata, non-exportable keys, no plaintext strings in raw record structure, owner/device separation, AAD group/part swaps rejected, six concurrent key creators interoperating, write-once behavior, missing-key failure and logout clearing.",
+    "Context cancellation and injected QuotaExceededError propagate without a pending record. This is injected storage failure, not a real disk-full browser test. Malformed snapshots fail before key/record creation.",
+    "Three crypto suites passed: 65 tests (pending storage, keyStorage, keyBackup). Added backup rollback test confirms the original local CryptoKey can still decrypt its sealed record after a failed restore; the backup layer is mocked metadata storage while crypto is real.",
+    "Full client regression passed before the last validation/test follow-up: 225 files / 2146 tests in 46.03s. Final seven pending-storage tests passed afterward (1.58s). Final tsc -b, targeted ESLint and git diff --check passed; an initial preserve-caught-error lint failure was fixed by attaching the caught cause.",
+    "Local Vite web production build passed: 1648 modules, 706ms; existing warnings remain unsuppressed. The storage module is not yet imported by the send runtime, so the unchanged module count/build does not prove live persistence or restart recovery."
+  ],
+  "remaining": [
+    "Wire write-before-first-POST, authenticated startup restore, ready-device/account/group affinity, multi-operation ordering, encrypted cleanup and persistent partial-file recovery. Do not mark runtime pending sends durable yet; UI still correctly warns session-only retention.",
+    "Preserve unresolved partial uploads across subsequent sends and restart rather than deleting their snapshot too early or overwriting one group slot. Handle cancellation/completion deletion failure and newer draft reconciliation explicitly.",
+    "Real browser/Electron process restart, actual storage quota failure, large-file memory/quota pressure, cross-tab lifecycle/logout races and successful backup/device-reset user warnings remain unverified. Backup rollback snapshots may become large with pending file ciphertext and need proportionate acceptance.",
+    "Non-exportable IndexedDB keys do not protect against compromised same-origin scripts. Existing plaintext message-cache/session storage was not converted to encrypted at-rest storage by this change.",
+    "No actual two-client/Windows acceptance, production update, commit, push, merge or release performed. Overall P0-P11 remains incomplete."
+  ]
+}

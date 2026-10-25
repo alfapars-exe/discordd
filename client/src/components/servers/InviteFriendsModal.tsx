@@ -3,7 +3,7 @@
  * Select friends from checkbox list, sends invite URL as DM to each.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useFriendStore } from "../../stores/friendStore";
@@ -13,6 +13,10 @@ import { useToastStore } from "../../stores/toastStore";
 import { getInviteUrl, copyToClipboard } from "../../utils/constants";
 import type { FriendshipWithUser } from "../../types";
 import Avatar from "../shared/Avatar";
+import { useChannelStore } from "../../stores/channelStore";
+import { useChannelPermissionStore } from "../../stores/channelPermissionStore";
+import { useAuthStore } from "../../stores/authStore";
+import { Permissions } from "../../utils/permissions";
 
 type InviteFriendsModalProps = {
   serverId: string;
@@ -23,15 +27,80 @@ type InviteFriendsModalProps = {
 function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModalProps) {
   const { t } = useTranslation("servers");
   const friends = useFriendStore((s) => s.friends);
-  const getOrCreatePermanentInvite = useInviteStore((s) => s.getOrCreatePermanentInvite);
+  const getOrCreateShareInvite = useInviteStore((s) => s.getOrCreateShareInvite);
   const createOrGetChannel = useDMStore((s) => s.createOrGetChannel);
   const sendMessage = useDMStore((s) => s.sendMessage);
   const addToast = useToastStore((s) => s.addToast);
+  const accountId = useAuthStore((s) => s.user?.id ?? null);
+  const categoriesForServer = useChannelStore((s) => s.categoriesByServer[serverId]);
+  const categories = categoriesForServer ?? [];
+  const overridesByChannel = useChannelPermissionStore((s) => s.overridesByChannel);
+  const fetchOverridesForChannels = useChannelPermissionStore((s) => s.fetchOverridesForChannels);
+  const textChannels = categories.flatMap((group) => group.channels).filter((channel) => channel.type === "text");
+  const textChannelKey = textChannels.map((channel) => channel.id).join("|");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [isSending, setIsSending] = useState(false);
+  const [sendingContext, setSendingContext] = useState<string | null>(null);
   const [progress, setProgress] = useState({ sent: 0, total: 0 });
-  const [isCopying, setIsCopying] = useState(false);
+  const [copyingContext, setCopyingContext] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(true);
+  const [recipientStatus, setRecipientStatus] = useState<Record<string, "sending" | "sent" | "failed">>({});
+  const [targetChannelId, setTargetChannelId] = useState("");
+  const contextKey = JSON.stringify([accountId, serverId, targetChannelId]);
+  const isSending = sendingContext === contextKey;
+  const isCopying = copyingContext === contextKey;
+  const activeContext = useRef(contextKey);
+  const mounted = useRef(false);
+  const targetChannel = textChannels.find((channel) => channel.id === targetChannelId);
+  const targetIsPrivate = !!targetChannel && (overridesByChannel[targetChannel.id] ?? []).some((override) => (override.deny & Permissions.ViewChannel) !== 0);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  const isCurrentContext = useCallback((key: string, requestAccountId: string | null) => {
+    return mounted.current && activeContext.current === key && useAuthStore.getState().user?.id === requestAccountId;
+  }, []);
+
+  const loadInviteUrl = useCallback(async (key: string, requestAccountId: string | null, requestServerId: string, requestChannelId: string): Promise<string> => {
+    try {
+      const invite = await getOrCreateShareInvite(requestServerId, requestChannelId || undefined);
+      if (!isCurrentContext(key, requestAccountId)) return "";
+      return invite ? getInviteUrl(invite.code) : "";
+    } catch {
+      return "";
+    }
+  }, [getOrCreateShareInvite, isCurrentContext]);
+
+  useEffect(() => {
+    fetchOverridesForChannels(textChannelKey ? textChannelKey.split("|") : []);
+  }, [fetchOverridesForChannels, textChannelKey]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filteredFriends = friends.filter((friend) => {
+    const name = `${friend.display_name ?? ""} ${friend.username}`.toLocaleLowerCase();
+    return !normalizedQuery || name.includes(normalizedQuery);
+  });
+
+  useEffect(() => {
+    let active = true;
+    const requestContext = contextKey;
+    const requestAccountId = accountId;
+    activeContext.current = requestContext;
+    void loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId).then((url) => {
+      if (!active || !isCurrentContext(requestContext, requestAccountId)) return;
+      setInviteUrl(url);
+      setInviteLoading(false);
+    }).catch(() => {
+      if (!active || !isCurrentContext(requestContext, requestAccountId)) return;
+      setInviteUrl("");
+      setInviteLoading(false);
+    });
+    return () => { active = false; };
+  }, [accountId, contextKey, isCurrentContext, loadInviteUrl, serverId, targetChannelId]);
 
   // Close on Escape
   const handleKeyDown = useCallback(
@@ -43,10 +112,11 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
     };
   }, [handleKeyDown]);
 
@@ -75,56 +145,93 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
   /** Copy invite link to clipboard for external sharing */
   async function handleCopyLink() {
     if (isCopying) return;
-    setIsCopying(true);
-
-    const invite = await getOrCreatePermanentInvite(serverId);
-    if (!invite) {
-      addToast("error", t("inviteCreateFailed"));
-      setIsCopying(false);
-      return;
-    }
-
+    const requestContext = contextKey;
+    setCopyingContext(requestContext);
+    const requestAccountId = accountId;
     try {
-      await copyToClipboard(getInviteUrl(invite.code));
+      const url = inviteUrl || await loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId);
+      if (!isCurrentContext(requestContext, requestAccountId)) return;
+      if (url && !inviteUrl) setInviteUrl(url);
+      if (!url) {
+        addToast("error", t("inviteCreateFailed"));
+        return;
+      }
+      await copyToClipboard(url);
+      if (!isCurrentContext(requestContext, requestAccountId)) return;
       addToast("success", t("inviteLinkCopied"));
     } catch {
-      addToast("error", t("inviteCopyFailed"));
+      if (isCurrentContext(requestContext, requestAccountId)) addToast("error", t("inviteCopyFailed"));
+    } finally {
+      if (isCurrentContext(requestContext, requestAccountId)) setCopyingContext(null);
     }
-    setIsCopying(false);
+  }
+
+  async function sendInviteTo(userId: string, content: string, requestContext: string, requestAccountId: string | null): Promise<boolean> {
+    if (!isCurrentContext(requestContext, requestAccountId)) return false;
+    setRecipientStatus((state) => ({ ...state, [userId]: "sending" }));
+    let sent = false;
+    try {
+      const channelId = await createOrGetChannel(userId);
+      sent = channelId && isCurrentContext(requestContext, requestAccountId)
+        ? await sendMessage(channelId, content)
+        : false;
+    } catch {
+      // Treat thrown transport failures like an unsuccessful send so the row
+      // becomes retryable and a bulk send can continue for other recipients.
+    }
+    if (isCurrentContext(requestContext, requestAccountId)) setRecipientStatus((state) => ({ ...state, [userId]: sent ? "sent" : "failed" }));
+    return sent;
+  }
+
+  async function handleSendOne(userId: string) {
+    if (recipientStatus[userId] === "sending" || recipientStatus[userId] === "sent") return;
+    const requestContext = contextKey;
+    const requestAccountId = accountId;
+    const url = inviteUrl || await loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId);
+    if (!isCurrentContext(requestContext, requestAccountId)) return;
+    if (url && !inviteUrl) setInviteUrl(url);
+    if (!url) {
+      setRecipientStatus((state) => ({ ...state, [userId]: "failed" }));
+      addToast("error", t("inviteCreateFailed"));
+      return;
+    }
+    await sendInviteTo(userId, url, requestContext, requestAccountId);
   }
 
   /** Send invite to each selected friend via DM */
   async function handleSendInvites() {
     if (selected.size === 0 || isSending) return;
 
-    setIsSending(true);
+    setSendingContext(contextKey);
     setProgress({ sent: 0, total: selected.size });
+    const requestContext = contextKey;
+    const requestAccountId = accountId;
 
-    // Reuse existing permanent invite or create new
-    const invite = await getOrCreatePermanentInvite(serverId);
-    if (!invite) {
+    const url = inviteUrl || await loadInviteUrl(requestContext, requestAccountId, serverId, targetChannelId);
+    if (!isCurrentContext(requestContext, requestAccountId)) {
+      return;
+    }
+    if (url && !inviteUrl) setInviteUrl(url);
+    if (!url) {
       addToast("error", t("inviteCreateFailed"));
-      setIsSending(false);
+      setSendingContext(null);
       return;
     }
 
-    const inviteContent = getInviteUrl(invite.code);
     let sentCount = 0;
 
     // Send sequentially (rate limit protection)
     for (const userId of selected) {
-      const channelId = await createOrGetChannel(userId);
-      if (channelId) {
-        await sendMessage(channelId, inviteContent);
+      if (!isCurrentContext(requestContext, requestAccountId)) break;
+      if (recipientStatus[userId] === "sent" || await sendInviteTo(userId, url, requestContext, requestAccountId)) {
         sentCount++;
-        setProgress({ sent: sentCount, total: selected.size });
+        if (isCurrentContext(requestContext, requestAccountId)) setProgress({ sent: sentCount, total: selected.size });
       }
     }
 
     // Done
-    addToast("success", t("invitesSent", { count: sentCount }));
-    setIsSending(false);
-    onClose();
+    if (isCurrentContext(requestContext, requestAccountId) && sentCount > 0) addToast("success", t("invitesSent", { count: sentCount }));
+    if (isCurrentContext(requestContext, requestAccountId)) setSendingContext(null);
   }
 
   /** Render a single friend row */
@@ -132,16 +239,15 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
     const isChecked = selected.has(friend.user_id);
     const name = friend.display_name ?? friend.username;
 
+    const status = recipientStatus[friend.user_id];
     return (
-      <button
+      <div
         key={friend.user_id}
         className={`invite-friend-item${isChecked ? " checked" : ""}`}
-        onClick={() => toggleFriend(friend.user_id)}
-        disabled={isSending}
       >
-        <span className={`invite-friend-check${isChecked ? " checked" : ""}`}>
-          {isChecked && "\u2713"}
-        </span>
+        <button className="invite-friend-select" onClick={() => toggleFriend(friend.user_id)} disabled={isSending} aria-label={t("selectInviteRecipient", { name })}>
+          <span className={`invite-friend-check${isChecked ? " checked" : ""}`}>{isChecked && "\u2713"}</span>
+        </button>
         <Avatar
           name={name}
           avatarUrl={friend.avatar_url ?? undefined}
@@ -150,7 +256,14 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
         />
         <span className="invite-friend-name">{name}</span>
         <span className="invite-friend-username">@{friend.username}</span>
-      </button>
+        <button
+          className="invite-friend-send-one"
+          onClick={() => void handleSendOne(friend.user_id)}
+          disabled={isSending || status === "sending" || status === "sent"}
+        >
+          {status === "sending" ? t("inviteSending") : status === "sent" ? t("inviteSent") : status === "failed" ? t("retryInvite") : t("invite")}
+        </button>
+      </div>
     );
   }
 
@@ -177,6 +290,13 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
 
         {/* Copy Link — for external sharing */}
         <div className="invite-friends-copy-section">
+          <label className="report-label" htmlFor="invite-target-channel">{t("inviteTargetChannel")}</label>
+          <select id="invite-target-channel" className="forward-search" value={targetChannelId} onChange={(event) => { setTargetChannelId(event.target.value); setInviteUrl(""); }} disabled={isSending}>
+            <option value="">{t("inviteServerHome")}</option>
+            {textChannels.map((channel) => <option key={channel.id} value={channel.id}># {channel.name}</option>)}
+          </select>
+          {targetIsPrivate && <p className="invite-private-warning" role="note">{t("invitePrivateChannelWarning", { channel: targetChannel?.name })}</p>}
+          <input className="invite-friends-link" value={inviteLoading ? t("loading") : inviteUrl} readOnly aria-label={t("inviteLink")} />
           <button
             className="invite-friends-copy-btn"
             onClick={handleCopyLink}
@@ -187,6 +307,14 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
           <span className="invite-friends-copy-hint">{t("copyInviteLinkHint")}</span>
         </div>
 
+        <input
+          className="invite-friends-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("searchFriends")}
+          aria-label={t("searchFriends")}
+        />
+
         {/* Separator */}
         <div className="invite-friends-separator">
           <span className="invite-friends-separator-line" />
@@ -196,7 +324,7 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
 
         {/* Friend list */}
         <div className="invite-friends-body">
-          {friends.length === 0 ? (
+          {filteredFriends.length === 0 ? (
             <div className="invite-friends-empty">
               <p>{t("noFriends")}</p>
             </div>
@@ -218,7 +346,7 @@ function InviteFriendsModal({ serverId, serverName, onClose }: InviteFriendsModa
 
               {/* Scrollable friend list */}
               <div className="invite-friends-list">
-                {friends.map(renderFriend)}
+                {filteredFriends.map(renderFriend)}
               </div>
             </>
           )}

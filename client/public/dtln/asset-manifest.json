@@ -1,0 +1,21 @@
+{
+  "tfjs": "4.22.0",
+  "tflite": "0.0.1-alpha.10",
+  "dtln": "@sapphi-red/dtln-web 0.1.4",
+  "files": {
+    "tflite_web_api_cc_simd_threaded.wasm": "6f7aa370b3fd3660ffa50c5028b95283640f6e6f0c79381f456f35c83b40903f",
+    "tflite_web_api_cc_simd_threaded.js": "c6cbb6a47fb2b1fb663951d16f10c5f4a4445e521d53dc4f5d50a6d6ca8e3f63",
+    "tflite_web_api_cc_simd.wasm": "40f49cc2d458ec09bb43db160e9e55f4b3c790a4c1d1fa280f8a61796296cf8e",
+    "tf-tflite.min.js": "2fb09bf069728bf4b63c51c72a3a6bcf415f3732c28e85624a0fd9bb8edabd2e",
+    "tflite_web_api_cc_threaded.wasm": "e1d4ceaa44a28336d46b30317d23cc3a26ed788bb7c5b2ca70e41bff4f83d57e",
+    "tflite_web_api_cc_simd_threaded.worker.js": "9ace3794b3e648b9c3f89f9af44d44708425fd20c3417466a9a98696fa6d1603",
+    "tflite_web_api_cc_threaded.worker.js": "9ace3794b3e648b9c3f89f9af44d44708425fd20c3417466a9a98696fa6d1603",
+    "tf.min.js": "300dfae273d20b4046f46a06d735688f03675a807561e9bcb5f664eb2f3d2831",
+    "model_quant_f16_1.tflite": "350fcbbca37510233e153961ff59a5a9d64939f4397a3d39ec9277233b98c2b3",
+    "model_quant_f16_2.tflite": "c89983204598b047fac0e2e6132db4f085c93064c4a081119f69a5496db3ca8d",
+    "tflite_web_api_cc.js": "08e963fcde11dc041feeac97ff711b3a157614edc98ff8bfa309557189b7368d",
+    "tflite_web_api_cc.wasm": "f1eb42f96ae91e5ef34e2f833f011373ca1c40fdc9d4062ec21eb07b886ea54f",
+    "tflite_web_api_cc_threaded.js": "93eddbbe9abc2d7f9785a7314e36639b6c2479396fa18e07067f874c3db39558",
+    "tflite_web_api_cc_simd.js": "d5c71816525140d7a35b59a908d3b07d42741576630e647d246c19c6fa72d63d"
+  }
+}

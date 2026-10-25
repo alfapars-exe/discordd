@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Root cause confirmed in pkg/logx: the standard log bridge emits every record at INFO, including log.Fatal output. At LOG_LEVEL=error the process still exited but its critical reason was filtered out.",
+    "Added logx.Fatal, resolving the current default logger at call time, recording ERROR with component and a separately redacted error field, bounded-flushing the existing optional Sentry pipeline and exiting with code 1. Uses existing pkg.ErrText/RedactSecrets; no new logging stack or dependency.",
+    "Migrated application boot/frontend/init, LiveKit seed and unrecoverable server/shutdown exits to this path. Ordinary stdlib messages retain their existing INFO behavior; severity is not guessed from arbitrary text. The standalone resize utility, which does not initialize this log bridge, retains its existing standard fatal path."
+  ],
+  "verification": [
+    "Subprocess tests verify actual exit status 1, visible ERROR severity with JSON/text configuration at LOG_LEVEL=error, use before Init, component context and masking of a synthetic authToken value.",
+    "Full default Linux Docker Go suite passed: pkg/logx 0.014s, main 7.133s, database 18.237s, handlers 3.190s, repository 43.304s, services 23.405s and remaining packages passed/cached. No PostgreSQL DSN was used.",
+    "Rebuilt both self-host and primary CGO/libSQL Docker images. In each actual image a deliberately invalid /proc upload path produced one structured ERROR failed-to-create-upload-directory record and process exit 1 at LOG_LEVEL=error. Generated disposable credentials were checked absent from captured logs.",
+    "Both rebuilt images also started normally with temporary SQLite/upload paths and returned health/readiness HTTP 200 at LOG_LEVEL=error. Tests used --network none, no host mounts/ports, UID 1000, disposable generated keys and no Sentry/LiveKit/HF credentials; all temporary test containers were removed.",
+    "Final Linux Docker go vet ./... passed. Targeted git diff --check and coverage validation passed: 33 references / 261 behaviors; acceptance remains NO. Only the original hichat-browser-qa container remains running."
+  ],
+  "images": {
+    "self_host": {"tag":"hichat-server-qa:20261024-fatal-logging","manifest":"sha256:e88a500cd4a40b8388479a240be65940642e3a17eab8fc0d416c6de731404683"},
+    "primary": {"tag":"hichat-primary-qa:20261024-fatal-logging","manifest":"sha256:a4bb2ec2db89d87c82b9c5032476f4aa32c0d54e90489c694f881250aef87583"}
+  },
+  "remaining": [
+    "Actual optional Sentry delivery, live external integrations, installed Windows checks, signing and the full P0-P11 implementation/acceptance gates are not proved by these local tests.",
+    "Previous packaging evidence remains a historical candidate; this new image evidence supersedes its open fatal-log diagnostic issue. No production service or existing QA container was restarted. No commit, push, merge, registry push, GitHub release or Windows update publication performed."
+  ]
+}

@@ -9,19 +9,20 @@ const MusicBotUserID = "__music_bot__"
 
 // MusicTrack — a single song in the queue or currently playing.
 //
-// All fields except URL come from yt-dlp metadata extraction (single
-// `--print '%(...)j'` JSON pass). URL is the original user-supplied
-// YouTube link; the bot re-extracts the audio stream URL at play time
+// Media fields come from yt-dlp metadata extraction (single
+// `--print '%(...)j'` JSON pass). URL is a canonical individual YouTube
+// video link; the bot re-extracts the audio stream URL at play time
 // because YouTube's CDN signed URLs expire after a few hours.
 type MusicTrack struct {
-	VideoID           string `json:"video_id"`           // YouTube ID, used for thumbnail too
+	QueueItemID       string `json:"queue_item_id"`
+	VideoID           string `json:"video_id"` // YouTube ID, used for thumbnail too
 	Title             string `json:"title"`
-	Artist            string `json:"artist,omitempty"`   // yt-dlp 'uploader' or 'channel'
+	Artist            string `json:"artist,omitempty"` // yt-dlp 'uploader' or 'channel'
 	Thumbnail         string `json:"thumbnail,omitempty"`
 	DurationSeconds   int    `json:"duration_seconds"`
-	URL               string `json:"url"`                // original input
+	URL               string `json:"url"` // canonical individual video URL
 	RequestedByUserID string `json:"requested_by_user_id"`
-	RequestedByName   string `json:"requested_by_name"`  // display name for UI; saves a join
+	RequestedByName   string `json:"requested_by_name"` // display name for UI; saves a join
 }
 
 // MusicBotChannelState — the snapshot a frontend needs to render the
@@ -30,13 +31,16 @@ type MusicTrack struct {
 // pause flag changes; also returned from the GET /music/state endpoint
 // for initial load and reconnect.
 type MusicBotChannelState struct {
-	ChannelID    string       `json:"channel_id"`
-	ServerID     string       `json:"server_id"`
-	IsActive     bool         `json:"is_active"`               // true while bot is in the room
-	CurrentTrack *MusicTrack  `json:"current_track,omitempty"` // nil when paused-from-start or queue is exhausted
-	Queue        []MusicTrack `json:"queue"`                   // FIFO; index 0 plays after current finishes
-	IsPaused     bool         `json:"is_paused"`
-	StartedAt    *time.Time   `json:"started_at,omitempty"`    // CurrentTrack play start; client computes elapsed
+	ChannelID      string       `json:"channel_id"`
+	ServerID       string       `json:"server_id"`
+	IsActive       bool         `json:"is_active"`               // true while bot is in the room
+	CurrentTrack   *MusicTrack  `json:"current_track,omitempty"` // nil when idle; set while buffering or paused
+	Queue          []MusicTrack `json:"queue"`                   // FIFO; index 0 plays after current finishes
+	IsPaused       bool         `json:"is_paused"`
+	StartedAt      *time.Time   `json:"started_at,omitempty"` // First emitted audio sample; nil while initially buffering
+	ElapsedSeconds float64      `json:"elapsed_seconds"`      // Audio actually sent; excludes buffering and pauses.
+	Revision       uint64       `json:"revision"`             // Monotonic queue/control revision for optimistic mutations.
+	RepeatMode     string       `json:"repeat_mode"`          // off, one, all
 }
 
 // MusicBotErrorPayload — the `music_bot_error` WebSocket event's data. Sent

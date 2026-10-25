@@ -9,6 +9,7 @@
  */
 
 import { toBase64 } from "./signalProtocol";
+import { readBoundedResponse } from "../utils/readBoundedResponse";
 
 // ──────────────────────────────────
 // Types
@@ -187,17 +188,19 @@ export async function encryptFile(file: File): Promise<EncryptedFileResult> {
 /** Download and decrypt an encrypted file. Verifies SHA-256 integrity. */
 export async function decryptFile(
   url: string,
-  meta: EncryptedFileMeta
+  meta: EncryptedFileMeta,
+  options?: {signal?:AbortSignal;maxBytes?:number}
 ): Promise<File> {
   // Download encrypted file. `credentials: "include"` is required in the
   // Electron/Capacitor shells, where the upload host is a different origin and
   // the default credentials mode would drop the `hichat_media` auth cookie.
-  const response = await fetch(url, { credentials: "include" });
+  const response = await fetch(url, { credentials: "include",...(options?.signal?{signal:options.signal}:{}),...(options?.maxBytes?{redirect:"error" as const}:{}) });
   if (!response.ok) {
     throw new Error(`Failed to download encrypted file: HTTP ${response.status}`);
   }
 
-  const encryptedData = await response.arrayBuffer();
+  const encryptedData = options?.maxBytes ? await readBoundedResponse(response,options.maxBytes,options.signal) : await response.arrayBuffer();
+  if(options?.signal?.aborted)throw new Error("media_analysis_cancelled");
 
   // Decrypt with AES-256-GCM
   const fileKey = fromBase64(meta.key);

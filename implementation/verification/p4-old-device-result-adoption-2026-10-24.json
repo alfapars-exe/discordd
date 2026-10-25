@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "An in-memory old-device pending request can now enter a persistent-for-that-attempt lookupOnly mode after account/group ownership remains current. Replacement-device restoration must still complete first. Its original ciphertext/files are never replayed from the replacement device.",
+    "Result handling may read an already-completed outcome or explicitly reconcile committed upload metadata under the authenticated sender's authority. Missing/prepared outcomes stay pending with a clear cancel-before-fresh-send message; they cannot fall back to POST messages on this or later attempts.",
+    "The lookup-only path does not create an old-device local snapshot if its original durable save never succeeded. Normal source/current-message checks still prevent stamping original plaintext onto edited ciphertext. Account/group invalidation still rejects adoption.",
+    "EN/TR UI labels distinguish server-result-only checking from a same-device safe replay. Existing server cancellation remains the route for safely fencing a missing/prepared old-device request."
+  ],
+  "verification": [
+    "Helper tests verify missing/prepared old-device operations never call POST messages, while committed-result reconciliation sends only the group/request identifier and no file/ciphertext payload.",
+    "Store tests confirm completed old-device adoption after replacement-device restoration without another send/encryption, and that repeated missing-result checks retain a lookupOnly/busy=false request without replay. Existing account/device/rekey/cancellation regressions continue passing.",
+    "Focused suites passed: 3 files / 81 tests in 4.31s. Final full client regression passed: 228 files / 2170 tests in 46.39s. tsc -b, targeted ESLint, locale JSON parsing and git diff --check passed.",
+    "Local Vite production web build passed: 1651 modules, 742ms. Existing config/chunk/dynamic-import warnings remain unsuppressed. No actual two-device/Electron restart acceptance is implied by these local tests."
+  ],
+  "remaining": [
+    "This adopts a retained in-memory request; discovery of records in a different stored device namespace after a real device/reset/restart still needs an explicit lifecycle design. Successful E2EE restore/logout clearing semantics and user warnings must be verified before claiming cross-device durable recovery.",
+    "Manual reviewed-to-draft file provenance, real two-client encrypted media, process restart, cross-tab/large-file/quota pressure and integrated Windows acceptance remain open.",
+    "No commit, push, merge, production migration or release performed. Overall P0-P11 remains incomplete."
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "phase": "P8",
+  "status": "implemented_unverified",
+  "scope": [
+    "Escape marks an active DM/group conversation read through scoped latest-message lookup and exact-anchor server read APIs. DM metadata refresh and group read revisions preserve newer unread state and detached history.",
+    "Shared modal boundaries prevent keyboard and direct conversation commands from navigating or mutating background conversations while a menu/dialog is open. Shortcut help may still toggle its own dialog.",
+    "Group upload shortcut invokes the existing file input only when composing is available. Validated selections append to existing attachments, cap at ten and preserve content/reply. Oversize rejections use the shared rejection feedback.",
+    "Group search reset on a new scroll target derives from request identity rather than synchronously setting React state inside the scrolling effect."
+  ],
+  "verification": [
+    "Five focused suites: 98 passed, zero failed. Report: C:/Users/PARS/AppData/Local/Temp/hichat-p8-shortcut-followup-20261025.json.",
+    "Scoped ESLint and client TypeScript passed for the changed implementation. No full-regression or actual-device acceptance claim is made for this slice."
+  ],
+  "open": [
+    "Group emoji/GIF/sticker selection and rendering with privacy controls, persistent group pins, and lo-fi listening remain unimplemented.",
+    "Real browser/Windows keyboard, file-picker, accessibility and multiple-client acceptance remains pending, alongside the rest of P0-P11."
+  ],
+  "release": "No commit, push, merge, deployment or publication."
+}

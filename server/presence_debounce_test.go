@@ -290,3 +290,36 @@ func TestPresenceOfflineDebouncer_StopAllCancelsPendingTimers(t *testing.T) {
 		// ever starting.
 	}
 }
+
+func TestPresenceOfflineDebouncer_StopAllPermanentlyRejectsLateSchedule(t *testing.T) {
+	const testGrace = 30 * time.Millisecond
+	debouncer := newPresenceOfflineDebouncer(testGrace)
+	fired := make(chan string, 2)
+	debouncer.schedule("before-stop", func(uint64) { fired <- "before-stop" })
+	debouncer.stopAll()
+
+	debouncer.schedule("after-stop", func(uint64) { fired <- "after-stop" })
+	if debouncer.pending("before-stop") || debouncer.pending("after-stop") {
+		t.Fatal("closed debouncer must not retain pending timers")
+	}
+	if debouncer.cancel("after-stop") {
+		t.Fatal("cancel after stopAll must be a no-op")
+	}
+	if debouncer.current("before-stop", 1) {
+		t.Fatal("current must be false after permanent shutdown")
+	}
+
+	debouncer.mu.Lock()
+	genCount := len(debouncer.gens)
+	debouncer.mu.Unlock()
+	if genCount != 1 {
+		t.Fatalf("late schedule/cancel grew generation state: got %d entries, want 1", genCount)
+	}
+
+	select {
+	case userID := <-fired:
+		t.Fatalf("callback for %q fired after stopAll", userID)
+	case <-time.After(testGrace * 4):
+		// Expected: both the original timer and the rejected late schedule stay silent.
+	}
+}

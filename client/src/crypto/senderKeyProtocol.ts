@@ -14,6 +14,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 import * as keyStorage from "./keyStorage";
 import { toBase64, fromBase64 } from "./signalProtocol";
 import {
@@ -27,6 +28,18 @@ import {
   MAX_SKIP,
   HKDF_INFO,
 } from "./types";
+
+function captureAuthGuard(parent: () => boolean = () => true): () => boolean {
+  const scope = getAuthSessionSnapshot();
+  return () => {
+    const current = getAuthSessionSnapshot();
+    return current.ownerId === scope.ownerId && current.generation === scope.generation && parent();
+  };
+}
+
+function assertAuthCurrent(isCurrent: () => boolean): void {
+  if (!isCurrent()) throw new Error("Auth session changed during sender-key operation");
+}
 
 /**
  * Highest `iteration` an inbound SenderKeyMessage may claim.
@@ -236,8 +249,11 @@ export async function createDistribution(
   channelId: string,
   userId: string,
   deviceId: string,
-  recipientFingerprint?: string
+  recipientFingerprint?: string,
+  isCurrent: () => boolean = () => true
 ): Promise<SenderKeyDistributionData> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   // Generate random chain key and distribution ID
   const chainKey = crypto.getRandomValues(new Uint8Array(32));
   const signingPrivateKey = ed25519.utils.randomSecretKey();
@@ -260,12 +276,14 @@ export async function createDistribution(
   };
 
   await keyStorage.saveSenderKey(senderKey);
+  assertAuthCurrent(current);
 
   // Store signing private key separately (only needed for outbound signing)
   await keyStorage.setMetadata(
     `sk_signing:${channelId}:${userId}:${deviceId}`,
     signingPrivateKey
   );
+  assertAuthCurrent(current);
 
   return {
     distributionId,
@@ -300,8 +318,11 @@ export async function processDistribution(
   channelId: string,
   senderUserId: string,
   senderDeviceId: string,
-  distribution: SenderKeyDistributionData
+  distribution: SenderKeyDistributionData,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  const current = captureAuthGuard(isCurrent);
+  if (!current()) return;
   const chainKey = fromBase64(distribution.chainKey);
 
   const existing = await keyStorage.getSenderKey(
@@ -309,6 +330,7 @@ export async function processDistribution(
     senderUserId,
     senderDeviceId
   );
+  if (!current()) return;
 
   if (existing && existing.distributionId === distribution.distributionId) {
     // The only state worth healing on a re-install: a key stored before
@@ -318,7 +340,9 @@ export async function processDistribution(
     // the forward derivation in decryptGroupMessage lands on the wrong key.
     if (!existing.initialChainKey) {
       existing.initialChainKey = new Uint8Array(chainKey);
-      await keyStorage.saveSenderKey(existing);
+      if (!current()) return;
+      await keyStorage.saveSenderKey(existing, current);
+      if (!current()) return;
     }
     return;
   }
@@ -340,7 +364,9 @@ export async function processDistribution(
     protocolVersion: SENDER_KEY_PROTOCOL_VERSION,
   };
 
-  await keyStorage.saveSenderKey(senderKey);
+  if (!current()) return;
+  await keyStorage.saveSenderKey(senderKey, current);
+  if (!current()) return;
 }
 
 /**
@@ -396,13 +422,17 @@ export async function encryptGroupMessage(
   channelId: string,
   userId: string,
   deviceId: string,
-  plaintext: string
+  plaintext: string,
+  isCurrent: () => boolean = () => true
 ): Promise<SenderKeyMessage> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   const senderKey = await keyStorage.getSenderKey(
     channelId,
     userId,
     deviceId
   );
+  assertAuthCurrent(current);
 
   if (!senderKey) {
     throw new Error(
@@ -433,6 +463,7 @@ export async function encryptGroupMessage(
   const signingPrivateKey = await keyStorage.getMetadata<Uint8Array>(
     `sk_signing:${channelId}:${userId}:${deviceId}`
   );
+  assertAuthCurrent(current);
 
   if (!signingPrivateKey) {
     throw new Error(
@@ -453,6 +484,7 @@ export async function encryptGroupMessage(
     senderKey.distributionId,
     senderKey.iteration
   );
+  assertAuthCurrent(current);
 
   const iteration = senderKey.iteration;
 
@@ -481,7 +513,8 @@ export async function encryptGroupMessage(
   // iteration or desynchronize this device from its receivers.
   senderKey.chainKey = newChainKey;
   senderKey.iteration++;
-  await keyStorage.saveSenderKey(senderKey);
+  await keyStorage.saveSenderKey(senderKey, current);
+  assertAuthCurrent(current);
 
   return {
     distributionId: senderKey.distributionId,
@@ -495,13 +528,20 @@ export async function decryptGroupMessage(
   channelId: string,
   senderUserId: string,
   senderDeviceId: string,
-  message: SenderKeyMessage
+  message: SenderKeyMessage,
+  isCurrent: () => boolean = () => true
 ): Promise<string> {
+  const current = captureAuthGuard(isCurrent);
+  const assertCurrent = () => {
+    assertAuthCurrent(current);
+  };
+  assertCurrent();
   const senderKey = await keyStorage.getSenderKey(
     channelId,
     senderUserId,
     senderDeviceId
   );
+  assertCurrent();
 
   if (!senderKey) {
     throw new Error(
@@ -623,13 +663,15 @@ export async function decryptGroupMessage(
       message.distributionId,
       message.iteration
     );
+    assertCurrent();
 
     // Record this iteration into the replay window so a future delivery
     // of the same ciphertext is rejected. We persist the senderKey here
     // even though we don't mutate chainKey/iteration — only seenIterations
     // changes.
     recordIteration(senderKey, message.iteration);
-    await keyStorage.saveSenderKey(senderKey);
+    await keyStorage.saveSenderKey(senderKey, current);
+    assertCurrent();
 
     return new TextDecoder().decode(plaintext);
   }
@@ -652,6 +694,7 @@ export async function decryptGroupMessage(
     message.distributionId,
     message.iteration
   );
+  assertCurrent();
 
   // Update sender key. Recording the iteration in the replay window
   // (in addition to advancing chainKey/iteration) closes the gap where a
@@ -660,7 +703,8 @@ export async function decryptGroupMessage(
   senderKey.chainKey = nextChainKey;
   senderKey.iteration = message.iteration + 1;
   recordIteration(senderKey, message.iteration);
-  await keyStorage.saveSenderKey(senderKey);
+  await keyStorage.saveSenderKey(senderKey, current);
+  assertCurrent();
 
   return new TextDecoder().decode(plaintext);
 }
@@ -723,13 +767,17 @@ function needsRotation(senderKey: StoredSenderKey): boolean {
 export async function needsSenderKeyRotation(
   channelId: string,
   userId: string,
-  deviceId: string
+  deviceId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<boolean> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   const senderKey = await keyStorage.getSenderKey(
     channelId,
     userId,
     deviceId
   );
+  assertAuthCurrent(current);
 
   if (!senderKey) return true; // No key — needs creation
   if (senderKey.protocolVersion !== SENDER_KEY_PROTOCOL_VERSION) return true;
@@ -749,6 +797,7 @@ export async function needsSenderKeyRotation(
   const signingPrivateKey = await keyStorage.getMetadata<Uint8Array>(
     `sk_signing:${channelId}:${userId}:${deviceId}`
   );
+  assertAuthCurrent(current);
   if (!signingPrivateKey) return true;
 
   return needsRotation(senderKey);
@@ -756,9 +805,13 @@ export async function needsSenderKeyRotation(
 
 /** Clear all sender keys for a channel (on deletion or membership removal). */
 export async function clearChannelSenderKeys(
-  channelId: string
+  channelId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  const current = captureAuthGuard(isCurrent);
+  assertAuthCurrent(current);
   await keyStorage.deleteAllSenderKeysForChannel(channelId);
+  assertAuthCurrent(current);
 }
 
 // ──────────────────────────────────

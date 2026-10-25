@@ -23,6 +23,8 @@ const TEXT_PERM_DEFS = [
 
 /** Voice channel overridable permissions */
 const VOICE_PERM_DEFS = [
+  { bit: Permissions.SendMessages, label: "permSendMessages", desc: "permSendMessagesDesc" },
+  { bit: Permissions.ReadMessages, label: "permReadMessages", desc: "permReadMessagesDesc" },
   { bit: Permissions.ConnectVoice, label: "permConnect", desc: "permConnectDesc" },
   { bit: Permissions.Speak, label: "permSpeak", desc: "permSpeakDesc" },
   { bit: Permissions.Stream, label: "permStream", desc: "permStreamDesc" },

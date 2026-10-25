@@ -1,0 +1,27 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Prerequisite for the actual chat widget, not a replacement for it: authenticated channel-message, member and override caches must never project an old account's text or permissions into a new native surface.",
+    "Credential-free synchronous owner and login-generation events break auth/crypto/store import cycles and invalidate account-owned caches even for same-user reauthentication. Normal access-token renewal is not a login-generation boundary.",
+    "Member and channel-override sources expose explicit current-owner/current-generation successful-load status. Failed refreshes may retain rows for existing UI continuity but cannot authorize sensitive projections.",
+    "useChannelPermissions exposes a separate fail-closed authorizationResolved flag requiring successful matching member and override snapshots and the current member. Existing optimistic composer permsResolved behavior is preserved; neither flag grants permissions by itself.",
+    "The transport captures owner/generation before token/ticket awaits, rejects old socket callbacks and coalesces owner/generation boundaries into one fresh connection. This closes the case where an old socket event starts after the new session already exists.",
+    "Dispatch also rechecks the originating connection predicate between awaited domain handlers. Channel decrypt passes its captured guard into Signal/PreKey and SenderKey operations; session/sender/trust/plaintext-cache writes abort on auth boundaries, and stale spam registration completions cannot affect the current session.",
+    "The actual chat widget, composer IPC, spam/ignored-content parity and video/stream widgets remain incomplete. No dormant chat toggle or fake functioning chat widget was introduced."
+  ],
+  "verification": [
+    "Root auth-boundary and strict-permission tests passed: 11 tests. Root combined member/override/notification/auth/permission checks passed: 55 tests before the final same-owner notification regression was added.",
+    "Root scoped ESLint passed for auth session events, API client, auth/notification stores and permission hook/test.",
+    "Agent member provenance tests passed: 17; override-focused checks passed: 25. Message/crypto/cache/spam focused checks passed: 181 tests across eight files. Final transport/dispatcher tests passed: 14.",
+    "Root final TypeScript, scoped ESLint and production Vite build passed (existing ineffective-dynamic-import warnings remain). Root verification of transport/notification/permission checks passed: 45 tests before the final dispatcher regression. Coverage structure VALID; all 32 validator tests passed.",
+    "Old test fixtures missing the newly required getAuthGeneration export were updated without weakening production guards: root 39 fixture tests and agent 87 fixture tests passed.",
+    "Final complete client regression passed after source stabilization: 317 files, 2960 tests, zero failed/pending. Exact report C:/Users/PARS/AppData/Local/Temp/hichat-message-scope-final-20261025.json. JSDOM emitted its existing unsupported cross-document navigation notices without failing tests."
+  ],
+  "open": [
+    "Release blocker: persistent crypto records still share the global mqvi_e2ee IndexedDB namespace. e2eeStore has an existing registration-user mismatch guard that clears the shared database, but no durable per-account partition/archive. Matching claimed registration checks device ID, not public identity-key equality; missing/ambiguous provenance and existing destructive account-switch behavior require preservation-first migration/recovery work. In-flight write fences alone do not solve stored-record ownership. No database deletion or migration was performed by this slice.",
+    "Actual live chat widget, target-scoped compose/send flow and all conversation variants",
+    "Real two-account/device acceptance, remaining P0-P11 requirements, Windows release/update checks and publication approval"
+  ],
+  "release": "No commit, push, merge or publication. The seven-widget composite remains missing and overall acceptance is incomplete."
+}

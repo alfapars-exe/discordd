@@ -1,0 +1,39 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Bounded WebSocket presence-callback dispatch, per-user ordering, and shutdown behavior. This is implementation evidence, not release acceptance.",
+  "code": [
+    "server/ws/hub_presence_callbacks.go",
+    "server/ws/hub_presence_callbacks_test.go",
+    "server/ws/hub.go",
+    "server/init_callbacks.go",
+    "server/init_callbacks_test.go",
+    "server/presence_debounce.go",
+    "server/repository/sqlite_user_presence.go"
+  ],
+  "implemented": [
+    "Ready callbacks are scheduled through a bounded dispatcher with at most 256 pending tickets and up to 8 workers.",
+    "Per-user callback completion is FIFO; callbacks for other users can run while a same-user predecessor is still active. Tests cover per-user order and progress under pool saturation.",
+    "Caller backpressure is bounded by the pending queue; callback event goroutines are not spawned per event. Submitters blocked on queue capacity are released on shutdown.",
+    "Workers exit after one idle second. Shutdown stops admission, cancels queued callbacks, and waits for active callbacks to return; active callbacks are not forcibly canceled and a callback that never returns can delay shutdown.",
+    "Hub visibility flags are synchronized, and conditional visibility commits reject stale callback results. Pre-registration flag handling was removed."
+  ],
+  "verification": {
+    "status": "full Go/vet, focused repeated race, callback/debouncer race, and PostgreSQL manual-presence checks passed; live acceptance pending",
+    "passed": [
+      "go test ./... -timeout=15m passed all packages; reported package durations: repository 56.332s, services 24.253s, root 7.989s, ws 3.354s.",
+      "go vet ./... passed.",
+      "Selected WebSocket presence and shutdown tests passed under -race, count=20, in 22.396s.",
+      "Root callback and offline-debouncer selected tests passed under -race, count=5, in 4.170s.",
+      "Four PostgreSQL manual-presence tests, including trigger rollback coverage, passed count=3 in 12.728s with no skips.",
+      "Focused dispatcher tests passed 20 repetitions, covering FIFO ordering, unrelated-user progress under pool saturation, ready scheduling, idle worker exit, shutdown, and stale visibility commit rejection.",
+      "Atomic manual-status database updates, permanent debouncer close, and first-connect fail-closed behavior passed their focused tests.",
+      "Temporary PostgreSQL container had AutoRemove enabled and no host ports; it was stopped and removed after testing."
+    ],
+    "pending": []
+  },
+  "open_gates": [
+    "Real browser two-client/device acceptance remains pending; the latest test backend must be rebuilt, and the browser viewport is currently 0x0 while user acceptance is awaited.",
+    "A callback that never returns cannot be canceled globally and may delay dispatcher shutdown. Most relevant callback operations use a five-second context, but this is not a hard cancellation guarantee for arbitrary callback code."
+  ],
+  "release": "Implementation evidence only; no acceptance promotion, deployment, or production mutation."
+}

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUIStore } from "../../stores/uiStore";
 import { useChannelStore } from "../../stores/channelStore";
+import { useThreadStore } from "../../stores/threadStore";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import PanelTabBar from "./PanelTabBar";
 import ChatArea from "./ChatArea";
@@ -35,6 +36,9 @@ type PanelViewProps = {
 
 function PanelView({ panelId, sendTyping, sendDMTyping }: PanelViewProps) {
   const { t } = useTranslation("chat");
+  const { t: tCommon } = useTranslation("common");
+  const openTab = useUIStore((s) => s.openTab);
+  const toggleQuickSwitcher = useUIStore((s) => s.toggleQuickSwitcher);
   const isMobile = useIsMobile();
   const panel = useUIStore((s) => s.panels[panelId]);
   const setActivePanel = useUIStore((s) => s.setActivePanel);
@@ -42,11 +46,12 @@ function PanelView({ panelId, sendTyping, sendDMTyping }: PanelViewProps) {
   const moveTab = useUIStore((s) => s.moveTab);
 
   const categories = useChannelStore((s) => s.categories);
+  const threadsByID = useThreadStore((s) => s.byID);
 
   const activeTab = panel?.tabs.find((t) => t.id === panel.activeTabId);
 
   const channel = activeTab
-    ? categories.flatMap((cg) => cg.channels).find((ch) => ch.id === activeTab.channelId)
+    ? categories.flatMap((cg) => cg.channels).find((ch) => ch.id === activeTab.channelId) ?? threadsByID[activeTab.channelId]
     : null;
 
   // ─── Drag state ───
@@ -180,7 +185,16 @@ function PanelView({ panelId, sendTyping, sendDMTyping }: PanelViewProps) {
 
       {/* Content */}
       {!activeTab ? (
-        <div className="no-channel">{t("noChannel")}</div>
+        <div className="no-channel home-welcome">
+          <div className="home-welcome-icon" aria-hidden="true">#</div>
+          <h1>{tCommon("welcomeHome")}</h1>
+          <p>{tCommon("welcomeHomeHint")}</p>
+          <div className="home-welcome-actions">
+            <button className="ch-tree-empty-action" onClick={() => openTab("friends", "friends", tCommon("friends"))}>{tCommon("friends")}</button>
+            <button className="ch-tree-empty-action" onClick={toggleQuickSwitcher}>{tCommon("quickSwitcherPlaceholder")}</button>
+          </div>
+          <span>{t("noChannel")}</span>
+        </div>
       ) : activeTab.type === "text" ? (
         <ChatArea channelId={activeTab.channelId} channel={channel ?? null} serverId={activeTab.serverInfo?.serverId} sendTyping={sendTyping} />
       ) : activeTab.type === "dm" ? (
@@ -188,7 +202,7 @@ function PanelView({ panelId, sendTyping, sendDMTyping }: PanelViewProps) {
       ) : activeTab.type === "friends" ? (
         <FriendsView />
       ) : activeTab.type === "inbox" ? (
-        <InboxView />
+        <InboxView panelId={panelId} />
       ) : activeTab.type === "notifications" ? (
         <NotificationsView />
       ) : activeTab.type === "saved" ? (

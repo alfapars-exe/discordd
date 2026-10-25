@@ -193,8 +193,7 @@ func TestBlockUser_NoPriorRecord(t *testing.T) {
 	assertUserBlockBothSides(t, f)
 }
 
-// The other side already blocked us: their row is replaced by ours (we
-// become user_id) and nobody is told a friendship was removed.
+// Each side owns a directed block. Adding ours must preserve theirs.
 func TestBlockUser_TargetBlockedMeFirst(t *testing.T) {
 	f := newBlockSvcFixture(t)
 	f.setPair(friendshipRow("bob", "alice", models.FriendshipStatusBlocked))
@@ -203,8 +202,8 @@ func TestBlockUser_TargetBlockedMeFirst(t *testing.T) {
 	if err := f.svc.BlockUser(context.Background(), "alice", "bob"); err != nil {
 		t.Fatalf("BlockUser: %v", err)
 	}
-	if len(*deleted) != 1 || (*deleted)[0] != "fr-1" {
-		t.Errorf("Delete calls = %v, want [fr-1]", *deleted)
+	if len(*deleted) != 0 {
+		t.Errorf("Delete calls = %v, reverse block must be preserved", *deleted)
 	}
 	assertBlockRow(t, *created)
 	if evs := f.eventsOf(ws.OpFriendRemove); len(evs) != 0 {

@@ -5,6 +5,8 @@
  * applyTheme() sets CSS custom properties on :root, instantly updating all UI.
  */
 
+import { UI_SHELL_V2 } from "../utils/uiShell";
+
 export type ThemeId =
   | "ocean"
   | "aurora"
@@ -522,6 +524,18 @@ export const THEME_ORDER: ThemeId[] = [
 ];
 
 export const DEFAULT_THEME: ThemeId = "midnight";
+
+if (UI_SHELL_V2) {
+  midnight.swatches = ["#121214", "#5865F2", "#202024"];
+  Object.assign(midnight.colors, {
+    "--bg-0": "#121214", "--bg-1": "#1A1A1E", "--bg-2": "#202024",
+    "--bg-3": "#2C2C32", "--bg-4": "#35353C", "--bg-5": "#404048",
+    "--bg-h": "#2C2C32", "--bg-ub": "#1A1A1E", "--primary": "#5865F2",
+    "--primary-h": "#4752C4", "--primary-s": "rgba(88,101,242,.16)",
+    "--primary-m": "rgba(88,101,242,.3)", "--t0": "#F2F3F5", "--t1": "#DBDEE1",
+    "--t2": "#B5BAC1", "--t3": "#A1A1AA", "--gradient": "none",
+  });
+}
 
 /**
  * Applies theme CSS variables to :root. Uses a temporary "theme-transitioning"

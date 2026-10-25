@@ -27,11 +27,17 @@ type FriendshipService interface {
 	ListFriends(ctx context.Context, userID string) ([]models.FriendshipWithUser, error)
 	ListRequests(ctx context.Context, userID string) (*FriendRequestsResponse, error)
 	SetDMAcceptor(acceptor DMRequestAcceptor)
+	SetEmailEnqueuer(enqueuer EmailEnqueuer)
 }
 
 // DMRequestAcceptor is a minimal ISP interface for auto-accepting pending DMs.
 type DMRequestAcceptor interface {
 	AcceptPendingChannels(ctx context.Context, userA, userB string) error
+}
+
+// EmailEnqueuer is the minimum queue API needed for optional social email.
+type EmailEnqueuer interface {
+	Enqueue(ctx context.Context, userID, category, dedupeKey, subject, body string) (bool, error)
 }
 
 type FriendRequestsResponse struct {
@@ -40,11 +46,24 @@ type FriendRequestsResponse struct {
 }
 
 type friendshipService struct {
-	friendRepo repository.FriendshipRepository
-	userRepo   repository.UserRepository
-	notifRepo  repository.NotificationRepository
-	hub        ws.Broadcaster
-	dmAcceptor DMRequestAcceptor
+	friendRepo    repository.FriendshipRepository
+	userRepo      repository.UserRepository
+	notifRepo     repository.NotificationRepository
+	hub           ws.Broadcaster
+	dmAcceptor    DMRequestAcceptor
+	requestPolicy FriendRequestPolicy
+	emailEnqueuer EmailEnqueuer
+	gameActivity  GameActivityPrivacyInvalidator
+}
+
+func (s *friendshipService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
+	s.gameActivity = invalidator
+}
+
+func (s *friendshipService) reconcileActivityRelationship(ctx context.Context, userA, userB string) {
+	if s.gameActivity != nil {
+		s.gameActivity.RelationshipChanged(ctx, userA, userB)
+	}
 }
 
 func NewFriendshipService(
@@ -52,17 +71,26 @@ func NewFriendshipService(
 	userRepo repository.UserRepository,
 	notifRepo repository.NotificationRepository,
 	hub ws.Broadcaster,
+	policies ...FriendRequestPolicy,
 ) FriendshipService {
-	return &friendshipService{
+	service := &friendshipService{
 		friendRepo: friendRepo,
 		userRepo:   userRepo,
 		notifRepo:  notifRepo,
 		hub:        hub,
 	}
+	if len(policies) > 0 {
+		service.requestPolicy = policies[0]
+	}
+	return service
 }
 
 func (s *friendshipService) SetDMAcceptor(acceptor DMRequestAcceptor) {
 	s.dmAcceptor = acceptor
+}
+
+func (s *friendshipService) SetEmailEnqueuer(enqueuer EmailEnqueuer) {
+	s.emailEnqueuer = enqueuer
 }
 
 // AreFriends checks if two users have an accepted friendship. Satisfies FriendChecker ISP.
@@ -115,6 +143,16 @@ func (s *friendshipService) SendRequest(ctx context.Context, senderID string, re
 		}
 	}
 
+	if s.requestPolicy != nil {
+		allowed, err := s.requestPolicy.CanSend(ctx, senderID, target.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate friend request policy: %w", err)
+		}
+		if !allowed {
+			return nil, fmt.Errorf("%w: this user is not accepting friend requests from you", pkg.ErrForbidden)
+		}
+	}
+
 	now := time.Now().UTC()
 	friendship := &models.Friendship{
 		ID:        uuid.New().String(),
@@ -133,6 +171,7 @@ func (s *friendshipService) SendRequest(ctx context.Context, senderID string, re
 	if err != nil {
 		return nil, err
 	}
+	s.enqueueFriendRequestEmail(target.ID, friendship.ID)
 
 	result := &models.FriendshipWithUser{
 		ID:               friendship.ID,
@@ -183,11 +222,47 @@ func (s *friendshipService) SendRequest(ctx context.Context, senderID string, re
 	return result, nil
 }
 
+func (s *friendshipService) enqueueFriendRequestEmail(targetID, friendshipID string) {
+	s.enqueueFriendshipEmail(targetID, friendshipID, "request", "New friend request", "<p>You have a new friend request. Open HiChat to review and respond.</p>")
+}
+
+func (s *friendshipService) enqueueFriendshipAcceptedEmail(targetID, friendshipID string) {
+	s.enqueueFriendshipEmail(targetID, friendshipID, "accepted", "Friend request accepted", "<p>Your friend request was accepted. Open HiChat to start chatting.</p>")
+}
+
+func (s *friendshipService) enqueueFriendshipEmail(targetID, friendshipID, event, subject, body string) {
+	if s.emailEnqueuer == nil {
+		return
+	}
+	contextual, ok := s.emailEnqueuer.(ScheduledEmailEnqueuer)
+	if !ok {
+		// Fail closed rather than create an unbound social email that cannot
+		// recheck whether the underlying friendship event is still current.
+		friendshipLogger.Error("friendship email enqueuer lacks event-context support", "event", event)
+		return
+	}
+	mailCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := contextual.EnqueueWithOptions(
+		mailCtx,
+		targetID,
+		models.EmailCategorySocial,
+		"friend-"+event+":"+friendshipID,
+		subject,
+		body,
+		EmailEnqueueOptions{FriendshipID: friendshipID, FriendshipEvent: event},
+	); err != nil {
+		// Event identifiers, addresses and error content are deliberately omitted.
+		friendshipLogger.Error("failed to enqueue friendship email", "event", event)
+	}
+}
+
 // acceptExisting auto-accepts a mutual friend request.
 func (s *friendshipService) acceptExisting(ctx context.Context, existing *models.Friendship, acceptorID string) (*models.FriendshipWithUser, error) {
 	if err := s.friendRepo.UpdateStatus(ctx, existing.ID, models.FriendshipStatusAccepted); err != nil {
 		return nil, err
 	}
+	s.enqueueFriendshipAcceptedEmail(existing.UserID, existing.ID)
 
 	sender, err := s.userRepo.GetByID(ctx, existing.UserID)
 	if err != nil {
@@ -255,6 +330,8 @@ func (s *friendshipService) AcceptRequest(ctx context.Context, userID, requestID
 	if err := s.friendRepo.UpdateStatus(ctx, requestID, models.FriendshipStatusAccepted); err != nil {
 		return nil, err
 	}
+	s.reconcileActivityRelationship(ctx, friendship.UserID, friendship.FriendID)
+	s.enqueueFriendshipAcceptedEmail(friendship.UserID, friendship.ID)
 
 	sender, err := s.userRepo.GetByID(ctx, friendship.UserID)
 	if err != nil {
@@ -360,6 +437,7 @@ func (s *friendshipService) RemoveFriend(ctx context.Context, userID, targetUser
 	if err := s.friendRepo.DeleteByPair(ctx, userID, targetUserID); err != nil {
 		return err
 	}
+	s.reconcileActivityRelationship(ctx, userID, targetUserID)
 
 	s.hub.BroadcastToUser(targetUserID, ws.Event{
 		Op: ws.OpFriendRemove,

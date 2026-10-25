@@ -9,6 +9,7 @@
 import { create } from "zustand";
 import { type ThemeId, DEFAULT_THEME, THEMES, applyTheme } from "../styles/themes";
 import { usePreferencesStore } from "./preferencesStore";
+import { useServerStore } from "./serverStore";
 
 const THEME_STORAGE_KEY = "mqvi_theme";
 const BLUR_STORAGE_KEY = "mqvi_blur_enabled";
@@ -48,9 +49,37 @@ const BLUR_STRENGTH_MAX = 40;
 
 /** Whole-app UI scale (%). 100 = native size; whole interface zooms uniformly. */
 const UI_SCALE_DEFAULT = 100;
-export const UI_SCALE_MIN = 100;
+export const UI_SCALE_MIN = 50;
 export const UI_SCALE_MAX = 200;
 export const UI_SCALE_STEP = 10;
+
+export type AppearancePreferences = {
+  blurEnabled: boolean;
+  blurStrength: number;
+  wallpaperEnabled: boolean;
+  lightningEnabled: boolean;
+  lightningBlur: number;
+  neonEnabled: boolean;
+  neonIntensity: number;
+  uiScale: number;
+  avatarAnimation: AvatarAnimationMode;
+};
+
+const APPEARANCE_DEFAULTS: AppearancePreferences = {
+  blurEnabled: false, blurStrength: BLUR_STRENGTH_DEFAULT, wallpaperEnabled: true,
+  lightningEnabled: false, lightningBlur: LIGHTNING_BLUR_DEFAULT,
+  neonEnabled: false, neonIntensity: NEON_INTENSITY_DEFAULT,
+  uiScale: UI_SCALE_DEFAULT, avatarAnimation: "hover",
+};
+
+function syncAppearance(partial: Partial<AppearancePreferences>): void {
+  usePreferencesStore.getState().set({ appearance: partial });
+}
+
+/** Device transparency hides wallpaper without changing the account preference. */
+export function isWallpaperVisible(settings: { wallpaperEnabled: boolean; transparentBackground: boolean }): boolean {
+  return settings.wallpaperEnabled && !settings.transparentBackground;
+}
 
 /**
  * Pure mapping for the LIVE UI-scale slider: a pointer position (px from the
@@ -264,9 +293,13 @@ type SettingsTab =
   | "profile"
   | "appearance"
   | "accessibility"
+  | "notifications"
+  | "registered-games"
+  | "activity-privacy"
   | "general"
   | "voice"
   | "security"
+  | "applications"
   | "encryption"
   | "server-general"
   | "channels"
@@ -277,6 +310,7 @@ type SettingsTab =
   | "stickers"
   | "entrance"
   | "entrance-sounds"
+  | "server-applications"
   | "cosmetics"
   | "platform"
   | "platform-quota"
@@ -286,13 +320,17 @@ type SettingsTab =
   | "platform-logs"
   | "platform-connections"
   | "platform-feedback"
+  | "platform-campaigns"
   | "feedback"
   | "blocked-users"
-  | "diagnostics";
+  | "diagnostics"
+  | "developer";
 
 type SettingsState = {
   isOpen: boolean;
   activeTab: SettingsTab;
+  context: SettingsContext;
+  contextServerId: string | null;
   themeId: ThemeId;
   blurEnabled: boolean;
   /** Backdrop blur strength in px (8–40) when blurEnabled is true. */
@@ -308,7 +346,7 @@ type SettingsState = {
   neonEnabled: boolean;
   /** Decorative neon intensity (0–100%) — scales opacity of the neon layers. */
   neonIntensity: number;
-  /** Whole-app UI scale (100-200%) - zoom factor for the entire interface. */
+  /** Whole-app UI scale (50-200%) - zoom factor for the entire interface. */
   uiScale: number;
   /** When animated avatars play (default "hover"). */
   avatarAnimation: AvatarAnimationMode;
@@ -332,9 +370,18 @@ type SettingsState = {
   setPendingWallpaperPreviewUrl: (url: string | null) => void;
   /** Apply theme from server preferences (no re-sync to server) */
   applyFromServer: (themeId: string) => void;
+  applyAppearanceFromServer: (partial: Record<string, unknown>) => void;
+  resetAccountPreferences: (preserveSessionState?: boolean) => void;
 };
 
 export type { SettingsTab };
+export type SettingsContext = "account" | "server" | "platform";
+
+function contextForTab(tab: SettingsTab): SettingsContext {
+  if (tab.startsWith("platform")) return "platform";
+  return ["server-general", "channels", "roles", "members", "invites", "emojis", "stickers", "entrance-sounds", "server-applications"].includes(tab)
+    ? "server" : "account";
+}
 
 const initialTheme = loadPersistedTheme();
 const initialBlur = loadPersistedBlur();
@@ -362,6 +409,8 @@ applyUiScale(initialUiScale);
 export const useSettingsStore = create<SettingsState>((set) => ({
   isOpen: false,
   activeTab: "profile",
+  context: "account",
+  contextServerId: null,
   themeId: initialTheme,
   blurEnabled: initialBlur,
   blurStrength: initialBlurStrength,
@@ -375,7 +424,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   avatarAnimation: loadPersistedAvatarAnimation(),
   pendingWallpaperPreviewUrl: null,
 
-  openSettings: (tab = "profile") => set({ isOpen: true, activeTab: tab }),
+  openSettings: (tab = "profile") => set({
+    isOpen: true, activeTab: tab, context: contextForTab(tab),
+    contextServerId: contextForTab(tab) === "server" ? useServerStore.getState().activeServerId : null,
+  }),
   closeSettings: () => set({ isOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -398,6 +450,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ blurEnabled: enabled });
+    syncAppearance({ blurEnabled: enabled });
   },
 
   setBlurStrength: (px) => {
@@ -408,6 +461,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ blurStrength: clamped });
+    syncAppearance({ blurStrength: clamped });
   },
 
   setWallpaperEnabled: (enabled) => {
@@ -417,6 +471,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ wallpaperEnabled: enabled });
+    syncAppearance({ wallpaperEnabled: enabled });
   },
 
   setTransparentBackground: (enabled) => {
@@ -429,13 +484,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     if (window.electronAPI?.setAppSetting) {
       window.electronAPI.setAppSetting("transparentBackground", enabled);
     }
-    // When enabling transparent, disable wallpaper
-    if (enabled) {
-      try { localStorage.setItem(WALLPAPER_ENABLED_KEY, "0"); } catch { /* */ }
-      set({ transparentBackground: true, wallpaperEnabled: false });
-    } else {
-      set({ transparentBackground: enabled });
-    }
+    // Keep the account's wallpaper choice intact; the renderer applies this
+    // device-local override, including after server hydration/account switches.
+    set({ transparentBackground: enabled });
   },
 
   setLightningEnabled: (enabled) => {
@@ -445,6 +496,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ lightningEnabled: enabled });
+    syncAppearance({ lightningEnabled: enabled });
   },
 
   setLightningBlur: (px) => {
@@ -456,6 +508,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyLightningBlur(clamped);
     set({ lightningBlur: clamped });
+    syncAppearance({ lightningBlur: clamped });
   },
 
   setNeonEnabled: (enabled) => {
@@ -469,6 +522,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     // as an argument — keeps the call sites symmetrical with lightning.
     applyNeonStyles(enabled, useSettingsStore.getState().neonIntensity);
     set({ neonEnabled: enabled });
+    syncAppearance({ neonEnabled: enabled });
   },
 
   setNeonIntensity: (pct) => {
@@ -480,6 +534,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyNeonStyles(useSettingsStore.getState().neonEnabled, clamped);
     set({ neonIntensity: clamped });
+    syncAppearance({ neonIntensity: clamped });
   },
 
   setUiScale: (pct) => {
@@ -491,6 +546,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     }
     applyUiScale(clamped);
     set({ uiScale: clamped });
+    syncAppearance({ uiScale: clamped });
   },
 
   setAvatarAnimation: (mode) => {
@@ -500,6 +556,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       /* localStorage full or inaccessible */
     }
     set({ avatarAnimation: mode });
+    syncAppearance({ avatarAnimation: mode });
   },
 
   setPendingWallpaperPreviewUrl: (url) => set({ pendingWallpaperPreviewUrl: url }),
@@ -513,6 +570,47 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       } catch { /* ignore */ }
       set({ themeId: id });
     }
+  },
+  applyAppearanceFromServer: (partial) => {
+    const next: Partial<AppearancePreferences> = {};
+    const numbers = {
+      blurStrength: [BLUR_STRENGTH_MIN, BLUR_STRENGTH_MAX],
+      lightningBlur: [LIGHTNING_BLUR_MIN, LIGHTNING_BLUR_MAX],
+      neonIntensity: [NEON_INTENSITY_MIN, NEON_INTENSITY_MAX],
+      uiScale: [UI_SCALE_MIN, UI_SCALE_MAX],
+    } as const;
+    for (const key of ["blurEnabled", "wallpaperEnabled", "lightningEnabled", "neonEnabled"] as const) {
+      if (typeof partial[key] === "boolean") next[key] = partial[key];
+    }
+    for (const key of Object.keys(numbers) as (keyof typeof numbers)[]) {
+      const value = partial[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        next[key] = Math.max(numbers[key][0], Math.min(numbers[key][1], value));
+      }
+    }
+    if (partial.avatarAnimation === "hover" || partial.avatarAnimation === "always") next.avatarAnimation = partial.avatarAnimation;
+    const merged = { ...useSettingsStore.getState(), ...next };
+    applyLightningBlur(merged.lightningBlur);
+    applyNeonStyles(merged.neonEnabled, merged.neonIntensity);
+    applyUiScale(merged.uiScale);
+    const storageKeys = {
+      blurEnabled: BLUR_STORAGE_KEY, blurStrength: BLUR_STRENGTH_KEY,
+      wallpaperEnabled: WALLPAPER_ENABLED_KEY, lightningEnabled: LIGHTNING_ENABLED_KEY,
+      lightningBlur: LIGHTNING_BLUR_KEY, neonEnabled: NEON_ENABLED_KEY,
+      neonIntensity: NEON_INTENSITY_KEY, uiScale: UI_SCALE_KEY, avatarAnimation: AVATAR_ANIMATION_KEY,
+    };
+    try {
+      for (const key of Object.keys(next) as (keyof AppearancePreferences)[]) {
+        const value = next[key];
+        localStorage.setItem(storageKeys[key], typeof value === "boolean" ? (value ? "1" : "0") : String(value));
+      }
+    } catch { /* Cache is best effort; server preferences remain authoritative. */ }
+    set(next);
+  },
+  resetAccountPreferences: (preserveSessionState = false) => {
+    useSettingsStore.getState().applyFromServer(DEFAULT_THEME);
+    useSettingsStore.getState().applyAppearanceFromServer(APPEARANCE_DEFAULTS);
+    if (!preserveSessionState) set({ pendingWallpaperPreviewUrl: null });
   },
 }));
 

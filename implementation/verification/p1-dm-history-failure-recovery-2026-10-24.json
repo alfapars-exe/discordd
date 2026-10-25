@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "DM history APIs accept the existing request cancellation guard, AbortSignal and timeout options. Store history reads use a 15-second network timeout; tail/around reads also pass their abort signal.",
+    "History network/decryption exceptions no longer leave tail loading or around-message claims stuck. Cleanup checks request ownership, so a stale failure cannot release a newer request or change its loading indicator. Concurrent channel loads retain the global indicator until the final owned request finishes.",
+    "Current failures produce a localized Turkish/English error toast; pagination retains its existing messages and can be retried. Around-message API failure is not treated as a missing target: 404/confirmed missing targets retain the existing fallback, while other failures do not silently load a different history window. No automatic message POST replay was added."
+  ],
+  "verification": [
+    "Focused API/store suites passed: 2 files / 51 tests. Tests cover request-option propagation, tail/around network and decryption errors, stale failure suppression, concurrent loaders and older/newer-page retry after errors.",
+    "TypeScript tsc -b, targeted ESLint and targeted git diff --check passed.",
+    "Full client regression suite passed: 231 files / 2273 tests in 46.99s. Vite production build passed in 700ms with existing build warnings. Coverage validation passed: 33 references / 261 behaviors; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Browser retry ergonomics and real network/disconnect acceptance remain open. The network timeout does not impose a timeout on cryptographic decryption or local IndexedDB work.",
+    "Per-message WS edit/delete ordering, monotonic cache-write arbitration and cross-tab cache/session atomicity are not addressed by this change.",
+    "Overall P0-P11 remains incomplete. No commit, push, merge, Windows package or production release performed."
+  ]
+}

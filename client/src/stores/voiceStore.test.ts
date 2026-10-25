@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
 import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
 import * as voiceApi from "../api/voice";
+import { isVoiceRecoveryAllowed, markVoiceActive } from "./shared/voiceRecovery";
 
 // Mock external dependencies that voiceStore imports at module level
 vi.mock("../api/voice", () => ({ getVoiceToken: vi.fn() }));
-vi.mock("../api/client", () => ({ ensureFreshToken: vi.fn() }));
+vi.mock("../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: () => 1 }));
 vi.mock("../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),
@@ -38,6 +39,12 @@ function resetStore() {
     activeSpeakers: {},
     watchingScreenShares: {},
     screenShareViewers: {},
+    screenShareQualityGradeByPublisher: {},
+    screenShareQualityHistoryByPublisher: {},
+    screenSharePublisherWarning: null,
+    musicBotStates: {},
+    musicBotRevisions: {},
+    musicBotUpdatedAt: {},
     preMuteVolumes: {},
     connectionQuality: {},
     rtt: 0,
@@ -180,6 +187,7 @@ describe("voiceStore", () => {
 
   describe("handleVoiceStatesSync", () => {
     it("should group states by channel_id", () => {
+      useVoiceStore.getState().setVoiceEpoch("legacy-grouping");
       useVoiceStore.getState().handleVoiceStatesSync([
         { user_id: "u1", channel_id: "ch1", username: "alice", display_name: "Alice", avatar_url: "", is_muted: false, is_deafened: false, is_streaming: false, is_server_muted: false, is_server_deafened: false },
         { user_id: "u2", channel_id: "ch1", username: "bob", display_name: "Bob", avatar_url: "", is_muted: false, is_deafened: false, is_streaming: false, is_server_muted: false, is_server_deafened: false },
@@ -188,6 +196,121 @@ describe("voiceStore", () => {
       const states = useVoiceStore.getState().voiceStates;
       expect(states["ch1"]).toHaveLength(2);
       expect(states["ch2"]).toHaveLength(1);
+    });
+  });
+
+  describe("voice snapshot/live revision reconciliation", () => {
+    const entry = (channelId: string, userId = "revision-user") => ({
+      user_id: userId,
+      channel_id: channelId,
+      server_id: "server-1",
+      username: userId,
+      display_name: userId,
+      avatar_url: "",
+      is_muted: false,
+      is_deafened: false,
+      is_streaming: false,
+      is_server_muted: false,
+      is_server_deafened: false,
+    });
+    const update = (channelId: string, action: "join" | "leave" | "update" = "join") => ({
+      ...entry(channelId),
+      action,
+    });
+
+    it("keeps a post-snapshot delta received before the snapshot frame", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-before-sync");
+      expect(voice.handleVoiceStateUpdate(update("new-channel"), "epoch-before-sync", 12)).toBe(true);
+      voice.handleVoiceStatesSync([], "epoch-before-sync", 11);
+      expect(useVoiceStore.getState().voiceStates["new-channel"]?.[0]?.user_id).toBe("revision-user");
+    });
+
+    it("upserts a complete versioned update received before the snapshot", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-update-upsert");
+      const base = entry("snapshot-channel");
+      voice.handleVoiceStatesSync([base], "epoch-update-upsert", 10);
+      voice.handleVoiceStateUpdate({
+        ...entry("snapshot-channel"),
+        is_muted: true,
+        action: "update",
+      }, "epoch-update-upsert", 11);
+      expect(voice.handleVoiceStatesSync([base], "epoch-update-upsert", 10)).toBe(true);
+      const merged = Object.values(useVoiceStore.getState().voiceStates).flat();
+      expect(merged).toHaveLength(1);
+      expect(merged[0].is_muted).toBe(true);
+    });
+
+    it("ignores delayed deltas already covered by the snapshot watermark", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-watermark");
+      voice.handleVoiceStatesSync([entry("snapshot-channel")], "epoch-watermark", 20);
+      expect(voice.handleVoiceStateUpdate(update("old-channel"), "epoch-watermark", 19)).toBe(false);
+      const states = useVoiceStore.getState().voiceStates;
+      expect(states["snapshot-channel"]?.[0]?.user_id).toBe("revision-user");
+      expect(states["old-channel"]).toBeUndefined();
+    });
+
+    it("rejects a same-epoch snapshot older than the applied watermark", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-old-sync");
+      voice.handleVoiceStatesSync([entry("new-channel")], "epoch-old-sync", 12);
+      voice.handleVoiceStateUpdate(update("new-channel", "update"), "epoch-old-sync", 13);
+      expect(voice.handleVoiceStatesSync([entry("old-channel")], "epoch-old-sync", 11)).toBe(false);
+      const states = Object.values(useVoiceStore.getState().voiceStates).flat();
+      expect(states.some((state) => state.channel_id === "new-channel")).toBe(true);
+      expect(states.some((state) => state.channel_id === "old-channel")).toBe(false);
+    });
+
+    it("preserves a newer leave tombstone over a stale snapshot", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-tombstone");
+      voice.handleVoiceStatesSync([entry("old-channel")], "epoch-tombstone", 30);
+      voice.handleVoiceStateUpdate(update("old-channel", "leave"), "epoch-tombstone", 31);
+      voice.handleVoiceStatesSync([entry("old-channel")], "epoch-tombstone", 30);
+      expect(useVoiceStore.getState().voiceStates["old-channel"]).toBeUndefined();
+    });
+
+    it("preserves newer screen-share viewer deltas over a stale snapshot", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-viewers");
+      voice.handleVoiceStatesSync([
+        { ...entry("stream-channel", "streamer"), is_streaming: true, screen_share_viewers: ["viewer-a"] },
+      ], "epoch-viewers", 40);
+      voice.handleScreenShareViewerUpdate({
+        streamer_user_id: "streamer",
+        channel_id: "stream-channel",
+        viewer_count: 2,
+        viewer_user_id: "viewer-b",
+        viewer_user_ids: ["viewer-a", "viewer-b"],
+        action: "join",
+      }, "epoch-viewers", 42);
+      voice.handleVoiceStatesSync([
+        { ...entry("stream-channel", "streamer"), is_streaming: true, screen_share_viewers: [] },
+      ], "epoch-viewers", 41);
+      expect(useVoiceStore.getState().screenShareViewers.streamer).toEqual(["viewer-a", "viewer-b"]);
+    });
+
+    it("rejects retired-epoch deltas after ready binds the new epoch", () => {
+      const voice = useVoiceStore.getState();
+      voice.handleVoiceStatesSync([entry("old-channel")], "old-process", 900);
+      voice.setVoiceEpoch("new-process");
+      expect(voice.handleVoiceStateUpdate(update("retired-channel"), "old-process", 901)).toBe(false);
+      voice.handleVoiceStatesSync([entry("fresh-channel")], "new-process", 0);
+      expect(useVoiceStore.getState().voiceStates["fresh-channel"]?.[0]?.user_id).toBe("revision-user");
+      expect(useVoiceStore.getState().voiceStates["retired-channel"]).toBeUndefined();
+    });
+
+    it("keeps deleted channels tombstoned against delayed joins and snapshots", () => {
+      const voice = useVoiceStore.getState();
+      voice.setVoiceEpoch("epoch-deleted-channel");
+      voice.markVoiceChannelDeleted("gone");
+      expect(voice.handleVoiceStateUpdate(update("gone"), "epoch-deleted-channel", 51)).toBe(false);
+      voice.handleVoiceStatesSync([entry("gone")], "epoch-deleted-channel", 50);
+      expect(useVoiceStore.getState().voiceStates.gone).toBeUndefined();
+      useVoiceStore.getState().markVoiceChannelCreated("gone");
+      expect(useVoiceStore.getState().handleVoiceStateUpdate(update("gone"), "epoch-deleted-channel", 52)).toBe(true);
     });
   });
 
@@ -579,6 +702,102 @@ describe("voiceStore", () => {
       const state = useVoiceStore.getState();
       expect(state.isServerMuted).toBe(false);
       expect(state.isServerDeafened).toBe(false);
+    });
+  });
+
+  describe("handleChannelDeleted", () => {
+    it("clears deleted-channel voice and streamer residue without touching another channel", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "other-channel",
+        voiceStates: {
+          "deleted-channel": [
+            { user_id: "gone-1", channel_id: "deleted-channel" } as never,
+            { user_id: "gone-2", channel_id: "deleted-channel" } as never,
+          ],
+          "other-channel": [
+            { user_id: "gone-1", channel_id: "other-channel" } as never,
+            { user_id: "kept", channel_id: "other-channel" } as never,
+          ],
+        },
+        activeSpeakers: { "gone-1": true, kept: true },
+        connectionQuality: { "gone-1": "good", kept: "excellent" },
+        screenShareViewers: { "gone-1": ["gone-2", "kept"], kept: ["gone-1", "kept"] },
+        screenShareQualityGradeByPublisher: { "gone-1": "poor", kept: "good" },
+        screenShareQualityHistoryByPublisher: { "gone-1": [{ t: 1, grade: "poor", kbps: 10 }], kept: [{ t: 2, grade: "good", kbps: 100 }] },
+        musicBotStates: {
+          "deleted-channel": { channel_id: "deleted-channel", server_id: "s1", is_active: true, queue: [], is_paused: false },
+          "other-channel": { channel_id: "other-channel", server_id: "s1", is_active: true, queue: [], is_paused: false },
+        },
+      });
+      const onLeave = vi.fn();
+      useVoiceStore.setState({ _onLeaveCallback: onLeave });
+
+      useVoiceStore.getState().handleChannelDeleted("deleted-channel");
+
+      const state = useVoiceStore.getState();
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(state.voiceStates).toEqual({ "other-channel": [
+        { user_id: "gone-1", channel_id: "other-channel" },
+        { user_id: "kept", channel_id: "other-channel" },
+      ] });
+      expect(state.activeSpeakers).toEqual({ "gone-1": true, kept: true });
+      expect(state.connectionQuality).toEqual({ "gone-1": "good", kept: "excellent" });
+      expect(state.screenShareViewers).toEqual({ "gone-1": ["kept"], kept: ["gone-1", "kept"] });
+      expect(state.screenShareQualityGradeByPublisher).toEqual({ "gone-1": "poor", kept: "good" });
+      expect(state.screenShareQualityHistoryByPublisher).toEqual({ "gone-1": [{ t: 1, grade: "poor", kbps: 10 }], kept: [{ t: 2, grade: "good", kbps: 100 }] });
+      expect(state.musicBotStates["deleted-channel"]).toBeUndefined();
+      expect(state.musicBotStates["other-channel"]).toBeDefined();
+      expect(state.musicBotRevisions["deleted-channel"]).toBe(1);
+    });
+
+    it("uses the real leave callback for the active deleted channel and clears recovery", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "deleted-channel",
+        currentVoiceServerId: "server-1",
+        livekitUrl: "wss://voice.invalid",
+        livekitToken: "token",
+        voiceStates: { "deleted-channel": [{ user_id: "me", channel_id: "deleted-channel" } as never] },
+      });
+      markVoiceActive("deleted-channel");
+      const onLeave = vi.fn(() => useVoiceStore.getState().leaveVoiceChannel());
+      useVoiceStore.setState({ _onLeaveCallback: onLeave });
+
+      useVoiceStore.getState().handleChannelDeleted("deleted-channel");
+
+      const state = useVoiceStore.getState();
+      expect(onLeave).toHaveBeenCalledOnce();
+      expect(state.currentVoiceChannelId).toBeNull();
+      expect(state.currentVoiceServerId).toBeNull();
+      expect(state.livekitToken).toBeNull();
+      expect(state.voiceStates["deleted-channel"]).toBeUndefined();
+      expect(isVoiceRecoveryAllowed("deleted-channel")).toBe(false);
+    });
+
+    it("falls back to local teardown when the leave callback throws", () => {
+      useVoiceStore.setState({
+        currentVoiceChannelId: "deleted-channel",
+        currentVoiceServerId: "server-1",
+        livekitToken: "token",
+        voiceStates: {
+          "deleted-channel": [{ user_id: "me", channel_id: "deleted-channel" } as never],
+          "other-channel": [{ user_id: "kept", channel_id: "other-channel" } as never],
+        },
+        activeSpeakers: { me: true, kept: true },
+      });
+      const onLeave = vi.fn(() => { throw new Error("stale callback"); });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      useVoiceStore.setState({ _onLeaveCallback: onLeave });
+
+      expect(() => useVoiceStore.getState().handleChannelDeleted("deleted-channel")).not.toThrow();
+
+      const state = useVoiceStore.getState();
+      expect(onLeave).toHaveBeenCalledOnce();
+      expect(state.currentVoiceChannelId).toBeNull();
+      expect(state.livekitToken).toBeNull();
+      expect(state.voiceStates).toEqual({ "other-channel": [{ user_id: "kept", channel_id: "other-channel" }] });
+      expect(state.activeSpeakers).toEqual({});
+      expect(warn).toHaveBeenCalledWith("[voiceStore] leave callback failed during channel deletion");
+      warn.mockRestore();
     });
   });
 

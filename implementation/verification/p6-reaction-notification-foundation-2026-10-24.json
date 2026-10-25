@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-24",
+  "scope": "P6 channel-message reaction inbox delivery foundation",
+  "implemented": [
+    "New reactions to another user's channel message create an inbox notification only when recipient preferences allow delivery and the author still has channel read access.",
+    "Removed reactions and self reactions do not notify. Matching actor/message/payload rows are deduplicated in the database across repository instances.",
+    "Notifications include actor enrichment and database creation time before websocket delivery.",
+    "Stable reaction identity uses a database primary key and ON CONFLICT DO NOTHING, including when display wording changes.",
+    "Inbox reaction text uses Turkish/English translations and opens the originating channel message.",
+    "All mode includes server channels; limited mode includes private conversations. One-to-one DM reactions use this shared preference and persistent delivery path, exclude pending requests and blocked pairs, and open the DM from the inbox.",
+    "Group DM reactions share delivery preferences and persistent deduplication; removed reactions, blocked pairs and departed authors do not notify. Group origin is preserved for inbox navigation.",
+    "Audible and desktop reaction cues run only on fresh persistent notification delivery; raw reaction updates no longer create false message-unread counts or repeated sounds."
+  ],
+  "verification": [
+    { "command": "go test ./services ./repository -run 'Test(ReactionNotification|ToggleReaction)' -count=1", "result": "passed" },
+    { "command": "go test . -run '^$'", "result": "passed; server bootstrap compiles" },
+    { "command": "client TypeScript project build", "result": "passed" },
+    { "command": "go test ./services ./repository -run 'Test(PrivateReaction|GroupReaction|ReactionNotification|ToggleReaction)' -count=1", "result": "passed" },
+    { "command": "vitest run reactionNotifications systemEventHandlers notificationPreferences", "result": "passed", "tests": 15 }
+  ],
+  "remaining": [
+    "Verify concurrent deduplication on every supported database backend.",
+    "Verify localized inbox and desktop presentation with two real clients."
+  ],
+  "acceptance": "Implemented but unverified; real two-client acceptance and PostgreSQL concurrency evidence remain outstanding."
+}

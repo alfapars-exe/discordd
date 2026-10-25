@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Group POST messages accepts optional bounded client_request_id in encrypted JSON/multipart. Canonical request JSON plus ordered actual file bytes, names, sizes and content types are SHA-256 bound; random multipart boundaries do not affect the digest. Hashing obeys per-file size limits. Exact encrypted request replay is required; changed ciphertext or files cannot reuse an operation key.",
+    "Service membership checks guard prepare, result read, completion and reconciliation. Internal computed RequestHash (not JSON input) binds the service insert to the prepared operation. Existing no-key clients remain on the legacy path; current client has NOT yet opted into idempotency.",
+    "Completed POST replays hydrate the current authorized message/attachments/reactions rather than a stored response; they return 201 or indexed 207 without another upload/broadcast/unread increment. Prepared retries contend on the repository fence. Committed unfinished operations return 202, which is not final send success; deleted operations return 410 and cannot resurrect messages.",
+    "Authenticated GET /api/group-dms/{groupId}/send-operations/{requestId} is read-only, sender-owned and no-store. Prepared/deleted states have no message. A second membership check protects hydration after revocation. Hashes and owner identity are omitted from operation JSON.",
+    "Explicit rate-limited POST .../reconcile preserves committed uploads and finalizes missing file positions as failures after a two-minute grace period, without resending text/files. It retries at most three concurrent attachment conflicts. Repository locking fences remaining old-worker inserts; completed/deleted operations never restart. GET does not perform this mutation.",
+    "Route golden and OpenAPI document optional identity, exact encrypted replay, pending vs completed, deletion, partial results, ownership and explicit reconciliation."
+  ],
+  "verification": [
+    "Real SQLite handler/service/repository integration tests pass: repeated text POST has one message/read increment/broadcast; cross-user and unauthenticated reads are denied; replay returns edited current content, deletion is 410, removed membership is denied.",
+    "Real multipart partial-result replay performs only the original two upload attempts and preserves failed index 0; changed same-length file bytes return 409. Committed pending POST is 202; early reconcile remains pending; old GET remains read-only; explicit old-op reconciliation completes text or returns only missing file indices, fencing a late original upload.",
+    "Hash test verifies multipart-boundary independence, file content/order and ciphertext binding plus hard per-file read limits.",
+    "Full Linux Go regression go test ./... -timeout=15m exited 0 (repository 34.898s, services 21.213s, handlers 2.766s, database 8.860s). Final no-store/hash follow-up targeted API/service/route tests also passed afterward (handlers 0.732s, services 0.198s, main 0.194s).",
+    "OpenAPI parsed through the existing root js-yaml dependency: 223 paths and zero unresolved internal refs. Initial Python/yaml and client-local parser attempts were unavailable; no dependency was installed. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "Client encrypted request retention, operation identity, pending/error UI, lookup/reconcile/retry integration and restart recovery are not implemented yet. Do not claim current app sends are duplicate-free.",
+    "A replay hydrates edited current ciphertext, so the client must not stamp its original plaintext/file keys into a newer encrypted message cache version. Account/device/membership/rekey ownership needs dedicated client tests.",
+    "Durable WebSocket/outbox delivery after commit-before-broadcast process failure is not implemented. Prepared operation cancellation/retention and interrupted-operation discovery need integration decisions; no existing operation rows were pruned.",
+    "New API integration ran SQLite only; prior repository foundation passed PostgreSQL 18, but new full PostgreSQL API/regression acceptance, real two-client Windows/web tests, backup/rollback and release remain open. No commit, push or live publication performed."
+  ]
+}

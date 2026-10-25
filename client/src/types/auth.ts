@@ -7,6 +7,8 @@ import type { User } from "./user";
 export type LoginRequest = {
   username: string;
   password: string;
+  mfa_code?: string;
+  reactivate?: boolean;
 };
 
 export type RegisterRequest = {

@@ -1,0 +1,18 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Follow-up to P6 online-friend delivery: commit-time eligibility guard for the P11 online-sharing preference.",
+  "implementation": [
+    "The existing production notification repository provides an additive guarded capability. Current accepted friendship, bilateral blocks, active nonbot accounts, actor visible status and sharing consent, and recipient opt-in are checked in the insertion transaction. Recipient offline status does not prevent inbox delivery.",
+    "PostgreSQL takes ordered account-row guards and NOWAIT shared authorization-table guards to serialize with relevant account, relationship and preference writers. Conflicts roll back without a notice. Service broadcasts and marks the in-process epoch only for returned committed rows; missing guarded capability fails closed.",
+    "The guarantee is authorization at the serialized commit snapshot, not erasure of a notice after a later revocation. Existing process-local reconnect deduplication is not durable exactly-once delivery."
+  ],
+  "verification": [
+    "Focused SQLite repository and online-friend service tests passed.",
+    "Parent PostgreSQL 18 focused repository run passed (5.788s). Agent then added and ran real PostgreSQL writer-conflict/retry regressions (5.415s): friendship revocation and recipient opt-out cause SQLSTATE 55P03 with no inserted notice; retry after writer commit reevaluates to no notice.",
+    "The exact parent-owned disposable PostgreSQL container and its anonymous fixture volume were removed after testing; existing QA services were not removed.",
+    "Parent full uncached backend run first failed package-main wiring count because four service setters shared one loop callsite. The loop was replaced with four explicit connections without weakening the regression; focused TestWiring passed. Complete post-fix go test ./... -count=1 -timeout=15m passed: main 10.231s, repository 76.003s, services 29.783s, handlers 4.304s, ws 3.784s and all other packages. PostgreSQL-only cases were separately exercised as recorded above.",
+    "Subsequent missing-notification-key default-off cleanup passed focused repository/services tests. Parent go vet ./... passed."
+  ],
+  "open": ["Real two-client reconnect/visibility acceptance", "Authorization lock contention and load acceptance", "Full integrated regression and release gates"],
+  "release": "No external sends, publication, commit, push or merge."
+}

@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "DM sends capture account, session generation, destination recipient/encryption mode and encrypted local-device context. Guards run after file preparation/encryption, through API dispatch/refresh, before cache effects and before detached-window navigation. Unknown conversations are not guessed to be plaintext.",
+    "Encrypted DMs now fail closed when crypto/device initialization or recipient keys are unavailable. Removed the RECIPIENT_NO_KEYS plaintext fallback and the not-ready encrypted-conversation fallthrough. Explicitly non-encrypted conversations retain their plaintext send path.",
+    "sendWithRetryAndToast supports an optional caller guard before dispatch and after completion, suppressing stale toasts without changing the no-automatic-POST-replay policy. DM send APIs propagate this guard for JSON and multipart requests. Persisted sent plaintext receives the existing cache context guard.",
+    "Failed encrypted sends remove their exact queued payload rather than another concurrent send's last entry. Queue access clears entries on session-generation changes as well as device changes. Removed the misleading blanket no-race comment; FIFO echo matching remains a separate limitation."
+  ],
+  "verification": [
+    "Store regressions cover missing recipient keys, not-ready crypto/missing device without plaintext dispatch, account/generation/device replacement during encryption, session replacement during file preparation, and late successful/failed encrypted HTTP responses without new-session caching/toasts.",
+    "Crypto tests verify exact failed-entry removal among overlapping payloads and old-session cleanup with an unchanged device ID. Shared helper tests cover abandoned dispatch and stale failure-to-toast suppression. The existing detached plaintext send test now supplies explicit plaintext conversation metadata rather than relying on an unknown-conversation fallback.",
+    "Initial focused suites passed: 3 files / 66 tests before the final queue/helper regressions were added. A final TypeScript check caught an untyped deferred test promise; fixed its APIResponse generic. Final tsc -b and targeted ESLint passed. Full client suite passed: 229 files / 2229 tests in 46.34s. Vite production web build passed in 702ms. Existing warning categories remain visible."
+  ],
+  "remaining": [
+    "This does not retract a write already accepted by the server. Internal Signal/IndexedDB operations, DM edit/create/message-fetch lifecycle races and actual device/logout acceptance still need broader verification.",
+    "The sent-plaintext queue still matches WS echoes by FIFO; reversed concurrent commit/echo ordering needs source/version-bound matching. Exact failure cleanup does not prove correct echo attribution. Sender cache at-rest and historical attachment-key behavior remain separate concerns.",
+    "Overall P0-P11 remains incomplete. No server migration, commit, push, merge, Windows packaging or production release performed."
+  ]
+}

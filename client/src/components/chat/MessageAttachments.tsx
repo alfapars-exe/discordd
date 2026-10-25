@@ -4,8 +4,14 @@ import { useTranslation } from "react-i18next";
 import { resolveAssetUrl } from "../../utils/constants";
 import { mimeTypeFromExtension } from "../../utils/fileValidation";
 import { useAuthImageRetry } from "../../hooks/useAuthImageRetry";
-import { useLightboxStore, isPlainLeftClick } from "../../stores/lightboxStore";
+import {
+  useLightboxStore,
+  isPlainLeftClick,
+  type LightboxItem,
+} from "../../stores/lightboxStore";
 import EncryptedAttachment from "./EncryptedAttachment";
+import AccessibleAnimatedImage from "../shared/AccessibleAnimatedImage";
+import UnclassifiedMediaGate from "./UnclassifiedMediaGate";
 import type { ChatMessage, ChatAttachment } from "../../hooks/useChatContext";
 
 type MessageAttachmentsProps = {
@@ -25,11 +31,34 @@ function isImageAttachment(attachment: ChatAttachment): boolean {
   return typeof inferred === "string" && inferred.startsWith("image/");
 }
 
+function isGifAttachment(attachment: ChatAttachment): boolean {
+  return attachment.mime_type?.toLowerCase() === "image/gif" || /\.gif$/i.test(attachment.filename);
+}
+
 function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
   const attachments = message.attachments;
   if (!attachments || attachments.length === 0) return null;
 
-  return (
+  const plaintextGallery: LightboxItem[] =
+    message.encryption_version === 1
+      ? []
+      : attachments.filter(isImageAttachment).map((attachment) => {
+          const url = resolveAssetUrl(attachment.file_url);
+          return {
+            kind: "remote" as const,
+            src: url,
+            href: url,
+            filename: attachment.filename,
+            authRetry: true,
+            authorName: message.author.display_name || message.author.username,
+            authorAvatarUrl: message.author.avatar_url,
+            createdAt: message.created_at,
+            messageId: message.id,
+            message,
+          };
+        });
+
+  const content = (
     <div className="msg-attachments">
       {attachments.map((attachment, idx) => {
         const isEncrypted = message.encryption_version === 1;
@@ -45,14 +74,34 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
               key={attachment.id}
               attachment={attachment}
               fileMeta={fileMeta}
+              authorName={message.author.display_name || message.author.username}
+              authorAvatarUrl={message.author.avatar_url}
+              createdAt={message.created_at}
+              messageId={message.id}
+              message={message}
             />
           );
         }
 
-        return <PlaintextAttachment key={attachment.id} attachment={attachment} />;
+        return (
+          <PlaintextAttachment
+            key={attachment.id}
+            attachment={attachment}
+            message={message}
+            gallery={plaintextGallery}
+          />
+        );
       })}
     </div>
   );
+  const mediaInputs = attachments.flatMap((attachment, index) => {
+    const fileMeta = message.encryption_version === 1 ? message.e2ee_file_keys?.[index] : undefined;
+    const mimeType = !attachment.mime_type || attachment.mime_type === "application/octet-stream"
+      ? mimeTypeFromExtension(attachment.filename) ?? "application/octet-stream" : attachment.mime_type;
+    const visual = isImageAttachment(attachment) || /^(image|video)\//.test(fileMeta?.mimeType ?? mimeType);
+    return visual ? [{url: attachment.file_url, mimeType, size: attachment.file_size, fileMeta}] : [];
+  });
+  return mediaInputs.length ? <UnclassifiedMediaGate authorId={message.user_id} messageId={message.id} revision={message.edited_at ?? "original"} mediaInputs={mediaInputs} identity={`${message.id}:${attachments.map((item) => item.id).join(",")}`}>{content}</UnclassifiedMediaGate> : content;
 }
 
 /**
@@ -61,10 +110,18 @@ function MessageAttachments({ message }: Readonly<MessageAttachmentsProps>) {
  * Plain left-click opens the fullscreen preview; modifier/middle clicks
  * keep the anchor's native open-in-tab / save-as behavior.
  */
-function PlaintextAttachment({ attachment }: Readonly<{ attachment: ChatAttachment }>) {
+function PlaintextAttachment({
+  attachment,
+  message,
+  gallery,
+}: Readonly<{
+  attachment: ChatAttachment;
+  message: ChatMessage;
+  gallery: LightboxItem[];
+}>) {
   const url = resolveAssetUrl(attachment.file_url);
   const { src, failed, handleError } = useAuthImageRetry(url, true);
-  const openLightbox = useLightboxStore((s) => s.open);
+  const openGallery = useLightboxStore((s) => s.openGallery);
 
   if (isImageAttachment(attachment) && !failed) {
     return (
@@ -79,19 +136,33 @@ function PlaintextAttachment({ attachment }: Readonly<{ attachment: ChatAttachme
           e.stopPropagation();
           // Pass the CURRENT src (post-retry) so a fresh-cookie image
           // renders straight from the browser cache.
-          openLightbox({
+          const current: LightboxItem = {
             kind: "remote",
             src,
             href: url,
             filename: attachment.filename,
             authRetry: true,
-          });
+            authorName: message.author.display_name || message.author.username,
+            authorAvatarUrl: message.author.avatar_url,
+            createdAt: message.created_at,
+            messageId: message.id,
+            message,
+          };
+          const index = gallery.findIndex(
+            (candidate) =>
+              candidate.kind === "remote" &&
+              candidate.filename === attachment.filename &&
+              candidate.href === url
+          );
+          const items = gallery.map((candidate, candidateIndex) => candidateIndex === index ? current : candidate);
+          openGallery(items.length > 0 ? items : [current], Math.max(index, 0));
         }}
       >
-        <img
+        <AccessibleAnimatedImage
           src={src}
           alt={attachment.filename}
           className="msg-attachment-img"
+          animated={isGifAttachment(attachment)}
           loading="lazy"
           decoding="async"
           onError={handleError}

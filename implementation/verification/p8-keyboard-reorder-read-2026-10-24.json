@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": [
+    "Shared global/message/drag shortcut contexts, non-customizable drag bindings, context-aware help and configured device voice bindings.",
+    "Keyboard server rail ordering in current V2 and legacy layout; category and within-category channel ordering with preview, commit, cancel, retry and live announcements.",
+    "Current channel/server mark-read and current text-channel link copy shortcuts with explicit destination, auth scoping and truthful completion.",
+    "Spam acceptance wording corrected: off does not route or hide new messages; no runtime policy change."
+  ],
+  "verification": [
+    "Parent focused shortcut/help/settings run: 5 files, 32 tests passed before subsequent read-state race hardening.",
+    "Parent help tests cover separate drag/message scopes, web focused-only keys, native configured-not-confirmed global scope and disabled device settings.",
+    "Agent reorder verification: helper plus legacy ServerList and current ServerRail, 3 files, 12 tests passed; targeted lint and TypeScript passed.",
+    "Parent native browser observation: HiChat p2 at 127.0.0.1:15174, 2548x1269 visible viewport; Control+Slash opened localized shortcut help with drag and device-voice sections.",
+    "Screenshot attempt failed because browser window was minimized; no screenshot or focus-return acceptance claimed.",
+    "Initial full-client run overlapped active read-shortcut edits: 2594 passed, 2 failed in conversationCommands.shortcuts. This is not a final frozen-snapshot result.",
+    "Subsequent combined run after read-state/reorder fixes: 278 test files, 2602 tests passed, zero failed. JSON report: C:/Users/PARS/AppData/Local/Temp/hichat-client-p8-final-20261024.json.",
+    "Parent tsc -b and Vite production build passed. Existing chunk size, ineffective dynamic import and future native config-loader warnings remain.",
+    "Store rollback regression: server/channel/category failures cannot restore old arrays over another account/server or newer WS state; agent 24 focused tests and lint passed.",
+    "Final native route-link follow-up uses shared buildRouteLink for HashRouter. Parent reran 5 affected test files: 26 tests passed; tsc -b and Vite build passed again. The full 2602-test result predates this small follow-up; it is not a final full-suite rerun.",
+    "Parent targeted ESLint passed on help, reorder components/helper, shortcut registry/hook, conversation commands and changed stores."
+  ],
+  "open": [
+    "Real keyboard reordering against persisted server data in both layouts; second client synchronization and denied-permission network checks.",
+    "Browser keyboard layout differences, focus return/trapping, screen reader announcements and Windows global shortcut registration.",
+    "Other missing reference shortcuts, shortcut enable/disable/remove controls and broader P8 application/helper work remain open.",
+    "No release, deployment or complete P8 acceptance."
+  ]
+}

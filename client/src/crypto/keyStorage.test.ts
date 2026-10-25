@@ -21,6 +21,7 @@ import "fake-indexeddb/auto";
 import { IDBFactory as FakeIDBFactory } from "fake-indexeddb";
 import { describe, it, expect, beforeEach } from "vitest";
 import * as keyStorage from "./keyStorage";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import type {
   StoredIdentityKeyPair,
   StoredSigningKeyPair,
@@ -48,7 +49,12 @@ async function resetDatabase(): Promise<void> {
     new FakeIDBFactory();
 }
 
-beforeEach(resetDatabase);
+let testAuthGeneration = 4000;
+beforeEach(async () => {
+  publishAuthOwnerChange("key-storage-test-owner");
+  publishAuthGenerationChange(++testAuthGeneration);
+  await resetDatabase();
+});
 
 // ──────────────────────────────────
 // Fixtures
@@ -477,6 +483,23 @@ describe("keyStorage — deleteAllSenderKeysForChannel prefix scoping", () => {
 // ──────────────────────────────────
 
 describe("keyStorage — searchCachedMessages (byChannel index + cursor)", () => {
+  it("aborts the bulk plaintext write when its owning session becomes stale", async () => {
+    let checks = 0;
+    let current = true;
+    await keyStorage.cacheDecryptedMessages(
+      [makeCachedMessage({ messageId: "stale", channelId: "c1", content: "private" })],
+      () => {
+        checks++;
+        if (checks === 4) {
+          current = false;
+          publishAuthGenerationChange(9001);
+        }
+        return current;
+      }
+    );
+    expect(await keyStorage.searchCachedMessages("c1", "private")).toEqual([]);
+  });
+
   it("returns only same-channel, case-insensitive content matches", async () => {
     await keyStorage.cacheDecryptedMessages([
       makeCachedMessage({ messageId: "m1", channelId: "c1", content: "Hello World" }),
@@ -527,6 +550,46 @@ describe("keyStorage — searchCachedDMMessages (byDMChannel index + cursor)", (
 });
 
 describe("keyStorage — single message cache read", () => {
+  it("deletes a matching DM cache record from direct reads and indexed search",async()=>{
+    const message=makeCachedMessage({messageId:"deleted",channelId:"",dmChannelId:"dm",content:"searchable"});
+    await keyStorage.cacheDecryptedMessage(message);
+    expect(await keyStorage.deleteCachedDMMessage("deleted","dm",()=>true)).toBe(true);
+    expect(await keyStorage.getCachedDecryptedMessage("deleted")).toBeNull();
+    expect(await keyStorage.searchCachedDMMessages("dm","searchable")).toEqual([]);
+  });
+  it.each([
+    {channelId:"",dmChannelId:"other"},
+    {channelId:"",dmChannelId:"group:dm"},
+    {channelId:"server",dmChannelId:"dm"},
+  ])("preserves cache records outside the exact DM scope: %j",async(scope)=>{
+    const message=makeCachedMessage({messageId:"retained",...scope});
+    await keyStorage.cacheDecryptedMessage(message);
+    expect(await keyStorage.deleteCachedDMMessage("retained","dm",()=>true)).toBe(false);
+    expect(await keyStorage.getCachedDecryptedMessage("retained")).toEqual(message);
+  });
+  it.each([0,1,2,3])("rolls back stale DM cleanup at context check %i",async(allowed)=>{
+    const message=makeCachedMessage({messageId:"retained",channelId:"",dmChannelId:"dm"});
+    await keyStorage.cacheDecryptedMessage(message);
+    let checks=0;
+    expect(await keyStorage.deleteCachedDMMessage("retained","dm",()=>++checks<=allowed)).toBe(false);
+    expect(await keyStorage.getCachedDecryptedMessage("retained")).toEqual(message);
+  });
+  it("is idempotent when a DM cache record is absent",async()=>{
+    expect(await keyStorage.deleteCachedDMMessage("missing","dm",()=>true)).toBe(false);
+  });
+  it("round-trips additive encrypted-version and file-key fields without a schema migration",async()=>{
+    const message={...makeCachedMessage({messageId:"versioned-group",dmChannelId:"group:g"}),encryptedSourceTag:"group-v1:hash",fileKeys:[{key:"key",iv:"iv",filename:"photo.png",mimeType:"image/png",originalSize:1,digest:"digest"}]};
+    await keyStorage.cacheDecryptedMessage(message);
+    expect(await keyStorage.getCachedDecryptedMessage(message.messageId)).toEqual(message);
+  });
+  it("does not persist a stale account write, including after asynchronous database opening",async()=>{
+    await keyStorage.cacheDecryptedMessage(makeCachedMessage({messageId:"stale-before"}),()=>false);
+    let checks=0;
+    await keyStorage.cacheDecryptedMessage(makeCachedMessage({messageId:"stale-after"}),()=>++checks===1);
+    expect(checks).toBe(2);
+    expect(await keyStorage.getCachedDecryptedMessage("stale-before")).toBeNull();
+    expect(await keyStorage.getCachedDecryptedMessage("stale-after")).toBeNull();
+  });
   it("getCachedDecryptedMessage round-trips by messageId", async () => {
     const msg = makeCachedMessage({ messageId: "m1", content: "hi" });
     await keyStorage.cacheDecryptedMessage(msg);
@@ -624,6 +687,27 @@ describe("keyStorage — overwrite semantics (last put wins)", () => {
 // ──────────────────────────────────
 
 describe("keyStorage — lifecycle", () => {
+  it("does not persist ratchet/session rows when the owning auth generation changes", async () => {
+    let current = true;
+    let checks = 0;
+    const isCurrent = () => {
+      checks += 1;
+      if (checks === 3) {
+        current = false;
+        publishAuthGenerationChange(987654);
+      }
+      return current;
+    };
+
+    await keyStorage.saveSession(makeSession("u1", "d1"), isCurrent);
+    expect(await keyStorage.getSession("u1", "d1")).toBeNull();
+
+    await keyStorage.saveSenderKey(makeSenderKey("c1", "u1", "d1"), () => false);
+    await keyStorage.saveTrustedIdentity(makeTrustedIdentity("u1", "d1"), () => false);
+    expect(await keyStorage.getSenderKey("c1", "u1", "d1")).toBeNull();
+    expect(await keyStorage.getTrustedIdentity("u1", "d1")).toBeNull();
+  });
+
   it("hasLocalKeys: false when empty, true only after identity + registration", async () => {
     expect(await keyStorage.hasLocalKeys()).toBe(false);
 

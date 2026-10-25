@@ -91,6 +91,10 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 		InviteRequired:    false,
 		LiveKitInstanceID: livekitInstanceID,
 	}
+	gameActivityAudience := false
+	if allowed, policyErr := gameActivityMembershipAllowed(ctx, s.preferencesRepo, ownerID, 1); policyErr == nil {
+		gameActivityAudience = allowed
+	}
 
 	err := database.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		txServerRepo := repository.NewSQLiteServerRepo(tx)
@@ -102,7 +106,11 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 			return fmt.Errorf("failed to create server: %w", err)
 		}
 
-		if err := txServerRepo.AddMember(ctx, server.ID, ownerID); err != nil {
+		snapshotWriter, ok := txServerRepo.(repository.GameActivityMembershipSnapshotRepository)
+		if !ok {
+			return fmt.Errorf("server repository cannot persist game activity membership snapshot")
+		}
+		if err := snapshotWriter.AddMemberWithGameActivityAudience(ctx, server.ID, ownerID, gameActivityAudience); err != nil {
 			return fmt.Errorf("failed to add owner as member: %w", err)
 		}
 
@@ -213,12 +221,17 @@ func (s *serverService) CreateServer(ctx context.Context, ownerID string, req *m
 
 	// WS broadcast (after commit)
 	s.hub.AddClientServerID(ownerID, server.ID)
+	if s.gameActivity != nil {
+		s.gameActivity.MembershipAdded(ctx, server.ID, ownerID)
+	}
+	s.hub.BroadcastToUser(ownerID, ws.Event{Op: ws.OpPreferencesChanged, Data: map[string]string{"user_id": ownerID}})
 	s.hub.BroadcastToUser(ownerID, ws.Event{
 		Op: ws.OpServerCreate,
 		Data: models.ServerListItem{
-			ID:      server.ID,
-			Name:    server.Name,
-			IconURL: server.IconURL,
+			ID:                   server.ID,
+			Name:                 server.Name,
+			IconURL:              server.IconURL,
+			GameActivityAudience: gameActivityAudience,
 		},
 	})
 
@@ -373,6 +386,9 @@ func (s *serverService) DeleteServer(ctx context.Context, serverID, userID strin
 		return repository.NewSQLiteServerRepo(tx).Delete(ctx, serverID)
 	}); err != nil {
 		return fmt.Errorf("failed to delete server: %w", err)
+	}
+	if s.gameActivity != nil {
+		s.gameActivity.ServerDeleted(ctx, serverID)
 	}
 
 	// Only remove files once the DB delete has actually committed — see

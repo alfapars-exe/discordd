@@ -39,7 +39,10 @@ export function useEntranceListenerPrefs() {
   const update = useCallback(
     (patch: Partial<EntranceListenerPrefs>) => {
       const next = sanitizeEntrancePrefs({ ...getEntranceListenerPrefs(), ...patch });
-      setPreferences({ [ENTRANCE_PREFS_KEY]: next });
+      setPreferences({ [ENTRANCE_PREFS_KEY]: {
+        ...(patch.enabled !== undefined ? { enabled: next.enabled } : {}),
+        ...(patch.volume !== undefined ? { volume: next.volume } : {}),
+      } });
     },
     [setPreferences],
   );

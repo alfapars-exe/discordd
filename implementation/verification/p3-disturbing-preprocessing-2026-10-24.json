@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-24",
+  "scope": "Deterministic decoded-RGB preprocessing for the candidate NSFL ONNX graph; not yet connected to the app worker",
+  "implemented": [
+    "Added pure TypeScript 224x224 bilinear preprocessing with separable antialias filtering, 22-bit filter coefficients and byte rounding after each pass. It emits NCHW float32 values in 0..255 without repeating normalization already inside the ONNX graph.",
+    "Matches Pillow 13's adaptive horizontal/vertical pass order. Initial unconditional horizontal-first behavior failed three independent reference cases; implementation was corrected, not the expected hashes.",
+    "Input dimensions, byte length, 4-million-pixel maximum and 8192-per-axis limits are checked before intermediate allocation. The source array is not modified.",
+    "Reference generator uses actual installed Pillow 13.0.0 on deterministic synthetic RGB, emitting only hashes. No user images, network or photo fixtures are used. Checked-in expected hashes keep normal tests independent of Python/Pillow installation."
+  ],
+  "verification": [
+    {"command": "py -3.12 scripts/reference-disturbing-preprocessing.py", "result": "passed", "detail": "Actual Pillow 13.0.0 generated fourteen independent RGB and NCHW byte hashes covering 1x1, one-pixel axes, identity size, upsampling, mixed/downsampling, odd dimensions and 2048x1024 input."},
+    {"command": "Vitest disturbingPreprocessing.test.ts", "result": "passed", "tests": 16, "detail": "All fourteen resized RGB hashes and little-endian NCHW float32 hashes exactly match the independent reference. Additional tests verify channel order, 0..255 values, source preservation and malformed/pathological dimensions."},
+    {"command": "Production TypeScript preprocessing plus actual candidate ONNX/WASM inference", "result": "passed", "detail": "Node imported the actual production .ts module, prepared deterministic 640x480 RGB, verified NCHW hash e019c4b8c311e85666548fc076c8bb2c1f00535180337039b855993e70ec1d15 against Pillow, verified candidate model hash, and executed real ONNX Runtime Web 1.30.0 WASM inference."},
+    {"command": "Final client full Vitest suite", "result": "passed", "files": 246, "tests": 2409},
+    {"command": "Client TypeScript project build and targeted ESLint", "result": "passed"},
+    {"command": "Vite production build", "result": "passed", "detail": "1.03s; existing dynamic-import/chunk-size warnings remain. The new NSFL preprocessor is not yet invoked by application media components."}
+  ],
+  "single_synthetic_chain_observation": {
+    "preprocessing_ms": 11.9772,
+    "inference_ms": 91.8332,
+    "probabilities": {"NSFL":0.04991690069437027,"NSFW":0.08443987369537354,"SFW":0.8656432032585144},
+    "provisional_evaluation_result": "uncertain",
+    "limitations": "One synthetic decoded-RGB tensor, not accuracy, peak performance, encoded-image decode parity, browser or Windows app acceptance."
+  },
+  "sources": [
+    "https://github.com/python-pillow/Pillow/blob/13.0.0/src/libImaging/Resample.c",
+    "https://huggingface.co/OwenElliott/image-safety-classifier-xs"
+  ],
+  "remaining": [
+    "Versioned ONNX Runtime Web integration, self-hosted/hash-checked model and runtime assets, license/attribution packaging, and actual worker/policy/UI integration.",
+    "Encoded-image decoding parity, transparency/ICC/orientation handling, representative NSFL/threshold evaluation, browser/CSP and packaged Windows acceptance.",
+    "The model card does not pin Pillow; this implementation explicitly targets Pillow 13. Earlier Pillow releases may use a different pass order and must not be claimed byte-identical without verification."
+  ],
+  "acceptance": "Not accepted. Preprocessing and a real synthetic inference chain are verified. The application still keeps disturbing classification unknown until integration and its acceptance gates are satisfied. No production release performed."
+}

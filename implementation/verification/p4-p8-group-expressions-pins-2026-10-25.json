@@ -1,0 +1,26 @@
+{
+  "phases": ["P4", "P8"],
+  "status": "implemented_unverified",
+  "scope": [
+    "Group emoji/GIF/sticker toolbar and registry shortcuts use shared pickers. Emoji replaces the selected text; independent GIF/sticker sends preserve the main draft, files and reply, reject existing pending operations and retain account/session/group/key-epoch/navigation guards.",
+    "Group message bodies use the shared formatting/expression renderer. Inline GIF/custom emoji/sticker media remains behind private group media classification/annotation policy and the existing spam/ignore gate; failed decrypted bodies do not render stale plaintext.",
+    "Persistent group pin list/pin/unpin APIs enforce current membership, same-group message identity and expected account. Pin metadata is additive; encrypted payloads are unchanged. Group members can manage group pins, without changing channel role permissions.",
+    "Ctrl+P, a header control and message pin action open a scoped decrypted pin panel. Confirmed unpin, retry/error states, encrypted attachments and missing-key states are implemented. Original-socket-scoped pin/edit/delete invalidations refresh the open panel.",
+    "Group pin limit is fifty, enforced atomically; PostgreSQL uses a per-group transaction lock. Existing pins remain idempotent at the cap, unpin frees a slot, and existing lists are never truncated to conceal legacy records."
+  ],
+  "verification": [
+    "Final stable complete client regression: 333 files, 3200 tests passed, zero failed/pending. Report: C:/Users/PARS/AppData/Local/Temp/hichat-group-expressions-pins-final-20261025.json.",
+    "Client TypeScript, scoped lint and Vite production build passed; existing ineffective-dynamic-import warnings remain.",
+    "Final Go complete suite passed after pin-cap hardening. Updated pin repository tests, including eight concurrent writers and cap/idempotence/unpin/legacy records, also passed five repeats. Coverage validator tests: 32 passed."
+  ],
+  "migrations": {
+    "sqlite": "server/database/migrations/135_group_dm_pins.sql",
+    "postgresql": "server/database/postgres_migrations/037_group_dm_pins.sql",
+    "compatibility": "Additive pin table/index only; old application code ignores it. Rollback of application code must retain this table rather than delete user pin metadata. No live database migration was run."
+  },
+  "open": [
+    "Real PostgreSQL group-pin migration/concurrency tests and bounded two-client encrypted text/pin UI acceptance are now recorded in p4-group-pins-postgres-2026-10-25.json and p4-group-pins-live-browser-2026-10-25.json. Broader expression/media/device and visual acceptance remains pending.",
+    "P8 lo-fi action and other remaining P0-P11 implementation/acceptance requirements remain open. No full phase acceptance is claimed."
+  ],
+  "release": "No commit, push, merge, deployment or publication."
+}

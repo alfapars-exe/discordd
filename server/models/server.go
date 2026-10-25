@@ -10,22 +10,23 @@ import (
 )
 
 type Server struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	IconURL            *string   `json:"icon_url"`
-	OwnerID            string    `json:"owner_id"`
-	InviteRequired     bool      `json:"invite_required"`
-	E2EEEnabled        bool      `json:"e2ee_enabled"`
-	LiveKitInstanceID  *string   `json:"livekit_instance_id,omitempty"` // nil = no voice
-	AFKTimeoutMinutes  int       `json:"afk_timeout_minutes"`           // 15/30/45/60, default 60
-	CreatedAt          time.Time `json:"created_at"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	IconURL           *string   `json:"icon_url"`
+	OwnerID           string    `json:"owner_id"`
+	InviteRequired    bool      `json:"invite_required"`
+	E2EEEnabled       bool      `json:"e2ee_enabled"`
+	LiveKitInstanceID *string   `json:"livekit_instance_id,omitempty"` // nil = no voice
+	AFKTimeoutMinutes int       `json:"afk_timeout_minutes"`           // 15/30/45/60, default 60
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // ServerListItem is the minimal data needed for the server icon sidebar.
 type ServerListItem struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	IconURL *string `json:"icon_url"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	IconURL              *string `json:"icon_url"`
+	GameActivityAudience bool    `json:"game_activity_audience,omitempty"`
 }
 
 // CreateServerRequest — HostType: "mqvi_hosted" uses platform LiveKit,

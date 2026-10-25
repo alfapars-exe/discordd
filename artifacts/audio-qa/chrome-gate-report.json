@@ -1,0 +1,72 @@
+{
+  "captureConstraintsSimulated": true,
+  "results": [
+    {
+      "micSensitivity": 50,
+      "inputVolume": 100,
+      "power": 0,
+      "status": {
+        "requestedEngine": "none",
+        "activeEngine": "none",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": true,
+        "inputDb": -83.01030047503879,
+        "outputDb": -120,
+        "gateOpen": false
+      }
+    },
+    {
+      "micSensitivity": 100,
+      "inputVolume": 100,
+      "power": 4.999999403171165e-9,
+      "status": {
+        "requestedEngine": "none",
+        "activeEngine": "none",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "inputDb": -83.01030047503879,
+        "outputDb": -83.01030047503883,
+        "gateOpen": true
+      }
+    },
+    {
+      "micSensitivity": 100,
+      "inputVolume": 200,
+      "power": 1.999999761268466e-8,
+      "status": {
+        "requestedEngine": "none",
+        "activeEngine": "none",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": false,
+        "inputDb": -83.01030047503879,
+        "outputDb": -76.98970056175921,
+        "gateOpen": true
+      }
+    },
+    {
+      "micSensitivity": 50,
+      "inputVolume": 200,
+      "power": 0,
+      "status": {
+        "requestedEngine": "none",
+        "activeEngine": "none",
+        "phase": "ready",
+        "sampleRate": 48000,
+        "gateAvailable": true,
+        "gateEnabled": true,
+        "inputDb": -83.01030047503879,
+        "outputDb": -120,
+        "gateOpen": false
+      }
+    }
+  ],
+  "gainPowerRatio": 4,
+  "inputDbDifference": 0,
+  "passed": true
+}

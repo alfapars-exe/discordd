@@ -42,6 +42,7 @@ func (r *sqliteUserRepo) ListAllUsersWithStats(ctx context.Context) ([]models.Ad
 			(SELECT COUNT(*) FROM server_members sm WHERE sm.user_id = u.id),
 			(SELECT COUNT(*) FROM bans b WHERE b.user_id = u.id)
 		FROM users u
+		WHERE u.is_bot = 0
 		ORDER BY u.created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, query)

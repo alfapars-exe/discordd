@@ -30,6 +30,8 @@ export const Permissions = {
   ManageNicknames: 524288,
   ManageExpressions: 1048576,
   UseEntranceSound: 2097152,
+  ManageApplications: 4194304,
+  ManageEvents: 8388608,
 } as const;
 
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
@@ -74,7 +76,7 @@ export function resolveChannelPermissions(
 ): number {
   // Admin bypasses all overrides
   if ((basePermissions & Permissions.Admin) !== 0) {
-    return 4194303; // PermAll = (1 << 22) - 1
+    return 16777215; // PermAll = (1 << 24) - 1
   }
 
   const roleIdSet = new Set(roleIds);

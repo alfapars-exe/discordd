@@ -42,6 +42,7 @@ import {
 import { useVoiceStore } from "../stores/voiceStore";
 import { resolveUserId } from "../utils/constants";
 import { isHarmlessVoiceRace } from "../utils/livekitErrors";
+import { liveMicrophone } from "../audio/liveMicrophone";
 
 const RECONNECT_REAPPLY_DELAY_MS = 1000;
 
@@ -82,7 +83,7 @@ export function useInitialRoomSync(
         currentMode === "push_to_talk" ? false : !currentMuted && !srvMuted;
       const fullyDeaf = deaf || srvDeaf;
 
-      localParticipant.setMicrophoneEnabled(shouldEnable).catch((err: unknown) => {
+      liveMicrophone(localParticipant).setEnabled(shouldEnable).catch((err: unknown) => {
         // Filter the engine-teardown race — see isHarmlessVoiceRace above
         // for the matching surface. Anything else is a real failure.
         if (isHarmlessVoiceRace(err)) return;
@@ -113,14 +114,6 @@ export function useInitialRoomSync(
     }
 
     function handleReconnected() {
-      const {
-        isMuted: currentMuted,
-        inputMode: currentMode,
-        isServerMuted: srvMuted,
-      } = useVoiceStore.getState();
-      const shouldEnable =
-        currentMode === "push_to_talk" ? false : !currentMuted && !srvMuted;
-
       // Wait for the PeerConnection to stabilize before re-applying state.
       // RemoteParticipant objects may have been recreated; volumes and
       // subscriptions need to be reapplied from scratch. The timer is
@@ -135,7 +128,10 @@ export function useInitialRoomSync(
         // Reconnected event will re-fire this handler if needed.
         if (room.state !== ConnectionState.Connected) return;
 
-        localParticipant.setMicrophoneEnabled(shouldEnable).catch((err: unknown) => {
+        // Read after the delay: a PTT/mute change during reconnect must win.
+        const current = useVoiceStore.getState();
+        const shouldEnable = current.inputMode !== "push_to_talk" && !current.isMuted && !current.isServerMuted;
+        liveMicrophone(localParticipant).setEnabled(shouldEnable).catch((err: unknown) => {
           // Same engine-teardown race as applyInitialState.
           if (isHarmlessVoiceRace(err)) return;
           console.error(

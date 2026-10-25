@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/handlers"
@@ -45,6 +46,9 @@ type PermissionMiddleware struct {
 	// permCache memoizes the (userID, serverID) -> effective Permission
 	// computation that previously hit the DB on every request.
 	permCache *cache.TTLCache[string, models.Permission]
+	// Serializes revision checks/cache publication with invalidation, never DB IO.
+	cacheMu       sync.Mutex
+	cacheRevision uint64
 }
 
 func NewPermissionMiddleware(roleRepo repository.RoleRepository) *PermissionMiddleware {
@@ -65,6 +69,9 @@ func permCacheKey(userID, serverID string) string {
 // permissions instead of waiting up to permCacheTTL for the entry to
 // expire.
 func (m *PermissionMiddleware) InvalidateUserPermissions(userID string) {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	m.cacheRevision++
 	prefix := userID + ":"
 	m.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasPrefix(key, prefix)
@@ -78,6 +85,9 @@ func (m *PermissionMiddleware) InvalidateUserPermissions(userID string) {
 // channelPermService and as the natural target if a server-scoped
 // invalidation path is added later.
 func (m *PermissionMiddleware) InvalidateServerPermissions(serverID string) {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	m.cacheRevision++
 	suffix := ":" + serverID
 	m.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasSuffix(key, suffix)
@@ -96,6 +106,9 @@ func (m *PermissionMiddleware) InvalidateUser(userID string) {
 // only keys on (userID, serverID), not role, so a full wipe is the correct
 // (and only practical) response. Mirrors channelPermService.InvalidateAll.
 func (m *PermissionMiddleware) InvalidateAll() {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	m.cacheRevision++
 	m.permCache.Clear()
 }
 
@@ -103,20 +116,37 @@ func (m *PermissionMiddleware) InvalidateAll() {
 // a DB lookup on miss.
 func (m *PermissionMiddleware) resolveEffectivePerms(r *http.Request, userID, serverID string) (models.Permission, error) {
 	key := permCacheKey(userID, serverID)
-	if perms, ok := m.permCache.Get(key); ok {
-		return perms, nil
-	}
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := r.Context().Err(); err != nil {
+			return 0, err
+		}
+		m.cacheMu.Lock()
+		revision := m.cacheRevision
+		if perms, ok := m.permCache.Get(key); ok {
+			m.cacheMu.Unlock()
+			return perms, nil
+		}
+		m.cacheMu.Unlock()
 
-	roles, err := m.roleRepo.GetByUserIDAndServer(r.Context(), userID, serverID)
-	if err != nil {
-		return 0, err
+		roles, err := m.roleRepo.GetByUserIDAndServer(r.Context(), userID, serverID)
+		if err != nil {
+			return 0, err
+		}
+		var effective models.Permission
+		for _, role := range roles {
+			effective |= role.Permissions
+		}
+		m.cacheMu.Lock()
+		if m.cacheRevision != revision {
+			m.cacheMu.Unlock()
+			continue // A committed role change supersedes this in-flight lookup.
+		}
+		m.permCache.Set(key, effective)
+		m.cacheMu.Unlock()
+		return effective, nil
 	}
-	var effective models.Permission
-	for _, role := range roles {
-		effective |= role.Permissions
-	}
-	m.permCache.Set(key, effective)
-	return effective, nil
+	// Sustained mutation must not turn into an unbounded retry loop or a stale grant.
+	return 0, pkg.ErrForbidden
 }
 
 // Load puts effective permissions into context without requiring any specific one.

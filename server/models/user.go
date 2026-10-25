@@ -26,47 +26,48 @@ const (
 )
 
 type User struct {
-	ID              string     `json:"id"`
-	Username        string     `json:"username"`
-	DisplayName     *string    `json:"display_name"`
-	AvatarURL       *string    `json:"avatar_url"`
-	WallpaperURL    *string    `json:"wallpaper_url"`
+	ID           string  `json:"id"`
+	Username     string  `json:"username"`
+	DisplayName  *string `json:"display_name"`
+	AvatarURL    *string `json:"avatar_url"`
+	WallpaperURL *string `json:"wallpaper_url"`
 	// Profile fields (migration 085). AvatarURL above always stays a static
 	// image (the poster); AvatarAnimatedURL is the optional animated GIF.
 	// All five are NULL until the user sets them.
-	AvatarAnimatedURL *string `json:"avatar_animated_url"`
-	BannerURL         *string `json:"banner_url"`
-	Bio               *string `json:"bio"`
-	Pronouns          *string `json:"pronouns"`
-	AccentColor       *string `json:"accent_color"`
-	PasswordHash    string     `json:"-"`
-	Status          UserStatus `json:"status"`
-	PrefStatus      UserStatus `json:"pref_status"`
-	CustomStatus    *string    `json:"custom_status"`
-	Email           *string    `json:"email"`
-	Language        string     `json:"language"`
-	DMPrivacy       string     `json:"dm_privacy"`
-	IsPlatformAdmin   bool       `json:"is_platform_admin"`
+	AvatarAnimatedURL     *string    `json:"avatar_animated_url"`
+	BannerURL             *string    `json:"banner_url"`
+	BannerAnimatedURL     *string    `json:"banner_animated_url"`
+	Bio                   *string    `json:"bio"`
+	Pronouns              *string    `json:"pronouns"`
+	AccentColor           *string    `json:"accent_color"`
+	PasswordHash          string     `json:"-"`
+	Status                UserStatus `json:"status"`
+	PrefStatus            UserStatus `json:"pref_status"`
+	CustomStatus          *string    `json:"custom_status"`
+	Email                 *string    `json:"email"`
+	Language              string     `json:"language"`
+	DMPrivacy             string     `json:"dm_privacy"`
+	IsPlatformAdmin       bool       `json:"is_platform_admin"`
 	IsPlatformBanned      bool       `json:"is_platform_banned"`
 	HasSeenDownloadPrompt bool       `json:"has_seen_download_prompt"`
 	HasSeenWelcome        bool       `json:"has_seen_welcome"`
 	PlatformBanReason     string     `json:"-"`
-	PlatformBannedBy  string     `json:"-"`
-	PlatformBannedAt  *time.Time `json:"-"`
+	PlatformBannedBy      string     `json:"-"`
+	PlatformBannedAt      *time.Time `json:"-"`
 	// LastSeenAt is stamped at the offline transition (ws disconnect,
 	// manual invisible, stale-presence reset on boot). NULL until the
 	// user's first recorded offline transition post-migration.
-	LastSeenAt        *time.Time `json:"last_seen_at"`
+	LastSeenAt *time.Time `json:"last_seen_at"`
 	// TokenVersion is the revocation counter embedded in JWT "tv" claims.
 	// Bumped by "logout from all devices" to invalidate every outstanding
 	// access token in one DB write. Never exposed to clients (the live
 	// session reads it via the access token claim, not the user payload).
-	TokenVersion      int        `json:"-"`
+	TokenVersion int `json:"-"`
 	// Bot identity (migration 072). IsBot marks an automated account whose
 	// password is disabled; OwnerUserID is the human who created it.
-	IsBot       bool    `json:"is_bot"`
-	OwnerUserID *string `json:"owner_user_id,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
+	IsBot       bool      `json:"is_bot"`
+	OwnerUserID *string   `json:"owner_user_id,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // PublicUser is the API-facing view of another user as embedded in message,
@@ -125,8 +126,8 @@ func (r *CreateUserRequest) Validate() error {
 		}
 	}
 
-	if utf8.RuneCountInString(r.Password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters")
+	if err := ValidateNewPassword(r.Password); err != nil {
+		return err
 	}
 
 	r.DisplayName = strings.TrimSpace(r.DisplayName)
@@ -138,7 +139,10 @@ func (r *CreateUserRequest) Validate() error {
 	}
 
 	r.Email = strings.TrimSpace(r.Email)
-	if r.Email != "" && !emailRegex.MatchString(r.Email) {
+	if r.Email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if !emailRegex.MatchString(r.Email) {
 		return fmt.Errorf("invalid email format")
 	}
 
@@ -146,8 +150,10 @@ func (r *CreateUserRequest) Validate() error {
 }
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	MFACode    string `json:"mfa_code,omitempty"`
+	Reactivate bool   `json:"reactivate,omitempty"`
 }
 
 func (r *LoginRequest) Validate() error {
@@ -169,8 +175,9 @@ type UpdateUserRequest struct {
 
 // ChangeEmailRequest requires current password for security.
 type ChangeEmailRequest struct {
-	Password string `json:"password"`
-	NewEmail string `json:"new_email"` // empty string = remove email
+	ExpectedUserID string `json:"expected_user_id,omitempty"`
+	Password       string `json:"password"`
+	NewEmail       string `json:"new_email"` // empty string = remove email
 }
 
 func (r *ChangeEmailRequest) Validate() error {

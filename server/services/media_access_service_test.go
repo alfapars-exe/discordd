@@ -52,6 +52,19 @@ func (noopDMs) GetChannelByID(context.Context, string) (*models.DMChannel, error
 	return nil, pkg.ErrNotFound
 }
 
+type fakeGroupDMs struct{ member bool }
+
+func (f fakeGroupDMs) GetAttachmentByFileURL(_ context.Context, url string) (*models.GroupDMAttachment, error) {
+	if url != "/api/uploads/group.bin" {
+		return nil, pkg.ErrNotFound
+	}
+	return &models.GroupDMAttachment{GroupMessageID: "gm-1", FileURL: url}, nil
+}
+func (f fakeGroupDMs) GetMessageByID(context.Context, string) (*models.GroupDMMessage, error) {
+	return &models.GroupDMMessage{ID: "gm-1", GroupID: "g-1"}, nil
+}
+func (f fakeGroupDMs) IsMember(context.Context, string, string) (bool, error) { return f.member, nil }
+
 type noopPermResolver struct{}
 
 func (noopPermResolver) ResolveChannelPermissions(context.Context, string, string) (models.Permission, error) {
@@ -221,6 +234,21 @@ func TestMediaAccessService_ReportAttachment(t *testing.T) {
 				t.Errorf("Authorize = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMediaAccessService_GroupDMAttachmentMembership(t *testing.T) {
+	base := func(member bool) MediaAccessService {
+		return NewMediaAccessService(noopAttachments{}, noopMessages{}, noopDMs{}, noopPermResolver{}, &fakeReports{}, &fakeFeedback{}, &fakeUsers{}, &fakePublicAssets{}, fakeGroupDMs{member: member})
+	}
+	if got, err := base(true).Authorize(context.Background(), "/api/uploads/group.bin", resolveAs("member")); err != nil || got != MediaAllowed {
+		t.Fatalf("member=%v,%v", got, err)
+	}
+	if got, err := base(false).Authorize(context.Background(), "/api/uploads/group.bin", resolveAs("removed")); err != nil || got != MediaForbidden {
+		t.Fatalf("removed=%v,%v", got, err)
+	}
+	if got, err := base(true).Authorize(context.Background(), "/api/uploads/group.bin", resolveAnon); err != nil || got != MediaRequiresAuth {
+		t.Fatalf("anon=%v,%v", got, err)
 	}
 }
 

@@ -21,6 +21,7 @@ type UserRepository interface {
 	Update(ctx context.Context, user *models.User) error
 	UpdateStatus(ctx context.Context, userID string, status models.UserStatus) error
 	UpdatePrefStatus(ctx context.Context, userID string, prefStatus models.UserStatus) error
+	UpdateManualPresence(ctx context.Context, userID string, status models.UserStatus) error
 	UpdatePassword(ctx context.Context, userID string, newPasswordHash string) error
 	// IncrementTokenVersion bumps users.token_version; every outstanding
 	// JWT access token for this user is invalidated on its next validation.

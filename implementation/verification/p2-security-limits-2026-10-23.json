@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P2 shared durable attempt budget for sensitive account security operations.",
+  "implemented": [
+    "Password change, email change, MFA setup/confirmation/recovery/disable and verified session revocation share the same durable per-account five-attempt/five-minute budget.",
+    "The repository reservation is transactional and therefore applies across server instances instead of relying on process-local counters.",
+    "Switching between sensitive endpoints cannot bypass the shared account budget.",
+    "Handlers return the fixed MFA_RATE_LIMITED response shape and do not expose credentials, secrets or provider errors.",
+    "Anonymous forgot/reset flows retain their separate per-IP limits and reset-token single-use/expiry controls because an invalid anonymous token has no safe account identity to charge."
+  ],
+  "checks": [
+    {
+      "command": "go test ./services ./handlers -run 'TestSensitiveCredentialActions|TestAuthSessions|TestChangePassword|TestChangeEmail|Test.*MFA' -count=1",
+      "cwd": "server",
+      "result": "passed"
+    }
+  ],
+  "remaining": [
+    "Exercise the shared budget against two concurrently running server instances backed by the deployment database.",
+    "Verify Retry-After/error presentation through independent web and installed Windows clients."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

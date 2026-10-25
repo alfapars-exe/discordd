@@ -12,12 +12,27 @@ type MockChannelRepo struct {
 	GetByIDFn                func(ctx context.Context, id string) (*models.Channel, error)
 	GetAllByServerFn         func(ctx context.Context, serverID string) ([]models.Channel, error)
 	GetByCategoryIDFn        func(ctx context.Context, categoryID string) ([]models.Channel, error)
+	GetThreadsByParentFn     func(ctx context.Context, parentChannelID string, includeArchived bool) ([]models.Channel, error)
+	SetThreadArchivedFn      func(ctx context.Context, threadID string, archived bool) error
 	CreateFn                 func(ctx context.Context, channel *models.Channel) error
 	UpdateFn                 func(ctx context.Context, channel *models.Channel) error
 	DeleteFn                 func(ctx context.Context, id string) error
 	GetMaxPositionFn         func(ctx context.Context, categoryID string) (int, error)
 	UpdatePositionsFn        func(ctx context.Context, items []models.PositionUpdate) error
 	GetFileURLsByChannelIDFn func(ctx context.Context, channelID string) ([]string, error)
+}
+
+func (m *MockChannelRepo) GetThreadsByParent(ctx context.Context, parentChannelID string, includeArchived bool) ([]models.Channel, error) {
+	if m.GetThreadsByParentFn != nil {
+		return m.GetThreadsByParentFn(ctx, parentChannelID, includeArchived)
+	}
+	return nil, nil
+}
+func (m *MockChannelRepo) SetThreadArchived(ctx context.Context, threadID string, archived bool) error {
+	if m.SetThreadArchivedFn != nil {
+		return m.SetThreadArchivedFn(ctx, threadID, archived)
+	}
+	return nil
 }
 
 func (m *MockChannelRepo) GetByID(ctx context.Context, id string) (*models.Channel, error) {

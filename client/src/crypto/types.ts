@@ -226,6 +226,9 @@ export type CachedDecryptedMessage = {
   dmChannelId: string | null;
   content: string;
   timestamp: number;
+  /** Optional additive DM/group source version; legacy reuse is caller-scoped. */
+  encryptedSourceTag?:string;
+  fileKeys?:import("./fileEncryption").EncryptedFileMeta[];
 };
 
 // ──────────────────────────────────

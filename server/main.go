@@ -44,9 +44,15 @@ func main() {
 	// 1. Config
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("[main] failed to load config: %v", err)
+		logx.Fatal("boot", "failed to load config", err)
 	}
 	bootLogger.Info("config loaded", "port", cfg.Server.Port)
+	if os.Getenv("HICHAT_MAINTENANCE") == "1" {
+		if err := serveMaintenance(cfg.Server.Host, cfg.Server.Port); err != nil {
+			logx.Fatal("boot", "maintenance listener failed", err)
+		}
+		return
+	}
 
 	// 1b. Structured logging + optional Sentry. Initialised right after config
 	// so the chosen level/format and SENTRY_DSN take effect before any other
@@ -60,7 +66,7 @@ func main() {
 	// fall back to "trust no proxy" and break legitimate rate-limit
 	// signals from a real upstream.
 	if err := ratelimit.SetTrustedProxies(cfg.TrustedProxies); err != nil {
-		log.Fatalf("[main] invalid TRUSTED_PROXIES: %v", err)
+		logx.Fatal("boot", "invalid TRUSTED_PROXIES", err)
 	}
 
 	// Log music-bot dependency versions so missing binaries are obvious from
@@ -91,12 +97,12 @@ func main() {
 	// 2b. Database
 	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
 	if err != nil {
-		log.Fatalf("[main] failed to access embedded migrations: %v", err)
+		logx.Fatal("boot", "failed to access embedded migrations", err)
 	}
 
 	db, err := database.New(cfg.Database.Path, migrationsFS)
 	if err != nil {
-		log.Fatalf("[main] failed to initialize database: %v", err)
+		logx.Fatal("boot", "failed to initialize database", err)
 	}
 
 	// Is referential integrity actually enforced? We could not previously
@@ -121,10 +127,10 @@ func main() {
 	// 3. i18n
 	localesFS, err := fs.Sub(i18n.EmbeddedLocales, "locales")
 	if err != nil {
-		log.Fatalf("[main] failed to access embedded locales: %v", err)
+		logx.Fatal("boot", "failed to access embedded locales", err)
 	}
 	if err := i18n.Load(localesFS); err != nil {
-		log.Fatalf("[main] failed to load i18n translations: %v", err)
+		logx.Fatal("boot", "failed to load i18n translations", err)
 	}
 
 	// 4. Upload directory. 0750 (not 0755) so only the mqvi service user
@@ -133,7 +139,7 @@ func main() {
 	// HTTP responses still serve them publicly via http.FileServer; this
 	// only restricts shell access on the host.
 	if err := os.MkdirAll(cfg.Upload.Dir, 0o750); err != nil {
-		log.Fatalf("[main] failed to create upload directory: %v", err)
+		logx.Fatal("boot", "failed to create upload directory", err)
 	}
 
 	// 5. Repository layer
@@ -142,7 +148,7 @@ func main() {
 	// 6. Encryption key
 	encryptionKey, err := crypto.DeriveKey(cfg.EncryptionKey)
 	if err != nil {
-		log.Fatalf("[main] invalid ENCRYPTION_KEY: %v", err)
+		logx.Fatal("boot", "invalid ENCRYPTION_KEY", err)
 	}
 
 	// 7. Startup hooks — each is independently testable and has a single
@@ -208,7 +214,7 @@ func main() {
 	// messageService/reactionService — no setter call needed here anymore.
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
-	stopPresenceDebounce := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission)
+	stopPresenceDebounce := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission, svcs.GameActivity, svcs.OnlineFriendNotifier)
 
 	// 10a. WS-layer defense-in-depth authorizer for voice moderation events
 	// (admin mute/deafen, move, disconnect) — see voice_authorizer.go and
@@ -253,6 +259,11 @@ func main() {
 	// so both tables grew without bound). The same pass runs a read-only
 	// orphan census; it logs a warning per affected table and deletes nothing.
 	stopMaintenance := startMaintenanceSweeper(repos.Session, repos.LinkPreview, db.Conn, time.Hour)
+	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
+	stopMessageReminders := svcs.ReminderWorker.Start(context.Background())
+	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
+	stopFriendAnniversaries := svcs.FriendAnniversaryWorker.Start(context.Background())
+	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
 
 	// 10h. Readiness checker — polls the deep dependency checks every 30s and
 	// caches the verdict. /api/health reads that cache so monitors can see
@@ -269,7 +280,8 @@ func main() {
 	// owner-facing bot management endpoints (create/list/revoke), AND the
 	// read-only WS bot gateway (handler.go botValidator). Constructed before
 	// the handler layer so the WS handler can validate bot tokens.
-	botService := services.NewBotService(repository.NewBotRepository(db.Conn))
+	botService := services.NewBotService(repository.NewBotRepository(db.Conn), hub)
+	botService.SetApplicationPermissionResolver(svcs.ChannelPermission)
 
 	// 11. Handler layer
 	h := initHandlers(svcs, repos, limiters, hub, cfg, encryptionKey, botService)
@@ -305,6 +317,11 @@ func main() {
 	// does). Wiring completes before the server accepts requests, so there
 	// is no window where a role/member write bypasses invalidation.
 	permInvalidator := services.NewMultiInvalidator(svcs.ChannelPermission, permMw)
+	if ownershipAuth, ok := svcs.Auth.(interface {
+		SetOwnershipInvalidator(services.PermissionInvalidator)
+	}); ok {
+		ownershipAuth.SetOwnershipInvalidator(permInvalidator)
+	}
 	svcs.Role.SetPermInvalidator(permInvalidator)
 	svcs.Member.SetPermInvalidator(permInvalidator)
 
@@ -316,7 +333,7 @@ func main() {
 	// returns 200 (the Docker HEALTHCHECK restarts on it, and a restart can't
 	// fix a remote-DB outage) but reports the cached deep-check verdict in its
 	// body; /api/ready does the request-time DB check and may return 503.
-	mux.HandleFunc("GET /api/health", healthHandler(readiness))
+	mux.HandleFunc("GET /api/health", healthHandler(readiness, svcs.AccountAssetCleanup.Status))
 	mux.HandleFunc("GET /api/ready", readyHandler(db.Conn, cfg))
 
 	// 14. SPA frontend serving
@@ -430,7 +447,7 @@ func main() {
 	go func() {
 		bootLogger.Info("server listening", "addr", cfg.Server.Addr())
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[main] server error: %v", err)
+			logx.Fatal("server", "server error", err)
 		}
 	}()
 
@@ -460,6 +477,11 @@ func main() {
 	backupShutdownCancel()
 	stopRuntimeStats()
 	stopMaintenance()
+	stopAccountAssetCleanup()
+	stopMessageReminders()
+	stopServerEvents()
+	stopFriendAnniversaries()
+	stopEmailDelivery()
 	stopReadiness()
 	// Cancel any pending presence-offline debounce timers (presence_debounce.go)
 	// before the Hub and DB pool below are torn down — see stopAll's doc
@@ -467,6 +489,9 @@ func main() {
 	// unsafe rather than merely wasteful.
 	stopPresenceDebounce()
 	metricsCollector.Stop()
+	if fanout, ok := svcs.Voice.(interface{ ShutdownVoiceStateFanout() }); ok {
+		fanout.ShutdownVoiceStateFanout()
+	}
 	hub.Shutdown()
 
 	// Deliver any buffered Sentry events before the process exits.
@@ -476,7 +501,7 @@ func main() {
 	shutdownErr := srv.Shutdown(ctx)
 	cancel() // explicit — a defer would never run past the Fatalf below
 	if shutdownErr != nil {
-		log.Fatalf("[main] forced shutdown: %v", shutdownErr)
+		logx.Fatal("shutdown", "forced shutdown", shutdownErr)
 	}
 
 	if err := db.Close(); err != nil {

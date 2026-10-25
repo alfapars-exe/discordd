@@ -8,7 +8,7 @@
  * by migration 061). UI hides the composer when type === "audit".
  */
 
-export type ChannelType = "text" | "voice" | "audit";
+export type ChannelType = "text" | "voice" | "audit" | "thread";
 
 export type Channel = {
   id: string;
@@ -20,6 +20,12 @@ export type Channel = {
   user_limit: number;
   bitrate: number;
   created_at: string;
+  parent_channel_id?: string | null;
+  starter_message_id?: string | null;
+  archived_at?: string | null;
+  reply_count?: number;
+  /** Requesting user's server-resolved bits, when supplied by channel listing. */
+  effective_permissions?: number;
 };
 
 export type Category = {

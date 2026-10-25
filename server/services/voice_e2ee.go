@@ -17,7 +17,10 @@ import (
 func (s *voiceService) getOrCreateRoomPassphrase(roomName string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.getOrCreateRoomPassphraseLocked(roomName)
+}
 
+func (s *voiceService) getOrCreateRoomPassphraseLocked(roomName string) (string, error) {
 	if passphrase, ok := s.roomPassphrases[roomName]; ok {
 		return passphrase, nil
 	}
@@ -29,8 +32,25 @@ func (s *voiceService) getOrCreateRoomPassphrase(roomName string) (string, error
 	passphrase := base64.RawURLEncoding.EncodeToString(raw)
 
 	s.roomPassphrases[roomName] = passphrase
+	if s.roomKeyVersions == nil {
+		s.roomKeyVersions = make(map[string]uint32)
+	}
+	s.roomKeyVersions[roomName] = 0
 	voiceLogger.Info("created E2EE passphrase for room", "room_name", roomName)
 	return passphrase, nil
+}
+
+// MusicRoomKey exposes the same room key and rotation index used by human
+// LiveKit clients. The music publisher uses it through a narrow read-only
+// interface and therefore never disables voice E2EE.
+func (s *voiceService) MusicRoomKey(roomName string) (string, uint32, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	passphrase, err := s.getOrCreateRoomPassphraseLocked(roomName)
+	if err != nil {
+		return "", 0, err
+	}
+	return passphrase, s.roomKeyVersions[roomName], nil
 }
 
 // cleanupRoomPassphraseIfEmpty deletes the passphrase when a room becomes empty (forward secrecy).
@@ -47,6 +67,7 @@ func (s *voiceService) cleanupRoomPassphraseIfEmpty(channelID string) {
 	for roomName := range s.roomPassphrases {
 		if strings.HasSuffix(roomName, suffix) {
 			delete(s.roomPassphrases, roomName)
+			delete(s.roomKeyVersions, roomName)
 			voiceLogger.Info("cleaned up E2EE passphrase for room", "room_name", roomName)
 		}
 	}
@@ -66,6 +87,9 @@ func (s *voiceService) cleanupRoomPassphraseIfEmpty(channelID string) {
 func (s *voiceService) rotateRoomPassphraseForChannel(channelID string) map[string]string {
 	suffix := ":" + channelID
 	rotated := make(map[string]string)
+	if s.roomKeyVersions == nil {
+		s.roomKeyVersions = make(map[string]uint32)
+	}
 
 	for roomName := range s.roomPassphrases {
 		if !strings.HasSuffix(roomName, suffix) {
@@ -79,6 +103,7 @@ func (s *voiceService) rotateRoomPassphraseForChannel(channelID string) map[stri
 		}
 		newPassphrase := base64.RawURLEncoding.EncodeToString(raw)
 		s.roomPassphrases[roomName] = newPassphrase
+		s.roomKeyVersions[roomName]++
 		rotated[roomName] = newPassphrase
 		voiceLogger.Info("rotated E2EE passphrase for room (within-session forward secrecy)", "room_name", roomName)
 	}

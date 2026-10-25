@@ -4,7 +4,6 @@ package main
 
 import (
 	"io/fs"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -49,7 +48,7 @@ func logMusicBotDeps() {
 func initFrontendFS() (fs.FS, bool) {
 	frontendFS, err := fs.Sub(static.FrontendFS, "dist")
 	if err != nil {
-		log.Fatalf("[main] failed to access embedded frontend: %v", err)
+		logx.Fatal("boot", "failed to access embedded frontend", err)
 	}
 
 	hasFrontend := false

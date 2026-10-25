@@ -52,8 +52,8 @@ function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[] {
   return keys;
 }
 
-const KNOWN_ONLY_IN_EN = new Set(["lastSeenHours_one", "lastSeenHours_other"]);
-const KNOWN_ONLY_IN_TR = new Set(["lastSeenHours"]);
+const KNOWN_ONLY_IN_EN = new Set(["lastSeenHours_one", "lastSeenHours_other", "memberCount_one", "memberCount_other"]);
+const KNOWN_ONLY_IN_TR = new Set(["lastSeenHours", "memberCount"]);
 
 function assertKeyParity(
   nsName: string,

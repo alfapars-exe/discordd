@@ -130,6 +130,14 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 			pkg.ErrorWithMessage(w, http.StatusUnauthorized, "token scope not valid for this endpoint")
 			return
 		}
+		if validator, ok := m.authService.(interface {
+			ValidateSession(context.Context, string, string) error
+		}); ok {
+			if err := validator.ValidateSession(r.Context(), claims.UserID, claims.SessionID); err != nil {
+				pkg.Error(w, err)
+				return
+			}
+		}
 
 		// Cache hit: skip the users-row read entirely. Cache miss: read,
 		// scrub the password hash, store the scrubbed copy. Storing the
@@ -174,6 +182,7 @@ func (m *AuthMiddleware) Require(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), handlers.UserContextKey, user)
+		ctx = context.WithValue(ctx, handlers.AuthSessionContextKey, claims.SessionID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../../stores/voiceStore";
 import { isElectron } from "../../../utils/constants";
 import { formatKeyCode } from "./keyCodeLabel";
+import { beginShortcutCapture } from "../../../stores/shortcutCaptureStore";
 
 function PTTKeySection() {
   const { t } = useTranslation("settings");
@@ -20,6 +21,7 @@ function PTTKeySection() {
   // ─── PTT Key Binding ───
   useEffect(() => {
     if (!isListeningKey) return;
+    const stopCapture = beginShortcutCapture();
 
     function handleKeyDown(e: KeyboardEvent) {
       e.preventDefault();
@@ -39,6 +41,7 @@ function PTTKeySection() {
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
+      stopCapture();
     };
   }, [isListeningKey, setPTTKey]);
 

@@ -34,10 +34,12 @@ const PERMISSION_DEFS = [
   { bit: Permissions.MuteMembers, label: "permMuteMembers", desc: "permMuteMembersDesc" },
   { bit: Permissions.DeafenMembers, label: "permDeafenMembers", desc: "permDeafenMembersDesc" },
   { bit: Permissions.ManageInvites, label: "permManageInvites", desc: "permManageInvitesDesc" },
+  { bit: Permissions.ManageEvents, label: "permManageEvents", desc: "permManageEventsDesc" },
   { bit: Permissions.UseSoundboard, label: "permUseSoundboard", desc: "permUseSoundboardDesc" },
   { bit: Permissions.ManageSoundboard, label: "permManageSoundboard", desc: "permManageSoundboardDesc" },
   { bit: Permissions.ManageExpressions, label: "permManageExpressions", desc: "permManageExpressionsDesc" },
   { bit: Permissions.UseEntranceSound, label: "permUseEntranceSound", desc: "permUseEntranceSoundDesc" },
+  { bit: Permissions.ManageApplications, label: "permManageApplications", desc: "permManageApplicationsDesc" },
 ] as const;
 
 function RoleSettings() {

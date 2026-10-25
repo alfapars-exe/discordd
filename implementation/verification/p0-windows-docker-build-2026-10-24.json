@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-24",
+  "status": "existing",
+  "scope": "Local QA packaging evidence only; not release or installation acceptance",
+  "ledger_checks": "32 coverage-validator tests passed; real ledger validation and targeted git diff --check passed. 33 references / 261 behaviors remain tracked; completion gate is still NO. Only the original hichat-browser-qa container remains running after disposable smoke-test cleanup.",
+  "windows": {
+    "version": "2.11.110",
+    "output": "release/qa-20261024",
+    "installer": "hichat-setup.exe",
+    "installer_bytes": 132566658,
+    "installer_sha256": "5654e485988833a3896172c4d53d4c10f4092b103d822e538f756a27d9951fbf",
+    "installer_sha512_base64": "H0KcuTIZz9+MUYkzpGfSsHa1LCkASqz5A2ascy0opXyeWs0jQbCdMA0xeTla4ICMWN3uGYqR3f5rx9Aad5foJg==",
+    "blockmap_sha256": "ce481b11bea0f33c2ebff1bd6a90bb99cc8710d0c6d10574fdcab0998f70012c",
+    "native_helper_sha256": "de1d334690f251bc56756ace6ad8093eb768d3f68074cd8b158784e462066fc5",
+    "authenticode_main_and_installer": "NotSigned",
+    "asar_entry_count": 647,
+    "checks": [
+      "Electron TypeScript compile and all 63 compiled Node desktop tests passed.",
+      "native/build.bat compiled the actual x64 WASAPI helper with MSVC 19.44.35229; its own dumpbin checks passed for DEP, ASLR, high entropy VA and CFG.",
+      "electron-builder 26.15.3 packaged Electron 43.8.3 win-x64 and built the NSIS one-click/per-user installer with --publish never and a separate QA output directory. Existing release outputs were not deleted; package version was not bumped for this QA candidate.",
+      "The initial --dir/prepackaged flow lacked app-update.yml. Applied the same explicit resource configuration as the existing CI workflow and rebuilt NSIS before recording these hashes.",
+      "Real ASAR inspection verified main/preload/client index entries and the embedded version. Windows path separators were normalized before entry comparison. The packaged helper hash equals the compiled source helper hash.",
+      "latest.yml modern file hashes/sizes and legacy path/SHA-512 match the rebuilt installer. app-update.yml matches the repository's GitHub provider/owner/repository/cache configuration.",
+      "Windows VERSIONINFO reports HiChat!, 2.11.110 and HiChat.exe as configured. Get-AuthenticodeSignature reports both main exe and installer as NotSigned despite electron-builder's signing log lines."
+    ]
+  },
+  "docker": {
+    "self_host_tag": "hichat-server-qa:20261024-deletion-receipts",
+    "self_host_manifest": "sha256:2a8da5b53f1df0662a5484e9ca7a32dc79b7e0720e326be497c12b0e9c75cd5b",
+    "checks": [
+      "Built the current server/Dockerfile using its actual ./server build context. Added server/.dockerignore because the root ignore does not apply to that context; the first filtered context was 1.56 MB.",
+      "Self-host runtime probes passed as uid 1000: executable server, migrations, yt-dlp 2026.10.21, Deno 2.9.8 and a real 48 kHz stereo libopus encode. Final-image isolated startup with temporary SQLite/uploads, generated disposable keys and --network none also returned health/readiness HTTP 200. No host port or volume was used; the temporary container was removed.",
+      "Extended the root build context exclusions to omit locally compiled server executables and SQLite local-state variants. No runtime schema or dependency versions were changed. Rebuilt the self-host image with the final ignore file; the final manifest above supersedes the initial QA manifest."
+    ],
+    "primary_build": "passed",
+    "primary_tag": "hichat-primary-qa:20261024-integration",
+    "primary_manifest": "sha256:2a4673530b86c90f0822f71d9ba8960de719127189497279a2e54d7b93a496cd",
+    "primary_checks": [
+      "Root Dockerfile built the current frontend with tsc/Vite and the CGO/libSQL backend. Primary image build completed with existing Vite chunk/config-loader and dependency deprecation notices; no check was disabled to suppress them.",
+      "Dependency/real libopus encode probes passed with explicit --user 1000:1000. This is an override: the primary HF-compatible image defaults to root; unlike the self-host image it does not declare a non-root USER.",
+      "Initial non-root startup test exited when the image's inherited /data/uploads path was retained. Re-ran with explicit temporary upload and SQLite paths, fresh disposable keys, --network none, no ports or host mounts. Health and readiness returned HTTP 200; database=true, livekit_configured=false. Temporary containers and their dummy data were removed; existing QA and user data were not touched.",
+      "No live libSQL DSN, HF bucket, LiveKit credentials or YouTube request was used. CGO linking/image startup do not prove live external integration compatibility."
+    ]
+  },
+  "remaining": [
+    "Unsigned QA artifacts are not a signed release. Signing identity/configuration, installed startup, clean Windows install/uninstall and real auto-update/rollback must still be verified in an isolated Windows environment.",
+    "The installer was deliberately not launched on the user's desktop: its existing customInit kills running HiChat/audio-capture processes. No user application or call was interrupted by installer execution.",
+    "Live libSQL, HF backup, YouTube/LiveKit, multi-user and installed Windows acceptance remain open. Tool/encode probes and isolated local-SQLite health are not substitutes.",
+    "Initial LOG_LEVEL=error startup failure logs were not sufficiently diagnostic after logging initialization. That historical open issue is subsequently addressed and re-tested in p0-fatal-startup-logging-2026-10-24.json; the hashes in this file still identify the earlier packaging candidate.",
+    "All remaining P0-P11 implementation/acceptance gates remain open. These artifacts must be rebuilt after later source changes. No Git tag, commit, push, merge, registry push, GitHub release, installed update or production publication occurred. Local-only Docker image tags were created as recorded above."
+  ]
+}

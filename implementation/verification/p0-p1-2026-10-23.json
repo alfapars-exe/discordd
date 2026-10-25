@@ -1,0 +1,403 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "updated_at": "2026-10-22T21:57:44Z",
+  "timezone": "Europe/Istanbul",
+  "scope": "P0 reference tracking and the current P1 implementation slice; not whole-product acceptance or release approval.",
+  "production_deployment": {
+    "performed": false,
+    "requires_separate_approval": true
+  },
+  "rollout_constraints": {
+    "database_migration_this_slice": false,
+    "client_and_server_pairing": "Ship the expected_user_id server guard with the client. An older backend that ignores this additive field cannot provide pre-write account affinity, even if the client later detects a response mismatch.",
+    "old_client_compatibility": "Validated by automated compatibility tests; the additive account guard is optional for older clients.",
+    "remaining_auth_scope": "Whole-auth cross-tab subject reconciliation remains a P2 gap beyond this narrow preference read/write guard."
+  },
+  "provenance": {
+    "source_review": "Current shared working tree inspected by the coverage/review subagent.",
+    "coverage_tests": "Executed directly by the coverage/review subagent; production validator source runs against in-memory fixture copies without writing the real ledger.",
+    "other_automated_checks": "Completed results reported by the coordinating agent and its native/backend verification subagent in this task. Final full-client, Go, lint and production-build results were reported after account-guard/mismatch-UX code stabilized; the unchanged Electron result is explicitly a prior run.",
+    "browser": "Real browser interaction reported by the coordinating agent against an isolated local SQLite-backed server on port 9191; not production or two independent devices.",
+    "raw_logs": "Raw terminal transcripts are retained in task tool outputs; this JSON is an outcome record, not fabricated raw output."
+  },
+  "automated_checks": [
+    {
+      "id": "coverage-structure-current-run",
+      "command": "node scripts/check-implementation-coverage.mjs",
+      "working_directory": ".",
+      "result": "passed",
+      "references": 33,
+      "behaviors": 259,
+      "counts": { "existing": 35, "missing": 210, "implemented_unverified": 1, "accepted": 2, "excluded": 11 },
+      "pending_acceptance": 246
+    },
+    {
+      "id": "coverage-strict-current-run",
+      "command": "node scripts/check-implementation-coverage.mjs --strict",
+      "working_directory": ".",
+      "result": "expected_failure",
+      "exit_code": 1,
+      "detail": "Structural validation passed, but completion was correctly refused because 246 in-scope behaviors still require acceptance."
+    },
+    {
+      "id": "coverage-validator-regressions",
+      "command": "node --test scripts/check-implementation-coverage.test.mjs",
+      "working_directory": ".",
+      "result": "passed",
+      "tests": 32,
+      "failures": 0,
+      "coverage": [
+        "Real ledger schema, all 33 named references, P0-P11 packages and accurate pending counts",
+        "Missing/replaced screenshots, duplicate IDs, missing forward/reverse behavior mappings",
+        "Invalid status/phase/platform, cyclic dependencies, missing exclusion reasons and acceptance scenarios",
+        "Accepted-without-evidence and invalid evidence kind/result/timestamp/summary/path",
+        "Traversal, Windows absolute and POSIX absolute code/evidence paths",
+        "Unknown CLI arguments, malformed JSON and strict completion gate",
+        "Byte-for-byte preservation of the real ledger during fixture tests"
+      ],
+      "source": "scripts/check-implementation-coverage.test.mjs"
+    },
+    {
+      "id": "client-full-prior-run",
+      "result": "passed",
+      "test_files": 151,
+      "tests": 1686,
+      "run_scope": "Prior completed full client run reported by the coordinating agent; final rerun was in progress when this record was first prepared."
+    },
+    {
+      "id": "client-full-final-run",
+      "command": "npm test",
+      "working_directory": "client",
+      "result": "passed",
+      "exit_code": 0,
+      "test_files": 152,
+      "tests": 1696,
+      "duration_seconds": 35.15,
+      "run_scope": "Final full suite after account guard and mismatch UX stabilized, reported by the native/backend verification subagent.",
+      "non_failing_notices": ["Three jsdom navigation notices."]
+    },
+    {
+      "id": "go-full-final-run",
+      "command": "go test ./... -count=1 -json",
+      "working_directory": "server",
+      "result": "passed",
+      "exit_code": 0,
+      "passing_test_and_subtest_events": 2100,
+      "failed_test_events": 0,
+      "passing_packages": 15,
+      "packages_without_tests": 7,
+      "skipped_opt_in_tests": ["TestMusicFFmpegSmoke", "TestMusicYouTubeLiveKitSmoke"],
+      "run_scope": "Final full Go suite, including latest account guard. Counts include subtest events, not 2100 independent end-to-end tests. Skipped live-media tests, live LibSQL and real media acceptance are not claimed."
+    },
+    {
+      "id": "electron-reported-run",
+      "result": "passed",
+      "tests": 62,
+      "exit_code": 0,
+      "run_scope": "Previous completed Electron run; Electron source was unchanged for the final client/server fixes. Not a Windows installer build or installed-app smoke test."
+    },
+    {
+      "id": "client-lint-final-run",
+      "result": "passed_with_warnings",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 6,
+      "warning_classification": "Reported as existing warnings by the coordinating agent."
+    },
+    {
+      "id": "client-production-build-final-run",
+      "result": "passed",
+      "exit_code": 0,
+      "environment": { "VITE_UI_SHELL_V2": "true" },
+      "transformed_modules": 1570,
+      "stages": ["TypeScript", "Vite production bundle"],
+      "non_failing_warnings": [
+        "__dirname/native-loader warning",
+        "dtln eval warning",
+        "Three ineffective dynamic-import warnings",
+        "Bundle chunks above 500KB"
+      ],
+      "run_scope": "Final local V2 production-mode bundle includes latest account guard; no publication or deployment."
+    }
+  ],
+  "implementation_inventory": [
+    {
+      "item_ids": ["p0.coverage-ledger"],
+      "implemented": [
+        "Machine-readable reference-to-behavior and behavior-to-reference mappings for all 33 supplied screenshots",
+        "Explicit exclusions, phase dependencies, persistence, authorization and acceptance scenarios",
+        "Structural validator and strict unfinished-work gate with durable negative regression tests"
+      ],
+      "code": [
+        "implementation/coverage.json",
+        "scripts/check-implementation-coverage.mjs",
+        "scripts/check-implementation-coverage.test.mjs"
+      ],
+      "limitations": ["Mechanical coverage does not prove pixel parity or working product behavior."]
+    },
+    {
+      "item_ids": ["p1.preferences"],
+      "implemented": [
+        "Account-and-backend scoped pending edits and acknowledged snapshots; serialized debounced leaf writes and explicit retry",
+        "Epoch cancellation and account response checks; edits made during hydration or older acknowledgements retain precedence",
+        "Optional expected_user_id binds GET/PATCH to the originating account before server access/mutation; mismatches preserve queued edits and display account-change guidance without exposing a different account's preferences",
+        "GET reconciliation preserves saving/pending indicators while a PATCH remains in flight rather than reporting a premature saved state",
+        "Validated presentation caches, bounded server patches/storage and atomic SQLite recursive leaf merge",
+        "Schema version 1 response metadata and preservation of unrecognized legacy stored namespaces",
+        "Hardware input/output/camera identifiers and native hotkey scope remain device-local",
+        "One-time backup of ownerless legacy appearance/accessibility choices; explicit missing-leaf import instead of automatic account adoption",
+        "Visible loading/pending/saving/saved/error state, retry action, and safe legacy import feedback",
+        "Focus/online reconciliation and unsaved-edit unload warning",
+        "Whole-request deadline and caller cancellation across refresh, retry and response parsing",
+        "Effective wallpaper visibility respects device-local transparency without overwriting the synced wallpaper choice"
+      ],
+      "code": [
+        "client/src/stores/preferencesStore.ts",
+        "client/src/api/preferences.ts",
+        "client/src/api/client.ts",
+        "client/src/stores/authStore.ts",
+        "client/src/stores/settingsStore.ts",
+        "client/src/stores/accessibilityStore.ts",
+        "client/src/stores/sidebarStore.ts",
+        "client/src/stores/slices/voiceSettingsSlice.ts",
+        "client/src/hooks/usePreferencesSync.ts",
+        "client/src/components/settings/PreferencesSyncStatus.tsx",
+        "client/src/components/layout/AppLayout.tsx",
+        "server/handlers/preferences.go",
+        "server/models/preferences.go",
+        "server/services/preferences_service.go",
+        "server/repository/sqlite_preferences.go"
+      ],
+      "test_sources": [
+        "client/src/stores/preferencesStore.test.ts",
+        "client/src/stores/accountPreferenceConsumers.test.ts",
+        "client/src/stores/accessibilityStore.test.ts",
+        "client/src/api/client.test.ts",
+        "client/src/api/preferences.test.ts",
+        "client/src/hooks/usePreferencesSync.test.ts",
+        "client/src/components/settings/PreferencesSyncStatus.test.tsx",
+        "server/handlers/preferences_test.go",
+        "server/models/preferences_test.go",
+        "server/services/preferences_service_test.go",
+        "server/repository/sqlite_preferences_test.go"
+      ],
+      "limitations": [
+        "One local browser failure/retry/reload scenario does not satisfy independent-device synchronization or all account-switch races.",
+        "Legacy import is an explicit queueing action, not proof that the server acknowledged a save.",
+        "Live LibSQL behavior, installed Windows behavior and all reference preference consumers remain separate acceptance work."
+      ]
+    },
+    {
+      "item_ids": ["p1.single-shell", "p1.settings-navigation", "p1.settings-dialog", "p1.capabilities", "p1.drafts", "p1.voice-binding"],
+      "implemented": [
+        "Feature-flagged single-destination shell, server rail and context sidebar with navigation-history adapter",
+        "Account/server/platform settings contexts, permission/capability filtering and modal focus handling",
+        "Conversation/account-scoped in-memory drafts and request revision guards",
+        "Persistent voice region and return-to-current-call navigation foundations"
+      ],
+      "code": [
+        "client/src/components/layout/ShellV2.tsx",
+        "client/src/components/layout/DestinationView.tsx",
+        "client/src/components/layout/ServerRail.tsx",
+        "client/src/hooks/useNavigationHistory.ts",
+        "client/src/stores/uiStore.ts",
+        "client/src/stores/composerDraftStore.ts",
+        "client/src/components/settings/settingsNavigation.ts",
+        "client/src/components/settings/SettingsModal.tsx",
+        "client/src/components/layout/UserBar.tsx",
+        "client/src/utils/uiShell.ts"
+      ],
+      "limitations": [
+        "VITE_UI_SHELL_V2 remains a build-time opt-in; classic shell is the rollback path.",
+        "The existing 28 settings destinations do not yet implement every screenshot section scheduled in P2-P11.",
+        "Related-settings cards are absent and p1.related-links is marked missing, not existing.",
+        "Subsection scroll-spy, settings scroll-position caching/restoration and the complete Windows/Web capability explanation matrix are absent; existing navigation/dialog/filtering code is only a partial foundation.",
+        "Drafts are in-memory only; full reload recovery is not claimed.",
+        "All-width visual parity, every focus interaction and real call continuity are not accepted by this record."
+      ]
+    }
+  ],
+  "browser_checks": [
+    {
+      "id": "p1-local-preferences-save-failure-retry-reload",
+      "result": "passed_bounded_scenario",
+      "environment": "Local isolated SQLite-backed server, port 9191; one authenticated test account and one browser session.",
+      "steps_observed": [
+        "Select avatar animation 'always'; the server persisted the selected value with schema_version 1.",
+        "Simulate preference PATCH network failure, then select 'hover'.",
+        "The UI kept the hover selection, showed a save error and retained an account-scoped pending cache.",
+        "Retry after removing the simulated failure; the server persisted hover.",
+        "Reload; hover was restored."
+      ],
+      "artifacts": [
+        {
+          "path": "implementation/verification/p1-retry-1440.png",
+          "native_capture_pixels": { "width": 2548, "height": 1269 },
+          "css_viewport": { "width": 2548, "height": 1269, "measurement": "Follow-up browser innerWidth/innerHeight observation in round 18." },
+          "filename_caveat": "The original filename says 1440, but the actual measured native/CSS width is 2548px.",
+          "purpose": "Single captured browser state, not all-width visual acceptance."
+        }
+      ],
+      "does_not_verify": [
+        "Two independent devices or two independent authenticated clients",
+        "Production database persistence or live LibSQL",
+        "All preference fields, all account-switch races or the full legacy import UI",
+        "390/768/1024/1440/2560 CSS-width coverage or 200% zoom"
+      ]
+    },
+    {
+      "id": "p1-sync-status-measured-390-and-1440",
+      "result": "passed_bounded_visual_check",
+      "environment": "Same isolated browser/account as the preference scenario; measured emulated CSS viewports at deviceScaleFactor 1.",
+      "observations": [
+        "At 390x844 CSS pixels, document width was 390; status bounds were left 16 and right 374, with status/retry text fitting.",
+        "At 1440x900 CSS pixels, document width was 1440 and status/retry text fitted.",
+        "The coordinating agent visually inspected both captures."
+      ],
+      "artifacts": [
+        {
+          "path": "implementation/verification/p1-retry-390.png",
+          "css_viewport": { "width": 390, "height": 844, "document_width": 390, "device_scale_factor": 1 }
+        },
+        {
+          "path": "implementation/verification/p1-retry-desktop-1440.png",
+          "css_viewport": { "width": 1440, "height": 900, "document_width": 1440, "device_scale_factor": 1 }
+        }
+      ],
+      "retry_caveat": "Round 19's final retry click found no button after automatic foreground reconciliation had already saved the value. This round is visual/reconciliation evidence only, not an additional explicit-retry success; round 17 supplied the explicit-retry evidence.",
+      "does_not_verify": [
+        "200% zoom",
+        "All reference views or the remaining 768/1024/2560 target widths",
+        "Independent-device synchronization, real audio/video or installed Windows behavior"
+      ]
+    },
+    {
+      "id": "p1-same-account-two-tab-focus-reconciliation",
+      "result": "passed_bounded_scenario",
+      "environment": "Two tabs in the same browser, sharing cookies and account; not independent devices or isolated cookie jars.",
+      "steps_observed": [
+        "Tab 2 saved avatar animation hover; focusing tab 1 reconciled hover.",
+        "Tab 1 saved the Ocean theme; focusing tab 2 reconciled Ocean while preserving hover."
+      ],
+      "artifacts": [],
+      "does_not_verify": [
+        "Independent physical devices, separate browsers or account isolation",
+        "Every concurrent-write interleaving or preference field"
+      ]
+    },
+    {
+      "id": "p1-sync-status-app-scale-200-at-1440",
+      "result": "passed_bounded_visual_check",
+      "environment": "Measured 1440x900 CSS viewport; the actual in-app scale control was set to 200 using keyboard End, producing root zoom 2.",
+      "measurements": {
+        "viewport_width": 1440,
+        "viewport_height": 900,
+        "root_zoom": 2,
+        "document_width": 1440,
+        "modal_width": 1440,
+        "status_bounds": { "left": 564, "right": 1366, "top": 48 }
+      },
+      "observations": [
+        "The coordinating agent visually inspected the final status capture: saved status and legacy-import controls fit.",
+        "The actual reset button restored application scale to 100 in round 22."
+      ],
+      "artifacts": [
+        {
+          "path": "implementation/verification/p1-status-zoom-200-1440.png",
+          "purpose": "Final measured 200% in-app-scale status/import-control visibility."
+        }
+      ],
+      "excluded_observations": [
+        "p1-zoom-200-1440.png was scrolled to the middle of the theme list; it is not status visibility proof.",
+        "A round 21 scripted ten-step reset reached 150, not 100; only the subsequent actual reset-button observation proves reset to 100."
+      ],
+      "does_not_verify": [
+        "Browser chrome zoom, other CSS widths or every reference screen at 200%",
+        "Complete keyboard/focus/overflow acceptance across all settings and dialogs"
+      ]
+    },
+    {
+      "id": "p1-real-http-account-affinity-guard",
+      "result": "passed_bounded_scenario",
+      "environment": "Rebuilt local Go server on port 9191 using the same isolated test SQLite database; actual authenticated HTTP requests from the browser.",
+      "steps_observed": [
+        "GET with expected_user_id set to a synthetic nonmatching expected account identifier was rejected with PREFERENCES_ACCOUNT_MISMATCH.",
+        "PATCH with expected_user_id set to a synthetic nonmatching expected account identifier was rejected with PREFERENCES_ACCOUNT_MISMATCH.",
+        "The actual stored preferences before and after the rejected requests were deeply equal."
+      ],
+      "artifacts": [],
+      "does_not_verify": [
+        "Older backends that do not implement the additive server guard",
+        "Whole-auth cross-tab reconciliation or a live cross-tab refresh-cookie switch",
+        "Independent devices or live LibSQL"
+      ]
+    },
+    {
+      "id": "p1-real-same-browser-account-switch-isolation",
+      "result": "passed_bounded_scenario",
+      "environment": "Two real test accounts in one browser and the same SPA; explicit logout/register/login flow against isolated local SQLite, not independent devices.",
+      "steps_observed": [
+        "Explicitly log out account A and register account B without reloading the SPA.",
+        "Account B showed the default Midnight theme and hover avatar animation; B's server preferences were an empty object, with no account-A values.",
+        "Account B saved Warm Ember.",
+        "Explicitly log out B and log in to A; A's UI and server restored Ocean/ocean, hover and application scale 100."
+      ],
+      "artifacts": [],
+      "does_not_verify": [
+        "Independent devices/browsers or simultaneous cross-account cookie changes",
+        "Every account-switch race, every preference field or unrelated private-data stores",
+        "Installed Windows app or live LibSQL behavior"
+      ]
+    }
+  ],
+  "local_test_cleanup": {
+    "browser_task": "The coordinating agent completed task.finish({keep:[]}) exactly once after the final browser round.",
+    "servers": "The coordinating agent stopped the isolated local test servers and verified that ports 3131 and 9191 had no listeners. Pre-existing services on ports 3030 and 9090 remained unchanged; no production service was involved.",
+    "fixtures": "Test fixtures are preserved under ignored server/tmp rather than deleted. No credentials or fixture account identifiers are copied into this record."
+  },
+  "review_followups": [
+    {
+      "id": "get-versus-inflight-patch-status",
+      "status": "fixed_with_regression_coverage",
+      "detail": "A GET response now derives saving/pending and hasPendingChanges from both in-flight and queued patches. The final 152-file/1696-test run includes the deferred GET/PATCH status regression.",
+      "source": "client/src/stores/preferencesStore.ts",
+      "test_source": "client/src/stores/preferencesStore.test.ts"
+    },
+    {
+      "id": "shared-refresh-cookie-account-guard",
+      "status": "implemented_with_regression_coverage",
+      "detail": "Preference requests carry expected_user_id to server handlers; a session/account mismatch rejects reads and writes before repository access. Automated tests cover the API contract, guard and owner-scoped queued-edit/error UX. Actual local HTTP mismatch requests left stored preferences unchanged, and a same-SPA A-to-B-to-A login sequence restored each account correctly. A real independent-browser cookie/account-switch scenario and whole-auth subject reconciliation remain outstanding.",
+      "sources": ["client/src/api/preferences.ts", "client/src/stores/preferencesStore.ts", "server/handlers/preferences.go"],
+      "test_sources": ["client/src/api/preferences.test.ts", "client/src/stores/preferencesStore.test.ts", "server/handlers/preferences_test.go"]
+    }
+  ],
+  "acceptance_decisions": [
+    {
+      "item_id": "p0.coverage-ledger",
+      "status": "accepted",
+      "reason": "The structural reference ledger and its fail-closed validator are directly verified; this accepts tracking infrastructure only."
+    },
+    {
+      "item_id": "p0.baseline",
+      "status": "accepted",
+      "reason": "This bounded record identifies current source, actual reported/executed checks, deployment status and remaining real-device/release/visual gaps; it accepts baseline documentation only."
+    },
+    {
+      "item_id": "p1.preferences",
+      "status": "implemented_unverified",
+      "reason": "Implementation, automated coverage and a bounded local browser scenario exist; the complete independent-device/platform acceptance remains outstanding."
+    }
+  ],
+  "remaining_gates": [
+    { "id": "full-reference-visuals", "status": "not_verified", "detail": "All 33 reference screens at 390/768/1024/1440/2560 CSS pixels and 200% zoom, with keyboard/focus/overflow checks." },
+    { "id": "windows-installer", "status": "not_verified", "detail": "Windows installer build, installation and installed-app smoke testing." },
+    { "id": "docker-build", "status": "not_verified", "detail": "Clean local Docker image build and runtime smoke test; Dockerfile changes are not build evidence." },
+    { "id": "live-libsql", "status": "not_verified", "detail": "Preferences compatibility and atomic merge against the intended live LibSQL backend; SQLite tests are not equivalent evidence." },
+    { "id": "independent-clients", "status": "not_verified", "detail": "Distinct authenticated clients/devices exercising concurrent preferences, account switching, permissions and reconnect." },
+    { "id": "real-av", "status": "not_verified", "detail": "Real microphone/camera/output devices, screen sharing, soundboard and call continuity on Windows and Web." },
+    { "id": "two-client-music", "status": "not_verified", "detail": "Real YouTube audio heard by two independent clients, including encrypted rooms, key rotation, reconnect and the full P10 queue/player lifecycle." },
+    { "id": "remaining-feature-packages", "status": "not_accepted", "detail": "P2-P11 and remaining P0/P1 requirements retain their individual ledger statuses; no broad phase completion is claimed." },
+    { "id": "production", "status": "not_performed", "detail": "No production deployment or production-data mutation; separate approval required." }
+  ]
+}

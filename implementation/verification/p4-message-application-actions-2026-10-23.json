@@ -1,0 +1,29 @@
+{
+  "item": "p4.apps-entry",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "discovery": "The message menu receives only server-returned actions from active application installations and granted message-action scopes.",
+    "desktop": "A nested Applications menu lists granted actions and presents an explicit disabled empty state instead of silently disappearing.",
+    "mobile": "Long-press actions expose the same granted application actions.",
+    "execution": "Invocation is persisted, tied to actor/server/channel/message, polled to a terminal result, and surfaces queued, success, failure, expiry or pending feedback. Revoked installations cannot complete a normal invocation."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    },
+    {
+      "command": "vitest run src/components/shared/ContextMenu.test.tsx src/components/shared/ImageLightbox.test.tsx src/components/chat/MessageAttachments.test.tsx src/components/chat/EncryptedAttachment.test.tsx",
+      "working_directory": "client",
+      "result": "34 passed"
+    },
+    {
+      "command": "go test ./services -run TestApplicationRegistry -count=1",
+      "working_directory": "server",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Install and revoke a real application in two clients, verify menu refresh, permission removal, bot completion and expiration against a running gateway."
+}

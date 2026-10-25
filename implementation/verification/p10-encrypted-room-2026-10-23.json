@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 music publication inside HiChat LiveKit rooms without disabling the room E2EE contract.",
+  "implemented": [
+    "The music publisher obtains the active passphrase and monotonic key index through a narrow read-only voice-room key source.",
+    "Opus frames use LiveKit AES-GCM frame encryption and the publication is explicitly marked Encryption_GCM; production publication refuses to start without a room key source.",
+    "Key derivation uses the LiveKit/JS-compatible PBKDF2 salt, SHA-256 iteration count and AES-128 key length.",
+    "The provider observes key-index rotation for subsequent frames and refuses stale key indices.",
+    "Room cleanup removes both the passphrase and its rotation index; participant-removal rotation advances both together.",
+    "The opt-in loopback YouTube smoke listener now rejects plaintext publications and decrypts Opus frames before validating decoded non-silent audio."
+  ],
+  "checks": [
+    {
+      "command": "go test ./services -run 'Test(MusicRoomKeyProvider|VoiceMusicRoomKey|MusicYouTubeLiveKitSmoke)' -count=1",
+      "cwd": "server",
+      "result": "passed; the external LiveKit smoke case was skipped because its explicit loopback environment variables were not supplied"
+    },
+    {
+      "command": "go test ./services ./handlers .",
+      "cwd": "server",
+      "result": "handlers and root passed; services test executable was blocked before execution by Windows Application Control"
+    }
+  ],
+  "remaining": [
+    "Run the opt-in test against a disposable loopback LiveKit with yt-dlp and ffmpeg to establish audible encrypted media evidence.",
+    "Verify a live participant-removal key rotation with two independent HiChat clients and the packaged Windows runtime.",
+    "The Windows Application Control block prevents claiming a current complete services-package suite pass."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

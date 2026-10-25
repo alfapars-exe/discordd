@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-24",
+  "environment": "Disposable PostgreSQL 16.9 container, no host ports, no production data. Linux Go 1.26.8 CGO_ENABLED=0; existing local-only schema-isolated repository helper. Container stopped/removed after tests.",
+  "full_repository": {
+    "command": "go test ./repository -count=1 -timeout=10m",
+    "result": "failed",
+    "duration_seconds": 390.005,
+    "findings": [
+      "Actual missing schema: reports source/evidence columns and music_sessions absent from PostgreSQL migrations.",
+      "Initial untriaged failures included cascade cleanup, retired-application token SQL and group timestamp handling. Follow-up traced cascade SQLite opens and trigger-drop syntax to SQLite-specific test fixtures, not production transaction routing.",
+      "Several tests contain SQLite-only PRAGMA, trigger, sqlite_master, FTS and text timestamp assumptions; broad cross-dialect acceptance is not established. Do not remove these tests to claim PostgreSQL support."
+    ]
+  },
+  "fix": "Additive PostgreSQL migration 018 adds report context/evidence, music session persistence and built-in music bot identity parity.",
+  "targeted_after_fix": {
+    "command": "go test ./repository -run 'ReportRepositoryPersistsMessageContextAndConsent|ReportRepo_GetAttachmentByFileURL_found|SQLiteMusicSessionRoundTripAndDelete|HardDeleteUser_ReportsFeedbackBadges' -count=1 -timeout=3m",
+    "result": "passed",
+    "duration_seconds": 12.937
+  },
+  "remaining": [
+    "Triaging and fixing remaining PostgreSQL runtime failures and dialect-specific test fixtures.",
+    "Production PostgreSQL opener explicitly requires version 18; this 16.9 compatibility test is not version-18 acceptance.",
+    "Existing-database upgrade, backup/restore and rollback verification; full regression after remediation."
+  ],
+  "postgres18_followup": {
+    "image": "postgres:18-alpine, digest sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5",
+    "runtime_fix": "Group message deletion compares persisted timestamp/ID ordering directly rather than COALESCE(timestamp,''); this avoids invalid PostgreSQL timestamps and driver serialization differences, and accounts for equal timestamp ordering.",
+    "fixture_fixes": "Foreign-key-disabled fixture connections select PostgreSQL for PostgreSQL DSNs, with localhost and hichat_test_ search_path guards. Explicit cleanup still runs with FK/trigger enforcement disabled in isolated tests; production enforcement unchanged. Retired token legacy-row fixture uses DROP TRIGGER ... ON bot_tokens on PostgreSQL.",
+    "passed": [
+      "PostgreSQL 18: GroupDMRepository, GroupDMDelete, report context persistence and music session round trip (7.176s).",
+      "PostgreSQL 18: retired application token validation, server cascade removes, entrance-channel cleanup and group delete counts (8.574s).",
+      "SQLite: retired application tokens, server cascade removes, entrance-channel cleanup and all GroupDM cases (1.772s).",
+      "New unread-count test covers deletion before the read marker, deletion of the marker and deletion of an unread message sharing the same timestamp."
+    ],
+    "isolation": "PostgreSQL 18 container exposed no host ports and was stopped/removed after tests. No production data or security settings changed.",
+    "limits": "Only targeted PostgreSQL 18 coverage; full repository regression and upgrade/rollback acceptance remain open."
+  },
+  "acceptance": "Not accepted. No production cutover or release."
+}

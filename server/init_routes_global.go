@@ -18,15 +18,32 @@ func (d *routeDeps) registerAuthRoutes() {
 	d.mux.Handle("POST /api/auth/logout-all", d.auth(d.h.Auth.LogoutAll))
 	d.mux.HandleFunc("POST /api/auth/forgot-password", d.h.Auth.ForgotPassword)
 	d.mux.HandleFunc("POST /api/auth/reset-password", d.h.Auth.ResetPassword)
+	d.mux.HandleFunc("POST /api/auth/verify-email", d.h.EmailVerification.Verify)
+	// The opaque email proof authorizes only a category opt-out. GET is a
+	// read-only confirmation so mail-link scanners cannot change preferences.
+	d.mux.HandleFunc("GET /api/email/unsubscribe", d.h.EmailUnsubscribe.Confirm)
+	d.mux.HandleFunc("POST /api/email/unsubscribe", d.h.EmailUnsubscribe.Unsubscribe)
 	d.mux.Handle("POST /api/auth/ws-ticket", d.auth(d.h.Auth.WSTicket))
 }
 
 // User
 func (d *routeDeps) registerUserRoutes() {
 	d.mux.Handle("GET /api/users/me", d.auth(d.h.Auth.Me))
+	d.mux.Handle("GET /api/users/me/account-status", d.auth(d.h.AccountStatus.Get))
+	d.mux.Handle("GET /api/users/me/deletion-status", d.auth(d.h.AccountDeletionStatus.Get))
+	d.mux.Handle("POST /api/users/me/delete", d.auth(d.h.Auth.DeleteAccount))
+	d.mux.Handle("POST /api/users/me/disable", d.auth(d.h.Auth.DisableAccount))
 	d.mux.Handle("PATCH /api/users/me/profile", d.auth(d.h.Member.UpdateProfile))
+	d.mux.Handle("GET /api/users/me/profile-showcase", d.auth(d.h.ProfileShowcase.Get))
+	d.mux.Handle("PUT /api/users/me/profile-showcase", d.auth(d.h.ProfileShowcase.Put))
 	d.mux.Handle("POST /api/users/me/password", d.auth(d.h.Auth.ChangePassword))
 	d.mux.Handle("PUT /api/users/me/email", d.auth(d.h.Auth.ChangeEmail))
+	d.mux.Handle("GET /api/users/me/email-verification", d.auth(d.h.EmailVerification.Status))
+	d.mux.Handle("POST /api/users/me/email-verification", d.auth(d.h.EmailVerification.Request))
+	d.mux.Handle("GET /api/users/me/mfa", d.auth(d.h.Auth.MFAStatus))
+	d.mux.Handle("POST /api/users/me/mfa/{action}", d.auth(d.h.Auth.MFAAction))
+	d.mux.Handle("GET /api/users/me/sessions", d.auth(d.h.Auth.ListSessions))
+	d.mux.Handle("POST /api/users/me/sessions/{sessionId}/revoke", d.auth(d.h.Auth.RevokeSession))
 	d.mux.Handle("POST /api/users/me/avatar", d.auth(d.h.Avatar.UploadUserAvatar))
 	d.mux.Handle("POST /api/users/me/wallpaper", d.auth(d.h.Avatar.UploadUserWallpaper))
 	d.mux.Handle("DELETE /api/users/me/wallpaper", d.auth(d.h.Avatar.DeleteUserWallpaper))
@@ -36,6 +53,10 @@ func (d *routeDeps) registerUserRoutes() {
 	d.mux.Handle("POST /api/users/me/dismiss-download-prompt", d.auth(d.h.DownloadPrompt.Dismiss))
 	d.mux.Handle("POST /api/users/me/dismiss-welcome", d.auth(d.h.DownloadPrompt.DismissWelcome))
 	d.mux.Handle("PATCH /api/users/me/preferences", d.auth(d.h.Preferences.Update))
+	d.mux.Handle("POST /api/users/me/data-exports", d.auth(d.h.DataExport.Create))
+	d.mux.Handle("GET /api/users/me/data-exports/{id}", d.auth(d.h.DataExport.Get))
+	d.mux.Handle("GET /api/users/me/data-exports/{id}/download", d.auth(d.h.DataExport.Download))
+	d.mux.Handle("GET /api/users/me/recommendations", d.auth(d.h.Personalization.Recommendations))
 
 	// Inbox notifications — literal "count" / "read-all" before the {id}
 	// wildcard. Self-scoped (the service filters by the caller's user_id),
@@ -45,9 +66,24 @@ func (d *routeDeps) registerUserRoutes() {
 	d.mux.Handle("POST /api/users/me/notifications/read-all", d.auth(d.h.Notification.MarkAllRead))
 	d.mux.Handle("POST /api/users/me/notifications/{id}/read", d.auth(d.h.Notification.MarkRead))
 
+	// Persistent message reminders. Every operation is self-scoped; an id
+	// owned by another user is deliberately indistinguishable from missing.
+	d.mux.Handle("GET /api/users/me/reminders", d.auth(d.h.Reminder.List))
+	d.mux.Handle("POST /api/users/me/reminders", d.auth(d.h.Reminder.Create))
+	d.mux.Handle("PATCH /api/users/me/reminders/{id}", d.auth(d.h.Reminder.Update))
+	d.mux.Handle("DELETE /api/users/me/reminders/{id}", d.auth(d.h.Reminder.Cancel))
+
 	// Saved messages (bookmarks) — literal "ids" before the {id} wildcard.
 	// Self-scoped like notifications: the service filters by the caller.
 	d.mux.Handle("GET /api/users/me/saved", d.auth(d.h.Saved.List))
+	d.mux.Handle("GET /api/users/me/spam", d.auth(d.h.SpamInbox.List))
+	d.mux.Handle("GET /api/users/me/media-label", d.auth(d.h.MediaLabel.Get))
+	d.mux.Handle("PUT /api/users/me/media-label", d.auth(d.h.MediaLabel.Set))
+	d.mux.Handle("DELETE /api/users/me/media-label", d.auth(d.h.MediaLabel.Delete))
+	d.mux.Handle("GET /api/users/me/spam/decisions", d.auth(d.h.SpamInbox.Decisions))
+	d.mux.Handle("POST /api/users/me/spam", d.auth(d.h.SpamInbox.Record))
+	d.mux.Handle("POST /api/users/me/spam/restore", d.auth(d.h.SpamInbox.Restore))
+	d.mux.Handle("POST /api/users/me/spam/dismiss", d.auth(d.h.SpamInbox.Dismiss))
 	d.mux.Handle("GET /api/users/me/saved/ids", d.auth(d.h.Saved.ListIDs))
 	d.mux.Handle("POST /api/users/me/saved", d.auth(d.h.Saved.Create))
 	d.mux.Handle("PATCH /api/users/me/saved/{id}", d.auth(d.h.Saved.UpdateNote))
@@ -133,6 +169,31 @@ func (d *routeDeps) registerDMRoutes() {
 	d.mux.Handle("PATCH /api/dms/channels/{channelId}/e2ee", d.auth(d.h.DM.ToggleE2EE))
 	// DM read state — membership is verified inside dmService.MarkRead.
 	d.mux.Handle("POST /api/dms/{channelId}/read", d.auth(d.h.DM.MarkRead))
+	d.mux.Handle("POST /api/dms/{channelId}/unread", d.auth(d.h.DM.MarkUnread))
+}
+
+func (d *routeDeps) registerGroupDMRoutes() {
+	d.mux.Handle("GET /api/group-dms", d.auth(d.h.GroupDM.List))
+	d.mux.Handle("POST /api/group-dms", d.auth(d.h.GroupDM.Create))
+	d.mux.Handle("GET /api/group-dms/{groupId}", d.auth(d.h.GroupDM.Get))
+	d.mux.Handle("PATCH /api/group-dms/{groupId}", d.auth(d.h.GroupDM.Update))
+	d.mux.Handle("POST /api/group-dms/{groupId}/members", d.auth(d.h.GroupDM.AddMember))
+	d.mux.Handle("DELETE /api/group-dms/{groupId}/members/{userId}", d.auth(d.h.GroupDM.RemoveMember))
+	d.mux.Handle("POST /api/group-dms/{groupId}/leave", d.auth(d.h.GroupDM.Leave))
+	d.mux.Handle("GET /api/group-dms/{groupId}/messages", d.auth(d.h.GroupDM.ListMessages))
+	d.mux.Handle("POST /api/group-dms/{groupId}/messages", d.auth(d.h.GroupDM.SendMessage))
+	d.mux.Handle("GET /api/group-dms/{groupId}/send-operations/{requestId}", d.auth(d.h.GroupDM.GetSendOutcome))
+	d.mux.Handle("POST /api/group-dms/{groupId}/send-operations/{requestId}/reconcile", d.auth(d.h.GroupDM.ReconcileSend))
+	d.mux.Handle("POST /api/group-dms/{groupId}/send-operations/{requestId}/cancel", d.auth(d.h.GroupDM.CancelSend))
+	d.mux.Handle("PATCH /api/group-dms/{groupId}/messages/{messageId}", d.auth(d.h.GroupDM.EditMessage))
+	d.mux.Handle("DELETE /api/group-dms/{groupId}/messages/{messageId}", d.auth(d.h.GroupDM.DeleteMessage))
+	d.mux.Handle("POST /api/group-dms/{groupId}/messages/{messageId}/reactions", d.auth(d.h.GroupDM.ToggleReaction))
+	d.mux.Handle("GET /api/group-dms/{groupId}/pinned", d.auth(d.h.GroupDM.ListPinnedMessages))
+	d.mux.Handle("POST /api/group-dms/{groupId}/messages/{messageId}/pin", d.auth(d.h.GroupDM.PinMessage))
+	d.mux.Handle("DELETE /api/group-dms/{groupId}/messages/{messageId}/pin", d.auth(d.h.GroupDM.UnpinMessage))
+	d.mux.Handle("POST /api/group-dms/{groupId}/read", d.auth(d.h.GroupDM.MarkRead))
+	d.mux.Handle("POST /api/group-dms/{groupId}/unread", d.auth(d.h.GroupDM.MarkUnread))
+	d.mux.Handle("POST /api/group-dms/{groupId}/call-token", d.auth(d.h.GroupDM.CallToken))
 }
 
 func (d *routeDeps) registerBlockReportRoutes() {
@@ -204,6 +265,7 @@ func (d *routeDeps) registerBadgeRoutes() {
 	d.mux.Handle("DELETE /api/badges/{id}/assign/{userId}", d.authAdmin(d.h.Badge.UnassignBadge))
 	d.mux.Handle("GET /api/users/{userId}/badges", d.auth(d.h.Badge.GetUserBadges))
 	d.mux.Handle("GET /api/users/{userId}/profile", d.auth(d.h.Member.GetUserProfile))
+	d.mux.Handle("GET /api/users/{userId}/profile-showcase", d.auth(d.h.ProfileShowcase.GetPublic))
 }
 
 // GIFs (Klipy proxy)
@@ -230,6 +292,15 @@ func (d *routeDeps) registerBotRoutes() {
 	d.mux.Handle("POST /api/bots", d.auth(d.botHandler.Create))
 	d.mux.Handle("GET /api/bots", d.auth(d.botHandler.List))
 	d.mux.Handle("POST /api/bots/{botID}/revoke", d.auth(d.botHandler.Revoke))
+	d.mux.Handle("POST /api/bots/{botID}/remove", d.auth(d.h.Auth.RemoveApplication))
+	d.mux.Handle("POST /api/bots/{botID}/transfer-requests", d.auth(d.botHandler.RequestTransfer))
+	d.mux.Handle("GET /api/application-transfer-requests", d.auth(d.botHandler.ListIncomingTransfers))
+	d.mux.Handle("POST /api/application-transfer-requests/{requestID}/resolve", d.auth(d.botHandler.ResolveTransfer))
+	d.mux.Handle("PUT /api/bots/{botID}/manifest", d.auth(d.botHandler.PutManifest))
+	d.mux.Handle("GET /api/application-manifests", d.auth(d.botHandler.ListManifests))
+	d.mux.Handle("POST /api/bots/{botID}/actions/{actionId}/test", d.auth(d.botHandler.InvokeTest))
+	d.mux.Handle("GET /api/application-invocations/{invocationId}", d.auth(d.botHandler.GetInvocation))
+	d.mux.Handle("POST /api/application-invocations/{invocationId}/complete", d.auth(d.botHandler.CompleteInvocation))
 }
 
 func (d *routeDeps) registerAdminRoutes() {
@@ -262,6 +333,9 @@ func (d *routeDeps) registerAdminRoutes() {
 
 	// Platform Admin — Users
 	d.mux.Handle("GET /api/admin/users", d.authAdmin(d.h.Admin.ListUsers))
+	d.mux.Handle("POST /api/admin/email-campaigns", d.authAdmin(d.h.EmailCampaign.CreateDraft))
+	d.mux.Handle("GET /api/admin/email-campaigns/{id}", d.authAdmin(d.h.EmailCampaign.Preview))
+	d.mux.Handle("POST /api/admin/email-campaigns/{id}/publish", d.authAdmin(d.h.EmailCampaign.Publish))
 	d.mux.Handle("POST /api/admin/users/{id}/ban", d.authAdmin(d.h.Admin.PlatformBanUser))
 	d.mux.Handle("DELETE /api/admin/users/{id}/ban", d.authAdmin(d.h.Admin.PlatformUnbanUser))
 	d.mux.Handle("DELETE /api/admin/users/{id}", d.authAdmin(d.h.Admin.HardDeleteUser))

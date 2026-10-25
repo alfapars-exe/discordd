@@ -38,7 +38,7 @@
   "terminationDesc": "Bu koşulların ihlali durumunda hesabınızı kendi takdirimize bağlı olarak askıya alabilir veya silebiliriz. Hesabınızı istediğiniz zaman uygulama ayarlarından silebilirsiniz. Fesih üzerine hizmeti kullanma hakkınız derhal sona erer. Doğası gereği fesihten sonra da geçerli olması gereken hükümler yürürlükte kalır.",
 
   "copyrightTitle": "Telif Hakkı ve Kaldırma",
-  "copyrightDesc": "HiChat!'deki bir içeriğin telif hakkınızı ihlal ettiğini düşünüyorsanız lütfen ilgili detaylarla GitHub deposunda bir issue açın. İnceleyip gerekli işlemi yapacağız.",
+  "copyrightDesc": "HiChat!'deki bir içeriğin telif hakkınızı ihlal ettiğini düşünüyorsanız ilgili detaylarla uygulama içi geri bildirim özelliğinden bize ulaşın.",
 
   "selfHostTitle": "Self-Hosted Kopyalar",
   "selfHostDesc": "HiChat! yazılımı açık kaynak lisansı altında self-hosting için kullanılabilir. Bu Kullanım Koşulları yalnızca resmi infinayazilim-discord.hf.space sunucusu için geçerlidir. Üçüncü taraflarca işletilen self-hosted kopyalardan, bunların veri işleme, erişilebilirlik veya yasal uyumluluk dahil hiçbir konusunda sorumluluk kabul etmiyoruz.",
@@ -53,7 +53,7 @@
   "lawDesc": "Bu koşullar Türkiye Cumhuriyeti yasalarına tabidir. Bu koşullardan kaynaklanan tüm uyuşmazlıklar Türkiye'deki mahkemelerin münhasır yargı yetkisine tabi olacaktır.",
 
   "contactTitle": "İletişim",
-  "contactDesc": "Bu koşullarla ilgili sorularınız için GitHub deposunda bir issue açabilir veya uygulama üzerinden bize ulaşabilirsiniz.",
+  "contactDesc": "Bu koşullarla ilgili sorularınız için uygulama içi geri bildirim özelliğinden bize ulaşabilirsiniz.",
 
-  "footerCopy": "© 2026 HiChat! — Açık kaynak, özgür iletişim."
+  "footerCopy": "© 2026 HiChat! — Özel iletişim."
 }

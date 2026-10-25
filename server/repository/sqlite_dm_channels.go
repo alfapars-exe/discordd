@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/argeinfina/hichat/database"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -75,6 +76,12 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 			COALESCE(ds.is_pinned, 0),
 			CASE WHEN ds.muted_until IS NOT NULL AND ds.muted_until > datetime('now') THEN 1 ELSE 0 END,
 			COALESCE(dr.unread_count, 0),
+			(SELECT unread.id FROM dm_messages unread
+			 WHERE unread.dm_channel_id=dc.id AND unread.user_id != ? AND COALESCE(dr.unread_count,0)>0
+			   AND (dr.last_read_message_id IS NULL OR EXISTS (
+			     SELECT 1 FROM dm_messages cursor WHERE cursor.id=dr.last_read_message_id AND cursor.dm_channel_id=dc.id
+			       AND (unread.created_at>cursor.created_at OR (unread.created_at=cursor.created_at AND unread.id>cursor.id))))
+			 ORDER BY unread.created_at ASC,unread.id ASC LIMIT 1),
 			lm.id, lm.user_id, lm.content, lm.encryption_version, lm.created_at
 		FROM dm_channels dc
 		JOIN users u ON u.id = CASE
@@ -91,7 +98,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		ORDER BY COALESCE(ds.is_pinned, 0) DESC,
 		         COALESCE(dc.last_message_at, dc.created_at) DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, userID, userID, userID, userID, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID, userID, userID, userID, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list DM channels: %w", err)
 	}
@@ -105,6 +112,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		var lastMsgAt, userCreatedAt sql.NullTime
 		var isPinned, isMuted int
 		var lmID, lmUserID, lmContent sql.NullString
+		var oldestUnread sql.NullString
 		var lmEncryptionVersion sql.NullInt64
 		var lmCreatedAt sql.NullTime
 
@@ -113,6 +121,7 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 			&user.ID, &user.Username, &displayName, &avatarURL, &user.Status, &customStatus, &userCreatedAt,
 			&isPinned, &isMuted,
 			&ch.UnreadCount,
+			&oldestUnread,
 			&lmID, &lmUserID, &lmContent, &lmEncryptionVersion, &lmCreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan DM channel: %w", err)
@@ -156,6 +165,9 @@ func (r *sqliteDMRepo) ListChannels(ctx context.Context, userID string) ([]model
 		}
 
 		ch.OtherUser = &user
+		if oldestUnread.Valid {
+			ch.OldestUnreadMessageID = &oldestUnread.String
+		}
 		ch.IsPinned = isPinned == 1
 		ch.IsMuted = isMuted == 1
 		channels = append(channels, ch)
@@ -201,6 +213,37 @@ func (r *sqliteDMRepo) UpdateChannelStatus(ctx context.Context, channelID, statu
 		return fmt.Errorf("failed to update DM channel status: %w", err)
 	}
 	return nil
+}
+
+type PendingDMAccepter interface {
+	AcceptPendingUnblocked(context.Context, string) (bool, error)
+}
+
+// Lock before checking blocks: PostgreSQL READ COMMITTED obtains a fresh
+// snapshot for the second statement after waiting for a blocking transaction.
+func (r *sqliteDMRepo) AcceptPendingUnblocked(ctx context.Context, channelID string) (bool, error) {
+	raw := database.RawDB(r.db)
+	if raw == nil {
+		return false, fmt.Errorf("%w: DM acceptance requires database connection", pkg.ErrInternal)
+	}
+	changed := false
+	err := database.WithTx(ctx, raw, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status = status WHERE id = ?`, channelID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `UPDATE dm_channels SET status = 'accepted'
+	 WHERE id = ? AND status = 'pending' AND NOT EXISTS (
+	 SELECT 1 FROM friendships f WHERE f.status = 'blocked' AND
+	 ((f.user_id = dm_channels.user1_id AND f.friend_id = dm_channels.user2_id)
+	 OR (f.user_id = dm_channels.user2_id AND f.friend_id = dm_channels.user1_id)))`, channelID)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		changed = count == 1
+		return err
+	})
+	return err == nil && changed, err
 }
 
 func (r *sqliteDMRepo) SetInitiatedBy(ctx context.Context, channelID, userID string) error {

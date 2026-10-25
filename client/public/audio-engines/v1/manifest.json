@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "provenance": {
+    "rnnoise": "@shiguredo/rnnoise-wasm@2022.2.0 via @sapphi-red/web-noise-suppressor@0.4.1 source map (patched upstream distribution)",
+    "gtcrn": "@sapphi-red/gtcrn-wasm@0.0.3 via @sapphi-red/web-noise-suppressor@0.4.1 source map",
+    "speex": "@sapphi-red/speex-preprocess-wasm@0.4.0 via @sapphi-red/web-noise-suppressor@0.4.1 source map",
+    "deepfilter": "Binding: https://github.com/mezonai/mezon-noise-suppression/tree/f5178ce858aa634b4bf46f27f5684d02828043ae (v1.2.1), src/df3/df.js. Its immutable AssetLoader selects official CDN deepfilternet3/v2. Bundled WASM/model match those v2 CDN bytes exactly, verified 2026-10-23. Model also matches Rikorose/DeepFilterNet commit84d57ec2c08fe08e68a13fb32a58cd7092060a0f. Exact local hashes pin all three artifacts; CDN WASM has no immutable build attestation."
+  },
+  "files": {
+    "rnnoise.wasm": {
+      "bytes": 152656,
+      "sha256": "8b60a2ab88fdae2d1a9f940249d0eb072f28ba8e796f7304347b4e07839c8853"
+    },
+    "rnnoise_simd.wasm": {
+      "bytes": 157234,
+      "sha256": "378fd17c294db15ee4e818ba5ef072242a21c8ad7445b483f7f46d7dc4f2c253"
+    },
+    "gtcrn.wasm": {
+      "bytes": 196884,
+      "sha256": "01a5286ddaa1ce6d0dd5510bd9241f3bf0cc727a05d5767ae6881d85d9983719"
+    },
+    "speex.wasm": {
+      "bytes": 56268,
+      "sha256": "bdd0a587bd7b0054589c3585b6b74390784d11265e43360bb3d1d09bf34ad788"
+    },
+    "../../deepfilter/v2/pkg/df_bg.wasm": {
+      "bytes": 9622975,
+      "sha256": "e133417d08bee384d8e60de27efa91da3d858920ed800d4794d490a177300600"
+    },
+    "vendor/deepfilter-upstream.js": {
+      "bytes": 12231,
+      "sha256": "1f358c846d3cf826b0bf51f57349c5c7f16f08ea20546d83882c02cf1eb2ec55"
+    },
+    "vendor/deepfilter.js": {
+      "bytes": 12477,
+      "sha256": "c8643793ac446fef7b49a8f52fa3fc8f76c2bf42ab8e1e8a457bbcdee5da86d4"
+    },
+    "deepfilter-model.bin": {
+      "bytes": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616"
+    }
+  }
+}

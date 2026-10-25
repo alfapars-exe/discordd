@@ -1,0 +1,27 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Foreground-game anchoring for the existing single external voice overlay window. Real-game, installer and multi-monitor acceptance remain open.",
+  "implementation": [
+    "A separate bundled Win32 utility queries only the foreground HWND, its process image path and visible client rectangle at at most 2Hz. It does not enumerate processes/windows, read titles, inject code or start a game. Physical-pixel bounds use per-monitor-v2 awareness. Unreadable/minimized/unavailable state emits no path or rectangle.",
+    "The main-only adapter validates bounded UTF-8 JSONL, path/rectangle types and rate, expires snapshots after two seconds, fences old child generations and retries with bounded backoff. Owned processes are stopped/reaped; the native utility exits when its parent or output consumer disappears.",
+    "Desktop mode preserves the previous passive widget. Explicit device-local Game mode additionally requires the master enabled, a nonempty current voice roster, positive visible-user cap and independent default-off overlayAllowed permission for a registered exact executable path. Network activity sharing and background CIM detection are not substituted for local overlay consent.",
+    "Foreground matches anchor the same overlay window to the visible game client area after Electron physical-to-DIP conversion and workarea intersection. Unknown foreground or helper failure hides the game widget; sampling can continue within the granted Game-mode consent to detect return to the game. Permission refresh stops/reloads the tracker; master disabled, Off, no voice roster or leaving Game mode stops sampling. Desktop mode restores only its explicitly selected passive behavior. Late policy results cannot restore revoked grants. Unsupported platforms or absent helpers use no-op tracking instead of breaking startup.",
+    "Per-game permission persists in the existing additive registry and is exposed through a trusted-main-frame IPC setter. Executable paths and rectangles remain main-only; renderer IPC contains only bounded voice data/options. The public helper status distinguishes installed-file presence from runtime acceptance. Logout layout cleanup, main-frame navigation and renderer failure clear the old native widget.",
+    "Windows packaging includes the helper through existing extraResources and CI compilation/hardening checks. Existing audio capture source and runtime were not modified by this slice."
+  ],
+  "verification": [
+    "Parent Electron TypeScript compilation and full native suite passed: 120 tests. Coverage includes exact-path matching, consent independence/default-off persistence, missing-helper/master/Off/no-roster gating, stale permissions, renderer clearing, helper ownership/backoff/expiry and existing geometry/lifecycle regressions.",
+    "The MSVC Build Tools installation was located through the installed Visual Studio path after an initial PATH-only check missed it. The project native build script compiled with /WX and verified DEP, ASLR, High Entropy VA and CFG using dumpbin. SHA256 of native/game-window.exe: 83547DF2A8EA2C44F4EF4CE44D0E557A86CE872787647FE3AAE9B26E7B00A488.",
+    "Parent actual Windows --once smoke returned valid protocol, verified absolute foreground image path and positive bounds, reporting aggregate booleans only. Actual compiled tracker start/stop received a native frame, cleared cache and reaped its owned child. No foreground path, title or geometry was printed or saved.",
+    "Agent bounded real-helper smokes verified exit within three seconds after its known Node parent exited and within 1.5 seconds after its output consumer closed. Only the exact known helper PID was monitored; no cleanup kill was necessary. No game was launched.",
+    "Final complete client suite passed: 308 files, 2856 tests, zero failures. Report C:/Users/PARS/AppData/Local/Temp/hichat-game-window-verified-20261025.json. Client TypeScript, scoped ESLint and Vite production build passed; existing dynamic-import/chunk warnings remain. Coverage structure and all 32 validator regressions passed, with acceptance explicitly incomplete."
+  ],
+  "open": [
+    "Real windowed/borderless game focus, move/resize, DPI, multi-monitor and click-through/no-focus-stealing acceptance",
+    "Packaged clean-install helper availability, signature/update checks and Windows installer acceptance",
+    "Exclusive fullscreen and blocking anti-cheat environments remain explicitly unsupported; no bypass is implemented",
+    "Compatibility profile, lock hotkey, actionable regions, non-voice widgets and remaining P0-P11 acceptance",
+    "Production distribution requires the full goal gates and separate release approval"
+  ],
+  "release": "No commit, push, merge, installer publication or production deployment. Native helper compilation and bounded OS smokes are not full game overlay acceptance."
+}

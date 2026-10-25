@@ -13,6 +13,7 @@ import VoiceUserContextMenu from "../voice/VoiceUserContextMenu";
 import MuteDurationPicker from "../servers/MuteDurationPicker";
 import MemberCard from "../members/MemberCard";
 import InviteFriendsModal from "../servers/InviteFriendsModal";
+import ServerEventsModal from "../servers/ServerEventsModal";
 import AddServerModal from "../servers/AddServerModal";
 import CreateChannelModal from "../channels/CreateChannelModal";
 import ChannelMuteDurationPicker from "../channels/ChannelMuteDurationPicker";
@@ -25,6 +26,7 @@ import type { Channel, PublicUser } from "../../types";
 type UserCardTarget = { user: PublicUser; top: number; left: number };
 type MutePickerTarget = { serverId: string; x: number; y: number };
 type InviteTarget = { serverId: string; serverName: string };
+type EventsTarget = { serverId: string; serverName: string; initialEventId?: string };
 type VoiceCtxMenuTarget = {
   userId: string;
   username: string;
@@ -48,6 +50,10 @@ type ChannelTreeOverlaysProps = {
   // Invite Friends modal
   inviteTarget: InviteTarget | null;
   setInviteTarget: (target: InviteTarget | null) => void;
+  // Server event manager
+  eventsTarget: EventsTarget | null;
+  setEventsTarget: (target: EventsTarget | null) => void;
+  accountId: string | null;
   // Voice user context menu
   voiceCtxMenu: VoiceCtxMenuTarget | null;
   setVoiceCtxMenu: (menu: VoiceCtxMenuTarget | null) => void;
@@ -75,6 +81,9 @@ function ChannelTreeOverlays({
   setMutePicker,
   inviteTarget,
   setInviteTarget,
+  eventsTarget,
+  setEventsTarget,
+  accountId,
   voiceCtxMenu,
   setVoiceCtxMenu,
   showCreateModal,
@@ -123,6 +132,16 @@ function ChannelTreeOverlays({
           serverId={inviteTarget.serverId}
           serverName={inviteTarget.serverName}
           onClose={() => setInviteTarget(null)}
+        />
+      )}
+
+      {eventsTarget && (
+        <ServerEventsModal
+          key={`${eventsTarget.serverId}:${accountId ?? "anonymous"}:${eventsTarget.initialEventId ?? ""}`}
+          serverId={eventsTarget.serverId}
+          serverName={eventsTarget.serverName}
+          initialEventId={eventsTarget.initialEventId}
+          onClose={() => setEventsTarget(null)}
         />
       )}
 

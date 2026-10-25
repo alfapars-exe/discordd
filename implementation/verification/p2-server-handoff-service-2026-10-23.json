@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "scope": "Ownership service and production dependency wiring; not yet exposed through an HTTP route or client workflow.",
+  "implemented": [
+    "Fresh session-action password/MFA proof, password recheck and transactional password/MFA/session compare-and-swap.",
+    "Missing security or runtime dependencies fail closed before mutation.",
+    "Committed ownership transfer invalidates all local permission caches and broadcasts updated server state.",
+    "Audit actor/target snapshots persist in the ownership transaction; stable event type and Turkish/English rendering templates added."
+  ],
+  "checks": [
+    "Main package compiled with go test . -run ^$.",
+    "Focused repository/services Ownership tests passed after correcting a JSON-path assertion in the new snapshot test.",
+    "Earlier focused Ownership/Anonymization tests passed before snapshot additions."
+  ],
+  "remaining": [
+    "Service success/failure runtime-event and permission invalidation integration tests.",
+    "Owner/account/server-bound route, explicit typed consent, recipient selection and client member-role refresh.",
+    "Client typechecking and audit rendering tests for these additions.",
+    "Real handoff/deletion acceptance, distributed cache behavior, remaining P0-P11 work and release gates."
+  ],
+  "release": "No live ownership changed; no commit, push, merge or update release."
+}

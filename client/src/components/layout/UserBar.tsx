@@ -3,13 +3,17 @@
  * Shows mic/deafen/screen/disconnect when in voice, status picker on avatar click.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useChannelStore } from "../../stores/channelStore";
 import { useServerStore } from "../../stores/serverStore";
+import { useUIStore } from "../../stores/uiStore";
+import { useP2PCallStore } from "../../stores/p2pCallStore";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
+import P2PCallControls from "../p2p/P2PCallControls";
 import Avatar from "../shared/Avatar";
 import MemberCard from "../members/MemberCard";
 import AudioDevicePopup from "./AudioDevicePopup";
@@ -17,7 +21,11 @@ import ScreenShareQualityPopup from "../voice/ScreenShareQualityPopup";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import SoundboardPanel from "../soundboard/SoundboardPanel";
 import { useDismissablePopup } from "../../hooks/useDismissablePopup";
+import { useVoiceShortcutAction } from "../../hooks/useVoiceShortcutAction";
+import { getAuthGeneration } from "../../api/client";
 import { createPortal } from "react-dom";
+
+const VoiceConnectionStatus = lazy(() => import("../voice/VoiceConnectionStatus"));
 
 type UserBarProps = {
   onToggleMute: () => void;
@@ -37,6 +45,9 @@ function UserBar({
   const user = useAuthStore((s) => s.user);
   const manualStatus = useAuthStore((s) => s.manualStatus);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
+  const currentVoiceServerId = useVoiceStore((s) => s.currentVoiceServerId);
+  const activeCall = useP2PCallStore((s) => s.activeCall);
+  const openTab = useUIStore((s) => s.openTab);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
   const isStreaming = useVoiceStore((s) => s.isStreaming);
@@ -67,14 +78,17 @@ function UserBar({
   const [devicePopup, setDevicePopup] = useState<"input" | "output" | "screenshare" | null>(null);
 
   // Connected voice channel name
-  const categories = useChannelStore((s) => s.categories);
-  const activeServer = useServerStore((s) => s.activeServer);
+  const categories = useChannelStore((s) => currentVoiceServerId ? s.categoriesByServer[currentVoiceServerId] : s.categories);
+  const voiceServer = useServerStore((s) => s.servers.find((server) => server.id === currentVoiceServerId));
+  const activeServerId = useServerStore((s) => s.activeServerId);
+  const authGeneration = getAuthGeneration();
+  const [pendingSoundboardServer, setPendingSoundboardServer] = useState<string | null>(null);
   const voiceChannelName = isInVoice
-    ? categories.flatMap((cg) => cg.channels).find((ch) => ch.id === currentVoiceChannelId)?.name
+    ? categories?.flatMap((cg) => cg.channels).find((ch) => ch.id === currentVoiceChannelId)?.name
     : undefined;
 
   // Own profile card state
-  const userRowRef = useRef<HTMLDivElement>(null);
+  const userRowRef = useRef<HTMLButtonElement>(null);
   const [ownCardPos, setOwnCardPos] = useState<{ top: number; left: number } | null>(null);
 
   // Ping color: green < 100ms, yellow 100-200ms, red > 200ms
@@ -96,6 +110,25 @@ function UserBar({
   // Close soundboard on click-outside / Escape (shared popup wiring)
   useDismissablePopup({ active: isPanelOpen, ref: sbRef, onDismiss: closePanel });
 
+  // Server navigation clears the old soundboard in AppLayout's passive effect.
+  // Open only after that effect flush, and recheck the destination so a second
+  // navigation or disconnect cannot open the wrong server's sounds.
+  useEffect(() => {
+    if (!pendingSoundboardServer) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const serverId = useServerStore.getState().activeServerId;
+      const voice = useVoiceStore.getState();
+      if (serverId === pendingSoundboardServer && voice.currentVoiceServerId === serverId && voice.currentVoiceChannelId) {
+        const soundboard = useSoundboardStore.getState();
+        if (!soundboard.isPanelOpen) soundboard.togglePanel();
+      }
+      setPendingSoundboardServer(null);
+    });
+    return () => { cancelled = true; };
+  }, [pendingSoundboardServer]);
+
   // Status dot color based on manual status preference
   const statusDotClass =
     manualStatus === "online"
@@ -106,7 +139,36 @@ function UserBar({
           ? "ub-dot-dnd"
           : "ub-dot-offline";
 
+  useVoiceShortcutAction("voice-soundboard", () => {
+    const currentVoice = useVoiceStore.getState();
+    if (!user?.id || useAuthStore.getState().user?.id !== user.id || getAuthGeneration() !== authGeneration ||
+        !currentVoice.currentVoiceChannelId || !currentVoice.currentVoiceServerId) return false;
+    return openSoundboard();
+  });
+
   if (!user) return null;
+  const peerName = activeCall ? (activeCall.caller_id === user.id
+    ? activeCall.receiver_display_name || activeCall.receiver_username
+    : activeCall.caller_display_name || activeCall.caller_username) : "";
+  const p2pOnly = UI_SHELL_V2 && !!activeCall && !isInVoice;
+
+  function returnToVoice() {
+    if (!currentVoiceChannelId || !currentVoiceServerId || !voiceServer) return false;
+    openTab(currentVoiceChannelId, "voice", voiceChannelName ?? t("voiceConnected"), {
+      serverId: currentVoiceServerId, serverName: voiceServer.name, serverIconUrl: voiceServer.icon_url,
+    });
+    return true;
+  }
+
+  function openSoundboard() {
+    if (!UI_SHELL_V2 || activeServerId === currentVoiceServerId) {
+      togglePanel();
+      return true;
+    }
+    if (!currentVoiceServerId || !voiceServer || !returnToVoice()) return false;
+    setPendingSoundboardServer(currentVoiceServerId);
+    return true;
+  }
 
   return (
     <div className="user-bar">
@@ -114,7 +176,9 @@ function UserBar({
       {isInVoice && (
         <div className="ub-voice-row">
           <div className="ub-voice-info">
-            <span className="ub-voice-label">{t("voiceConnected")}</span>
+            {UI_SHELL_V2 ? <Suspense fallback={<span className="ub-voice-label">{t("connectingToVoice")}</span>}>
+              <VoiceConnectionStatus showConnected />
+            </Suspense> : <span className="ub-voice-label">{t("voiceConnected")}</span>}
             {rtt > 0 && (
               <div className="ub-ping-tooltip">
                 <span className={`ub-ping-value ${pingColor}`}>{rtt} ms</span>
@@ -122,9 +186,15 @@ function UserBar({
             )}
           </div>
           {/* Connected server / channel name */}
-          {voiceChannelName && (
+          {UI_SHELL_V2 ? (
+            <button className="ub-return-call" onClick={returnToVoice} disabled={!voiceServer}
+              aria-label={t("returnToCall", { defaultValue: "Return to call" })}>
+              <span>{voiceServer?.name}{voiceServer ? " / " : ""}{voiceChannelName ?? t("voiceConnected")}</span>
+              <span className="ub-return-call-hint">{t("returnToCall", { defaultValue: "Return to call" })} ↗</span>
+            </button>
+          ) : voiceChannelName && (
             <div className="ub-voice-channel">
-              {activeServer ? `${activeServer.name} / ` : ""}{voiceChannelName}
+              {voiceServer ? `${voiceServer.name} / ` : ""}{voiceChannelName}
             </div>
           )}
           {/* Noise Reduction toggle */}
@@ -140,17 +210,28 @@ function UserBar({
               onClick={() => setNoiseReduction(!noiseReduction)}
               title={noiseReduction ? t("noiseReductionOn") : t("noiseReductionOff")}
               role="switch"
+              aria-label={t("noiseReduction")}
               aria-checked={noiseReduction}
             >
               <span className="ub-switch-thumb" />
             </button>
           </div>
           <div className="ub-voice-btns">
+            {UI_SHELL_V2 && <button className={`ub-ctrl${isCameraEnabled ? " active" : ""}`}
+              onClick={() => setCameraEnabled(!isCameraEnabled)} aria-pressed={isCameraEnabled}
+              title={isCameraEnabled ? t("cameraOff") : t("cameraOn")} aria-label={isCameraEnabled ? t("cameraOff") : t("cameraOn")}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <rect x="2" y="5" width="14" height="14" rx="2" /><path d="m16 10 6-4v12l-6-4" />
+                {!isCameraEnabled && <path d="m2 2 20 20" />}
+              </svg>
+            </button>}
             <div className="ub-ctrl-group">
               <button
                 className={`ub-ctrl${isStreaming ? " active" : ""}`}
                 onClick={onToggleScreenShare}
                 title={isStreaming ? t("stopScreenShare") : t("screenShare")}
+                aria-label={isStreaming ? t("stopScreenShare") : t("screenShare")}
+                aria-pressed={isStreaming}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h6v2H7a1 1 0 1 0 0 2h10a1 1 0 1 0 0-2h-2v-2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3zm9 4a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0v-2H9a1 1 0 1 1 0-2h2V9a1 1 0 0 1 1-1z" />
@@ -174,8 +255,10 @@ function UserBar({
             <button
               ref={sbBtnRef}
               className={`ub-ctrl${isPanelOpen ? " active" : ""}`}
-              onClick={togglePanel}
+              onClick={openSoundboard}
               title={t("soundboard", { ns: "soundboard" })}
+              aria-label={t("soundboard", { ns: "soundboard" })}
+              aria-expanded={isPanelOpen}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6zM10 19a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
@@ -185,6 +268,7 @@ function UserBar({
               className="ub-ctrl ub-end"
               onClick={onDisconnect}
               title={t("endCall")}
+              aria-label={t("endCall")}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 8c-3.5 0-6.6 1.1-9 3a1 1 0 0 0 0 1.4l2.5 2.5a1 1 0 0 0 1.2.1c.8-.5 1.7-.9 2.7-1.1a1 1 0 0 0 .8-1v-2.8c.6-.1 1.2-.1 1.8-.1s1.2 0 1.8.1v2.8a1 1 0 0 0 .8 1c1 .2 1.9.6 2.7 1.1a1 1 0 0 0 1.2-.1L21 12.4a1 1 0 0 0 0-1.4c-2.4-1.9-5.5-3-9-3z" />
@@ -194,13 +278,23 @@ function UserBar({
         </div>
       )}
 
+      {UI_SHELL_V2 && activeCall && <div className="ub-p2p-row">
+        <button className="ub-return-call" onClick={() => openTab(activeCall.id, "p2p", peerName)}
+          aria-label={t("returnToCall", { defaultValue: "Return to call" })}>
+          <span className="ub-voice-label">{t("returnToCall", { defaultValue: "Return to call" })} ↗</span>
+          <span>{peerName}</span>
+        </button>
+        <P2PCallControls minimal={activeCall.status === "ringing"} />
+      </div>}
+
       {/* User avatar + settings */}
       <div className="ub-main">
-        <div
+        <button
           ref={userRowRef}
           className="ub-user"
           onClick={openOwnCard}
           title={tc("userProfile")}
+          aria-label={tc("userProfile")}
         >
           <div className="ub-avatar-wrap">
             <Avatar
@@ -223,14 +317,16 @@ function UserBar({
               <span className="ub-status">@{user.username}</span>
             )}
           </div>
-        </div>
+        </button>
 
         {/* Mic toggle + device chevron */}
-        <div className="ub-ctrl-group">
+        {!p2pOnly && <div className="ub-ctrl-group">
           <button
             className={`ub-ctrl${isMuted ? " active" : ""}`}
             onClick={onToggleMute}
             title={isMuted ? t("unmute") : t("mute")}
+            aria-label={isMuted ? t("unmute") : t("mute")}
+            aria-pressed={isMuted}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               {isMuted ? (
@@ -254,14 +350,16 @@ function UserBar({
               }
             </svg>
           </button>
-        </div>
+        </div>}
 
         {/* Deafen toggle + device chevron */}
-        <div className="ub-ctrl-group">
+        {!p2pOnly && <div className="ub-ctrl-group">
           <button
             className={`ub-ctrl${isDeafened ? " active" : ""}`}
             onClick={onToggleDeafen}
             title={isDeafened ? t("undeafen") : t("deafen")}
+            aria-label={isDeafened ? t("undeafen") : t("deafen")}
+            aria-pressed={isDeafened}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               {isDeafened ? (
@@ -285,13 +383,13 @@ function UserBar({
               }
             </svg>
           </button>
-        </div>
+        </div>}
 
         {/* Camera toggle — only meaningful when in a voice channel. We render
             it always (consistent with mute/deafen) but only flip the store
             flag; VoiceStateManager picks up isCameraEnabled and publishes /
             unpublishes the LiveKit camera track. */}
-        {isInVoice && (
+        {isInVoice && !UI_SHELL_V2 && (
           <div className="ub-ctrl-group">
             <button
               className={`ub-ctrl${isCameraEnabled ? " active" : ""}`}
@@ -320,6 +418,7 @@ function UserBar({
           className="ub-ctrl ub-settings"
           onClick={() => openSettings("profile")}
           title={tc("settings")}
+          aria-label={tc("settings")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8.3-3.7a1.5 1.5 0 0 1 .3 1.7l-.9 1.5a1.5 1.5 0 0 1-1.6.7l-1.1-.2a7 7 0 0 1-1.2.7l-.3 1.1a1.5 1.5 0 0 1-1.4 1h-1.8a1.5 1.5 0 0 1-1.4-1l-.3-1.1a7 7 0 0 1-1.2-.7l-1.1.2a1.5 1.5 0 0 1-1.6-.7l-.9-1.5a1.5 1.5 0 0 1 .3-1.7l.8-.9V10a7 7 0 0 1 0-1.4l-.8-.9a1.5 1.5 0 0 1-.3-1.7l.9-1.5a1.5 1.5 0 0 1 1.6-.7l1.1.2a7 7 0 0 1 1.2-.7l.3-1.1a1.5 1.5 0 0 1 1.4-1h1.8a1.5 1.5 0 0 1 1.4 1l.3 1.1a7 7 0 0 1 1.2.7l1.1-.2a1.5 1.5 0 0 1 1.6.7l.9 1.5a1.5 1.5 0 0 1-.3 1.7l-.8.9a7 7 0 0 1 0 1.4l.8.9z" />
@@ -352,10 +451,10 @@ function UserBar({
       )}
 
       {/* Soundboard floating popup — fixed position, above button */}
-      {isPanelOpen && sbPos && createPortal(
+      {isPanelOpen && sbPos && (!UI_SHELL_V2 || (isInVoice && activeServerId === currentVoiceServerId)) && createPortal(
         <div
           ref={sbRef}
-          className="sb-float-popup"
+          className={`sb-float-popup${UI_SHELL_V2 ? " sb-float-popup--v2" : ""}`}
           style={{ top: sbPos.top, left: sbPos.left, transform: "translateY(-100%)" }}
         >
           <SoundboardPanel />

@@ -51,6 +51,8 @@ type MockEventPublisher struct {
 	MockBroadcaster
 	GetOnlineUserIDsFn          func() []string
 	GetVisibleOnlineUserIDsFn   func() []string
+	IsInvisibleFn               func(userID string) bool
+	CommitPresenceVisibilityFn  func(userID, status string) bool
 	GetOnlineUserIDsForServerFn func(serverID string) []string
 	SetInvisibleFn              func(userID string, invisible bool)
 	DisconnectUserFn            func(userID string)
@@ -70,6 +72,18 @@ func (m *MockEventPublisher) GetVisibleOnlineUserIDs() []string {
 		return m.GetVisibleOnlineUserIDsFn()
 	}
 	return nil
+}
+func (m *MockEventPublisher) IsInvisible(userID string) bool {
+	if m.IsInvisibleFn != nil {
+		return m.IsInvisibleFn(userID)
+	}
+	return false
+}
+func (m *MockEventPublisher) CommitPresenceVisibility(userID, status string) bool {
+	if m.CommitPresenceVisibilityFn != nil {
+		return m.CommitPresenceVisibilityFn(userID, status)
+	}
+	return true
 }
 func (m *MockEventPublisher) GetOnlineUserIDsForServer(serverID string) []string {
 	if m.GetOnlineUserIDsForServerFn != nil {

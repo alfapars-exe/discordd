@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Local deterministic spam-signal regression fixes and reproducible curated evaluation; not production classifier-quality acceptance.",
+  "implementation": [
+    "Existing local rules detect credential-bearing URLs, repeated links and mass mentions with link bursts. Decrypted message text remains local; the server receives source references, revisions and reason codes only.",
+    "Trailing sentence punctuation and unmatched brackets are normalized so punctuation variants do not evade repeated-link detection. Bracket counts are computed once, avoiding quadratic UI-thread work for large sender-controlled closing-bracket bursts.",
+    "A checked-in hand-curated corpus and standalone evaluator compare explicit regression expectations. Unavailable decrypted text is counted separately as unknown, not treated as a true negative.",
+    "The user's spam-mode requirement is global all/nonfriends/off. The former generic ledger persistence description did not establish a new requirement for per-server spam overrides. Historical victim reporting/restoration must not be vetoed solely because a friendship ended or a block was added; current source access remains authoritative."
+  ],
+  "verification": [
+    "Parent focused classifier tests passed 6/6, including mixed punctuation and 60,000 unmatched closing brackets across repeated URLs. Scoped lint passed. Final combined client suite passed 299 files/2786 tests; TypeScript and build passed.",
+    "Standalone local evaluator: 19 curated cases, TP=10, FP=0, TN=8, FN=0, unknown=1, no mismatches. These are regression-label counts, not a representative accuracy/false-positive/false-negative estimate."
+  ],
+  "followup_verification": [
+    "useSpamVisibility registration and restore requests are now fenced by authentication generation, account, source, message revision/content and mount lifetime. In-flight restore controllers abort on context change; late success/error responses cannot reveal a replacement message or persist another session's restore.",
+    "Focused hook regressions passed 6/6, including same-account re-login, edited-message and unmount-during-registration races. Combined hook, registered-games and platform-capability checks passed 13/13.",
+    "Reconnect decision snapshots now also check authentication generation and contain rejected requests. Spam inbox remounts across same-account reauthentication; initial load, paging and decisions fence stale sessions and expose recoverable network failures. Decision requests abort on unmount, duplicate decisions are synchronously excluded, and restore preferences cannot be written into a different account store.",
+    "Full client suite passed 299 files/2795 tests with zero failures after all inbox/store changes, including paging retry. Focused spam hook/store/inbox tests passed 22/22. TypeScript, scoped ESLint and Vite production build passed; existing chunk/config/import warnings remain. Report: C:/Users/PARS/AppData/Local/Temp/hichat-spam-complete-final-20261024.json. No real multi-client spam inbox acceptance is claimed."
+  ],
+  "open": ["Representative labeled evaluation beyond these curated heuristics", "Real inbox/report/restore browser and multi-client acceptance", "Complete P3 acceptance"],
+  "release": "No remote inference, new dependency, message deletion or production publication."
+}

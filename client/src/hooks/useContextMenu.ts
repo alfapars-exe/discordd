@@ -10,6 +10,7 @@ import { useState, useCallback } from "react";
 export type ContextMenuItem = {
   label: string;
   onClick: () => void;
+  children?: ContextMenuItem[];
   danger?: boolean;
   disabled?: boolean;
   /** Show separator line before this item */

@@ -11,7 +11,10 @@
  */
 
 import { apiClient } from "./client";
-import type { PlayMusicResponse, MusicBotChannelState } from "../types";
+import type { PlayMusicResponse, SearchMusicResponse, MusicBotChannelState } from "../types";
+
+// Bounded control/state requests must release the UI lock on dead connections.
+const CONTROL_TIMEOUT_MS = 15_000;
 
 /**
  * The server extends this request's write deadline to 45 s (YouTube
@@ -27,31 +30,38 @@ export async function playMusic(serverId: string, channelId: string, url: string
   );
 }
 
+export async function searchMusic(serverId: string, channelId: string, query: string) {
+  return apiClient<SearchMusicResponse>(
+    `/servers/${serverId}/channels/${channelId}/music/search?q=${encodeURIComponent(query)}`,
+    { timeoutMs: 25_000 },
+  );
+}
+
 export async function skipMusic(serverId: string, channelId: string) {
   return apiClient<{ status: string }>(
     `/servers/${serverId}/channels/${channelId}/music/skip`,
-    { method: "POST" },
+    { method: "POST", timeoutMs: CONTROL_TIMEOUT_MS },
   );
 }
 
 export async function pauseMusic(serverId: string, channelId: string) {
   return apiClient<{ status: string }>(
     `/servers/${serverId}/channels/${channelId}/music/pause`,
-    { method: "POST" },
+    { method: "POST", timeoutMs: CONTROL_TIMEOUT_MS },
   );
 }
 
 export async function resumeMusic(serverId: string, channelId: string) {
   return apiClient<{ status: string }>(
     `/servers/${serverId}/channels/${channelId}/music/resume`,
-    { method: "POST" },
+    { method: "POST", timeoutMs: CONTROL_TIMEOUT_MS },
   );
 }
 
 export async function stopMusic(serverId: string, channelId: string) {
   return apiClient<{ status: string }>(
     `/servers/${serverId}/channels/${channelId}/music/stop`,
-    { method: "POST" },
+    { method: "POST", timeoutMs: CONTROL_TIMEOUT_MS },
   );
 }
 
@@ -65,5 +75,48 @@ export async function stopMusic(serverId: string, channelId: string) {
 export async function getMusicState(serverId: string, channelId: string) {
   return apiClient<MusicBotChannelState>(
     `/servers/${serverId}/channels/${channelId}/music/state`,
+    { timeoutMs: CONTROL_TIMEOUT_MS },
+  );
+}
+
+export async function removeMusicQueueItem(serverId: string, channelId: string, queueItemId: string, revision: number) {
+  return apiClient<{ status: string }>(
+    `/servers/${serverId}/channels/${channelId}/music/queue/${encodeURIComponent(queueItemId)}?revision=${revision}`,
+    { method: "DELETE", timeoutMs: CONTROL_TIMEOUT_MS },
+  );
+}
+
+export async function reorderMusicQueue(serverId: string, channelId: string, queueItemIds: string[], expectedRevision: number) {
+  return apiClient<{ status: string }>(
+    `/servers/${serverId}/channels/${channelId}/music/queue`,
+    { method: "PUT", body: { queue_item_ids: queueItemIds, expected_revision: expectedRevision }, timeoutMs: CONTROL_TIMEOUT_MS },
+  );
+}
+
+export async function shuffleMusicQueue(serverId: string, channelId: string, expectedRevision: number) {
+  return apiClient<{ status: string }>(
+    `/servers/${serverId}/channels/${channelId}/music/shuffle`,
+    { method: "POST", body: { expected_revision: expectedRevision }, timeoutMs: CONTROL_TIMEOUT_MS },
+  );
+}
+
+export async function setMusicRepeatMode(serverId: string, channelId: string, mode: "off" | "one" | "all") {
+  return apiClient<{ status: string }>(
+    `/servers/${serverId}/channels/${channelId}/music/repeat`,
+    { method: "PUT", body: { mode }, timeoutMs: CONTROL_TIMEOUT_MS },
+  );
+}
+
+export async function seekMusic(serverId: string, channelId: string, seconds: number) {
+  return apiClient<{ status: string }>(
+    `/servers/${serverId}/channels/${channelId}/music/seek`,
+    { method: "POST", body: { seconds: Math.floor(seconds) }, timeoutMs: CONTROL_TIMEOUT_MS },
+  );
+}
+
+export async function restoreMusicSession(serverId: string, channelId: string) {
+  return apiClient<{ status: string }>(
+    `/servers/${serverId}/channels/${channelId}/music/restore`,
+    { method: "POST", timeoutMs: CONTROL_TIMEOUT_MS },
   );
 }

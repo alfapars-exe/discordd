@@ -128,7 +128,7 @@ func (s *voiceService) sweepOrphanStates() {
 		delete(s.states, userID)
 		delete(s.offlineSince, userID)
 
-		s.broadcastToServer(serverID, ws.Event{
+		s.broadcastToServerLocked(serverID, ws.Event{
 			Op: ws.OpVoiceStateUpdate,
 			Data: ws.VoiceStateUpdateBroadcast{
 				UserID:      userID,
@@ -259,12 +259,25 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 		})
 		return
 	}
+	s.removeParticipantFromLiveKitInServer(ctx, channel.ServerID, channelID, identity)
+}
 
-	lkInstance, err := s.livekitGetter.GetByServerID(ctx, channel.ServerID)
+// removeDeletedChannelParticipant is the post-delete counterpart to
+// removeParticipantFromLiveKit. The channel row is already gone, so its
+// server ID must come from the pre-delete state snapshot instead of a channel
+// repository lookup.
+func (s *voiceService) removeDeletedChannelParticipant(serverID, channelID, identity string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	s.removeParticipantFromLiveKitInServer(ctx, serverID, channelID, identity)
+}
+
+func (s *voiceService) removeParticipantFromLiveKitInServer(ctx context.Context, serverID, channelID, identity string) {
+	lkInstance, err := s.livekitGetter.GetByServerID(ctx, serverID)
 	if err != nil {
-		voiceLogger.Error("removeParticipant: livekit instance lookup failed", "server_id", channel.ServerID, "err", pkg.ErrText(err))
+		voiceLogger.Error("removeParticipant: livekit instance lookup failed", "server_id", serverID, "err", pkg.ErrText(err))
 		s.logError(models.LogCategoryVoice, &identity, "removeParticipant: LiveKit instance lookup failed", map[string]string{
-			"server_id": channel.ServerID, "channel_id": channelID, "error": pkg.ErrText(err),
+			"server_id": serverID, "channel_id": channelID, "error": pkg.ErrText(err),
 		})
 		return
 	}
@@ -286,7 +299,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 		return
 	}
 
-	roomName := channel.ServerID + ":" + channelID
+	roomName := serverID + ":" + channelID
 	roomClient := lksdk.NewRoomServiceClient(lkInstance.URL, apiKey, apiSecret)
 
 	_, err = roomClient.RemoveParticipant(ctx, &livekit.RoomParticipantIdentity{
@@ -651,6 +664,24 @@ func (s *voiceService) attemptServerMuteUpdate(ctx context.Context, roomClient *
 // transient DB hiccup would kick or silence innocent participants for
 // reasons unrelated to moderation.
 func (s *voiceService) EnforceModerationOnJoin(ctx context.Context, serverID, channelID, userID string) {
+	// A JWT issued before channel deletion can remain valid until its expiry.
+	// Re-check the authoritative channel row on every participant_joined
+	// webhook, and evict both identities if the room no longer maps to a live
+	// voice channel. The deleted-row-safe helper is required here because the
+	// normal removal path intentionally resolves room scope through that row.
+	if s.channelGetter != nil {
+		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		channel, err := s.channelGetter.GetByID(checkCtx, channelID)
+		cancel()
+		if err != nil || channel == nil || channel.ServerID != serverID || channel.Type != models.ChannelTypeVoice {
+			voiceLogger.Warn("EnforceModerationOnJoin: evicting participant from missing or mismatched voice channel",
+				"server_id", serverID, "channel_id", channelID, "user_id", userID, "err", pkg.ErrText(err))
+			go s.removeDeletedChannelParticipant(serverID, channelID, userID)
+			go s.removeDeletedChannelParticipant(serverID, channelID, userID+"_ss")
+			return
+		}
+	}
+
 	moderated := false
 
 	if s.timeoutChecker != nil {

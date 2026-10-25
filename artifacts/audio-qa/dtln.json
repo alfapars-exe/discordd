@@ -1,0 +1,252 @@
+{
+  "engine": "dtln",
+  "createdAt": "2026-10-23T01:29:35.624Z",
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 7950X3D 16-Core Processor          ",
+    "ffmpeg": "ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "sampleRate": 48000,
+  "modelSampleRate": 16000,
+  "resampling": "FFmpeg swresample, float32, filter_size=64, phase_shift=10, cutoff=0.95, exact_rational=1, 48-to-16-to-48 kHz; inference timings exclude resampling.",
+  "limitations": [
+    "One Turkish sentence, originally 16 kHz; synthetic noise; cannot rank full-band speech quality, target-speaker isolation or all speakers.",
+    "Inputs are the exported PCM16 WAV fixtures, shared with the other engine comparisons; input hashes are recorded per fixture.",
+    "Real shipped TFLite model in classic Worker VM with one interpreter thread and 12-hop warmup, state reset before each fixture. Initialization includes loading and warmup.",
+    "No energy gate, live browser bridge/queue, microphone, LiveKit or P2P. Offline resampler compensates filter delay, so output lag is model-only correlation, not end-to-end latency.",
+    "Noise attenuation includes the 16 kHz bandwidth restriction; per-frame process CPU accounting is coarse and may be zero on Windows.",
+    "Float output drives metrics; exported listening files are PCM16. Values below PCM16 resolution cannot be assessed from the listening files."
+  ],
+  "results": [
+    {
+      "fixture": "clean",
+      "inputSha256": "cf308b05e9bccb309ab4951d30389fc04319c11905b670b27330a10686291868",
+      "outputFile": "dtln-clean.wav",
+      "modelSampleRate": 16000,
+      "frameSamples": 128,
+      "frameBudgetMs": 8,
+      "frames": 2395,
+      "initializationMs": 168.2288000000001,
+      "inferenceWallMs": {
+        "p50": 0.48730000000000473,
+        "p95": 0.5839000000000851,
+        "p99": 0.7286000000000286
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 16
+      },
+      "noiseOnly": null,
+      "outputLag": {
+        "samples": 1152,
+        "milliseconds": 24,
+        "normalizedCorrelation": 0.9155638735325032,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.24330389073259,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "fan",
+      "inputSha256": "6ec9b1518b7b007d1fb087bed52d19489c78f6a34659d168b5e8c4d728ad84b3",
+      "outputFile": "dtln-fan.wav",
+      "modelSampleRate": 16000,
+      "frameSamples": 128,
+      "frameBudgetMs": 8,
+      "frames": 2395,
+      "initializationMs": 62.5306999999998,
+      "inferenceWallMs": {
+        "p50": 0.7049999999999272,
+        "p95": 0.938600000000406,
+        "p99": 1.0330000000003565
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 31
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -31.801171518596867,
+          "outputRmsDbfs": -57.56444515412059,
+          "attenuationDb": 25.763273635523724
+        },
+        "tail": {
+          "inputRmsDbfs": -32.43268685735202,
+          "outputRmsDbfs": -58.7174934405615,
+          "attenuationDb": 26.28480658320948
+        }
+      },
+      "outputLag": {
+        "samples": 1152,
+        "milliseconds": 24,
+        "normalizedCorrelation": 0.9465770305089849,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -34.08402451915283,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "keyboard",
+      "inputSha256": "69f222fc01676879f077ddd3b33ded740da89d67386601006835f804ae9c28db",
+      "outputFile": "dtln-keyboard.wav",
+      "modelSampleRate": 16000,
+      "frameSamples": 128,
+      "frameBudgetMs": 8,
+      "frames": 2395,
+      "initializationMs": 70.84699999999975,
+      "inferenceWallMs": {
+        "p50": 0.6868999999996959,
+        "p95": 0.9309000000002925,
+        "p99": 1.0181999999995242
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.17333244610398,
+          "outputRmsDbfs": -70.01711911616515,
+          "attenuationDb": 36.84378667006117
+        },
+        "tail": {
+          "inputRmsDbfs": -33.31342352961014,
+          "outputRmsDbfs": -71.7128179453616,
+          "attenuationDb": 38.399394415751466
+        }
+      },
+      "outputLag": {
+        "samples": 1152,
+        "milliseconds": 24,
+        "normalizedCorrelation": 0.8985777292811822,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.325730501756716,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "transient",
+      "inputSha256": "acb16a3c6db5e9aaf29529d384553b535b47e52a30d0201167e5443863e9ea56",
+      "outputFile": "dtln-transient.wav",
+      "modelSampleRate": 16000,
+      "frameSamples": 128,
+      "frameBudgetMs": 8,
+      "frames": 2395,
+      "initializationMs": 66.17920000000049,
+      "inferenceWallMs": {
+        "p50": 0.6826999999993859,
+        "p95": 0.9328000000004977,
+        "p99": 1.0064000000002125
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 15,
+        "p99": 16
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.97000337466929,
+          "outputRmsDbfs": -68.64914443993274,
+          "attenuationDb": 34.67914106526345
+        },
+        "tail": {
+          "inputRmsDbfs": -33.84338417586975,
+          "outputRmsDbfs": -64.54864060478782,
+          "attenuationDb": 30.70525642891807
+        }
+      },
+      "outputLag": {
+        "samples": 1152,
+        "milliseconds": 24,
+        "normalizedCorrelation": 0.8731736572043182,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -35.33728831301974,
+      "finite": true,
+      "clippedSamples": 0
+    }
+  ],
+  "assetProvenance": {
+    "tfjs": "4.22.0",
+    "tflite": "0.0.1-alpha.10",
+    "dtln": "@sapphi-red/dtln-web 0.1.4",
+    "files": {
+      "dtln-core.js": {
+        "bytes": 3700,
+        "sha256": "53c3f6861eefc5d61fae6a43b7bf13815ebea365524e2032ede2dddfc4449ea4"
+      },
+      "fft.js": {
+        "bytes": 13299,
+        "sha256": "25499cf7312ce94bd694ae2de0ed08096453e7159f44ec3df900ad0d6b5bd100"
+      },
+      "inference-worker.js": {
+        "bytes": 2861,
+        "sha256": "9319e1141b83f7768678dea42f3a415c4f8e3d3b4799e2b54c53fe3efb45e2b6"
+      },
+      "model_quant_f16_1.tflite": {
+        "bytes": 736000,
+        "sha256": "350fcbbca37510233e153961ff59a5a9d64939f4397a3d39ec9277233b98c2b3"
+      },
+      "model_quant_f16_2.tflite": {
+        "bytes": 1266336,
+        "sha256": "c89983204598b047fac0e2e6132db4f085c93064c4a081119f69a5496db3ca8d"
+      },
+      "tf-tflite.min.js": {
+        "bytes": 1219490,
+        "sha256": "2fb09bf069728bf4b63c51c72a3a6bcf415f3732c28e85624a0fd9bb8edabd2e"
+      },
+      "tf.min.js": {
+        "bytes": 1469843,
+        "sha256": "300dfae273d20b4046f46a06d735688f03675a807561e9bcb5f664eb2f3d2831"
+      },
+      "tflite_web_api_cc.js": {
+        "bytes": 78792,
+        "sha256": "08e963fcde11dc041feeac97ff711b3a157614edc98ff8bfa309557189b7368d"
+      },
+      "tflite_web_api_cc.wasm": {
+        "bytes": 3592067,
+        "sha256": "f1eb42f96ae91e5ef34e2f833f011373ca1c40fdc9d4062ec21eb07b886ea54f"
+      },
+      "tflite_web_api_cc_simd.js": {
+        "bytes": 78797,
+        "sha256": "d5c71816525140d7a35b59a908d3b07d42741576630e647d246c19c6fa72d63d"
+      },
+      "tflite_web_api_cc_simd.wasm": {
+        "bytes": 3689633,
+        "sha256": "40f49cc2d458ec09bb43db160e9e55f4b3c790a4c1d1fa280f8a61796296cf8e"
+      },
+      "tflite_web_api_cc_simd_threaded.js": {
+        "bytes": 96161,
+        "sha256": "c6cbb6a47fb2b1fb663951d16f10c5f4a4445e521d53dc4f5d50a6d6ca8e3f63"
+      },
+      "tflite_web_api_cc_simd_threaded.wasm": {
+        "bytes": 3723481,
+        "sha256": "6f7aa370b3fd3660ffa50c5028b95283640f6e6f0c79381f456f35c83b40903f"
+      },
+      "tflite_web_api_cc_simd_threaded.worker.js": {
+        "bytes": 2302,
+        "sha256": "9ace3794b3e648b9c3f89f9af44d44708425fd20c3417466a9a98696fa6d1603"
+      },
+      "tflite_web_api_cc_threaded.js": {
+        "bytes": 96151,
+        "sha256": "93eddbbe9abc2d7f9785a7314e36639b6c2479396fa18e07067f874c3db39558"
+      },
+      "tflite_web_api_cc_threaded.wasm": {
+        "bytes": 3626387,
+        "sha256": "e1d4ceaa44a28336d46b30317d23cc3a26ed788bb7c5b2ca70e41bff4f83d57e"
+      },
+      "tflite_web_api_cc_threaded.worker.js": {
+        "bytes": 2302,
+        "sha256": "9ace3794b3e648b9c3f89f9af44d44708425fd20c3417466a9a98696fa6d1603"
+      }
+    }
+  }
+}

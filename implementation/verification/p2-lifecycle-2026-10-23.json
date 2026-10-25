@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P2 self-disable and explicit restoration; separate from moderation bans, deletion and full account-lifecycle acceptance.",
+  "implemented": [
+    "Additive migration 094 persists self-disable time and a monotonically changing lifecycle version. This state is distinct from platform moderation and is explicitly removed on hard deletion even without foreign-key enforcement.",
+    "Account-bound POST /api/users/me/disable requires an active authenticated session, current password, enabled MFA proof, a separate confirmation flag and shared durable security-attempt budget. Bots, stale accounts, oversized/extra JSON and missing confirmation are rejected.",
+    "Disable atomically sets offline/last-seen, increments token version, persists disabled state, tombstones every logical sign-in and deletes refresh credentials. Failed database writes roll back every step. Live local-process sockets receive 4001/session_revoked; existing voice-disconnect infrastructure is invoked.",
+    "Session creation, refresh and validation reject disabled accounts. A late non-offline presence update cannot revive disabled presence. Normal production login publishes online presence only with successful durable session creation.",
+    "A correct-password ordinary login to a disabled account returns ACCOUNT_DISABLED without session rows, presence or cookies. The login form offers an unchecked explicit restore option. Changing identity/password clears that consent; saved desktop credentials do not auto-restore the account.",
+    "Explicit restoration still requires the enabled second factor. Restoration, lifecycle/token-version CAS, online state, new logical sign-in and refresh credential commit together. Twelve simultaneous restoration attempts produce one winner. Old credentials remain revoked after restoration.",
+    "Password recovery does not clear disabled state. Current password-hash checks inside lifecycle transactions reject stale password proofs, and a platform ban cannot be bypassed by restoration.",
+    "TR/EN security form, keyboard-usable confirmation, draft preservation on cancellation/failure, account-generation guards and local-only logout. Disable responses never clear a shared cookie belonging to a later login."
+  ],
+  "automated_checks": [
+    {"command": "go test ./repository ./services -run 'Test(SQLiteAccountLifecycle|AccountLifecycle)' -count=1", "cwd": "server", "result": "passed", "note": "Real SQLite atomic disable/restore, trigger-induced rollback, no late online revival, old-token rejection, one concurrent winner, stale hash, moderation-ban enforcement and MFA/recovery behavior. The new password-recovery preservation test also passed in the final full run."},
+    {"command": "go test ./handlers ./repository ./services ./ws . -run 'Test(DisableAccount|DisabledLogin|SQLiteAccountLifecycle|AccountLifecycle|DisconnectSession|InitRoutes)' -count=1", "cwd": "server", "result": "passed", "note": "Includes explicit confirmation, owner/session affinity, cookie safety, malformed/bounded bodies, disabled login without cookies, and route registration order."},
+    {"command": "go test ./...", "cwd": "server", "result": "passed", "note": "All Go packages passed with migration 094 and final lifecycle implementation. Optional external-service tests are not implied."},
+    {"command": "npm test -- --reporter=dot", "cwd": "client", "result": "passed", "files": 162, "tests": 1741, "note": "After all source edits and new consent/store tests. Existing act/navigation and intentional failure-probe console messages remain."},
+    {"command": "npx tsc -b", "cwd": "client", "result": "passed"},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-lifecycle.exe .", "cwd": "server", "result": "passed"},
+    {"command": "VITE_UI_SHELL_V2=true npm run build", "cwd": "client", "result": "passed", "modules": 1584, "note": "Web production build only; existing config-loader, dependency eval and chunk/import warnings remain."},
+    {"command": "npx eslint src/components/settings/AccountLifecycleSettings.tsx src/components/settings/AccountLifecycleSettings.test.tsx src/api/accountLifecycle.ts src/components/auth/LoginPage.tsx src/components/auth/LoginPage.mfa.test.tsx src/stores/authStore.ts src/stores/authStore.test.ts", "cwd": "client", "result": "passed", "errors": 0},
+    {"command": "npm run check:coverage && npm run test:coverage", "cwd": ".", "result": "passed", "tests": 32, "note": "Ledger structure valid; full acceptance still incomplete."},
+    {"command": "git diff --check", "cwd": ".", "result": "passed", "note": "Existing line-ending conversion warnings remain."}
+  ],
+  "local_runtime": {
+    "environment": "Reused own Ego task space 10, web 3131 and isolated SQLite API 9191. Only existing throwaway fixture p1_acceptance was disabled and then restored; no production account was changed.",
+    "observations": [
+      "The actual security page displayed the disable explanation and credential fields at 1440x900 and 390x844. Both screenshots were visually inspected with empty secret fields; mobile document width was 390.",
+      "An independent sign-in on the same computer connected a real WebSocket and reached READY. Browser disable required password and the existing approval dialog, then returned the browser to login.",
+      "Independent WebSocket closed 4001/session_revoked; independent bearer and refresh credential both returned 401.",
+      "Browser ordinary password login displayed the disabled-account message, and restoration consent was not preselected. Selecting that consent and submitting explicitly restored login.",
+      "The independent pre-disable bearer and refresh cookie still returned 401 after restoration. The browser fixture remains signed in with a new logical session."
+    ],
+    "screenshots_visually_inspected": [
+      "implementation/verification/p2-lifecycle-1440.png",
+      "implementation/verification/p2-lifecycle-390.png"
+    ],
+    "execution_notes": [
+      "An initial service probe exhausted the existing shared five-attempt MFA window because enrollment, disable and negative restore probes were combined. The test moved restoration into the next injected clock window; production limits were not weakened.",
+      "The route golden initially placed the new endpoint at the wrong position. It was aligned with actual registration order and the route test passed.",
+      "The isolated API restarted with the new binary and stable throwaway encryption key. Preexisting services on ports 9090/3030 were not touched."
+    ]
+  },
+  "operations": {
+    "rollout": "Preserve a database backup and the existing MFA encryption key. Apply 094 before session/lifecycle-aware binaries. Never run or roll back to a lifecycle-unaware binary against disabled accounts; such an old application would not enforce this state.",
+    "meaning": "Self-disable blocks login without explicit restore and sets offline; it is not deletion, anonymization, a platform ban, profile hiding or a promise to stop all future email categories. Messages, memberships and server ownership are intentionally retained.",
+    "recovery": "Password reset is allowed for recovery but does not reactivate. Restore requires a fresh credential login with reactivate=true and enabled MFA. Old tokens are never restoration credentials.",
+    "remaining_dependency": "Previously issued direct LiveKit JWT validity remains an independent SFU lifecycle limitation. The same-process voice disconnect path exists, but no real media-server acceptance was performed in this isolated fixture."
+  },
+  "remaining_acceptance": [
+    "Installed Windows (including saved-credential behavior), independent physical clients, distributed API/SFU behavior and remote libSQL failure injection.",
+    "Full encrypted history/attachment/profile/server-ownership preservation across real device restore and all required viewport/zoom/assistive-technology checks.",
+    "Backup/restore drills and rollout/rollback validation; schema addition alone is not proof of operational readiness.",
+    "Deletion, export, verified email, consent/privacy and the rest of P2-P11 remain open. No commit/push/merge, installer update or production deployment occurred."
+  ]
+}

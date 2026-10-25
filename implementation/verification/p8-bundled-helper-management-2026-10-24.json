@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "decision": "The user explicitly chose management of the existing bundled system-audio helper instead of a separately installed companion application.",
+  "implementation": [
+    "Typed main-owned status distinguishes unavailable, stopped, starting, running and safe error reasons. Settings reads status without starting capture; web capability explanations report unsupported rather than pretending a native helper exists.",
+    "Explicit diagnostic start discards captured PCM and never emits the screen-share capture IPC stream. A main-generated UUID stop token protects each diagnostic run. Diagnostics cannot steal a live share, screen sharing may preempt diagnostics, and old diagnostic cleanup cannot stop the new owner.",
+    "Settings polling and actions use request/mount generations; delayed status responses cannot overwrite newer actions. Unmount stops only the view's own run, including a start that completes late. Failed/invalid initial app-settings reads show recoverable retry instead of fake saved defaults.",
+    "Installation, repair and removal remain part of the HiChat application installer. There is no separate fake install/uninstall flow. The existing bundled native/audio-capture.exe is present and included by the existing extraResources configuration."
+  ],
+  "verification": [
+    "Parent Electron TypeScript compile and full Electron suite passed 84/84, including diagnostic ownership/silence, startup failures and PCM framing tests.",
+    "Parent helper settings tests passed 9/9 after replacing generic async polling with React-aware waitFor; no act warnings in that final focused run. Capability/helper tests passed 11/11; scoped lint passed.",
+    "Final combined client snapshot passed 299 files/2786 tests, zero failures: C:/Users/PARS/AppData/Local/Temp/hichat-games-helper-spam-final-20261024.json. Client TypeScript and production Vite build passed; existing chunk/import warnings remain."
+  ],
+  "open": ["Actual installed Windows helper diagnostic and audible screen-share acceptance", "Installer/repair/removal/signature and Windows update acceptance", "Real browser screenshots and assistive-technology acceptance"],
+  "release": "No actual device capture, helper reinstall, commit, push, merge or production publication."
+}

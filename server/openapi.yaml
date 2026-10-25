@@ -19,7 +19,7 @@ info:
 
     ## Permission model
     Server-scoped authorization (`models.Permission` in `server/models/role.go`) is a
-    20-bit bitfield stored per `Role`; a member's effective permission mask is the
+    24-bit bitfield stored per `Role`; a member's effective permission mask is the
     bitwise OR of every role they hold. Endpoints gated on one specific bit at the
     routing-middleware layer (`authServerPerm` in `init_routes.go`) carry the
     `x-required-permission` extension (bit name + decimal value). `PermAdmin` (512)
@@ -65,6 +65,8 @@ servers:
 tags:
   - name: Auth
     description: Registration, login, session refresh/logout, password reset, WS ticket issuance.
+  - name: Email
+    description: Public email-proof operations that do not require a signed-in session.
   - name: Users
     description: The caller's own profile, avatar, wallpaper, preferences, and onboarding-prompt state.
   - name: Notifications
@@ -122,7 +124,7 @@ tags:
   - name: E2EE-GroupSessions
     description: Sender-key group-session distribution for E2EE server channels.
   - name: Bots
-    description: Owner-facing bot-account management — create, list, revoke automation credentials.
+    description: Owner-facing bot-account management — create, list, revoke credentials, or retire an automation identity while retaining shared history.
   - name: Voice
     description: LiveKit voice/screen-share token issuance, voice-state snapshot, and the LiveKit webhook receiver.
   - name: Music
@@ -210,15 +212,363 @@ x-permissions:
     PermTimeoutMembers: 262144
     PermManageNicknames: 524288
     PermManageExpressions: 1048576
-  PermAll: 2097151
+    PermUseEntranceSound: 2097152
+    PermManageApplications: 4194304
+    PermManageEvents: 8388608
+  PermAll: 16777215
   PermAllNote: >-
-    Sum of every bit above — (1 << 21) - 1. Distinct from the boolean
+    Sum of every bit above — (1 << 24) - 1. Distinct from the boolean
     models.User.IsPlatformAdmin used by authAdmin routes (see x-platform-admin),
     which is a platform-wide flag, not a bit in this server-scoped field.
 security:
   - bearerAuth: []
   - botAuth: []
 paths:
+  /api/group-dms/{groupId}/messages:
+    get:
+      operationId: groupDMListMessages
+      summary: Read an encrypted group history page or bounded anchor window.
+      description: Requires current group membership. Around must name a message in this group; returns ascending created_at/ID order with ciphertext, key epoch and hydrated attachments/reactions intact. No read cursor is changed.
+      tags: [DMs]
+      parameters:
+        - { name: groupId, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/BeforeParam' }
+        - { $ref: '#/components/parameters/AroundParam' }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
+      responses:
+        '200':
+          description: History page; has_more/has_more_after describe the around window when requested.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      messages: { type: array, items: { $ref: '#/components/schemas/GroupMessageData' } }
+                      has_more: { type: boolean }
+                      has_more_after: { type: boolean }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      operationId: groupDMSendMessage
+      summary: Persist and broadcast one encrypted group message, with optional opaque encrypted files.
+      description: Requires current membership, current key epoch and a group-owned reply target for a new message. Optional client_request_id durably binds the exact encrypted JSON fields and ordered file bytes/metadata to one message; retain and replay the SAME ciphertext/files after an ambiguous result, never re-encrypt with the same key. A differing body returns 409. A completed replay returns the current message (not an old cached response), even after a group rekey; a deleted message returns 410. A 202 is an unfinished operation, NOT final send success. File order is the encrypted payload key order (0 through 9). Successful attachment rows preserve file_key_index. A 207 means the message is committed; retry only failed files as a new operation, not the original text. Requests without client_request_id keep legacy non-idempotent behavior.
+      tags: [DMs]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ciphertext, sender_device_id, key_epoch]
+              properties:
+                ciphertext: { type: string, maxLength: 2000000 }
+                sender_device_id: { type: string }
+                e2ee_metadata: { type: string, maxLength: 1000000 }
+                key_epoch: { type: integer, minimum: 1 }
+                reply_to_id: { type: string }
+                client_request_id: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ciphertext, sender_device_id, e2ee_metadata, key_epoch]
+              properties:
+                ciphertext: { type: string }
+                sender_device_id: { type: string }
+                e2ee_metadata: { type: string }
+                key_epoch: { type: integer, minimum: 1 }
+                reply_to_id: { type: string }
+                client_request_id: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' }
+                files:
+                  type: array
+                  maxItems: 10
+                  items: { type: string, format: binary }
+      responses:
+        '201':
+          description: Message committed; all requested file uploads succeeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/GroupMessageData' }
+        '202':
+          description: A matching operation exists but is not finalized. Query its outcome; do not create another operation for the same user action.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/GroupSendOutcome' }
+        '207':
+          description: Message committed; one or more uploads failed. Includes original zero-based key indices, even if all files failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    required: [message, upload_failures]
+                    properties:
+                      message: { $ref: '#/components/schemas/GroupMessageData' }
+                      upload_failures:
+                        type: array
+                        minItems: 1
+                        items:
+                          type: object
+                          required: [filename, error, file_key_index]
+                          properties:
+                            filename: { type: string }
+                            error: { type: string }
+                            file_key_index: { type: integer, minimum: 0, maximum: 9 }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '410': { description: The original message was deleted; the operation cannot resurrect it. }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/group-dms/{groupId}/send-operations/{requestId}:
+    get:
+      operationId: groupDMSendOutcome
+      summary: Read the authenticated sender's durable operation outcome.
+      description: Requires current group membership and sender ownership. Read-only and Cache-Control no-store. No request hash, filenames or response snapshot are stored here. Committed/completed results hydrate the current authorized message; prepared/deleted/cancelled results contain no message.
+      tags: [DMs]
+      parameters:
+        - { name: groupId, in: path, required: true, schema: { type: string } }
+        - { name: requestId, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' } }
+      responses:
+        '200':
+          description: Current operation state. Only completed is a final upload outcome.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/GroupSendOutcome' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/group-dms/{groupId}/send-operations/{requestId}/reconcile:
+    post:
+      operationId: groupDMReconcileSend
+      summary: Explicitly finalize an interrupted committed upload operation.
+      description: Current member/sender only. Does not send a new message or upload files. Before a two-minute grace period, returns 202. Afterward, successful persisted file positions are preserved and missing positions become failures; late inserts are transactionally fenced. Prepared operations remain pending and can be retried with the exact original POST. Completed/deleted operations are never restarted. Clients must retain original files for an explicit failed-files-only new send.
+      tags: [DMs]
+      parameters:
+        - { name: groupId, in: path, required: true, schema: { type: string } }
+        - { name: requestId, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' } }
+      responses:
+        '201': { description: Completed success; same message response as POST messages. }
+        '202': { description: Pending; data is GroupSendOutcome, not a final success. }
+        '207': { description: Completed partial upload; same message and indexed upload_failures envelope as POST messages. }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '410': { description: The sent message was deleted. }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/group-dms/{groupId}/send-operations/{requestId}/cancel:
+    post:
+      operationId: groupDMCancelSend
+      summary: Fence a not-yet-committed send without deleting a message.
+      description: Requires authenticated sender ownership and current group membership. Cancellation races atomically with message commit. A missing operation gets a permanent cancellation tombstone, preventing a delayed original HTTP request from sending later. Only a returned cancelled phase confirms cancellation. If commit already won, the current committed/completed/deleted outcome is returned and no message or upload is removed. Repeated cancellation is idempotent. Cancelled original POST replays return 410 SEND_CANCELLED when the stored request hash matches, or 409 if a missing-row tombstone has no matching original request hash. Never clear the local request on an unconfirmed cancellation.
+      tags: [DMs]
+      parameters:
+        - { name: groupId, in: path, required: true, schema: { type: string } }
+        - { name: requestId, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{16,128}$' } }
+      responses:
+        '200':
+          description: Current operation state; cancellation succeeds only if operation.phase is cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/GroupSendOutcome' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+  /api/group-dms/{groupId}/read:
+    post:
+      operationId: groupDMMarkRead
+      summary: Set the caller's group read cursor and return revisioned unread state.
+      description: Requires current group membership. Omitted/null message_id reads through the latest message; an explicit group-owned message preserves later unread messages. Read-state changes are pushed only to the reader's sessions.
+      tags: [DMs]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                message_id: { type: [string, 'null'] }
+      responses:
+        '200': { $ref: '#/components/responses/GroupReadStateOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/group-dms/{groupId}/unread:
+    post:
+      operationId: groupDMMarkUnread
+      summary: Mark a group conversation unread starting at a specified message.
+      description: Current members only. The anchor must belong to this group. Counts exclude the caller's own messages and compare persisted timestamp/id order; cursor and count update transactionally. Returns and broadcasts a monotonically increasing reader-owned revision without exposing message plaintext.
+      tags: [DMs]
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [message_id]
+              properties:
+                message_id: { type: string, minLength: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/GroupReadStateOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  # ── Public email proof ──
+  /api/email/unsubscribe:
+    get:
+      operationId: emailUnsubscribeConfirm
+      summary: Show a read-only email-unsubscribe confirmation page.
+      description: >-
+        Public proof-scoped operation; no bearer session or identity is
+        required. The opaque 43-character unpadded base64url token represents
+        32 random bytes and is the sole authority to inspect this category
+        preference. This page does not mutate preferences, so email link
+        scanners that perform GET requests cannot unsubscribe the recipient;
+        a person must explicitly submit the confirmation form with POST.
+        The page and generic errors do not identify the account or disclose
+        its email address. Responses are no-store and set Referrer-Policy
+        no-referrer so the proof is not cached or forwarded as a referrer.
+      tags: [Email]
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Opaque 32-byte proof encoded as exactly 43 unpadded base64url characters. Treat as a bearer secret.
+          schema:
+            type: string
+            minLength: 43
+            maxLength: 43
+            pattern: '^[A-Za-z0-9_-]{43}$'
+      responses:
+        '200':
+          description: Read-only HTML confirmation page; an already-consumed token gets an informational page without a form.
+          content:
+            text/html:
+              schema: { type: string }
+        '400':
+          description: Token is malformed, invalid, expired, or no longer bound to the current verified email. Generic response; no account or email detail is disclosed.
+          content:
+            text/plain:
+              schema: { type: string }
+        '429':
+          description: Per-IP request limit exceeded.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying.
+              schema: { type: integer, example: 300 }
+          content:
+            text/plain:
+              schema: { type: string }
+        '503':
+          description: Email preference storage is temporarily unavailable; no mutation was performed.
+          content:
+            text/plain:
+              schema: { type: string }
+    post:
+      operationId: emailUnsubscribe
+      summary: Confirm an email-category unsubscribe with the proof token.
+      description: >-
+        Public proof-scoped operation; no bearer session or identity is
+        required. The form token is the sole authority and must be explicitly
+        submitted from the GET confirmation page. The 1024-byte request-body
+        limit bounds parsing. Success changes only the category represented
+        by the proof, and the generic HTML response does not identify the
+        account or disclose its email address. Responses are no-store and
+        set Referrer-Policy no-referrer.
+      tags: [Email]
+      security: []
+      requestBody:
+        required: true
+        description: URL-encoded form, limited to 1024 bytes, with exactly one token value.
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  minLength: 43
+                  maxLength: 43
+                  pattern: '^[A-Za-z0-9_-]{43}$'
+                  description: Opaque 32-byte proof encoded as unpadded base64url.
+            encoding:
+              token:
+                style: form
+                explode: true
+      responses:
+        '200':
+          description: HTML confirmation that the category preference was updated; replay of a valid consumed token is idempotent.
+          content:
+            text/html:
+              schema: { type: string }
+        '400':
+          description: Form or token is malformed, invalid, expired, or stale. Generic response; no account or email detail is disclosed.
+          content:
+            text/plain:
+              schema: { type: string }
+        '413':
+          description: URL-encoded request body exceeds 1024 bytes.
+          content:
+            text/plain:
+              schema: { type: string }
+        '429':
+          description: Per-IP request limit exceeded.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying.
+              schema: { type: integer, example: 300 }
+          content:
+            text/plain:
+              schema: { type: string }
+        '503':
+          description: Email preference storage is temporarily unavailable; retry later.
+          content:
+            text/plain:
+              schema: { type: string }
+
   # ── Auth ──
   /api/auth/register:
     post:
@@ -392,6 +742,63 @@ paths:
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+  /api/users/me/profile-showcase:
+    get:
+      operationId: usersGetProfileShowcase
+      summary: Get the caller's global or server-specific profile showcase.
+      description: Omit server_id for the global profile. A server scope requires current membership.
+      tags: [Users]
+      parameters:
+        - in: query
+          name: server_id
+          schema: { type: string }
+      responses:
+        '200': { description: Versioned profile theme, widgets and manual links. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    put:
+      operationId: usersPutProfileShowcase
+      summary: Replace a profile showcase using optimistic concurrency.
+      description: Manual links are user-entered URLs and never assert verified ownership or OAuth state.
+      tags: [Users]
+      parameters:
+        - in: query
+          name: server_id
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_version, showcase]
+              properties:
+                expected_version: { type: integer, minimum: 0 }
+                showcase: { type: object, additionalProperties: false }
+      responses:
+        '200': { description: Saved profile showcase with its new version. }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/users/{userId}/profile-showcase:
+    get:
+      operationId: usersGetPublicProfileShowcase
+      summary: Get an audience-filtered public profile showcase.
+      description: Hidden links are removed. Server-specific records require both users to be current members.
+      tags: [Users]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: server_id
+          schema: { type: string }
+      responses:
+        '200': { description: Public theme, activity, widgets and visible user-provided links. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /api/users/me/password:
     post:
       operationId: usersChangePassword
@@ -519,6 +926,75 @@ paths:
         '200': { $ref: '#/components/responses/UserPreferencesOK' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/data-exports:
+    post:
+      operationId: usersCreateDataExport
+      summary: Prepare a short-lived personal-data export for the caller.
+      description: >-
+        Builds an owner-scoped JSON export and stores it for 24 hours. The
+        payload deliberately excludes password hashes, session credentials,
+        MFA secrets and other authentication material.
+      tags: [Users]
+      responses:
+        '201': { $ref: '#/components/responses/DataExportJobCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/data-exports/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: usersGetDataExport
+      summary: Get a non-expired export job owned by the caller.
+      tags: [Users]
+      responses:
+        '200': { $ref: '#/components/responses/DataExportJobOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/me/data-exports/{id}/download:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: usersDownloadDataExport
+      summary: Download a ready, non-expired export owned by the caller.
+      tags: [Users]
+      responses:
+        '200':
+          description: Personal data JSON attachment.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/users/me/recommendations:
+    get:
+      operationId: usersGetPersonalizedRecommendations
+      summary: Get optional profile and activity-driven suggestions for the caller.
+      description: >-
+        Returns disabled with an empty list unless the caller has explicitly
+        enabled experience personalization. Optional profile, server-membership
+        and friendship inputs are not read while consent is disabled.
+      tags: [Users]
+      responses:
+        '200':
+          description: Personalization consent state and recommendation codes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/PersonalizationRecommendations' }
+                required: [success, data]
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
   /api/users/me/dismiss-download-prompt:
     post:
       operationId: usersDismissDownloadPrompt
@@ -599,6 +1075,141 @@ paths:
           description: Notification ID.
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /api/users/me/media-label:
+    get:
+      operationId: privateMediaLabelGet
+      summary: Read the caller's own media annotation after source access and revision checks.
+      description: 'This is an explicit user annotation, not an automated classifier verdict. Response is no-store. A missing annotation returns null. No media bytes or decrypted message text are accepted.'
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: source_kind, in: query, required: true, schema: { type: string, enum: [channel, dm, group] } }
+        - { name: channel_id, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: message_id, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: revision, in: query, required: true, schema: { type: string, maxLength: 64 } }
+        - { name: fingerprint, in: query, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+      responses:
+        '200': { description: 'Owner-only annotation or null; no media or plaintext message.' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { description: Message revision changed; reload before using the annotation. }
+    put:
+      operationId: privateMediaLabelSet
+      summary: Save the caller's explicit classification of received media.
+      description: 'Private per-account annotation. Successful changes invalidate only the owner sessions. Limit 5000 annotations. Read access and current message revision are required. expected_version must equal the version read from GET, or empty string when no annotation exists. Stale writes fail with 409. Fingerprint binds the client UI to its media set; the server does not claim to verify encrypted content. Bots are rejected; body is bounded to 4096 bytes.'
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/PrivateMediaLabel' }
+                - { required: [label, expected_version] }
+      responses:
+        '200': { description: Annotation saved. }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { description: Message revision or annotation version changed; reload before retrying. }
+    delete:
+      operationId: privateMediaLabelDelete
+      summary: Remove the caller's exact annotation, including after source access is lost.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/PrivateMediaLabel' }
+                - { required: [expected_version] }
+      responses:
+        '200': { description: Matching annotation removed, or expected-absent annotation is still absent. }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { description: Annotation version changed or expected annotation is no longer present. }
+  /api/users/me/spam:
+    get:
+      operationId: spamInboxList
+      summary: List owned quarantined message references without decrypted content.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: cursor, in: query, schema: { type: string, maxLength: 1024 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200': { description: 'Object with entries and optional opaque next_cursor; entries include source_kind, channel_id, message_id, revision, reasons, status, created_at and unavailable.' }
+        '400': { description: Invalid cursor. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+    post:
+      operationId: spamInboxRecord
+      summary: Record locally detected spam after verifying source access and current revision.
+      description: 'No plaintext is accepted. Limit 5000 references per account; retrying the same revision preserves explicit decisions. Body is bounded to 8192 bytes. Bots are rejected.'
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source_kind, channel_id, message_id, revision, reasons]
+              properties:
+                source_kind: { type: string, enum: [channel, dm, group] }
+                channel_id: { type: string, minLength: 1, maxLength: 128 }
+                message_id: { type: string, minLength: 1, maxLength: 128 }
+                revision: { type: string, maxLength: 64, description: 'original or exact edited_at RFC3339 timestamp' }
+                reasons:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  uniqueItems: true
+                  items: { type: string, enum: [credential-link, mass-mention-links, repeated-links] }
+      responses:
+        '200': { description: Reference recorded or existing decision retained. }
+        '400': { description: Invalid metadata or spam_inbox_limit reached; no message is deleted. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { description: Source read access denied. }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { description: Message revision changed; reload before retrying. }
+  /api/users/me/spam/decisions:
+    get:
+      operationId: spamDecisionList
+      summary: Recover owned restored/dismissed decisions after reconnect.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: cursor, in: query, schema: { type: string, maxLength: 1024 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200': { description: 'Object with entries and optional next_cursor; contains decision metadata only.' }
+        '400': { description: Invalid cursor. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/users/me/spam/restore:
+    post:
+      operationId: spamRestore
+      summary: Restore an owned current revision after checking source access.
+      description: 'JSON body requires source_kind, channel_id, message_id and revision. Does not delete or rewrite the source message. Emits spam_decision only to the owner sessions after success.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Restore decision committed. }
+        '400': { description: Invalid reference. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { description: Stale message revision. }
+  /api/users/me/spam/dismiss:
+    post:
+      operationId: spamDismiss
+      summary: Remove an owned reference from the spam list without deleting the source message.
+      description: 'JSON body requires source_kind, channel_id, message_id and revision. Source read access is not required to dismiss an unavailable owned reference.'
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Dismiss decision committed. }
+        '400': { description: Invalid reference. }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
 
@@ -893,6 +1504,25 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/dms/{channelId}/unread:
+    post:
+      operationId: dmsMarkUnreadFrom
+      summary: Mark a DM unread starting at one message.
+      description: Atomically rewinds the caller's read cursor and recomputes the unread count from persisted messages.
+      tags: [DMs]
+      parameters:
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkDMReadRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /api/dms/channels/{channelId}/hide:
     post:
       operationId: dmsHide
@@ -1053,7 +1683,22 @@ paths:
           schema: { type: string }
           description: DM message ID.
       responses:
-        '200': { $ref: '#/components/responses/StubOK' }
+        '200':
+          description: Committed deletion. New servers return its scope; legacy implementations may return only message.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [message]
+                    properties:
+                      message: { type: string }
+                      id: { type: string, description: Deleted DM message ID. }
+                      dm_channel_id: { type: string, description: Conversation containing the deleted message. }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
@@ -1165,14 +1810,46 @@ paths:
     post:
       operationId: reportsCreateUserReport
       summary: Report a user for abuse/policy violation.
+      description: 'Accepts JSON or multipart fields reason and description, with optional source_kind (channel, dm, group), source_server_id (channel only), source_channel_id and source_message_id. Message context requires current source access and matching reported author. evidence_content is reporter-supplied plaintext and requires explicit evidence_consent=true; it is never independently authenticated server plaintext. Without consent no decrypted message content is stored. Multipart may additionally include image evidence files.'
       tags: [Reports]
       parameters:
         - $ref: '#/components/parameters/UserId'
-      requestBody: { $ref: '#/components/requestBodies/StubMultipart' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, description]
+              properties:
+                reason: { type: string, enum: [spam, harassment, inappropriate_content, impersonation, other] }
+                description: { type: string, minLength: 10, maxLength: 1000 }
+                source_kind: { type: string, enum: [channel, dm, group] }
+                source_server_id: { type: string }
+                source_channel_id: { type: string }
+                source_message_id: { type: string }
+                evidence_consent: { type: boolean, default: false }
+                evidence_content: { type: string }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [reason, description]
+              properties:
+                reason: { type: string }
+                description: { type: string, minLength: 10, maxLength: 1000 }
+                source_kind: { type: string, enum: [channel, dm, group] }
+                source_server_id: { type: string }
+                source_channel_id: { type: string }
+                source_message_id: { type: string }
+                evidence_consent: { type: string, enum: ['true', 'false'] }
+                evidence_content: { type: string }
+                files: { type: array, items: { type: string, format: binary } }
       responses:
         '201': { $ref: '#/components/responses/StubCreated' }
         '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { description: 'The reporting user cannot currently access the source message.' }
+        '409': { description: 'A pending report already exists for this source message or user.' }
         '404': { $ref: '#/components/responses/NotFoundError' }
   /api/client-log:
     post:
@@ -1694,6 +2371,239 @@ paths:
         '204': { $ref: '#/components/responses/StubNoContent' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/bots/{botID}/remove:
+    post:
+      operationId: botsRemove
+      summary: Permanently retire one of the caller's bot identities.
+      description: >-
+        Requires the owning human's active session, fresh password and MFA
+        factor when enabled, an account/application affinity pair, a separate
+        confirmation boolean, and the exact confirmation text `REMOVE`.
+        Credentials, memberships, owner linkage and personal profile data are
+        removed. Shared messages and referenced shared attachments remain under
+        an anonymized identity; personal asset cleanup is queued. Applications
+        that still own servers or child applications must hand them off first.
+      tags: [Bots]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BotId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_user_id, expected_application_id, password, confirm, confirm_text]
+              properties:
+                expected_user_id: { type: string }
+                expected_application_id: { type: string }
+                password: { type: string, format: password }
+                code: { type: string, description: Fresh TOTP or unused recovery code when MFA is enabled. }
+                confirm: { type: boolean, enum: [true] }
+                confirm_text: { type: string, enum: [REMOVE] }
+      responses:
+        '200':
+          description: Application retired; shared history retained and personal cleanup queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [removed, shared_history, personal_asset_cleanup]
+                    properties:
+                      removed: { type: boolean, enum: [true] }
+                      shared_history: { type: string, enum: [retained] }
+                      personal_asset_cleanup: { type: string, enum: [queued] }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+        '503':
+          description: Application removal security dependencies are unavailable.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/bots/{botID}/transfer-requests:
+    post:
+      operationId: applicationTransferRequestCreate
+      summary: Ask another human user to accept ownership of an application.
+      description: The request expires after seven days. Ownership and credentials do not change until the named recipient accepts.
+      tags: [Bots]
+      parameters:
+        - $ref: '#/components/parameters/BotId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [recipient_username]
+              properties:
+                recipient_username: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/StubCreated' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/application-transfer-requests:
+    get:
+      operationId: applicationTransferRequestsIncoming
+      summary: List unexpired application ownership requests addressed to the caller.
+      tags: [Bots]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/application-transfer-requests/{requestID}/resolve:
+    post:
+      operationId: applicationTransferRequestResolve
+      summary: Accept or decline an application ownership request.
+      description: Acceptance atomically changes ownership, revokes all old credentials, and returns one new credential exactly once.
+      tags: [Bots]
+      parameters:
+        - name: requestID
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [accept]
+              properties:
+                accept: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /api/bots/{botID}/manifest:
+    put:
+      operationId: applicationManifestPut
+      summary: Replace an owned application's declared message actions and test-mode setting.
+      tags: [Bots]
+      parameters: [{ $ref: '#/components/parameters/BotId' }]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/application-manifests:
+    get:
+      operationId: applicationManifestListOwned
+      summary: List application manifests owned by the caller.
+      tags: [Bots]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /api/bots/{botID}/actions/{actionId}/test:
+    post:
+      operationId: applicationActionTest
+      summary: Deliver an owner-only test invocation to a connected application.
+      tags: [Bots]
+      parameters:
+        - $ref: '#/components/parameters/BotId'
+        - { name: actionId, in: path, required: true, schema: { type: string } }
+      responses:
+        '202': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/application-invocations/{invocationId}:
+    get:
+      operationId: applicationInvocationGet
+      summary: Read the status of the caller's application invocation.
+      tags: [Bots]
+      parameters: [{ name: invocationId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/application-invocations/{invocationId}/complete:
+    post:
+      operationId: applicationInvocationComplete
+      summary: Complete a pending invocation using the target bot credential.
+      tags: [Bots]
+      parameters: [{ name: invocationId, in: path, required: true, schema: { type: string } }]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/applications:
+    get:
+      operationId: serverApplicationsList
+      summary: List application grants for a server.
+      tags: [Bots]
+      parameters: [{ $ref: '#/components/parameters/ServerId' }]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/servers/{serverId}/applications/{botID}:
+    put:
+      operationId: serverApplicationInstall
+      summary: Install or update a scoped application grant.
+      tags: [Bots]
+      parameters: [{ $ref: '#/components/parameters/ServerId' }, { $ref: '#/components/parameters/BotId' }]
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      operationId: serverApplicationRevoke
+      summary: Revoke an application grant immediately.
+      tags: [Bots]
+      parameters: [{ $ref: '#/components/parameters/ServerId' }, { $ref: '#/components/parameters/BotId' }]
+      responses:
+        '204': { $ref: '#/components/responses/StubNoContent' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/application-actions:
+    get:
+      operationId: serverApplicationActionsList
+      summary: List active message actions available to server members.
+      tags: [Bots]
+      parameters: [{ $ref: '#/components/parameters/ServerId' }]
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/servers/{serverId}/channels/{channelId}/messages/{messageId}/application-actions/{actionId}:
+    post:
+      operationId: messageApplicationActionInvoke
+      summary: Invoke an installed application action for one readable message.
+      tags: [Bots]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - { name: channelId, in: path, required: true, schema: { type: string } }
+        - { name: messageId, in: path, required: true, schema: { type: string } }
+        - { name: actionId, in: path, required: true, schema: { type: string } }
+      responses:
+        '202': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   # ── Platform Admin — LiveKit ──
   /api/admin/livekit/quota:
@@ -1996,6 +2906,59 @@ paths:
         '200': { $ref: '#/components/responses/StubOK' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/admin/email-campaigns:
+    post:
+      operationId: adminCreateEmailCampaign
+      summary: Create an immutable-content email campaign draft without sending mail.
+      tags: [Admin]
+      x-platform-admin: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [category, subject, body, expires_at]
+              properties:
+                category: { type: string, enum: [announcements, tips, recommendations] }
+                subject: { type: string, minLength: 1, maxLength: 120 }
+                body: { type: string, minLength: 1, maxLength: 10000 }
+                expires_at: { type: string, format: date-time, description: Between one hour and thirty days from creation. }
+      responses:
+        '201': { description: Draft campaign with server-generated ec_ ID, audit actor and draft status. }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '413': { description: JSON request exceeds 128 KiB. }
+  /api/admin/email-campaigns/{id}:
+    get:
+      operationId: adminPreviewEmailCampaign
+      summary: Preview escaped plain text and eligible-recipient count, never recipient identities.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^ec_[a-f0-9]{32}$' } }
+      responses:
+        '200': { description: Object containing campaign, escaped body_html and eligible_recipients count. Does not queue or send email. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/admin/email-campaigns/{id}/publish:
+    post:
+      operationId: adminPublishEmailCampaign
+      summary: Atomically publish once and queue consent-eligible recipients.
+      description: Repeating the same campaign ID returns its original publication result without duplicate jobs. Published content is immutable. Expired campaigns cannot begin delivery; provider configuration, verified address and consent are rechecked separately. Queueing is not provider delivery confirmation.
+      tags: [Admin]
+      x-platform-admin: true
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^ec_[a-f0-9]{32}$' } }
+      responses:
+        '200': { description: Published campaign with original publisher, timestamp and queued-recipient count. }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
   /api/admin/users/{id}/ban:
     post:
       operationId: adminBanUser
@@ -2186,6 +3149,51 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/transfer-ownership:
+    post:
+      operationId: serversTransferOwnership
+      summary: Permanently transfer ownership to an existing active human member.
+      description: |-
+        Requires a generation-bound human session, current password and (when enabled)
+        a fresh TOTP or unused recovery code. Actual current ownership is checked
+        transactionally; generic administrator permissions do not override ownership.
+        The protected owner role and audit record move atomically. Ordinary roles,
+        memberships and shared history are preserved. Never automatically retry a
+        timed-out request: refresh ownership to determine whether it committed.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_user_id, expected_server_id, target_user_id, password, confirm, confirm_text]
+              properties:
+                expected_user_id: { type: string, minLength: 1 }
+                expected_server_id: { type: string, minLength: 1 }
+                target_user_id: { type: string, minLength: 1 }
+                password: { type: string, minLength: 1, writeOnly: true }
+                code: { type: string, writeOnly: true }
+                confirm: { type: boolean, const: true }
+                confirm_text: { type: string, const: TRANSFER }
+      responses:
+        '200':
+          description: Updated server in data, with the recipient as owner_id. No session cookies are changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409':
+          description: Account or server identity changed (ACCOUNT_MISMATCH or SERVER_MISMATCH).
+        '429':
+          description: Sensitive-action verification attempt budget exhausted (MFA_RATE_LIMITED).
+        '503':
+          description: Ownership-transfer security is unavailable.
   /api/servers/{serverId}/leave:
     post:
       operationId: serversLeave
@@ -2308,6 +3316,275 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+
+  # ── Server events ──
+  /api/servers/{serverId}/events:
+    get:
+      operationId: serverEventsList
+      summary: List server events for a current member.
+      description: >-
+        Returns events ordered by start time, with the caller's `interested` RSVP state.
+        `before_id` is the last event ID already seen; results follow it in chronological
+        start-time/ID order. `limit` defaults to 50 and must be 1–100.
+        Account-bound clients may send `expected_user_id`; if it does not match the
+        authenticated user, the request fails with 409 SERVER_EVENT_ACCOUNT_MISMATCH.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: before_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+        - name: expected_user_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Client context guard; must match the authenticated account.
+      responses:
+        '200':
+          description: Current page of events.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [events]
+                        properties:
+                          events:
+                            type: array
+                            items: { $ref: '#/components/schemas/ServerEvent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ServerEventAccountMismatch' }
+    post:
+      operationId: serverEventsCreate
+      summary: Create a server event.
+      description: >-
+        Requires current server membership and effective PermManageEvents (including
+        the existing PermAdmin bypass). Bodies are strict JSON and limited to 16 KiB.
+        Name is at most 100 Unicode code points and description at most 2,000. Starts
+        must be RFC3339, in the future, and within one year. An optional channel must
+        belong to this server and be readable by the creator.
+      tags: [Servers]
+      x-required-permission: { name: PermManageEvents, value: 8388608 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: expected_user_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Client context guard; must match the authenticated account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateServerEventRequest' }
+      responses:
+        '201':
+          description: Event created with version 1.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServerEvent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ServerEventAccountMismatch' }
+        '413': { $ref: '#/components/responses/PayloadTooLargeError' }
+  /api/servers/{serverId}/events/{eventId}:
+    get:
+      operationId: serverEventsGet
+      summary: Get an event for a current server member.
+      description: >-
+        The linked channel ID is redacted when the caller cannot read that channel.
+        An optional expected_user_id query parameter must match the authenticated user.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: expected_user_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Client context guard; must match the authenticated account.
+      responses:
+        '200':
+          description: Event including this caller's interested RSVP state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServerEvent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ServerEventAccountMismatch' }
+    patch:
+      operationId: serverEventsUpdate
+      summary: Replace an event's mutable fields using version compare-and-swap.
+      description: >-
+        Requires current membership and PermManageEvents. `expected_version` must be
+        the version last read; a stale version returns 409 CONFLICT and does not apply
+        the update. Bodies are strict JSON and limited to 16 KiB. Optional channel
+        must belong to this server and be readable by the caller.
+      tags: [Servers]
+      x-required-permission: { name: PermManageEvents, value: 8388608 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: expected_user_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Client context guard; must match the authenticated account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateServerEventRequest' }
+      responses:
+        '200':
+          description: Updated event with its incremented version.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServerEvent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ServerEventConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLargeError' }
+  /api/servers/{serverId}/events/{eventId}/cancel:
+    post:
+      operationId: serverEventsCancel
+      summary: Cancel an event using version compare-and-swap.
+      description: >-
+        Requires current membership and PermManageEvents. Requires a positive
+        expected_version; stale versions return 409 CONFLICT. Cancellation is a
+        status transition to `cancelled`, not deletion. Body is strict JSON and
+        limited to 16 KiB.
+      tags: [Servers]
+      x-required-permission: { name: PermManageEvents, value: 8388608 }
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: expected_user_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Client context guard; must match the authenticated account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_version]
+              properties:
+                expected_version: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Cancelled event with incremented version.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServerEvent' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ServerEventConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLargeError' }
+  /api/servers/{serverId}/events/{eventId}/rsvp:
+    put:
+      operationId: serverEventsSetRSVP
+      summary: Set the caller's event interest RSVP.
+      description: >-
+        Requires current server membership. Setting interested=true is accepted only
+        while the event is scheduled and starts in the future. Setting false withdraws
+        an existing RSVP even after the event starts. Body is strict JSON and limited
+        to 16 KiB; interested is required.
+      tags: [Servers]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: expected_user_id
+          in: query
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Client context guard; must match the authenticated account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [interested]
+              properties:
+                interested: { type: boolean }
+      responses:
+        '200':
+          description: RSVP state after the change.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [interested]
+                        properties:
+                          interested: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ServerEventConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLargeError' }
 
   # ── Channels ──
   /api/servers/{serverId}/channels:
@@ -2659,12 +3936,30 @@ paths:
   /api/servers/{serverId}/channels/unread:
     get:
       operationId: readStateGetUnreads
-      summary: Get the unread-message summary for a server's channels.
+      summary: Get the unread-message and unread-mention summary for readable server channels.
+      description: Text and voice-channel message histories are included; audit channels are excluded. Mention counts use persisted direct and current-role mentions after the caller's read cursor, not a paginated notification cache. Current ViewChannel and ReadMessages permissions filter every result; ConnectVoice is not required for voice text history.
       tags: [ReadState]
       parameters:
         - $ref: '#/components/parameters/ServerId'
       responses:
-        '200': { $ref: '#/components/responses/StubOK' }
+        '200':
+          description: Per-channel unread counts, including channels never opened by the caller.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [channel_id, unread_count, mention_count]
+                      properties:
+                        channel_id: { type: string }
+                        unread_count: { type: integer, minimum: 0 }
+                        mention_count: { type: integer, minimum: 0 }
+                        oldest_unread_message_id: { type: string, description: First unread non-author message after the reader cursor, omitted when none exists. }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
@@ -2682,6 +3977,30 @@ paths:
           description: Channel ID.
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{id}/unread:
+    post:
+      operationId: readStateMarkUnreadFrom
+      summary: Mark a channel unread starting at one message.
+      description: Atomically rewinds the caller's read cursor and recomputes the unread count from persisted messages.
+      tags: [ReadState]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: Channel ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkDMReadRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
@@ -3192,6 +4511,53 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/voice/clips/consent:
+    get:
+      operationId: voiceClipConsent
+      summary: Resolve the current participant consent snapshot for a local voice clip.
+      tags: [Voice]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: channel_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/servers/{serverId}/voice/clips/start:
+    post:
+      operationId: voiceClipStart
+      summary: Start a consent-audited, client-local voice clip session.
+      tags: [Voice]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '201': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /api/servers/{serverId}/voice/clips/{recordingId}/stop:
+    post:
+      operationId: voiceClipStop
+      summary: Stop and audit a client-local voice clip session.
+      tags: [Voice]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - name: recordingId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '204': { description: Clip session stopped. }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   # ── Music bot ──
   /api/servers/{serverId}/channels/{channelId}/music/play:
@@ -3213,6 +4579,28 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/search:
+    get:
+      operationId: musicSearch
+      summary: Search YouTube by name and return up to five selectable tracks.
+      tags: [Music]
+      x-permission-note: >-
+        authServer grants membership; MusicHandler.Search additionally requires
+        PermSpeak before starting the bounded external lookup.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '429': { $ref: '#/components/responses/TooManyRequestsError' }
+        '502': { description: YouTube search provider could not resolve the query. }
   /api/servers/{serverId}/channels/{channelId}/music/skip:
     post:
       operationId: musicSkip
@@ -3226,6 +4614,100 @@ paths:
         - $ref: '#/components/parameters/ChannelId'
       responses:
         '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/queue/{queueItemId}:
+    delete:
+      operationId: musicQueueRemove
+      summary: Remove one pending queue item by its stable queue identity.
+      tags: [Music]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+        - { name: queueItemId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: revision, in: query, required: true, schema: { type: integer, format: int64, minimum: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/servers/{serverId}/channels/{channelId}/music/queue:
+    put:
+      operationId: musicQueueReorder
+      summary: Replace the pending queue order using stable IDs and an expected revision.
+      tags: [Music]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/servers/{serverId}/channels/{channelId}/music/shuffle:
+    post:
+      operationId: musicQueueShuffle
+      summary: Shuffle only pending tracks using an expected queue revision.
+      tags: [Music]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /api/servers/{serverId}/channels/{channelId}/music/repeat:
+    put:
+      operationId: musicRepeatMode
+      summary: Set repeat mode to off, one, or all.
+      tags: [Music]
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/restore:
+    post:
+      operationId: musicRestorePausedQueue
+      summary: Explicitly reconnect and resume a queue restored in the paused state.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler enforces PermSpeak in
+        the target voice channel — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+  /api/servers/{serverId}/channels/{channelId}/music/seek:
+    post:
+      operationId: musicSeek
+      summary: Restart the current finite track at a whole-second offset.
+      tags: [Music]
+      x-permission-note: >-
+        authServer only grants membership; MusicHandler enforces PermSpeak in
+        the target voice channel — not reflected in x-required-permission.
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+        - $ref: '#/components/parameters/ChannelId'
+      requestBody: { $ref: '#/components/requestBodies/StubJSON' }
+      responses:
+        '200': { $ref: '#/components/responses/StubOK' }
+        '400': { $ref: '#/components/responses/BadRequestError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
@@ -4179,13 +5661,108 @@ components:
       schema: { type: string, enum: ['24h', '7d', '30d'], default: '24h' }
       description: Metrics aggregation window.
   schemas:
+    PrivateMediaLabel:
+      type: object
+      additionalProperties: false
+      required: [source_kind, channel_id, message_id, revision, fingerprint]
+      properties:
+        source_kind: { type: string, enum: [channel, dm, group] }
+        channel_id: { type: string, minLength: 1, maxLength: 128 }
+        message_id: { type: string, minLength: 1, maxLength: 128 }
+        revision: { type: string, maxLength: 64, description: 'original or exact edited_at RFC3339 timestamp' }
+        fingerprint: { type: string, pattern: '^[a-f0-9]{64}$' }
+        label: { type: string, enum: [ordinary, sexual, disturbing, both] }
+        version: { type: string, readOnly: true, pattern: '^(legacy|[a-f0-9]{32})$', description: 'Opaque annotation version; rotates on each successful write.' }
+        expected_version: { type: string, pattern: '^(|legacy|[a-f0-9]{32})$', description: 'Required for PUT/DELETE. Empty string expects absence; otherwise exact version returned by GET.' }
+    ServerEvent:
+      type: object
+      additionalProperties: false
+      required: [id, server_id, creator_id, name, description, starts_at, status, version, interested, created_at, updated_at]
+      properties:
+        id: { type: string }
+        server_id: { type: string }
+        creator_id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 100, description: Maximum 100 Unicode code points. }
+        description: { type: string, maxLength: 2000, description: Maximum 2,000 Unicode code points. }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        channel_id: { type: string, description: Omitted when no linked channel exists or the caller cannot read it. }
+        status: { type: string, enum: [scheduled, cancelled] }
+        version: { type: integer, minimum: 1 }
+        interested: { type: boolean, description: RSVP state for the authenticated caller. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateServerEventRequest:
+      type: object
+      additionalProperties: false
+      required: [name, starts_at]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: Maximum 100 Unicode code points. }
+        description: { type: string, maxLength: 2000, description: Maximum 2,000 Unicode code points. }
+        starts_at: { type: string, format: date-time, description: Must be in the future and no more than one year away. }
+        ends_at: { type: [string, 'null'], format: date-time, description: If present, must be later than starts_at. }
+        channel_id: { type: [string, 'null'], description: Optional channel in the same server that the caller can read. }
+    UpdateServerEventRequest:
+      type: object
+      additionalProperties: false
+      required: [name, starts_at, expected_version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: Maximum 100 Unicode code points. }
+        description: { type: string, maxLength: 2000, description: Maximum 2,000 Unicode code points. }
+        starts_at: { type: string, format: date-time, description: Must be in the future and no more than one year away. }
+        ends_at: { type: [string, 'null'], format: date-time, description: If present, must be later than starts_at. }
+        channel_id: { type: [string, 'null'], description: Optional channel in the same server that the caller can read. }
+        expected_version: { type: integer, minimum: 1, description: Exact version last read; prevents stale overwrites. }
+    GroupSendOutcome:
+      type: object
+      required: [operation]
+      properties:
+        operation:
+          type: object
+          required: [group_id, request_id, message_id, file_count, phase, failed_indices, created_at, updated_at]
+          properties:
+            group_id: { type: string }
+            request_id: { type: string }
+            message_id: { type: string }
+            file_count: { type: integer, minimum: 0, maximum: 10 }
+            phase: { type: string, enum: [prepared, committed, completed, deleted, cancelled] }
+            failed_indices: { type: array, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 9 } }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+        message: { $ref: '#/components/schemas/GroupMessageData' }
+    GroupMessageData:
+      type: object
+      required: [id, group_id, user_id, encryption_version, key_epoch, attachments]
+      properties:
+        id: { type: string }
+        group_id: { type: string }
+        user_id: { type: string }
+        encryption_version: { type: integer, const: 1 }
+        key_epoch: { type: integer }
+        ciphertext: { type: string }
+        sender_device_id: { type: string }
+        attachments:
+          type: array
+          items:
+            type: object
+            required: [id, group_message_id, filename, file_url]
+            properties:
+              id: { type: string }
+              group_message_id: { type: string }
+              filename: { type: string }
+              file_url: { type: string }
+              file_key_index:
+                type: [integer, 'null']
+                minimum: 0
+                maximum: 9
+                description: Original encrypted payload key position; omitted on legacy records. Never infer modern key position from database list order.
     ErrorCode:
       type: string
       description: >-
         Machine-readable error identifier derived from the domain sentinel
-        error (server/pkg/errors.go) via pkg.errorCode. Empty/omitted on
-        success responses and on some legacy message-only error paths
-        (pkg.ErrorWithMessage).
+        error (server/pkg/errors.go) via pkg.errorCode, or explicitly set by
+        handlers using pkg.ErrorWithCode. Empty/omitted on success responses
+        and on some legacy message-only error paths (pkg.ErrorWithMessage).
       enum:
         - NOT_FOUND
         - UNAUTHORIZED
@@ -4195,6 +5772,8 @@ components:
         - CONFLICT
         - INVALID_KEY
         - INTERNAL
+        - SERVER_EVENT_ACCOUNT_MISMATCH
+        - PAYLOAD_TOO_LARGE
     ApiEnvelope:
       type: object
       description: Standard response envelope wrapping every API response (pkg.APIResponse).
@@ -4368,7 +5947,7 @@ components:
         email:
           type: string
           format: email
-          description: Optional. Validated against a simple `local@domain.tld` regex when non-empty.
+          description: Required. Validated against a simple `local@domain.tld` regex.
         invite_code:
           type: string
           description: >-
@@ -4376,7 +5955,7 @@ components:
             AuthService.Register never reads CreateUserRequest.InviteCode —
             there is no invite-gated registration flow in the code today.
             Do not rely on this for access control.
-      required: [username, password]
+      required: [username, password, email]
       example:
         username: hb_wanderer
         password: "correct-horse-battery-staple"
@@ -4445,10 +6024,10 @@ components:
       description: models.ForgotPasswordRequest — body of POST /api/auth/forgot-password.
       type: object
       properties:
-        email: { type: string, format: email }
-      required: [email]
+        identifier: { type: string, description: Username or email address }
+      required: [identifier]
       example:
-        email: user@example.com
+        identifier: user@example.com
     ResetPasswordRequest:
       description: models.ResetPasswordRequest — body of POST /api/auth/reset-password.
       type: object
@@ -4679,6 +6258,23 @@ components:
       required: [data]
       example:
         data: { theme: dark }
+    DataExportJob:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [ready, failed] }
+        error_code: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+      required: [id, status, created_at, expires_at]
+    PersonalizationRecommendations:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        items:
+          type: array
+          items: { type: string, enum: [complete_profile, join_server, add_friend] }
+      required: [enabled, items]
 
     # ── Messages (server-channel scoped) ──
     Attachment:
@@ -4931,6 +6527,9 @@ components:
         position: { type: integer }
         user_limit: { type: integer, description: "Voice channels only. 0 = unlimited." }
         bitrate: { type: integer, description: "Voice channels only, in bps." }
+        effective_permissions:
+          type: integer
+          description: Requesting user's resolved permission bits on listed text channels; response-only, not shared channel state.
         created_at: { type: string, format: date-time }
       required: [id, server_id, name, type, category_id, topic, position, user_limit, bitrate, created_at]
       example:
@@ -5104,6 +6703,7 @@ components:
         is_pinned: { type: boolean }
         is_muted: { type: boolean }
         unread_count: { type: integer, minimum: 0 }
+        oldest_unread_message_id: { type: string, description: Optional reader-specific first non-author message after the read cursor; omitted when none exists. }
         last_message:
           oneOf:
             - $ref: '#/components/schemas/DMLastMessage'
@@ -5652,6 +7252,24 @@ components:
         plain: { type: boolean }
       required: [user_id, server_id, slots, plain]
   responses:
+    GroupReadStateOK:
+      description: Reader-owned cursor, unread count and revision after the transaction.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { type: boolean }
+              data:
+                type: object
+                required: [group_id, last_read_message_id, unread_count, revision]
+                properties:
+                  group_id: { type: string }
+                  last_read_message_id: { type: [string, 'null'] }
+                  unread_count: { type: integer, minimum: 0 }
+                  revision: { type: integer, minimum: 0 }
+                  oldest_unread_message_id: { type: string, description: Reader-specific first unread non-author message; omitted when no unread anchor exists. }
     StubOK:
       description: Success (200). Payload is a stub in this phase — see StubData.
       content:
@@ -5703,6 +7321,24 @@ components:
         State conflict — a duplicate resource (code ALREADY_EXISTS) or a
         conflicting current state (code CONFLICT, e.g. an exhausted E2EE
         one-time-prekey pool).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServerEventAccountMismatch:
+      description: HTTP 409 with code SERVER_EVENT_ACCOUNT_MISMATCH when expected_user_id differs from the authenticated account.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServerEventConflict:
+      description: >-
+        HTTP 409 CONFLICT when expected_version is stale, an RSVP transition is
+        no longer allowed, or SERVER_EVENT_ACCOUNT_MISMATCH when the expected
+        account differs.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    PayloadTooLargeError:
+      description: HTTP 413 with code PAYLOAD_TOO_LARGE; JSON body exceeds the 16 KiB limit.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -5792,6 +7428,26 @@ components:
                 properties:
                   data:
                     $ref: '#/components/schemas/UserPreferences'
+    DataExportJobOK:
+      description: Success (200) — caller-owned export job.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DataExportJob' }
+    DataExportJobCreated:
+      description: Created (201) — caller-owned export job.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiEnvelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DataExportJob' }
 
     # ── DMs ──
     DMChannelListOK:

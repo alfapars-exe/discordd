@@ -13,6 +13,8 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+const shell = vi.hoisted(() => ({ enabled: false }));
+vi.mock("../utils/uiShell", () => ({ get UI_SHELL_V2() { return shell.enabled; } }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: (ns?: string) => ({
@@ -93,9 +95,24 @@ const addToast = () => vi.mocked(useToastStore.getState().addToast);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  shell.enabled = false;
 });
 
 describe("useOpenAtMessage — channel", () => {
+  it("does not scroll another V2 destination when a slow message lookup finishes", async () => {
+    shell.enabled = true;
+    let finish!: (found: boolean) => void;
+    openTab().mockImplementation((channelId, type, label, serverInfo) => {
+      useUIStore.setState({ destination: { channelId, type, label, serverInfo }, navigationRevision: 1 });
+    });
+    fetchAround().mockImplementation(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useOpenAtMessage());
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.openAtMessage("srv-1", "ch-1", "m-7"); });
+    useUIStore.setState({ destination: { type: "dm", channelId: "other", label: "" }, navigationRevision: 2 });
+    await act(async () => { finish(true); await pending; });
+    expect(setScroll()).not.toHaveBeenCalled();
+  });
   it("opens the tab, fetches around the target, then arms the scroll target", async () => {
     const calls: string[] = [];
     openTab().mockImplementation(() => { calls.push("openTab"); });

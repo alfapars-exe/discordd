@@ -111,7 +111,7 @@ function StreamerPipPreviewInner() {
       }
     }
     // No tab yet — open one. uiStore.openTab handles dedup if it raced.
-    const activeServerId = useServerStore.getState().activeServerId;
+    const activeServerId = useVoiceStore.getState().currentVoiceServerId ?? useServerStore.getState().activeServerId;
     if (activeServerId) {
       const serverItem = useServerStore
         .getState()

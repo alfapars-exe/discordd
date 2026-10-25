@@ -1,0 +1,150 @@
+{
+  "engine": "speex",
+  "results": [
+    {
+      "fixture": "clean",
+      "outputFile": "speex-clean.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 2.8152999999999793,
+      "inferenceWallMs": {
+        "p50": 0.03690000000005966,
+        "p95": 0.07129999999983738,
+        "p99": 0.0966000000000804
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": null,
+      "outputLag": {
+        "samples": 480,
+        "milliseconds": 10,
+        "normalizedCorrelation": 0.9996010953873646,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -33.61993613156413,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "fan",
+      "outputFile": "speex-fan.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 2.1786999999999352,
+      "inferenceWallMs": {
+        "p50": 0.041600000000016735,
+        "p95": 0.07359999999994216,
+        "p99": 0.12049999999999272
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -31.801171518596867,
+          "outputRmsDbfs": -42.12626021817569,
+          "attenuationDb": 10.32508869957882
+        },
+        "tail": {
+          "inputRmsDbfs": -32.43268685735202,
+          "outputRmsDbfs": -42.3725798643757,
+          "attenuationDb": 9.939893007023684
+        }
+      },
+      "outputLag": {
+        "samples": 480,
+        "milliseconds": 10,
+        "normalizedCorrelation": 0.8908694494556826,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -33.54450597143309,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "keyboard",
+      "outputFile": "speex-keyboard.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 2.337600000000066,
+      "inferenceWallMs": {
+        "p50": 0.033100000000104046,
+        "p95": 0.07209999999986394,
+        "p99": 0.11419999999998254
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.17333244610398,
+          "outputRmsDbfs": -33.49985017214585,
+          "attenuationDb": 0.326517726041871
+        },
+        "tail": {
+          "inputRmsDbfs": -33.31342352961014,
+          "outputRmsDbfs": -33.65612355501748,
+          "attenuationDb": 0.3427000254073391
+        }
+      },
+      "outputLag": {
+        "samples": 480,
+        "milliseconds": 10,
+        "normalizedCorrelation": 0.7503597736456923,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -30.503789022120152,
+      "finite": true,
+      "clippedSamples": 0
+    },
+    {
+      "fixture": "transient",
+      "outputFile": "speex-transient.wav",
+      "frameSamples": 480,
+      "frameBudgetMs": 10,
+      "frames": 1916,
+      "initializationMs": 1.620200000000068,
+      "inferenceWallMs": {
+        "p50": 0.03089999999997417,
+        "p95": 0.05640000000016698,
+        "p99": 0.07369999999991705
+      },
+      "processCpuMs": {
+        "p50": 0,
+        "p95": 0,
+        "p99": 0
+      },
+      "noiseOnly": {
+        "lead": {
+          "inputRmsDbfs": -33.97000337466929,
+          "outputRmsDbfs": -34.221402513403596,
+          "attenuationDb": 0.25139913873430686
+        },
+        "tail": {
+          "inputRmsDbfs": -33.84338417586975,
+          "outputRmsDbfs": -34.08855817745395,
+          "attenuationDb": 0.24517400158419633
+        }
+      },
+      "outputLag": {
+        "samples": 479,
+        "milliseconds": 9.979166666666666,
+        "normalizedCorrelation": 0.920258729064434,
+        "searchLimitMs": 250
+      },
+      "outputRmsDbfs": -32.40371928428224,
+      "finite": true,
+      "clippedSamples": 0
+    }
+  ]
+}

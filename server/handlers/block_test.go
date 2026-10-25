@@ -32,6 +32,29 @@ func (s *stubBlockService) IsBlocked(context.Context, string, string) (bool, err
 
 var _ services.BlockService = (*stubBlockService)(nil)
 
+func TestBlockAccountMismatch(t *testing.T) {
+	for _, action := range []string{"block", "unblock", "list"} {
+		t.Run(action, func(t *testing.T) {
+			svc := &stubBlockService{}
+			h := NewBlockHandler(svc, nil)
+			req := newBlockRequest(t)
+			req.URL.RawQuery = "expected_user_id=another-account"
+			rec := httptest.NewRecorder()
+			switch action {
+			case "block":
+				h.BlockUser(rec, req)
+			case "unblock":
+				h.UnblockUser(rec, req)
+			case "list":
+				h.ListBlocked(rec, req)
+			}
+			if rec.Code != http.StatusConflict || svc.blockCalled {
+				t.Fatalf("status=%d serviceCalled=%v", rec.Code, svc.blockCalled)
+			}
+		})
+	}
+}
+
 func newBlockRequest(t *testing.T) *http.Request {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/api/users/user-2/block", nil)

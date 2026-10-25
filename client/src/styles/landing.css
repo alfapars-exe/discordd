@@ -1751,14 +1751,3 @@ body:has(.landing-page) #root { overflow-y: auto !important; height: auto !impor
 }
 .ss-btn--download:hover { opacity: 0.9; }
 
-.ss-github-note {
-  font-size: 13px;
-  color: var(--lp-text-muted);
-  text-align: center;
-  margin: 16px 0 0;
-}
-.ss-github-note a {
-  color: var(--lp-secondary);
-  text-decoration: none;
-}
-.ss-github-note a:hover { text-decoration: underline; }

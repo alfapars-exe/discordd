@@ -25,7 +25,12 @@ import (
 // always-succeed stubs (the test helper hides them entirely).
 type noopReadStateRepo struct{}
 
+func (noopReadStateRepo) PrepareMessageDeletion(_ context.Context, _ string) error { return nil }
+
 func (noopReadStateRepo) Upsert(_ context.Context, _, _, _ string) error { return nil }
+func (noopReadStateRepo) MarkUnreadFrom(_ context.Context, _, _, _ string) (int, error) {
+	return 0, nil
+}
 func (noopReadStateRepo) GetUnreadCounts(_ context.Context, _, _ string) ([]models.UnreadInfo, error) {
 	return nil, nil
 }
@@ -80,8 +85,8 @@ func newTestMessageService(
 	permResolver ChannelPermResolver,
 ) MessageService {
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
-		Message:     msgRepo,
-		Mention:     mentionRepo,
+		Message:      msgRepo,
+		Mention:      mentionRepo,
 		RoleMention:  roleMentionRepo,
 		ReadState:    noopReadStateRepo{},
 		Notification: &testutil.MockNotificationRepo{},
@@ -177,6 +182,25 @@ func TestMessageCreate(t *testing.T) {
 				t.Error("author should be populated")
 			}
 		})
+	}
+}
+
+func TestMessageCreate_ArchivedThreadIsReadOnly(t *testing.T) {
+	now := time.Now()
+	svc := newTestMessageService(
+		&testutil.MockMessageRepo{}, &testutil.MockAttachmentRepo{},
+		&testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
+			return &models.Channel{ID: "thread", ServerID: "srv", Type: models.ChannelTypeThread, ArchivedAt: &now}, nil
+		}},
+		&testutil.MockUserRepo{}, &testutil.MockMentionRepo{}, &testutil.MockRoleMentionRepo{},
+		&testutil.MockRoleRepo{}, &testutil.MockReactionRepo{}, &testutil.MockBroadcastAndOnline{},
+		&testutil.MockChannelPermResolver{ResolveChannelPermissionsFn: func(context.Context, string, string) (models.Permission, error) {
+			return models.PermViewChannel | models.PermReadMessages | models.PermSendMessages, nil
+		}},
+	)
+	_, err := svc.Create(context.Background(), "srv", "thread", "user", &models.CreateMessageRequest{Content: "blocked"})
+	if !errors.Is(err, pkg.ErrForbidden) {
+		t.Fatalf("expected forbidden for archived thread, got %v", err)
 	}
 }
 
@@ -857,8 +881,8 @@ func TestMessageCreate_TimedOutUserBlocked(t *testing.T) {
 	mentionRepo := &testutil.MockMentionRepo{}
 	roleMentionRepo := &testutil.MockRoleMentionRepo{}
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
-		Message:     msgRepo,
-		Mention:     mentionRepo,
+		Message:      msgRepo,
+		Mention:      mentionRepo,
 		RoleMention:  roleMentionRepo,
 		ReadState:    noopReadStateRepo{},
 		Notification: &testutil.MockNotificationRepo{},
@@ -912,8 +936,8 @@ func TestMessageCreate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 	mentionRepo := &testutil.MockMentionRepo{}
 	roleMentionRepo := &testutil.MockRoleMentionRepo{}
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
-		Message:     msgRepo,
-		Mention:     mentionRepo,
+		Message:      msgRepo,
+		Mention:      mentionRepo,
 		RoleMention:  roleMentionRepo,
 		ReadState:    noopReadStateRepo{},
 		Notification: &testutil.MockNotificationRepo{},
@@ -971,8 +995,8 @@ func TestMessageUpdate_TimedOutUserBlocked(t *testing.T) {
 	mentionRepo := &testutil.MockMentionRepo{}
 	roleMentionRepo := &testutil.MockRoleMentionRepo{}
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
-		Message:     msgRepo,
-		Mention:     mentionRepo,
+		Message:      msgRepo,
+		Mention:      mentionRepo,
 		RoleMention:  roleMentionRepo,
 		ReadState:    noopReadStateRepo{},
 		Notification: &testutil.MockNotificationRepo{},
@@ -1021,8 +1045,8 @@ func TestMessageUpdate_DMChannelSkipsTimeoutCheck(t *testing.T) {
 	mentionRepo := &testutil.MockMentionRepo{}
 	roleMentionRepo := &testutil.MockRoleMentionRepo{}
 	runner := passthroughTxRunner{repos: repository.MessageTxRepos{
-		Message:     msgRepo,
-		Mention:     mentionRepo,
+		Message:      msgRepo,
+		Mention:      mentionRepo,
 		RoleMention:  roleMentionRepo,
 		ReadState:    noopReadStateRepo{},
 		Notification: &testutil.MockNotificationRepo{},

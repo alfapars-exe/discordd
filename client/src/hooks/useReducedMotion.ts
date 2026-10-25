@@ -14,5 +14,6 @@ function osPrefersReducedMotion(): boolean {
 
 export function useReducedMotion(): boolean {
   const reduceMotion = useAccessibilityStore((s) => s.reduceMotion);
-  return reduceMotion || osPrefersReducedMotion();
+  const syncReducedMotion = useAccessibilityStore((s) => s.syncReducedMotion);
+  return reduceMotion || (syncReducedMotion && osPrefersReducedMotion());
 }

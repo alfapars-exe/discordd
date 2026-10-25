@@ -17,6 +17,7 @@ export async function login(data: LoginRequest) {
   return apiClient<AuthTokens>("/auth/login", {
     method: "POST",
     body: data,
+    skipAuthRefresh: true,
   });
 }
 
@@ -30,10 +31,10 @@ export async function refreshToken(refresh_token: string) {
   );
 }
 
-export async function logout(refresh_token: string) {
+export async function logout(refresh_token: string, expectedUserId?: string) {
   return apiClient<{ message: string }>("/auth/logout", {
     method: "POST",
-    body: { refresh_token },
+    body: { refresh_token, expected_user_id: expectedUserId },
   });
 }
 
@@ -42,20 +43,20 @@ export async function getMe() {
 }
 
 /** Change password — requires current password (server: POST /api/users/me/password 400s without it). */
-export async function changePassword(currentPassword: string, newPassword: string) {
+export async function changePassword(currentPassword: string, newPassword: string, expectedUserId?: string) {
   return apiClient<{ message: string }>("/users/me/password", {
     method: "POST",
-    body: { current_password: currentPassword, new_password: newPassword },
+    body: { current_password: currentPassword, new_password: newPassword, expected_user_id: expectedUserId },
   });
 }
 
 /** Sends a password reset email. Returns cooldown seconds if rate-limited. */
-export async function forgotPassword(email: string) {
+export async function forgotPassword(identifier: string) {
   return apiClient<{ message: string; cooldown?: number }>(
     "/auth/forgot-password",
     {
       method: "POST",
-      body: { email },
+      body: { identifier },
     },
   );
 }
@@ -82,12 +83,12 @@ export async function dismissWelcome() {
 }
 
 /** Change email — requires current password for security. */
-export async function changeEmail(password: string, newEmail: string) {
+export async function changeEmail(password: string, newEmail: string, expectedUserId?: string) {
   return apiClient<{ message: string; email: string | null }>(
     "/users/me/email",
     {
       method: "PUT",
-      body: { password, new_email: newEmail },
+      body: { password, new_email: newEmail, expected_user_id: expectedUserId },
     },
   );
 }

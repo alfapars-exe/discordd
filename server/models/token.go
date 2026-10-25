@@ -30,6 +30,7 @@ import "github.com/golang-jwt/jwt/v5"
 // Those legacy tokens keep working everywhere until they expire — see the
 // empty-scope allowance in UploadDownloadHandler.authUserID.
 type TokenClaims struct {
+	SessionID    string `json:"sid,omitempty"`
 	UserID       string `json:"user_id"`
 	Username     string `json:"username"`
 	TokenVersion int    `json:"tv,omitempty"`

@@ -26,6 +26,7 @@ type Props = {
   avatarUrl?: string | null;
   animatedUrl?: string | null;
   bannerUrl?: string | null;
+  animatedBannerUrl?: string | null;
   accentColor?: string | null;
   bio?: string | null;
   pronouns?: string | null;
@@ -56,6 +57,7 @@ function MemberCardIdentity({
   avatarUrl,
   animatedUrl,
   bannerUrl,
+  animatedBannerUrl,
   accentColor,
   bio,
   pronouns,
@@ -114,6 +116,7 @@ function MemberCardIdentity({
         avatarUrl={avatarUrl}
         animatedUrl={animatedUrl}
         bannerUrl={bannerUrl}
+        animatedBannerUrl={animatedBannerUrl}
         accentColor={accentColor}
         animate={animateAvatar}
         frame={cosmetics.avatar_frame}
@@ -153,7 +156,11 @@ function MemberCardIdentity({
                 onChange={(e) => setNicknameDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSaveNickname();
-                  if (e.key === "Escape") setNicknameDraft(null);
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setNicknameDraft(null);
+                  }
                 }}
                 placeholder={displayName ?? username}
               />

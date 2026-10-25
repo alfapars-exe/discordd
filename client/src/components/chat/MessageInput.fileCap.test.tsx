@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useComposerDraftStore } from "../../stores/composerDraftStore";
 import { render, fireEvent, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { ChatContextValue } from "../../hooks/useChatContext";
@@ -19,7 +20,7 @@ import type { ChatContextValue } from "../../hooks/useChatContext";
 const mockSendMessage = vi.fn();
 const mockSetReplyingTo = vi.fn();
 const mockSendTyping = vi.fn();
-const mockRunMusicCommand = vi.fn().mockResolvedValue(false);
+const mockRunMusicCommand = vi.fn().mockResolvedValue({ handled: false });
 
 function makeChatContext(overrides: Partial<ChatContextValue> = {}): ChatContextValue {
   return {
@@ -103,11 +104,12 @@ function makeFiles(count: number, prefix = "file"): File[] {
 }
 
 beforeEach(() => {
+  useComposerDraftStore.getState().reset();
   mockSendMessage.mockReset();
   mockSetReplyingTo.mockReset();
   mockSendTyping.mockReset();
   mockRunMusicCommand.mockReset();
-  mockRunMusicCommand.mockResolvedValue(false);
+  mockRunMusicCommand.mockResolvedValue({ handled: false });
   currentContext = makeChatContext();
   useToastStore.setState({ addToast: vi.fn() });
 });

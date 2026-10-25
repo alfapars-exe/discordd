@@ -44,6 +44,16 @@ function baseProps(overrides: Partial<Props> = {}): Props {
 
 const futureIso = () => new Date(Date.now() + 60_000).toISOString();
 
+it("Escape cancels nickname editing without dismissing the surrounding card", () => {
+  const props = baseProps({ nicknameDraft: "Draft", canEditNickname: true });
+  const outerKeyDown = vi.fn();
+  render(<div onKeyDown={outerKeyDown}><MemberCardIdentity {...props} /></div>);
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+  expect(props.setNicknameDraft).toHaveBeenCalledWith(null);
+  expect(props.onClose).not.toHaveBeenCalled();
+  expect(outerKeyDown).not.toHaveBeenCalled();
+});
+
 describe("MemberCardIdentity — timeout banner", () => {
   it("does not render when there is no active timeout", () => {
     render(<MemberCardIdentity {...baseProps()} />);

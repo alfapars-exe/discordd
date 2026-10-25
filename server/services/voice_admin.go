@@ -103,6 +103,7 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 	newDeafened := state.IsServerDeafened
 	logMuted := state.IsServerMuted
 	logDeafened := state.IsServerDeafened
+	voiceRevision := s.bumpVoiceRevisionLocked()
 
 	s.mu.Unlock()
 
@@ -115,10 +116,10 @@ func (s *voiceService) AdminUpdateState(ctx context.Context, adminUserID, target
 		s.applyServerMuteToLiveKit(channelID, targetUserID)
 	}
 
-	s.broadcastToServer(serverID, ws.Event{
+	s.broadcastToServerAtRevision(serverID, ws.Event{
 		Op:   ws.OpVoiceStateUpdate,
 		Data: broadcastData,
-	})
+	}, voiceRevision)
 
 	// Audit log — one entry per state transition. We split mute and deafen
 	// into separate events so the audit channel reads naturally (e.g. "X
@@ -310,7 +311,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	// Broadcast leave(source) + join(target). If both channels are on the same
 	// server, one BroadcastToServer covers both events' audiences.
-	s.broadcastToServer(sourceServerID, ws.Event{
+	s.broadcastToServerLocked(sourceServerID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
 		Data: ws.VoiceStateUpdateBroadcast{
 			UserID:           state.UserID,
@@ -323,7 +324,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 			Action:           "leave",
 		},
 	})
-	s.broadcastToServer(targetServerID, ws.Event{
+	s.broadcastToServerLocked(targetServerID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
 		Data: ws.VoiceStateUpdateBroadcast{
 			UserID:           state.UserID,
@@ -461,7 +462,7 @@ func (s *voiceService) AdminDisconnectUser(ctx context.Context, disconnecterUser
 	disconnectIsCloud := state.LiveKitIsCloud
 	delete(s.states, targetUserID)
 
-	s.broadcastToServer(serverID, ws.Event{
+	s.broadcastToServerLocked(serverID, ws.Event{
 		Op: ws.OpVoiceStateUpdate,
 		Data: ws.VoiceStateUpdateBroadcast{
 			UserID:      targetUserID,

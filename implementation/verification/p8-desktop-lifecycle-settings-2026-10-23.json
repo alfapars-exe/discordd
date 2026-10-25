@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P8 Windows startup, minimized launch, close-to-tray and hardware acceleration preferences.",
+  "implemented": [
+    "Electron persists a validated device-local settings document and reflects the live Windows login-item state in the renderer.",
+    "Start-minimized suppresses the initial window while retaining the tray entry; close-to-tray intercepts ordinary close while explicit quit bypasses it.",
+    "Hardware acceleration is applied before Electron ready on the next launch and the renderer states that restart is required.",
+    "Renderer writes roll back to the previous visible value and show an error when the desktop bridge rejects persistence. Web does not render the desktop-only destination."
+  ],
+  "checks": [
+    { "command": "node node_modules/typescript/bin/tsc -p electron/tsconfig.json --pretty false", "result": "passed" },
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/components/settings/GeneralSettings.test.tsx", "cwd": "client", "result": "passed", "tests": 2 }
+  ],
+  "remaining": [
+    "Installed-Windows acceptance must still verify registry persistence through update, startup/tray reachability, explicit quit, and GPU feature state after restart."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

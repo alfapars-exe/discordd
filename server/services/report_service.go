@@ -18,18 +18,44 @@ type ReportService interface {
 	UpdateReportStatus(ctx context.Context, reportID string, status models.ReportStatus, adminID string) error
 }
 
+type reportTargetLookup interface {
+	GetByID(ctx context.Context, id string) (*models.User, error)
+}
+
+type reportChannelMessageReader interface {
+	GetAround(ctx context.Context, serverID, channelID, userID, anchorID string, limit int) (*models.MessagePage, error)
+}
+
+type reportDMMessageReader interface {
+	GetMessagesAround(ctx context.Context, userID, channelID, anchorID string, limit int) (*models.DMMessagePage, error)
+}
+
+type reportGroupMessageReader interface {
+	IsMember(context.Context, string, string) (bool, error)
+	GetMessage(context.Context, string, string) (*models.GroupDMMessage, error)
+}
+
 type reportService struct {
 	reportRepo repository.ReportRepository
-	userRepo   repository.UserRepository
+	userRepo   reportTargetLookup
+	messages   reportChannelMessageReader
+	dms        reportDMMessageReader
+	groups     reportGroupMessageReader
 }
 
 func NewReportService(
 	reportRepo repository.ReportRepository,
-	userRepo repository.UserRepository,
+	userRepo reportTargetLookup,
+	messages reportChannelMessageReader,
+	dms reportDMMessageReader,
+	groups reportGroupMessageReader,
 ) ReportService {
 	return &reportService{
 		reportRepo: reportRepo,
 		userRepo:   userRepo,
+		messages:   messages,
+		dms:        dms,
+		groups:     groups,
 	}
 }
 
@@ -46,8 +72,48 @@ func (s *reportService) CreateReport(ctx context.Context, reporterID, targetID s
 		return nil, fmt.Errorf("%w: user not found", pkg.ErrNotFound)
 	}
 
+	if req.SourceMessageID != "" {
+		var sourceAuthorID string
+		switch req.SourceKind {
+		case "channel":
+			page, err := s.messages.GetAround(ctx, req.SourceServerID, req.SourceChannelID, reporterID, req.SourceMessageID, 1)
+			if err != nil || page == nil || len(page.Messages) != 1 || page.Messages[0].ID != req.SourceMessageID {
+				return nil, fmt.Errorf("%w: message is unavailable", pkg.ErrForbidden)
+			}
+			sourceAuthorID = page.Messages[0].UserID
+		case "dm":
+			page, err := s.dms.GetMessagesAround(ctx, reporterID, req.SourceChannelID, req.SourceMessageID, 1)
+			if err != nil || page == nil || len(page.Messages) != 1 || page.Messages[0].ID != req.SourceMessageID {
+				return nil, fmt.Errorf("%w: message is unavailable", pkg.ErrForbidden)
+			}
+			sourceAuthorID = page.Messages[0].UserID
+		case "group":
+			if s.groups == nil {
+				return nil, pkg.ErrForbidden
+			}
+			member, err := s.groups.IsMember(ctx, req.SourceChannelID, reporterID)
+			if err != nil || !member {
+				return nil, fmt.Errorf("%w: message is unavailable", pkg.ErrForbidden)
+			}
+			message, err := s.groups.GetMessage(ctx, req.SourceChannelID, req.SourceMessageID)
+			if err != nil || message == nil || message.ID != req.SourceMessageID {
+				return nil, fmt.Errorf("%w: message is unavailable", pkg.ErrForbidden)
+			}
+			sourceAuthorID = message.UserID
+		}
+		if sourceAuthorID != targetID {
+			return nil, fmt.Errorf("%w: reported user did not author this message", pkg.ErrBadRequest)
+		}
+	}
+
 	// Duplicate check — prevent multiple pending reports for the same pair
-	hasPending, err := s.reportRepo.HasPendingReport(ctx, reporterID, targetID)
+	var hasPending bool
+	var err error
+	if req.SourceMessageID != "" {
+		hasPending, err = s.reportRepo.HasPendingMessageReport(ctx, reporterID, req.SourceMessageID)
+	} else {
+		hasPending, err = s.reportRepo.HasPendingReport(ctx, reporterID, targetID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to check pending report: %w", err)
 	}
@@ -62,6 +128,18 @@ func (s *reportService) CreateReport(ctx context.Context, reporterID, targetID s
 		Reason:         models.ReportReason(req.Reason),
 		Description:    req.Description,
 		Status:         models.ReportStatusPending,
+		EvidenceShared: req.EvidenceConsent,
+	}
+	if req.SourceMessageID != "" {
+		report.SourceKind = &req.SourceKind
+		report.SourceChannelID = &req.SourceChannelID
+		report.SourceMessageID = &req.SourceMessageID
+		if req.SourceServerID != "" {
+			report.SourceServerID = &req.SourceServerID
+		}
+		if req.EvidenceConsent {
+			report.EvidenceContent = req.EvidenceContent
+		}
 	}
 
 	if err := s.reportRepo.Create(ctx, report); err != nil {

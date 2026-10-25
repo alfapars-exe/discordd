@@ -1,0 +1,24 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Default-off device-local notification indicators use the existing authenticated notification feed. At most three unread category indicators cross the native bridge; message previews, actor identity, payloads, URLs and decrypted content are not forwarded.",
+    "Account/login generation, connected state, loaded account preferences, blocked actors, muted servers/DMs, known accessible channel trees and current group membership fence publication. Category preferences and DND/offline suppress indicators. Unknown system action categories fail closed rather than bypassing their notification preferences.",
+    "Native validation and physical geometry bound notification rows independently of the voice roster. The action-only window receives no notification data. Localized loading, unavailable and genuine empty states distinguish service failures from successful empty feeds.",
+    "This is a read-only partial notification widget, not complete reply-capable notifications, calls, invites or independent widget layouts. The composite seven-widget acceptance stays missing."
+  ],
+  "verification": [
+    "Root focused store/projector/settings-workspace checks passed: 36 tests. Hook/projector checks passed: 8 tests. Scoped root ESLint passed for projection, hook and publisher.",
+    "Root Electron TypeScript and full native suite passed: 150 passed, zero failed, one previously documented Windows physical-symlink permission skip.",
+    "Agent native notification contract/geometry/window tests passed: 23; renderer tests passed: 15. Actual Windows game rendering was not tested.",
+    "Final complete client regression reported by the store/test agent: 314 files, 2908 tests passed. Final root client TypeScript and scoped ESLint passed; production Vite build passed with existing ineffective-dynamic-import warnings.",
+    "Independent review identified and then confirmed repair of stale notification refresh merging: fresh server read state wins over unchanged cached unread state, omitted stale rows are dropped, and concurrent post-request WS arrivals/read changes survive. Regression tests cover these cases.",
+    "Coverage structure VALID; all 32 coverage-validator tests passed. Counts remain 41 missing, 175 implemented_unverified, 32 existing, 2 accepted, 11 excluded; acceptance is incomplete."
+  ],
+  "open": [
+    "Real Windows DPI/monitor/game-focus and multi-client privacy/read synchronization acceptance",
+    "Reply-capable notifications, calls/invites, chat/video/stream widgets and independent widget layouts",
+    "Remaining P0-P11 acceptance, Windows packaging/update verification and separate production publication approval"
+  ],
+  "release": "No commit, push, merge or production/Windows update publication. Overall goal remains incomplete."
+}

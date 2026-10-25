@@ -44,7 +44,7 @@ import {
 } from "livekit-client";
 
 import { useVoiceStore } from "../stores/voiceStore";
-import { logToServer } from "../api/clientLog";
+import { logOptionalTelemetry } from "../api/clientLog";
 import type { ScreenShareLimitationReason } from "../stores/slices/voiceScreenShareSlice";
 
 /**
@@ -285,7 +285,7 @@ export function useScreenShareStats(localParticipant: LocalParticipant): void {
         }
       }
 
-      logToServer("info", "screen_share_stats", {
+      logOptionalTelemetry("screen_share_stats", {
         intervalSec: Math.round(dtSec),
         kbps,
         fps,

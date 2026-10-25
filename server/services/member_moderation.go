@@ -30,6 +30,9 @@ func (s *memberService) Kick(ctx context.Context, serverID, actorID, targetID st
 	if err := s.serverRepo.RemoveMember(ctx, serverID, targetID); err != nil {
 		return fmt.Errorf("failed to kick user: %w", err)
 	}
+	if s.gameActivity != nil {
+		s.gameActivity.MembershipRemoved(ctx, serverID, targetID)
+	}
 
 	// Kicked user shouldn't be holding live API connections anyway, but
 	// drop their cached permissions defensively so any in-flight request
@@ -89,6 +92,9 @@ func (s *memberService) Ban(ctx context.Context, serverID, actorID, targetID, re
 	// Remove membership (best-effort — ban already created)
 	if rmErr := s.serverRepo.RemoveMember(ctx, serverID, targetID); rmErr != nil {
 		memberLogger.Error("failed to remove member after ban", "server_id", serverID, "target_id", targetID, "err", pkg.ErrText(rmErr))
+	}
+	if s.gameActivity != nil {
+		s.gameActivity.MembershipRemoved(ctx, serverID, targetID)
 	}
 
 	// Same rationale as Kick — drop cached permissions defensively.

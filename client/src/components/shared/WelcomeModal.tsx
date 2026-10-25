@@ -16,14 +16,15 @@ function WelcomeModal() {
   const { t } = useTranslation("auth");
   const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedUserId, setDismissedUserId] = useState<string | null>(null);
 
-  if (!user || user.has_seen_welcome || dismissed) {
+  if (!user || user.has_seen_welcome || dismissedUserId === user.id) {
     return null;
   }
 
   function handleDismiss() {
-    setDismissed(true);
+    if (!user) return;
+    setDismissedUserId(user.id);
     updateUser({ has_seen_welcome: true });
     dismissWelcome();
   }

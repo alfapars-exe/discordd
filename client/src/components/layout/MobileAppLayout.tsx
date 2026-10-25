@@ -22,6 +22,8 @@ import MobileDrawer from "./MobileDrawer";
 import Sidebar from "./Sidebar";
 import MemberList from "./MemberList";
 import SplitPaneContainer from "./SplitPaneContainer";
+import DestinationView from "./DestinationView";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 type MobileAppLayoutProps = {
   sidebarProps: {
     onJoinVoice: (channelId: string) => void;
@@ -36,6 +38,7 @@ type MobileAppLayoutProps = {
 
 function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLayoutProps) {
   const layout = useUIStore((s) => s.layout);
+  const hasMembers = useUIStore((s) => !UI_SHELL_V2 || !!s.destination.serverInfo);
 
   // Keep the message composer above the on-screen keyboard.
   useMobileKeyboardOffset();
@@ -66,14 +69,14 @@ function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLa
     (typeof navigator !== "undefined" && /Android/.test(navigator.userAgent));
   const swipeHandlers = useSwipeGesture({
     onSwipeRight: isAndroid ? undefined : openLeftDrawer,
-    onSwipeLeft: isAndroid ? undefined : openRightDrawer,
+    onSwipeLeft: isAndroid || !hasMembers ? undefined : openRightDrawer,
     edgeWidth: 30,
     threshold: 30,
     velocityThreshold: 0.15,
   });
 
   return (
-    <div className="mqvi-app mobile" {...swipeHandlers}>
+    <div className={`mqvi-app mobile${UI_SHELL_V2 ? " ui-shell-v2" : ""}`} {...swipeHandlers}>
       <MobileHeader />
 
       {/* Left drawer — Sidebar */}
@@ -86,18 +89,18 @@ function MobileAppLayout({ sidebarProps, sendTyping, sendDMTyping }: MobileAppLa
       </MobileDrawer>
 
       {/* Right drawer — MemberList */}
-      <MobileDrawer
+      {hasMembers && <MobileDrawer
         isOpen={rightDrawerOpen}
         onClose={closeRightDrawer}
         side="right"
       >
         <MemberList />
-      </MobileDrawer>
+      </MobileDrawer>}
 
       <div className="app-body">
         {/* <main> landmark — mirrors AppLayout.tsx desktop. */}
         <main className="main-area">
-          <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />
+          {UI_SHELL_V2 ? <DestinationView sendTyping={sendTyping} sendDMTyping={sendDMTyping} onJoinVoice={sidebarProps.onJoinVoice} /> : <SplitPaneContainer node={layout} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />}
         </main>
       </div>
     </div>

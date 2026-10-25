@@ -19,7 +19,37 @@ import * as keyStorage from "./keyStorage";
 import * as signalProtocol from "./signalProtocol";
 import { toBase64 } from "./signalProtocol";
 import * as e2eeApi from "../api/e2ee";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 import { PREKEY_BATCH_SIZE, PREKEY_LOW_THRESHOLD } from "./types";
+
+type AuthScope = { ownerId: string; generation: number };
+
+function captureScope(expectedOwnerId?: string): AuthScope {
+  const snapshot = getAuthSessionSnapshot();
+  if (!snapshot.ownerId || !snapshot.ownerId.trim() || snapshot.ownerId.length > 256) {
+    throw new Error("e2ee_account_scope_unavailable");
+  }
+  if (expectedOwnerId !== undefined && expectedOwnerId !== snapshot.ownerId) {
+    throw new Error("e2ee_account_scope_owner_mismatch");
+  }
+  return { ownerId: snapshot.ownerId, generation: snapshot.generation };
+}
+
+function isCurrent(scope: AuthScope): boolean {
+  const snapshot = getAuthSessionSnapshot();
+  return snapshot.ownerId === scope.ownerId && snapshot.generation === scope.generation;
+}
+
+function assertCurrent(scope: AuthScope): void {
+  if (!isCurrent(scope)) throw new Error("e2ee_account_scope_changed");
+}
+
+async function awaitScoped<T>(scope: AuthScope, operation: () => Promise<T>): Promise<T> {
+  assertCurrent(scope);
+  const result = await operation();
+  assertCurrent(scope);
+  return result;
+}
 
 // ──────────────────────────────────
 // Device Identification
@@ -32,7 +62,8 @@ import { PREKEY_BATCH_SIZE, PREKEY_LOW_THRESHOLD } from "./types";
  * @returns Device ID, or null (device not yet registered)
  */
 export async function getLocalDeviceId(): Promise<string | null> {
-  return keyStorage.getMetadata<string>("deviceId");
+  const scope = captureScope();
+  return awaitScoped(scope, () => keyStorage.getMetadata<string>("deviceId"));
 }
 
 /**
@@ -67,14 +98,15 @@ export async function registerNewDevice(
   userId: string,
   displayName?: string
 ): Promise<string> {
+  const scope = captureScope(userId);
   // 1. Generate device ID
   const deviceId = generateDeviceId();
 
   // 2. Generate E2EE keys
-  const keys = await signalProtocol.generateAllKeys();
+  const keys = await awaitScoped(scope, () => signalProtocol.generateAllKeys(() => isCurrent(scope)));
 
   // 3. Register with the server
-  const response = await e2eeApi.registerDevice({
+  const response = await awaitScoped(scope, () => e2eeApi.registerDevice({
     device_id: deviceId,
     display_name: displayName ?? getDefaultDeviceName(),
     identity_key: keys.identityPublicKey,
@@ -87,7 +119,7 @@ export async function registerNewDevice(
       prekey_id: pk.id,
       public_key: pk.publicKey,
     })),
-  });
+  }));
 
   if (!response.success) {
     throw new Error(
@@ -96,19 +128,16 @@ export async function registerNewDevice(
   }
 
   // 4. Save local metadata
-  await keyStorage.setMetadata("deviceId", deviceId);
-  await keyStorage.saveRegistrationData({
+  await awaitScoped(scope, () => keyStorage.setMetadata("deviceId", deviceId));
+  await awaitScoped(scope, () => keyStorage.saveRegistrationData({
     registrationId: keys.registrationId,
     deviceId,
     userId,
     createdAt: Date.now(),
-  });
+  }));
 
   // Save the starting ID for the next prekey batch
-  await keyStorage.setMetadata(
-    "nextPrekeyId",
-    PREKEY_BATCH_SIZE + 1
-  );
+  await awaitScoped(scope, () => keyStorage.setMetadata("nextPrekeyId", PREKEY_BATCH_SIZE + 1));
 
   return deviceId;
 }
@@ -125,22 +154,24 @@ export async function registerNewDevice(
  *
  * @param deviceId - Device ID to register
  */
-async function registerExistingKeys(deviceId: string): Promise<void> {
-  const identityKeyPair = await keyStorage.getIdentityKeyPair();
+async function registerExistingKeys(deviceId: string, scope: AuthScope): Promise<void> {
+  const identityKeyPair = await awaitScoped(scope, () => keyStorage.getIdentityKeyPair());
   if (!identityKeyPair) throw new Error("Identity key pair not found in IndexedDB");
 
-  const signingKeyPair = await keyStorage.getSigningKeyPair();
+  const signingKeyPair = await awaitScoped(scope, () => keyStorage.getSigningKeyPair());
   if (!signingKeyPair) throw new Error("Signing key pair not found in IndexedDB");
 
-  const registration = await keyStorage.getRegistrationData();
+  const registration = await awaitScoped(scope, () => keyStorage.getRegistrationData());
   if (!registration) throw new Error("Registration data not found in IndexedDB");
+  if (registration.userId !== scope.ownerId) throw new Error("Registration account does not match authenticated account");
+  if (registration.deviceId !== deviceId) throw new Error("Device ID does not match the current account registration");
 
-  const signedPreKeys = await keyStorage.getAllSignedPreKeys();
+  const signedPreKeys = await awaitScoped(scope, () => keyStorage.getAllSignedPreKeys());
   if (signedPreKeys.length === 0) throw new Error("No signed prekey found in IndexedDB");
 
   const latestSignedPreKey = signedPreKeys.sort((a, b) => b.id - a.id)[0];
 
-  const response = await e2eeApi.registerDevice({
+  const response = await awaitScoped(scope, () => e2eeApi.registerDevice({
     device_id: deviceId,
     display_name: getDefaultDeviceName(),
     identity_key: toBase64(identityKeyPair.publicKey),
@@ -150,7 +181,7 @@ async function registerExistingKeys(deviceId: string): Promise<void> {
     signed_prekey_signature: toBase64(latestSignedPreKey.signature),
     registration_id: registration.registrationId,
     one_time_prekeys: [],
-  });
+  }));
 
   if (!response.success) {
     throw new Error(`Device registration failed: ${response.error ?? "unknown error"}`);
@@ -167,7 +198,8 @@ async function registerExistingKeys(deviceId: string): Promise<void> {
  * @param deviceId - Local device ID (from IndexedDB)
  */
 export async function reRegisterDevice(deviceId: string): Promise<void> {
-  await registerExistingKeys(deviceId);
+  const scope = captureScope();
+  await registerExistingKeys(deviceId, scope);
 }
 
 /**
@@ -186,44 +218,46 @@ export async function reRegisterDevice(deviceId: string): Promise<void> {
  * @returns New device ID
  */
 export async function registerRestoredDevice(): Promise<string> {
+  const scope = captureScope();
+  const registration = await awaitScoped(scope, () => keyStorage.getRegistrationData());
+  if (!registration || registration.userId !== scope.ownerId) {
+    throw new Error("Registration account does not match authenticated account");
+  }
   // Store the old device ID from the backup as legacy
-  const oldDeviceId = await keyStorage.getMetadata<string>("deviceId");
+  const oldDeviceId = await awaitScoped(scope, () => keyStorage.getMetadata<string>("deviceId"));
   if (oldDeviceId) {
-    const existing = await keyStorage.getMetadata<string[]>("legacyDeviceIds") ?? [];
+    const existing = await awaitScoped(scope, () => keyStorage.getMetadata<string[]>("legacyDeviceIds")) ?? [];
     if (!existing.includes(oldDeviceId)) {
-      await keyStorage.setMetadata("legacyDeviceIds", [...existing, oldDeviceId]);
+      await awaitScoped(scope, () => keyStorage.setMetadata("legacyDeviceIds", [...existing, oldDeviceId]));
     }
   }
 
   const newDeviceId = generateDeviceId();
 
   // Update the device ID in IndexedDB
-  await keyStorage.setMetadata("deviceId", newDeviceId);
+  await awaitScoped(scope, () => keyStorage.setMetadata("deviceId", newDeviceId));
 
-  const registration = await keyStorage.getRegistrationData();
-  if (registration) {
-    await keyStorage.saveRegistrationData({
-      ...registration,
-      deviceId: newDeviceId,
-      createdAt: Date.now(),
-    });
-  }
+  await awaitScoped(scope, () => keyStorage.saveRegistrationData({
+    ...registration,
+    deviceId: newDeviceId,
+    createdAt: Date.now(),
+  }));
 
   // Clear old sessions — invalid with a different device ID.
   // The new device will establish fresh sessions with other devices via PreKey messages.
-  await keyStorage.clearAllSessions();
+  await awaitScoped(scope, () => keyStorage.clearAllSessions());
 
   // Register with the server
-  await registerExistingKeys(newDeviceId);
+  await registerExistingKeys(newDeviceId, scope);
 
   // Prekey ID counter: the value from the backup must be preserved.
   // The backup metadata "nextPrekeyId" already contains the correct value.
   // If we overwrite it with PREKEY_BATCH_SIZE + 1, refreshPreKeys generates
   // new prekeys colliding with old IDs and overwrites the backup's private
   // keys → X3DH shared secret mismatch → OperationError.
-  const restoredNextId = await keyStorage.getMetadata<number>("nextPrekeyId");
+  const restoredNextId = await awaitScoped(scope, () => keyStorage.getMetadata<number>("nextPrekeyId"));
   if (!restoredNextId || restoredNextId < PREKEY_BATCH_SIZE + 1) {
-    await keyStorage.setMetadata("nextPrekeyId", PREKEY_BATCH_SIZE + 1);
+    await awaitScoped(scope, () => keyStorage.setMetadata("nextPrekeyId", PREKEY_BATCH_SIZE + 1));
   }
 
   return newDeviceId;
@@ -235,7 +269,8 @@ export async function registerRestoredDevice(): Promise<string> {
  * In envelope matching, current + legacy IDs are tried together.
  */
 export async function getLegacyDeviceIds(): Promise<string[]> {
-  return (await keyStorage.getMetadata<string[]>("legacyDeviceIds")) ?? [];
+  const scope = captureScope();
+  return (await awaitScoped(scope, () => keyStorage.getMetadata<string[]>("legacyDeviceIds"))) ?? [];
 }
 
 // ──────────────────────────────────
@@ -251,8 +286,13 @@ export async function getLegacyDeviceIds(): Promise<string[]> {
  * @param deviceId - This device's device ID
  */
 export async function refreshPreKeys(deviceId: string): Promise<void> {
+  const scope = captureScope();
+  const registration = await awaitScoped(scope, () => keyStorage.getRegistrationData());
+  if (!registration || registration.userId !== scope.ownerId || registration.deviceId !== deviceId) {
+    throw new Error("Device ID does not match the current account registration");
+  }
   // Check the prekey count on the server
-  const countResponse = await e2eeApi.getPrekeyCount(deviceId);
+  const countResponse = await awaitScoped(scope, () => e2eeApi.getPrekeyCount(deviceId));
   if (!countResponse.success || !countResponse.data) return;
 
   const serverCount = countResponse.data.count;
@@ -262,22 +302,21 @@ export async function refreshPreKeys(deviceId: string): Promise<void> {
   }
 
   // Generate a new batch
-  const nextId =
-    (await keyStorage.getMetadata<number>("nextPrekeyId")) ??
-    PREKEY_BATCH_SIZE + 1;
+  const nextId = (await awaitScoped(scope, () => keyStorage.getMetadata<number>("nextPrekeyId"))) ?? PREKEY_BATCH_SIZE + 1;
 
-  const newPreKeys = await signalProtocol.generateMorePreKeys(
+  const newPreKeys = await awaitScoped(scope, () => signalProtocol.generateMorePreKeys(
     nextId,
-    PREKEY_BATCH_SIZE
-  );
+    PREKEY_BATCH_SIZE,
+    () => isCurrent(scope)
+  ));
 
   // Upload to the server
-  const uploadResponse = await e2eeApi.uploadPrekeys(deviceId, {
+  const uploadResponse = await awaitScoped(scope, () => e2eeApi.uploadPrekeys(deviceId, {
     one_time_prekeys: newPreKeys.map((pk) => ({
       prekey_id: pk.id,
       public_key: pk.publicKey,
     })),
-  });
+  }));
 
   if (!uploadResponse.success) {
     console.error("[deviceManager] Failed to upload prekeys:", uploadResponse.error);
@@ -285,7 +324,7 @@ export async function refreshPreKeys(deviceId: string): Promise<void> {
   }
 
   // Update the ID for the next batch
-  await keyStorage.setMetadata("nextPrekeyId", nextId + PREKEY_BATCH_SIZE);
+  await awaitScoped(scope, () => keyStorage.setMetadata("nextPrekeyId", nextId + PREKEY_BATCH_SIZE));
 }
 
 /**
@@ -297,8 +336,13 @@ export async function refreshPreKeys(deviceId: string): Promise<void> {
  * @param deviceId - This device's device ID
  */
 export async function rotateSignedPreKey(deviceId: string): Promise<void> {
+  const scope = captureScope();
+  const registration = await awaitScoped(scope, () => keyStorage.getRegistrationData());
+  if (!registration || registration.userId !== scope.ownerId || registration.deviceId !== deviceId) {
+    throw new Error("Device ID does not match the current account registration");
+  }
   // Find the current signed prekey ID
-  const allSignedPreKeys = await keyStorage.getAllSignedPreKeys();
+  const allSignedPreKeys = await awaitScoped(scope, () => keyStorage.getAllSignedPreKeys());
   const currentMaxId = allSignedPreKeys.reduce(
     (max, spk) => Math.max(max, spk.id),
     0
@@ -306,14 +350,14 @@ export async function rotateSignedPreKey(deviceId: string): Promise<void> {
   const newId = currentMaxId + 1;
 
   // Generate a new signed prekey
-  const newSignedPreKey = await signalProtocol.rotateSignedPreKey(newId);
+  const newSignedPreKey = await awaitScoped(scope, () => signalProtocol.rotateSignedPreKey(newId, () => isCurrent(scope)));
 
   // Upload to the server
-  const response = await e2eeApi.updateSignedPrekey(deviceId, {
+  const response = await awaitScoped(scope, () => e2eeApi.updateSignedPrekey(deviceId, {
     signed_prekey: newSignedPreKey.publicKey,
     signed_prekey_id: newSignedPreKey.id,
     signed_prekey_signature: newSignedPreKey.signature,
-  });
+  }));
 
   if (!response.success) {
     console.error("[deviceManager] Failed to rotate signed prekey:", response.error);
@@ -323,7 +367,7 @@ export async function rotateSignedPreKey(deviceId: string): Promise<void> {
   // Clean up old signed prekeys (keep the last 2 — for in-flight messages)
   const sortedKeys = allSignedPreKeys.sort((a, b) => b.id - a.id);
   for (let i = 2; i < sortedKeys.length; i++) {
-    await keyStorage.deleteSignedPreKey(sortedKeys[i].id);
+    await awaitScoped(scope, () => keyStorage.deleteSignedPreKey(sortedKeys[i].id));
   }
 }
 
@@ -342,7 +386,8 @@ export async function rotateSignedPreKey(deviceId: string): Promise<void> {
 export async function removeDeviceFromServer(
   deviceId: string
 ): Promise<void> {
-  const response = await e2eeApi.removeDevice(deviceId);
+  const scope = captureScope();
+  const response = await awaitScoped(scope, () => e2eeApi.removeDevice(deviceId));
   if (!response.success) {
     console.error("[deviceManager] Failed to remove device:", response.error);
   }
@@ -355,7 +400,8 @@ export async function removeDeviceFromServer(
  * IndexedDB are cleared. This operation is irreversible.
  */
 export async function clearDevice(): Promise<void> {
-  await keyStorage.clearAllE2EEData();
+  const scope = captureScope();
+  await awaitScoped(scope, () => keyStorage.clearAllE2EEData());
 }
 
 // ──────────────────────────────────

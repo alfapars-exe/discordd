@@ -27,6 +27,11 @@ export type InboxDMRow = {
   activityAt: string;
 };
 
+/** Return the first unread row in the same section/order that InboxList renders. */
+export function selectTopUnreadInboxRow(requests: InboxDMRow[], conversations: InboxDMRow[]): InboxDMRow | undefined {
+  return [...requests, ...conversations].find((row) => row.unread > 0);
+}
+
 export function useInboxDMs(limit?: number) {
   const { t } = useTranslation("inbox");
   const channels = useDMStore((s) => s.channels);

@@ -35,6 +35,7 @@ import { useScreenShareStats } from "../../hooks/useScreenShareStats";
 import { useScreenShareReceiverStats } from "../../hooks/useScreenShareReceiverStats";
 import { useMicSync } from "../../hooks/useMicSync";
 import { useOutputDeviceSync } from "../../hooks/useOutputDeviceSync";
+import { useCameraDeviceSync } from "../../hooks/useCameraDeviceSync";
 import { useTrackSubscriptions } from "../../hooks/useTrackSubscriptions";
 import { useInitialRoomSync } from "../../hooks/useInitialRoomSync";
 import { useLiveKitDebugTracer } from "../../hooks/useLiveKitDebugTracer";
@@ -46,6 +47,7 @@ import "../../audio/audioDoctor";
 function VoiceStateManager() {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
+  useCameraDeviceSync(room);
 
   // Skip effects until initial connection sync is done
   const initialSyncDone = useRef(false);

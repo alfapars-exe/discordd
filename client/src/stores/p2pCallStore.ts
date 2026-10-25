@@ -24,24 +24,23 @@ import {
 } from "../webrtc/p2pPeerConnection";
 import { startScreenShare, stopScreenShare } from "../webrtc/p2pScreenShare";
 import { useToastStore } from "./toastStore";
+import { useAuthStore } from "./authStore";
+import { useVoiceStore } from "./voiceStore";
+import { cameraConstraintsFor, cameraErrorKey } from "../utils/cameraCapture";
+import { P2PMicrophoneSession } from "../webrtc/p2pMicrophone";
+
+function selectedCameraConstraints() {
+  const { cameraQuality, cameraFps, cameraDevice } = useVoiceStore.getState();
+  return cameraConstraintsFor(cameraQuality, cameraFps, cameraDevice);
+}
 
 // ─── Helpers ───
-
-/** Acquire a local mic (+ optional camera) stream for a call. */
-async function getMediaStream(callType: P2PCallType): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video:
-      callType === "video"
-        ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
-        : false,
-  });
-}
 
 /** Acquire a single high-quality camera track (used by toggleVideo). */
 async function getCameraTrack(): Promise<MediaStreamTrack> {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+    audio: false,
+    video: selectedCameraConstraints(),
   });
   return stream.getVideoTracks()[0];
 }
@@ -109,6 +108,39 @@ type P2PCallStore = {
 // ─── Store ───
 
 export const useP2PCallStore = create<P2PCallStore>((set, get) => {
+  let cameraPending = false;
+  let microphone: P2PMicrophoneSession | null = null;
+  let startingCall: P2PCall | null = null;
+  let preparation: { call: P2PCall; promise: Promise<MediaStream> } | null = null;
+  const prepareMedia = (call: P2PCall) => {
+    if (preparation?.call === call) return preparation.promise;
+    microphone?.dispose();
+    const session: P2PMicrophoneSession = new P2PMicrophoneSession({
+      isCurrent: () => microphone === session && get().activeCall === call,
+      isMuted: () => get().isMuted,
+      replaceTrack: async (previous, next) => {
+        const { peerConnection, localStream } = get();
+        if (microphone !== session || get().activeCall !== call || !peerConnection || !localStream) return false;
+        const sender = peerConnection.getSenders().find((candidate) => candidate.track === previous);
+        if (!sender) throw new Error("P2P microphone sender is unavailable");
+        next.enabled = !get().isMuted;
+        await sender.replaceTrack(next);
+        if (microphone !== session || get().peerConnection !== peerConnection || get().activeCall !== call) return false;
+        next.enabled = !get().isMuted;
+        localStream.removeTrack(previous);
+        localStream.addTrack(next);
+        return true;
+      },
+      onError: (error) => {
+        console.error("[p2p] Microphone settings update failed:", error);
+        useToastStore.getState().addToast("error", i18n.t("settings:microphoneUpdateFailed"));
+      },
+    });
+    microphone = session;
+    const promise = session.start(call.call_type === "video" ? selectedCameraConstraints() : false);
+    preparation = { call, promise };
+    return promise;
+  };
   /** Build the callbacks object that webrtc/p2pPeerConnection wires up. */
   const pcCallbacks = () => ({
     onRemoteStream: (s: MediaStream) => set({ remoteStream: s }),
@@ -165,7 +197,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     toggleVideo: () => {
       const { localStream, isVideoOn, peerConnection, activeCall } = get();
-      if (!localStream || !peerConnection || !activeCall) return;
+      if (!localStream || !peerConnection || !activeCall || cameraPending) return;
 
       if (isVideoOn) {
         for (const track of localStream.getVideoTracks()) track.enabled = false;
@@ -173,24 +205,32 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
         return;
       }
 
-      const existing = localStream.getVideoTracks()[0];
-      if (existing) {
-        existing.enabled = true;
-        set({ isVideoOn: true });
-        return;
-      }
-
-      // No video track yet — acquire one. addTrack triggers
-      // onnegotiationneeded so renegotiation happens automatically.
+      cameraPending = true;
       getCameraTrack()
-        .then((videoTrack) => {
+        .then(async (videoTrack) => {
+          const current = get();
+          if (current.activeCall !== activeCall || current.peerConnection !== peerConnection || current.localStream !== localStream) {
+            videoTrack.stop();
+            return;
+          }
+          const previous = localStream.getVideoTracks()[0];
+          const sender = previous ? peerConnection.getSenders().find((candidate) => candidate.track === previous) : undefined;
+          try {
+            if (sender) await sender.replaceTrack(videoTrack);
+            else peerConnection.addTrack(videoTrack, localStream);
+          } catch (error) { videoTrack.stop(); throw error; }
+          if (get().peerConnection !== peerConnection || get().activeCall !== activeCall) {
+            videoTrack.stop();
+            return;
+          }
+          if (previous) { localStream.removeTrack(previous); previous.stop(); }
           localStream.addTrack(videoTrack);
-          peerConnection.addTrack(videoTrack, localStream);
           set({ isVideoOn: true });
         })
         .catch((err) => {
           console.error("[p2p] Failed to get video:", err);
-        });
+          if (get().activeCall === activeCall) useToastStore.getState().addToast("error", i18n.t(`settings:${cameraErrorKey(err)}`));
+        }).finally(() => { cameraPending = false; });
     },
 
     toggleScreenShare: () => {
@@ -230,24 +270,34 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
       // Receiver defers media acquisition to handleSignal("offer") to avoid
       // racing with concurrent getUserMedia calls.
       if (!isCaller) return;
+      if (startingCall === activeCall) return;
+      startingCall = activeCall;
 
       try {
-        const stream = await getMediaStream(activeCall.call_type);
+        const stream = await prepareMedia(activeCall);
+        if (get().activeCall !== activeCall) { stopAllTracks(stream); return; }
         set({ localStream: stream, isVideoOn: activeCall.call_type === "video" });
 
         const pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks());
+        set({ peerConnection: pc });
         // addTrack triggers onnegotiationneeded; PC's handler creates the offer.
         for (const track of stream.getTracks()) pc.addTrack(track, stream);
         applyDegradationPreference(pc);
-        set({ peerConnection: pc });
+        microphone?.connect();
       } catch (err) {
         console.error("[p2p] WebRTC start error:", err);
-        get().cleanup();
+        if (get().activeCall === activeCall) get().cleanup();
+      } finally {
+        if (startingCall === activeCall) startingCall = null;
       }
     },
 
     cleanup: () => {
       const { localStream, remoteStream, peerConnection, _durationInterval } = get();
+      microphone?.dispose();
+      microphone = null;
+      preparation = null;
+      startingCall = null;
 
       // Stop all PC sender/receiver tracks first (covers screen-share track
       // not present in localStream).
@@ -320,8 +370,17 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
       }
     },
 
-    handleCallEnd: () => {
-      get().cleanup();
+    handleCallEnd: (data) => {
+      if(!data || typeof data.call_id!=="string" || !data.call_id)return;
+      const {activeCall,incomingCall}=get();
+      if(activeCall?.id===data.call_id){
+        if(data.reason==="no_answer" && activeCall.status==="ringing" && activeCall.caller_id===useAuthStore.getState().user?.id){
+          useToastStore.getState().addToast("info",i18n.t("common:callNoAnswer"));
+        }
+        get().cleanup();
+      }else if(incomingCall?.id===data.call_id){
+        set({incomingCall:null});
+      }
     },
 
     handleCallBusy: () => {
@@ -332,6 +391,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
     handleSignal: async (data) => {
       const { peerConnection, activeCall, _sendWS } = get();
+      if (!activeCall || data.call_id !== activeCall.id) return;
 
       switch (data.type) {
         case "offer": {
@@ -342,26 +402,41 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
           if (!pc) {
             if (!activeCall || !_sendWS) break;
-            pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks());
-
             // Acquire local media if we don't have it yet (receiver path).
             // setRemoteDescription is awaited below so onnegotiationneeded
             // fired by addTrack here cannot race past the offer state machine.
             let stream = get().localStream;
             if (!stream) {
               try {
-                stream = await getMediaStream(activeCall.call_type);
+                stream = await prepareMedia(activeCall);
+                if (get().activeCall !== activeCall) {
+                  stopAllTracks(stream);
+                  return;
+                }
                 set({ localStream: stream, isVideoOn: activeCall.call_type === "video" });
               } catch (err) {
                 console.error("[p2p] Failed to get media in handleSignal:", err);
+                if (get().activeCall === activeCall) get().cleanup();
+                return;
               }
             }
-            if (stream) {
-              for (const track of stream.getTracks()) pc.addTrack(track, stream);
+            // Another offer may have completed the shared media acquisition first.
+            pc = get().peerConnection;
+            if (!pc) {
+              pc = createPeerConnection(activeCall.id, _sendWS, pcCallbacks());
+              set({ peerConnection: pc });
+              try {
+                if (stream) {
+                  for (const track of stream.getTracks()) pc.addTrack(track, stream);
+                }
+                applyDegradationPreference(pc);
+                microphone?.connect();
+              } catch (error) {
+                console.error("[p2p] Failed to attach local media:", error);
+                if (get().peerConnection === pc) get().cleanup();
+                return;
+              }
             }
-
-            applyDegradationPreference(pc);
-            set({ peerConnection: pc });
           }
 
           await pc.setRemoteDescription(
@@ -374,7 +449,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
 
           const call = get().activeCall;
           const ws = get()._sendWS;
-          if (ws && call) {
+          if (ws && call === activeCall && get().peerConnection === pc) {
             ws("p2p_signal", { call_id: call.id, type: "answer", sdp: answer.sdp });
           }
           break;

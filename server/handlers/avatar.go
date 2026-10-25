@@ -123,9 +123,8 @@ func (h *AvatarHandler) freshUser(r *http.Request, userID string) (*models.User,
 // avatar files are deleted only after the DB update succeeds.
 // POST /api/users/me/avatar (multipart/form-data)
 func (h *AvatarHandler) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	user, ok := profileAccountUser(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
 
@@ -163,13 +162,12 @@ func (h *AvatarHandler) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	pkg.JSON(w, http.StatusOK, member)
 }
 
-// UploadUserBanner uploads the current user's profile banner (static,
-// 5:2). The previous banner file is deleted only after the DB update.
+// UploadUserBanner uploads the current user's profile banner (static poster
+// plus an optional safe animated GIF, both 5:2).
 // POST /api/users/me/banner (multipart/form-data)
 func (h *AvatarHandler) UploadUserBanner(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	user, ok := profileAccountUser(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
 
@@ -190,15 +188,18 @@ func (h *AvatarHandler) UploadUserBanner(w http.ResponseWriter, r *http.Request)
 	}
 
 	member, err := h.memberService.UpdateProfile(r.Context(), user.ID, &models.UpdateProfileRequest{
-		BannerURL: &res.URL,
+		BannerURL:         &res.URL,
+		BannerAnimatedURL: res.AnimatedURL,
 	})
 	if err != nil {
 		h.deleteOldFile(&res.URL)
+		h.deleteOldFile(res.AnimatedURL)
 		pkg.Error(w, err)
 		return
 	}
 
 	h.deleteOldFile(fresh.BannerURL)
+	h.deleteOldFile(fresh.BannerAnimatedURL)
 
 	pkg.JSON(w, http.StatusOK, member)
 }
@@ -207,9 +208,8 @@ func (h *AvatarHandler) UploadUserBanner(w http.ResponseWriter, r *http.Request)
 // then file) and returns the updated member.
 // DELETE /api/users/me/banner
 func (h *AvatarHandler) DeleteUserBanner(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(UserContextKey).(*models.User)
+	user, ok := profileAccountUser(w, r)
 	if !ok {
-		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "user not found in context")
 		return
 	}
 
@@ -234,6 +234,7 @@ func (h *AvatarHandler) DeleteUserBanner(w http.ResponseWriter, r *http.Request)
 	}
 
 	h.deleteOldFile(fresh.BannerURL)
+	h.deleteOldFile(fresh.BannerAnimatedURL)
 
 	pkg.JSON(w, http.StatusOK, member)
 }
@@ -382,7 +383,9 @@ func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request, ki
 		res, err = ProcessAvatar(r.Context(), file)
 		data, ext, animated = res.Static, res.StaticExt, res.Animated
 	case kindBanner:
-		data, ext, err = ResizeBannerBytes(file)
+		var res AvatarResult
+		res, err = ProcessBanner(r.Context(), file)
+		data, ext, animated = res.Static, res.StaticExt, res.Animated
 	default:
 		data, ext, err = ResizeAvatarBytes(file)
 	}
@@ -411,7 +414,11 @@ func (h *AvatarHandler) processUpload(w http.ResponseWriter, r *http.Request, ki
 	}
 	result := uploadResult{URL: fileURL}
 	if animated != nil {
-		animatedURL, err := h.writeUpload("avatar.gif", animated)
+		animatedName := "avatar.gif"
+		if kind == kindBanner {
+			animatedName = "banner.gif"
+		}
+		animatedURL, err := h.writeUpload(animatedName, animated)
 		if err != nil {
 			h.deleteOldFile(&fileURL)
 			return uploadResult{}, err

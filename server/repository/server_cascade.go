@@ -154,6 +154,23 @@ var deleteServerCascadeStmts = []struct {
 		args:  func(id string) []any { return []any{id} },
 	},
 	{
+		// Event deliveries and RSVPs only reference server_events, not the
+		// server directly. Remove them explicitly before their event parent so
+		// server deletion remains correct when FK enforcement is unavailable.
+		query: `DELETE FROM server_event_deliveries WHERE event_id IN (
+			SELECT id FROM server_events WHERE server_id = ?)`,
+		args: func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM server_event_rsvps WHERE event_id IN (
+			SELECT id FROM server_events WHERE server_id = ?)`,
+		args: func(id string) []any { return []any{id} },
+	},
+	{
+		query: `DELETE FROM server_events WHERE server_id = ?`,
+		args:  func(id string) []any { return []any{id} },
+	},
+	{
 		// Custom emojis (migration 086): the declared ON DELETE CASCADE to
 		// servers is not enforced on Turso. Their files are collected by
 		// GetFileURLsByServerID before this cascade runs.
@@ -231,9 +248,9 @@ var deleteServerCascadeStmts = []struct {
 // pkg.ErrNotFound if no server with that ID existed — matching the contract
 // the bare `DELETE FROM servers` call had before this. Tables with a real
 // enforced foreign key to servers (server_members, server_mutes, and others
-// confirmed at audit time) are intentionally left to that constraint — this
-// function only covers the tables proven to lack one; see
-// deleteServerCascadeStmts.
+// confirmed at audit time) are generally left to that constraint. Server
+// events and their descendants are explicitly removed despite FKs because
+// remote libSQL/Turso does not enforce them; see deleteServerCascadeStmts.
 //
 // q may be a *sql.DB or a *sql.Tx (database.TxQuerier covers both). Callers
 // that need the whole operation to be atomic should bind q to a transaction

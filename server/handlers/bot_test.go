@@ -23,7 +23,11 @@ type fakeBotService struct {
 	listBots []models.User
 	listErr  error
 
-	revokeErr error
+	revokeErr       error
+	transferRequest *models.ApplicationTransferRequest
+	transferCalls   int
+	resolvedAccept  bool
+	resolvedToken   string
 }
 
 func (f *fakeBotService) CreateBot(_ context.Context, _ string, _ models.CreateBotRequest) (*models.User, string, error) {
@@ -37,6 +41,77 @@ func (f *fakeBotService) ListBots(_ context.Context, _ string) ([]models.User, e
 
 func (f *fakeBotService) RevokeAllTokens(_ context.Context, _, _ string) error {
 	return f.revokeErr
+}
+
+func (f *fakeBotService) RequestOwnershipTransfer(_ context.Context, _, _, _ string) (*models.ApplicationTransferRequest, error) {
+	f.transferCalls++
+	return f.transferRequest, nil
+}
+
+func (f *fakeBotService) ListIncomingOwnershipTransfers(_ context.Context, _ string) ([]models.ApplicationTransferRequest, error) {
+	return nil, nil
+}
+
+func (f *fakeBotService) ResolveOwnershipTransfer(_ context.Context, _, _ string, _ bool) (string, error) {
+	f.transferCalls++
+	return f.resolvedToken, nil
+}
+
+func (f *fakeBotService) PutApplicationManifest(context.Context, string, string, string, bool, []models.ApplicationAction) (*models.ApplicationManifest, error) {
+	return nil, nil
+}
+func (f *fakeBotService) ListOwnedApplicationManifests(context.Context, string) ([]models.ApplicationManifest, error) {
+	return nil, nil
+}
+func (f *fakeBotService) InstallApplication(context.Context, string, string, string, []string) (*models.ApplicationInstallation, error) {
+	return nil, nil
+}
+func (f *fakeBotService) ListApplicationInstallations(context.Context, string) ([]models.ApplicationInstallation, error) {
+	return nil, nil
+}
+func (f *fakeBotService) ListAvailableApplicationActions(context.Context, string) ([]models.ApplicationAction, error) {
+	return nil, nil
+}
+func (f *fakeBotService) RevokeApplicationInstallation(context.Context, string, string) error {
+	return nil
+}
+func (f *fakeBotService) InvokeApplicationAction(context.Context, string, string, string, string, string) (*models.ApplicationInvocation, error) {
+	return nil, nil
+}
+func (f *fakeBotService) InvokeApplicationTest(context.Context, string, string, string) (*models.ApplicationInvocation, error) {
+	return nil, nil
+}
+func (f *fakeBotService) CompleteApplicationInvocation(context.Context, string, string, string, *string, *string) error {
+	return nil
+}
+func (f *fakeBotService) GetApplicationInvocation(context.Context, string, string) (*models.ApplicationInvocation, error) {
+	return nil, nil
+}
+
+func TestApplicationTransferHandlersRequireHumanAndReturnRotatedToken(t *testing.T) {
+	svc := &fakeBotService{transferRequest: &models.ApplicationTransferRequest{ID: "tr-1", BotUserID: "bot-1"}, resolvedToken: "hb_rotated"}
+	h := NewBotHandler(svc)
+	botReq := withUser(httptest.NewRequest(http.MethodPost, "/api/bots/bot-1/transfer-requests", strings.NewReader(`{"recipient_username":"next"}`)), &models.User{ID: "bot", IsBot: true})
+	botReq.SetPathValue("botID", "bot-1")
+	botRec := httptest.NewRecorder()
+	h.RequestTransfer(botRec, botReq)
+	if botRec.Code != http.StatusForbidden || svc.transferCalls != 0 {
+		t.Fatalf("bot status=%d calls=%d", botRec.Code, svc.transferCalls)
+	}
+	req := withUser(httptest.NewRequest(http.MethodPost, "/api/bots/bot-1/transfer-requests", strings.NewReader(`{"recipient_username":"next"}`)), &models.User{ID: "owner"})
+	req.SetPathValue("botID", "bot-1")
+	rec := httptest.NewRecorder()
+	h.RequestTransfer(rec, req)
+	if rec.Code != http.StatusCreated || svc.transferCalls != 1 {
+		t.Fatalf("request status=%d calls=%d body=%s", rec.Code, svc.transferCalls, rec.Body.String())
+	}
+	accept := withUser(httptest.NewRequest(http.MethodPost, "/api/application-transfer-requests/tr-1/resolve", strings.NewReader(`{"accept":true}`)), &models.User{ID: "recipient"})
+	accept.SetPathValue("requestID", "tr-1")
+	acceptRec := httptest.NewRecorder()
+	h.ResolveTransfer(acceptRec, accept)
+	if acceptRec.Code != http.StatusOK || !strings.Contains(acceptRec.Body.String(), "hb_rotated") {
+		t.Fatalf("accept status=%d body=%s", acceptRec.Code, acceptRec.Body.String())
+	}
 }
 
 var _ BotService = (*fakeBotService)(nil)
@@ -106,5 +181,22 @@ func TestBotCreate_BotCallerForbidden(t *testing.T) {
 	}
 	if svc.createCalls != 0 {
 		t.Errorf("CreateBot called %d times, want 0 (guard must short-circuit)", svc.createCalls)
+	}
+}
+
+func TestBotCreate_StrictBoundedJSON(t *testing.T) {
+	for _, body := range []string{
+		`{"username":"weatherbot","display_name":"W","unexpected":true}`,
+		`{"username":"weatherbot","display_name":"W"} {}`,
+		`{"username":"` + strings.Repeat("x", 9000) + `","display_name":"W"}`,
+	} {
+		svc := &fakeBotService{}
+		h := NewBotHandler(svc)
+		req := withUser(httptest.NewRequest(http.MethodPost, "/api/bots", strings.NewReader(body)), &models.User{ID: "owner-1"})
+		rec := httptest.NewRecorder()
+		h.Create(rec, req)
+		if rec.Code != http.StatusBadRequest || svc.createCalls != 0 {
+			t.Fatalf("status=%d calls=%d body=%s", rec.Code, svc.createCalls, rec.Body.String())
+		}
 	}
 }

@@ -203,6 +203,7 @@ func initRoutes(
 	d.registerServerListRoutes()
 	d.registerUploadRoutes()
 	d.registerDMRoutes()
+	d.registerGroupDMRoutes()
 	d.registerBlockReportRoutes()
 	d.registerDiagnosticsRoutes()
 	d.registerFeedbackRoutes()

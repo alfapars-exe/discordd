@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "implemented": [
+    "History Alt+Left/Right uses bounded app-owned routes, not external browser history; group-DM routes round-trip and removed groups resolve home.",
+    "Previous server/private context is re-resolved against current membership; account changes reset history. Return-to-call opens the connected voice/P2P destination without joining another room.",
+    "Create/join server and create group shortcuts use always-mounted, account/session-scoped modal launchers, including when the sidebar is absent or a V2 server is selected.",
+    "Inbox, focused-message thread creation, incoming call answer/reject, private-conversation call start and connected-channel soundboard reuse existing authorized actions.",
+    "Help and focused context menu have registry metadata; context menu supports enabled-item focus, arrow navigation, nested menus, Escape and focus restoration.",
+    "Voice command metadata/help/settings distinguish incoming-call, voice, message and reorder contexts. Recording, text entry and unrelated modal/menu precedence are preserved."
+  ],
+  "verification": [
+    "Final combined client run: 284 test files, 2642 tests passed, zero failed. Report C:/Users/PARS/AppData/Local/Temp/hichat-client-p8-actions-final-20261024.json.",
+    "Parent tsc -b and Vite production build passed. Existing large-chunk/ineffective-dynamic-import warnings remain.",
+    "Parent targeted ESLint on context menu, shared help/settings, launchers, server modal and AppLayout passed; agents' scoped registry/navigation/voice lint also passed.",
+    "Group/server modal tests cover missing sidebars, account/session changes and other open dialogs; real server modal test covers role, Tab boundaries, Escape suppression and focus return.",
+    "Agent navigation/registry focused suite: 6 files, 45 tests passed. Voice component/hook focused suite: 4 files, 50 tests passed.",
+    "After the full run, the focused context-menu guard was additionally hardened for plaintext-only editors and role-based dialogs; its 5 affected tests plus targeted lint, tsc -b and Vite build passed again."
+  ],
+  "follow_up": [
+    "Ctrl+Shift+E now marks the first visual unread Inbox DM at its exact latest message ID without accepting requests or replacing message history. Shift+PageUp resolves the authoritative oldest unread server-channel message and loads its surrounding window, guarded against stale account/navigation responses.",
+    "Device shortcut overrides now support enable/disable/reset with conflict detection and failed-storage rollback; fixed native bindings remain non-editable. These are implementation results, not Windows or assistive-technology acceptance.",
+    "Combined client snapshot before follow-up race hardening: 287 files, 2667 tests passed, zero failed; C:/Users/PARS/AppData/Local/Temp/hichat-client-shortcuts-current-20261024.json. Parent TypeScript and Vite build passed. Full Go go test ./... -timeout=15m passed, including repository unread cursor cases.",
+    "Follow-up parent TypeScript and 4-file/118-test suite passed after Inbox metadata revision guards and around-fetch auth-scoped cleanup, including exceptions/retry. Agent scoped ESLint passed. Plaintext-only editors retain native input behavior.",
+    "PageUp/PageDown now dispatch synchronously to the active visible channel/DM/group message scroller; consume only actual movement, preserving native paging at boundaries and inside editors, selection, modal/menu, capture and composition. Account/session identity and original source event are rechecked by the surface. Parent 4-file/52-test suite, TypeScript, scoped ESLint and Vite build passed.",
+    "Final combined snapshot including page-scroll and race hardening: 288 test files, 2684 passed, zero failed; C:/Users/PARS/AppData/Local/Temp/hichat-client-p8-p10-final-20261024.json. This snapshot precedes any subsequent focus-on-typing work.",
+    "Subsequent focus-on-typing implementation covers channel, DM and group composers: first printable character is inserted once at the preserved selection, without sending or losing files/reply/edit state; touch, interactive focus, hidden composers, permissions/disabled state, modal/menu, selection and account/session guards apply. Caret restoration checks draft revision. Parent focused suite passed 4 files/65 tests, scoped lint and production build passed. A jsdom hidden-layout fixture was corrected without weakening the production visibility check.",
+    "Post-focus full regression passed: 289 files, 2696 tests, zero failures; C:/Users/PARS/AppData/Local/Temp/hichat-focus-full-20261024.json.",
+    "Actual Ego Lite p2 /15174 My Notes smoke did not focus or insert q after textarea blur. No message was sent; test draft was restored empty. Source inspection found classic shell was the default (uiShell.ts and Docker build ARG), while new shortcut targets use the single-destination state. This failed browser smoke drove a real default-shell correction, not a test-only workaround.",
+    "Single-destination UI is now the code, Dockerfile and .env.example default; explicit VITE_UI_SHELL_V2=false remains rollback. Agent full regression: 290 files/2697 tests passed, including default/explicit-false configuration tests; TypeScript and Vite build passed.",
+    "With user authorization, reclaimed the same Ego Lite space 0 and adopted the existing /15174 HiChat tab as p1. Visible single-destination My Notes: blurred textarea, physical q produced exactly q and focused TEXTAREA; coarse pointer false. Physical z in sidebar search stayed in INPUT and left draft q unchanged. Ctrl+E yielded a real emoji picker while draft remained q. Final cleanup returned draft empty, zero tab bars and zero pickers; no message was sent. Browser task finished once, keeping the HiChat tab. This bounded browser smoke is not screen-reader, Windows package or two-client acceptance.",
+    "Subsequent DM/group oldest-unread and voice-text Ctrl+U implementations are tracked in p8-dm-group-unread-2026-10-24.json and p8-voice-text-2026-10-24.json. Final parent snapshot: 293 files/2728 tests passed, zero failures; C:/Users/PARS/AppData/Local/Temp/hichat-voice-text-final-20261024.json. TypeScript, scoped ESLint and Vite production build passed. Final full Go suite passed (repository 76.788s; services 32.699s). Existing Vite import/chunk warnings remain."
+  ],
+  "open": [
+    "Windows/browser real keyboard layout, assistive technology and two-client call acceptance have not been executed for these changes.",
+    "Lo-fi action, unsupported group message-command contexts and other P8 helper/application work remain open. DM/group unread jumps and voice-text require real browser/two-client acceptance; focus-on-typing still requires Windows/assistive-technology acceptance beyond the bounded browser smoke.",
+    "No publication, installer or full P8/release acceptance is claimed."
+  ]
+}

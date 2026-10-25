@@ -18,12 +18,15 @@
  * - metadata: General metadata (key-value)
  *
  * Security note:
- * IndexedDB is the browser's sandboxed storage. Data is written to disk
- * unencrypted, but is protected by OS-level FDE (Full Disk Encryption).
- * This is the same approach used by Signal Desktop and Element.
+ * Existing identity/session/message-cache records are not encrypted at rest
+ * by this wrapper; protection depends on browser and device/OS security.
+ * Pending-send metadata uses a separate AES-GCM envelope and a non-exportable
+ * local CryptoKey. Same-origin code can still use that key; this is not an
+ * XSS defense and does not establish that OS full-disk encryption is enabled.
  */
 
 import { openDB, type IDBPDatabase } from "idb";
+import { SERVER_URL } from "../utils/constants";
 import type {
   StoredIdentityKeyPair,
   StoredSigningKeyPair,
@@ -35,91 +38,249 @@ import type {
   CachedDecryptedMessage,
   RegistrationData,
 } from "./types";
+import {
+  getAuthSessionSnapshot,
+  subscribeAuthGenerationChanges,
+  subscribeAuthOwnerChanges,
+} from "../api/authSessionEvents";
+
+type GuardedTransaction = { abort: () => void; done: Promise<unknown> };
+
+function abortWriteOnSessionChange(tx: GuardedTransaction, isCurrent: () => boolean): () => void {
+  const abortIfStale = () => {
+    if (isCurrent()) return;
+    try { tx.abort(); } catch { /* transaction may already be complete */ }
+  };
+  const stopGeneration = subscribeAuthGenerationChanges(abortIfStale);
+  const stopOwner = subscribeAuthOwnerChanges(abortIfStale);
+  return () => { stopGeneration(); stopOwner(); };
+}
+
+async function guardedPut(
+  tx: GuardedTransaction,
+  isCurrent: () => boolean,
+  put: () => Promise<unknown>
+): Promise<void> {
+  const stopWatching = abortWriteOnSessionChange(tx, isCurrent);
+  try {
+    if (!isCurrent()) { tx.abort(); await tx.done.catch(() => {}); return; }
+    await put();
+    if (!isCurrent()) { tx.abort(); await tx.done.catch(() => {}); return; }
+    await tx.done;
+  } catch (error) {
+    try { tx.abort(); } catch { /* transaction may already be complete */ }
+    await tx.done.catch(() => {});
+    if (isCurrent()) throw error;
+  } finally {
+    stopWatching();
+  }
+}
 
 // ──────────────────────────────────
-// Database Schema
+// Account-scoped database and schema
 // ──────────────────────────────────
 
-const DB_NAME = "mqvi_e2ee";
 const DB_VERSION = 1;
+export const KEY_DATABASE_STORES = [
+  "identity", "signing", "registration", "signedPreKeys", "preKeys",
+  "sessions", "senderKeys", "trustedIdentities", "messageCache", "metadata",
+] as const;
+
+type AuthScope = { ownerId: string; generation: number; backendUrl: string; dbName: string };
+type DbEntry = { scope: AuthScope; promise: Promise<IDBPDatabase>; db?: IDBPDatabase };
+type KeyStoreName = (typeof KEY_DATABASE_STORES)[number];
+const dbEntries = new Map<string, DbEntry>();
+
+function canonicalBackendUrl(value: string): string {
+  const source = value || (typeof location !== "undefined" ? location.origin : "");
+  if (!source || source.length > 2048) throw new Error("e2ee_backend_scope_unavailable");
+  let url: URL;
+  try { url = new URL(source); } catch { throw new Error("e2ee_backend_scope_invalid"); }
+  if (url.protocol !== "https:" && url.protocol !== "http:" && url.protocol !== "app:") {
+    throw new Error("e2ee_backend_scope_invalid");
+  }
+  if (url.username || url.password || url.search || url.hash) throw new Error("e2ee_backend_scope_invalid");
+  const pathname = url.pathname.replace(/\/+$/, "");
+  return `${url.origin}${pathname}`;
+}
+
+/** Deterministic, collision-resistant account/backend-specific IndexedDB name. */
+export async function getAccountDatabaseName(ownerId: string, backendUrl: string): Promise<string> {
+  if (typeof ownerId !== "string" || !ownerId.trim() || ownerId.length > 256) {
+    throw new Error("e2ee_account_scope_unavailable");
+  }
+  const backend = canonicalBackendUrl(backendUrl);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify([backend, ownerId]))
+  );
+  const suffix = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `mqvi_e2ee.account.v1.${suffix}`;
+}
+
+function scopeIsCurrent(scope: AuthScope): boolean {
+  const snapshot = getAuthSessionSnapshot();
+  if (snapshot.ownerId !== scope.ownerId || snapshot.generation !== scope.generation) return false;
+  try { return canonicalBackendUrl(SERVER_URL) === scope.backendUrl; }
+  catch { return false; }
+}
+
+function assertScope(scope: AuthScope): void {
+  if (!scopeIsCurrent(scope)) throw new Error("e2ee_account_scope_changed");
+}
+
+function captureScope(): { ownerId: string; generation: number; backendUrl: string } {
+  const snapshot = getAuthSessionSnapshot();
+  if (!snapshot.ownerId || !snapshot.ownerId.trim() || snapshot.ownerId.length > 256) {
+    throw new Error("e2ee_account_scope_unavailable");
+  }
+  return {
+    ownerId: snapshot.ownerId,
+    generation: snapshot.generation,
+    backendUrl: canonicalBackendUrl(SERVER_URL),
+  };
+}
+
+function scopedIdbName(scope: Omit<AuthScope, "dbName">): Promise<string> {
+  return getAccountDatabaseName(scope.ownerId, scope.backendUrl);
+}
 
 /**
- * IndexedDB connection — lazy initialization.
- *
- * openDB is only called on first access; subsequent accesses
- * use the same db instance. Singleton pattern.
+ * Schema creator shared with the explicit legacy-import path. This module
+ * never opens or mutates the legacy database.
  */
-let dbInstance: IDBPDatabase | null = null;
-
-async function getDB(): Promise<IDBPDatabase> {
-  if (dbInstance) return dbInstance;
-
-  dbInstance = await openDB(DB_NAME, DB_VERSION, {
-    /**
-     * upgrade callback — runs when the DB is first created or the version is bumped.
-     *
-     * In IndexedDB, schema changes can only be made inside an upgrade transaction.
-     * Each object store is like a table. keyPath specifies the primary key.
-     * Indexes are added for query performance (similar to a SQL INDEX).
-     */
-    upgrade(db) {
+export function upgradeKeyDatabase(db: IDBPDatabase): void {
       // Identity key pair — single record under the "primary" key
-      if (!db.objectStoreNames.contains("identity")) {
-        db.createObjectStore("identity");
-      }
-
-      // Ed25519 signing key pair
-      if (!db.objectStoreNames.contains("signing")) {
-        db.createObjectStore("signing");
-      }
-
-      // Device registration info
-      if (!db.objectStoreNames.contains("registration")) {
-        db.createObjectStore("registration");
-      }
-
-      // Signed prekeys — keyed by id
-      if (!db.objectStoreNames.contains("signedPreKeys")) {
-        db.createObjectStore("signedPreKeys", { keyPath: "id" });
-      }
-
-      // One-time prekeys — keyed by id
-      if (!db.objectStoreNames.contains("preKeys")) {
-        db.createObjectStore("preKeys", { keyPath: "id" });
-      }
-
-      // Signal sessions — out-of-line key built by compositeKey function
-      if (!db.objectStoreNames.contains("sessions")) {
-        db.createObjectStore("sessions");
-      }
-
-      // Sender Key sessions — out-of-line key
-      if (!db.objectStoreNames.contains("senderKeys")) {
-        db.createObjectStore("senderKeys");
-      }
-
-      // Trusted device identities — out-of-line key
-      if (!db.objectStoreNames.contains("trustedIdentities")) {
-        db.createObjectStore("trustedIdentities");
-      }
-
-      // Decrypted message cache — keyed by messageId, indexed by channelId
+      if (!db.objectStoreNames.contains("identity")) db.createObjectStore("identity");
+      if (!db.objectStoreNames.contains("signing")) db.createObjectStore("signing");
+      if (!db.objectStoreNames.contains("registration")) db.createObjectStore("registration");
+      if (!db.objectStoreNames.contains("signedPreKeys")) db.createObjectStore("signedPreKeys", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("preKeys")) db.createObjectStore("preKeys", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions");
+      if (!db.objectStoreNames.contains("senderKeys")) db.createObjectStore("senderKeys");
+      if (!db.objectStoreNames.contains("trustedIdentities")) db.createObjectStore("trustedIdentities");
       if (!db.objectStoreNames.contains("messageCache")) {
-        const store = db.createObjectStore("messageCache", {
-          keyPath: "messageId",
-        });
+        const store = db.createObjectStore("messageCache", { keyPath: "messageId" });
         store.createIndex("byChannel", "channelId", { unique: false });
         store.createIndex("byDMChannel", "dmChannelId", { unique: false });
       }
+      if (!db.objectStoreNames.contains("metadata")) db.createObjectStore("metadata");
+}
 
-      // General metadata (key-value)
-      if (!db.objectStoreNames.contains("metadata")) {
-        db.createObjectStore("metadata");
+function wrapPromise<T>(promise: Promise<T>, scope: AuthScope): Promise<T> {
+  return promise.then((value) => { assertScope(scope); return wrapIdbValue(value, scope) as T; });
+}
+
+function wrapTransaction<T extends GuardedTransaction>(tx: T, scope: AuthScope): T {
+  const transaction = tx;
+  const abortIfStale = () => {
+    if (scopeIsCurrent(scope)) return;
+    try { transaction.abort(); } catch { /* transaction already completed */ }
+  };
+  const stopGeneration = subscribeAuthGenerationChanges(abortIfStale);
+  const stopOwner = subscribeAuthOwnerChanges(abortIfStale);
+  transaction.done.then(() => { stopGeneration(); stopOwner(); }, () => { stopGeneration(); stopOwner(); });
+  return wrapIdbValue(tx, scope) as T;
+}
+
+function wrapIdbValue<T>(value: T, scope: AuthScope, database = false): T {
+  if (!value || typeof value !== "object") return value;
+  if (value instanceof Promise) return wrapPromise(value, scope) as T;
+  const candidate = value as Record<PropertyKey, unknown>;
+  const isDatabase = typeof candidate.transaction === "function" && "objectStoreNames" in candidate;
+  const isTransaction = "done" in candidate && "store" in candidate && typeof candidate.abort === "function";
+  const isStore = typeof candidate.put === "function" && typeof candidate.get === "function" && typeof candidate.index === "function";
+  const isIndex = typeof candidate.openCursor === "function" && typeof candidate.getAll === "function";
+  const isCursor = typeof candidate.continue === "function" && "key" in candidate;
+  if (!isDatabase && !isTransaction && !isStore && !isIndex && !isCursor) return value;
+  return new Proxy(value as object, {
+    get(target, property) {
+      const member = Reflect.get(target, property, target) as unknown;
+      if (property === "transaction" && typeof member === "function") {
+        return (...args: unknown[]) => {
+          assertScope(scope);
+          return wrapTransaction(Reflect.apply(member, target, args), scope);
+        };
       }
+      if (database && (property === "put" || property === "add" || property === "delete" || property === "clear") && typeof member === "function") {
+        return async (...args: unknown[]) => {
+          assertScope(scope);
+          const [storeName, ...storeArgs] = args;
+          if (typeof storeName !== "string" || !(KEY_DATABASE_STORES as readonly string[]).includes(storeName)) {
+            throw new Error("e2ee_invalid_store");
+          }
+          const rawTx = (target as IDBPDatabase).transaction(storeName as KeyStoreName, "readwrite");
+          const tx = wrapTransaction(rawTx, scope) as unknown as {
+            store: Record<string, (...values: unknown[]) => Promise<unknown>>;
+            done: Promise<unknown>;
+          };
+          const result = await tx.store[property](...storeArgs);
+          await tx.done;
+          assertScope(scope);
+          return result;
+        };
+      }
+      if (typeof member !== "function") {
+        if (property === "done" && member instanceof Promise) return wrapPromise(member, scope);
+        return wrapIdbValue(member, scope);
+      }
+      return (...args: unknown[]) => {
+        assertScope(scope);
+        const result = Reflect.apply(member, target, args) as unknown;
+        return result instanceof Promise ? wrapPromise(result, scope) : wrapIdbValue(result, scope);
+      };
     },
-  });
+  }) as T;
+}
 
-  return dbInstance;
+function closeStaleEntries(): void {
+  for (const [name, entry] of dbEntries) {
+    if (scopeIsCurrent(entry.scope)) continue;
+    entry.db?.close();
+    dbEntries.delete(name);
+    void entry.promise.then((db) => db.close(), () => {});
+  }
+}
+
+subscribeAuthGenerationChanges(closeStaleEntries);
+subscribeAuthOwnerChanges(closeStaleEntries);
+
+async function getDB(): Promise<IDBPDatabase> {
+  const captured = captureScope();
+  const dbName = await scopedIdbName(captured);
+  const scope: AuthScope = { ...captured, dbName };
+  assertScope(scope);
+
+  let entry = dbEntries.get(dbName);
+  if (!entry) {
+    const created: DbEntry = { scope, promise: Promise.resolve(null as unknown as IDBPDatabase) };
+    created.promise = openDB(dbName, DB_VERSION, {
+      upgrade: upgradeKeyDatabase,
+    }).then((db) => {
+      created.db = db;
+      if (dbEntries.get(dbName) !== created || !scopeIsCurrent(scope)) {
+        db.close();
+        throw new Error("e2ee_account_scope_changed");
+      }
+      return db;
+    });
+    entry = created;
+    dbEntries.set(dbName, created);
+  }
+
+  const db = await entry.promise;
+  assertScope(scope);
+  if (dbEntries.get(dbName) !== entry) { db.close(); throw new Error("e2ee_account_scope_changed"); }
+  return wrapIdbValue(db, scope, true);
+}
+
+/** Open an active account's database for the explicit migration controller. */
+export async function openScopedKeyDatabase(ownerId: string, backendUrl: string): Promise<IDBPDatabase> {
+  const snapshot = getAuthSessionSnapshot();
+  if (snapshot.ownerId !== ownerId || canonicalBackendUrl(SERVER_URL) !== canonicalBackendUrl(backendUrl)) {
+    throw new Error("e2ee_account_scope_unavailable");
+  }
+  return getDB();
 }
 
 // ──────────────────────────────────
@@ -325,10 +486,13 @@ export async function getAllPreKeys(): Promise<StoredPreKey[]> {
 /**
  * Saves/updates a Signal session.
  */
-export async function saveSession(session: StoredSession): Promise<void> {
+export async function saveSession(session: StoredSession, isCurrent: () => boolean = () => true): Promise<void> {
+  if (!isCurrent()) return;
   const db = await getDB();
+  if (!isCurrent()) return;
   const key = sessionKey(session.userId, session.deviceId);
-  await db.put("sessions", session, key);
+  const tx = db.transaction("sessions", "readwrite");
+  await guardedPut(tx, isCurrent, () => tx.store.put(session, key));
 }
 
 /**
@@ -409,14 +573,17 @@ export async function clearAllSessions(): Promise<void> {
 /**
  * Saves/updates a Sender Key.
  */
-export async function saveSenderKey(senderKey: StoredSenderKey): Promise<void> {
+export async function saveSenderKey(senderKey: StoredSenderKey, isCurrent: () => boolean = () => true): Promise<void> {
+  if (!isCurrent()) return;
   const db = await getDB();
+  if (!isCurrent()) return;
   const key = senderKeyKey(
     senderKey.channelId,
     senderKey.senderUserId,
     senderKey.senderDeviceId
   );
-  await db.put("senderKeys", senderKey, key);
+  const tx = db.transaction("senderKeys", "readwrite");
+  await guardedPut(tx, isCurrent, () => tx.store.put(senderKey, key));
 }
 
 /**
@@ -471,11 +638,15 @@ export async function getAllSenderKeys(): Promise<StoredSenderKey[]> {
  * Saves/updates a trusted identity.
  */
 export async function saveTrustedIdentity(
-  identity: TrustedIdentity
+  identity: TrustedIdentity,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  if (!isCurrent()) return;
   const db = await getDB();
+  if (!isCurrent()) return;
   const key = trustedIdentityKey(identity.userId, identity.deviceId);
-  await db.put("trustedIdentities", identity, key);
+  const tx = db.transaction("trustedIdentities", "readwrite");
+  await guardedPut(tx, isCurrent, () => tx.store.put(identity, key));
 }
 
 /**
@@ -578,10 +749,31 @@ export async function setTrustedIdentityVerified(
  * Writes a decrypted message to the cache.
  */
 export async function cacheDecryptedMessage(
-  message: CachedDecryptedMessage
+  message: CachedDecryptedMessage,
+  isCurrent:()=>boolean=()=>true
 ): Promise<void> {
+  if(!isCurrent())return;
   const db = await getDB();
-  await db.put("messageCache", message);
+  if(!isCurrent())return;
+  const tx = db.transaction("messageCache", "readwrite");
+  const abortIfStale = () => {
+    if (isCurrent()) return;
+    try { tx.abort(); } catch { /* transaction may already be complete */ }
+  };
+  const stopGeneration = subscribeAuthGenerationChanges(abortIfStale);
+  const stopOwner = subscribeAuthOwnerChanges(abortIfStale);
+  try {
+    await tx.store.put(message);
+    if (!isCurrent()) { tx.abort(); await tx.done.catch(() => {}); return; }
+    await tx.done;
+  } catch (error) {
+    try { tx.abort(); } catch { /* transaction may already be complete */ }
+    await tx.done.catch(() => {});
+    if (isCurrent()) throw error;
+  } finally {
+    stopGeneration();
+    stopOwner();
+  }
 }
 
 /**
@@ -599,18 +791,78 @@ export async function getCachedDecryptedMessage(
   return (result as CachedDecryptedMessage) ?? null;
 }
 
+/** Remove only a matching 1:1 DM cache row in the caller's active session.
+ * Scope read and deletion share one transaction, preventing TOCTOU replacement. */
+export async function deleteCachedDMMessage(
+  messageId:string,dmChannelId:string,isCurrent:()=>boolean
+):Promise<boolean> {
+  if (!isCurrent()) return false;
+  const db=await getDB();
+  if (!isCurrent()) return false;
+  const tx=db.transaction("messageCache","readwrite");
+  try {
+    const record=await tx.store.get(messageId) as CachedDecryptedMessage|undefined;
+    if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
+    if (!record || record.messageId!==messageId || record.channelId!=="" || record.dmChannelId!==dmChannelId) {
+      await tx.done;return false;
+    }
+    await tx.store.delete(messageId);
+    if (!isCurrent()) {tx.abort();await tx.done.catch(()=>{});return false;}
+    await tx.done;
+    return true;
+  } catch(error) {
+    try {tx.abort();} catch {/* The transaction may already have completed. */}
+    await tx.done.catch(()=>{});
+    if (!isCurrent()) return false;
+    throw error;
+  }
+}
+
 /**
  * Writes multiple decrypted messages to the cache.
  */
 export async function cacheDecryptedMessages(
-  messages: CachedDecryptedMessage[]
+  messages: CachedDecryptedMessage[],
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
+  if (!isCurrent()) return;
   const db = await getDB();
+  if (!isCurrent()) return;
   const tx = db.transaction("messageCache", "readwrite");
-  for (const msg of messages) {
-    await tx.store.put(msg);
+  const abortIfStale = () => {
+    if (isCurrent()) return;
+    try { tx.abort(); } catch { /* transaction may already be complete */ }
+  };
+  const stopGeneration = subscribeAuthGenerationChanges(abortIfStale);
+  const stopOwner = subscribeAuthOwnerChanges(abortIfStale);
+  try {
+    for (const msg of messages) {
+      if (!isCurrent()) {
+        tx.abort();
+        await tx.done.catch(() => {});
+        return;
+      }
+      await tx.store.put(msg);
+      if (!isCurrent()) {
+        tx.abort();
+        await tx.done.catch(() => {});
+        return;
+      }
+    }
+    if (!isCurrent()) {
+      tx.abort();
+      await tx.done.catch(() => {});
+      return;
+    }
+    await tx.done;
+  } catch (error) {
+    try { tx.abort(); } catch { /* transaction may already be complete */ }
+    await tx.done.catch(() => {});
+    if (isCurrent()) throw error;
+  } finally {
+    stopGeneration();
+    stopOwner();
   }
-  await tx.done;
 }
 
 /**
@@ -702,6 +954,82 @@ export async function getMetadata<T>(key: string): Promise<T | null> {
   return (result as T) ?? null;
 }
 
+// Local pending sends use the existing metadata store so schema v1, logout
+// cleanup and the in-memory backup rollback snapshot stay compatible. These
+// namespaces are deliberately NOT included in exported portable backups.
+export function pendingGroupSendPrefix(accountId:string,deviceId:string):string{return `group_pending:v1:${JSON.stringify([accountId,deviceId])}:`}
+function pendingGroupKeyName(accountId:string,deviceId:string):string{return `group_pending_key:v1:${JSON.stringify([accountId,deviceId])}`}
+
+export async function getPendingGroupSendKey(accountId:string,deviceId:string):Promise<CryptoKey|null>{return getMetadata<CryptoKey>(pendingGroupKeyName(accountId,deviceId))}
+
+export async function getOrCreatePendingGroupSendKey(accountId:string,deviceId:string,isCurrent:()=>boolean):Promise<CryptoKey>{
+  if(!isCurrent())throw new Error("pending_send_context_changed");
+  const existing=await getPendingGroupSendKey(accountId,deviceId);if(existing)return existing;
+  const generated=await crypto.subtle.generateKey({name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+  const db=await getDB();if(!isCurrent())throw new Error("pending_send_context_changed");
+  // A write transaction serializes independent tabs generating their first
+  // key concurrently. Never replace the winner with a different key.
+  const tx=db.transaction("metadata","readwrite");
+  const keyName=pendingGroupKeyName(accountId,deviceId),winner=await tx.store.get(keyName) as CryptoKey|undefined;
+  if(winner){await tx.done;return winner}
+  const prefix=pendingGroupSendPrefix(accountId,deviceId);
+  const orphan=await tx.store.openKeyCursor(IDBKeyRange.bound(prefix,`${prefix}\uffff`));
+  if(orphan||!isCurrent()){tx.abort();await tx.done.catch(()=>{});throw new Error(orphan?"pending_send_key_missing":"pending_send_context_changed")}
+  await tx.store.put(generated,keyName);await tx.done;return generated;
+}
+
+export async function putPendingGroupSendRecord(accountId:string,deviceId:string,groupId:string,requestId:string,value:unknown,isCurrent:()=>boolean):Promise<void>{
+  const token=(value as {writeToken?:unknown}|null)?.writeToken;if(typeof token!=="string"||!token)throw new Error("pending_send_invalid_record");
+  const db=await getDB();if(!isCurrent())throw new Error("pending_send_context_changed");
+  const key=pendingGroupSendPrefix(accountId,deviceId)+JSON.stringify([groupId,requestId]);
+  const tx=db.transaction("metadata","readwrite");
+  if(await tx.store.get(key)!==undefined){await tx.done;throw new Error("pending_send_already_stored")}
+  if(!isCurrent()){tx.abort();await tx.done.catch(()=>{});throw new Error("pending_send_context_changed")}
+  await tx.store.put(value,key);
+  if(!isCurrent()){try{tx.abort()}catch{/* commit may already have completed */}}
+  try{await tx.done}catch(error){if(!isCurrent())throw new Error("pending_send_context_changed",{cause:error});throw error}
+  if(!isCurrent()){
+    const cleanup=db.transaction("metadata","readwrite"),stored=await cleanup.store.get(key) as {writeToken?:unknown}|undefined;
+    if(stored?.writeToken===token)await cleanup.store.delete(key);await cleanup.done;throw new Error("pending_send_context_changed");
+  }
+}
+
+export async function listPendingGroupSendRecords(accountId:string,deviceId:string):Promise<Array<{groupId:string;requestId:string;value:unknown}>>{
+  const db=await getDB(),prefix=pendingGroupSendPrefix(accountId,deviceId),tx=db.transaction("metadata","readonly");
+  const entries:Array<{groupId:string;requestId:string;value:unknown}>=[];
+  let cursor=await tx.store.openCursor(IDBKeyRange.bound(prefix,`${prefix}\uffff`));
+  while(cursor){
+    const scope=JSON.parse(String(cursor.key).slice(prefix.length)) as unknown;
+    if(!Array.isArray(scope)||scope.length!==2||scope.some(id=>typeof id!=="string"))throw new Error("pending_send_invalid_scope");
+    entries.push({groupId:scope[0],requestId:scope[1],value:cursor.value});
+    cursor=await cursor.continue();
+  }
+  await tx.done;return entries;
+}
+
+export async function deletePendingGroupSendRecord(accountId:string,deviceId:string,groupId:string,requestId:string):Promise<void>{
+  const db=await getDB();await db.delete("metadata",pendingGroupSendPrefix(accountId,deviceId)+JSON.stringify([groupId,requestId]));
+}
+
+export async function getPendingGroupSendRecord(accountId:string,deviceId:string,groupId:string,requestId:string):Promise<unknown|null>{
+  const db=await getDB();return (await db.get("metadata",pendingGroupSendPrefix(accountId,deviceId)+JSON.stringify([groupId,requestId])))??null;
+}
+
+/** CAS updates retain the previous record on a conflict or abort. A stale
+ * post-commit context must not delete the original pending work. */
+export async function replacePendingGroupSendRecord(accountId:string,deviceId:string,groupId:string,requestId:string,expectedToken:string,value:unknown,isCurrent:()=>boolean):Promise<boolean>{
+  const next=(value as {writeToken?:unknown}|null)?.writeToken;
+  if(!expectedToken||typeof next!=="string"||!next||next===expectedToken)throw new Error("pending_send_invalid_record");
+  const db=await getDB();if(!isCurrent())throw new Error("pending_send_context_changed");
+  const key=pendingGroupSendPrefix(accountId,deviceId)+JSON.stringify([groupId,requestId]),tx=db.transaction("metadata","readwrite");
+  const stored=await tx.store.get(key) as {writeToken?:unknown}|undefined;
+  if(stored?.writeToken!==expectedToken){await tx.done;return false}
+  if(!isCurrent()){tx.abort();await tx.done.catch(()=>{});throw new Error("pending_send_context_changed")}
+  await tx.store.put(value,key);if(!isCurrent()){try{tx.abort()}catch{/* the transaction may have completed */}}
+  try{await tx.done}catch(error){if(!isCurrent())throw new Error("pending_send_context_changed",{cause:error});throw error}
+  if(!isCurrent())throw new Error("pending_send_context_changed");return true;
+}
+
 /**
  * Lists every metadata entry as [key, value] pairs.
  *
@@ -788,8 +1116,10 @@ export async function hasLocalKeys(): Promise<boolean> {
  * Used for tests and cleanup.
  */
 export async function closeDB(): Promise<void> {
-  if (dbInstance) {
-    dbInstance.close();
-    dbInstance = null;
+  const entries = [...dbEntries.values()];
+  dbEntries.clear();
+  for (const entry of entries) {
+    entry.db?.close();
+    void entry.promise.then((db) => db.close(), () => {});
   }
 }

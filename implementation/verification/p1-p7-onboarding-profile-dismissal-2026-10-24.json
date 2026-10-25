@@ -1,0 +1,25 @@
+{
+  "status": "implemented_unverified",
+  "phases": ["P1", "P7"],
+  "changes": [
+    "Download prompt waits until welcome is dismissed; local dismissal is keyed by account ID.",
+    "Anchored profile card closes on Escape unless a child modal is open, input composition is active or the event was already handled.",
+    "Nickname editor consumes Escape to cancel editing without dismissing the profile card."
+  ],
+  "verification": {
+    "focusedVitest": "3 files, 15 tests passed",
+    "fullClientVitest": "269 files, 2531 tests passed, 57.89 seconds",
+    "typecheck": "tsc -b passed",
+    "eslint": "All seven touched source/test files passed",
+    "build": "Vite production build passed, 2.79 seconds",
+    "liveProfileEscape": "Ego Lite task 9, round-24.mjs: reloaded current client, opened own profile through visible button, pressed Escape, observed .member-card hidden"
+  },
+  "warnings": [
+    "Existing React act, mock API URL and deliberate crypto failure diagnostics in test suite.",
+    "Existing Vite native config, large chunks and ineffective dynamic import warnings."
+  ],
+  "remaining": [
+    "Live first-run onboarding sequencing and full focus/keyboard acceptance matrix.",
+    "No whole P1/P7 acceptance or Windows release implied."
+  ]
+}

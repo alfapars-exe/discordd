@@ -11,4 +11,5 @@ export type Invite = {
   created_at: string;
   creator_username: string;
   creator_display_name: string | null;
+  channel_id?: string | null;
 };

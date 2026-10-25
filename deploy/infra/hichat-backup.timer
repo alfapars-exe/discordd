@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly HiChat PostgreSQL recovery point
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

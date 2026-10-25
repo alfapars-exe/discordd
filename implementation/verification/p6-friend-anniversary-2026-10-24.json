@@ -1,0 +1,26 @@
+{
+  "phase": "P6",
+  "status": "implemented_unverified",
+  "implemented": [
+    "Accepted friendship timestamp and indexed UTC anniversary day are additive SQLite/PostgreSQL schema fields, backfilled from acceptance-updated timestamp for existing accepted rows.",
+    "Bounded cancellable worker processes due accepted relationships, resets cursor on UTC day rollover, and observes Feb 29 on Feb 28 in non-leap years.",
+    "Transaction rechecks both accounts, relationship, blocking and recipient preference; persistent per-relationship/year/recipient decisions prevent duplicate delivery, retroactive opt-in and recreation after notification deletion.",
+    "Worker is wired into application startup/shutdown; committed system notifications use friend_anniversary action and years payload with no private channel context.",
+    "Localized inbox rows and desktop/sound/taskbar cues respect recipient preference, DND/offline, focus and duplicate delivery. Personal export includes acceptance timestamp."
+  ],
+  "verification": [
+    "Implementing agent focused SQLite repository/worker tests and root compile passed.",
+    "Root PostgreSQL 18 isolated-schema FriendAnniversary/Friendship/DataExport tests passed count=3 (4.556s).",
+    "Final PostgreSQL 18 expanded FriendAnniversary/Friendship/DataExport/AccountAnonymization selection passed count=2 (9.157s) after timestamp fixes and backend-equivalent fixture repairs.",
+    "Root full Go test ./... passed after feature wiring (repository 60.325s, services 26.764s).",
+    "Client focused locale/inbox tests passed 32 tests; WS duplicate-cue tests passed 13 tests; cue utility tests passed; targeted ESLint and TypeScript build passed. Initial full client run caught a locale parity mismatch, corrected with explicit matching plural keys.",
+    "Expanded tests cover first acceptance retention, actual due-list/delivery after acceptance, historical Go-sqlite timestamp migration, malformed preference decisions and notification-insert rollback/retry. Tests exposed and fixed timestamp parsing and SQLite migration day extraction.",
+    "Final full Go suite after timestamp fixes passed (repository 62.319s, services 27.48s, handlers 3.777s). Focused anniversary/profile/webhook race tests passed count=3 (services 3.113s, handlers 3.022s).",
+    "Final client JSON report records success=true, 2570 passing tests and zero failures; Vite build passed in 1.18s with existing chunk/import warnings."
+  ],
+  "open": [
+    "Live two-client, OS notification permission and real time-trigger acceptance are not completed.",
+    "An earlier full client repeat failed two ServerEventsModal tests; isolated nine-test suite and a later full suite passed, but the earlier intermittent failure's root cause is not established. Retain this as test-stability debt rather than implying every run was green.",
+    "Broader PostgreSQL selection exposed SQLite-specific anonymization fixtures; equivalent PostgreSQL FK-off/rollback fixtures were repaired without removing assertions."
+  ]
+}

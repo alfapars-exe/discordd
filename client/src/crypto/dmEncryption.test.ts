@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { PreKeyBundleResponse } from "../types";
+import type { DMMessage, PreKeyBundleResponse } from "../types";
 import type { RegistrationData } from "./types";
 // Type-only: erased at compile time, so it does not defeat the vi.mock of the
 // store below.
@@ -189,12 +189,28 @@ vi.mock("../api/clientLog", () => ({
 import {
   encryptDMMessage,
   decryptDMMessage,
+  decryptDMMessages,
   markSelfFanoutNeedsReset,
   pushSentPlaintext,
   popSentPlaintext,
+  discardSentPlaintext,
+  cacheEditPlaintext,popEditPlaintext,discardEditPlaintext,
 } from "./dmEncryption";
+import {useComposerDraftStore} from "../stores/composerDraftStore";
 import * as keyStorage from "./keyStorage";
 import * as signalProtocol from "./signalProtocol";
+
+it("skips a superseded history message during cache lookup without dropping unaffected messages", async () => {
+  let finish!:(value:null)=>void;
+  vi.mocked(keyStorage.getCachedDecryptedMessage).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  let active=true;
+  const encrypted={id:"old",dm_channel_id:"dm",user_id:"peer",encryption_version:1,ciphertext:"cipher",sender_device_id:"remote"} as DMMessage;
+  const unaffected:DMMessage={...encrypted,id:"plain",encryption_version:0,content:"kept"};
+  const pending=decryptDMMessages([encrypted,unaffected],()=>true,message=>message.id!=="old"||active);
+  active=false;finish(null);
+  expect(await pending).toEqual([unaffected]);
+  expect(keyStorage.cacheDecryptedMessage).not.toHaveBeenCalled();
+});
 
 /** deviceIds passed to keyStorage.deleteSession, in call order. */
 function deletedDevices(): string[] {
@@ -805,6 +821,27 @@ describe("dmEncryption — self-DM (recipient is the sender)", () => {
 describe("dmEncryption — sent-plaintext FIFO across a local device id change", () => {
   // The module-level queue persists across tests: drain what each test owns.
   const CHANNEL = "dm-fifo";
+  it("binds overlapping edits of the same message to their exact encrypted source",()=>{
+    const a={content:"first edit"},b={content:"second edit"},sourceA={ciphertext:"edit-a",metadata:"one"},sourceB={ciphertext:"edit-b",metadata:"two"};cacheEditPlaintext("edited",a,sourceA);cacheEditPlaintext("edited",b,sourceB);expect(popEditPlaintext("edited",sourceB)).toBe(b);expect(popEditPlaintext("edited",sourceA)).toBe(a);
+    cacheEditPlaintext("edited",a,sourceA);cacheEditPlaintext("edited",b,sourceB);discardEditPlaintext("edited",a);expect(popEditPlaintext("edited",sourceA)).toBeNull();expect(popEditPlaintext("edited",sourceB)).toBe(b);
+  });
+  it("matches reversed echo order by ciphertext and metadata rather than queue position",()=>{
+    const a={content:"first"},b={content:"second"},sourceA={ciphertext:"cipher-a",metadata:"{}"},sourceB={ciphertext:"cipher-b",metadata:"{}"};
+    pushSentPlaintext(CHANNEL,a,sourceA);pushSentPlaintext(CHANNEL,b,sourceB);expect(popSentPlaintext(CHANNEL,sourceB)).toBe(b);expect(popSentPlaintext(CHANNEL,sourceA)).toBe(a);expect(popSentPlaintext(CHANNEL,sourceA)).toBeNull();
+  });
+  it("distinguishes empty self-DM envelope arrays by per-send metadata",()=>{
+    const a={content:"note one"},b={content:"note two"},sourceA={ciphertext:"[]",metadata:'{"client_send_id":"a"}'},sourceB={ciphertext:"[]",metadata:'{"client_send_id":"b"}'};
+    pushSentPlaintext(CHANNEL,a,sourceA);pushSentPlaintext(CHANNEL,b,sourceB);expect(popSentPlaintext(CHANNEL,{ciphertext:"[]",metadata:"{}"})).toBeNull();expect(popSentPlaintext(CHANNEL,sourceB)).toBe(b);expect(popSentPlaintext(CHANNEL,sourceA)).toBe(a);
+  });
+  it("does not guess ambiguous sources or consume bound entries through legacy FIFO calls",()=>{
+    const a={content:"one"},b={content:"two"},source={ciphertext:"same",metadata:"same"};pushSentPlaintext(CHANNEL,a,source);pushSentPlaintext(CHANNEL,b,source);expect(popSentPlaintext(CHANNEL,source)).toBeNull();expect(popSentPlaintext(CHANNEL)).toBeNull();discardSentPlaintext(CHANNEL,a);expect(popSentPlaintext(CHANNEL,source)).toBe(b);
+  });
+  it("removes only the failed send's exact payload from overlapping queue entries",()=>{
+    const a={content:"first"},b={content:"second"};pushSentPlaintext(CHANNEL,a);pushSentPlaintext(CHANNEL,b);discardSentPlaintext(CHANNEL,a);expect(popSentPlaintext(CHANNEL)).toBe(b);expect(popSentPlaintext(CHANNEL)).toBeNull();
+  });
+  it("does not retain an old session queue even when the local device id stays unchanged",()=>{
+    const old={content:"old"};pushSentPlaintext(CHANNEL,old);useComposerDraftStore.getState().reset();const fresh={content:"fresh"};pushSentPlaintext(CHANNEL,fresh);discardSentPlaintext(CHANNEL,old);expect(popSentPlaintext(CHANNEL)).toBe(fresh);expect(popSentPlaintext(CHANNEL)).toBeNull();
+  });
 
   it("pops in FIFO order under a stable device id", () => {
     pushSentPlaintext(CHANNEL, { content: "a" });

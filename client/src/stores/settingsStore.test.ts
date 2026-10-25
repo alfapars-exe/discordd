@@ -1,9 +1,33 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { useSettingsStore, scaleFromPosition } from "./settingsStore";
+import { useSettingsStore, scaleFromPosition, isWallpaperVisible } from "./settingsStore";
+
+describe("wallpaper device override", () => {
+  it("preserves unsaved wallpaper preview during same-account reconciliation only", () => {
+    const store = useSettingsStore.getState();
+    store.setPendingWallpaperPreviewUrl("blob:preview");
+    store.resetAccountPreferences(true);
+    expect(useSettingsStore.getState().pendingWallpaperPreviewUrl).toBe("blob:preview");
+    store.resetAccountPreferences();
+    expect(useSettingsStore.getState().pendingWallpaperPreviewUrl).toBeNull();
+  });
+  it("keeps the account preference but hides wallpaper in transparent mode after hydration and reset", () => {
+    const store = useSettingsStore.getState();
+    store.setWallpaperEnabled(true);
+    store.setTransparentBackground(true);
+    expect(useSettingsStore.getState().wallpaperEnabled).toBe(true);
+    expect(isWallpaperVisible(useSettingsStore.getState())).toBe(false);
+    store.applyAppearanceFromServer({ wallpaperEnabled: true });
+    expect(isWallpaperVisible(useSettingsStore.getState())).toBe(false);
+    store.resetAccountPreferences();
+    expect(isWallpaperVisible(useSettingsStore.getState())).toBe(false);
+    store.setTransparentBackground(false);
+    expect(isWallpaperVisible(useSettingsStore.getState())).toBe(true);
+  });
+});
 
 /**
  * UI Scale (Appearance → Uygulama Ölçeği). The store keeps an integer percent
- * (100–200, default 100) and applies it as the --ui-scale CSS custom property
+ * (50–200, default 100) and applies it as the --ui-scale CSS custom property
  * (a unitless zoom factor) on :root, mirroring the neon/lightning pattern.
  * globals.css turns that var into `html { zoom: var(--ui-scale) }`.
  */
@@ -12,7 +36,7 @@ describe("settingsStore — uiScale (UI Scale)", () => {
     useSettingsStore.getState().setUiScale(100);
   });
 
-  it("persists, clamps to 100–200, and writes --ui-scale as a zoom factor", () => {
+  it("persists, clamps to 50–200, and writes --ui-scale as a zoom factor", () => {
     const { setUiScale } = useSettingsStore.getState();
 
     setUiScale(130);
@@ -22,8 +46,8 @@ describe("settingsStore — uiScale (UI Scale)", () => {
 
     // Clamp below the floor.
     setUiScale(40);
-    expect(useSettingsStore.getState().uiScale).toBe(100);
-    expect(document.documentElement.style.getPropertyValue("--ui-scale")).toBe("1");
+    expect(useSettingsStore.getState().uiScale).toBe(50);
+    expect(document.documentElement.style.getPropertyValue("--ui-scale")).toBe("0.5");
 
     // Clamp above the ceiling.
     setUiScale(900);
@@ -46,21 +70,21 @@ describe("settingsStore — uiScale (UI Scale)", () => {
  */
 describe("scaleFromPosition (UI-scale slider drag mapping)", () => {
   it("maps a track-relative position to a clamped, step-10 percentage", () => {
-    expect(scaleFromPosition(0, 200)).toBe(100); // left edge → min
+    expect(scaleFromPosition(0, 200)).toBe(50); // left edge → min
     expect(scaleFromPosition(200, 200)).toBe(200); // right edge → max
-    expect(scaleFromPosition(100, 200)).toBe(150); // midpoint
-    expect(scaleFromPosition(40, 200)).toBe(120); // 20% → 120
-    expect(scaleFromPosition(52, 200)).toBe(130); // 26% → rounds up to 130
+    expect(scaleFromPosition(100, 200)).toBe(130); // midpoint rounded to step 10
+    expect(scaleFromPosition(40, 200)).toBe(80);
+    expect(scaleFromPosition(52, 200)).toBe(90);
   });
 
   it("clamps positions outside the track", () => {
-    expect(scaleFromPosition(-50, 200)).toBe(100);
+    expect(scaleFromPosition(-50, 200)).toBe(50);
     expect(scaleFromPosition(9999, 200)).toBe(200);
   });
 
   it("guards against a zero or negative track width (no NaN/Infinity)", () => {
-    expect(scaleFromPosition(50, 0)).toBe(100);
-    expect(scaleFromPosition(50, -10)).toBe(100);
+    expect(scaleFromPosition(50, 0)).toBe(50);
+    expect(scaleFromPosition(50, -10)).toBe(50);
   });
 
   it("is monotonic non-decreasing in position (no oscillation)", () => {

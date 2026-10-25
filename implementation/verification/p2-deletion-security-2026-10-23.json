@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Credential/runtime service and explicit-consent handler, not yet registered as a production route or UI action.",
+  "implemented": [
+    "Auth service deletion requires the existing durable per-account attempt limiter, active logical sign-in, current password and enabled second factor. Missing security infrastructure fails closed.",
+    "The verified password hash and MFA enabled-secret state are matched again inside the anonymization transaction. A concurrent factor enrollment/change after proof rejects the transition rather than applying a stale security decision.",
+    "Successful durable anonymization invokes the existing user-cache invalidation, all-user WebSocket disconnect and voice-disconnect collaborators. Failed transition does not revoke the caller or report success.",
+    "Handler requires account affinity, active human session, bounded single JSON object, no unknown fields, password, separate confirmation flag and exact DELETE text. Ownership/application/admin blockers have distinct recoverable error codes.",
+    "No Set-Cookie is emitted, so a late account-bound response cannot clear a newer shared-cookie login. Success explicitly reports shared history retained and personal-asset cleanup queued, not all blobs already removed.",
+    "Handler and AuthOption exist but no deletion route, production repository option or UI action has been wired yet; operational cleanup scheduling and full consent UX must land before exposure."
+  ],
+  "checks": [
+    {"command": "go test ./repository ./services -run 'Test(AccountAnonymization|SQLiteAccountAnonymization)' -count=1", "result": "passed credential/factor checks and durable transition tests"},
+    {"command": "go test ./handlers ./services -run 'Test(DeleteAccountExplicit|AccountAnonymization)' -count=1", "result": "passed typed consent/body/account-affinity/cookie checks, runtime invalidation collaborators and failed-transition preservation"},
+    {"command": "go test ./... -json", "result": "all Go packages passed, including injected MFA-change-after-proof rejection; optional real media-service and host-unavailable symbolic-link tests remain skipped"}
+  ],
+  "remaining_acceptance": [
+    "Wire worker scheduling/health, ownership handoff discovery, production repositories/options/routes, localized client consent and account-generation response guards.",
+    "Real WebSocket/SFU/cache behavior for deletion, remaining in-flight message edits, remote libSQL and independent-client/installed Windows history/media preservation.",
+    "All required visual, accessibility, backup/retention, distribution and P0-P11 acceptance remains open. No commit/push/merge/update/release performed."
+  ]
+}

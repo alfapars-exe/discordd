@@ -1,0 +1,15 @@
+{
+  "model": "NSFWJS MobileNetV2",
+  "upstream": "https://github.com/infinitered/nsfwjs",
+  "commit": "d55a54c51f14380670064cc129b2ea51029c5e46",
+  "license": "MIT; upstream LICENSE included unchanged",
+  "source_directory": "models/mobilenet_v2",
+  "files": {
+    "model.json": {"bytes":128945,"sha256":"11846416217e68bf1eb7b0e651bcfd305973566453c63275bbd16766ab089979"},
+    "group1-shard1of1": {"bytes":2619461,"sha256":"8e7dddbb16acacc1bf1601b1b8a761e730ff934b7f2d7771312b2f000e5f5f13"},
+    "LICENSE": {"bytes":1075,"sha256":"2f7fe40b4f0d97020f0a0dc2214d637471f6204e565eb83e9fd414f0e5287d94"}
+  },
+  "class_order": ["Drawing","Hentai","Neutral","Porn","Sexy"],
+  "preprocessing": "RGB float32 0..1; TensorFlow bilinear 224x224 alignCorners=true",
+  "limits": "Sexual content scores only. Not a violence/gore classifier. Conservative provisional thresholds require representative evaluation. No guarantee of safety, legality or age. GIF/video and unsupported/failed images remain unknown."
+}

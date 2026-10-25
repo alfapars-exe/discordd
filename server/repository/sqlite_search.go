@@ -63,6 +63,9 @@ func scanSearchResult(rows *sql.Rows) (models.Message, error) {
 // that wasn't would itself leak how many messages exist in a channel the
 // caller cannot read.
 func (r *sqliteSearchRepo) Search(ctx context.Context, query string, serverID string, channelID *string, allowedChannelIDs []string, limit, offset int) (*SearchResult, error) {
+	if database.IsPostgres(r.db) {
+		return r.searchPostgres(ctx, query, serverID, channelID, allowedChannelIDs, limit, offset)
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}

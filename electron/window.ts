@@ -7,11 +7,9 @@
  *
  * Does NOT register IPC. Does NOT send anything through the window — other
  * modules import `getMainWindow()` when they need to reach the renderer.
- * The one exception is push-to-talk.ts: this file calls its
- * shutdownGlobalHotkeys() when the window's renderer is gone (crashed or
- * the window itself closed), so the global uIOhook keyboard hook never
- * outlives the window that owns it. That's a one-way cleanup call, not a
- * binding or a signal — push-to-talk.ts still owns all hotkey state.
+ * It calls one-way cleanup functions when renderer ownership ends: the
+ * native overlay may retain decrypted chat text, and push-to-talk's global
+ * keyboard hook must not outlive the renderer that owns its listeners.
  */
 
 import { app, BrowserWindow, Menu, screen, shell } from "electron";
@@ -24,12 +22,12 @@ import { getSettings, getWindowBounds, saveWindowBounds, WindowBounds } from "./
 // itself is kept separate the same way resolve-path.ts is.
 import { isInternalNavigation } from "./navigation-policy";
 
-// See the header note above — the only reason this file reaches into
-// push-to-talk.ts. Referenced only inside event-handler callbacks below
+// See the header note above. Referenced only inside event-handler callbacks below
 // (never at module load time), so the require cycle with push-to-talk.ts
 // (which imports getMainWindow from this file) resolves safely: both
 // modules are fully loaded well before either callback can fire.
 import { shutdownGlobalHotkeys } from "./push-to-talk";
+import { closeVoiceOverlay } from "./voice-overlay";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -223,14 +221,19 @@ export function createMainWindow(): BrowserWindow {
     }
   });
 
-  // If the renderer dies (crash, OOM, killed) the global keyboard hook has
-  // no one left to signal — registerPTT/registerMuteHotkey's IPC listeners
-  // are gone with it, so the hook would otherwise keep running (and keep
-  // comparing every system keystroke) for a dead window until the whole
-  // app quits. Shut it down here; a future createMainWindow() call (or the
-  // renderer coming back) re-registers whatever the user still has enabled.
+  // If the renderer dies (crash, OOM, killed), neither its listeners nor the
+  // owner of the native overlay snapshot exist anymore. Tear down both; the
+  // global keyboard hook also cannot signal the lost renderer.
   mainWindow.webContents.on("render-process-gone", () => {
+    closeVoiceOverlay();
     shutdownGlobalHotkeys();
+  });
+
+  // The overlay can retain decrypted chat text outside the renderer. Drop
+  // that native snapshot before any new document/preload takes ownership;
+  // React Router and same-document navigations are not document boundaries.
+  mainWindow.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) closeVoiceOverlay();
   });
 
   // Close-to-tray: hide instead of quit unless tray Quit was clicked.
@@ -252,12 +255,11 @@ export function createMainWindow(): BrowserWindow {
   });
 
   mainWindow.on("closed", () => {
+    closeVoiceOverlay();
     mainWindow = null;
-    // Same reasoning as the render-process-gone handler above: the window
-    // (and its IPC listeners) are gone, so the hook must not keep running.
     // "closed" only fires on real destruction, never on hide-to-tray (that
-    // path calls e.preventDefault() in the "close" handler above), so this
-    // never interrupts the close-to-tray flow.
+    // path calls e.preventDefault() in the "close" handler above), so native
+    // overlay teardown does not interrupt the close-to-tray flow.
     shutdownGlobalHotkeys();
   });
 

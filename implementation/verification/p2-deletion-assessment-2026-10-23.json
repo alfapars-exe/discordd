@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "inspected_at": "2026-10-23T00:05:26Z",
+  "goal_turn_classification": "progress",
+  "scope": "Current-code inspection of the next P2 feature and its unresolved destructive-data semantics. This is not an implemented or accepted deletion feature, security scan, legal retention assessment or release approval.",
+  "current_state": [
+    {"path": "server/services/admin_user_service.go", "line": 163, "finding": "The administrative HardDeleteUser explicitly refuses self-deletion and deletion of a platform administrator. It cannot be exposed as the self-service API without a distinct policy and authorization contract."},
+    {"path": "server/repository/sqlite_user_moderation.go", "line": 191, "finding": "Existing administrative deletion enumerates every owned server and calls the server cascade. A self-service action must not silently inherit deletion of entire shared servers."},
+    {"path": "server/services/admin_user_service.go", "line": 190, "finding": "File URL collection currently covers owned-server assets and personal entrance clips. The function's current documented behavior leaves the user's avatar and attachments in other servers/DMs unswept on disk; a deleted database reference is not proof of blob erasure."},
+    {"path": "server/repository/sqlite_user_moderation.go", "line": 317, "finding": "The tail still depends on database cascades for remaining user-related data. Explicit cleanup exists for selected newer tables, but it is not evidence of complete cleanup when remote foreign-key enforcement is absent."},
+    {"path": "server/database/migrations/009_dm.sql", "line": 11, "finding": "Existing one-to-one DM channels reference both users with DELETE CASCADE, and messages/attachments cascade from the channel. Reusing that cascade can remove another participant's shared history, not just the deleting account's authored messages."}
+  ],
+  "decision_requested": {
+    "mechanism": "One concise asynchronous user question; no default response submitted automatically.",
+    "question": "When an account is deleted, should shared history remain under an anonymized deleted identity, or should the account's authored messages and attachments also be permanently removed?",
+    "options": [
+      "Preserve shared history under an anonymized deleted identity (recommended option shown to the user).",
+      "Remove the account's authored messages and attachments."
+    ],
+    "state": "answered: preserve shared history under an anonymized deleted identity",
+    "user_answer": "Silinen hesabın kimliğini anonimleştir; paylaşılan geçmiş diğer kişilerde kalsın (önerilen).",
+    "not_authorized_by_this_assessment": "No irreversible production deletion, owned-server deletion, administrative impersonation or choice of retention policy has occurred."
+  },
+  "implementation_requirements_after_choice": [
+    "Distinct owner-bound self-service endpoint; active header session, current password, enabled second factor, durable attempt budget, explicit typed confirmation and account-generation response guard.",
+    "Surface actual owned servers and required administrative handoff. Do not silently delete shared servers as a side effect of self-deletion.",
+    "Keep private account data, encryption keys/backups, sessions, tokens, notes, preferences and integration records separate from the selected shared-history treatment. Do not send silently decrypted message evidence to the server.",
+    "Implement durable, retryable cleanup of uniquely owned blobs with safe path validation and surviving-reference checks; database deletion alone must not report complete file erasure.",
+    "Test local and foreign-key-disabled schemas, cleanup failure/retry, concurrent writes, ownership changes, other-user data preservation, realtime revocation, actual downloadable files and the selected history contract.",
+    "Explain the exact operation and backup/retention limitations before irreversible confirmation. No generic promise of retroactively erasing copies already downloaded by other users."
+  ],
+  "other_work": "The user has selected anonymization with shared-history preservation; this branch no longer awaits a retention choice. Finish email verification evidence, then implement the distinct self-service contract. The full P0-P11 goal remains active and incomplete. No commit, push, merge, Windows update or production deployment was performed."
+}

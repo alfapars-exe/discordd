@@ -537,7 +537,7 @@ func TestStopAll_StopsEveryBot(t *testing.T) {
 // GenericIE actually stays disabled.
 func TestPlayTrackYtdlpArgs_RestrictsToYoutubeExtractors(t *testing.T) {
 	const url = "https://www.youtube.com/watch?v=x"
-	args := playTrackYtdlpArgs(url)
+	args := playTrackYtdlpArgs(url, 0)
 	assertHasAdjacentPair(t, args, "--use-extractors", "Youtube.*")
 	assertHasAdjacentPair(t, args, "-f", "bestaudio/best")
 	if n := len(args); n < 2 || args[n-2] != "--" || args[n-1] != url {

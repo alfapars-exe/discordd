@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "scope": "Alt+Shift+Up/Down unread server-channel navigation, shared command registry and custom binding editor",
+  "behavior": [
+    "Fetches fresh unread counts and server-authorized channel trees, including unopened servers; preserves server/channel display order and the active read channel as an anchor.",
+    "Excludes muted servers/channels, archived channels, voice channels and nested threads. Does not mark messages read, reveal plaintext or join voice.",
+    "At most four server lookups run concurrently. Each HTTP request has a 15 second lifetime. New key presses abort and supersede older lookups.",
+    "Account identity, destination identity, live server membership, mute settings and modal ownership are checked before navigation. Failed snapshots show an error instead of navigating through partial results.",
+    "English/Turkish help labels explicitly identify server channels. Mentions and private unread conversations are not represented as implemented."
+  ],
+  "verification": [
+    "4 targeted files / 35 tests passed, including unopened server selection, reverse ordering, muted targets, archived/voice/thread exclusion, failed partial snapshots, account/destination races, modal isolation and superseding key presses.",
+    "TypeScript and targeted lint passed after the cancellation/API-options follow-up.",
+    "Full client regression: 218 files / 2025 tests passed in 44.22s. Existing jsdom navigation warnings did not fail tests. A subsequent no-op early-return controller cleanup was covered by the targeted rerun.",
+    "Coverage validator: 33/33 references, 261 behaviors; acceptance complete NO. No package was accepted solely on automated test results."
+  ],
+  "remaining": [
+    "Real browser/Windows keyboard acceptance; Ego Lite space is still handed to the user, so no resumed browser control or screenshot acceptance was claimed.",
+    "Unread mention navigation was subsequently implemented (p8-unread-mentions-2026-10-24.json); private unread conversation navigation remains open.",
+    "Multi-client permission revocation and live unread changes during navigation acceptance. DestinationView remains the live permission boundary."
+  ],
+  "typecheck_correction": "The tsc --noEmit command in this historical run did not traverse solution references. Correct whole-project tsc -b passed in the later group-copy/speech follow-up; see p4-group-copy-speech-2026-10-24.json."
+}

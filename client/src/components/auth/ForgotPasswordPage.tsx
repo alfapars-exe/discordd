@@ -14,7 +14,7 @@ function ForgotPasswordPage() {
   // ─── Hooks ───
   const { t } = useTranslation("auth");
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isSent, setIsSent] = useState(false);
@@ -49,7 +49,7 @@ function ForgotPasswordPage() {
     setError("");
     setIsLoading(true);
 
-    const res = await authApi.forgotPassword(email);
+    const res = await authApi.forgotPassword(identifier);
     setIsLoading(false);
 
     if (res.error) {
@@ -97,18 +97,18 @@ function ForgotPasswordPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="auth-field">
-            <label htmlFor="email" className="auth-label">
-              {t("email")}
+            <label htmlFor="identifier" className="auth-label">
+              {t("usernameOrEmail")}
             </label>
             <input
-              id="email"
-              type="email"
-              value={email}
+              id="identifier"
+              type="text"
+              value={identifier}
               onChange={(e) => {
-                setEmail(e.target.value);
+                setIdentifier(e.target.value);
                 if (error) setError("");
               }}
-              placeholder={t("emailPlaceholder")}
+              placeholder={t("usernameOrEmailPlaceholder")}
               required
               autoFocus
               className="auth-input"

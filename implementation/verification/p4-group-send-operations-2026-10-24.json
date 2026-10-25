@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "stage": "durable repository foundation; not yet exposed by HTTP or used by the client",
+  "changes": [
+    "Additive SQLite 119/PostgreSQL 021 create account/group/request-scoped operation records with a stable reserved message ID, request hash, expected file count, prepared/committed/completed/deleted phase and failed file indices. No plaintext, encrypted payload, filename or response snapshot is duplicated in the operation table.",
+    "PrepareSend validates bounded ASCII operation keys, hex SHA-256 hashes and 0..10 files; conflicting body hashes/file counts cannot reuse a key. Concurrent preparations reserve one message ID. Caller/service membership enforcement is still required when exposing operation reads.",
+    "Internal non-JSON SendRequestID binds a message insert, read-counter update and prepared-to-committed transition in the same transaction. Operation row locking fences concurrent writes; membership/current key epoch is checked again under the group write lock. Failed insertion leaves the operation prepared.",
+    "CompleteSend verifies an exact partition of successful attachment key positions and failed positions. It rejects overlapping, duplicate, missing and out-of-range positions, preserves identical completion replays, and prevents changing a completed outcome.",
+    "Tracked attachment inserts acquire the same operation lock, reject duplicate key positions and refuse late uploads after finalization. Message deletion atomically leaves a deleted operation tombstone so a reserved ID cannot resurrect the message. Existing untracked send/upload paths remain supported."
+  ],
+  "verification": [
+    "Lifecycle and eight-concurrent-prepare/eight-concurrent-insert tests passed on SQLite and PostgreSQL 18: one claim, one message and one read-counter increment; cross-user operation key lookup misses; conflicting payload metadata is rejected; reconstructed repositories see persisted state.",
+    "Ten upload-vs-finalize races passed on both databases. Either the file commits and the conflicting failed outcome is rejected, or finalization commits and the late attachment is rejected. Stale key epoch rollback leaves no message and does not consume the operation.",
+    "Full Linux Go regression go test ./... -timeout=15m exited 0 (repository 34.263s, services 21.322s, database 8.720s) before the final added race/epoch tests. Final focused durable-operation suite passed afterward: PostgreSQL 3.725s and SQLite 0.547s.",
+    "Existing attachment nullable index/read-back and tied-timestamp pagination tests also passed on PostgreSQL with the new migration (3.897s). Temporary no-host-port PostgreSQL container was stopped/removed; no production database was touched. Targeted git diff --check passed."
+  ],
+  "remaining": [
+    "Service and HTTP request hashing, current-membership authorization, exact replay result hydration, operation lookup route and bounded interrupted-upload reconciliation are not wired yet. Do not claim this foundation alone makes current send endpoints idempotent.",
+    "Client operation identity must survive an ambiguous result with the exact encrypted request/files; re-encrypting on a same-key retry would correctly cause a hash mismatch. Pending/error/retry UI, device/account/rekey ownership and restart recovery remain to implement and test.",
+    "Production migration backup/rollback, full PostgreSQL suite and actual two-client Windows/web acceptance remain open. No release, commit, push or publication performed."
+  ]
+}

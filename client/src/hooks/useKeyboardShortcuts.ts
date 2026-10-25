@@ -21,14 +21,25 @@
  * Uses a bubble-phase document listener (not capture) for app-wide reach.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUIStore } from "../stores/uiStore";
 import { useVoiceStore } from "../stores/voiceStore";
 import { isElectron } from "../utils/constants";
+import { resolveContextShortcutId, resolveDefaultShortcut, type VoiceShortcutId } from "../utils/shortcutRegistry";
+import { useShortcutCaptureStore } from "../stores/shortcutCaptureStore";
+import { useShortcutBindingsStore } from "../stores/shortcutBindingsStore";
+import { openFocusedContextMenu } from "../utils/contextMenuShortcut";
+import type { NavigationShortcutId } from "../utils/shortcutNavigation";
+import type { ConversationShortcutId } from "../utils/conversationCommands";
+import { hasShortcutModalBoundary } from "../utils/shortcutModalBoundary";
 
 type KeyboardShortcutActions = {
   toggleMute: () => void;
   toggleDeafen: () => void;
+  navigate?: (command: NavigationShortcutId) => void;
+  conversation?: (command: ConversationShortcutId, event?: KeyboardEvent) => void | boolean;
+  inbox?: (command: "inbox-read-top", event: KeyboardEvent) => boolean;
+  voice?: (command: VoiceShortcutId, event: KeyboardEvent) => boolean;
 };
 
 /** Elements that should swallow the mute hotkey to avoid stealing keystrokes while typing. */
@@ -38,7 +49,9 @@ function isTextInput(el: Element | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el as HTMLElement).isContentEditable;
 }
 
-export function useKeyboardShortcuts({ toggleMute, toggleDeafen }: KeyboardShortcutActions) {
+export function useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate, conversation, inbox, voice }: KeyboardShortcutActions) {
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const capturing = useShortcutCaptureStore((state) => state.active);
   // Read via a ref inside both effects below — useVoice.ts's toggleMute
   // useCallback identity is unstable across renders, and putting it in the
   // registration effect's deps would re-register the Electron global
@@ -68,15 +81,18 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen }: KeyboardShort
       api?.registerMuteHotkeyShortcut !== undefined &&
       muteHotkeyEnabled &&
       muteHotkeyGlobal &&
+      !capturing &&
       !collidesWithPTT;
 
     if (!canRegister || !api) {
       globalMuteActiveRef.current = false;
       return;
     }
+    let disposed = false;
 
     api.removeMuteHotkeyListeners?.();
     api.onMuteHotkeyGlobal?.(() => {
+      if (disposed || useShortcutCaptureStore.getState().active) return;
       // The global hook fired regardless of window focus. Still don't steal
       // keystrokes from a focused text input while the window IS focused —
       // document.hasFocus() (not activeElement) is what actually tells us
@@ -92,6 +108,7 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen }: KeyboardShort
     globalMuteActiveRef.current = true;
     api.registerMuteHotkeyShortcut?.(muteHotkey)
       .then((ok) => {
+        if (disposed) return;
         // Unmapped key (not in push-to-talk.ts's codeToUiohook) — fall back
         // to the document-focused path instead of leaving a dead shortcut.
         if (!ok) globalMuteActiveRef.current = false;
@@ -101,22 +118,64 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen }: KeyboardShort
         // an explicit `false` result. Without this, a rejection leaves the
         // ref stuck optimistically true (the document-level fallback stays
         // suppressed forever) AND surfaces as an unhandled rejection.
-        globalMuteActiveRef.current = false;
+        if (!disposed) globalMuteActiveRef.current = false;
       });
 
     return () => {
+      disposed = true;
       api.unregisterMuteHotkeyShortcut?.();
       api.removeMuteHotkeyListeners?.();
       globalMuteActiveRef.current = false;
     };
-  }, [muteHotkeyEnabled, muteHotkeyGlobal, muteHotkey, inputMode, pttKey]);
+  }, [muteHotkeyEnabled, muteHotkeyGlobal, muteHotkey, inputMode, pttKey, capturing]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if (e.defaultPrevented || e.isComposing || e.repeat || useShortcutCaptureStore.getState().active) return;
+      const currentBindings = useShortcutBindingsStore.getState().bindings;
+      const incomingCommand = resolveContextShortcutId(e, "incoming-call", currentBindings) as VoiceShortcutId | undefined;
+      if (incomingCommand && voice?.(incomingCommand, e)) { e.preventDefault(); return; }
+      const inboxCommand = resolveContextShortcutId(e, "inbox", currentBindings);
+      if (inboxCommand === "inbox-read-top" && inbox?.(inboxCommand, e)) { e.preventDefault(); return; }
+      const voiceCommand = resolveContextShortcutId(e, "voice", currentBindings) as VoiceShortcutId | undefined;
+      if (voiceCommand && voice?.(voiceCommand, e)) { e.preventDefault(); return; }
       const isInputFocused = isTextInput(e.target as HTMLElement);
+      const voiceState = useVoiceStore.getState();
+      // Device voice bindings may change after a custom assignment was saved.
+      // Native hooks match the physical code, regardless of modifier keys.
+      if ((voiceState.inputMode === "push_to_talk" && e.code === voiceState.pttKey) ||
+          (globalMuteActiveRef.current && e.code === voiceState.muteHotkey)) return;
+      const command = resolveDefaultShortcut(e, isInputFocused, currentBindings);
+      const openDialog = document.querySelector("dialog[open]");
+      const togglesOpenHelp = (command === "app-help" || command === "shortcut-help") && !!openDialog?.querySelector("#shortcut-help-title");
+      const blockingOverlay = hasShortcutModalBoundary();
+      // A dialog owns its keys. Do not navigate, mark background messages read,
+      // or open a second picker behind it. Help can toggle its own dialog and
+      // explicit mute/deafen controls remain available independently of chat.
+      if (blockingOverlay && !togglesOpenHelp && command
+        && command !== "toggle-mute" && command !== "toggle-deafen") return;
+      if ((command === "chat-oldest-unread" || command === "chat-page-up" || command === "chat-page-down") && (isInputFocused || isTextInput(document.activeElement) || window.getSelection()?.isCollapsed === false)) return;
+      if ((command === "chat-search" || command === "chat-pins" || command === "chat-members" || command === "chat-emoji" || command === "chat-gif" || command === "chat-sticker" || command === "chat-upload" || command === "chat-mark-channel-read" || command === "chat-mark-server-read" || command === "chat-copy-channel-link" || command === "chat-open-inbox" || command === "chat-create-group" || command === "chat-oldest-unread" || command === "chat-page-up" || command === "chat-page-down") && conversation) {
+        if ((command === "chat-mark-channel-read" || command === "chat-mark-server-read") &&
+            ((e.target instanceof Element && e.target.closest('[role="article"]')) || document.querySelector("dialog[open], .settings-overlay, .modal-backdrop, .report-overlay"))) return;
+        if (command === "chat-page-up" || command === "chat-page-down") {
+          if (conversation(command, e) === true) e.preventDefault();
+          return;
+        }
+        e.preventDefault(); conversation(command as ConversationShortcutId); return;
+      }
+      if (command && (command === "previous-server" || command === "next-server" || command === "previous-channel" || command === "next-channel" || command === "previous-unread-channel" || command === "next-unread-channel" || command === "previous-mention-channel" || command === "next-mention-channel" || command === "history-back" || command === "history-forward" || command === "return-to-call" || command === "add-server" || command === "previous-destination") && navigate) {
+        e.preventDefault(); navigate(command); return;
+      }
+      if (command === "context-menu" && openFocusedContextMenu()) { e.preventDefault(); return; }
+      if (command === "shortcut-help" || command === "app-help") {
+        e.preventDefault();
+        setShortcutHelpOpen((open) => !open);
+        return;
+      }
 
       // Ctrl+K — Quick Switcher (works in input too)
-      if (e.ctrlKey && !e.shiftKey && e.key === "k") {
+      if (command === "quick-switcher") {
         e.preventDefault();
         useUIStore.getState().toggleQuickSwitcher();
         return;
@@ -125,14 +184,14 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen }: KeyboardShort
       if (isInputFocused) return;
 
       // Ctrl+Shift+M — Mute toggle
-      if (e.ctrlKey && e.shiftKey && e.key === "M") {
+      if (command === "toggle-mute") {
         e.preventDefault();
         toggleMuteRef.current();
         return;
       }
 
       // Ctrl+Shift+D — Deafen toggle
-      if (e.ctrlKey && e.shiftKey && e.key === "D") {
+      if (command === "toggle-deafen") {
         e.preventDefault();
         toggleDeafen();
         return;
@@ -166,5 +225,6 @@ export function useKeyboardShortcuts({ toggleMute, toggleDeafen }: KeyboardShort
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggleDeafen]);
+  }, [toggleDeafen, navigate, conversation, inbox, voice]);
+  return { shortcutHelpOpen, closeShortcutHelp: () => setShortcutHelpOpen(false) };
 }

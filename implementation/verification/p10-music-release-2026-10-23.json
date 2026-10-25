@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 packaged backend music runtime and remaining live acceptance boundary.",
+  "implemented": [
+    "Both production and self-host Dockerfiles install a pinned yt-dlp artifact after verifying its published SHA-256 checksum.",
+    "The runtime includes a pinned Deno JavaScript engine and Debian FFmpeg with libopus support.",
+    "The self-host image runs as uid 1000 and contains the compiled HiChat server and migrations.",
+    "Image builds fail if yt-dlp, Deno, FFmpeg or a real libopus encode probe is unavailable.",
+    "The opt-in integration test covers search-source playback, independent encrypted listener decryption, pause/resume, duplicate enqueue, skip, stop and non-silent decoded audio."
+  ],
+  "checks": [
+    {
+      "command": "docker build --progress=plain -t hichat-server-music-acceptance:local -f Dockerfile .",
+      "cwd": "server",
+      "result": "passed; image manifest f8af948ca5467defd46a9245841d6c4f380b981d4e922a9dc44d5cdcd8cdc4a5"
+    },
+    {
+      "command": "docker run --rm --entrypoint /bin/sh hichat-server-music-acceptance:local -c '<identity, versions, libopus encode, server executable probes>'",
+      "cwd": ".",
+      "result": "passed as uid 1000; yt-dlp 2026.10.21, Deno 2.9.8, FFmpeg 5.1.9 and libopus encode available"
+    }
+  ],
+  "remaining": [
+    "Name-search selection and server-side encrypted room-key rotation now pass the permitted-video loopback tests; packaged client acceptance remains open, see follow_up.",
+    "Complete two-client packaged Windows checks for audible encrypted playback, key rotation, queue races, restart restore and listener-local volume.",
+    "The Electron desktop is a remote-backend client and does not bundle backend media tools; Windows installer acceptance remains part of the final release gate."
+  ],
+  "follow_up": "2026-10-24: implementation/verification/p10-live-youtube-2026-10-24.json records actual encrypted YouTube playback and repeated successful pause/resume/queue/skip/stop checks. This does not close packaged Windows/two-HiChat-client acceptance.",
+  "release": "A disposable local Docker image was built only for acceptance. No commit, push, merge, production deployment or Windows update was performed."
+}

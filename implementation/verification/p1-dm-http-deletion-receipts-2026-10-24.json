@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Added an optional DMDeletionReceiptService extension while retaining the existing DMService DeleteMessage signature and callers. The real service returns only deleted message ID, conversation ID and the existing success text after membership/ownership checks and successful repository deletion. Existing attachment/notification cleanup and WS broadcast remain in the same path.",
+    "The HTTP handler returns that additive receipt for supporting services and retains the legacy message-only response for older implementations. OpenAPI documents the backward-compatible response. No message content, keys, member list or new database schema is included.",
+    "Client HTTP deletion captures account/generation/device context and passes its guard and 15-second timeout to the existing DELETE API. Successful source-bound receipts update the visible deletion state and perform scoped local cache cleanup without waiting for WS. Partial/mismatched receipts and abandoned contexts are rejected; failed requests do not delete local records.",
+    "Legacy message-only responses use the original loaded message's conversation when available. New server receipts allow unloaded/search targets to be cleaned up too. A missing WS echo no longer prevents cleanup for a verified new receipt."
+  ],
+  "verification": [
+    "Initial targeted client suites passed: 2 files / 74 tests before the final strict-receipt/failure cases. Initial Linux Docker Go services, handlers and models suites passed: 20.983s / 2.826s / 0.027s. Tests exercise actual service receipt after commit and ownership/commit rejection, HTTP receipt serialization, client scope validation, legacy fallback, missed WS echo and account/generation/device replacement.",
+    "Final tsc -b and targeted ESLint passed. Full client suite passed: 232 files / 2325 tests in 47.56s. Vite production build passed in 723ms with existing warnings.",
+    "Full default Linux Docker Go suite go test ./... -timeout=15m passed; repository 44.574s, services 21.318s, handlers 2.925s, models 0.032s. No PostgreSQL DSN or real device acceptance was configured for this run. Targeted diff whitespace and coverage validation passed: 33 references / 261 behaviors; acceptance remains incomplete."
+  ],
+  "remaining": [
+    "Actual browser/API deployment and two-client deletion acceptance are not done. The currently running QA backend is older and does not yet return these new receipts.",
+    "Legacy servers cannot bind an unloaded target's message-only receipt to a conversation; that case still relies on WS or authoritative refetch. Offline missed deletions, idempotent reconciliation and cache cleanup retry remain open.",
+    "Full P0-P11, Windows packages and release acceptance remain incomplete. No commit, push, merge, production database migration or production publication performed."
+  ]
+}

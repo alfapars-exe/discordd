@@ -8,6 +8,7 @@ import Avatar from "../shared/Avatar";
 import { formatRelativePast } from "../../utils/dateFormat";
 import { notificationActorName } from "../../hooks/useNotificationNavigation";
 import type { AppNotification } from "../../types";
+import { anniversaryYears as getAnniversaryYears } from "../../utils/anniversaryNotifications";
 
 type NotificationItemProps = {
   notification: AppNotification;
@@ -28,12 +29,23 @@ function NotificationItem({ notification: n, onOpen }: NotificationItemProps) {
 
   const name = notificationActorName(n, tCommon("directMessages"));
   const channel = typeof n.payload.channel_name === "string" ? n.payload.channel_name : "";
+  const isProfileUpdate = n.kind === "system" && n.payload.action === "profile_update";
+  const anniversaryYears = getAnniversaryYears(n);
+  const isReaction = n.kind === "system" && n.payload.subtype === "reaction";
   const headline =
-    n.kind === "system" && typeof n.payload.title === "string"
+    n.kind === "system" && n.payload.action === "stream_start"
+      ? t("kind.streamStart", { name })
+      : anniversaryYears !== null
+      ? t("kind.friendAnniversary", { name, count: anniversaryYears })
+      : isReaction
+      ? t("kind.reaction", { name, emoji: typeof n.payload.emoji === "string" ? n.payload.emoji : "" })
+      : isProfileUpdate
+      ? t("kind.profileUpdate", { name })
+      : n.kind === "system" && typeof n.payload.title === "string"
       ? n.payload.title
       : t(KIND_KEY[n.kind], { name, channel });
   const preview =
-    n.kind === "system"
+    isReaction ? "" : n.kind === "system"
       ? typeof n.payload.body === "string" ? n.payload.body : ""
       : typeof n.payload.preview === "string" ? n.payload.preview : "";
   const isUnread = n.read_at === null;

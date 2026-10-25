@@ -20,9 +20,11 @@ package services
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/cache"
 )
 
@@ -44,6 +46,9 @@ type cachingPermResolver struct {
 	// invalidateChannelCache/InvalidateUser's prefix/suffix matches can never
 	// silently diverge from what Resolve/ResolveBulk wrote.
 	permCache *cache.TTLCache[string, models.Permission]
+	// Invalidations supersede DB reads already in flight. Never hold over IO.
+	cacheMu       sync.Mutex
+	cacheRevision uint64
 }
 
 // newCachingPermResolver wraps inner. Unexported: the only caller is
@@ -103,17 +108,33 @@ func (c *cachingPermResolver) DeleteOverride(ctx context.Context, serverID, chan
 // for the actual resolution logic.
 func (c *cachingPermResolver) ResolveChannelPermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
 	cacheKey := permCacheKey(userID, channelID)
-	if cached, ok := c.permCache.Get(cacheKey); ok {
-		return cached, nil
-	}
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		c.cacheMu.Lock()
+		revision := c.cacheRevision
+		if cached, ok := c.permCache.Get(cacheKey); ok {
+			c.cacheMu.Unlock()
+			return cached, nil
+		}
+		c.cacheMu.Unlock()
 
-	perm, err := c.inner.ResolveChannelPermissions(ctx, userID, channelID)
-	if err != nil {
-		return 0, err
-	}
+		perm, err := c.inner.ResolveChannelPermissions(ctx, userID, channelID)
+		if err != nil {
+			return 0, err
+		}
 
-	c.permCache.Set(cacheKey, perm)
-	return perm, nil
+		c.cacheMu.Lock()
+		if revision != c.cacheRevision {
+			c.cacheMu.Unlock()
+			continue
+		}
+		c.permCache.Set(cacheKey, perm)
+		c.cacheMu.Unlock()
+		return perm, nil
+	}
+	return 0, pkg.ErrForbidden
 }
 
 // ResolveChannelPermissionsBulk probes the cache for every requested user
@@ -123,10 +144,25 @@ func (c *cachingPermResolver) ResolveChannelPermissions(ctx context.Context, use
 // filtering a broadcast to the online members of a server would otherwise
 // cost 3N round trips every time the 30s cache expired.
 func (c *cachingPermResolver) ResolveChannelPermissionsBulk(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		result, superseded, err := c.resolveBulkAttempt(ctx, channelID, userIDs)
+		if err != nil || !superseded {
+			return result, err
+		}
+	}
+	return nil, pkg.ErrForbidden
+}
+
+func (c *cachingPermResolver) resolveBulkAttempt(ctx context.Context, channelID string, userIDs []string) (map[string]models.Permission, bool, error) {
 	resolved := make(map[string]models.Permission, len(userIDs))
 	if len(userIDs) == 0 {
-		return resolved, nil
+		return resolved, false, nil
 	}
+	c.cacheMu.Lock()
+	revision := c.cacheRevision
 
 	// Probe the cache first; only the misses reach the core. Duplicates in
 	// the caller's list (shouldn't happen, but the online-user list is built
@@ -145,20 +181,26 @@ func (c *cachingPermResolver) ResolveChannelPermissionsBulk(ctx context.Context,
 		}
 		misses = append(misses, userID)
 	}
+	c.cacheMu.Unlock()
 	if len(misses) == 0 {
-		return resolved, nil
+		return resolved, false, nil
 	}
 
 	fresh, err := c.inner.ResolveChannelPermissionsBulk(ctx, channelID, misses)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	if revision != c.cacheRevision {
+		return nil, true, nil
 	}
 	for userID, perm := range fresh {
 		c.permCache.Set(permCacheKey(userID, channelID), perm)
 		resolved[userID] = perm
 	}
 
-	return resolved, nil
+	return resolved, false, nil
 }
 
 // ─── Invalidation — decorator-only; the uncached core has no cache to invalidate ───
@@ -167,6 +209,9 @@ func (c *cachingPermResolver) ResolveChannelPermissionsBulk(ctx context.Context,
 // Uses suffix match on "userID:channelID" keys since we can't know which
 // users are affected.
 func (c *cachingPermResolver) invalidateChannelCache(channelID string) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.cacheRevision++
 	suffix := ":" + channelID
 	c.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasSuffix(key, suffix)
@@ -182,6 +227,9 @@ func (c *cachingPermResolver) invalidateChannelCache(channelID string) {
 // API, but the cache entry would still leak through any half-finished
 // request).
 func (c *cachingPermResolver) InvalidateUser(userID string) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.cacheRevision++
 	prefix := userID + ":"
 	c.permCache.DeleteFunc(func(key string) bool {
 		return strings.HasPrefix(key, prefix)
@@ -196,6 +244,9 @@ func (c *cachingPermResolver) InvalidateUser(userID string) {
 // edit; a full cache wipe lets the next request rebuild lazily and
 // the system returns to steady state within permCacheTTL (30s).
 func (c *cachingPermResolver) InvalidateAll() {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.cacheRevision++
 	c.permCache.DeleteFunc(func(string) bool { return true })
 }
 

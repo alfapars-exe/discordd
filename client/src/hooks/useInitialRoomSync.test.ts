@@ -19,14 +19,17 @@ import {
 
 import { useInitialRoomSync } from "./useInitialRoomSync";
 
+const currentState = vi.hoisted(() => ({ isMuted: false, inputMode: "voice_activity", isServerMuted: false }));
+vi.mock("../audio/liveMicrophone", () => ({
+  liveMicrophone: (participant: { setMicrophoneEnabled: () => Promise<void> }) => ({ setEnabled: participant.setMicrophoneEnabled }),
+}));
+
 // The hook only reads voice state via getState() — stub the slice it uses
 // so the test doesn't drag in the real store's API/native-plugin imports.
 vi.mock("../stores/voiceStore", () => ({
   useVoiceStore: {
     getState: () => ({
-      isMuted: false,
-      inputMode: "voice_activity",
-      isServerMuted: false,
+      ...currentState,
       isDeafened: false,
       isServerDeafened: false,
       watchingScreenShares: {},
@@ -95,6 +98,7 @@ function renderRoomSync(
 describe("useInitialRoomSync — QA bug #2 (reconnect timer / listener leak)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    Object.assign(currentState, { isMuted: false, inputMode: "voice_activity", isServerMuted: false });
   });
 
   afterEach(() => {
@@ -146,5 +150,16 @@ describe("useInitialRoomSync — QA bug #2 (reconnect timer / listener leak)", (
 
     unmount();
     expect(registeredCount()).toBe(0);
+  });
+
+  it("uses the latest PTT state when the reconnect delay ends", () => {
+    const { stub } = makeStubRoom(ConnectionState.Connected);
+    const lp = makeLocalParticipant();
+    const { unmount } = renderRoomSync(stub, lp, { current: false });
+    stub.emit(RoomEvent.Reconnected);
+    currentState.inputMode = "push_to_talk";
+    vi.advanceTimersByTime(1_000);
+    expect(lp.setMicrophoneEnabled).toHaveBeenLastCalledWith(false);
+    unmount();
   });
 });

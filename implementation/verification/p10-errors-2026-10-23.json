@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 safe and actionable music failure reporting.",
+  "implemented": [
+    "Missing yt-dlp or FFmpeg, access denial, bot check, unavailable or restricted video, region block, rate limit, network failure and playback stall map to fixed localized reason codes.",
+    "Raw provider stderr, internal paths and dependency errors remain server-side and are not rendered to clients.",
+    "Queue capacity and extraction backpressure fail explicitly without exceeding the 200-item bound.",
+    "A timed-out play request is reported as indeterminate and is not retried automatically, preventing duplicate queue entries.",
+    "Rejected and indeterminate slash commands return non-success outcomes so the composer retains the user's draft."
+  ],
+  "checks": [
+    { "command": "go test ./services ./handlers -run 'MusicError|PlaybackFailure|Queue|Play_' -count=1", "cwd": "server", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/hooks/useMusicSlashCommand.test.ts src/utils/musicRequestError.test.ts src/hooks/ws/voiceEventHandlers.test.ts", "cwd": "client", "result": "passed", "tests": 73 }
+  ],
+  "remaining": [
+    "Live YouTube smoke testing must exercise real 403, rate-limit and inaccessible-content responses without account cookies.",
+    "Packaged Windows acceptance must verify localized feedback and retained composer drafts."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

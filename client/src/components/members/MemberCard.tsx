@@ -1,7 +1,7 @@
 /** MemberCard — Unified user profile popover. Works in server context (with roles/mod)
  *  and global context (DM sidebar, friend list — no server-specific sections). */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { MemberWithRoles, PublicUser } from "../../types";
@@ -21,6 +21,7 @@ import { useDMStore } from "../../stores/dmStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useFriendStore } from "../../stores/friendStore";
 import { useBlockStore } from "../../stores/blockStore";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAnchoredCard } from "../../hooks/useAnchoredCard";
@@ -32,6 +33,9 @@ import ModDurationPicker from "./ModDurationPicker";
 import { TIMEOUT_PRESETS, TEMPBAN_PRESETS } from "./modDurationPresets";
 import { formatDate } from "../../utils/dateFormat";
 import { showApiError } from "../../utils/apiError";
+import * as profileApi from "../../api/profile";
+import type { ProfileShowcase } from "../../api/profile";
+import GameActivityLabel from "../shared/GameActivityLabel";
 
 type MemberCardProps = {
   member?: MemberWithRoles;
@@ -68,6 +72,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const prof = member ?? profile ?? (isOwnTarget ? currentUser : null);
   const animatedUrl = prof?.avatar_animated_url;
   const bannerUrl = prof?.banner_url;
+  const animatedBannerUrl = prof?.banner_animated_url;
   const accentColor = prof?.accent_color;
   const bio = prof?.bio;
   const pronouns = prof?.pronouns;
@@ -77,6 +82,15 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   // before the first WS event arrives. Subscribes to the store so the
   // banner disappears live when handleMemberTimeoutRemove fires.
   const activeServerId = useServerStore((s) => s.activeServerId);
+  const [showcase, setShowcase] = useState<ProfileShowcase | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!userId) return () => { active = false; };
+    void profileApi.getUserProfileShowcase(userId, isServerContext ? activeServerId : null).then((res) => {
+      if (active) setShowcase(res.success && res.data ? res.data : null);
+    });
+    return () => { active = false; };
+  }, [userId, isServerContext, activeServerId]);
   const storeTimeout = useMemberTimeout(activeServerId, userId);
   const timeoutExpiresAt =
     storeTimeout?.expires_at ?? (isServerContext ? member?.timeout_expires_at ?? undefined : undefined);
@@ -96,6 +110,14 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
   const isBlocked = useBlockStore((s) => s.isBlocked)(userId);
   const blockUser = useBlockStore((s) => s.blockUser);
   const unblockUser = useBlockStore((s) => s.unblockUser);
+  const privacyPreferences = usePreferencesStore((s) => s.get<{ ignoredUsers?: Record<string, boolean> }>("privacy"));
+  const isIgnored = privacyPreferences?.ignoredUsers?.[userId] === true;
+  const toggleIgnored = () => {
+    const ignoredUsers = { ...(privacyPreferences?.ignoredUsers ?? {}) };
+    if (isIgnored) delete ignoredUsers[userId];
+    else ignoredUsers[userId] = true;
+    usePreferencesStore.getState().set({ privacy: { ...privacyPreferences, ignoredUsers } });
+  };
 
   const userBadges = useUserBadges(userId);
 
@@ -299,6 +321,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
           avatarUrl={avatarUrl}
           animatedUrl={animatedUrl}
           bannerUrl={bannerUrl}
+          animatedBannerUrl={animatedBannerUrl}
           accentColor={accentColor}
           bio={bio}
           pronouns={pronouns}
@@ -318,6 +341,18 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
           sortedRoles={sortedRoles}
           onClose={onClose}
         >
+          {(!isServerContext || activeServerId) && <GameActivityLabel userId={userId} serverId={isServerContext ? activeServerId ?? undefined : undefined} visible={target.status !== "offline"} className="member-profile-activity" />}
+          {showcase && (showcase.watching || showcase.widgets.length > 0 || showcase.links.length > 0) && (
+            <section className="member-profile-showcase" style={{ background: `linear-gradient(145deg, ${showcase.theme.primary || "transparent"}, ${showcase.theme.secondary || "transparent"})` }}>
+              {showcase.watching && <p className="member-profile-activity">▶ {showcase.watching}</p>}
+              {showcase.widgets.map((widget) => <div className="member-profile-widget" key={widget.id}>
+                <strong>{widget.title || widget.game}</strong>
+                {widget.items?.length ? <span>{widget.items.join(" · ")}</span> : null}
+                {widget.url ? <a href={widget.url} target="_blank" rel="noopener noreferrer">{widget.game || widget.url}</a> : null}
+              </div>)}
+              {showcase.links.length > 0 && <div className="member-profile-links">{showcase.links.map((link) => <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" title="User-provided link">{link.label}</a>)}</div>}
+            </section>
+          )}
           {/* Self status picker */}
           {isMe && (
             <MemberCardSelfStatus
@@ -331,6 +366,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
             isBadgeAdmin={isBadgeAdmin}
             isFriend={isFriend}
             isBlocked={isBlocked}
+            isIgnored={isIgnored}
             userId={userId}
             username={username}
             handleSendMessage={handleSendMessage}
@@ -340,6 +376,7 @@ function MemberCard({ member, user: userProp, position, onClose }: MemberCardPro
             getFriendLabel={getFriendLabel}
             blockUser={blockUser}
             unblockUser={unblockUser}
+            toggleIgnored={toggleIgnored}
             confirm={confirm}
             setShowBadgeAssign={setShowBadgeAssign}
             setShowReport={setShowReport}

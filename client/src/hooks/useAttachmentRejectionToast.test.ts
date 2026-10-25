@@ -13,14 +13,12 @@ vi.mock("../stores/toastStore", () => ({
   ),
 }));
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
+vi.mock("react-i18next", () => ({ useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
       if (opts) return `${key}:${JSON.stringify(opts)}`;
       return key;
     },
-  }),
-}));
+  }), initReactI18next: { type: "3rdParty", init: () => {} } }));
 
 import { useAttachmentRejectionToast } from "./useAttachmentRejectionToast";
 

@@ -9,12 +9,14 @@ import { useTranslation } from "react-i18next";
 import { useUIStore } from "../../stores/uiStore";
 import { useMobileStore } from "../../stores/mobileStore";
 import HeaderInboxButtons from "../inbox/HeaderInboxButtons";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 
 function MobileHeader() {
   const { t } = useTranslation("common");
 
   const panels = useUIStore((s) => s.panels);
   const activePanelId = useUIStore((s) => s.activePanelId);
+  const destination = useUIStore((s) => s.destination);
 
   const leftDrawerOpen = useMobileStore((s) => s.leftDrawerOpen);
   const rightDrawerOpen = useMobileStore((s) => s.rightDrawerOpen);
@@ -24,7 +26,7 @@ function MobileHeader() {
   const closeRightDrawer = useMobileStore((s) => s.closeRightDrawer);
 
   const panel = activePanelId ? panels[activePanelId] : null;
-  const activeTab = panel?.tabs.find((tab) => tab.id === panel.activeTabId);
+  const activeTab = UI_SHELL_V2 ? destination : panel?.tabs.find((tab) => tab.id === panel.activeTabId);
 
   function getTabIcon(): string {
     if (!activeTab) return "#";
@@ -47,7 +49,10 @@ function MobileHeader() {
       <button
         className="mobile-header-btn"
         onClick={leftDrawerOpen ? closeLeftDrawer : openLeftDrawer}
-        title={t("openSidebar")}
+        title={t(leftDrawerOpen ? "closeSidebar" : "openSidebar")}
+        aria-label={t(leftDrawerOpen ? "closeSidebar" : "openSidebar")}
+        aria-expanded={leftDrawerOpen}
+        aria-controls="mobile-drawer-left"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="3" y1="6" x2="21" y2="6" />
@@ -65,10 +70,13 @@ function MobileHeader() {
       <HeaderInboxButtons variant="mobile" />
 
       {/* Members drawer toggle */}
-      <button
+      {(!UI_SHELL_V2 || destination.serverInfo) && <button
         className="mobile-header-btn"
         onClick={rightDrawerOpen ? closeRightDrawer : openRightDrawer}
         title={rightDrawerOpen ? t("closeMembers") : t("openMembers")}
+        aria-label={rightDrawerOpen ? t("closeMembers") : t("openMembers")}
+        aria-expanded={rightDrawerOpen}
+        aria-controls="mobile-drawer-right"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -76,7 +84,7 @@ function MobileHeader() {
           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
-      </button>
+      </button>}
     </div>
   );
 }

@@ -166,6 +166,8 @@ type VoiceCoreActions = {
   /** Hot-swap LiveKit token without disconnect cycle — used for auto-rejoin. */
   refreshVoiceToken: (channelId: string) => Promise<VoiceTokenResponse | null>;
   leaveVoiceChannel: () => void;
+  /** Remove all transient state for a deleted voice channel and leave it if active. */
+  handleChannelDeleted: (channelId: string) => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
   setStreaming: (isStreaming: boolean) => void;
@@ -453,6 +455,78 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
     // Release AudioContext memory (2-5MB + accumulated node refs)
     closeAudioContext();
+  },
+
+  handleChannelDeleted: (channelId) => {
+    if (!channelId) return;
+    const before = get();
+    const channelUserIds = new Set((before.voiceStates[channelId] ?? []).map((state) => state.user_id));
+    const wasCurrentChannel = before.currentVoiceChannelId === channelId;
+    if (wasCurrentChannel) {
+      const ownUserId = getOwnUserId();
+      if (ownUserId) channelUserIds.add(ownUserId);
+    }
+
+    // Use the mounted orchestration callback so LiveKit/UI teardown and the
+    // server voice_leave frame run together. Clearing the recovery marker and
+    // join generation prevents an in-flight reconnect from restoring a room
+    // whose channel no longer exists.
+    if (wasCurrentChannel) {
+      if (before._onLeaveCallback) {
+        try {
+          before._onLeaveCallback();
+        } catch {
+          // A stale/unmounted orchestration callback must not prevent local
+          // teardown for a channel the server has already deleted.
+          console.warn("[voiceStore] leave callback failed during channel deletion");
+        }
+      }
+      if (get().currentVoiceChannelId === channelId) get().leaveVoiceChannel();
+    }
+
+    const afterLeave = get();
+    // A delayed snapshot for the deleted channel may contain a participant
+    // who has since moved elsewhere. Keep user-keyed LiveKit telemetry for
+    // anybody represented in another currently cached channel.
+    const usersStillPresent = new Set<string>();
+    for (const [otherChannelId, states] of Object.entries(afterLeave.voiceStates)) {
+      if (otherChannelId === channelId) continue;
+      for (const state of states) usersStillPresent.add(state.user_id);
+    }
+    const usersToPrune = new Set([...channelUserIds].filter((userId) => !usersStillPresent.has(userId)));
+    const voiceStates = { ...afterLeave.voiceStates };
+    delete voiceStates[channelId];
+    const activeSpeakers = Object.fromEntries(
+      Object.entries(afterLeave.activeSpeakers).filter(([userId]) => !usersToPrune.has(userId)),
+    );
+    const connectionQuality = Object.fromEntries(
+      Object.entries(afterLeave.connectionQuality).filter(([userId]) => !usersToPrune.has(userId)),
+    );
+    const screenShareViewers: Record<string, string[]> = {};
+    for (const [streamerId, viewerIds] of Object.entries(afterLeave.screenShareViewers)) {
+      if (usersToPrune.has(streamerId)) continue;
+      const remainingViewers = viewerIds.filter((viewerId) => !usersToPrune.has(viewerId));
+      if (remainingViewers.length > 0) screenShareViewers[streamerId] = remainingViewers;
+    }
+    const screenShareQualityGradeByPublisher = Object.fromEntries(
+      Object.entries(afterLeave.screenShareQualityGradeByPublisher).filter(([userId]) => !usersToPrune.has(userId)),
+    );
+    const screenShareQualityHistoryByPublisher = Object.fromEntries(
+      Object.entries(afterLeave.screenShareQualityHistoryByPublisher).filter(([userId]) => !usersToPrune.has(userId)),
+    );
+
+    set({
+      voiceStates,
+      activeSpeakers,
+      connectionQuality,
+      screenShareViewers,
+      screenShareQualityGradeByPublisher,
+      screenShareQualityHistoryByPublisher,
+      ...(wasCurrentChannel ? { screenSharePublisherWarning: null } : {}),
+    });
+    // Advances the channel revision even if no cached snapshot exists, so an
+    // already-running music-state request cannot repopulate a deleted room.
+    get().clearMusicBotState(channelId);
   },
 
   toggleMute: () => {

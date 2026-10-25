@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-24",
+  "status": "implemented_unverified",
+  "changes": [
+    "Additive SQLite 120/PostgreSQL 022 add nullable cancelled_at without rebuilding operation rows or changing their existing phase CHECK. Read models expose cancelled as a terminal phase; no message/ciphertext snapshot is stored.",
+    "Repository CancelSend atomically fences prepared sends. If the original request has not arrived yet, it inserts a permanent account/group/request-scoped cancellation tombstone so a delayed PrepareSend cannot create a message. It races on the same operation row as CreateMessage; if commit wins, cancellation returns the real committed/completed state and never deletes a message or attachment.",
+    "Current-member/sender-authorized, rate-limited POST .../send-operations/{requestId}/cancel returns the actual outcome with no-store. Repeated cancellation is idempotent. Original matching-hash cancelled POSTs return 410 SEND_CANCELLED; a missing-row tombstone whose hash does not match rejects a late prepare with 409. Route golden and OpenAPI were updated.",
+    "Client provides a confirmation-gated cancel-if-not-sent button. Pending state is cleared only after validated cancelled confirmation; timeouts, malformed or already-committed outcomes retain the original operation. Same-account/group cancellation is permitted after a local device change because it sends no old ciphertext and never resumes an old-device write.",
+    "Cancellation preserves current drafts. Original files removed from a newer draft remain in an explicitly labelled review-only recovery entry, unless an existing failed-upload source already retains them. No automatic new send or replacement of newer text occurs. Delayed confirmation checks the captured request ID so it cannot cancel a replacement operation."
+  ],
+  "verification": [
+    "SQLite and PostgreSQL repository tests cover cancellation before the original request arrives, repeated tombstones, and 12 concurrent cancel-vs-commit races. Cancel wins with no message, or commit wins with the message retained; completed operations cannot be cancelled. Existing durable-send races also pass. PostgreSQL final affected run: 4.802s.",
+    "Real SQLite HTTP integration verifies missing/prepared cancellation, late original rejection, SEND_CANCELLED, already-completed no-delete behavior, unauthenticated/removed-member rejection, and sender-scoped equal request IDs. Final sender-namespace follow-up passed in 0.322s.",
+    "Full Linux Go regression go test ./... -timeout=15m exited 0 (repository 35.907s, services 21.178s, handlers 3.056s, database 9.046s) before the last sender-namespace assertion; focused HTTP follow-up passed afterward.",
+    "Full client regression: 224 files / 2139 tests passed in 45.93s. Final tsc -b and targeted ESLint passed. Cases include device-change cancellation, new-draft/file retention, fresh ID after confirmed cancellation, timeout/committed non-success and delayed-confirmation replacement guard.",
+    "Local Vite production web build passed: 1648 modules, 730ms; existing config/chunk/dynamic-import warnings remain. OpenAPI parsed as 224 paths, zero unresolved internal refs. Targeted git diff --check passed. Temporary no-host-port PostgreSQL QA container was stopped/removed; no production data was touched."
+  ],
+  "remaining": [
+    "Encrypted durable pending storage, restart discovery/recovery, reload safeguards and persisted delivery/outbox remain open. Session-only pending/file retention is still explicitly disclosed.",
+    "If a local device changed and the message already committed, cancellation correctly refuses rather than pretending success. Read-only adoption/finalization of that confirmed send in the new device context still needs integration; old ciphertext is not replayed.",
+    "Real two-client encrypted race/restart acceptance, full PostgreSQL API regression, backup/rollback rehearsal, Windows packaging and 390px/200%/screen-reader visual acceptance remain unperformed. Existing browser QA backend was not restarted/replaced while its test area remains handed to the user.",
+    "No commit, push, merge, production migration or release was performed. This does not close P4 or the overall P0-P11 objective."
+  ]
+}

@@ -1,4 +1,17 @@
 {
+  "spam": "Spam inbox",
+  "spamReport": "Report spam",
+  "spamAuthor": "Message author",
+  "spamLoading": "Loading spam inbox…",
+  "spamRefresh": "Refresh",
+  "spamError": "The spam inbox operation failed. Refresh and retry.",
+  "spamEmpty": "No spam records.",
+  "spamUnavailable": "The source message is no longer accessible.",
+  "spamReference": "Message flagged by the local filter",
+  "spamOpen": "Go to message",
+  "spamRestore": "Restore visibility",
+  "spamDismiss": "Remove from spam list",
+  "spamGroup": "Group conversation",
   "inbox": "Inbox",
   "notifications": "Notifications",
   "viewAll": "View all",
@@ -16,7 +29,13 @@
     "reply": "{{name}} replied to you in #{{channel}}",
     "friendRequest": "{{name}} sent you a friend request",
     "dmRequest": "{{name}} wants to message you",
-    "system": "System notification"
+    "system": "System notification",
+    "reaction": "{{name}} reacted {{emoji}} to your message",
+    "profileUpdate": "{{name}} updated their profile",
+    "streamStart": "{{name}} started streaming",
+    "friendAnniversary": "You and {{name}} have been friends for {{count}} years!",
+    "friendAnniversary_one": "You and {{name}} have been friends for {{count}} year!",
+    "friendAnniversary_other": "You and {{name}} have been friends for {{count}} years!"
   },
   "friendRequestToast": "{{name}} sent you a friend request"
 }

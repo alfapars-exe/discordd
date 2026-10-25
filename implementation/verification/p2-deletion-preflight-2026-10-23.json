@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "Authenticated read-only deletion preflight plus additional deleted-author write barriers. Destructive deletion route/UI still not exposed.",
+  "implemented": [
+    "GET /api/users/me/deletion-status uses active human session and required expected_user_id affinity. Private response is no-store; failed/missing reads never become a safe empty result.",
+    "Single-query fresh snapshot of platform-admin flag, owned server/application count, ordered resource names/IDs and 50-row pages with next offset. Full count remains present even on an empty/out-of-range page. Final deletion independently rechecks ownership transactionally.",
+    "Migration 099 rejects deleted authors' late content edits/new attachments, new DM membership involving a deleted account, and new private logs/notifications. Shared messages/attachments remain intact; surviving participants' pin state stays writable."
+  ],
+  "checks": [
+    {"command": "go test ./repository ./handlers . -run 'Test(AccountDeletionStatus|DeletionStatus|InitRoutes|RoutePermissions)' -count=1", "result": "passed ownership isolation, 56-resource pagination, changed owner/admin snapshots, missing/error state and declared auth/route registration checks"},
+    {"command": "go test ./repository -run 'Test(SQLiteAccountAnonymization|AccountDeletionStatus)' -count=1", "result": "passed late edit/attachment/log rejection with foreign keys on/off; final full run additionally confirmed retained DM pin updates remain allowed"},
+    {"command": "go test ./... -json", "result": "all packages passed with migration 099 and final pin test; unavailable external media and host symlink prerequisites remain open"},
+    {"command": "go build -o tmp/p1-acceptance-20261023/server-deletion-status.exe .", "result": "passed"}
+  ],
+  "local_runtime": {
+    "environment": "Only own isolated API 9191 restarted with existing throwaway database/key; migration 099 applied. No production accounts/resources changed.",
+    "preflight": "Actual independent fixture login for p1_acceptance returned platform_admin=false, owned_count=1 and the existing owned test server; next_offset=null. Wrong expected user returned HTTP 409. The temporary independent sign-in was logged out afterward without altering browser cookies.",
+    "periodic_cleanup": "Before restart, a later actual health read showed running=true, last_checked_at/last_success_at=2026-10-23T03:51:19.7423732+03:00 and zero failures, confirming periodic advancement beyond the startup pass recorded at 03:47:19."
+  },
+  "remaining": [
+    "Client ownership handoff/consent form and production auth-option/destructive-route wiring, followed by local real deletion/retained history/media and socket validation.",
+    "Installed Windows, independent clients, real SFU, remote libSQL, symbolic-link-enabled host and backup/retention acceptance.",
+    "Full P0-P11 plan remains incomplete. No commit/push/merge, installer/update or production deployment occurred."
+  ]
+}

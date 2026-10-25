@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 bounded YouTube name search and explicit result selection.",
+  "implemented": [
+    "Authenticated voice members with Speak permission can search YouTube by a 1-100 character name without mutating the queue.",
+    "The provider command is bounded to five results, uses a fixed ytsearch prefix as one positional argument after --, disables plugins and restricts extraction to YouTube.",
+    "The active voice UI renders selectable results and queues only the chosen canonical video URL; /play with a name resolves the first result.",
+    "Search shares the resource limiter with play and surfaces provider-classified failures without exposing raw stderr."
+  ],
+  "checks": [
+    { "command": "go test ./handlers ./services -run 'TestSearch|TestSearchMusicArgs' -count=1", "cwd": "server", "result": "passed" },
+    { "command": "node node_modules/typescript/bin/tsc -b --pretty false", "cwd": "client", "result": "passed" },
+    { "command": "node node_modules/vitest/vitest.mjs run src/api/music.test.ts src/hooks/useMusicSlashCommand.test.ts src/components/voice/MusicBotPanel.test.tsx", "cwd": "client", "result": "passed", "tests": 40 }
+  ],
+  "remaining": [
+    "Live YouTube lookup and two-client audible playback acceptance require yt-dlp, ffmpeg and LiveKit in the acceptance environment."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

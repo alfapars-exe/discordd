@@ -12,6 +12,8 @@ type ChannelRepository interface {
 	GetByID(ctx context.Context, id string) (*models.Channel, error)
 	GetAllByServer(ctx context.Context, serverID string) ([]models.Channel, error)
 	GetByCategoryID(ctx context.Context, categoryID string) ([]models.Channel, error)
+	GetThreadsByParent(ctx context.Context, parentChannelID string, includeArchived bool) ([]models.Channel, error)
+	SetThreadArchived(ctx context.Context, threadID string, archived bool) error
 	Update(ctx context.Context, channel *models.Channel) error
 	Delete(ctx context.Context, id string) error
 	GetMaxPosition(ctx context.Context, categoryID string) (int, error)

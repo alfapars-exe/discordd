@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-24",
+  "implemented": [
+    "Existing quick-switcher, mute and deafen default shortcuts now resolve through a shared typed command registry, including labels and input-focus policy.",
+    "Exact modifier matching rejects unintended Alt/Meta combinations; composing, repeated and default-prevented key events do not run commands. Physical key code takes priority, with key fallback for legacy events.",
+    "Ctrl+/ toggles a native modal shortcut help dialog from AppLayout; displayed bindings derive from the same registry used by runtime dispatch. English and Turkish labels and focused-window limitations are explicit.",
+    "Existing opt-in local/global mute and PTT collision behavior remains in place.",
+    "Mute/PTT key recorders acquire a shared transient capture lease. Overlapping recorders retain suspension until the last cleanup; local commands are suppressed and Electron mute/PTT registrations are removed while capturing. An active PTT mic is released.",
+    "Disposed native callback closures and stale asynchronous mute registration responses cannot re-enable an old binding after recorder cleanup/re-registration.",
+    "Four currently supported commands have a custom binding editor in shortcut help and desktop general settings. Device-local versioned storage validates loaded fields, rejects duplicate bindings and reserved/modifier-only chords, preserves the old state on storage failure and supports reset-to-default with conflict checks.",
+    "Runtime dispatch and help labels use effective custom bindings. Later changes to PTT/global mute physical keys take priority over conflicting command overrides. Help dialog bounds and scroll fit the viewport.",
+    "Registry now has eight commands including Ctrl+Alt+Up/Down server navigation and Alt+Up/Down channel/private-conversation navigation. Assignments and help use these actual commands. Server navigation reuses remembered single destinations; voice presentation never auto-joins or leaves calls.",
+    "Channel navigation uses the sidebar's server tree, excludes nested/archived threads and keeps DestinationView's live permission gate. Private navigation cycles group DMs and accepted DMs rather than leaking into the stale active server; pending requests are excluded.",
+    "Eight message-context commands now share the registry: edit, delete, pin, reaction, reply, forward, copy and mark unread. Focusable channel/1:1 DM Message rows run only the existing permission-filtered action registry, preserving deletion confirmation. Descendant controls/editors do not trigger row shortcuts; normal selected-text Ctrl+C is retained.",
+    "Message-context overrides permit bare supported keys without exposing global typing shortcuts. Spam-hidden, ignored-hidden and decryption-failed rows cannot invoke these content actions. Message rows have a visible keyboard focus outline.",
+    "Message S invokes explicit browser/system speech using the account rate/language without enabling automatic incoming-message reading. Explicit speech accepts up to the message limit (4000 chars); automatic incoming reading retains its 500-char limit. URL text is normalized, and unsupported/synchronously failing engines return failure to the caller.",
+    "Escape on a focused message returns focus only to an enabled composer inside the same conversation. It works without revealing hidden message content. Pointer/touch message action menus also expose speech only when readable plaintext is available.",
+    "Group spam gate now owns focused keyboard action dispatch using the same registry and capture suspension. Supported group actions are reply, existing thumbs-up reaction, owner edit/delete and scoped composer focus; hidden/undecrypted rows do not run content actions. Group pointer deletion and keyboard deletion share confirmation. Channel/DM and group deletion check account affinity after asynchronous confirmation.",
+    "Ctrl+F/P/U now dispatch search/pins/members through a typed active-conversation command event. Target includes channel kind, ID and server ID. Subscribers acknowledge only supported actions; no receiver, closed view or modal-open view is reported as unavailable rather than simulated success.",
+    "Channel commands reuse existing search, pin and member toggles including mobile member drawer behavior. DMs support pins and non-self search; group conversations focus their existing search input and toggle membership view, while unsupported group pin actions remain explicit failures.",
+    "Ctrl+E/G/S and Ctrl+Shift+U now target the active channel/1:1 DM composer for emoji/GIF/sticker/file selection. Pointer buttons and keyboard use the same picker toggles; only one picker stays open. No send permission or in-flight send prevents opening. The original file chooser, file validation, count cap, draft ownership and encryption/send pipeline are retained. Unsupported group picker commands remain unavailable, not simulated."
+  ],
+  "verification": [
+    "2 test files, 18 tests passed: shortcut registry and useKeyboardShortcuts, including existing Electron mute registration tests and help open/close.",
+    "TypeScript project build and targeted ESLint passed.",
+    "Capture follow-up: 4 files / 32 tests passed. After disposed-native-callback hardening: 3 files / 20 tests passed. New tests cover overlapping/idempotent capture cleanup, default/local mute suppression, held browser mic release, native unregister/re-register and stale native PTT down suppression. TypeScript and targeted lint passed.",
+    "Custom bindings: 4 files / 25 tests passed for registry, runtime, persistence and editor. Cases cover effective override vs old default, reset, conflict, modifier-only/reserved chords, storage failure, voice conflicts, capture cancellation and later PTT changes.",
+    "Navigation: 5 files / 30 tests passed, TypeScript and targeted lint passed. Additional hook dispatch regression: 2 files / 24 tests passed. Cases cover wraparound, absent selections, departed server/cache misses, thread exclusion, voice presentation, accepted private conversation navigation and composer-focused keyboard dispatch.",
+    "Message-context follow-up: 5 files / 29 tests passed; after extra bare-message-key validation, 4 files / 12 tests passed including canonical message action permissions. TypeScript project build and targeted ESLint passed.",
+    "Speech/composer follow-up: 5 files / 33 tests passed. TypeScript and targeted lint passed after fixing an initially detected Message display-name declaration-order error. Tests cover manual-vs-auto speech, length bounds, synchronous engine failure, scoped composer focus and disabled/missing composers. Real audible speech remains unverified.",
+    "Group integration: initial 3 files / 9 tests passed; with account-switch confirmation regression, 2 files / 6 tests passed. TypeScript and targeted ESLint passed. Tests cover focused action vs child-control isolation, hidden content, group composer focus, confirm/cancel and no delete under a changed account.",
+    "Full client regression before conversation-command additions: 216 files / 2010 tests passed in 45.12s.",
+    "Conversation commands: 4 files / 29 tests passed; TypeScript passed. Lint initially detected a channel thread callback memoization dependency, fixed to track channel object. Targeted lint and 2 files / 8 scope/group integration tests then passed. Tests cover exact server identity, malformed commands, unmount cleanup, unsupported operations and modal isolation.",
+    "Composer shortcut follow-up: 5 files / 48 tests passed, TypeScript and targeted lint passed. New MessageInput integration tests verify wrong-conversation rejection, mutual picker exclusion, existing file chooser activation and denied send permission; existing send-lock and attachment-cap tests remained green."
+  ],
+  "remaining": [
+    "Unread server-channel and mention-channel navigation now use fresh server counts (see p8-unread-mentions-2026-10-24.json). Private unread conversation navigation remains separate and incomplete; real browser/Windows acceptance is still pending.",
+    "Group copy/speech now implemented with scoped ignore/spam gates (p4-group-copy-speech-2026-10-24.json). Other unsupported group actions, remaining navigation/drag/chat/voice groups, full settings reference layout and custom assignment coverage for remaining commands remain open. Real Windows key-recording/native event-order acceptance and actual audible TTS remain required.",
+    "Settings default list integration, actual browser focus containment/restoration and Windows global-key acceptance."
+  ],
+  "browser_partial": {
+    "space_id": 6,
+    "url": "http://127.0.0.1:15173/channels",
+    "environment": "Localhost Vite port 15173 with disposable Docker backend port 19191 and temporary SQLite database; no production account or data.",
+    "observed": "Disposable UI registration/login succeeded. Ctrl+/ opened a native modal with localized registry bindings. DOM evaluation showed modal=true, focusedInDialog=true and no horizontal viewport overflow at 2548x1269.",
+    "not_verified": "Screenshot failed because Ego Lite was minimized. A subsequent keyboard round found no open dialog, so Tab containment and focus restoration are inconclusive, not accepted. Handed space to user to restore the window before resuming."
+  },
+  "typecheck_correction": "Some later checks labeled TypeScript passed ran tsc --noEmit against the solution config with files:[] and did not traverse references. Those commands alone were insufficient evidence. On 2026-10-24 the correct tsc -b traversed app/node projects, found a new nullable reveal-state error, and passed after its fix. Current whole-project type evidence is the tsc -b run, not the earlier no-op checks.",
+  "acceptance": "Foundation only; P8 registry and custom bindings remain incomplete."
+}

@@ -18,7 +18,8 @@
  * The receiver therefore only ever holds what processDistribution installs.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { getAuthSessionSnapshot, publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 import type {
   StoredSenderKey,
   SenderKeyMessage,
@@ -89,6 +90,11 @@ const CH = "channel-1";
 const USER = "user-alice";
 const DEV = "device-1";
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  return { promise: new Promise<T>((done) => { resolve = done; }), resolve };
+}
+
 /** IndexedDB metadata key holding the OUTBOUND Ed25519 signing private key. */
 const SIGNING_META_KEY = `sk_signing:${CH}:${USER}:${DEV}`;
 
@@ -157,6 +163,34 @@ describe("senderKeyProtocol — group encryption round-trip and guards", () => {
     h.active = h.sender;
   });
 
+  afterEach(() => {
+    publishAuthOwnerChange(null);
+    publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+  });
+
+  it("does not advance or persist a sender key after auth changes during signing-key load", async () => {
+    const distribution = await createDistribution(CH, USER, DEV);
+    const key = h.sender.keys.get(senderKeyId(CH, USER, DEV));
+    expect(key).toBeDefined();
+    const signingKey = h.sender.meta.get(SIGNING_META_KEY) as Uint8Array;
+    const signingPending = deferred<Uint8Array | null>();
+    vi.mocked(keyStorage.getMetadata).mockReturnValueOnce(signingPending.promise);
+    vi.mocked(keyStorage.saveSenderKey).mockClear();
+
+    publishAuthOwnerChange("scope-a");
+    publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+    const encrypting = encryptGroupMessage(CH, USER, DEV, "private");
+    await vi.waitFor(() => expect(keyStorage.getMetadata).toHaveBeenCalled());
+    publishAuthOwnerChange("scope-b");
+    publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+    signingPending.resolve(signingKey);
+
+    await expect(encrypting).rejects.toThrow("Auth session changed");
+    expect(keyStorage.saveSenderKey).not.toHaveBeenCalled();
+    expect(key?.iteration).toBe(0);
+    expect(distribution.iteration).toBe(0);
+  });
+
   it("round-trips a distribution and decrypts N sequential messages", async () => {
     h.active = h.sender;
     const dist = await createDistribution(CH, USER, DEV);
@@ -178,6 +212,22 @@ describe("senderKeyProtocol — group encryption round-trip and guards", () => {
         plaintexts[i]
       );
     }
+  });
+
+  it("does not persist ratchet or replay-window state when the auth session changes during AES", async () => {
+    h.active = h.sender;
+    const distribution = await createDistribution(CH, USER, DEV);
+    const message = await encryptGroupMessage(CH, USER, DEV, "private");
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, distribution);
+    vi.mocked(keyStorage.saveSenderKey).mockClear();
+
+    let checks = 0;
+    await expect(decryptGroupMessage(CH, USER, DEV, message, () => ++checks < 3))
+      .rejects.toThrow("Auth session changed");
+
+    expect(keyStorage.saveSenderKey).not.toHaveBeenCalled();
+    expect(h.receiver.keys.get(senderKeyId(CH, USER, DEV))?.iteration).toBe(distribution.iteration);
   });
 
   it("rejects a message whose signed body is tampered (Ed25519 covers the body)", async () => {

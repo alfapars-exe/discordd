@@ -1,0 +1,24 @@
+{
+  "phase": "P11",
+  "status": "implemented_unverified",
+  "scope": [
+    "Separate default-off device-local permission enables an explicit open-in-application action on the existing chat preview. This opens the currently authorized channel in the main application; it is not an overlay composer and never sends messages.",
+    "An independent nonfocusable shaped 88x20 native child displays only the action control and opaque session. No chat text or channel identifiers are delivered to that child. Native validates sender, main frame, actual button hit, cooldown, visibility, ready chat, consent and current session before requesting confirmation.",
+    "Trusted main renderer resolves its target from current stores, not the native payload. Account/login generation, server/channel membership, loaded privacy/block state, message-window ownership and exact successful permission sources are checked before and after native confirmation. Missing override data is not treated as a successfully loaded empty list.",
+    "Native confirmation consumes a one-shot five-second intent and then restores/shows/focuses the main window. Pending requests are retired by session rotation, revoked consent, hidden widgets or destroyed surfaces. Failed requests can be retried; no success toast claims a message was sent.",
+    "Layout setup and auth owner/generation boundaries queue blank native snapshots without waiting for React passive effects. Old publisher effects are scope-fenced. Native overlay teardown also runs on main renderer crash, main-frame document reload/navigation and actual window destruction, but not same-document navigation, subframe navigation or close-to-tray."
+  ],
+  "verification": [
+    "Root live-target and action lifecycle focused tests initially passed 12/12; cleanup and updated permission provenance regressions added afterward. The boundary-clear regression runs its emitted snapshot through the real native parser, ensuring a blank snapshot is accepted instead of silently rejected by strict disabled-data rules.",
+    "Agent UI/device preference/bridge tests passed 83/83. Native TypeScript and complete native suite passed: 160 tests, one existing permission-dependent skip.",
+    "Final client TypeScript, scoped lint and production build passed after source stabilization; existing ineffective-dynamic-import/build-timing warnings remain.",
+    "Final complete client regression: 325 files, 3052 tests passed, zero failed/pending. Exact report C:/Users/PARS/AppData/Local/Temp/hichat-overlay-chat-action-checked-20261025.json.",
+    "Coverage structure VALID and validator tests 32/32 passed. Composite widget and overall P0-P11 acceptance remain incomplete."
+  ],
+  "open": [
+    "Actual Windows game click-through/focus, DPI/multiple-monitor and two-client privacy acceptance; mocked native windows do not replace these gates.",
+    "Real overlay composition/sending, DM/group/thread variants, independent widget placement, video and stream widgets. Opening the main application does not satisfy these requirements.",
+    "Remaining P0-P11 acceptance, Windows packaging/update delivery and publication approval."
+  ],
+  "release": "No commit, push, merge, deployment or publication."
+}

@@ -10,39 +10,42 @@
 import { apiClient } from "./client";
 import type { DMChannelWithUser, DMMessagePage, DMMessage } from "../types";
 
-export function listDMChannels() {
-  return apiClient<DMChannelWithUser[]>("/dms");
+export function listDMChannels(options?:{isCurrent?:()=>boolean;timeoutMs?:number}) {
+  return apiClient<DMChannelWithUser[]>("/dms",options);
 }
 
-export function createDMChannel(userId: string) {
+export function createDMChannel(userId: string, options?: { isCurrent?: () => boolean; timeoutMs?: number }) {
   return apiClient<DMChannelWithUser>("/dms", {
+    ...options,
     method: "POST",
     body: { user_id: userId },
   });
 }
 
 /** The caller's self-DM ("My Notes") channel — created on first call. */
-export function getOrCreateSelfDMChannel() {
-  return apiClient<DMChannelWithUser>("/dms/self", { method: "POST" });
+export function getOrCreateSelfDMChannel(options?: { isCurrent?: () => boolean; timeoutMs?: number }) {
+  return apiClient<DMChannelWithUser>("/dms/self", { ...options, method: "POST" });
 }
 
-export function getDMMessages(channelId: string, before?: string, limit = 50) {
+type DMReadOptions = {isCurrent?: () => boolean; timeoutMs?: number; signal?: AbortSignal};
+
+export function getDMMessages(channelId: string, before?: string, limit = 50, options?: DMReadOptions) {
   const params = new URLSearchParams();
   if (before) params.set("before", before);
   params.set("limit", String(limit));
-  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`);
+  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`, options);
 }
 
 /** Window centred on one DM message (jump-to-message); ASC order. */
-export function getDMMessagesAround(channelId: string, messageId: string, limit = 50) {
+export function getDMMessagesAround(channelId: string, messageId: string, limit = 50, options?: DMReadOptions) {
   const params = new URLSearchParams({ around: messageId, limit: String(limit) });
-  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`);
+  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`, options);
 }
 
 /** DM messages newer than `afterId` (forward paging out of a jumped-to window). */
-export function getDMMessagesAfter(channelId: string, afterId: string, limit = 50) {
+export function getDMMessagesAfter(channelId: string, afterId: string, limit = 50, options?: DMReadOptions) {
   const params = new URLSearchParams({ after: afterId, limit: String(limit) });
-  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`);
+  return apiClient<DMMessagePage>(`/dms/${channelId}/messages?${params}`, options);
 }
 
 /**
@@ -53,7 +56,8 @@ export async function sendDMMessage(
   channelId: string,
   content: string,
   files?: File[],
-  replyToId?: string
+  replyToId?: string,
+  options?:{isCurrent?:()=>boolean;timeoutMs?:number}
 ) {
   if (files && files.length > 0) {
     const formData = new FormData();
@@ -66,12 +70,14 @@ export async function sendDMMessage(
     }
 
     return apiClient<DMMessage>(`/dms/${channelId}/messages`, {
+      ...options,
       method: "POST",
       body: formData,
     });
   }
 
   return apiClient<DMMessage>(`/dms/${channelId}/messages`, {
+    ...options,
     method: "POST",
     body: {
       content,
@@ -91,7 +97,8 @@ export async function sendEncryptedDMMessage(
   senderDeviceId: string,
   metadata: string,
   files?: File[],
-  replyToId?: string
+  replyToId?: string,
+  options?:{isCurrent?:()=>boolean;timeoutMs?:number}
 ) {
   if (files && files.length > 0) {
     const formData = new FormData();
@@ -107,12 +114,14 @@ export async function sendEncryptedDMMessage(
     }
 
     return apiClient<DMMessage>(`/dms/${channelId}/messages`, {
+      ...options,
       method: "POST",
       body: formData,
     });
   }
 
   return apiClient<DMMessage>(`/dms/${channelId}/messages`, {
+    ...options,
     method: "POST",
     body: {
       encryption_version: 1,
@@ -129,9 +138,11 @@ export function editEncryptedDMMessage(
   messageId: string,
   ciphertext: string,
   senderDeviceId: string,
-  metadata: string
+  metadata: string,
+  options?:{isCurrent?:()=>boolean;timeoutMs?:number}
 ) {
   return apiClient<DMMessage>(`/dms/messages/${messageId}`, {
+    ...options,
     method: "PATCH",
     body: {
       encryption_version: 1,
@@ -142,15 +153,17 @@ export function editEncryptedDMMessage(
   });
 }
 
-export function editDMMessage(messageId: string, content: string) {
+export function editDMMessage(messageId: string, content: string,options?:{isCurrent?:()=>boolean;timeoutMs?:number}) {
   return apiClient<DMMessage>(`/dms/messages/${messageId}`, {
+    ...options,
     method: "PATCH",
     body: { content },
   });
 }
 
-export function deleteDMMessage(messageId: string) {
-  return apiClient<{ message: string }>(`/dms/messages/${messageId}`, {
+export function deleteDMMessage(messageId: string,options?:{isCurrent?:()=>boolean;timeoutMs?:number}) {
+  return apiClient<{ message: string; id?:string; dm_channel_id?:string }>(`/dms/messages/${messageId}`, {
+    ...options,
     method: "DELETE",
   });
 }
@@ -190,10 +203,18 @@ export function getDMPinnedMessages(channelId: string) {
  * omitted means "up to the latest message". The server echoes `dm_read` to
  * the caller's other sessions.
  */
-export function markDMRead(channelId: string, messageId?: string) {
+export function markDMRead(channelId: string, messageId?: string, options?: { isCurrent?: () => boolean; timeoutMs?: number }) {
   return apiClient<{ message: string }>(`/dms/${channelId}/read`, {
+    ...options,
     method: "POST",
     body: messageId ? { message_id: messageId } : {},
+  });
+}
+
+export function markDMUnreadFrom(channelId: string, messageId: string) {
+  return apiClient<{ unread_count: number }>(`/dms/${channelId}/unread`, {
+    method: "POST",
+    body: { message_id: messageId },
   });
 }
 

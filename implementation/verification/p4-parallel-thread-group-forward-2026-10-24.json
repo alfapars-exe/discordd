@@ -1,0 +1,10 @@
+{
+  "status": "implemented_unverified",
+  "thread": "Loading/error/retry states distinguish failed listing from an empty list. Create is blocked until successful listing; account/auth generation/source remount and request sequencing reject stale UI updates. Create/archive/reopen serialized. Added en/tr loading/error keys.",
+  "group": "Participant add/remove/leave UI serializes operations, preserves failed add selection and exposes retry. Store membership operations serialize per group, capture account/auth generation and group lifetime/key epoch, validate response identity/member delta/new epoch before state update. API wrappers still lack retry scope; only pre/post request fencing is implemented in this slice.",
+  "forward": "Independent Escape handling and idempotent close; account/session generation changes close stale destination view. Existing send paths inspected for File attachment encryption, not a new cryptographic acceptance claim.",
+  "targetedVerification": "Agents report thread + locale parity 34 tests; group UI/store 81 tests; forward 25 tests, targeted ESLint clean. Main independently ran forward + reminder API/modal/storage: 45 tests passed. Main TypeScript and production Vite build passed after all parallel edits; existing build warnings remain.",
+  "integratedRegression": "Main full client Vitest suite passed: 257 files / 2481 tests; exit 0, duration 57.18s. Existing React act, mocked API URL, Capacitor and intentional failure-path warnings remain. This is automated regression evidence, not device acceptance.",
+  "remaining": ["Request-level identity fencing for membership/thread API refresh retries", "Real browser and two-client encrypted behavior acceptance", "Server permission and concurrent membership event integration acceptance"],
+  "release": "No commit, push, publication or production migration"
+}

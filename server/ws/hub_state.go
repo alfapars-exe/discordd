@@ -59,6 +59,24 @@ func (h *Hub) GetVisibleOnlineUserIDs() []string {
 	return ids
 }
 
+// IsVisibleOnline is the fail-closed per-user presence query used by privacy
+// policies. Invisible users are deliberately indistinguishable from offline.
+func (h *Hub) IsVisibleOnline(userID string) (bool, error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.shuttingDown || h.invisibleUsers[userID] { return false, nil }
+	return len(h.clients[userID]) > 0, nil
+}
+
+// IsInvisible reports the user's hidden-presence flag from one atomic Hub
+// snapshot. Callers should not infer invisibility by comparing separate
+// online and visible-user queries, which may observe different states.
+func (h *Hub) IsInvisible(userID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.invisibleUsers[userID]
+}
+
 // GetOnlineUserIDsForServer returns deduplicated user IDs of clients in the given server.
 // Used by services to scope permission checks to server members only.
 func (h *Hub) GetOnlineUserIDsForServer(serverID string) []string {

@@ -3,7 +3,9 @@
 import { useMemo, useCallback, useRef, type ReactNode } from "react";
 import { ChatContext, type ChatContextValue, type ChatMessage } from "../../hooks/useChatContext";
 import { useDMStore } from "../../stores/dmStore";
-import type { DMMessage, MemberWithRoles } from "../../types";
+import { useAuthStore } from "../../stores/authStore";
+import { composerKey, useComposerDraftStore } from "../../stores/composerDraftStore";
+import type { MemberWithRoles } from "../../types";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_MEMBERS: MemberWithRoles[] = [];
@@ -33,13 +35,14 @@ function DMChatProvider({
   const hasMoreAfter = useDMStore((s) =>
     channelId ? s.hasMoreAfterByChannel[channelId] ?? false : false
   );
-  const replyingTo = useDMStore((s) => s.replyingTo) as ChatMessage | null;
+  const accountId = useAuthStore((s) => s.user?.id);
+  const draftKey = composerKey(accountId, "dm", channelId);
+  const replyingTo = useComposerDraftStore((s) => s.drafts[draftKey]?.replyingTo ?? null);
   const scrollToMessageId = useDMStore((s) => s.scrollToMessageId);
   const typingUsers = useDMStore((s) =>
     channelId ? s.typingUsers[channelId] ?? EMPTY_STRINGS : EMPTY_STRINGS
   );
 
-  const storeSetReplyingTo = useDMStore((s) => s.setReplyingTo);
   const storeSetScrollToMessageId = useDMStore((s) => s.setScrollToMessageId);
   const storeSendMessage = useDMStore((s) => s.sendMessage);
   const storeEditMessage = useDMStore((s) => s.editMessage);
@@ -100,10 +103,9 @@ function DMChatProvider({
 
   const setReplyingTo = useCallback(
     (msg: ChatMessage | null) => {
-      // Safe cast — runtime object is already a DMMessage
-      storeSetReplyingTo(msg as DMMessage | null);
+      useComposerDraftStore.getState().patch(draftKey, { replyingTo: msg });
     },
-    [storeSetReplyingTo]
+    [draftKey]
   );
 
   const setScrollToMessageId = useCallback(

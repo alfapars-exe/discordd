@@ -7,6 +7,7 @@
   "unknownTarget": "bilinmeyen kullanıcı",
 
   "events": {
+    "server_ownership_transfer": "{{actor}} sunucu sahipliğini {{target}} kullanıcısına devretti",
     "server_mute": "{{actor}} {{target}}'ın mikrofonunu kapattı",
     "server_unmute": "{{actor}} {{target}}'ın mikrofonunu açtı",
     "server_deafen": "{{actor}} {{target}}'ı sağırlaştırdı",

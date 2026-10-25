@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P10 bounded music publisher recovery after an unexpected LiveKit disconnect.",
+  "implemented": [
+    "An unexpected publisher disconnect first snapshots the interrupted track and pending queue as an inactive paused session.",
+    "The server retries publication with a bounded 0ms, 500ms, 1s and 2s schedule and a 12-second timeout per attempt.",
+    "A successful reconnect consumes the restored queue once and resumes through the normal single play loop without duplicating queue entries.",
+    "Exhausted retries leave the durable queue paused for the user's explicit restore action instead of reporting false playback.",
+    "Explicit stop, channel-empty teardown and graceful shutdown do not invoke automatic reconnect."
+  ],
+  "checks": [
+    { "command": "go test ./services -run 'TestDisconnectedPublisher|TestMusicSession|TestUnexpectedDisconnect|TestSeek|TestPlayLoopSeek' -count=1", "cwd": "server", "result": "passed" }
+  ],
+  "remaining": [
+    "A real LiveKit interruption must verify audible recovery, stable participant identity and absence of accelerated samples with two clients.",
+    "Packaged Windows network-loss recovery remains an acceptance gate."
+  ],
+  "release": "Source and automated fixtures only; no commit, push, merge, deployment or Windows update was performed."
+}

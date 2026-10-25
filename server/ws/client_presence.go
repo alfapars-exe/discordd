@@ -2,10 +2,55 @@
 package ws
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
+	"unicode"
 
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/google/uuid"
 )
+
+func (c *Client) handleGameActivityUpdate(event Event) {
+	raw, err := json.Marshal(event.Data)
+	if err != nil {
+		return
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var payload GameActivityClientUpdate
+	if err := decoder.Decode(&payload); err != nil {
+		return
+	}
+	if payload.Game != nil && !validGameActivityInput(payload.Game) {
+		return
+	}
+	if c.isBot {
+		return
+	}
+	seq := c.activitySeq.Add(1)
+	c.hub.QueueGameActivityUpdate(c, seq, payload.Game)
+}
+
+func validGameActivityInput(game *GameActivityClientGame) bool {
+	if game == nil || len(game.ID) != 36 || len(game.Name) == 0 || len(game.Name) > 80 {
+		return false
+	}
+	if _, err := uuid.Parse(game.ID); err != nil {
+		return false
+	}
+	if strings.TrimSpace(game.ID) != game.ID || strings.TrimSpace(game.Name) != game.Name {
+		return false
+	}
+	for _, value := range []string{game.ID, game.Name} {
+		for _, r := range value {
+			if r == '/' || r == '\\' || r == ':' || unicode.IsControl(r) {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 // handlePresenceUpdate processes a client presence change.
 // Updates per-connection status, computes aggregate across all connections,
@@ -32,17 +77,48 @@ func (c *Client) handlePresenceUpdate(event Event) {
 	}
 
 	c.hub.mu.Lock()
-	defer c.hub.mu.Unlock()
-	c.status = data.Status
+	if c.hub.shuttingDown {
+		c.hub.mu.Unlock()
+		return
+	}
+	if data.IsAuto {
+		// Auto-idle is only valid for users whose account preference is
+		// online (empty is the legacy representation of that default).
+		// A stale event from an old tab must not override a later manual
+		// DND or offline choice.
+		if c.prefStatus != "" && c.prefStatus != "online" {
+			c.hub.mu.Unlock()
+			return
+		}
+		c.status = data.Status
+	} else {
+		// Manual presence is account-scoped. Update every connected tab in
+		// one Hub critical section so aggregation cannot retain a stale
+		// higher-priority status from another connection.
+		for client := range c.hub.clients[c.userID] {
+			client.prefStatus = data.Status
+			client.status = data.Status
+		}
+		if data.Status == "offline" {
+			// Hide immediately. Revealing a previously-hidden user waits for
+			// the persistence callback to commit and revalidate this preference.
+			c.hub.invisibleUsers[c.userID] = true
+		}
+	}
 	aggregate := c.hub.computeAggregateStatusLocked(c.userID)
-
-	// onPresenceManualUpdate is dispatched via logx.Go (separate goroutine),
-	// not called synchronously, so holding c.hub.mu through the dispatch
-	// (deferred Unlock above, rather than the manual Unlock() this used to
-	// have right after computeAggregateStatusLocked) doesn't risk
-	// deadlocking the callback against this lock.
-	if c.hub.onPresenceManualUpdate != nil {
-		logx.Go("ws.presence_manual_update", func() { c.hub.onPresenceManualUpdate(c.userID, aggregate, data.IsAuto) })
+	callback := c.hub.onPresenceManualUpdate
+	userID := c.userID
+	var ticket *presenceCallbackTicket
+	if callback != nil {
+		ticket = c.hub.presenceCallbacks.reserve(userID, "presence_manual_update")
+	}
+	c.hub.mu.Unlock()
+	if c.hub.onGameActivityPresenceChange != nil && data.Status == "offline" {
+		cb := c.hub.onGameActivityPresenceChange
+		go cb(userID)
+	}
+	if callback != nil {
+		c.hub.presenceCallbacks.submit(ticket, func() { callback(userID, aggregate, data.IsAuto) })
 	}
 }
 

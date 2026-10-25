@@ -25,6 +25,14 @@ func NewBlockHandler(service services.BlockService, limiter *ratelimit.MessageRa
 	return &BlockHandler{service: service, limiter: limiter}
 }
 
+func blockAccountMatches(w http.ResponseWriter, r *http.Request, userID string) bool {
+	if expected := r.URL.Query().Get("expected_user_id"); expected != "" && expected != userID {
+		pkg.ErrorWithCode(w, http.StatusConflict, "block account changed", "BLOCK_ACCOUNT_MISMATCH")
+		return false
+	}
+	return true
+}
+
 // BlockUser -- POST /api/users/{userId}/block
 func (h *BlockHandler) BlockUser(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
@@ -33,6 +41,9 @@ func (h *BlockHandler) BlockUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !blockAccountMatches(w, r, user.ID) {
+		return
+	}
 	if h.limiter != nil && !h.limiter.Allow(user.ID) {
 		retryAfter := h.limiter.CooldownSeconds(user.ID)
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
@@ -64,6 +75,9 @@ func (h *BlockHandler) UnblockUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !blockAccountMatches(w, r, user.ID) {
+		return
+	}
 	targetID := r.PathValue("userId")
 	if targetID == "" {
 		pkg.ErrorWithMessage(w, http.StatusBadRequest, "userId is required")
@@ -86,6 +100,9 @@ func (h *BlockHandler) ListBlocked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !blockAccountMatches(w, r, user.ID) {
+		return
+	}
 	blocked, err := h.service.ListBlocked(r.Context(), user.ID)
 	if err != nil {
 		pkg.Error(w, err)

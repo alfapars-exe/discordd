@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-24",
+  "scope": "Private manual media annotation session invalidation and canonical reload",
+  "implemented": [
+    "After successful annotation storage or deletion, MediaLabelService broadcasts media_label_changed only to the authenticated owner's connections. Failed storage does not broadcast. Events carry source references, not label values or decrypted content.",
+    "Mounted annotation consumers subscribe to bounded-lifetime owner/source invalidations. No persistent label cache or unbounded message history is retained. Events for another account, malformed references, unsubscribed consumers and old authentication generations are ignored.",
+    "Invalidation immediately aborts in-flight responses, revokes temporary visibility and matching detached viewers, returns the media to unknown preferences and re-reads canonical server state. Delayed events cannot directly restore a stale revealing label.",
+    "Successful HTTP mutations invalidate other mounted copies even without the originating socket echo. Every ready/reconnect handshake invalidates the current owner's mounted labels to recover events missed while offline.",
+    "Async annotation reads and writes also verify the encryption device identity before applying a result. Clearing/replacing the device invalidates an old receipt."
+  ],
+  "verification": [
+    {"command": "Docker Linux go test ./services -run MediaLabel -count=1", "result": "passed", "detail": "Includes owner-only event routing after storage, no public/server/multiple-owner broadcast, no label value in payload, and no invalidation on failed set/delete."},
+    {"command": "Targeted Vitest: mediaLabelSync, PrivateMediaAnnotation, UnclassifiedMediaGate.annotation, systemEventHandlers", "result": "passed", "files": 4, "tests": 25, "detail": "Snapshot before additional device-clear regression. Covers owner/source filtering, unsubscribe, same-account authentication generation, malformed events, ready dispatch, stale-read abort and local HTTP synchronization across two mounted copies."},
+    {"command": "Final client full Vitest suite", "result": "passed", "files": 237, "tests": 2354, "detail": "Includes device-clear receipt regression. No runtime source edits during this final run."},
+    {"command": "Client TypeScript project build and targeted ESLint", "result": "passed"},
+    {"command": "Client Vite production build", "result": "passed", "detail": "734ms; existing ineffective dynamic import warning remains."},
+    {"command": "Docker Linux Go 1.26.8 CGO_ENABLED=0 go test ./... -timeout=15m", "result": "passed"},
+    {"command": "Docker Linux go vet ./...", "result": "passed"},
+    {"command": "git diff --check and implementation coverage validator", "result": "passed", "detail": "33 references / 261 behaviors; acceptance remains incomplete."}
+  ],
+  "remaining": [
+    "Live two-client socket acceptance against a backend built with these changes; the existing running browser QA backend predates the annotation API.",
+    "Compare-and-swap and explicit client conflict handling were subsequently implemented and tested; see p3-media-label-version-conflicts-2026-10-24.json. Real two-client acceptance remains outstanding.",
+    "Full automatic on-device media classifier and quality evaluation remain unimplemented. Manual user labels are not automatic analysis."
+  ],
+  "acceptance": "Not accepted. Automated runtime and component evidence is not real two-client acceptance."
+}

@@ -41,6 +41,7 @@ type MemberWithRoles struct {
 	// Public profile fields (migration 085), copied verbatim from User.
 	AvatarAnimatedURL *string `json:"avatar_animated_url"`
 	BannerURL         *string `json:"banner_url"`
+	BannerAnimatedURL *string `json:"banner_animated_url"`
 	Bio               *string `json:"bio"`
 	Pronouns          *string `json:"pronouns"`
 	AccentColor       *string `json:"accent_color"`
@@ -87,6 +88,7 @@ func ToMemberWithRoles(user *User, roles []Role) MemberWithRoles {
 		LastSeenAt:           lastSeenAt,
 		AvatarAnimatedURL:    user.AvatarAnimatedURL,
 		BannerURL:            user.BannerURL,
+		BannerAnimatedURL:    user.BannerAnimatedURL,
 		Bio:                  user.Bio,
 		Pronouns:             user.Pronouns,
 		AccentColor:          user.AccentColor,
@@ -136,6 +138,7 @@ type UpdateProfileRequest struct {
 	// it); ClearBanner wins over BannerURL.
 	AvatarAnimatedURL *string `json:"-"`
 	BannerURL         *string `json:"-"`
+	BannerAnimatedURL *string `json:"-"`
 	ClearBanner       bool    `json:"-"`
 }
 

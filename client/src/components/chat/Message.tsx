@@ -10,11 +10,15 @@
  *   - useContextMenu / useLongPress — interaction primitives
  */
 
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
+import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useSavedStore } from "../../stores/savedStore";
+import { useSpamVisibility } from "../../hooks/useSpamVisibility";
+import UnclassifiedMediaGate from "./UnclassifiedMediaGate";
+import SpamPreview from "./SpamPreview";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
 import { formatFullDateTime, formatMessageTime } from "../../utils/dateFormat";
@@ -46,6 +50,33 @@ import MessageAttachments from "./MessageAttachments";
 import MessageHoverActions from "./MessageHoverActions";
 import MessageReactions from "./MessageReactions";
 import MobileMessageActions from "./MobileMessageActions";
+import ReportModal from "../shared/ReportModal";
+import {
+  getApplicationInvocation,
+  invokeMessageApplicationAction,
+  type ApplicationAction,
+} from "../../api/applications";
+import { useToastStore } from "../../stores/toastStore";
+import { useAccessibilityStore } from "../../stores/accessibilityStore";
+import { useDeveloperSettingsStore } from "../../stores/developerSettingsStore";
+import { useIgnoredMessageVisibility } from "../../hooks/useIgnoredMessage";
+import { markUnreadFrom } from "../../api/readState";
+import { markDMUnreadFrom } from "../../api/dm";
+import { useReadStateStore } from "../../stores/readStateStore";
+import { useDMStore } from "../../stores/dmStore";
+import { buildMessageLink } from "../../utils/messageLinks";
+import ReminderModal from "./ReminderModal";
+import { buildMessageActions } from "./messageActionRegistry";
+import ForwardMessageModal from "./ForwardMessageModal";
+import ThreadModal from "./ThreadModal";
+import { useThreadStore } from "../../stores/threadStore";
+import { useChannelStore } from "../../stores/channelStore";
+import { useServerStore } from "../../stores/serverStore";
+import { useUIStore } from "../../stores/uiStore";
+import { focusMessageComposer, runMessageShortcut } from "../../utils/messageShortcuts";
+import { speakMessage } from "../../utils/textToSpeech";
+import { useShortcutBindingsStore } from "../../stores/shortcutBindingsStore";
+import { useShortcutCaptureStore } from "../../stores/shortcutCaptureStore";
 
 type MessageProps = {
   message: ChatMessage;
@@ -78,7 +109,31 @@ type MessageProps = {
   setScrollToMessageId: (id: string | null) => void;
   pinMessage: (messageId: string) => Promise<void>;
   unpinMessage: (messageId: string) => Promise<void>;
+  channelId: string;
+  applicationActions: ApplicationAction[];
 };
+
+/**
+ * Thread actions are only supported from text-channel parents. When a server
+ * tree has not loaded yet, preserve the existing text-chat affordance unless
+ * the thread store already proves this channel is itself a thread; nested
+ * threads are not supported by the API.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function canStartThreadFromChannel(
+  channelID: string,
+  channelTree: ReturnType<typeof useChannelStore.getState>["categoriesByServer"][string],
+  knownThread: boolean,
+): boolean {
+  const listedChannel = channelTree?.flatMap((category) => category.channels).find((channel) => channel.id === channelID);
+  if (listedChannel) return listedChannel.type === "text";
+  return !knownThread;
+}
+
+// Zustand selectors must return a referentially stable fallback. Returning a
+// fresh `{}` here made React's external-store snapshot change on every read,
+// so rendering the first real message could recurse until the chat boundary
+// crashed with "Maximum update depth exceeded".
 
 function Message({
   message,
@@ -97,11 +152,18 @@ function Message({
   setScrollToMessageId,
   pinMessage,
   unpinMessage,
+  channelId,
+  applicationActions,
 }: MessageProps) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
   const { t: tSaved } = useTranslation("saved");
   const currentUser = useAuthStore((s) => s.user);
+  const spam = useSpamVisibility(message, { kind: mode === "dm" ? "dm" : "channel", channelId });
+  const roleColorMode = useAccessibilityStore((s) => s.roleColorMode);
+  const officialMessageStyle = useAccessibilityStore((s) => s.officialMessageStyle);
+  const { ignored: isIgnored, shown: showIgnoredContent, reveal: revealIgnoredContent } = useIgnoredMessageVisibility(message, `${mode}:${channelId}`);
+  const developerMode = useDeveloperSettingsStore((s) => s.developerMode);
   // Bookmark state — channel and DM messages live in separate id indexes.
   const isSaved = useSavedStore((s) =>
     mode === "dm" ? !!s.savedDMMessageIds[message.id] : !!s.savedMessageIds[message.id],
@@ -120,6 +182,55 @@ function Message({
   const isMobile = useIsMobile();
   const confirm = useConfirm();
   const { menuState, openMenu, closeMenu } = useContextMenu();
+  const channelThreads = useThreadStore((state) => state.byParent[channelId]);
+  const loadThreads = useThreadStore((state) => state.loadParent);
+  const rememberThread = useThreadStore((state) => state.remember);
+  const channelTree = useChannelStore((state) => cosmeticScope ? state.categoriesByServer[cosmeticScope] : undefined);
+  const knownThread = useThreadStore((state) => state.byID[channelId]?.type === "thread" && state.serverIdByThread[channelId] === cosmeticScope);
+  const threadActionsAllowed = mode === "channel" && Boolean(cosmeticScope)
+    && canStartThreadFromChannel(channelId, channelTree, knownThread);
+  const messageThread = threadActionsAllowed ? channelThreads?.find((thread) => thread.starter_message_id === message.id) : undefined;
+  const threadGeneration = getAuthSessionSnapshot().generation;
+  useEffect(() => {
+    const scope = getAuthSessionSnapshot();
+    if (threadActionsAllowed && cosmeticScope && currentUser?.id === scope.ownerId && threadGeneration === scope.generation) void loadThreads(cosmeticScope, channelId);
+  }, [threadActionsAllowed, cosmeticScope, channelId, loadThreads, currentUser?.id, threadGeneration]);
+
+  const openExistingThread = useCallback(() => {
+    if (!threadActionsAllowed || !messageThread || !cosmeticScope) return;
+    const scope = getAuthSessionSnapshot();
+    if (!currentUser?.id || currentUser.id !== scope.ownerId || threadGeneration !== scope.generation) return;
+    rememberThread(messageThread, cosmeticScope);
+    const server = useServerStore.getState().servers.find((item) => item.id === cosmeticScope);
+    useUIStore.getState().openTab(messageThread.id, "text", messageThread.name, server ? { serverId: cosmeticScope, serverName: server.name, serverIconUrl: server.icon_url } : undefined);
+  }, [messageThread, cosmeticScope, rememberThread, threadActionsAllowed, currentUser, threadGeneration]);
+
+  const invokeApplicationAction = useCallback(async (action: ApplicationAction) => {
+    if (!cosmeticScope || !action.id) return;
+    const toast = useToastStore.getState().addToast;
+    const started = await invokeMessageApplicationAction(cosmeticScope, channelId, message.id, action.id);
+    if (!started.success || !started.data) {
+      toast("error", t("applicationActionFailed"));
+      return;
+    }
+
+    toast("info", t("applicationActionQueued", { action: action.label }));
+    const invocationID = started.data.id;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      const status = await getApplicationInvocation(invocationID);
+      if (!status.success || !status.data) continue;
+      if (status.data.status === "succeeded") {
+        toast("success", status.data.result_text?.trim() || t("applicationActionCompleted"));
+        return;
+      }
+      if (status.data.status === "failed" || status.data.status === "expired") {
+        toast("error", t(status.data.status === "expired" ? "applicationActionExpired" : "applicationActionFailed"));
+        return;
+      }
+    }
+    toast("warning", t("applicationActionPending"));
+  }, [channelId, cosmeticScope, message.id, t]);
 
   // Destructure the editing hook's return at the top so downstream JSX
   // reads named locals (editTextareaRef, editContent, onChange, ...)
@@ -144,9 +255,14 @@ function Message({
 
   const [pickerSource, setPickerSource] = useState<"bar" | "hover" | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [threadOpen, setThreadOpen] = useState(false);
   const [profileTarget, setProfileTarget] = useState<{ user: PublicUser; top: number; left: number } | null>(null);
 
   const isOwner = currentUser?.id === message.user_id;
+  const displayName = message.author?.display_name ?? message.author?.username ?? "Unknown";
 
   // Role display info — member prop is undefined in DMs (showRoleColors=false)
   const roleType = getRoleType(member);
@@ -173,14 +289,15 @@ function Message({
   const formatFullDate = (dateStr: string) => formatFullDateTime(dateStr, locale);
 
   const handleDelete = useCallback(async () => {
+    const actorId = currentUser?.id;
     const ok = await confirm({
       message: t("deleteMessageConfirm"),
       confirmLabel: t("deleteMessage"),
       danger: true,
     });
-    if (!ok) return;
+    if (!ok || !actorId || useAuthStore.getState().user?.id !== actorId) return;
     await deleteMessage(message.id);
-  }, [confirm, deleteMessage, message.id, t]);
+  }, [confirm, deleteMessage, message.id, t, currentUser?.id]);
 
   const handlePinToggle = useCallback(async () => {
     if (isPinned) await unpinMessage(message.id);
@@ -201,64 +318,106 @@ function Message({
     void toggleSaved({ kind: mode === "dm" ? "dm" : "message", id: message.id });
   }, [toggleSaved, mode, message.id]);
 
+  const handleMarkUnread = useCallback(async () => {
+    const result = mode === "channel" && cosmeticScope
+      ? await markUnreadFrom(cosmeticScope, channelId, message.id)
+      : await markDMUnreadFrom(channelId, message.id);
+    if (!result.success || !result.data) {
+      useToastStore.getState().addToast("error", t("markUnreadFailed"));
+      return;
+    }
+    if (mode === "channel") {
+      useReadStateStore.setState((state) => ({ unreadCounts: { ...state.unreadCounts, [channelId]: result.data!.unread_count } }));
+    } else {
+      useDMStore.setState((state) => ({ dmUnreadCounts: { ...state.dmUnreadCounts, [channelId]: result.data!.unread_count } }));
+    }
+    useToastStore.getState().addToast("success", t("markedUnread"));
+  }, [channelId, cosmeticScope, message.id, mode, t]);
+
+  const handleCopyLink = useCallback(async () => {
+    const target = mode === "channel" && cosmeticScope
+      ? { kind: "channel" as const, serverId: cosmeticScope, channelId, messageId: message.id }
+      : { kind: "dm" as const, channelId, messageId: message.id };
+    try {
+      await copyToClipboard(buildMessageLink(target));
+      useToastStore.getState().addToast("success", t("messageLinkCopied"));
+    } catch {
+      useToastStore.getState().addToast("error", t("messageLinkCopyFailed"));
+    }
+  }, [channelId, cosmeticScope, message.id, mode, t]);
+
+  const messageActions = useMemo(() => buildMessageActions({
+    labels: {
+      reply: t("replyMessage"),
+      reaction: t("addReaction"),
+      forward: t("forwardMessage"),
+      thread: t("threadAction"),
+      copy: t("copyMessage"),
+      speak: t("common:shortcutMessageSpeak"),
+      "copy-link": t("copyMessageLink"),
+      save: isSaved ? tSaved("unsave") : tSaved("save"),
+      "mark-unread": t("markUnread"),
+      reminder: t("remindMe"),
+      applications: t("applicationActions"),
+      "applications-empty": t("applicationActionsEmpty"),
+      report: t("reportMessage"),
+      pin: isPinned ? t("unpinMessage") : t("pinMessage"),
+      edit: t("editMessage"),
+      delete: t("deleteMessage"),
+      "copy-id": t("copyId"),
+    },
+    hasContent: Boolean(message.content) && !spam.hidden && (!isIgnored || showIgnoredContent) && !hasDecryptionError,
+    isOwner,
+    isSaved,
+    isPinned,
+    canManageMessages,
+    developerMode,
+    supportsApplications: mode === "channel" && Boolean(cosmeticScope),
+    supportsThreads: threadActionsAllowed,
+    applicationActions,
+    onApplicationAction: (action) => { void invokeApplicationAction(action); },
+    onReply: handleReply,
+    onReaction: () => setPickerSource("bar"),
+    onForward: () => setForwardOpen(true),
+    onThread: () => setThreadOpen(true),
+    onCopy: () => { if (message.content) void copyToClipboard(message.content).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))); },
+    onSpeak: () => {
+      if (spam.hidden || (isIgnored && !showIgnoredContent) || hasDecryptionError) return;
+      if (!speakMessage(displayName, message.content)) useToastStore.getState().addToast("error", t("common:shortcutSpeechUnavailable"));
+    },
+    onCopyLink: () => { void handleCopyLink(); },
+    onSaveToggle: handleToggleSave,
+    onMarkUnread: () => { void handleMarkUnread(); },
+    onRemind: () => setReminderOpen(true),
+    onReport: () => setReportOpen(true),
+    onPinToggle: () => { void handlePinToggle(); },
+    onEdit: startEdit,
+    onDelete: () => { void handleDelete(); },
+    onCopyID: () => { void copyToClipboard(message.id).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))); },
+  }), [applicationActions, canManageMessages, cosmeticScope, developerMode, handleCopyLink,
+    handleDelete, handleMarkUnread, handlePinToggle, handleReply, handleToggleSave, invokeApplicationAction,
+    isOwner, isPinned, isSaved, message.content, message.id, mode, startEdit, t, tSaved, spam.hidden, isIgnored, showIgnoredContent, hasDecryptionError, displayName, threadActionsAllowed]);
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
-      const items: ContextMenuItem[] = [];
-
-      // Universal items first
-      items.push({ label: t("replyMessage"), onClick: handleReply });
-      items.push({ label: t("addReaction"), onClick: () => setPickerSource("bar") });
-      items.push({
-        label: t("copyMessage"),
-        onClick: () => {
-          if (message.content) copyToClipboard(message.content);
-        },
-      });
       // Bookmark. The id index is normally warmed by the sidebar header;
       // this keeps the label right when that button never mounted.
       void ensureSavedIds();
-      items.push({
-        label: isSaved ? tSaved("unsave") : tSaved("save"),
-        onClick: handleToggleSave,
-      });
-
-      // Pin/unpin requires manage permission
-      if (canManageMessages) {
-        items.push({
-          label: isPinned ? t("unpinMessage") : t("pinMessage"),
-          onClick: handlePinToggle,
-          separator: true,
-        });
-      }
-
-      // Edit — owner only
-      if (isOwner) {
-        items.push({
-          label: t("editMessage"),
-          onClick: startEdit,
-          separator: !canManageMessages,
-        });
-      }
-
-      // Delete — owner or has manage permission
-      if (isOwner || canManageMessages) {
-        items.push({
-          label: t("deleteMessage"),
-          onClick: handleDelete,
-          danger: true,
-        });
-      }
-
-      // Power-user: copy raw message id
-      items.push({
-        label: t("copyId"),
-        onClick: () => copyToClipboard(message.id),
-        separator: true,
-      });
-
+      const items: ContextMenuItem[] = messageActions.map((action) => ({
+        label: action.label,
+        onClick: action.run,
+        danger: action.danger,
+        separator: action.separator,
+        disabled: action.disabled,
+        children: action.children?.map((child) => ({
+          label: child.label,
+          onClick: child.run,
+          disabled: child.disabled,
+        })),
+      }));
       openMenu(e, items);
     },
-    [t, tSaved, handleReply, message.content, message.id, canManageMessages, isOwner, isPinned, isSaved, handlePinToggle, handleToggleSave, ensureSavedIds, handleDelete, startEdit, openMenu],
+    [ensureSavedIds, messageActions, openMenu],
   );
 
   // Long-press → bottom-sheet on mobile (in lieu of context menu)
@@ -266,9 +425,6 @@ function Message({
     useCallback(() => setMobileActionsOpen(true), []),
     { delay: 500 },
   );
-
-  const displayName =
-    message.author?.display_name ?? message.author?.username ?? "Unknown";
 
   const renderedContent = useMemo(
     () => renderMessageContent(message.content, roles, members),
@@ -280,11 +436,19 @@ function Message({
   const msgClass =
     `msg${!isCompact ? " first-of-group" : " grouped"}` +
     `${pickerSource ? " picker-open" : ""}` +
-    `${isMentioned ? " msg-mentioned" : ""}`;
+    `${isMentioned ? " msg-mentioned" : ""}` +
+    `${message.author?.is_bot ? ` msg-official msg-official-${officialMessageStyle}` : ""}`;
 
   return (
     <div
       className={msgClass}
+      tabIndex={0}
+      role="article"
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || useShortcutCaptureStore.getState().active) return;
+        if (event.ctrlKey && event.code === "KeyC" && window.getSelection()?.toString()) return;
+        runMessageShortcut(event.nativeEvent, messageActions, spam.hidden || (isIgnored && !showIgnoredContent) || hasDecryptionError, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
+      }}
       {...(isMobile ? longPressHandlers : {})}
       onContextMenu={isMobile ? longPressHandlers.onContextMenu : handleContextMenu}
     >
@@ -317,7 +481,8 @@ function Message({
         <div className="msg-body">
           <div className="msg-meta">
             <span className="msg-name">
-              <StyledName name={displayName} style={cosmetics.name_style} fallbackColor={roleColor} />
+              {roleColorMode === "dots" && roleColor && <span className="msg-role-color-dot" style={{ backgroundColor: roleColor }} aria-hidden="true" />}
+              <StyledName name={displayName} style={cosmetics.name_style} fallbackColor={roleColorMode === "names" ? roleColor : null} />
             </span>
             {userBadges.length > 0 && (
               <span className="msg-badges">
@@ -341,7 +506,9 @@ function Message({
                       message.referenced_message.author.username}
                   </span>
                   <span className="msg-reply-content">
-                    {plainPreview(message.referenced_message.content) || t("noContent")}
+                    <SpamPreview kind={mode === "dm" ? "dm" : "channel"} message={{ id: message.referenced_message.id, user_id: message.referenced_message.author.id, content: message.referenced_message.content }}>
+                      {plainPreview(message.referenced_message.content) || t("noContent")}
+                    </SpamPreview>
                   </span>
                 </>
               ) : (
@@ -401,15 +568,29 @@ function Message({
                 </span>
               )}
             </div>
+          ) : spam.hidden ? (
+            <div className="msg-text msg-ignored" role="note">
+              <span>{t("spamHidden")}</span>
+              <span>{spam.reasons.map((reason) => t(`spamReason.${reason}`)).join(" · ")}</span>
+              <button type="button" onClick={spam.restore}>{t("spamRestore")}</button>
+              {spam.syncError && <span role="alert">{t("spamSyncFailed")} <button type="button" onClick={spam.retry}>{t("spamRetry")}</button></span>}
+            </div>
+          ) : isIgnored && !showIgnoredContent ? (
+            <div className="msg-text msg-ignored" role="note">
+              <span>{t("ignoredMessage")}</span>
+              <button type="button" className="msg-ignored-reveal" onClick={revealIgnoredContent}>{t("showIgnoredMessage")}</button>
+            </div>
           ) : (
             <div className="msg-text">
               {renderedContent}
               {previewUrls.length > 0 && (
-                <span className="msg-link-previews">
+                <div className="msg-link-previews">
                   {previewUrls.map((url) => (
-                    <LinkPreviewCard key={url} url={url} />
+                    <UnclassifiedMediaGate key={url} authorId={message.user_id} messageId={message.id} revision={message.edited_at ?? "original"} identity={`${message.id}:${url}`}>
+                      <LinkPreviewCard url={url} />
+                    </UnclassifiedMediaGate>
                   ))}
-                </span>
+                </div>
               )}
               {message.edited_at && <span className="msg-edited">{t("edited")}</span>}
               {isCompact && (
@@ -420,15 +601,21 @@ function Message({
             </div>
           )}
 
-          <MessageAttachments message={message} />
+          {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageAttachments message={message} />}
 
-          <MessageReactions
+          {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageReactions
             message={message}
             pickerSource={pickerSource}
             onPickerOpen={() => setPickerSource("bar")}
             onPickerClose={() => setPickerSource(null)}
             onReaction={handleReaction}
-          />
+          />}
+          {messageThread && (
+            <button type="button" className="thread-summary" onClick={openExistingThread}>
+              <span>{messageThread.name}</span>
+              <strong>{t("threadReplyCount", { count: messageThread.reply_count ?? 0 })}</strong>
+            </button>
+          )}
         </div>
 
         {!isEditing && (
@@ -455,23 +642,41 @@ function Message({
           isOpen={mobileActionsOpen}
           onClose={() => setMobileActionsOpen(false)}
           message={message}
-          onReply={() => {
-            handleReply();
-            setMobileActionsOpen(false);
-          }}
-          onPinToggle={handlePinToggle}
-          onEdit={startEdit}
-          onDelete={handleDelete}
           onReaction={handleReaction}
-          onCopy={() => {
-            if (message.content) copyToClipboard(message.content);
-          }}
-          onSaveToggle={handleToggleSave}
-          isSaved={isSaved}
-          canManageMessages={canManageMessages}
-          isPinned={isPinned}
+          actions={messageActions}
         />
       )}
+
+      {reportOpen && !isOwner && (
+        <ReportModal
+          userId={message.user_id}
+          username={displayName}
+          onClose={() => setReportOpen(false)}
+          messageEvidence={{
+            kind: mode,
+            serverId: cosmeticScope ?? undefined,
+            channelId,
+            messageId: message.id,
+            content: message.content ?? "",
+            encrypted: (message.encryption_version ?? 0) > 0,
+          }}
+        />
+      )}
+
+      {reminderOpen && (
+        <ReminderModal
+          source={{
+            source_kind: mode,
+            server_id: mode === "channel" ? cosmeticScope : null,
+            channel_id: channelId,
+            message_id: message.id,
+          }}
+          onClose={() => setReminderOpen(false)}
+        />
+      )}
+
+      {forwardOpen && <ForwardMessageModal message={message} onClose={() => setForwardOpen(false)} />}
+      {threadOpen && threadActionsAllowed && cosmeticScope && <ThreadModal serverId={cosmeticScope} channelId={channelId} messageId={message.id} defaultName={(message.content || t("threadDefaultName")).slice(0, 100)} onClose={() => setThreadOpen(false)} />}
 
       {profileTarget && (
         <MemberCard

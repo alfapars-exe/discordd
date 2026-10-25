@@ -1,0 +1,24 @@
+{
+  "item": "p4.unread",
+  "date": "2026-10-23",
+  "status": "implemented_unverified",
+  "implementation": {
+    "atomicity": "Channel and DM repositories use one INSERT SELECT UPSERT to validate the message belongs to the target, rewind to the preceding message and recompute unread_count from authoritative rows.",
+    "authorization": "Channel actions require both view and read permission; DM actions verify participant membership before accessing the anchor.",
+    "client": "Desktop context menus and mobile long-press actions call the scoped endpoint and apply the returned count instead of optimistic guessing.",
+    "synchronization": "DM mark-unread events include unread_count so the caller's other sessions restore the badge rather than clearing it."
+  },
+  "automated_verification": [
+    {
+      "command": "node node_modules/typescript/bin/tsc -b tsconfig.json",
+      "working_directory": "client",
+      "result": "pass"
+    },
+    {
+      "command": "go test ./repository ./services ./handlers . -run Test(ReadStateRepoMarkUnreadFrom|DMReadRepoMarkUnreadFrom|DMMarkRead|DMMarkUnreadFrom|InitRoutesGolden) -count=1",
+      "working_directory": "server",
+      "result": "pass"
+    }
+  ],
+  "remaining_acceptance": "Verify channel and DM counters across two live clients and ensure opening the marked conversation does not immediately clear the restored marker before the intended navigation state is displayed."
+}

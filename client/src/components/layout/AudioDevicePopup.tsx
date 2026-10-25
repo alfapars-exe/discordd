@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
 
 type DeviceOption = {
   deviceId: string;
@@ -29,6 +30,8 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
   const popupRef = useRef<HTMLDivElement>(null);
   const [devices, setDevices] = useState<DeviceOption[]>([]);
   const [showDeviceList, setShowDeviceList] = useState(false);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const deviceHeaderRef = useRef<HTMLButtonElement>(null);
 
   const inputDevice = useVoiceStore((s) => s.inputDevice);
   const outputDevice = useVoiceStore((s) => s.outputDevice);
@@ -47,14 +50,10 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
 
   // Load device list
   useEffect(() => {
+    let disposed = false;
     async function load() {
       try {
-        if (kind === "input") {
-          await navigator.mediaDevices.getUserMedia({ audio: true })
-            .then((stream) => stream.getTracks().forEach((t) => t.stop()))
-            .catch(() => {});
-        }
-
+        // Reading preferences must not open a second mic or trigger a prompt.
         const all = await navigator.mediaDevices.enumerateDevices();
         const filtered = all
           .filter((d) => d.kind === (kind === "input" ? "audioinput" : "audiooutput"))
@@ -62,10 +61,16 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
             deviceId: d.deviceId,
             label: d.label || `${kind === "input" ? t("inputDevice") : t("outputDevice")} ${i + 1}`,
           }));
-        setDevices(filtered);
-      } catch { /* device enumeration failed; show empty list */ }
+        if (!disposed) setDevices(filtered);
+      } catch { if (!disposed) setDevices([]); }
+      finally { if (!disposed) setLoadingDevices(false); }
     }
-    load();
+    void load();
+    navigator.mediaDevices?.addEventListener?.("devicechange", load);
+    return () => {
+      disposed = true;
+      navigator.mediaDevices?.removeEventListener?.("devicechange", load);
+    };
   }, [kind, t]);
 
   // Find active device label
@@ -77,8 +82,20 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
   // Position popup above anchor
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   useEffect(() => {
-    const rect = anchorEl.getBoundingClientRect();
-    queueMicrotask(() => setPos({ top: rect.top - 6, left: rect.left }));
+    const position = () => {
+      const rect = anchorEl.getBoundingClientRect();
+      const width = popupRef.current?.getBoundingClientRect().width ?? Math.min(280, window.innerWidth - 16);
+      const height = popupRef.current?.getBoundingClientRect().height ?? 0;
+      setPos({ top: Math.max(height + 8, Math.min(rect.top - 6, window.innerHeight - 8)), left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) });
+    };
+    const frame = requestAnimationFrame(position);
+    window.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("resize", position);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("resize", position);
+    };
   }, [anchorEl]);
 
   // Clamp to viewport after render
@@ -97,13 +114,13 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
       y = rect.height + 8;
     }
     if (x + rect.width > vw - 8) {
-      x = vw - rect.width - 8;
+      x = Math.max(8, vw - rect.width - 8);
     }
 
     if (x !== pos.left || y !== pos.top) {
       setPos({ top: y, left: x });
     }
-  }, [pos]);
+  }, [pos, showDeviceList, devices.length]);
 
   // Close on outside click (but ignore clicks on the anchor button — chevron toggles itself)
   useEffect(() => {
@@ -113,20 +130,43 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
       if (anchorEl.contains(target)) return;
       onClose();
     }
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       document.addEventListener("mousedown", handleClick);
     });
-    return () => document.removeEventListener("mousedown", handleClick);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("mousedown", handleClick);
+    };
   }, [onClose, anchorEl]);
 
-  // Close on Escape
+  const visible = !!pos;
+  useEffect(() => {
+    if (!visible) return;
+    deviceHeaderRef.current?.focus();
+    return () => { if (anchorEl.isConnected) anchorEl.focus(); };
+  }, [visible, anchorEl]);
+
+  // Escape first dismisses the expanded picker; the second closes the popup.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (showDeviceList) { setShowDeviceList(false); deviceHeaderRef.current?.focus(); }
+        else onClose();
+      }
+      if (e.key === "Tab") {
+        const elements = popupRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])');
+        const first = elements?.[0];
+        const last = elements?.[elements.length - 1];
+        if (!first || !last) return;
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  }, [onClose, showDeviceList]);
 
   const volumeValue = kind === "input" ? inputVolume : masterVolume;
   const volumeMax = kind === "input" ? 200 : 100;
@@ -168,12 +208,17 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
   return createPortal(
     <div
       ref={popupRef}
-      className="adp-popup"
+      className={`adp-popup${UI_SHELL_V2 ? " adp-popup--v2" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={kind === "input" ? t("inputDevice") : t("outputDevice")}
       style={{ top: pos.top, left: pos.left, transform: "translateY(-100%)" }}
     >
       {/* Device header — click to expand submenu */}
       <button
+        ref={deviceHeaderRef}
         className="adp-device-header"
+        aria-expanded={showDeviceList}
         onClick={() => setShowDeviceList(!showDeviceList)}
       >
         <div className="adp-device-header-text">
@@ -196,6 +241,9 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
       {/* Side-expanding device submenu */}
       {showDeviceList && (
         <div className="adp-submenu">
+          {devices.length === 0 && <p className="adp-device-empty" role="status">{loadingDevices
+            ? t("loadingDevices", { defaultValue: "Loading audio devices…" })
+            : t("noAudioDevices", { defaultValue: "No audio devices available. Check your browser permissions and connected devices." })}</p>}
           {devices.map((d) => {
             const isDefault = d.deviceId === "default" || d.deviceId === "";
             const isSelected = selectedDevice
@@ -205,6 +253,7 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
               <button
                 key={d.deviceId}
                 className={`adp-submenu-item${isSelected ? " selected" : ""}`}
+                aria-pressed={isSelected}
                 onClick={() => handleDeviceSelect(d.deviceId)}
               >
                 <span className="adp-submenu-label">{d.label}</span>
@@ -232,6 +281,8 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
             value={volumeValue}
             onChange={handleVolumeChange}
             className="adp-range"
+            aria-label={kind === "input" ? tv("micVolume") : t("masterVolume")}
+            aria-valuetext={`${volumeValue}%`}
             style={{
               background: `linear-gradient(to right, var(--primary) ${(volumeValue / volumeMax) * 100}%, var(--bg-5) ${(volumeValue / volumeMax) * 100}%)`,
             }}
@@ -252,6 +303,8 @@ function AudioDevicePopup({ kind, anchorEl, onClose }: AudioDevicePopupProps) {
               value={micSensitivity}
               onChange={handleSensitivityChange}
               className="adp-range"
+              aria-label={t("micSensitivity")}
+              aria-valuetext={`${micSensitivity}%`}
               style={{
                 background: `linear-gradient(to right, var(--primary) ${micSensitivity}%, var(--bg-5) ${micSensitivity}%)`,
               }}

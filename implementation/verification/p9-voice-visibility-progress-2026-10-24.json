@@ -1,0 +1,36 @@
+{
+  "status": "implemented_unverified",
+  "phase": "P9",
+  "implemented": [
+    "HTTP voice states restricted to authenticated viewer and requested server, with current membership, actual voice-channel ownership and ViewChannel checks.",
+    "Ready voice snapshots use the same visibility policy before attaching screen-share viewer IDs.",
+    "Live voice and screen-share viewer deltas use a bounded FIFO fanout worker, current server membership and channel-scoped ViewChannel recipients instead of server-wide fanout.",
+    "Queued pointer payloads are copied; malformed events, lookup errors and overload fail closed; shutdown cancels queued work and joins the worker.",
+    "Live voice fanout bypasses the process-local permission cache so a role revocation committed by another process cannot retain a cached ViewChannel grant.",
+    "Atomic voice snapshots and mutation-time epoch/revision metadata reconcile delayed snapshots, out-of-order updates, leave tombstones and process restarts. Viewer events carry full copied viewer sets.",
+    "Successful channel deletion clears matching voice occupants, room keys, grants, viewers and music; bounded LiveKit eviction uses the saved server identity. In-flight joins are fenced against deletion.",
+    "Client channel deletion closes the active room, clears related recovery/music/viewer state and rejects delayed deleted-channel snapshots and deltas. Explicit channel creation clears the tombstone."
+  ],
+  "verification": [
+    "Snapshot service/handler/WS focused tests passed in implementing agent.",
+    "Final focused fanout race tests count=10 passed (23.091s), including FIFO, idle restart, active lookup cancellation, post-shutdown rejection and fresh permission resolution.",
+    "Fresh-permission regression passed: warmed cache grant does not survive a role revocation at voice fanout boundary.",
+    "Earlier full Go test ./... passed all packages (services 26.546s, repository 58.635s); go vet ./... passed.",
+    "Post-revision/deletion full Go test ./... passed all packages (services 23.373s, ws 3.371s); go vet ./... passed. A five-repeat services run subsequently reproduced a fatal concurrent map iteration/write in WatchScreenShare: full viewer IDs were read after unlocking. The payload now copies viewer IDs under the same mutation lock as its revision.",
+    "After the map-read fix, TestVoice_ConcurrentScreenShareViewerChurn passed 20 repetitions with -race (3.214s). This concurrency test was not included by the earlier focused snapshot/fanout regex, so that earlier passing subset did not cover the failing path.",
+    "Final post-map-read-fix full Go test ./... passed (services 23.724s), and go vet ./... passed. Expected panic-recovery test logs were emitted but the tests and package passed.",
+    "Subsequent wire review found copied empty viewer sets became JSON null. Fanout now preserves [] for nil/empty inputs, with value/pointer JSON serialization regression coverage. Client also accepts legacy null as an empty authoritative set; seven merge regressions passed.",
+    "Wire/fanout/concurrent-viewer suite passed -race count=5 (13.316s). Initial repeat exposed a test handshake race: a nonblocking send to an unbuffered entered channel could be lost before receive. Buffering that test notification preserves the queue-saturation assertions.",
+    "Focused revision, fanout, deletion, webhook and snapshot race suite passed five repetitions (services 18.311s, ws 1.060s).",
+    "Client full suite passed 270 files / 2555 tests; TypeScript build passed. Six independent merge regressions cover pre-sync updates, leave resurrection, stale snapshots, epoch restart and orphan viewers.",
+    "Post-change Vite production build passed (1668 modules, 1.26s); existing chunk-size and ineffective dynamic import warnings remain."
+  ],
+  "openFindings": [
+    "Mutation revision reconciliation and channel-deletion cleanup have automated evidence but still require two-client runtime acceptance on a rebuilt QA server.",
+    "Already-issued LiveKit JWTs remain valid until expiry; webhook eviction is post-connection and does not prove zero brief media exposure after deletion.",
+    "Read-only review confirms user/viewer revision maps can grow with distinct participants until another versioned snapshot; deleted-channel tombstones grow for the epoch lifetime. Safe caps require explicit snapshot recovery and deletion revision metadata, not silent entry eviction.",
+    "Queue limit 256, online recipient cap 4096 and member cap 100000 drop events on overload; explicit resync recovery and operational acceptance remain open.",
+    "Legacy synchronous voice observer fixtures were adapted without production fallback; full regression now passes.",
+    "Two physical-client voice/media and real private-channel acceptance are not completed. Ego Lite test space 9 disappeared; inventory currently contains only a user-owned Medium space. No new test space was created."
+  ]
+}

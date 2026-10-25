@@ -40,7 +40,7 @@ func (b *BackupService) Restore(ctx context.Context) error {
 		backupLogger.Info("restore skipped: disabled (HF_TOKEN not set)")
 		return nil
 	}
-	if database.IsRemoteLibSQL(b.cfg.DBPath) {
+	if database.IsRemoteDatabase(b.cfg.DBPath) {
 		backupLogger.Info("restore skipped: remote DSN, upstream is already persistent", "dsn", database.RedactDSN(b.cfg.DBPath))
 		return nil
 	}

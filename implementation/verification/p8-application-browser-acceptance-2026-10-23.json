@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "record_date": "2026-10-23",
+  "goal_turn_classification": "progress",
+  "scope": "P8 application manifest, scoped server grant, message action and immediate revocation browser acceptance.",
+  "environment": "Own Ego Lite task space 12, web 3131 and freshly built isolated SQLite API 9191. Only the disposable p1_acceptance fixture and its isolated acceptance database were used.",
+  "checks": [
+    "Created a disposable application through the account settings UI, observed the one-time credential warning, hid the credential and saved a test-enabled message-action manifest.",
+    "Installed the application into the disposable test server with read_message and send_response scopes and observed the persisted installation in server settings.",
+    "Opened a real channel message context menu and observed the installed Özetle action. Invoking it produced an immediate localized queued toast.",
+    "Revoked the installation through the confirmation dialog. A stale pre-refresh menu invocation was rejected by the server and produced a localized error toast.",
+    "After loading the final client bundle, reinstallation made the action appear without a page reload and revocation removed it from the message menu without a page reload. This verifies the settings-to-chat refresh event and immediate server-side enforcement.",
+    "Closed the Ego Lite task space after the acceptance run. The disposable application remains only in the isolated acceptance database and has no active server grant."
+  ],
+  "artifacts": [
+    "implementation/verification/p8-browser-application-settings-2026-10-23.png",
+    "implementation/verification/p8-browser-application-manifest-2026-10-23.png",
+    "implementation/verification/p8-browser-server-application-grant-2026-10-23.png",
+    "implementation/verification/p8-browser-message-application-action-2026-10-23.png"
+  ],
+  "remaining": [
+    "A real separately connected bot process must complete an invocation in two-client acceptance.",
+    "Installed-Windows acceptance remains open."
+  ],
+  "release": "Local acceptance only; no commit, push, merge, deployment or Windows update was performed."
+}

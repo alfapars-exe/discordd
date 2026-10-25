@@ -15,6 +15,18 @@
  */
 
 import { useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
+import { useVoiceOverlayCleanup } from "../../hooks/useVoiceOverlayCleanup";
+import { useOverlayShortcut } from "../../hooks/useOverlayShortcut";
+import { getOverlayVoiceSession, useOverlayVoiceActions } from "../../hooks/useOverlayVoiceActions";
+import { useOverlayActivity } from "../../hooks/useOverlayActivity";
+import { useOverlayChat } from "../../hooks/useOverlayChat";
+import { useOverlayChatActions } from "../../hooks/useOverlayChatActions";
+import { useOverlayChatCompose } from "../../hooks/useOverlayChatCompose";
+import { useThreadReconnectRefresh } from "../../hooks/useThreadReconnectRefresh";
+import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
+import { formatOverlayChatComposeLabel, getLiveOverlayChatTarget } from "../../utils/overlayChatAccess";
+import { useOverlayNotifications } from "../../hooks/useOverlayNotifications";
+import { useOverlayNotificationActions } from "../../hooks/useOverlayNotificationActions";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import SplitPaneContainer from "./SplitPaneContainer";
 import MobileAppLayout from "./MobileAppLayout";
@@ -36,17 +48,26 @@ import SettingsModal from "../settings/SettingsModal";
 // existing "Connecting..." UX from useVoice's join flow.
 const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
 import { useWebSocket } from "../../hooks/useWebSocket";
+import { useGameActivity } from "../../hooks/useGameActivity";
 import { useVoice } from "../../hooks/useVoice";
 import { useIdleDetection } from "../../hooks/useIdleDetection";
 import { useVoiceActivityReporter } from "../../hooks/useVoiceActivityReporter";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
+import { executeVoiceShortcut } from "../../hooks/useVoiceShortcutAction";
+import { executeInboxShortcut } from "../../hooks/useInboxShortcutAction";
+import { executeNavigationShortcut } from "../../utils/shortcutNavigation";
+import { executeConversationShortcut } from "../../utils/conversationCommands";
 import { useP2PCall } from "../../hooks/useP2PCall";
 import { useE2EE } from "../../hooks/useE2EE";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import RecoveryPasswordPrompt from "../shared/RecoveryPasswordPrompt";
+import LegacyKeyRecoveryPrompt from "../shared/LegacyKeyRecoveryPrompt";
 import IncomingCallOverlay from "../p2p/IncomingCallOverlay";
+import GroupConversationLauncher from "../dm/GroupConversationLauncher";
+import ServerCreationLauncher from "../servers/ServerCreationLauncher";
 import P2PAudioSink from "../p2p/P2PAudioSink";
 import QuickSwitcher from "../shared/QuickSwitcher";
+import KeyboardShortcutHelp from "../shared/KeyboardShortcutHelp";
 import ScreenPicker from "../voice/ScreenPicker";
 import AFKKickPopup from "../voice/AFKKickPopup";
 import ConnectionBanner from "../shared/ConnectionBanner";
@@ -64,17 +85,72 @@ import { useVoiceStore } from "../../stores/voiceStore";
 import { useMessageStore } from "../../stores/messageStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { useInviteStore } from "../../stores/inviteStore";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { isWallpaperVisible, useSettingsStore } from "../../stores/settingsStore";
 import { useSoundboardStore } from "../../stores/soundboardStore";
 import { useNotificationBadge } from "../../hooks/useNotificationBadge";
 import { useServerCosmeticsSync } from "../../hooks/useServerCosmeticsSync";
-import { ensureNotificationPermission } from "../../utils/notifications";
+import { UI_SHELL_V2 } from "../../utils/uiShell";
+import { useNavigationHistory } from "../../hooks/useNavigationHistory";
+import ShellV2 from "./ShellV2";
+import MessageDeepLinkHandler from "./MessageDeepLinkHandler";
+import "../../styles/voice-overlay.css";
 
 function AppLayout() {
+  const { ownerId: overlayRenderOwner, generation: overlayRenderGeneration } = getAuthSessionSnapshot();
+  useVoiceOverlayCleanup();
+  useOverlayShortcut();
   const { sendTyping, sendDMTyping, sendPresenceUpdate, sendVoiceJoin, sendVoiceLeave, sendVoiceStateUpdate, sendWS, connectionStatus, reconnectAttempt } =
     useWebSocket();
+  useThreadReconnectRefresh(connectionStatus === "connected");
+  const overlayEnabled = useVoiceStore((s) => s.voiceOverlayEnabled);
+  const overlayChatEnabled = useVoiceStore((s) => s.voiceOverlayChat);
+  const overlayChat = useOverlayChat(overlayEnabled && overlayChatEnabled, connectionStatus === "connected");
+  const overlayChatActions = useVoiceStore((s) => s.voiceOverlayChatActions);
+  const chatActionSession = useOverlayChatActions(connectionStatus === "connected", overlayChat.chatStatus === "ready");
+  const overlayChatCompose = useVoiceStore((s) => s.voiceOverlayChatCompose);
+  const chatComposeSession = useOverlayChatCompose(connectionStatus === "connected", overlayChat.chatStatus === "ready");
+  const chatComposeLabel = formatOverlayChatComposeLabel(getLiveOverlayChatTarget(true)?.label);
+  const overlayMode = useVoiceStore((s) => s.voiceOverlayMode);
+  const overlayPinned = useVoiceStore((s) => s.voiceOverlayPinned);
+  const overlayActivityEnabled = useVoiceStore((s) => s.voiceOverlayActivity);
+  const overlayActivities = useOverlayActivity(overlayActivityEnabled, connectionStatus === "connected");
+  const overlayNotificationsEnabled = useVoiceStore((s) => s.voiceOverlayNotifications);
+  const overlayNotificationActions = useVoiceStore((s) => s.voiceOverlayNotificationActions);
+  const { notifications: overlayNotifications, notificationStatus } = useOverlayNotifications(overlayEnabled && overlayNotificationsEnabled, connectionStatus === "connected");
+  const notificationActionSession = useOverlayNotificationActions(connectionStatus === "connected", notificationStatus === "ready" && overlayNotifications.length > 0);
+  const overlayQuickActions = useVoiceStore((s) => s.voiceOverlayQuickActions);
+  const overlayClickableActions = useVoiceStore((s) => s.voiceOverlayClickableActions);
+  const overlaySelfMuted = useVoiceStore((s) => s.isMuted);
+  const overlaySelfDeafened = useVoiceStore((s) => s.isDeafened);
+  const overlayJoinGeneration = useVoiceStore((s) => s._joinGeneration);
+  const overlaySpeakingOpacity = useVoiceStore((s) => s.voiceOverlaySpeakingOpacity);
+  const overlayIdleOpacity = useVoiceStore((s) => s.voiceOverlayIdleOpacity);
+  const overlayScale = useVoiceStore((s) => s.voiceOverlayScale);
+  const overlayPosition = useVoiceStore((s) => s.voiceOverlayPosition);
+  const overlaySpeakingOnly = useVoiceStore((s) => s.voiceOverlaySpeakingOnly);
+  const overlayAvatarSize = useVoiceStore((s) => s.voiceOverlayAvatarSize);
+  const overlayNameDisplay = useVoiceStore((s) => s.voiceOverlayNameDisplay);
+  const overlayMaxParticipants = useVoiceStore((s) => s.voiceOverlayMaxParticipants);
+  const voiceStates = useVoiceStore((s) => s.voiceStates);
+  const overlayChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
+  const activeSpeakers = useVoiceStore((s) => s.activeSpeakers);
+  useEffect(() => {
+    if (!window.electronAPI?.sendVoiceOverlaySnapshot) return;
+    const currentScope = getAuthSessionSnapshot();
+    if (!overlayRenderOwner || currentScope.ownerId !== overlayRenderOwner || currentScope.generation !== overlayRenderGeneration) return;
+    // Match the bounded native IPC contract even in large voice channels.
+    const participants = (overlayChannelId ? voiceStates[overlayChannelId] ?? [] : []).slice(0, 64).map((p) => ({
+      id: p.user_id, name: p.display_name || p.username, avatarUrl: p.avatar_url || "",
+      speaking: activeSpeakers[p.user_id] ?? false, muted: p.is_muted, deafened: p.is_deafened,
+    }));
+    const notificationActions = { voiceOverlayNotificationActions: overlayNotificationActions, ...(notificationActionSession ? { notificationActionSession } : {}) };
+    const chatSnapshot = { voiceOverlayChat: overlayChatEnabled, ...(overlayChatEnabled ? { ...overlayChat, voiceOverlayChatActions: overlayChatActions, ...(chatActionSession ? { chatActionSession } : {}), voiceOverlayChatCompose: overlayChatCompose, ...(chatComposeSession ? { chatComposeSession, chatComposeLabel } : {}) } : {}) };
+    window.electronAPI.sendVoiceOverlaySnapshot({ enabled: overlayEnabled, ...chatSnapshot, voiceOverlayMode: overlayMode, voiceOverlayPinned: overlayPinned, voiceOverlayActivity: overlayActivityEnabled, activities: overlayActivityEnabled ? overlayActivities : [], voiceOverlayNotifications: overlayNotificationsEnabled, ...(overlayNotificationsEnabled ? { notifications: overlayNotifications, notificationStatus, ...notificationActions } : {}), voiceOverlayQuickActions: overlayQuickActions, voiceOverlayClickableActions: overlayClickableActions, ...(getOverlayVoiceSession() ? { voiceActionSession: getOverlayVoiceSession() } : {}), selfMuted: overlaySelfMuted, selfDeafened: overlaySelfDeafened, participants, speakingOpacity: overlaySpeakingOpacity, idleOpacity: overlayIdleOpacity, scale: overlayScale, position: overlayPosition, speakingOnly: overlaySpeakingOnly, voiceOverlayAvatarSize: overlayAvatarSize, voiceOverlayNameDisplay: overlayNameDisplay, voiceOverlayMaxParticipants: overlayMaxParticipants });
+  }, [overlayRenderOwner, overlayRenderGeneration, overlayEnabled, overlayChatEnabled, overlayChat, overlayChatActions, chatActionSession, overlayChatCompose, chatComposeSession, chatComposeLabel, overlayMode, overlayPinned, overlayActivityEnabled, overlayActivities, overlayNotificationsEnabled, overlayNotificationActions, overlayNotifications, notificationStatus, notificationActionSession, overlayQuickActions, overlayClickableActions, overlaySelfMuted, overlaySelfDeafened, overlayJoinGeneration, overlaySpeakingOpacity, overlayIdleOpacity, overlayScale, overlayPosition, overlaySpeakingOnly, overlayAvatarSize, overlayNameDisplay, overlayMaxParticipants, voiceStates, overlayChannelId, activeSpeakers]);
+  useNavigationHistory();
 
   // Idle detection — auto-set "idle" after 5min inactivity
+  useGameActivity({ sendWS, connectionStatus });
   useIdleDetection({ sendPresenceUpdate });
 
   // Voice AFK activity reporter — sends voice_activity ping while in voice
@@ -87,32 +163,21 @@ function AppLayout() {
   // too — MobileAppLayout renders inside this component.
   useServerCosmeticsSync();
 
-  // Ask the OS for notification permission once after the user reaches
-  // the main app. We do this here (post-auth) instead of at App.tsx so
-  // anonymous landing visitors never see the prompt — they have no
-  // notifications to receive anyway. ensureNotificationPermission()
-  // is idempotent + non-blocking; the toast for new messages is fired
-  // from channelEventHandlers / dmEventHandlers if permission ends up
-  // granted, and silently dropped otherwise.
-  useEffect(() => {
-    ensureNotificationPermission().catch(() => {
-      /* notifications-disabled WebView — no-op */
-    });
-  }, []);
-
   // E2EE device identity check + key init
   useE2EE();
   const showRecoveryPrompt = useE2EEStore((s) => s.showRecoveryPrompt);
+  const legacyRecoveryRequired = useE2EEStore((s) => s.initStatus === "legacy-recovery");
 
   // Blur + transparent classes are applied at App root level so they also
   // affect pre-auth pages. Wallpaper stays here because it depends on auth
   // (user.wallpaper_url) and must not leak to login screens.
   const wallpaperUrl = useAuthStore((s) => s.user?.wallpaper_url ?? null);
-  const wallpaperEnabled = useSettingsStore((s) => s.wallpaperEnabled);
+  const wallpaperEnabled = useSettingsStore(isWallpaperVisible);
+  const transparentBackground = useSettingsStore((s) => s.transparentBackground);
   const pendingWallpaperPreviewUrl = useSettingsStore((s) => s.pendingWallpaperPreviewUrl);
   const lightningEnabled = useSettingsStore((s) => s.lightningEnabled);
   useEffect(() => {
-    if (pendingWallpaperPreviewUrl) {
+    if (pendingWallpaperPreviewUrl && !transparentBackground) {
       document.documentElement.style.setProperty("--wallpaper", `url(${pendingWallpaperPreviewUrl})`);
       return;
     }
@@ -141,7 +206,7 @@ function AppLayout() {
       cancelled = true;
       if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
     };
-  }, [wallpaperUrl, wallpaperEnabled, pendingWallpaperPreviewUrl]);
+  }, [wallpaperUrl, wallpaperEnabled, pendingWallpaperPreviewUrl, transparentBackground]);
 
   const activeServerId = useServerStore((s) => s.activeServerId);
   const servers = useServerStore((s) => s.servers);
@@ -198,6 +263,7 @@ function AppLayout() {
 
   // Auto-open the first selected channel as a UI tab after channels load
   useEffect(() => {
+    if (UI_SHELL_V2) return;
     if (!selectedChannelId || autoOpenedRef.current) return;
     if (categories.length === 0) return;
 
@@ -224,6 +290,7 @@ function AppLayout() {
 
   // Auto-mark-read when switching channels
   useEffect(() => {
+    if (UI_SHELL_V2) return;
     if (!selectedChannelId) return;
 
     const messages = useMessageStore.getState().messagesByChannel[selectedChannelId];
@@ -241,9 +308,10 @@ function AppLayout() {
     sendVoiceLeave,
     sendVoiceStateUpdate,
   });
+  useOverlayVoiceActions(toggleMute, toggleDeafen);
 
   // Global keyboard shortcuts
-  useKeyboardShortcuts({ toggleMute, toggleDeafen });
+  const { shortcutHelpOpen, closeShortcutHelp } = useKeyboardShortcuts({ toggleMute, toggleDeafen, navigate: executeNavigationShortcut, conversation: executeConversationShortcut, voice: executeVoiceShortcut, inbox: executeInboxShortcut });
 
   // P2P call lifecycle
   useP2PCall();
@@ -309,6 +377,7 @@ function AppLayout() {
   // pages too (not only after auth) — no duplicate render here.
   const overlays = (
     <>
+      <MessageDeepLinkHandler />
       {/* Connection status banner */}
       <ConnectionBanner status={connectionStatus} reconnectAttempt={reconnectAttempt} />
 
@@ -332,6 +401,9 @@ function AppLayout() {
 
       {/* Quick Switcher (Ctrl+K) */}
       <QuickSwitcher />
+      <GroupConversationLauncher />
+      <ServerCreationLauncher />
+      {shortcutHelpOpen && <KeyboardShortcutHelp onClose={closeShortcutHelp} />}
 
       {/* P2P incoming call overlay */}
       <IncomingCallOverlay />
@@ -348,7 +420,8 @@ function AppLayout() {
       <AFKKickPopup />
 
       {/* E2EE recovery password prompt (non-blocking — shown when E2EE is active) */}
-      {showRecoveryPrompt && <RecoveryPasswordPrompt />}
+      {showRecoveryPrompt && !legacyRecoveryRequired && <RecoveryPasswordPrompt />}
+      {legacyRecoveryRequired && <LegacyKeyRecoveryPrompt />}
     </>
   );
 
@@ -359,6 +432,13 @@ function AppLayout() {
   // the chunk fetch on first voice join; the existing "Connecting..." toast
   // covers the perceived gap.
   const isVoiceSessionActive = !!currentVoiceChannelId;
+
+  // This owner is stable across desktop/mobile breakpoints and destination changes.
+  // Do not put VoiceProvider inside ShellV2 or key it by the selected conversation.
+  if (UI_SHELL_V2) {
+    const body = <><ShellV2 sidebarProps={sidebarProps} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />{overlays}</>;
+    return isVoiceSessionActive ? <Suspense fallback={body}><SectionErrorBoundary section="voice"><VoiceProvider>{body}</VoiceProvider></SectionErrorBoundary></Suspense> : body;
+  }
 
   // Mobile layout
   if (isMobile) {

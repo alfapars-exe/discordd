@@ -172,12 +172,7 @@ func TestRegister(t *testing.T) {
 			errIs:   pkg.ErrBadRequest,
 		},
 		{
-			// Email is optional at every layer — this pins Register()'s side
-			// of that contract: a blank email must not block registration,
-			// and must not even reach the ban-list check (there's nothing to
-			// check), matching CreateUserRequest.Validate() and the client
-			// form, which never require it.
-			name: "should register successfully with no email, without checking the ban list",
+			name: "should reject registration with no email",
 			req: &models.CreateUserRequest{
 				Username: "testuser",
 				Password: "password123",
@@ -196,7 +191,7 @@ func TestRegister(t *testing.T) {
 					return nil
 				}
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "should fail when email is platform banned",
@@ -249,6 +244,9 @@ func TestRegister(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			if !tc.wantErr && tc.req.Email == "" {
+				tc.req.Email = "test@example.com"
+			}
 			userRepo := &testutil.MockUserRepo{}
 			sessionRepo := &testutil.MockSessionRepo{}
 			if tc.setupRepo != nil {
@@ -779,6 +777,7 @@ func TestGenerateTokens_AccessTokenHasEmptyScope(t *testing.T) {
 	tokens, err := svc.Register(context.Background(), &models.CreateUserRequest{
 		Username: "scopeless",
 		Password: "password123",
+		Email:    "scopeless@example.test",
 	})
 	if err != nil {
 		t.Fatalf("Register: %v", err)

@@ -45,7 +45,7 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 	//    cannot open a libsql:// URL anyway — passing one made VACUUM fail
 	//    every cycle. So skip the DB snapshot entirely in remote mode; the
 	//    uploads mirror below still runs.
-	if database.IsRemoteLibSQL(b.cfg.DBPath) {
+	if database.IsRemoteDatabase(b.cfg.DBPath) {
 		backupLogger.Info("db snapshot skipped: remote DSN, upstream is already persistent", "dsn", database.RedactDSN(b.cfg.DBPath))
 	} else {
 		// SQLite snapshot via VACUUM INTO — produces a consistent file
@@ -98,10 +98,9 @@ func (b *BackupService) runBackupCore(dbOnly bool) {
 		_ = os.Remove(snapshotPath)
 	}
 
-	// 3. Mirror uploads directory — `hf sync --delete` keeps the bucket
-	//    bit-for-bit aligned with the live tree. Xet deduplication means
-	//    unchanged files don't re-upload. Independent of the DB backend:
-	//    uploads live on ephemeral local /data even when the DB is remote.
+	// 3. Copy uploads without deletion: an empty or unavailable mount must
+	//    never erase remote files. Xet deduplicates unchanged content.
+	//    This is independent of the database backend.
 	//    Skipped on the shutdown (dbOnly) path so the critical DB upload
 	//    never starves inside HF's limited shutdown grace window.
 	if !dbOnly {

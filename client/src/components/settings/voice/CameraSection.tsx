@@ -8,9 +8,11 @@
  * text says so rather than leaving the user to wonder.
  */
 
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceStore } from "../../../stores/voiceStore";
 import type { CameraQuality, CameraFps } from "../../../stores/slices/voiceSettingsSlice";
+import { useCameraPreview } from "../../../hooks/useCameraPreview";
 
 const SELECT_STYLE: React.CSSProperties = {
   background: "var(--input-bg)",
@@ -30,9 +32,53 @@ function CameraSection() {
   const setCameraQuality = useVoiceStore((s) => s.setCameraQuality);
   const cameraFps = useVoiceStore((s) => s.cameraFps);
   const setCameraFps = useVoiceStore((s) => s.setCameraFps);
+  const cameraDevice = useVoiceStore((s) => s.cameraDevice);
+  const setCameraDevice = useVoiceStore((s) => s.setCameraDevice);
+  const preview = useCameraPreview();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const isTesting = preview.status === "starting" || preview.status === "active";
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = preview.stream;
+    return () => { video.srcObject = null; };
+  }, [preview.stream]);
+
+  function updateSetting(update: () => void) {
+    update();
+    if (isTesting) void preview.startPreview();
+  }
 
   return (
     <div className="vs-section">
+      <h3 className="vs-section-header" data-settings-section="camera">{t("cameraDevice")}</h3>
+      <div className="settings-field">
+        <label className="vs-label" htmlFor="camera-device">{t("cameraDevice")}</label>
+        <select id="camera-device" className="vs-select" value={cameraDevice}
+          onChange={(event) => updateSetting(() => setCameraDevice(event.target.value))}>
+          <option value="">{t("defaultDevice")}</option>
+          {cameraDevice && !preview.devices.some((device) => device.deviceId === cameraDevice)
+            && <option value={cameraDevice}>{t("cameraSelectedUnavailable")}</option>}
+          {preview.devices.filter((device) => device.deviceId).map((device, index) => (
+            <option key={device.deviceId} value={device.deviceId}>{device.label || t("cameraNumber", { number: index + 1 })}</option>
+          ))}
+        </select>
+        <p className="vs-desc">{t("cameraDeviceHint")}</p>
+        {preview.deviceError && <p className="vs-desc" role="status">{t(preview.deviceError)}</p>}
+      </div>
+      <div className="camera-preview" aria-label={t("cameraPreview")}>
+        {preview.stream ? <video ref={videoRef} autoPlay playsInline muted aria-label={t("cameraPreview")} />
+          : <p>{t(preview.status === "starting" ? "cameraStarting" : "cameraPreviewIdle")}</p>}
+      </div>
+      <div className="camera-preview-actions">
+        <button className="settings-btn" onClick={() => isTesting ? preview.stopPreview() : void preview.startPreview()} aria-pressed={isTesting}>
+          {t(isTesting ? "cameraTestStop" : "cameraTest")}
+        </button>
+        <button className="settings-btn settings-btn-secondary" onClick={() => void preview.refreshDevices()}>{t("cameraRefreshDevices")}</button>
+      </div>
+      {preview.error && <p className="vs-warning" role="alert">{t(preview.error)}</p>}
+      <p className="vs-desc camera-preview-hint">{t("cameraPreviewPrivate")}</p>
       <div className="vs-toggle-row">
         <div>
           <div className="vs-label">{t("cameraQuality")}</div>
@@ -40,7 +86,7 @@ function CameraSection() {
         </div>
         <select
           value={cameraQuality}
-          onChange={(e) => setCameraQuality(e.target.value as CameraQuality)}
+          onChange={(e) => updateSetting(() => setCameraQuality(e.target.value as CameraQuality))}
           style={SELECT_STYLE}
           aria-label={t("cameraQuality")}
         >
@@ -57,7 +103,7 @@ function CameraSection() {
         </div>
         <select
           value={cameraFps}
-          onChange={(e) => setCameraFps(Number(e.target.value) as CameraFps)}
+          onChange={(e) => updateSetting(() => setCameraFps(Number(e.target.value) as CameraFps))}
           style={SELECT_STYLE}
           aria-label={t("cameraFps")}
         >

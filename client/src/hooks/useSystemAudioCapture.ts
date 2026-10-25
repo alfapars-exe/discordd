@@ -46,6 +46,8 @@ export function useSystemAudioCapture(): SystemAudioCapture {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const destRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
+  const startGenerationRef = useRef(0);
+  const cancelPendingStartRef = useRef<(() => void) | null>(null);
 
   const start = useCallback(async (): Promise<MediaStreamTrack | null> => {
     if (!isElectron()) return null;
@@ -53,8 +55,35 @@ export function useSystemAudioCapture(): SystemAudioCapture {
     const api = window.electronAPI;
     if (!api) return null;
 
+    cancelPendingStartRef.current?.();
+    const generation = ++startGenerationRef.current;
+
     return new Promise<MediaStreamTrack | null>((resolve) => {
       let resolved = false;
+      const startupTimeout: { id?: number } = {};
+      const releaseResources = (stopNative = true) => {
+        api.removeCaptureListeners();
+        if (stopNative) void api.stopSystemCapture().catch(() => {});
+        if (trackRef.current) { trackRef.current.stop(); trackRef.current = null; }
+        if (workletNodeRef.current) { workletNodeRef.current.disconnect(); workletNodeRef.current = null; }
+        if (destRef.current) { destRef.current.disconnect(); destRef.current = null; }
+        if (audioCtxRef.current) { void audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
+        setIsCapturing(false);
+      };
+      const fail = (reason: string, error?: unknown) => {
+        if (resolved || generation !== startGenerationRef.current) return;
+        resolved = true;
+        startGenerationRef.current++;
+        cancelPendingStartRef.current = null;
+        if (startupTimeout.id !== undefined) window.clearTimeout(startupTimeout.id);
+        logToServer("warn", "system_audio_capture_failed", {
+          reason,
+          ...(error instanceof Error ? { errorMessage: error.message.slice(0, 256) } : {}),
+        });
+        releaseResources();
+        resolve(null);
+      };
+      cancelPendingStartRef.current = () => fail("start_superseded");
 
       // Remove ALL previous capture listeners before registering new ones.
       // Without this, ipcRenderer.on() accumulates duplicate listeners
@@ -80,7 +109,7 @@ export function useSystemAudioCapture(): SystemAudioCapture {
 
       // Listen for audio header (format info) from native capture
       api.onCaptureAudioHeader(async (header) => {
-        if (resolved) return;
+        if (resolved || generation !== startGenerationRef.current) return;
 
         try {
           // Create AudioContext matching the capture format
@@ -95,6 +124,10 @@ export function useSystemAudioCapture(): SystemAudioCapture {
             window.location.href
           ).href;
           await ctx.audioWorklet.addModule(moduleUrl);
+          if (resolved || generation !== startGenerationRef.current) {
+            await ctx.close().catch(() => {});
+            return;
+          }
 
           // Create worklet node with matching channel count
           const workletNode = new AudioWorkletNode(ctx, "pcm-feeder", {
@@ -155,24 +188,21 @@ export function useSystemAudioCapture(): SystemAudioCapture {
             // backing buffers may be shared/pooled by Electron and aren't
             // safe to neuter.
             let float32Data: Float32Array;
+            const sampleCount = Math.floor(data.byteLength / bytesPerSample);
+            const samples = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
             if (isFloat && bytesPerSample === 4) {
-              const view = new Float32Array(
-                data.buffer,
-                data.byteOffset,
-                Math.floor(data.byteLength / 4)
-              );
-              float32Data = new Float32Array(view); // copy so we can transfer
+              // IPC Buffer views can have a non-zero, unaligned byteOffset.
+              // DataView safely reads each little-endian sample without
+              // constructing an alignment-sensitive Float32Array view.
+              float32Data = new Float32Array(sampleCount);
+              for (let i = 0; i < sampleCount; i++) float32Data[i] = samples.getFloat32(i * 4, true);
             } else if (bytesPerSample === 2) {
-              // 16-bit PCM int → float32
-              const int16 = new Int16Array(
-                data.buffer,
-                data.byteOffset,
-                Math.floor(data.byteLength / 2)
-              );
-              float32Data = new Float32Array(int16.length);
-              for (let i = 0; i < int16.length; i++) {
-                float32Data[i] = int16[i] / 32768;
+              // 16-bit little-endian PCM int → float32; DataView also makes
+              // this safe for arbitrary IPC byte offsets.
+              float32Data = new Float32Array(sampleCount);
+              for (let i = 0; i < sampleCount; i++) {
+                float32Data[i] = samples.getInt16(i * 2, true) / 32768;
               }
             } else {
               // Unsupported format — skip
@@ -188,15 +218,12 @@ export function useSystemAudioCapture(): SystemAudioCapture {
 
           setIsCapturing(true);
           resolved = true;
+          cancelPendingStartRef.current = null;
+          if (startupTimeout.id !== undefined) window.clearTimeout(startupTimeout.id);
           resolve(track);
         } catch (err) {
           console.error("[useSystemAudioCapture] Setup failed:", err);
-          logToServer("warn", "system_audio_capture_failed", {
-            reason: "worklet_setup",
-            errorMessage: err instanceof Error ? err.message : String(err),
-          });
-          resolved = true;
-          resolve(null);
+          fail("worklet_setup", err);
         }
       });
 
@@ -204,42 +231,38 @@ export function useSystemAudioCapture(): SystemAudioCapture {
       api.onCaptureAudioStopped(() => {
         console.error("[useSystemAudioCapture] Capture stopped (exe exited before header)");
         if (!resolved) {
-          logToServer("warn", "system_audio_capture_failed", {
-            reason: "stopped_before_header",
-          });
-          resolved = true;
-          resolve(null);
+          fail("stopped_before_header");
+          return;
         }
+        if (generation !== startGenerationRef.current) return;
+        startGenerationRef.current++;
+        cancelPendingStartRef.current = null;
+        logToServer("warn", "system_audio_capture_failed", { reason: "helper_stopped_during_capture" });
+        releaseResources(false);
       });
 
       // Tell main process to start the native capture
       api.startSystemCapture().catch((err: unknown) => {
         console.error("[useSystemAudioCapture] Start failed:", err);
-        if (!resolved) {
-          logToServer("warn", "system_audio_capture_failed", {
-            reason: "start_rejected",
-            errorMessage: err instanceof Error ? err.message : String(err),
-          });
-          resolved = true;
-          resolve(null);
-        }
+        fail("start_rejected", err);
       });
 
       // Timeout: if header doesn't arrive in 5 seconds, give up
-      setTimeout(() => {
+      startupTimeout.id = window.setTimeout(() => {
         if (!resolved) {
           console.error("[useSystemAudioCapture] Timeout waiting for header");
-          logToServer("warn", "system_audio_capture_failed", {
-            reason: "header_timeout_5s",
-          });
-          resolved = true;
-          resolve(null);
+          fail("header_timeout_5s");
         }
       }, 5000);
     });
   }, []);
 
   const stop = useCallback(() => {
+    if (cancelPendingStartRef.current) {
+      cancelPendingStartRef.current();
+      return;
+    }
+    startGenerationRef.current++;
     if (!isElectron()) return;
 
     const api = window.electronAPI;
