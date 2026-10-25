@@ -138,7 +138,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		UploadDownload: handlers.NewUploadDownloadHandler(cfg.Upload.Dir, services.NewMediaAccessService(
 			repos.Attachment, repos.Message, repos.DM, svcs.ChannelPermission,
 			repos.Report, repos.Feedback, repos.User, repos.MediaAsset, repos.GroupDM,
-		), svcs.Auth),
+		), svcs.Auth, botService),
 		Notification:    handlers.NewNotificationHandler(svcs.Notification),
 		Reminder:        handlers.NewReminderHandler(svcs.Reminder),
 		Saved:           handlers.NewSavedHandler(svcs.Saved),

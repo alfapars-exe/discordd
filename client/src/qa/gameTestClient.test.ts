@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GameTestClient } from "./gameTestClient";
 
-const f = vi.hoisted(() => ({ registration: vi.fn(), identity: vi.fn(), generate: vi.fn(), hasSession: vi.fn(), encrypt: vi.fn(), decrypt: vi.fn(), processBundle: vi.fn(), owner: vi.fn(), generation: vi.fn(), fetch: vi.fn(), devices: [{ device_id: "peer-device" }], failSend: false }));
-vi.mock("../crypto/keyStorage", () => ({ getRegistrationData: f.registration, getIdentityKeyPair: f.identity, setMetadata: vi.fn(), saveRegistrationData: vi.fn() }));
+const f = vi.hoisted(() => ({ metadata: vi.fn(), saveRegistration: vi.fn(), registration: vi.fn(), identity: vi.fn(), generate: vi.fn(), hasSession: vi.fn(), encrypt: vi.fn(), decrypt: vi.fn(), processBundle: vi.fn(), owner: vi.fn(), generation: vi.fn(), fetch: vi.fn(), devices: [{ device_id: "peer-device" }], failSend: false }));
+vi.mock("../crypto/keyStorage", () => ({ getRegistrationData: f.registration, getIdentityKeyPair: f.identity, setMetadata: f.metadata, saveRegistrationData: f.saveRegistration }));
 vi.mock("../crypto/signalProtocol", () => ({ generateAllKeys: f.generate, hasSessionFor: f.hasSession, processPreKeyBundle: f.processBundle, encryptMessage: f.encrypt, decryptMessage: f.decrypt }));
 vi.mock("../api/authSessionEvents", () => ({ publishAuthOwnerChange: f.owner, publishAuthGenerationChange: f.generation }));
 const token = "hb_test_only_not_a_real_token";
@@ -100,4 +100,25 @@ it("does not establish a session without a signed recipient key", async () => {
   const client = new GameTestClient(); await client.connect(token);
   await expect(client.send("peer", "private message")).rejects.toThrow("recipient_signed_keys_missing");
   expect(f.processBundle).not.toHaveBeenCalled(); expect(f.encrypt).not.toHaveBeenCalled();
+});
+
+it("registers only public key material for a fresh bot device and never persists its bearer credential", async () => {
+  f.registration.mockResolvedValue(undefined); f.identity.mockResolvedValue(undefined);
+  f.generate.mockResolvedValue({ identityPublicKey: "public-identity", signingPublicKey: "public-signing", signedPreKey: { id: 1, publicKey: "public-signed-prekey", signature: "public-signature" }, oneTimePreKeys: [{ id: 1, publicKey: "public-onetime-prekey" }], registrationId: 42 });
+  const fallback = f.fetch.getMockImplementation()!;
+  f.fetch.mockImplementation(async (path: string, options: RequestInit) => path === "/api/devices" && options.method === "POST"
+    ? { ok: true, status: 200, json: async () => ({ success: true, data: { device_id: JSON.parse(options.body as string).device_id } }) }
+    : fallback(path, options));
+  const client = new GameTestClient(); const connected = await client.connect(token);
+  const registration = JSON.parse(f.fetch.mock.calls.find(([path, options]) => path === "/api/devices" && options.method === "POST")![1].body);
+  expect(registration).toMatchObject({ identity_key: "public-identity", signing_key: "public-signing", signed_prekey: "public-signed-prekey", signed_prekey_signature: "public-signature", registration_id: 42, one_time_prekeys: [{ prekey_id: 1, public_key: "public-onetime-prekey" }] });
+  expect(f.saveRegistration).toHaveBeenCalledWith(expect.objectContaining({ userId: "bot", deviceId: connected.device, registrationId: 42 }));
+  expect(JSON.stringify(f.metadata.mock.calls)).not.toContain(token);
+  expect(JSON.stringify(f.saveRegistration.mock.calls)).not.toContain(token);
+});
+
+it("does not overwrite recoverable partial key material", async () => {
+  f.registration.mockResolvedValue(undefined);
+  await expect(new GameTestClient().connect(token)).rejects.toThrow("partial_device_keys_preserved");
+  expect(f.generate).not.toHaveBeenCalled(); expect(f.saveRegistration).not.toHaveBeenCalled();
 });

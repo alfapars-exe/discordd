@@ -1,0 +1,31 @@
+{
+  "verified_at": "2026-10-25T07:38:53.388128+00:00",
+  "status": "implemented_unverified",
+  "scope": "Bot token authentication for existing private media download authorization",
+  "changes": [
+    "Explicit Bearer hb_ is resolved by the existing BotService to the live bot user ID, never its owner.",
+    "Media cookies never authenticate bot tokens; a failed bot header cannot borrow an accompanying human cookie.",
+    "Existing channel/DM/group file authorization, public asset behavior, opaque bytes and range handling remain unchanged. No read grant, scope bypass or WS expansion is added."
+  ],
+  "verification": {
+    "native_handlers": "TestBotDownload,TestAuthUserID,TestServe:passed2.799s",
+    "linux_race": "Go1.26.10 CGO:passed6.761s",
+    "go_vet": "handlers passed",
+    "routes": "golden/no-duplicate passed2.435s",
+    "real_resolver": "BotService and SQLite tests reject revoked,deleted,banned,disabled and non-bot token identities on each lookup",
+    "file_policy": "DM/server outsider and removed group membership denied; exact opaque bytes and206range preserved",
+    "base_ci": {
+      "run": 40172399265,
+      "source": "d61d204803ad4cfa6a26933e67eb3b40407f688e",
+      "jobs_passed": 21,
+      "scope": "Game grant/control baseline before this download change; not final-source CI proof"
+    },
+    "local_game_client_unit": "9passed; real browser/peer crypto still unverified"
+  },
+  "remaining": [
+    "Final-source CI after this patch.",
+    "Actual installed Windows and browser encrypted file round-trip. The standalone QA game client currently exercises text, not attachment upload/download.",
+    "Existing history access belongs to conversation membership; revoking the write grant does not erase that shared history. UI text explicitly describes this.",
+    "No new production/Windows publication;2.11.111 stays unchanged."
+  ]
+}
