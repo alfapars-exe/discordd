@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
     voiceOverlayEnabled: true, voiceOverlayMode: "desktop", voiceOverlaySpeakingOpacity: 100, voiceOverlayIdleOpacity: 35,
     voiceOverlayScale: 100, voiceOverlayPosition: "bottom-left", voiceOverlaySpeakingOnly: false,
     voiceOverlayPinned: false,
-    voiceOverlayQuickActions: false, voiceOverlayClickableActions: false,
+    voiceOverlayQuickActions: false, voiceOverlayClickableActions: false, voiceOverlayCompatibility: false,
     voiceOverlayActivity: false,
     voiceOverlayWelcome: false, voiceOverlayGoLive: false,
     voiceOverlayNotifications: false,
@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
     setNoiseReductionEngine: vi.fn(), setNoiseSuppressionLevel: vi.fn(), setDeepfilterSuppression: vi.fn(),
     setVoiceOverlayMode: vi.fn(), setVoiceOverlayAvatarSize: vi.fn(), setVoiceOverlayNameDisplay: vi.fn(), setVoiceOverlayMaxParticipants: vi.fn(),
     setVoiceOverlayPinned: vi.fn(), setVoiceOverlayPosition: vi.fn(), setVoiceOverlayScale: vi.fn(),
-    setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(),
+    setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(), setVoiceOverlayCompatibility: vi.fn(),
     setVoiceOverlayActivity: vi.fn(),
     setVoiceOverlayWelcome: vi.fn(), setVoiceOverlayGoLive: vi.fn(),
     setVoiceOverlayNotifications: vi.fn(),
@@ -60,7 +60,7 @@ vi.mock("./voice/CameraSection", () => ({ default: () => null }));
 beforeEach(() => {
   delete window.electronAPI;
   vi.clearAllMocks();
-  Object.assign(mocks.state, { noiseReduction: true, noiseReductionEngine: "rnnoise", inputMode: "voice_activity", micProfile: "konusma", micSensitivity: 50 });
+  Object.assign(mocks.state, { voiceOverlayCompatibility:false, noiseReduction: true, noiseReductionEngine: "rnnoise", inputMode: "voice_activity", micProfile: "konusma", micSensitivity: 50 });
   mocks.status = null;
   mocks.testError = undefined;
 });
@@ -307,3 +307,5 @@ describe("voice processing settings", () => {
     delete window.electronAPI;
   });
 });
+
+it("offers actual read-only compatibility without losing stored interaction choices",()=>{const view=render(<VoiceSettings/>);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayCompatibility}));expect(mocks.state.setVoiceOverlayCompatibility).toHaveBeenCalledWith(true);mocks.state.voiceOverlayCompatibility=true;view.rerender(<VoiceSettings/>);for(const label of [en.voiceOverlayPinned,en.voiceOverlayClickableActions,en.voiceOverlayNotificationActions,en.voiceOverlayChatActions,en.voiceOverlayChatCompose])expect(screen.getByRole("checkbox",{name:label})).toBeDisabled();expect(screen.getByRole("status")).toHaveTextContent(en.voiceOverlayCompatibilityActive);expect(en.voiceOverlayCompatibilityDesc).toContain("exclusive-fullscreen");expect(tr.voiceOverlayCompatibilityDesc).toContain("Özel tam ekran");expect(mocks.state.setVoiceOverlayClickableActions).not.toHaveBeenCalled();});

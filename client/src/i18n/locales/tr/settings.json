@@ -1479,5 +1479,8 @@
     "register": "Oyun uygulaması olarak kaydet",
     "registerConfirm": "{{name}} kalıcı olarak oyun uygulaması türüne geçirilecek. Sana veya diğer kullanıcılara mesaj göndermek için alıcı izni gerekecek. Bu tür değişikliği geri alınamaz ve doğrulanmış sahiplik anlamına gelmez.",
     "registered": "Oyun uygulaması; kişisel mesajlaşma için alıcı izni gerekir."
-  }
+  },
+  "voiceOverlayCompatibility": "Salt okunur uyumluluk modu",
+  "voiceOverlayCompatibilityDesc": "HUD görünür kalır; fare ve klavye girişi almaz. Sürükleme, hızlı işlemler, uygulamayı açma ve sohbet yazma kapalıdır. Özel tam ekran veya anti-cheat desteği eklemez.",
+  "voiceOverlayCompatibilityActive": "Uyumluluk modu salt okunurdur. Etkileşim için ana uygulamayı kullanın; önceki etkileşim tercihleriniz normal mod için korunur."
 }

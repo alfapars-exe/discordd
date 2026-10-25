@@ -35,6 +35,8 @@ function VoiceSettings() {
   const inputVolume = useVoiceStore((s) => s.inputVolume);
   const soundsEnabled = useVoiceStore((s) => s.soundsEnabled);
   const overlayEnabled = useVoiceStore((s) => s.voiceOverlayEnabled);
+  const overlayCompatibility = useVoiceStore(s=>s.voiceOverlayCompatibility);
+  const setOverlayCompatibility = useVoiceStore(s=>s.setVoiceOverlayCompatibility);
   const overlayMode = useVoiceStore((s) => s.voiceOverlayMode);
   const overlaySpeakingOpacity = useVoiceStore((s) => s.voiceOverlaySpeakingOpacity);
   const overlayIdleOpacity = useVoiceStore((s) => s.voiceOverlayIdleOpacity);
@@ -338,6 +340,8 @@ function VoiceSettings() {
           </div>
           <label className="vs-switch"><input type="checkbox" checked={overlayEnabled} onChange={(e) => setOverlayEnabled(e.target.checked)} /><span className="vs-switch-slider" /></label>
         </div>
+        <div className="vs-toggle-row"><div><div className="vs-label">{t("voiceOverlayCompatibility")}</div><div className="vs-desc">{t("voiceOverlayCompatibilityDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayCompatibility")} checked={overlayCompatibility} onChange={event=>setOverlayCompatibility(event.target.checked)}/><span className="vs-switch-slider"/></label></div>
+        {overlayCompatibility && <p className="vs-desc" role="status">{t("voiceOverlayCompatibilityActive")}</p>}
         <label className="vs-label">{t("voiceOverlayMode")}
           <select className="vs-select" value={overlayMode} onChange={(e) => setOverlayMode(e.target.value as typeof overlayMode)}>
             <option value="desktop">{t("voiceOverlayModeDesktop")}</option>
@@ -350,7 +354,7 @@ function VoiceSettings() {
             <div className="vs-label">{t("voiceOverlayPinned")}</div>
             <div className="vs-desc">{t("voiceOverlayPinnedDesc")}</div>
           </div>
-          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayPinned")} checked={overlayPinned} onChange={(e) => setOverlayPinned(e.target.checked)} /><span className="vs-switch-slider" /></label>
+          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayPinned")} disabled={overlayCompatibility} checked={overlayPinned} onChange={(e) => setOverlayPinned(e.target.checked)} /><span className="vs-switch-slider" /></label>
         </div>
         <div className="vs-toggle-row">
           <div>
@@ -364,7 +368,7 @@ function VoiceSettings() {
             <div className="vs-label">{t("voiceOverlayClickableActions")}</div>
             <div className="vs-desc">{t("voiceOverlayClickableActionsDesc")}</div>
           </div>
-          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayClickableActions")} checked={overlayClickableActions} onChange={(e) => setOverlayClickableActions(e.target.checked)} /><span className="vs-switch-slider" /></label>
+          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayClickableActions")} disabled={overlayCompatibility} checked={overlayClickableActions} onChange={(e) => setOverlayClickableActions(e.target.checked)} /><span className="vs-switch-slider" /></label>
         </div>
         <div className="vs-toggle-row">
           <div>
@@ -385,7 +389,7 @@ function VoiceSettings() {
             <div className="vs-label">{t("voiceOverlayNotificationActions")}</div>
             <div className="vs-desc">{t("voiceOverlayNotificationActionsDesc")}</div>
           </div>
-          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayNotificationActions")} checked={overlayNotificationActions} onChange={(e) => setOverlayNotificationActions(e.target.checked)} /><span className="vs-switch-slider" /></label>
+          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayNotificationActions")} disabled={overlayCompatibility} checked={overlayNotificationActions} onChange={(e) => setOverlayNotificationActions(e.target.checked)} /><span className="vs-switch-slider" /></label>
         </div>
         <div className="vs-toggle-row">
           <div>
@@ -399,14 +403,14 @@ function VoiceSettings() {
             <div className="vs-label">{t("voiceOverlayChatActions")}</div>
             <div className="vs-desc">{t("voiceOverlayChatActionsDesc")}</div>
           </div>
-          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayChatActions")} checked={overlayChatActions} onChange={(e) => setOverlayChatActions(e.target.checked)} /><span className="vs-switch-slider" /></label>
+          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayChatActions")} disabled={overlayCompatibility} checked={overlayChatActions} onChange={(e) => setOverlayChatActions(e.target.checked)} /><span className="vs-switch-slider" /></label>
         </div>
         <div className="vs-toggle-row">
           <div>
             <div className="vs-label">{t("voiceOverlayChatCompose")}</div>
             <div className="vs-desc">{t("voiceOverlayChatComposeDesc")}</div>
           </div>
-          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayChatCompose")} checked={overlayChatCompose} onChange={(e) => setOverlayChatCompose(e.target.checked)} /><span className="vs-switch-slider" /></label>
+          <label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayChatCompose")} disabled={overlayCompatibility} checked={overlayChatCompose} onChange={(e) => setOverlayChatCompose(e.target.checked)} /><span className="vs-switch-slider" /></label>
         </div>
         <div className="vs-section">
           <button type="button" className="settings-btn settings-btn-secondary" disabled={!resetOverlayLayout || resettingOverlayLayout} onClick={() => void handleResetOverlayLayout()}>

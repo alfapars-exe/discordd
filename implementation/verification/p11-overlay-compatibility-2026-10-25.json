@@ -1,0 +1,157 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 real device-local read-only overlay compatibility mode",
+  "status": "implemented_focused_verified_physical_acceptance_pending",
+  "owned_paths": [
+    "electron/voice-overlay.ts",
+    "electron/voice-overlay-window.test.ts",
+    "electron/voice-overlay-contract.ts",
+    "electron/voice-overlay-contract.test.ts",
+    "electron/overlay-shortcut.ts",
+    "electron/overlay-shortcut.test.ts",
+    "electron/ipc-handlers.ts",
+    "client/src/stores/slices/voiceSettingsSlice.ts",
+    "client/src/stores/slices/voiceSettingsSlice.compatibility.test.ts",
+    "client/src/components/settings/VoiceSettings.tsx",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx",
+    "client/src/components/voice/VoiceOverlayContent.tsx",
+    "client/src/components/voice/VoiceOverlayContent.test.tsx",
+    "client/src/components/layout/AppLayout.tsx",
+    "client/src/hooks/useOverlayVoiceActions.ts",
+    "client/src/hooks/useOverlayVoiceActions.test.ts",
+    "client/src/hooks/useOverlayShortcut.ts",
+    "client/src/hooks/useOverlayShortcut.test.ts",
+    "client/src/hooks/useOverlayChatActions.ts",
+    "client/src/hooks/useOverlayChatActions.test.tsx",
+    "client/src/hooks/useOverlayChatCompose.ts",
+    "client/src/hooks/useOverlayChatCompose.test.tsx",
+    "client/src/hooks/useOverlayNotificationActions.ts",
+    "client/src/hooks/useOverlayNotificationActions.test.tsx",
+    "client/src/hooks/useOverlayNotificationReply.ts",
+    "client/src/hooks/useOverlayNotificationReply.test.tsx",
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/en/common.json",
+    "client/src/i18n/locales/tr/settings.json",
+    "client/src/i18n/locales/tr/common.json",
+    "implementation/verification/p11-overlay-compatibility-2026-10-25.json"
+  ],
+  "owned_locale_keys": {
+    "client/src/i18n/locales/en/settings.json": [
+      "voiceOverlayCompatibility",
+      "voiceOverlayCompatibilityDesc",
+      "voiceOverlayCompatibilityActive"
+    ],
+    "client/src/i18n/locales/en/common.json": [
+      "overlayCompatibilityActive"
+    ],
+    "client/src/i18n/locales/tr/settings.json": [
+      "voiceOverlayCompatibility",
+      "voiceOverlayCompatibilityDesc",
+      "voiceOverlayCompatibilityActive"
+    ],
+    "client/src/i18n/locales/tr/common.json": [
+      "overlayCompatibilityActive"
+    ]
+  },
+  "shared_foreign_worktree_paths": [
+    "client/src/i18n/locales/en/settings.json",
+    "client/src/i18n/locales/tr/settings.json"
+  ],
+  "staging_note": "Settings locale files contain unrelated logging WIP. Stage only the three compatibility keys per language, preserving logging changes. No index mutation was performed by this agent.",
+  "source_sha256_lf": {
+    "electron/voice-overlay.ts": "285a1ffe636a83ef3c516f2b2c5dc9e12fe73756a4be25d78167d47d06263ac8",
+    "electron/voice-overlay-window.test.ts": "60ceb2ea8ddb63cd6d18a1fb9f08293abae597cc13f915358aaaffdb892dda6c",
+    "electron/voice-overlay-contract.ts": "653413fb5e88c5788db99689b83a88e2416e8c6386bda32d600f62c6a453ebb6",
+    "electron/voice-overlay-contract.test.ts": "3011b99af86efb143f6860b57b4360a5f222e458940dcdfee62f6f335e4ed1e6",
+    "electron/overlay-shortcut.ts": "2fd173f4cb425c599de444fe0cb99ef509c3e208d11d9a2e3656f120b3f397a3",
+    "electron/overlay-shortcut.test.ts": "b90a98cba9e8364cebd4abd2c92bd30466a4a3d01d5ccf16571d1a6b92d46ca7",
+    "electron/ipc-handlers.ts": "2da18a0ce230e3b1d74d1032e47f0bc891fa8e6d7d9b82e08954b1dc1af565fc",
+    "client/src/stores/slices/voiceSettingsSlice.ts": "4c5bbfd59a40f5ecf000e2f6ca0a74876e59e834c704e16db8797e1ca623ce71",
+    "client/src/stores/slices/voiceSettingsSlice.compatibility.test.ts": "a70ed6502c1d2823ed4ced8e75d23679476ffa3b71fd2ad0626166a9f274a6b7",
+    "client/src/components/settings/VoiceSettings.tsx": "3a9d75ae0809b82d42f20c6014fb7d27ecb5a90b715bd4c519b87c93fa54c3d9",
+    "client/src/components/settings/VoiceSettings.audio.test.tsx": "ec0eced995970b2ea409f6dad6c27edcdf380d0d20041a89e05c172833e7160a",
+    "client/src/components/voice/VoiceOverlayContent.tsx": "f0d213fe5f90d5e60253b651ef095da4a70949f290187c7f6de1c54fb2905f4b",
+    "client/src/components/voice/VoiceOverlayContent.test.tsx": "d95229c89b87fc3404d0c4cf52f0b650399babb9aef0988f563906f77e1f0cc9",
+    "client/src/components/layout/AppLayout.tsx": "4893b37a35f80c93804d246b5f6076122f373491caf728565bddfd7ab14ef177",
+    "client/src/hooks/useOverlayVoiceActions.ts": "dff1bf9a23101f2a31be40c8a6f838a5597ecdae9c28f3c153f09794260f12f5",
+    "client/src/hooks/useOverlayVoiceActions.test.ts": "daacf191e496775f693ee8ad34fd04b3907aab6ffd9a919e78938d63d3dca70b",
+    "client/src/hooks/useOverlayShortcut.ts": "714a51a90c4e0b10ca61df7adb6e50e68e3cf4f774253375f127efd10ec80ec0",
+    "client/src/hooks/useOverlayShortcut.test.ts": "6d2f761e1845e01df339bba7dfcdbc67eaa1175086fa319ede0c5e28df7616b3",
+    "client/src/hooks/useOverlayChatActions.ts": "36b41e491961215a352abc2e0f77485ae44380d2161598d8d107545ea3da21e7",
+    "client/src/hooks/useOverlayChatActions.test.tsx": "9b18753ebd8941b3cd28bae5c89698a55185a9404991d0ef34eacd8dcf45a90f",
+    "client/src/hooks/useOverlayChatCompose.ts": "4f6457fc68ae27f4c93b6db347e1b6477ba550ed9dd0f703d3d967cd01b5d0c8",
+    "client/src/hooks/useOverlayChatCompose.test.tsx": "3d638693adeecf8afa744916671b84199e22a79a80071493cb918150ac624d64",
+    "client/src/hooks/useOverlayNotificationActions.ts": "d0b0ff65127509d633dfd26ae63deb4c4a0a7e1eaf081d3d1a6a827d3c69e94d",
+    "client/src/hooks/useOverlayNotificationActions.test.tsx": "83dac75838a7a2a07d8091a31025c1f6efd385ba8afba868fc6dc85815320359",
+    "client/src/hooks/useOverlayNotificationReply.ts": "8e0909a51cea5ab373b80530b4d07d456ce61e352182861fa91f2923f74dc895",
+    "client/src/hooks/useOverlayNotificationReply.test.tsx": "763c0c49fa3d221eeab7e3e781ed4b6910a41b01a821e1bac118ac0088e28404",
+    "client/src/i18n/locales/en/common.json": "6374b8b55168fd3aabb7b0f0a5933ecce215284dc29294769b7e4967b9f2e78a",
+    "client/src/i18n/locales/tr/common.json": "c9db8f598517d7c70492b51153b8f02088348d075dac91ef389244afd7fe4f43"
+  },
+  "owned_locale_values": {
+    "client/src/i18n/locales/en/settings.json": {
+      "voiceOverlayCompatibility": "Read-only compatibility mode",
+      "voiceOverlayCompatibilityDesc": "Keep the HUD visible without receiving mouse or keyboard input. Dragging, quick actions, opening the app and chat composition are disabled. This does not add exclusive-fullscreen or anti-cheat support.",
+      "voiceOverlayCompatibilityActive": "Compatibility mode is read-only. Use the main app to interact; your interaction preferences are kept for normal mode."
+    },
+    "client/src/i18n/locales/en/common.json": {
+      "overlayCompatibilityActive": "Read-only compatibility mode"
+    },
+    "client/src/i18n/locales/tr/settings.json": {
+      "voiceOverlayCompatibility": "Salt okunur uyumluluk modu",
+      "voiceOverlayCompatibilityDesc": "HUD görünür kalır; fare ve klavye girişi almaz. Sürükleme, hızlı işlemler, uygulamayı açma ve sohbet yazma kapalıdır. Özel tam ekran veya anti-cheat desteği eklemez.",
+      "voiceOverlayCompatibilityActive": "Uyumluluk modu salt okunurdur. Etkileşim için ana uygulamayı kullanın; önceki etkileşim tercihleriniz normal mod için korunur."
+    },
+    "client/src/i18n/locales/tr/common.json": {
+      "overlayCompatibilityActive": "Salt okunur uyumluluk modu"
+    }
+  },
+  "behavior": [
+    "voiceOverlayCompatibility defaults false, validates strictly as a boolean, persists as a device-only preference, and is excluded from account/server preference synchronization. Existing interaction preferences remain stored while the mode is active.",
+    "The same native HUD remains focusable:false and is shown with showInactive. Compatibility forces native mouse passthrough, denies unlock/drag, hides shaped action children and closes the focusable composer. It does not create another window, inject into a game or add fullscreen/anti-cheat support.",
+    "Compatibility entry clears pending inbox/chat/reply focus intents and cancels outstanding composer acknowledgements. All action, notification, chat and composer availability checks and trusted-main confirmation routes deny interaction while active. Late native did-finish-load callbacks cannot revive hit regions or focus the main app. An already-dispatched main-renderer/network send cannot be retroactively unsent by changing this display policy.",
+    "Main-renderer action hooks check live compatibility before and across awaits; eligibility and opaque grants are revoked on entry. Voice action sessions include a synchronous policy epoch so old grants stay stale after normal mode resumes. Normal-mode restoration never implicitly unlocks or focuses the HUD.",
+    "Compatibility also releases the global overlay shortcut, rather than leaving an OS-reserved chord with a no-op callback. Native shortcut suspension rejects late registration while active; registration epochs reject old callbacks even after the same chord is registered again. Failed unregister is exposed through the existing shortcut status instead of reporting success. Other independent call hotkeys such as PTT are unchanged.",
+    "The settings toggle and disabled interaction controls explain the read-only limitation and preserve choices. The renderer independently suppresses stale interaction flags and shows a read-only indicator; chat/activity/notification display privacy rules and existing layout storage remain in place."
+  ],
+  "verification": [
+    {
+      "kind": "focused client Vitest",
+      "result": "PASS:9 files,124 tests on final scoped source",
+      "suites": [
+        "voiceSettingsSlice.compatibility",
+        "VoiceOverlayContent",
+        "VoiceSettings.audio",
+        "useOverlayShortcut",
+        "useOverlayVoiceActions",
+        "useOverlayChatActions",
+        "useOverlayChatCompose",
+        "useOverlayNotificationActions",
+        "useOverlayNotificationReply"
+      ]
+    },
+    {
+      "kind": "native TypeScript and focused node tests",
+      "command": "tsc -p electron/tsconfig.json --outDir %TEMP%/hichat-overlay-compat-native-20261025; node --test voice-overlay-contract.test.js voice-overlay-window.test.js overlay-shortcut.test.js",
+      "result": "PASS:native compile and31 tests,0 skips; includes actual native owner/action code executed against deterministic BrowserWindow/IPC seams"
+    },
+    {
+      "kind": "application TypeScript",
+      "command": "tsc --noEmit -p tsconfig.app.json",
+      "result": "PASS before final report; exact final result sent separately to parent if concurrent unrelated WIP changes it"
+    },
+    {
+      "kind": "scoped ESLint",
+      "result": "PASS clean on19 owned client TS/TSX paths"
+    },
+    {
+      "kind": "diff check",
+      "result": "PASS on owned source paths; unrelated CRLF warnings are not source changes"
+    }
+  ],
+  "remaining": [
+    "Physical Windows windowed/borderless games, real keyboard interception/focus, Alt-Tab, multiple monitors, DPI and composing-to-compatibility transitions remain unaccepted. Deterministic native window tests are not those device tests.",
+    "Exclusive fullscreen and blocking anti-cheat environments remain unsupported; this mode makes no claim to bypass or repair them.",
+    "Parent coordinates exact staged snapshot review, security manifest checks, full client/native build/regression gates and any commit/push/deployment. No staging, production change or whole-P11 acceptance is claimed."
+  ]
+}

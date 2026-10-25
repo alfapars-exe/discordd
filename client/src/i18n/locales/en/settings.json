@@ -1479,5 +1479,8 @@
     "register": "Register as game application",
     "registerConfirm": "{{name}} will permanently become a game application. Sending personal messages will require recipient authorization. This type change cannot be undone and does not imply verified ownership.",
     "registered": "Game application; personal messaging requires recipient authorization."
-  }
+  },
+  "voiceOverlayCompatibility": "Read-only compatibility mode",
+  "voiceOverlayCompatibilityDesc": "Keep the HUD visible without receiving mouse or keyboard input. Dragging, quick actions, opening the app and chat composition are disabled. This does not add exclusive-fullscreen or anti-cheat support.",
+  "voiceOverlayCompatibilityActive": "Compatibility mode is read-only. Use the main app to interact; your interaction preferences are kept for normal mode."
 }

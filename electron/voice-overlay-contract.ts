@@ -20,6 +20,7 @@ export type VoiceOverlaySnapshot = {
   voiceOverlayPinned?: boolean;
   voiceOverlayQuickActions?: boolean;
   voiceOverlayClickableActions?: boolean;
+  voiceOverlayCompatibility?: boolean;
   voiceOverlayActivity?: boolean;
   voiceOverlayWelcome?: boolean;
   voiceOverlayGoLive?: boolean;
@@ -107,7 +108,7 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
   if (typeof raw.enabled !== "boolean" || typeof raw.speakingOnly !== "boolean") return null;
   if (raw.voiceOverlayMode !== undefined && raw.voiceOverlayMode !== "desktop" && raw.voiceOverlayMode !== "game") return null;
   if (raw.voiceOverlayPinned !== undefined && typeof raw.voiceOverlayPinned !== "boolean") return null;
-  for (const key of ["voiceOverlayQuickActions", "voiceOverlayClickableActions", "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive", "goLiveEligible", "voiceOverlayNotifications", "voiceOverlayNotificationActions", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "selfMuted", "selfDeafened"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") return null;
+  for (const key of ["voiceOverlayQuickActions", "voiceOverlayClickableActions", "voiceOverlayCompatibility", "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive", "goLiveEligible", "voiceOverlayNotifications", "voiceOverlayNotificationActions", "voiceOverlayChat", "voiceOverlayChatActions", "voiceOverlayChatCompose", "selfMuted", "selfDeafened"]) if (raw[key] !== undefined && typeof raw[key] !== "boolean") return null;
   if (raw.goLiveSession !== undefined && !isBoundedText(raw.goLiveSession, 256)) return null;
   if (raw.goLiveEligible === true && (raw.voiceOverlayGoLive !== true || !isBoundedText(raw.goLiveSession, 256))) return null;
   if (raw.notificationStatus !== undefined && (typeof raw.notificationStatus !== "string" || !NOTIFICATION_STATUSES.has(raw.notificationStatus as VoiceOverlayNotificationStatus))) return null;
@@ -195,6 +196,7 @@ export function parseVoiceOverlaySnapshot(raw: unknown): VoiceOverlaySnapshot | 
     ...(raw.voiceOverlayMode !== undefined ? { voiceOverlayMode: raw.voiceOverlayMode as "desktop" | "game" } : {}),
     ...(raw.voiceOverlayPinned !== undefined ? { voiceOverlayPinned: raw.voiceOverlayPinned as boolean } : {}),
     ...(raw.voiceOverlayQuickActions !== undefined ? { voiceOverlayQuickActions: raw.voiceOverlayQuickActions as boolean } : {}),
+    ...(raw.voiceOverlayCompatibility !== undefined ? { voiceOverlayCompatibility: raw.voiceOverlayCompatibility as boolean } : {}),
     ...(raw.voiceOverlayClickableActions !== undefined ? { voiceOverlayClickableActions: raw.voiceOverlayClickableActions as boolean } : {}),
     ...(raw.overlayNotificationDurationMs !== undefined ? { overlayNotificationDurationMs: raw.overlayNotificationDurationMs as number } : {}),
     ...(raw.voiceOverlayGoLive !== undefined ? { voiceOverlayGoLive: raw.voiceOverlayGoLive as boolean } : {}),

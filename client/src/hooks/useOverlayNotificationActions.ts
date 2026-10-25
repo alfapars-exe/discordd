@@ -10,7 +10,7 @@ import i18n from "../i18n";
 export function useOverlayNotificationActions(connected: boolean, hasVisibleNotifications: boolean) {
   const owner = useAuthStore((s) => s.user?.id ?? null);
   const generation = useAuthStore(() => getAuthGeneration());
-  const enabled = useVoiceStore((s) => s.voiceOverlayEnabled && s.voiceOverlayNotifications && s.voiceOverlayNotificationActions);
+  const enabled = useVoiceStore((s) => !s.voiceOverlayCompatibility && s.voiceOverlayEnabled && s.voiceOverlayNotifications && s.voiceOverlayNotificationActions);
   const eligible = enabled && connected && hasVisibleNotifications && !!owner;
   const session = useMemo(() => eligible && owner ? `${generation}:${crypto.randomUUID()}` : null, [eligible, generation, owner]);
   useEffect(() => {
@@ -20,7 +20,7 @@ export function useOverlayNotificationActions(connected: boolean, hasVisibleNoti
     const current = () => {
       const voice = useVoiceStore.getState();
       return !disposed && connected && useAuthStore.getState().user?.id === owner && getAuthGeneration() === generation
-        && voice.voiceOverlayEnabled && voice.voiceOverlayNotifications && voice.voiceOverlayNotificationActions
+        && !voice.voiceOverlayCompatibility && voice.voiceOverlayEnabled && voice.voiceOverlayNotifications && voice.voiceOverlayNotificationActions
         && getLiveOverlayNotificationItems().length > 0;
     };
     const unsubscribe = window.electronAPI?.onOverlayOpenInbox?.((value) => {

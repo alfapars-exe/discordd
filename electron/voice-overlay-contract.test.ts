@@ -313,3 +313,5 @@ test("notification reply metadata contains only a unique visible mention/reply s
   assert.deepEqual(parseVoiceOverlaySnapshot({ ...source,notifications:[{id:"dm-message",category:"message"}],notificationReplyIds:["dm-message"] })?.notificationReplyIds,["dm-message"]);
   for (const patch of [{ notificationReplyIds: ["missing"] }, { notificationReplyIds: ["friend"] }, { notificationReplyIds: ["mention", "mention"] }, { notificationReplyIds: ["mention"], notificationReplySession: undefined }, { notificationReplySession: "bad\nsession" }, { notificationReplyButtons: [{ id: "mention", row: 0 }] }, { voiceOverlayNotificationActions: false }]) assert.equal(parseVoiceOverlaySnapshot({ ...source, ...patch }), null);
 });
+
+test("compatibility is optional legacy-safe and strictly boolean",()=>{assert.equal(parseVoiceOverlaySnapshot(validSnapshot())?.voiceOverlayCompatibility,undefined);assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:true})?.voiceOverlayCompatibility,true);for(const value of [1,"true",null,{},[]])assert.equal(parseVoiceOverlaySnapshot({...validSnapshot(),voiceOverlayCompatibility:value}),null);});

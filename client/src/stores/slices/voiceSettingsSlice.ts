@@ -234,6 +234,7 @@ export type VoiceSettings = {
   voiceOverlayQuickActions: boolean;
   /** Device-local opt-in for mute/deafen button input while widget is click-through locked. */
   voiceOverlayClickableActions: boolean;
+  voiceOverlayCompatibility: boolean;
   /** Device-local display of activity already shared by friends. */
   voiceOverlayActivity: boolean;
   voiceOverlayWelcome: boolean;
@@ -328,6 +329,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   voiceOverlayPinned: false,
   voiceOverlayQuickActions: false,
   voiceOverlayClickableActions: false,
+  voiceOverlayCompatibility: false,
   voiceOverlayActivity: false,
   voiceOverlayWelcome: false,
   voiceOverlayGoLive: false,
@@ -379,6 +381,7 @@ export function loadSettings(): VoiceSettings {
     if (typeof merged.voiceOverlayPinned !== "boolean") merged.voiceOverlayPinned = DEFAULT_SETTINGS.voiceOverlayPinned;
     if (typeof merged.voiceOverlayQuickActions !== "boolean") merged.voiceOverlayQuickActions = DEFAULT_SETTINGS.voiceOverlayQuickActions;
     if (typeof merged.voiceOverlayClickableActions !== "boolean") merged.voiceOverlayClickableActions = DEFAULT_SETTINGS.voiceOverlayClickableActions;
+    if (typeof merged.voiceOverlayCompatibility !== "boolean") merged.voiceOverlayCompatibility = DEFAULT_SETTINGS.voiceOverlayCompatibility;
     if (typeof merged.voiceOverlayGoLive !== "boolean") merged.voiceOverlayGoLive = DEFAULT_SETTINGS.voiceOverlayGoLive;
     if (typeof merged.voiceOverlayWelcome !== "boolean") merged.voiceOverlayWelcome = DEFAULT_SETTINGS.voiceOverlayWelcome;
     if (typeof merged.voiceOverlayActivity !== "boolean") merged.voiceOverlayActivity = DEFAULT_SETTINGS.voiceOverlayActivity;
@@ -436,6 +439,7 @@ const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
   "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
   "voiceOverlayPinned",
   "voiceOverlayQuickActions", "voiceOverlayClickableActions",
+  "voiceOverlayCompatibility",
   "voiceOverlayActivity", "voiceOverlayWelcome", "voiceOverlayGoLive",
   "voiceOverlayNotifications",
   "voiceOverlayNotificationActions",
@@ -558,6 +562,7 @@ function currentSettings(s: VoiceSettings): VoiceSettings {
     voiceOverlayPinned: s.voiceOverlayPinned,
     voiceOverlayQuickActions: s.voiceOverlayQuickActions,
     voiceOverlayClickableActions: s.voiceOverlayClickableActions,
+    voiceOverlayCompatibility: s.voiceOverlayCompatibility,
     voiceOverlayActivity: s.voiceOverlayActivity,
     voiceOverlayWelcome: s.voiceOverlayWelcome,
     voiceOverlayGoLive: s.voiceOverlayGoLive,
@@ -609,6 +614,7 @@ export type VoiceSettingsSlice = VoiceSettings & {
   setVoiceOverlayPinned: (pinned: boolean) => void;
   setVoiceOverlayQuickActions: (enabled: boolean) => void;
   setVoiceOverlayClickableActions: (enabled: boolean) => void;
+  setVoiceOverlayCompatibility: (enabled: boolean) => void;
   setVoiceOverlayActivity: (enabled: boolean) => void;
   setVoiceOverlayWelcome: (enabled: boolean) => void;
   setVoiceOverlayGoLive: (enabled: boolean) => void;
@@ -677,6 +683,7 @@ export const createVoiceSettingsSlice: StateCreator<
     voiceOverlayPinned: initial.voiceOverlayPinned,
     voiceOverlayQuickActions: initial.voiceOverlayQuickActions,
     voiceOverlayClickableActions: initial.voiceOverlayClickableActions,
+    voiceOverlayCompatibility: initial.voiceOverlayCompatibility,
     voiceOverlayActivity: initial.voiceOverlayActivity,
     voiceOverlayWelcome: initial.voiceOverlayWelcome,
     voiceOverlayGoLive: initial.voiceOverlayGoLive,
@@ -817,6 +824,7 @@ export const createVoiceSettingsSlice: StateCreator<
     setVoiceOverlayPinned: (pinned) => { set({ voiceOverlayPinned: pinned === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayQuickActions: (enabled) => { set({ voiceOverlayQuickActions: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayClickableActions: (enabled) => { set({ voiceOverlayClickableActions: enabled === true }); saveSettings(currentSettings(get())); },
+    setVoiceOverlayCompatibility: (enabled) => { set({ voiceOverlayCompatibility: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayGoLive: (enabled) => { set({ voiceOverlayGoLive: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayWelcome: (enabled) => { set({ voiceOverlayWelcome: enabled === true }); saveSettings(currentSettings(get())); },
     setVoiceOverlayActivity: (enabled) => { set({ voiceOverlayActivity: enabled === true }); saveSettings(currentSettings(get())); },
@@ -957,6 +965,7 @@ export const createVoiceSettingsSlice: StateCreator<
         voiceOverlayPinned: merged.voiceOverlayPinned,
         voiceOverlayQuickActions: merged.voiceOverlayQuickActions,
         voiceOverlayClickableActions: merged.voiceOverlayClickableActions,
+        voiceOverlayCompatibility: merged.voiceOverlayCompatibility,
         voiceOverlayActivity: merged.voiceOverlayActivity,
         voiceOverlayWelcome: merged.voiceOverlayWelcome,
         voiceOverlayGoLive: merged.voiceOverlayGoLive,
@@ -989,6 +998,7 @@ export const createVoiceSettingsSlice: StateCreator<
         voiceOverlayPinned: current.voiceOverlayPinned,
         voiceOverlayQuickActions: current.voiceOverlayQuickActions,
         voiceOverlayClickableActions: current.voiceOverlayClickableActions,
+        voiceOverlayCompatibility: current.voiceOverlayCompatibility,
         voiceOverlayActivity: current.voiceOverlayActivity,
         voiceOverlayWelcome: current.voiceOverlayWelcome,
         voiceOverlayGoLive: current.voiceOverlayGoLive,

@@ -6,7 +6,7 @@ import { useShortcutBindingsStore } from "../stores/shortcutBindingsStore";
 import { beginShortcutCapture } from "../stores/shortcutCaptureStore";
 
 beforeEach(() => {
-  useVoiceStore.setState({ voiceOverlayEnabled: true, inputMode: "voice_activity", pttKey: "Space", muteHotkeyEnabled: false });
+  useVoiceStore.setState({ voiceOverlayEnabled: true, voiceOverlayCompatibility:false, inputMode: "voice_activity", pttKey: "Space", muteHotkeyEnabled: false });
   useShortcutBindingsStore.setState({ bindings: { "overlay-lock": { code: "KeyO", key: "o", ctrl: true, shift: false, alt: true, meta: false } } });
   useOverlayShortcutStatus.setState({ failed: false });
 });
@@ -57,3 +57,7 @@ it("suspends an already configured chord if the physical key becomes a PTT bindi
   expect(configure).toHaveBeenLastCalledWith(null);
   await waitFor(() => expect(useOverlayShortcutStatus.getState().failed).toBe(true));
 });
+
+it("releases the OS overlay shortcut in compatibility and restores only its binding in normal mode",async()=>{const configure=vi.fn().mockResolvedValue(true);vi.stubGlobal("electronAPI",{setOverlayShortcut:configure});renderHook(useOverlayShortcut);expect(configure).toHaveBeenLastCalledWith(expect.objectContaining({code:"KeyO"}));act(()=>useVoiceStore.setState({voiceOverlayCompatibility:true}));expect(configure).toHaveBeenLastCalledWith(null);act(()=>useVoiceStore.setState({voiceOverlayCompatibility:false}));expect(configure).toHaveBeenLastCalledWith(expect.objectContaining({code:"KeyO"}));});
+
+it("does not hide failed native unregister while compatibility is requested",async()=>{const configure=vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false);vi.stubGlobal("electronAPI",{setOverlayShortcut:configure});renderHook(useOverlayShortcut);await waitFor(()=>expect(useOverlayShortcutStatus.getState().failed).toBe(false));act(()=>useVoiceStore.setState({voiceOverlayCompatibility:true}));await waitFor(()=>expect(useOverlayShortcutStatus.getState().failed).toBe(true));expect(configure).toHaveBeenLastCalledWith(null);});

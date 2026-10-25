@@ -475,5 +475,6 @@
     "retry": "Try again",
     "reloading": "Reloading...",
     "sectionTitle": "Something went wrong in this section ({{section}})"
-  }
+  },
+  "overlayCompatibilityActive": "Read-only compatibility mode"
 }

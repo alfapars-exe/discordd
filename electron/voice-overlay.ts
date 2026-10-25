@@ -108,12 +108,12 @@ function setMouseIgnored(ignore: boolean): void {
   else overlayWindow.setIgnoreMouseEvents(false);
 }
 function actionAvailable(): boolean {
-  return !!latest?.enabled && latest.voiceOverlayQuickActions === true && !!latest.voiceActionSession
+  return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayQuickActions === true && !!latest.voiceActionSession
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
 }
 function notificationActionAvailable(): boolean {
   const geometry = latest && calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return !!latest?.enabled && latest.voiceOverlayNotifications === true && latest.voiceOverlayNotificationActions === true
+  return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayNotifications === true && latest.voiceOverlayNotificationActions === true
     && latest.notificationStatus === "ready" && (latest.notifications?.length ?? 0) > 0
     && !!latest.notificationActionSession && !!geometry?.notificationsVisible
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
@@ -122,7 +122,7 @@ function notificationActionAvailable(): boolean {
 
 function chatActionAvailable(): boolean {
   const geometry = latest && calculateVoiceOverlayGeometry(latest, latestArea ?? screen.getPrimaryDisplay().workArea);
-  return !!latest?.enabled && latest.voiceOverlayChat === true && latest.voiceOverlayChatActions === true
+  return latest?.voiceOverlayCompatibility !== true && !!latest?.enabled && latest.voiceOverlayChat === true && latest.voiceOverlayChatActions === true
     && latest.chatStatus === "ready" && !!latest.chatActionSession && !!geometry?.chatVisible
     && !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
     && process.platform === "win32" && !chatActionShapeFailed;
@@ -353,7 +353,7 @@ function updateNotificationActionWindow(): void {
 }
 
 function updateMousePolicy(): void {
-  setMouseIgnored(!unlocked);
+  setMouseIgnored(latest?.voiceOverlayCompatibility === true || !unlocked);
   if (!actionAvailable() || (!unlocked && latest?.voiceOverlayClickableActions !== true) || process.platform !== "win32" || actionShapeFailed) { hideActionWindow(); return; }
   if (!actionWindow || actionWindow.isDestroyed()) {
     const created = new BrowserWindow({ width: 88, height: 40, frame: false, transparent: true, resizable: false, alwaysOnTop: true, focusable: false, skipTaskbar: true, hasShadow: false, show: false, parent: overlayWindow!, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true } });
@@ -642,7 +642,7 @@ export function resetVoiceOverlayLayout(): boolean {
 /** Unlock only a visible, authorized widget; never activate/focus its window. */
 export function toggleVoiceOverlayLock(): void {
   const win = overlayWindow;
-  if (!win || win.isDestroyed() || !win.isVisible() || !latest?.enabled || latest.voiceOverlayPinned) return;
+  if (!win || win.isDestroyed() || !win.isVisible() || !latest?.enabled || latest.voiceOverlayPinned || latest.voiceOverlayCompatibility === true) return;
   if (unlocked) {
     lockVoiceOverlay();
   } else {
@@ -701,6 +701,17 @@ function ensureOverlay(): BrowserWindow {
 }
 
 export function updateVoiceOverlay(snapshot: VoiceOverlaySnapshot, area?: VoiceOverlayWorkArea, context?: string): void {
+  // Compatibility is a real passive native policy, not a renderer-only preference.
+  const compatibility = snapshot.voiceOverlayCompatibility === true;
+  const compatibilityChanged = compatibility !== (latest?.voiceOverlayCompatibility === true);
+  if (compatibilityChanged) {
+    rememberPosition(); unlocked = false;
+    pendingOpenInbox = null; pendingOpenChat = null; pendingNotificationReply = null;
+    closeChatComposerWindow();
+    hideActionWindow(); hideNotificationActionWindow(); hideChatActionWindow();
+    setMouseIgnored(true);
+  }
+  if (compatibility) snapshot = { ...snapshot, voiceOverlayClickableActions: false, voiceOverlayNotificationActions: false, voiceOverlayChatActions: false, voiceOverlayChatCompose: false };
   if (process.platform !== "win32") snapshot = { ...snapshot, goLiveEligible: false };
   if (!snapshot.voiceOverlayGoLive || !snapshot.goLiveEligible || !snapshot.goLiveSession || (latest !== null && latest.goLiveSession !== snapshot.goLiveSession)) {
     goLiveLifecycle.dismiss();

@@ -241,7 +241,10 @@ export function registerIpcHandlers(): void {
   ipcMain.on("voice-overlay-snapshot", (event, raw: unknown) => {
     if (!isTrustedMainWindowSender(event)) return;
     const snapshot = parseVoiceOverlaySnapshot(raw);
-    if (snapshot) gameOverlay?.setSnapshot(snapshot);
+    if (snapshot) {
+      if (snapshot.voiceOverlayCompatibility !== undefined) overlayShortcut.setSuspended(snapshot.voiceOverlayCompatibility);
+      gameOverlay?.setSnapshot(snapshot);
+    }
   });
   ipcMain.handle("set-registered-game-overlay", async (event, id: unknown, allowed: unknown) => {
     assertTrustedMainWindowSender(event);

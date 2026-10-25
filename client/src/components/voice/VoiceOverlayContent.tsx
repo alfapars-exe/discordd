@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 export type VoiceOverlaySnapshot = {
   unlocked?: boolean;
+  voiceOverlayCompatibility?: boolean;
   voiceOverlayPinned?: boolean;
   voiceOverlayQuickActions?: boolean;
   voiceOverlayClickableActions?: boolean;
@@ -236,7 +237,8 @@ function OverlayWelcomeNotice({ notice, bottom, height = 32, textKey = "overlayW
   return visible ? <div role="status" className="voice-overlay-welcome" style={{ position: "absolute", bottom, left: 8, right: 8, height, boxSizing: "border-box", overflow: "hidden", padding: "6px", borderRadius: 6, background: "rgba(12, 14, 20, .96)", color: "#f4f6fb", fontSize: 12, lineHeight: height === 64 ? "16px" : "20px", overflowWrap: "anywhere", pointerEvents: "none" }}>{t(textKey)}</div> : null;
 }
 
-export default function VoiceOverlayContent({ snapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
+export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly = false, notificationActionsOnly = false, chatActionsOnly = false, chatComposerOnly = false }: Props) {
+  const snapshot=rawSnapshot.voiceOverlayCompatibility?{...rawSnapshot,unlocked:false,voiceOverlayClickableActions:false,voiceOverlayNotificationActions:false,voiceOverlayChatActions:false,voiceOverlayChatCompose:false}:rawSnapshot;
   const { t } = useTranslation("common");
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -343,6 +345,7 @@ export default function VoiceOverlayContent({ snapshot, actionsOnly = false, not
         <strong>{entry.label}</strong><span>{t("gameActivityPlaying", { name: entry.gameName })}</span>
       </div>) : <p className="voice-overlay-activity-empty">{t("overlayActivityEmpty")}</p>}
     </section>}
+    {snapshot.voiceOverlayCompatibility && <span className="voice-overlay-pin" role="status" title={t("overlayCompatibilityActive")} aria-label={t("overlayCompatibilityActive")}>◌</span>}
     {snapshot.layoutSaveFailed && <span className="voice-overlay-layout-error" role="alert" title={t("overlayLayoutSaveFailed")} aria-label={t("overlayLayoutSaveFailed")}>!</span>}
     {snapshot.voiceOverlayPinned && <span className="voice-overlay-pin" title={t("overlayWidgetPinned")} aria-label={t("overlayWidgetPinned")}>⌖</span>}
     <div className="voice-overlay-widget" data-avatar-size={snapshot.voiceOverlayAvatarSize} style={{ transform: `scale(${scaleFactor})`, transformOrigin, maxWidth: `${maxWidthVw}vw` }}>

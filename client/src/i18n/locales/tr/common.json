@@ -473,5 +473,6 @@
     "retry": "Tekrar dene",
     "reloading": "Yeniden yükleniyor...",
     "sectionTitle": "Bu bölümde bir sorun oluştu ({{section}})"
-  }
+  },
+  "overlayCompatibilityActive": "Salt okunur uyumluluk modu"
 }
