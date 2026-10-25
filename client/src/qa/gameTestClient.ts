@@ -138,4 +138,3 @@ export class GameTestClient {
     return output;
   }
 }
-
