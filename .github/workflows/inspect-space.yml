@@ -1,0 +1,51 @@
+name: Inspect HF deployment status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check --no-input huggingface_hub==1.26.0
+      - name: Read deployment status and bounded sanitized error lines
+        env:
+          HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          import httpx
+          from huggingface_hub import HfApi
+          def clean(value):
+              text = str(value).replace(os.environ['HF_TOKEN'], '[redacted]')
+              text = re.sub(r'(?i)\b(?:https?|postgres(?:ql)?|libsql)://\S+', '[url]', text)
+              text = re.sub(r'(?i)(password|secret|token|authorization|api_key)([\s"\x27:=]+)\S+', r'\1=[redacted]', text)
+              return text[:1500]
+          info = HfApi().space_info('infinayazilim/discord')
+          raw = info.runtime.raw if info.runtime else {}
+          print(json.dumps({'head':info.sha, 'stage':raw.get('stage'), 'runtime_commit':raw.get('sha'), 'error':clean(raw.get('errorMessage','')), 'runtime_fields':sorted(raw)}), flush=True)
+          for kind in ('build', 'run'):
+              print('LOG_KIND ' + kind, flush=True)
+              count = 0
+              try:
+                  with httpx.stream('GET', 'https://huggingface.co/api/spaces/infinayazilim/discord/logs/' + kind,
+                      headers={'Authorization':'Bearer ' + os.environ['HF_TOKEN']}, timeout=15) as response:
+                      print('LOG_HTTP ' + str(response.status_code), flush=True)
+                      if response.status_code != 200:
+                          continue
+                      for line in response.iter_lines():
+                          count += 1
+                          if re.search(r'(?i)error|failed|panic|fatal|denied|exit code|not found|no space', line):
+                              print(clean(line), flush=True)
+                          if count >= 3000:
+                              break
+              except httpx.HTTPError as error:
+                  print('LOG_READ ' + type(error).__name__, flush=True)
+          PY
