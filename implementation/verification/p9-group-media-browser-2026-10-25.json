@@ -52,5 +52,16 @@
     "cleanup": "First client explicitly left and panel absence verified. Second page became unresponsive; navigation to root then completed, discarding the old execution and call page. No browser-owned permission bypass.",
     "remaining": "Browser unresponsiveness still needs diagnosis; no general call stability or production runtime acceptance claim."
   },
-  "next": "Diagnose browser unresponsiveness and complete peer-audible two-client acceptance from a frozen build."
+  "instrumented_frozen_follow_up": {
+    "scope": "Separate qa-dist based on frozen9f with bounded lifecycle metadata only; production source untouched by diagnostics",
+    "observed": [
+      "Both clients reached connected controls. First client's initial key installation and exact worker acknowledgement completed.",
+      "First client retained the same Room4/provider2/worker3. SDK reconnecting/reconnected occurred at approximately35/38 and52/55 seconds after page start; each acknowledgement succeeded and no admission cleanup/fatal/key-timeout occurred in this observation.",
+      "Before this instrumentation, first client receiver reported3 audio RTP packets but0 total received audio samples/energy; publisher reported0 packets sent. No usable peer audio proven.",
+      "Second page lifecycle read timed out again. Previous execution must be discarded by reload/navigation before further actions.",
+      "Local compose pins LiveKit1.8.4 whereas deployment installer pins1.9.12; transport/version compatibility remains a test question, not a proven root cause."
+    ],
+    "conclusion": "Own admission-loop hypothesis is unsupported by this run. Investigate SDK/media transport and local SFU compatibility without weakening encryption gates."
+  },
+  "next": "Diagnose SDK transport reconnects and browser unresponsiveness; complete peer-audible two-client acceptance from a frozen build."
 }
