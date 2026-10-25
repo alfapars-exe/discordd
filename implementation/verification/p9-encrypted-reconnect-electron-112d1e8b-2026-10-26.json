@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-25T22:01:42.332381+00:00",
+  "sourceCommit": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "imageId": "sha256:f7d435662855a00d4b8ac425bd80d23624efee10ed8f69351c56922c330e1af0",
+  "livekitImage": "livekit/livekit-server:v1.9.12",
+  "qualification": "Actual production encrypted admission/playback component fixture with SDK transport; not full HiChat UI/navigation or physical-device acceptance",
+  "ledgerId": "p9.call-reconnect",
+  "ledgerAcceptanceNotFullyClosed": true,
+  "fixture": {
+    "accounts": 2,
+    "freshDatabase": true,
+    "freshProfiles": true,
+    "ownLoopbackOnly": true,
+    "captureCalls": 0,
+    "permissionRequests": 0,
+    "allNativeWindowsMutedBeforeLoad": true,
+    "allAudioContextsForcedVerifiedSinkNone": true,
+    "audioFilesWritten": false,
+    "externalProvidersUsed": false,
+    "outage": "Pause only owned LiveKit process22seconds, API process unchanged; actual media/signaling transport interrupted",
+    "media": "Synthetic440Hz oscillator-derived MediaStreamTrack published through production admission-guarded SDK with GCM enabled"
+  },
+  "verification": {
+    "source": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+    "passed": true,
+    "reason": "encrypted-reconnect-component-complete",
+    "results": [
+      {
+        "who": "a",
+        "type": "admission-stage",
+        "room": false,
+        "connect": false,
+        "ready": false,
+        "error": false
+      },
+      {
+        "who": "a",
+        "type": "admission-stage",
+        "room": true,
+        "connect": false,
+        "ready": false,
+        "error": false,
+        "transport": "disconnected"
+      },
+      {
+        "who": "b",
+        "type": "admission-stage",
+        "room": false,
+        "connect": false,
+        "ready": false,
+        "error": false
+      },
+      {
+        "who": "a",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": false,
+        "error": false,
+        "transport": "disconnected"
+      },
+      {
+        "who": "b",
+        "type": "admission-stage",
+        "room": true,
+        "connect": false,
+        "ready": false,
+        "error": false,
+        "transport": "disconnected"
+      },
+      {
+        "who": "b",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": false,
+        "error": false,
+        "transport": "disconnected"
+      },
+      {
+        "who": "b",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": true,
+        "error": false,
+        "transport": "connected"
+      },
+      {
+        "who": "a",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": true,
+        "error": false,
+        "transport": "connected"
+      },
+      {
+        "who": "b",
+        "type": "baseline",
+        "decodedPower": 0.0006938253698390042,
+        "e2ee": true,
+        "admitted": true,
+        "remoteCount": 1
+      },
+      {
+        "type": "owned-livekit-paused",
+        "durationMs": 22000
+      },
+      {
+        "who": "a",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": false,
+        "error": false,
+        "transport": "signalReconnecting"
+      },
+      {
+        "who": "b",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": false,
+        "error": false,
+        "transport": "signalReconnecting"
+      },
+      {
+        "type": "owned-livekit-resumed"
+      },
+      {
+        "who": "a",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": true,
+        "error": false,
+        "transport": "connected"
+      },
+      {
+        "who": "b",
+        "type": "admission-stage",
+        "room": true,
+        "connect": true,
+        "ready": true,
+        "error": false,
+        "transport": "connected"
+      },
+      {
+        "who": "a",
+        "type": "after",
+        "sourceRestored": true,
+        "events": {
+          "reconnecting": 1,
+          "signalReconnecting": 1,
+          "reconnected": 1,
+          "disconnected": 0,
+          "encryptionErrors": 0
+        },
+        "admitted": true,
+        "e2ee": true,
+        "callBindingPreserved": true,
+        "masterVolume": 75,
+        "sinkNone": true,
+        "captureCalls": 0
+      },
+      {
+        "who": "b",
+        "type": "after",
+        "decodedPower": 0.0007977190518098639,
+        "events": {
+          "reconnecting": 1,
+          "signalReconnecting": 1,
+          "reconnected": 1,
+          "disconnected": 0,
+          "encryptionErrors": 0
+        },
+        "admitted": true,
+        "e2ee": true,
+        "callBindingPreserved": true,
+        "masterVolume": 75,
+        "sinkNone": true,
+        "captureCalls": 0
+      },
+      {
+        "who": "b",
+        "type": "left",
+        "remoteCount": 0,
+        "localTracks": 0
+      },
+      {
+        "who": "a",
+        "type": "cleanup-checked",
+        "remoteCount": 0,
+        "sourceEnded": true,
+        "contextClosed": true,
+        "captureCalls": 0
+      }
+    ],
+    "permissions": 0,
+    "blocked": 0,
+    "hardwareAudioMuted": true,
+    "remainingOwnWindows": 0
+  },
+  "previousFixtureAttempt": {
+    "result": "fixture-only React effect initialization ordering error: Player read globalroom before admission assigned it; corrected by passing actual admitted room as prop, production untouched",
+    "sourceModification": false
+  },
+  "cleanup": [
+    {
+      "containerId": "05385e8d9e5c27f5766325ad2f43aaf6520e103663261280cb08716119f2febe",
+      "removed": true
+    },
+    {
+      "containerId": "b503e5a4307cf6263ec26fc977a417e7be6e78b039b0cf74b514bdce9e5c513e",
+      "removed": true
+    }
+  ],
+  "independent18185VisualReadyHTTP": 200,
+  "remainingAcceptance": [
+    "Full HiChat navigation while connected",
+    "Physical microphone/camera/output device restoration",
+    "Web browser and Windows installed-app full product flows",
+    "Group call provider state/reconnect path separate from tested server voice admission component",
+    "No new key rotation in this reconnect fixture"
+  ],
+  "scriptHashes": {
+    "main.cjs": "3c243ad8f5b60de60f721e59154983b9ba8c22a8a4d416e9ee291e9467655c4a",
+    "preload.cjs": "408f18239e7ea83b6ca9314303b6408cd22945aab40d2e0944c5753bf7a8a2c6",
+    "entry.tsx": "690bd712a7a944acaae41f5f42bc8b18a4b7e5baa589125be1e91fd6389c256b",
+    "build.mjs": "684d6c13a16f1411dc3cfd41a7e91e54e98d1414fbc74900dbd7df8e37fd6676",
+    "launch.py": "1b223434136de405556b4ac6c03ec00771ac0c6530ed75e313c3c1ff027a8bd7"
+  },
+  "productionModuleHashes": {
+    "client/src/hooks/useEncryptedRoomAdmission.ts": "53085c6e3ee9ef4d8aa7854526765c33947ba14b3fb6c93e16972cda451e5429",
+    "client/src/hooks/useVolumeSync.ts": "9a3b1db69a9f4297d526366795764c53a48e31d6a14edfd5f0a0b38ccba80c98",
+    "client/src/audio/voiceEncryptionKeys.ts": "cc9dde448b7455dfe7b32747d451d6a9a01bb613b1e23f0f8e4e9c4ebd8e3f44"
+  }
+}

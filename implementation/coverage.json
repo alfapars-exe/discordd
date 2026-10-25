@@ -5096,7 +5096,10 @@
         "Sample messages, reactions, links, presence indicators and sample button reflect every relevant changed preference immediately."
       ],
       "code": ["client/src/components/settings/AccessibilitySettings.tsx", "client/src/styles/accessibility.ts", "client/src/styles/globals.css"],
-      "evidence": ["implementation/verification/p7-accessibility-foundation-2026-10-23.json"]
+      "evidence": [
+        "implementation/verification/p7-accessibility-foundation-2026-10-23.json",
+        "implementation/verification/p7-preview-wrap-2026-10-26.json"
+      ]
     },
     {
       "id": "p7.text-size",
@@ -5264,7 +5267,10 @@
         "50–200% zoom adjusts application and preserves keyboard navigation; Windows/Web limitations are explicit."
       ],
       "code": ["client/src/components/settings/AppearanceSettings.tsx", "client/src/stores/settingsStore.ts", "client/src/styles/globals.css"],
-      "evidence": ["implementation/verification/p7-accessibility-foundation-2026-10-23.json"]
+      "evidence": [
+        "implementation/verification/p7-accessibility-foundation-2026-10-23.json",
+        "implementation/verification/p7-preview-wrap-2026-10-26.json"
+      ]
     },
     {
       "id": "p7.saturation",
@@ -6743,7 +6749,8 @@
       ],
       "evidence": [
         "implementation/verification/p9-persistent-group-call-2026-10-25.json",
-        "implementation/verification/p9-group-media-browser-2026-10-25.json"
+        "implementation/verification/p9-group-media-browser-2026-10-25.json",
+        "implementation/verification/p9-encrypted-reconnect-electron-112d1e8b-2026-10-26.json"
       ]
     },
     {
@@ -8271,7 +8278,8 @@
         "package.json"
       ],
       "evidence": [
-        "implementation/verification/p11-windows-rc-packaging-4b0e196d-2026-10-26.json"
+        "implementation/verification/p11-windows-rc-packaging-4b0e196d-2026-10-26.json",
+        "implementation/verification/p11-windows-rc-packaging-e7b1e56c-2026-10-26.json"
       ]
     }
   ]

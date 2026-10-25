@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-26",
+  "scope": "Appearance and accessibility preview wrapping at narrow width and application scale200",
+  "source_base": "77ce859267a38c844dafa98ebb61e2a0c264ad25",
+  "css_lf_sha256": "4cc569d3ae925c603ca51c8d31cf132dbf549700bead15d0ed845488a75e2f27",
+  "status": "build_pass_and_scoped_actual_dom_candidate_checked_full_artifact_visual_open",
+  "observed_bug": {
+    "fixture_source": "112d1e8b",
+    "viewport_width": 390,
+    "application_zoom": 2,
+    "description": "Preview URL visibly clipped outside its card although document scrollWidth equals390",
+    "screenshot": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-browser-20261025-1140\\visual-112-appearance-390-app200.png"
+  },
+  "change": "Seven scoped existing CSS rules enable anywhere wrapping, flex shrinking/wrapping and bounded preview buttons.",
+  "verification": {
+    "build": "Agent ran actual tsc and Vite production build successfully on source including this CSS patch",
+    "actual_browser_dom_candidate": "Exactly seven source rule lines temporarily appended to original112 UI; not presented as a new compiled/deployed artifact",
+    "viewport_width": 390,
+    "html_zoom": 2,
+    "preview_client_width": 161,
+    "preview_scroll_width": 161,
+    "both_text_client_widths": [
+      73,
+      73
+    ],
+    "both_text_scroll_widths": [
+      73,
+      73
+    ],
+    "computed_overflow_wrap": "anywhere",
+    "cleanup": "Temporary style removed, application scale restored100, device metrics override cleared",
+    "screenshot_qualification": "Candidate screenshot captured theme region after scroll reflow; geometric text measurements establish candidate wrapping, but do not replace final artifact screenshot comparison."
+  },
+  "remaining": [
+    "Verify newly compiled artifact at all planned widths/zoom",
+    "Complete remaining reference UI and real-device acceptance"
+  ],
+  "delivery": "No deployment, installer launch or stable feed mutation by this patch."
+}

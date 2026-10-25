@@ -1,0 +1,360 @@
+{
+  "date": "2026-10-26",
+  "scope": "Local-only Windows RC comparison build from e7b1e56c; no installation, user application launch or publication performed by this task.",
+  "status": "local_rc_packaging_and_module_loading_verified_not_published",
+  "source_commit": "e7b1e56ce8da66ad5ece05f5ae94e5069fd8fa7f",
+  "base_version": "2.11.111",
+  "local_version_override": "2.11.114-rc.2",
+  "local_artifact_directory": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-windows-rc-e7b1-c6styhbk\\source\\release-rc2",
+  "source_fidelity": {
+    "status": "PASS",
+    "source_commit": "e7b1e56ce8da66ad5ece05f5ae94e5069fd8fa7f",
+    "tracked_files_compared": 3379,
+    "only_local_metadata_override_files": [
+      "package-lock.json",
+      "package.json"
+    ],
+    "only_semantic_changes": [
+      "package.json.version",
+      "package-lock.json.version",
+      "package-lock.json.packages[\"\"].version"
+    ],
+    "all_other_archive_files_byte_equal": true,
+    "archive_sha256": "747d1bfd43ea56841bbf42a5a2838f545ad5b178b5914e478cf9499b10837117",
+    "pinned_assets_count": 59,
+    "pinned_assets_manifest_sha256": "10909e82efecf69e7138a5741905d95808f84da13a23971425fada3b419d74c0"
+  },
+  "toolchain": {
+    "electron": "45.0.0",
+    "electron_builder": "26.18.0",
+    "msvc": "Installed Visual Studio2022 BuildTools vcvars64.bat",
+    "native_hardening": "Fresh audio-capture and game-window helpers passed actual dumpbin DEP/ASLR/HighEntropyVA/CFG checks.",
+    "native_flags": [
+      "/GS",
+      "/sdl",
+      "/guard:cf",
+      "/DYNAMICBASE",
+      "/NXCOMPAT",
+      "/HIGHENTROPYVA",
+      "/WX"
+    ],
+    "new_software_installed": false,
+    "shared_tools_unchanged": {
+      "unchanged": true,
+      "sha256": {
+        "node_modules/app-builder-lib/out/targets/nsis/NsisTarget.js": "f91b31d96cae53852f263ed89d2bc406ae2be7ff40ce3539b46e1cafe34a41b9",
+        "node_modules/app-builder-lib/templates/nsis/installer.nsi": "8811964416d122612c3e7601728af5d3f998d677918df829a4e8b4c739c8b9f8",
+        "node_modules/electron/dist/electron.exe": "8e84549b05d27d444da2957653200d1e0ac287eff0fc5722b92835b9e0821a59"
+      }
+    },
+    "source_hashes": {
+      "native/audio-capture.cpp": "670ef08e0c67ca149fb2e49736224483cd368c14c4883cbb6866f2635b447d84",
+      "native/build.bat": "9ee85a58e10b27bd222a5b28d79ad872ce54f0f5ef69d2f05bdf6a58fc23a29e",
+      "native/game-window.cpp": "52040ae895be3068356210eea002a85f34e5ca9cc1ae0a7d9ebabd2919c723e8",
+      "native/build-game-window.bat": "333843afeb54ab34e3dcf9d8811800ce4e2e7277cb3017489301f55d7d881cc9",
+      "build/after-pack.js": "73d80a904420f1343da1422360abf4cf42a5c5c2f28bfc2d44a9bd1f75f72d4b",
+      "build/installer.nsh": "ba730e7925d9d055ac0e3940a049c559c223a786217c41ffafcae75c2fa411a3"
+    }
+  },
+  "dependencies": {
+    "frozen_locked_runtime_packages": 18,
+    "all_required_versions_present_in_asar": true,
+    "actual_asar_package_versions": [
+      {
+        "path": "node_modules/argparse/package.json",
+        "name": "argparse",
+        "version": "2.0.1"
+      },
+      {
+        "path": "node_modules/builder-util-runtime/package.json",
+        "name": "builder-util-runtime",
+        "version": "9.7.0"
+      },
+      {
+        "path": "node_modules/debug/package.json",
+        "name": "debug",
+        "version": "4.4.3"
+      },
+      {
+        "path": "node_modules/electron-updater/package.json",
+        "name": "electron-updater",
+        "version": "6.8.11"
+      },
+      {
+        "path": "node_modules/fs-extra/package.json",
+        "name": "fs-extra",
+        "version": "10.1.0"
+      },
+      {
+        "path": "node_modules/graceful-fs/package.json",
+        "name": "graceful-fs",
+        "version": "4.2.11"
+      },
+      {
+        "path": "node_modules/js-yaml/package.json",
+        "name": "js-yaml",
+        "version": "4.3.2"
+      },
+      {
+        "path": "node_modules/jsonfile/package.json",
+        "name": "jsonfile",
+        "version": "6.2.1"
+      },
+      {
+        "path": "node_modules/lazy-val/package.json",
+        "name": "lazy-val",
+        "version": "1.0.5"
+      },
+      {
+        "path": "node_modules/lodash.escaperegexp/package.json",
+        "name": "lodash.escaperegexp",
+        "version": "4.1.2"
+      },
+      {
+        "path": "node_modules/lodash.isequal/package.json",
+        "name": "lodash.isequal",
+        "version": "4.5.0"
+      },
+      {
+        "path": "node_modules/ms/package.json",
+        "name": "ms",
+        "version": "2.1.3"
+      },
+      {
+        "path": "node_modules/node-gyp-build/package.json",
+        "name": "node-gyp-build",
+        "version": "4.8.4"
+      },
+      {
+        "path": "node_modules/sax/package.json",
+        "name": "sax",
+        "version": "1.4.4"
+      },
+      {
+        "path": "node_modules/semver/package.json",
+        "name": "semver",
+        "version": "7.7.4"
+      },
+      {
+        "path": "node_modules/tiny-typed-emitter/package.json",
+        "name": "tiny-typed-emitter",
+        "version": "2.1.0"
+      },
+      {
+        "path": "node_modules/uiohook-napi/package.json",
+        "name": "uiohook-napi",
+        "version": "1.5.5"
+      },
+      {
+        "path": "node_modules/universalify/package.json",
+        "name": "universalify",
+        "version": "2.0.1"
+      }
+    ],
+    "qualification": "All frozen lock package entries and runtime dependency declarations unchanged; installed superset has additional development-only coverage packages unused by this RC build. No dependency install performed.",
+    "additional_dev_only_entries": [
+      "node_modules/@bcoe/v8-coverage",
+      "node_modules/@vitest/coverage-v8",
+      "node_modules/@vitest/istanbul-lib-coverage",
+      "node_modules/@vitest/istanbul-lib-report",
+      "node_modules/ast-v8-to-istanbul",
+      "node_modules/ast-v8-to-istanbul/node_modules/js-tokens",
+      "node_modules/magicast",
+      "node_modules/tinyrainbow"
+    ],
+    "production_materialization": {
+      "physical_package_roots": [
+        "argparse",
+        "builder-util-runtime",
+        "debug",
+        "electron-updater",
+        "fs-extra",
+        "graceful-fs",
+        "js-yaml",
+        "jsonfile",
+        "lazy-val",
+        "lodash.escaperegexp",
+        "lodash.isequal",
+        "ms",
+        "node-gyp-build",
+        "sax",
+        "tiny-typed-emitter",
+        "uiohook-napi",
+        "universalify"
+      ],
+      "build_dependency_junctions": 225,
+      "frozen_locked_package_count": 18,
+      "no_install": true,
+      "reason": "Whole root node_modules junction caused stock builder collector to omit transitive runtime dependencies; materialized only existing locked production closure in owned workspace."
+    },
+    "ts_vite_cache_isolated": true
+  },
+  "lfs": {
+    "tracked_files": 103,
+    "unresolved_pointers": 0,
+    "verified_bytes": 75023171,
+    "qualification": "All 103 pinned LFS files already materialized by git archive on this host; archive and copied source both verified against exact committed LFS OID. No LFS download performed."
+  },
+  "build_results": {
+    "native": {
+      "phase": "native",
+      "exit_code": 0,
+      "seconds": 4.812,
+      "source": "e7b1e56c",
+      "local_version": "2.11.114-rc.2",
+      "hardening": "Both native helpers DEP/ASLR/HighEntropyVA/CFG verified using actual dumpbin headers/loadconfig"
+    },
+    "client": {
+      "phase": "client",
+      "exit_code": 0,
+      "seconds": 24.938,
+      "source": "e7b1e56c",
+      "local_version": "2.11.114-rc.2"
+    },
+    "electron": {
+      "phase": "electron",
+      "exit_code": 0,
+      "seconds": 0.453,
+      "source": "e7b1e56c",
+      "local_version": "2.11.114-rc.2"
+    },
+    "installer3": {
+      "phase": "installer3",
+      "exit_code": 0,
+      "seconds": 36.204,
+      "source": "e7b1e56c",
+      "local_version": "2.11.114-rc.2"
+    }
+  },
+  "build_command": "Stock electron-builder --win nsis --x64 --publish never, existing Electron45 distribution, fresh owned release-rc2 output. No recursive clean or dependency install.",
+  "packaged_app": {
+    "version": "2.11.114-rc.2",
+    "asar": {
+      "size": 90567143,
+      "sha256": "f557a56faca758b00a268b2d311f1b6b55dd75c34beed5a27e038dff1f0fcb87"
+    },
+    "asar_entry_count": 778,
+    "native_helpers": {
+      "audio-capture.exe": {
+        "sha256": "d60cc05a387a423ac829fa040dc01907770942d08bdd3610b594d498f3f931a2",
+        "size": 156672,
+        "built_resource_equal": true
+      },
+      "game-window.exe": {
+        "sha256": "0fe836cca3605e4bd5dbd3f4ed0120f843303d1bb88fd308b06613ee925eaad7",
+        "size": 267264,
+        "built_resource_equal": true
+      }
+    },
+    "uiohook_binding": {
+      "sha256": "ee68f046628d2e4406d8aa85c6489ad06578b64a0e19ed64822bd22e7c473b85",
+      "size": 173056,
+      "installed_locked_copy_equal": true
+    },
+    "pinned_audio_classifier_assets": {
+      "all_public_audio_classifier_assets_present": true,
+      "expected_count": 59,
+      "packaged_count": 59,
+      "no_silently_omitted_assets": true
+    },
+    "pinned_asset_manifest_sha256": "10909e82efecf69e7138a5741905d95808f84da13a23971425fada3b419d74c0"
+  },
+  "artifacts": {
+    "hichat-setup.exe": {
+      "size": 166033327,
+      "sha256": "5af38cc35ef215d5feb97105060e60f168dd97a1e546716ab3f34ccd365b98ae",
+      "sha512": "45UmWyYmdYWGeQ3XXB2QBsWivZ+Uzc6migjELF64YQxHp5urQa/HIQrDwE+wsdUF55lpT4uE/VvMe8koxrPPAg=="
+    },
+    "hichat-setup.exe.blockmap": {
+      "size": 173699,
+      "sha256": "95005ce1a09d69fa8c008e2cbc649b3649c0d2b3c9e8ad48446144ad4ae25fe1"
+    },
+    "rc.yml": {
+      "size": 337,
+      "sha256": "d8f6b19b5963f70170cb8f31e68caec4c5cce4d2cd2414215b8934663625dae8"
+    }
+  },
+  "updater": {
+    "channel": "rc",
+    "provider": "generic",
+    "feed": "rc.yml",
+    "version_size_sha512_and_file_entries_match": true,
+    "stable_latest_feed_absent": true,
+    "publish_performed": false
+  },
+  "blockmap": {
+    "version": "2",
+    "files": 1,
+    "blocks": 7976,
+    "byte_coverage": 166033327,
+    "checksums_sizes_consistent": true
+  },
+  "pe_metadata": [
+    {
+      "RelativePath": "win-unpacked\\HiChat.exe",
+      "FileVersion": "2.11.114-rc.2",
+      "ProductVersion": "2.11.114-rc.2",
+      "NumericFileVersion": "2.11.114.0",
+      "ProductName": "HiChat!",
+      "FileDescription": "HiChat!",
+      "CopyrightUTF8Correct": true,
+      "SignatureStatus": "NotSigned"
+    },
+    {
+      "RelativePath": "hichat-setup.exe",
+      "FileVersion": "2.11.114-rc.2",
+      "ProductVersion": "2.11.114-rc.2",
+      "NumericFileVersion": "2.11.114.0",
+      "ProductName": "HiChat!",
+      "FileDescription": "HiChat! desktop application",
+      "CopyrightUTF8Correct": true,
+      "SignatureStatus": "NotSigned"
+    }
+  ],
+  "actual_isolated_electron_module_probe": {
+    "status": "PASS",
+    "electron": "45.0.0",
+    "node": "24.22.0",
+    "arch": "x64",
+    "archived_updater_required": true,
+    "archived_uiohook_required": true,
+    "packaged_win32_x64_native_binding_loaded": true,
+    "loaded_packaged_module_count": 162,
+    "external_dependency_fallbacks": 0,
+    "blocked_optional_external_requests": [
+      "supports-color"
+    ],
+    "network_attempts": 0,
+    "uiohook_start_called": false,
+    "hichat_main_loaded": false,
+    "browser_windows_created": 0,
+    "isolated_temp_user_data": true
+  },
+  "build_emitter": {
+    "stock_intermediate_BUILD_UNINSTALLER_executed": true,
+    "final_installer_executed": false,
+    "project_installer_kill_macro_executed": false,
+    "qualification": "Unmodified electron-builder creates and executes its intermediate BUILD_UNINSTALLER emitter as a build tool. Reviewed stock .onInit writes the bound own-output uninstaller and quitSuccess before initMultiUser/customInit/install. Project include declares no preInit. Stock template hashes unchanged. The final installer was never executed."
+  },
+  "preparation_recovery": [
+    {
+      "issue": "Initial exact client lock byte comparison found the installed development dependency superset rather than the frozen client lock.",
+      "resolution": "Continued in the same owned archive after verifying every frozen package entry, runtime declaration, and original build-tool requirement unchanged; only eight additional coverage packages were development-only. No installation, lock rewrite or shared source change."
+    }
+  ],
+  "cleanup": {
+    "owned_probe_processes_remaining": 0,
+    "final_installer_not_run": true,
+    "packaged_hichat_executable_not_run": true,
+    "hichat_main_not_run": true,
+    "uiohook_not_started": true,
+    "temporary_probe_user_data_only": true,
+    "existing_installation_and_real_user_profile_not_used": true
+  },
+  "remaining": [
+    "This e7b1e56c RC is a local comparison artifact. Another user-authorized task independently publishes stable2.11.114; this task did not alter its feeds, tag, workflow, HF or source.",
+    "Clean installation, installed application startup, real-device flows and existing-version automatic update are not verified by this packaging rehearsal.",
+    "Both RC executable files report NotSigned. No signing, Windows reputation or production acceptance claim.",
+    "No push, tag, upload, HF publication, remote update-feed replacement or deployment was performed by this task."
+  ]
+}
