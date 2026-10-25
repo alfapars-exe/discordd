@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-26",
+  "scope": "Read-only runtime diagnosis of exact registered-games production service on one owned harmless hidden generic Windows process; not a game, CS2 or Steam acceptance.",
+  "status": "runtime_detection_failure_reproduced_source_fix_pending_review",
+  "source_commit": "112d1e8b3f85953540d7fc15a1a0ddc36f74977f",
+  "source_hashes": {
+    "electron/registered-games.ts": "a98790bba5ff435dc9b5038ccebad8e53e1cc61cab569dd0c47b765d3a854139",
+    "dist-electron/registered-games.js": "5dbd3d24109e7ee537aa8a176f08f425d3fa918ff49b98fd34aac9608f3aeaad"
+  },
+  "production_service_dependencies": "Unmodified compiled registered-games.js with default production CIM scanner, executable filesystem probe, background scheduler and getter. Only the registry file points to a newly created owned Temp directory.",
+  "checks": {
+    "production_snapshot_ms": 3018,
+    "production_cim_detection": "unavailable",
+    "own_registered_executable_availability": "available",
+    "production_running_result": null,
+    "public_snapshot_path_free": true,
+    "default_background_activity_null": true,
+    "background_getter_detected_owned_process": false,
+    "no_cs2_adapter_or_canonical_claim": true,
+    "background_getter_path_free": true,
+    "sharing_revoke_immediately_clears_activity": true,
+    "background_disable_clears_activity": true,
+    "owned_registry_entries_after_cleanup": 0
+  },
+  "one_owned_pid_path_diagnosis": {
+    "own_pid_cim_query_success": true,
+    "cim_path_present": true,
+    "cim_path_matches_expected": true,
+    "getprocess_query_success": true,
+    "getprocess_path_present": true,
+    "getprocess_path_matches_expected": true,
+    "limited_winapi_attempted": false
+  },
+  "production_scanner_direct": {
+    "status": "rejected",
+    "elapsed_ms": 3030,
+    "error": "Process scan timed out."
+  },
+  "finding": {
+    "observed": "The exact exported scanner rejected with Process scan timed out at3030ms; service snapshot also returned unavailable at3018ms for a process whose exact own PID was concurrently readable through both CIM and Get-Process. Background activity remained null.",
+    "impact": "On this host the current global CIM query can fail to detect even an ordinary owned readable process within the existing3-second deadline. This is an actual runtime integration failure, not proof that a particular game or anti-cheat caused it.",
+    "boundary": "The current3s/128KiB bounds and fail-closed unknown-running result were preserved. No arbitrary process was classified by basename alone.",
+    "next": "Review a provider-side WQL predicate for only the registered image names, constructed inside the fixed script from strictly validated/escaped stdin data. Re-run the same owned-process acceptance under unchanged bounds before applying or claiming a fix.",
+    "not_proven": [
+      "Actual CS2 process/lobby acceptance",
+      "That CS2's earlier null ExecutablePath has the same cause as this ordinary-process timeout",
+      "A filtered query fix or a WinAPI fallback"
+    ]
+  },
+  "isolation": {
+    "own_hidden_process": "System ping to127.0.0.1 only; exact Popen child handle terminated during finally cleanup",
+    "owned_process_alive_during_test": true,
+    "owned_process_cleanup_verified": true,
+    "regular_user_processes_untouched": true,
+    "registry_entries_after_cleanup": 0,
+    "full_process_paths_or_rows_printed": false,
+    "no_cs2_adapter_assigned": true,
+    "no_game_or_steam_launch": true,
+    "no_injection_elevation_or_SeDebug": true,
+    "limited_winapi_not_needed_because_own_cim_path_was_readable": true
+  },
+  "probe_harness_qualification": "Initial own diagnostic used PowerShell -File and was rejected by existing Restricted execution policy; the child was cleaned. The diagnostic was corrected to inline -Command, matching the production scanner's existing invocation. No execution policy was changed.",
+  "source_changes": "None. Only a scoped verification receipt was added; no application source edit, staging, commit, installation or publication."
+}

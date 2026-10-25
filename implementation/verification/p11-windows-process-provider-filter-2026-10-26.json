@@ -1,0 +1,176 @@
+{
+  "date": "2026-10-26",
+  "scope": "P11 real Windows registered-process detection timeout remediation; provider-side bounded CIM filtering.",
+  "status": "targeted_tests_and_owned_windows_process_integration_verified_real_cs2_open",
+  "source_base": "112d1e8b",
+  "head_before_selective_commit": "81217d75e8eec317aebd589e893186556512d03c",
+  "owned_paths": [
+    "electron/registered-games.ts",
+    "electron/registered-games-scanner.test.ts"
+  ],
+  "source_hashes": {
+    "electron/registered-games.ts": "d3eaf11b431dbfe4ff8e7489af56bc4110926d5f1d9e3d6826d6978264d33bda",
+    "electron/registered-games-scanner.test.ts": "6dac27e4643717bcde6f607c2a7c6878592fa504b2867d7a1414d4fac76f4538"
+  },
+  "hash_normalization": "SHA-256 source bytes with CRLF normalized to LF",
+  "problem": "The old scanner requested every Win32_Process Name/ExecutablePath from CIM before applying its allowlist. Real owned-process acceptance reproduced a three-second timeout despite direct CIM/Get-Process access to that same owned process path.",
+  "change": [
+    "Validate at the JS process boundary: actual Windows basename ending .exe, <=255characters, input <=32, no double quote/path separator/colon/wildcard/control characters; case-insensitive deduplication.",
+    "Empty input returns [] without spawning PowerShell; invalid input rejects before starting a process.",
+    "Pass validated names only as base64 JSON stdin to the unchanged fixed PowerShell command.",
+    "Construct double-quoted WQL Name equality predicates inside the fixed script and use Get-CimInstance -Filter before materializing rows. Legal apostrophes are preserved as literal filename text.",
+    "Keep the script's post-query HashSet allowlist and the Node result allowlist, three-second deadline,128KiB stdout cap, main-only paths and fail-closed unknown results unchanged."
+  ],
+  "controlled_same_process_comparison": {
+    "source": "112d1e8b",
+    "same_deadline_ms": 3000,
+    "same_stdout_bound_bytes": 131072,
+    "only_candidate_difference": "Get-CimInstance provider-side Name filter built from stdin names; original post-query allowlist retained",
+    "owned_binary_copy_with_apostrophe_name": true,
+    "results": {
+      "original": {
+        "status": "rejected",
+        "elapsed_ms": 3036,
+        "error": "Process scan timed out."
+      },
+      "provider_filtered": {
+        "status": "resolved",
+        "elapsed_ms": 789,
+        "filtered_rows": 1,
+        "owned_path_matched": true
+      }
+    },
+    "candidate_sha256": "b22b800a76dd0aa0aeec59c63aafb06bd03488e378d5a34ae90b000bbc8d477e",
+    "owned_process_alive_during_comparison": true,
+    "owned_process_cleanup_verified": true
+  },
+  "actual_patched_default_service_runtime": {
+    "source": "112d1e8b plus registered-games provider-filter patch",
+    "scope": "One owned harmless generic Windows process; not a game or CS2 acceptance",
+    "checks": {
+      "production_snapshot_ms": 653,
+      "production_cim_detection": "available",
+      "own_registered_executable_availability": "available",
+      "production_running_result": true,
+      "last_seen_timestamp_recorded": true,
+      "public_snapshot_path_free": true,
+      "default_background_activity_null": true,
+      "background_getter_detected_owned_process": true,
+      "no_cs2_adapter_or_canonical_claim": true,
+      "background_getter_path_free": true,
+      "sharing_revoke_immediately_clears_activity": true,
+      "background_disable_clears_activity": true,
+      "owned_registry_entries_after_cleanup": 0
+    },
+    "one_pid_path_diagnosis": {
+      "own_pid_cim_query_success": true,
+      "cim_path_present": true,
+      "cim_path_matches_expected": true,
+      "getprocess_query_success": true,
+      "getprocess_path_present": true,
+      "getprocess_path_matches_expected": true,
+      "limited_winapi_attempted": false
+    },
+    "production_scanner_direct": {
+      "status": "resolved",
+      "elapsed_ms": 633,
+      "filtered_rows": 1,
+      "matching_path_present": true,
+      "matching_name_with_null_path": false
+    },
+    "status": "generic_process_integration_pass",
+    "source_hashes": {
+      "electron/registered-games.ts": "b1e71b4e454c16c3c4221f54a41304e2ea5609c4e67a5b471e4810067af460f1",
+      "dist-electron/registered-games.js": "dcca12fd4e0df2f5cbbd82d13b5e007b8e11b38471725ee8c6ae96124022cf68"
+    },
+    "owned_process_alive_during_test": true,
+    "owned_binary_copy_has_legal_apostrophe_name": true,
+    "owned_process_cleanup_verified": true,
+    "regular_user_processes_untouched": true
+  },
+  "checks": [
+    {
+      "command": "node node_modules/typescript/bin/tsc -p electron/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "command": "node --test dist-electron/registered-games-scanner.test.js dist-electron/registered-games.test.js",
+      "exit_code": 0,
+      "tests": 23,
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 586.9854
+    },
+    {
+      "command": "Controlled original112 vs filtered-candidate comparison on ONE owned hidden copied system process, legal apostrophe filename",
+      "exit_code": 0
+    },
+    {
+      "command": "Actual compiled patched service with DEFAULT production scanner/filesystem probe/background getter and isolated registry, on a new owned hidden copied process",
+      "exit_code": 0
+    }
+  ],
+  "regression_coverage": [
+    "Legal apostrophe/spaces/Unicode names; case deduplication without input mutation",
+    "Windows paths, double-quote query injection, wildcard, separator and control-character rejection",
+    "32-name and255-character limits",
+    "Empty/invalid names cause zero process spawns",
+    "Validated names appear only in stdin, not command arguments/text; provider and post-query allowlists retained",
+    "Unexpected provider result names deny",
+    "128KiB stdout cap still kills the child and rejects",
+    "Existing registered-game privacy/defaults, exact-path matching, protected-path unknown state, persistence rollback and background expiry/disable tests"
+  ],
+  "privacy_and_cleanup": {
+    "private_paths_not_printed_or_sent_to_renderer_or_server": true,
+    "generic_process_only_no_cs2_adapter": true,
+    "owned_registry_entries_after_cleanup": 0,
+    "own_process_cleanup_verified": true,
+    "no_regular_user_process_modified": true,
+    "no_actual_game_steam_installer_or_hichat_launch": true,
+    "no_injection_elevation_SeDebug_or_execution_policy_change": true
+  },
+  "qualification": "The real generic-process comparison and integration prove the provider-query timeout fix under the existing bounds on this Windows host. They do not prove actual CS2 detection, Steam lobby joining, foreground overlay behavior or anti-cheat compatibility. Actual CS2 acceptance remains open and was deferred by the user.",
+  "remaining": [
+    "Root selective-commit/frozen full regression gates",
+    "Real CS2 process and lobby acceptance when available",
+    "Rebuild Windows release artifacts from the final source including this patch"
+  ],
+  "delivery": "No stage, commit, push, dependency install, deployment or release publication by this task.",
+  "clean_owned_snapshot_full_gate": {
+    "base_commit": "81217d75e8eec317aebd589e893186556512d03c",
+    "source": "Fresh git archive of base plus ONLY the two source-hash-pinned scanner-owned files; no shared source or index edits.",
+    "archive_sha256": "3ff909a3c5a969faab410af96d27f233948d51f39a01b0ec0f14f9ccf3923512",
+    "source_hashes": {
+      "electron/registered-games.ts": "d3eaf11b431dbfe4ff8e7489af56bc4110926d5f1d9e3d6826d6978264d33bda",
+      "electron/registered-games-scanner.test.ts": "6dac27e4643717bcde6f607c2a7c6878592fa504b2867d7a1414d4fac76f4538"
+    },
+    "source_hash_normalization": "CRLF normalized to LF",
+    "electron_typescript": {
+      "command": "node node_modules/typescript/bin/tsc -p electron/tsconfig.json",
+      "exit_code": 0
+    },
+    "full_electron": {
+      "command": "node --test dist-electron/*.test.js",
+      "exit_code": 0,
+      "total": 250,
+      "passed": 249,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "duration_ms": 909.5186,
+      "skip": "Existing overlay-layout-store symlink test: symlink creation unavailable on this Windows host; no new scanner test skipped."
+    },
+    "log_hashes": {
+      "compile": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "full_electron": "30817fab58c7cba309854242e40b473170a4558ac8f80da72afaf1b6bf7965b6"
+    },
+    "wql_safety_review": "No escape sequence is needed or accepted for raw names: JS rejects the WQL string delimiter double quote, the WQL escape character backslash, forward slash, colon, wildcard characters and all Unicode Cc controls; validates actual Windows basename/.exe/length/count. The fixed PowerShell script receives names only as base64 JSON stdin, constructs fixed Name-equality double-quoted literals, and retains provider and post-query allowlists. Apostrophes are legal literal contents and were verified on a real owned executable copy. Empty input starts no provider query.",
+    "existing_ui_fixture": {
+      "port": 18185,
+      "listener_process_before": 52088,
+      "listener_process_after": 52088,
+      "loopback_listener_remained_live": true
+    }
+  }
+}

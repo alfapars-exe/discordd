@@ -84,21 +84,47 @@ export function parseProcessSnapshot(json: string): DetectedExecutable[] {
 }
 
 /**
+ * A provider-side WQL literal may contain a legal apostrophe, but never a
+ * double quote, path separator, wildcard or control character. Values still
+ * cross the process boundary only as base64 JSON stdin, never command text.
+ */
+export function validateProcessImageNames(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_GAMES) throw new TypeError("Invalid registered process names.");
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const name of value) {
+    if (typeof name !== "string" || !name || name.length > 255 || !/\.exe$/i.test(name)
+      || /[<>:"/\\|?*\p{Cc}]/u.test(name) || path.win32.basename(name) !== name) {
+      throw new TypeError("Invalid registered process name.");
+    }
+    const key = name.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); names.push(name); }
+  }
+  return names;
+}
+
+/**
  * Run one fixed PowerShell/CIM query. Registered image names enter over stdin,
  * never in command text or arguments. The local process list is filtered before
  * output; no process data is logged or sent to the renderer/server.
  */
 export function scanWindowsExecutables(knownImageNames: string[]): Promise<DetectedExecutable[]> {
+  let names: string[];
+  try { names = validateProcessImageNames(knownImageNames); } catch (error) { return Promise.reject(error); }
+  // An empty provider filter would enumerate every process. Do not start one.
+  if (!names.length) return Promise.resolve([]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
   const powershell = path.win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   const script = [
     "$ErrorActionPreference = 'Stop'",
     "$namesJson = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))",
     "$names = @($namesJson | ConvertFrom-Json)",
+    "if ($names.Count -eq 0) { throw 'Empty process filter.' }",
     "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
     "$lookup = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)",
     "foreach ($name in $names) { [void]$lookup.Add([string]$name) }",
-    "$rows = @(Get-CimInstance -ClassName Win32_Process -Property Name, ExecutablePath -ErrorAction Stop | Where-Object { $_.Name -and $lookup.Contains([string]$_.Name) } | Select-Object @{Name='name';Expression={$_.Name}}, @{Name='executablePath';Expression={$_.ExecutablePath}})",
+    "$filter = ($names | ForEach-Object { 'Name = \"' + [string]$_ + '\"' }) -join ' OR '",
+    "$rows = @(Get-CimInstance -ClassName Win32_Process -Filter $filter -Property Name, ExecutablePath -ErrorAction Stop | Where-Object { $_.Name -and $lookup.Contains([string]$_.Name) } | Select-Object @{Name='name';Expression={$_.Name}}, @{Name='executablePath';Expression={$_.ExecutablePath}})",
     "ConvertTo-Json -InputObject $rows -Compress -Depth 2",
   ].join("; ");
 
@@ -134,7 +160,7 @@ export function scanWindowsExecutables(knownImageNames: string[]): Promise<Detec
       if (code !== 0) return finish(new Error("Process scan failed."));
       try {
         const rows = parseProcessSnapshot(output);
-        const known = new Set(knownImageNames.map((name) => name.toLowerCase()));
+        const known = new Set(names.map((name) => name.toLowerCase()));
         if (rows.some((row) => !known.has(row.name))) throw new Error("Unexpected process name.");
         finish(undefined, rows);
       } catch {
@@ -145,7 +171,7 @@ export function scanWindowsExecutables(knownImageNames: string[]): Promise<Detec
       child.kill();
       finish(new Error("Process scan input failed."));
     });
-    child.stdin.end(Buffer.from(JSON.stringify(knownImageNames), "utf8").toString("base64"));
+    child.stdin.end(Buffer.from(JSON.stringify(names), "utf8").toString("base64"));
   });
 }
 
