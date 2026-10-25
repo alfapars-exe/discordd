@@ -10,7 +10,9 @@ import { useChannelPermissionStore } from "../stores/channelPermissionStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useMessageStore } from "../stores/messageStore";
 import { useDMStore } from "../stores/dmStore";
-import { isDMMessageNotification } from "./dmMessageNotification";
+import { useGroupDMStore } from "../stores/groupDMStore";
+import { groupNotificationSource, refreshGroupNotificationAccess } from "./groupMessageNotification";
+import { isGroupMessageNotification, isDMMessageNotification } from "./dmMessageNotification";
 import { listDMChannels } from "../api/dm";
 import { useE2EEStore } from "../stores/e2eeStore";
 import { composerKey, EMPTY_DRAFT, useComposerDraftStore } from "../stores/composerDraftStore";
@@ -19,12 +21,12 @@ import { getLiveOverlayNotificationItems } from "./overlayNotificationAccess";
 import { resolveChatChannel } from "./resolveChatChannel";
 import { hasPermission, Permissions, resolveChannelPermissions } from "./permissions";
 import { shouldSuppressMessagePreview } from "./messageSpamPolicy";
-import type { OpenAtMessage, OpenAtDMMessage } from "../hooks/useOpenAtMessage";
+import type { OpenAtMessage, OpenAtDMMessage, OpenAtGroupMessage } from "../hooks/useOpenAtMessage";
 import type { ChatMessage } from "../hooks/useChatContext";
 import { UI_SHELL_V2 } from "./uiShell";
 
 export type OverlayNotificationReplySource = {
-  mode?: "dm";
+  mode?: "dm" | "group"; keyEpoch?: number;
   notificationId: string; ownerId: string; generation: number; serverId: string;
   channelId: string; messageId: string; actorId: string; permissionChannelId: string; label: string;
 };
@@ -36,6 +38,13 @@ function sourceMetadata(id: string): OverlayNotificationReplySource | null {
   if (!auth.ownerId || useAuthStore.getState().user?.id !== auth.ownerId
     || !getLiveOverlayNotificationItems().some(item => item.id === id)) return null;
   const n = useNotificationStore.getState().items.find(item => item.id === id);
+  if (n && isGroupMessageNotification(n)) {
+    const access = groupNotificationSource(n);
+    if (!access || !safeId(n.group_dm_channel_id) || !safeId(n.message_id) || !safeId(n.actor_id)) return null;
+    return { mode: "group", keyEpoch: access.epoch, notificationId: id, ownerId: auth.ownerId, generation: auth.generation,
+      serverId: "", channelId: n.group_dm_channel_id, messageId: n.message_id, actorId: n.actor_id,
+      permissionChannelId: "", label: access.group.name || "" };
+  }
   if (n && isDMMessageNotification(n) && n.user_id === auth.ownerId && safeId(n.dm_channel_id)
     && safeId(n.message_id) && safeId(n.actor_id) && n.actor_id !== auth.ownerId) {
     const dms = useDMStore.getState(), dm = dms.channels.find(item => item.id === n.dm_channel_id);
@@ -47,7 +56,7 @@ function sourceMetadata(id: string): OverlayNotificationReplySource | null {
   }
   if (!n || (n.kind !== "mention" && n.kind !== "reply") || n.user_id !== auth.ownerId
     || !safeId(n.server_id) || !safeId(n.channel_id) || !safeId(n.message_id) || !safeId(n.actor_id)
-    || n.actor_id === auth.ownerId || n.dm_channel_id || n.payload.group_id !== undefined) return null;
+    || n.actor_id === auth.ownerId || n.dm_channel_id || n.group_dm_channel_id || n.payload.group_id !== undefined) return null;
   const resolved = resolveChatChannel(n.channel_id, n.server_id, {
     categoriesByServer: useChannelStore.getState().categoriesByServer, threads: useThreadStore.getState(),
     currentOwnerId: auth.ownerId, currentAuthGeneration: auth.generation,
@@ -62,7 +71,7 @@ function sourceMetadata(id: string): OverlayNotificationReplySource | null {
 /** Hydrate the existing ACL caches, never message bodies, for already-visible rows. */
 export async function primeOverlayNotificationReplyAccess(ids: readonly string[]): Promise<void> {
   const sources = ids.slice(0, 3).map(sourceMetadata).filter(source => source !== null);
-  await Promise.allSettled(sources.filter(source => source.mode !== "dm").flatMap(source => [
+  await Promise.allSettled(sources.filter(source => !source.mode).flatMap(source => [
     useMemberStore.getState().fetchMembers(source.serverId),
     useChannelPermissionStore.getState().fetchOverrides(source.permissionChannelId, source.serverId),
   ]));
@@ -79,6 +88,10 @@ export function resolveOverlayNotificationReplySource(id: string, requireMessage
     || blocks.ownerId !== source.ownerId || blocks.authGeneration !== source.generation || !blocks.snapshotReady || blocks.isLoading
     || blocks.blockedUserIds.includes(source.actorId) || useServerStore.getState().mutedServerIds.has(source.serverId)
     || channels.mutedChannelIds.has(source.channelId) || channels.mutedChannelIds.has(source.permissionChannelId)) return null;
+  if (source.mode === "group") {
+    const n = useNotificationStore.getState().items.find(item => item.id === source.notificationId);
+    return n && groupNotificationSource(n, requireMessage) ? source : null;
+  }
   if (source.mode === "dm") {
     const dms = useDMStore.getState(), message = dms.messagesByChannel[source.channelId]?.find(item => item.id === source.messageId);
     if (!message) return requireMessage ? null : source;
@@ -112,7 +125,7 @@ export function resolveOverlayNotificationReplySource(id: string, requireMessage
 }
 
 export const notificationReplyBinding = (source: OverlayNotificationReplySource) => JSON.stringify([
-  source.mode ?? "channel", source.notificationId, source.ownerId, source.generation, source.serverId, source.channelId, source.messageId, source.actorId, source.permissionChannelId,
+  source.mode ?? "channel", source.keyEpoch, source.notificationId, source.ownerId, source.generation, source.serverId, source.channelId, source.messageId, source.actorId, source.permissionChannelId,
 ]);
 export type NotificationReplyPreparation = "prepared" | "conflict" | "unavailable";
 
@@ -134,7 +147,7 @@ function currentDraftIsBusy(): boolean {
 
 /** Open one main chat and select a reply; never send or replace an existing draft. */
 export async function prepareOverlayNotificationReply(source: OverlayNotificationReplySource, openAtMessage: OpenAtMessage,
-  isCurrent: () => boolean, openAtDMMessage?: OpenAtDMMessage): Promise<NotificationReplyPreparation> {
+  isCurrent: () => boolean, openAtDMMessage?: OpenAtDMMessage, openAtGroupMessage?: OpenAtGroupMessage): Promise<NotificationReplyPreparation> {
   const binding = notificationReplyBinding(source);
   const deviceId = useE2EEStore.getState().localDeviceId;
   const current = (requireMessage = false) => {
@@ -143,6 +156,11 @@ export async function prepareOverlayNotificationReply(source: OverlayNotificatio
   };
   if (!current()) return "unavailable";
   if (currentDraftIsBusy()) return "conflict";
+  if (source.mode === "group" && !openAtGroupMessage) return "unavailable";
+  if (source.mode === "group") {
+    const n = useNotificationStore.getState().items.find(item => item.id === source.notificationId);
+    if (!n || !source.keyEpoch || !await refreshGroupNotificationAccess(n, source.keyEpoch, current) || !current()) return "unavailable";
+  }
   if (source.mode === "dm" && !openAtDMMessage) return "unavailable";
   if (source.mode === "dm") {
     // Refresh the authoritative accepted-conversation permission before opening.
@@ -150,25 +168,28 @@ export async function prepareOverlayNotificationReply(source: OverlayNotificatio
     const live = result.success && result.data?.find(dm => dm.id === source.channelId);
     if (!current() || !live || live.status !== "accepted" || live.is_muted || live.other_user.id !== source.actorId) return "unavailable";
   }
-  const key = composerKey(source.ownerId, source.mode === "dm" ? "dm" : "channel", source.channelId, source.mode === "dm" ? undefined : source.serverId);
+  const key = composerKey(source.ownerId, source.mode ?? "channel", source.channelId, source.mode ? undefined : source.serverId);
   const before = useComposerDraftStore.getState();
   const draft = before.drafts[key] ?? EMPTY_DRAFT;
-  if (draft.sending || draft.groupEditingId || (draft.replyingTo && draft.replyingTo.id !== source.messageId)) return "conflict";
+  if (draft.sending || draft.groupEditingId || (draft.groupReplyToId && draft.groupReplyToId !== source.messageId) || (draft.replyingTo && draft.replyingTo.id !== source.messageId)) return "conflict";
   const generation = before.generation, revision = draft.revision;
-  const opening = source.mode === "dm" ? openAtDMMessage!(source.channelId, source.messageId, { isCurrent: () => current() })
+  const opening = source.mode === "group" ? openAtGroupMessage!(source.channelId, source.messageId, { isCurrent: () => current() }) : source.mode === "dm" ? openAtDMMessage!(source.channelId, source.messageId, { isCurrent: () => current() })
     : openAtMessage(source.serverId, source.channelId, source.messageId, source.label, { isCurrent: () => current() });
   const navigationRevision = useUIStore.getState().navigationRevision;
   if (!await opening || !current(true)) return "unavailable";
   const ui = useUIStore.getState(), target = selectedConversation();
-  if (ui.navigationRevision !== navigationRevision || target?.type !== (source.mode === "dm" ? "dm" : "text") || target.channelId !== source.channelId
-    || (source.mode !== "dm" && target.serverInfo?.serverId !== source.serverId)) return "unavailable";
+  if (ui.navigationRevision !== navigationRevision || target?.type !== (source.mode === "group" ? "group-dm" : source.mode === "dm" ? "dm" : "text") || target.channelId !== source.channelId
+    || (!source.mode && target.serverInfo?.serverId !== source.serverId)) return "unavailable";
   const state = useComposerDraftStore.getState(), now = state.drafts[key] ?? EMPTY_DRAFT;
   if (currentDraftIsBusy() || state.generation !== generation || now.revision !== revision || now.sending || now.groupEditingId
-    || (now.replyingTo && now.replyingTo.id !== source.messageId)) return "conflict";
-  const message = (source.mode === "dm" ? useDMStore.getState() : useMessageStore.getState()).messagesByChannel[source.channelId]?.find(item => item.id === source.messageId);
+    || (now.groupReplyToId && now.groupReplyToId !== source.messageId) || (now.replyingTo && now.replyingTo.id !== source.messageId)) return "conflict";
+  const message = (source.mode === "group" ? useGroupDMStore.getState().messages[source.channelId] : (source.mode === "dm" ? useDMStore.getState() : useMessageStore.getState()).messagesByChannel[source.channelId])?.find(item => item.id === source.messageId);
   if (!message || !current(true)) return "unavailable";
-  const reply: ChatMessage = { ...message, is_pinned: false };
-  state.patch(key, { replyingTo: reply });
+  if (source.mode === "group") state.patch(key, { groupReplyToId: source.messageId });
+  else {
+    const reply: ChatMessage = { ...message, is_pinned: false } as ChatMessage;
+    state.patch(key, { replyingTo: reply });
+  }
   // Read state changes only after the exact source opened and the draft was prepared.
   void useNotificationStore.getState().markRead(source.notificationId);
   return "prepared";

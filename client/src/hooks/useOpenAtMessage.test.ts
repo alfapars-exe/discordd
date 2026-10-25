@@ -68,6 +68,12 @@ vi.mock("../stores/dmStore", async () => {
     })),
   };
 });
+vi.mock("../api/authSessionEvents",()=>({getAuthSessionSnapshot:()=>({ownerId:"me",generation:1})}));
+vi.mock("../stores/e2eeStore",()=>({useE2EEStore:{getState:()=>({localDeviceId:"device"})}}));
+vi.mock("../stores/groupDMStore", async()=>{
+ const {create}=await vi.importActual<typeof import("zustand")>("zustand");
+ return {useGroupDMStore:create(()=>({ownerId:"me",authGeneration:1,groupsReady:true,loading:false,groups:[{id:"group",name:"Group",key_epoch:3,members:[{id:"me"}]}],fetchMessagesAround:vi.fn(),setScrollTarget:vi.fn(()=>1)}))};
+});
 vi.mock("../stores/authStore", async () => {
   const { create } = await vi.importActual<typeof import("zustand")>("zustand");
   return { useAuthStore: create(() => ({ user: { id: "me" } })) };
@@ -85,6 +91,7 @@ import { useOpenAtMessage } from "./useOpenAtMessage";
 import { useUIStore } from "../stores/uiStore";
 import { useChannelStore } from "../stores/channelStore";
 import { useMessageStore } from "../stores/messageStore";
+import { useGroupDMStore } from "../stores/groupDMStore";
 import { useDMStore } from "../stores/dmStore";
 import { useToastStore } from "../stores/toastStore";
 
@@ -211,4 +218,11 @@ describe("useOpenAtMessage — DM", () => {
     });
     expect(openTab()).toHaveBeenCalledWith("dm-self", "dm", "dm:myNotes");
   });
+});
+
+it("group exact-source opens main chat then fetches before arming scroll; late membership loss cannot arm it",async()=>{
+ const group=useGroupDMStore.getState();vi.mocked(group.fetchMessagesAround).mockResolvedValueOnce(true);const {result}=renderHook(()=>useOpenAtMessage());
+ expect(await result.current.openAtGroupMessage("group","source")).toBe(true);expect(group.setScrollTarget).toHaveBeenCalledWith("group","source");
+ vi.mocked(group.setScrollTarget).mockClear();let finish!:(value:boolean)=>void;vi.mocked(group.fetchMessagesAround).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+ const pending=result.current.openAtGroupMessage("group","source");useGroupDMStore.setState({groups:[]});finish(true);expect(await pending).toBe(false);expect(group.setScrollTarget).not.toHaveBeenCalled();
 });

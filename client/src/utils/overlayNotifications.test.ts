@@ -61,3 +61,10 @@ describe("overlay notification metadata", () => {
     }
   });
 });
+
+it("projects canonical group metadata only and refuses ambiguous sources or body-bearing group payloads",()=>{
+ const n=notification({kind:"system",group_dm_channel_id:"group",message_id:"source",payload:{action:"incoming_message",source:"group"}});
+ expect(project([n])).toEqual([{id:"n1",category:"message"}]);
+ expect(project([{...n,dm_channel_id:"dm"}])).toEqual([]);
+ expect(project([{...n,payload:{...n.payload,body:"secret"}}])).toEqual([]);
+});

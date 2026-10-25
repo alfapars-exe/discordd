@@ -29,6 +29,7 @@ export type AppNotification = {
   channel_id: string | null;
   message_id: string | null;
   dm_channel_id: string | null;
+  group_dm_channel_id?: string | null;
   payload: Record<string, unknown>;
   read_at: string | null;
   created_at: string;

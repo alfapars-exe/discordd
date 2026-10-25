@@ -341,7 +341,7 @@
   "voiceOverlayNotifications": "Show unread notification indicators",
   "voiceOverlayNotificationsDesc": "Shows only genuine unread notification indicators in the read-only native desktop widget. No decrypted message text or preview is sent to the overlay; live notifications are not shown in the web preview.",
   "voiceOverlayNotificationActions": "Allow opening inbox from notification indicators",
-  "voiceOverlayNotificationActionsDesc": "Opens your inbox. Eligible mention and reply notifications can prepare a reply to the exact message in the main chat; nothing is sent automatically and existing drafts are preserved. This is a separate device-only opt-in from mute/deafen clicks.",
+  "voiceOverlayNotificationActionsDesc": "Opens your inbox. Eligible mention, reply, accepted direct-message and group-message notifications can prepare a reply to the exact message in the main chat; nothing is sent automatically and existing drafts are preserved. This is a separate device-only opt-in from mute/deafen clicks.",
   "voiceOverlayChat": "Show recent chat in the widget",
   "voiceOverlayChatDesc": "Optional read-only excerpt of up to five recent messages, stored only on this device. It is not a composer and cannot send replies. Available in the desktop widget only; the web preview does not show chat.",
   "voiceOverlayChatActions": "Allow opening chat in the app",

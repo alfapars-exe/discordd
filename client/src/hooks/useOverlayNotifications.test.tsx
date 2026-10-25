@@ -150,3 +150,12 @@ it("uses current thread ownership, parent mute and ignored actors for both publi
   act(() => useThreadStore.setState({ authGeneration: getAuthGeneration() - 1 }));
   expect(view.result.current.notifications).toEqual([]); expect(getLiveOverlayNotificationItems()).toEqual([]);
 });
+
+it("projects canonical group rows only for current account membership and clears them on mute/rekey",()=>{
+ useGroupDMStore.setState({ownerId:owner,authGeneration:getAuthGeneration(),groupsReady:true,loading:false,groups:[{id:"group",key_epoch:3,read_key_epoch:3,members:[{id:owner}],is_muted:false} as never],messages:{}});
+ useBlockStore.setState({ownerId:owner,authGeneration:getAuthGeneration(),snapshotReady:true,isLoading:false,blockedUserIds:[]});
+ makeReadyFeed([notification({kind:"system",group_dm_channel_id:"group",message_id:"source",payload:{action:"incoming_message",source:"group"}})]);
+ const view=renderHook(()=>useOverlayNotifications(true,true));expect(view.result.current.notifications).toEqual([{id:"notice-1",category:"message"}]);expect(getLiveOverlayNotificationItems()).toEqual(view.result.current.notifications);
+ act(()=>useGroupDMStore.setState({groups:[{id:"group",key_epoch:4,read_key_epoch:3,members:[{id:owner}]} as never]}));
+ expect(view.result.current.notifications).toEqual([]);expect(getLiveOverlayNotificationItems()).toEqual([]);
+});

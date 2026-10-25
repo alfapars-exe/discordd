@@ -23,7 +23,9 @@ import { useMobileStore } from "../stores/mobileStore";
 import { useAuthStore } from "../stores/authStore";
 import { useBlockStore } from "../stores/blockStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
-import { isDMMessageNotification } from "../utils/dmMessageNotification";
+import { groupNotificationSource, refreshGroupNotificationAccess } from "../utils/groupMessageNotification";
+import { useE2EEStore } from "../stores/e2eeStore";
+import { isGroupMessageNotification, isDMMessageNotification } from "../utils/dmMessageNotification";
 import { listDMChannels } from "../api/dm";
 import { useOpenAtMessage } from "./useOpenAtMessage";
 import type { AppNotification } from "../types";
@@ -38,7 +40,7 @@ export function useNotificationNavigation() {
   const markRead = useNotificationStore((s) => s.markRead);
   const openTab = useUIStore((s) => s.openTab);
   const selectChannel = useChannelStore((s) => s.selectChannel);
-  const { openAtMessage, openAtDMMessage } = useOpenAtMessage();
+  const { openAtMessage, openAtDMMessage, openAtGroupMessage } = useOpenAtMessage();
   const selectDM = useDMStore((s) => s.selectDM);
   const fetchDMMessages = useDMStore((s) => s.fetchMessages);
   const clearDMUnread = useDMStore((s) => s.clearDMUnread);
@@ -80,6 +82,22 @@ export function useNotificationNavigation() {
       if (useAuthStore.getState().user?.id !== currentUserId
         || useNotificationStore.getState().ownerId !== currentUserId
         || useNotificationStore.getState().authGeneration !== getAuthGeneration()) return;
+      if (isGroupMessageNotification(n)) {
+        const source = groupNotificationSource(n), device = useE2EEStore.getState().localDeviceId;
+        if (!source) return;
+        const current = () => {
+          const live = groupNotificationSource(n);
+          return useE2EEStore.getState().localDeviceId === device && live?.epoch === source.epoch
+            && live.ownerId === source.ownerId && live.generation === source.generation;
+        };
+        void (async () => {
+          if (!await refreshGroupNotificationAccess(n, source.epoch, current) || !current()) return;
+          if (await openAtGroupMessage(n.group_dm_channel_id!, n.message_id!, { isCurrent: current })
+            && current() && groupNotificationSource(n, true)) void markRead(n.id);
+        })().catch(() => {});
+        return;
+      }
+      if (n.payload.action === "incoming_message" && !isDMMessageNotification(n)) return;
       if (isDMMessageNotification(n)) {
         const generation = getAuthGeneration(), channelId = n.dm_channel_id!, messageId = n.message_id!;
         const current = () => {
@@ -178,7 +196,7 @@ export function useNotificationNavigation() {
       closeAllDrawers();
     },
     [
-      markRead, openTab, selectChannel, openAtMessage, openAtDMMessage,
+      markRead, openTab, selectChannel, openAtMessage, openAtDMMessage, openAtGroupMessage,
       selectDM, fetchDMMessages, clearDMUnread, closeAllDrawers, t,
     ]
   );

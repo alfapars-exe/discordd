@@ -43,3 +43,14 @@ it.each([["en","Ada sent you a direct message"],["tr","Ada sana bir özel mesaj 
   render(<I18nextProvider i18n={i18n}><NotificationItem notification={{...notification,dm_channel_id:"dm",message_id:"source",payload:{action:"incoming_message",source:"dm",body:"private body",preview:"private preview"}}} onOpen={vi.fn()} /></I18nextProvider>);
   expect(screen.getByText(headline)).toBeInTheDocument();expect(screen.queryByText("private body")).not.toBeInTheDocument();expect(screen.queryByText("private preview")).not.toBeInTheDocument();
 });
+
+it.each([["en","Ada sent a group message"],["tr","Ada bir grup mesajı gönderdi"]] as const)("renders generic %s group metadata without a conversation/body copy",async(language,headline)=>{
+ const i18n=createInstance();await i18n.init({lng:language,resources:{en:{inbox:en},tr:{inbox:tr}},interpolation:{escapeValue:false}});
+ render(<I18nextProvider i18n={i18n}><NotificationItem notification={{...notification,group_dm_channel_id:"group",message_id:"source",payload:{action:"incoming_message",source:"group"}}} onOpen={vi.fn()}/></I18nextProvider>);
+ expect(screen.getByText(headline)).toBeInTheDocument();
+});
+it("never displays malformed incoming group plaintext payloads",async()=>{
+ const i18n=createInstance();await i18n.init({lng:"en",resources:{en:{inbox:en}},interpolation:{escapeValue:false}});
+ render(<I18nextProvider i18n={i18n}><NotificationItem notification={{...notification,group_dm_channel_id:"group",message_id:"source",payload:{action:"incoming_message",source:"group",body:"private body",title:"private title"}}} onOpen={vi.fn()}/></I18nextProvider>);
+ expect(screen.queryByText("private body")).not.toBeInTheDocument();expect(screen.queryByText("private title")).not.toBeInTheDocument();
+});

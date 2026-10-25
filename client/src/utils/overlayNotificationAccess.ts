@@ -1,3 +1,5 @@
+import { isGroupMessageNotification } from "./dmMessageNotification";
+import { groupNotificationSource } from "./groupMessageNotification";
 import { getAuthGeneration } from "../api/client";
 import { useAuthStore } from "../stores/authStore";
 import { useNotificationStore } from "../stores/notificationStore";
@@ -29,6 +31,7 @@ type Visibility = {
 
 export function isOverlayNotificationVisible(n: AppNotification, context: Visibility): boolean {
   const { userId, servers, mutedServers, channels, dms, groups, blocked } = context;
+  if (isGroupMessageNotification(n) && !groups.some(g => g.id === n.group_dm_channel_id && !g.is_muted && g.read_key_epoch === g.key_epoch && g.members.some(m => m.id === userId))) return false;
   if (n.actor_id && (blocked.includes(n.actor_id) || context.ignoredUsers?.[n.actor_id])) return false;
   if (n.channel_id && context.mutedChannelIds?.has(n.channel_id)) return false;
   if (n.server_id && (!servers.some((s) => s.id === n.server_id) || mutedServers.has(n.server_id)
@@ -60,7 +63,7 @@ export function getLiveOverlayNotificationItems() {
     ownerId: feed.ownerId, currentOwnerId: userId,
     authGeneration: feed.authGeneration, currentAuthGeneration: getAuthGeneration(),
     status: auth.manualStatus, items: feed.items, preferences: getNotificationPreferences(),
-    isVisible: (n) => isOverlayNotificationVisible(n, {
+    isVisible: (n) => (!isGroupMessageNotification(n) || !!groupNotificationSource(n)) && isOverlayNotificationVisible(n, {
       userId, servers: useServerStore.getState().servers, mutedServers: useServerStore.getState().mutedServerIds,
       channels: useChannelStore.getState().categoriesByServer, dms: useDMStore.getState().channels,
       groups: useGroupDMStore.getState().groups, blocked: useBlockStore.getState().blockedUserIds,

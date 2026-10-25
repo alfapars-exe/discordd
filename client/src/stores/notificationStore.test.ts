@@ -442,3 +442,9 @@ describe("authoritative message notification badge and read ordering", () => {
     expect(useNotificationStore.getState()).toMatchObject({ unreadCount: 1, badgeUnreadCount: 0, hasMore: true });
   });
 });
+
+it("leaves canonical group badge ownership to group unread while retaining inbox count and dedup",()=>{
+ const group=makeNotification({id:"group-source",kind:"system",server_id:null,channel_id:null,dm_channel_id:null,group_dm_channel_id:"group",payload:{action:"incoming_message",source:"group"}});
+ useNotificationStore.getState().handleCreate(group);useNotificationStore.getState().handleCreate(group);
+ expect(useNotificationStore.getState()).toMatchObject({unreadCount:1,badgeUnreadCount:0});
+});

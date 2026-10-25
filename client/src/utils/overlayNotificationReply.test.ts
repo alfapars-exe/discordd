@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   function store() { let state: Record<string, unknown> = {}; return { getState: () => state, set: (value: Record<string, unknown>) => { state = { ...state, ...value }; } }; }
-  return { dms: store(), listDMs: vi.fn(), auth: store(), feed: store(), prefs: store(), blocks: store(), servers: store(), channels: store(), members: store(), overrides: store(), threads: store(), messages: store(), e2ee: store(), ui: store(),
+  return { groups: store(), listGroups: vi.fn(), dms: store(), listDMs: vi.fn(), auth: store(), feed: store(), prefs: store(), blocks: store(), servers: store(), channels: store(), members: store(), overrides: store(), threads: store(), messages: store(), e2ee: store(), ui: store(),
     scope: { ownerId: "owner", generation: 1 }, ignored: {} as Record<string, boolean>, spam: false, pending: false, visible: true, markRead: vi.fn(), primeMembers: vi.fn(), primeOverrides: vi.fn() };
 });
 vi.mock("../api/authSessionEvents", () => ({ getAuthSessionSnapshot: () => h.scope }));
@@ -15,6 +15,8 @@ vi.mock("../stores/memberStore", () => ({ useMemberStore: h.members }));
 vi.mock("../stores/channelPermissionStore", () => ({ useChannelPermissionStore: h.overrides }));
 vi.mock("../stores/threadStore", () => ({ useThreadStore: h.threads }));
 vi.mock("../stores/messageStore", () => ({ useMessageStore: h.messages }));
+vi.mock("../stores/groupDMStore", () => ({ useGroupDMStore: h.groups }));
+vi.mock("../api/groupDM", () => ({ listGroupDMs: h.listGroups }));
 vi.mock("../stores/dmStore", () => ({ useDMStore: h.dms }));
 vi.mock("../api/dm", () => ({ listDMChannels: h.listDMs }));
 vi.mock("../stores/e2eeStore", () => ({ useE2EEStore: h.e2ee }));
@@ -48,6 +50,7 @@ beforeEach(() => {
   h.overrides.set({ statusByChannel: { channel: { ownerId: "owner", authGeneration: 1, serverId: "server", status: "ready" } }, overridesByChannel: { channel: [] }, fetchOverrides: h.primeOverrides });
   h.threads.set({ ownerId: "owner", authGeneration: 1, byID: {}, serverIdByThread: {}, statusByParent: {} });
   h.messages.set({ ownerId: "owner", authGeneration: 1, messagesByChannel: { channel: [message] } });
+  h.groups.set({ownerId:"owner",authGeneration:1,groupsReady:true,loading:false,groups:[],messages:{}});
   h.e2ee.set({ initStatus: "ready", decryptionErrors: [], localDeviceId: "device" });
   h.ui.set({ destination: { type: "friends", channelId: "friends" }, navigationRevision: 0, panels: {}, activePanelId: "main" });
   useComposerDraftStore.getState().reset();
@@ -176,4 +179,51 @@ it("never quotes a pending spam/relationship decision into a reply or reads the 
   expect(resolveOverlayNotificationReplySource("notice")).toBeNull();
   h.pending = false;
   expect(await prepareOverlayNotificationReply(source, openSource(), () => true)).toBe("prepared");
+});
+
+const group = {id:"group",name:"Group",key_epoch:3,read_key_epoch:3,is_muted:false,members:[{id:"owner"},{id:"actor"}]};
+function setupGroup() {
+  h.feed.set({items:[{...notice,kind:"system",server_id:null,channel_id:null,group_dm_channel_id:"group",payload:{action:"incoming_message",source:"group"}}]});
+  h.groups.set({ownerId:"owner",authGeneration:1,groupsReady:true,loading:false,groups:[group],messages:{group:[{...message,channel_id:undefined,group_id:"group",key_epoch:1,encryption_version:1}]}});
+  h.listGroups.mockResolvedValue({success:true,data:{group_dms:[group]}});
+  return resolveOverlayNotificationReplySource("notice")!;
+}
+function openGroup() { return vi.fn(async()=>{h.ui.set({destination:{type:"group-dm",channelId:"group"},navigationRevision:1});return true;}); }
+it("prepares historical group source using current membership epoch, preserving text/files and using the real group reply field",async()=>{
+ const source=setupGroup(),draftKey=composerKey("owner","group","group"),files=[new File(["x"],"draft.txt")];
+ useComposerDraftStore.getState().patch(draftKey,{content:"unfinished",files});const open=openGroup();
+ expect(await prepareOverlayNotificationReply(source,vi.fn(),()=>true,undefined,open)).toBe("prepared");
+ expect(useComposerDraftStore.getState().drafts[draftKey]).toMatchObject({content:"unfinished",files,groupReplyToId:"message",replyingTo:null});
+ expect(open).toHaveBeenCalledWith("group","message",expect.objectContaining({isCurrent:expect.any(Function)}));expect(h.markRead).toHaveBeenCalledExactlyOnceWith("notice");
+});
+it.each(["removed","muted","stale epoch","blocked","ignored","pending spam","decrypt"])("denies group preparation for %s",async reason=>{
+ setupGroup();if(reason==="removed")h.groups.set({groups:[]});if(reason==="muted")h.groups.set({groups:[{...group,is_muted:true}]});
+ if(reason==="stale epoch")h.groups.set({groups:[{...group,read_key_epoch:2}]});if(reason==="blocked")h.blocks.set({blockedUserIds:["actor"]});
+ if(reason==="ignored")h.ignored.actor=true;if(reason==="pending spam")h.pending=true;
+ if(reason==="decrypt")h.groups.set({messages:{group:[{...message,group_id:"group",encryption_version:1,content:null}]}});
+ expect(resolveOverlayNotificationReplySource("notice")).toBeNull();expect(h.markRead).not.toHaveBeenCalled();
+});
+it("does not open or acknowledge a group after authoritative denial or rejoin during access refresh",async()=>{
+ const source=setupGroup(),read=deferred<{success:boolean;data:{group_dms:typeof group[]}}>();h.listGroups.mockReturnValueOnce(read.promise);const open=openGroup();
+ const pending=prepareOverlayNotificationReply(source,vi.fn(),()=>true,undefined,open);h.groups.set({groups:[{...group,key_epoch:4,read_key_epoch:4}]});
+ read.resolve({success:true,data:{group_dms:[group]}});expect(await pending).toBe("unavailable");expect(open).not.toHaveBeenCalled();expect(h.markRead).not.toHaveBeenCalled();
+});
+it("rejects group target changes while source loads and preserves an existing reply",async()=>{
+ const source=setupGroup(),draftKey=composerKey("owner","group","group");useComposerDraftStore.getState().patch(draftKey,{groupReplyToId:"other",content:"keep"});
+ expect(await prepareOverlayNotificationReply(source,vi.fn(),()=>true,undefined,openGroup())).toBe("conflict");expect(h.markRead).not.toHaveBeenCalled();
+ useComposerDraftStore.getState().patch(draftKey,{groupReplyToId:undefined});const read=deferred<boolean>(),open=vi.fn(()=>{h.ui.set({destination:{type:"group-dm",channelId:"group"},navigationRevision:1});return read.promise;});
+ const pending=prepareOverlayNotificationReply(source,vi.fn(),()=>true,undefined,open);await vi.waitFor(()=>expect(open).toHaveBeenCalled());
+ h.e2ee.set({localDeviceId:"replacement"});read.resolve(true);expect(await pending).toBe("unavailable");expect(h.markRead).not.toHaveBeenCalled();
+});
+
+it("keeps a valid historical source after its author leaves and rejects draft edits during group loading",async()=>{
+ const source=setupGroup(),draftKey=composerKey("owner","group","group");h.groups.set({groups:[{...group,members:[{id:"owner"}]}]});h.listGroups.mockResolvedValue({success:true,data:{group_dms:[{...group,members:[{id:"owner"}]}]}});
+ const found=deferred<boolean>(),open=vi.fn(()=>{h.ui.set({destination:{type:"group-dm",channelId:"group"},navigationRevision:1});return found.promise;});
+ const pending=prepareOverlayNotificationReply(source,vi.fn(),()=>true,undefined,open);await vi.waitFor(()=>expect(open).toHaveBeenCalled());
+ useComposerDraftStore.getState().patch(draftKey,{content:"typed while loading"});found.resolve(true);expect(await pending).toBe("conflict");expect(h.markRead).not.toHaveBeenCalled();expect(useComposerDraftStore.getState().drafts[draftKey].content).toBe("typed while loading");
+});
+
+it("fails closed on a missing authoritative group list without navigating or acknowledging",async()=>{
+ const source=setupGroup();h.listGroups.mockResolvedValueOnce({success:true,data:{}});const open=openGroup();
+ expect(await prepareOverlayNotificationReply(source,vi.fn(),()=>true,undefined,open)).toBe("unavailable");expect(open).not.toHaveBeenCalled();expect(h.markRead).not.toHaveBeenCalled();
 });

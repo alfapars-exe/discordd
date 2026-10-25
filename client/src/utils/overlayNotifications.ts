@@ -1,6 +1,6 @@
 import type { AppNotification } from "../types/notification";
 import type { NotificationPreferences } from "./notificationPreferences";
-import { isDMMessageNotification } from "./dmMessageNotification";
+import { isPrivateMessageNotification } from "./dmMessageNotification";
 
 export type OverlayNotification = { id: string; category: "mention" | "reply" | "friend_request" | "dm_request" | "system" | "message" };
 
@@ -40,14 +40,14 @@ export function projectOverlayNotifications(input: {
           profile_update: p.profileUpdateNotifications,
           friend_online: p.onlineFriendNotifications,
           server_event_upcoming: p.upcomingEventNotifications,
-          incoming_message: isDMMessageNotification(n),
+          incoming_message: isPrivateMessageNotification(n),
         };
         // Unknown event categories fail closed until their preference is mapped.
         if (allowed[action] !== true) continue;
       }
     }
     seen.add(n.id);
-    result.push({ id: n.id, category: isDMMessageNotification(n) ? "message" : n.kind });
+    result.push({ id: n.id, category: isPrivateMessageNotification(n) ? "message" : n.kind });
   }
   return result;
 }

@@ -10,7 +10,7 @@ import { create } from "zustand";
 import { getAuthGeneration } from "../api/client";
 import * as notificationsApi from "../api/notifications";
 import type { AppNotification } from "../types";
-import { isDMMessageNotification } from "../utils/dmMessageNotification";
+import { isPrivateMessageNotification } from "../utils/dmMessageNotification";
 import { useAuthStore } from "./authStore";
 import { getAuthSessionOwner, subscribeAuthOwnerChanges, subscribeAuthGenerationChanges } from "../api/authSessionEvents";
 
@@ -272,7 +272,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       set((state) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, read_at: readAt } : item)),
         unreadCount: Math.max(0, state.unreadCount - 1),
-        badgeUnreadCount: target && !isDMMessageNotification(target) ? Math.max(0, state.badgeUnreadCount - 1) : state.badgeUnreadCount,
+        badgeUnreadCount: target && !isPrivateMessageNotification(target) ? Math.max(0, state.badgeUnreadCount - 1) : state.badgeUnreadCount,
       }));
 
       let succeeded: boolean;
@@ -341,7 +341,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
         return {
           items: listed ? [notification, ...state.items] : state.items,
           unreadCount: notification.read_at ? state.unreadCount : state.unreadCount + 1,
-          badgeUnreadCount: notification.read_at || isDMMessageNotification(notification) ? state.badgeUnreadCount : state.badgeUnreadCount + 1,
+          badgeUnreadCount: notification.read_at || isPrivateMessageNotification(notification) ? state.badgeUnreadCount : state.badgeUnreadCount + 1,
         };
       });
     },

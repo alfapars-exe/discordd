@@ -16,6 +16,9 @@ import { useUIStore, type TabServerInfo } from "../stores/uiStore";
 import { useServerStore } from "../stores/serverStore";
 import { useChannelStore } from "../stores/channelStore";
 import { useMessageStore } from "../stores/messageStore";
+import { useGroupDMStore } from "../stores/groupDMStore";
+import { useE2EEStore } from "../stores/e2eeStore";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
 import { useDMStore } from "../stores/dmStore";
 import { useAuthStore } from "../stores/authStore";
 import { useMobileStore } from "../stores/mobileStore";
@@ -32,9 +35,12 @@ export type OpenAtMessage = (
 
 export type OpenAtDMMessage = (dmChannelId: string, messageId: string, context?: { isCurrent: () => boolean }) => Promise<boolean>;
 
+export type OpenAtGroupMessage = OpenAtDMMessage;
+
 export function useOpenAtMessage(): {
   openAtMessage: OpenAtMessage;
   openAtDMMessage: OpenAtDMMessage;
+  openAtGroupMessage: OpenAtGroupMessage;
 } {
   const { t } = useTranslation("saved");
   const { t: tCommon } = useTranslation("common");
@@ -131,5 +137,27 @@ export function useOpenAtMessage(): {
     ]
   );
 
-  return { openAtMessage, openAtDMMessage };
+  const openAtGroupMessage = useCallback<OpenAtGroupMessage>(async (groupId, messageId, context) => {
+    const auth = getAuthSessionSnapshot(), initial = useGroupDMStore.getState();
+    const group = initial.groups.find(item => item.id === groupId), device = useE2EEStore.getState().localDeviceId;
+    const current = () => {
+      const now = getAuthSessionSnapshot(), state = useGroupDMStore.getState(), live = state.groups.find(item => item.id === groupId);
+      return (!context || context.isCurrent()) && !!group && now.ownerId === auth.ownerId && now.generation === auth.generation
+        && state.ownerId === auth.ownerId && state.authGeneration === auth.generation && state.groupsReady && !state.loading && live?.key_epoch === group.key_epoch
+        && live.members.some(member => member.id === auth.ownerId);
+    };
+    if (!current() || !auth.ownerId || !group) return false;
+    openTab(groupId, "group-dm", group.name || tCommon("directMessages"));
+    const revision = useUIStore.getState().navigationRevision;
+    const found = await initial.fetchMessagesAround(groupId, messageId, { isCurrent: current });
+    if (!current() || useE2EEStore.getState().localDeviceId !== device) return false;
+    const ui = useUIStore.getState();
+    if (UI_SHELL_V2 && (ui.navigationRevision !== revision || ui.destination.type !== "group-dm" || ui.destination.channelId !== groupId)) return false;
+    if (!found) { addToast("info", t("messageGone")); return false; }
+    if (useGroupDMStore.getState().setScrollTarget(groupId, messageId) === null) return false;
+    closeAllDrawers();
+    return true;
+  }, [openTab, tCommon, addToast, t, closeAllDrawers]);
+
+  return { openAtMessage, openAtDMMessage, openAtGroupMessage };
 }
