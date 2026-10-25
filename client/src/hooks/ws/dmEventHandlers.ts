@@ -1,3 +1,5 @@
+import {getAuthGeneration} from "../../api/client";
+import i18n from "../../i18n";
 /**
  * DM-domain WS event handlers.
  * Handles: DM channel, DM message CRUD, DM typing, DM reactions, DM pins, DM settings.
@@ -16,7 +18,7 @@ import { useGroupDMStore } from "../../stores/groupDMStore";
 import { useUIStore } from "../../stores/uiStore";
 import { shouldFlashTaskbar } from "../../utils/notificationPreferences";
 import { speakIncomingMessage } from "../../utils/textToSpeech";
-import { isMessageFilteredAsSpam } from "../../utils/messageSpamPolicy";
+import { resolveMessageSpamDisposition,getMessageSpamDisposition } from "../../utils/messageSpamPolicy";
 import { registerSpamMessage } from "../../utils/registerSpamMessage";
 import {cacheDMMessage,readDMMessageCache} from "../../crypto/dmMessageCache";
 import {useComposerDraftStore} from "../../stores/composerDraftStore";
@@ -72,8 +74,9 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       let dmMsg = msg.d;
       const dmCurrentUserId = useAuthStore.getState().user?.id;
       const generation=useComposerDraftStore.getState().generation,device=useE2EEStore.getState().localDeviceId;
+      const authGeneration=getAuthGeneration();
       const versionCurrent=observeDMMessage(dmMsg.dm_channel_id,dmMsg.id,false,dmMsg);
-      const current=()=>versionCurrent()&&Boolean(dmCurrentUserId)&&useAuthStore.getState().user?.id===dmCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
+      const current=()=>isCurrent()&&getAuthGeneration()===authGeneration&&versionCurrent()&&Boolean(dmCurrentUserId)&&useAuthStore.getState().user?.id===dmCurrentUserId&&useComposerDraftStore.getState().generation===generation&&useE2EEStore.getState().localDeviceId===device;
       if(!current())return true;
 
       if (dmMsg.encryption_version === 1 && dmMsg.ciphertext && dmMsg.sender_device_id) {
@@ -134,21 +137,25 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
       useDMStore.getState().handleDMMessageCreate(dmMsg);
 
       if (dmMsg.user_id === dmCurrentUserId) return true;
-      if (isMessageFilteredAsSpam(dmMsg, "dm")) { void registerSpamMessage(dmMsg, "dm", dmMsg.dm_channel_id); return true; }
+      const disposition=await resolveMessageSpamDisposition(dmMsg,"dm",current);
+      if(disposition==="stale"||!current())return true;
+      if(disposition==="filter"){void registerSpamMessage(dmMsg,"dm",dmMsg.dm_channel_id,current);return true;}
 
-      speakIncomingMessage(
+      if(disposition==="allow")speakIncomingMessage(
         dmMsg.author?.display_name || dmMsg.author?.username || "",
         dmMsg.content,
       );
 
       const dmState = useDMStore.getState();
-      if (dmMsg.dm_channel_id === dmState.selectedDMId) {
+      if (dmMsg.dm_channel_id === dmState.selectedDMId&&disposition==="allow") {
         // Viewing this DM — advance the server read cursor so other devices
         // (and the next fetchChannels seed) don't count it as unread. Same
         // contract as channelEventHandlers' markAsRead for the active channel.
         dmApi.markDMRead(dmMsg.dm_channel_id, dmMsg.id).catch(() => {});
         return true;
       }
+
+      if(dmMsg.dm_channel_id===dmState.selectedDMId){dmState.incrementDMUnread(dmMsg.dm_channel_id);return true;}
 
       // Unread always counts (the badge is still shown, dimmed, on a muted
       // DM); only the attention-grabbing cues honour the mute.
@@ -167,14 +174,14 @@ export async function handleDMEvent(msg: WSMessage, isCurrent: () => boolean = (
           "HiChat!";
         showNotification({
           title: authorName,
-          body: dmMsg.content ?? "",
+          body: disposition==="pending"?i18n.t("chat:spamPendingNotification"):dmMsg.content??"",
           icon: dmMsg.author?.avatar_url ?? null,
           tag: `dm:${dmMsg.dm_channel_id}`,
           isStillEligible: () => {
             const auth = useAuthStore.getState();
             const state = useDMStore.getState();
             const channel = state.channels.find((item) => item.id === dmMsg.dm_channel_id);
-            return auth.user?.id === dmCurrentUserId && state.selectedDMId !== dmMsg.dm_channel_id
+            return current()&&(disposition==="pending"||getMessageSpamDisposition(dmMsg,"dm")==="allow")&&auth.user?.id === dmCurrentUserId && state.selectedDMId !== dmMsg.dm_channel_id
               && (state.dmUnreadCounts[dmMsg.dm_channel_id] ?? 0) > 0
               && !!channel && channel.status === "accepted" && !channel.is_muted
               && !(channel.other_user?.id && useBlockStore.getState().isBlocked(channel.other_user.id));

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import SpamPendingNotice from "./SpamPendingNotice";
 import { useSpamVisibility } from "../../hooks/useSpamVisibility";
 import type { GroupDMMessage } from "../../types/groupDM";
 import type { MessageAction } from "./messageActionRegistry";
@@ -15,8 +16,8 @@ export default function GroupSpamGate({ message, children, keyboardActions = [] 
   return <div data-message-shortcuts tabIndex={0} role="group" onKeyDown={(event) => {
     if (event.target !== event.currentTarget || useShortcutCaptureStore.getState().active) return;
     if (event.ctrlKey && event.code === "KeyC" && window.getSelection()?.toString()) return;
-    runMessageShortcut(event.nativeEvent, keyboardActions, spam.hidden || ignored.hidden || message.content === null, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
-  }}>{!spam.hidden ? ignored.hidden ? <div role="note"><p>{t("ignoredMessage")}</p><button type="button" onClick={ignored.reveal}>{t("showIgnoredMessage")}</button></div> : children : <div role="note">
+    runMessageShortcut(event.nativeEvent, keyboardActions, spam.hidden || spam.pending || ignored.hidden || message.content === null, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
+  }}>{spam.pending?<SpamPendingNotice failed={spam.pendingError} retry={spam.retryRelationship}/>:!spam.hidden ? ignored.hidden ? <div role="note"><p>{t("ignoredMessage")}</p><button type="button" onClick={ignored.reveal}>{t("showIgnoredMessage")}</button></div> : children : <div role="note">
     <p>{t("spamHidden")}</p>
     <p>{spam.reasons.map((reason) => t(`spamReason.${reason}`)).join(" · ")}</p>
     <button type="button" onClick={() => void spam.restore()}>{t("spamRestore")}</button>

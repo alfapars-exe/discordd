@@ -1,0 +1,69 @@
+{
+  "phase": "P3",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "client/src/utils/messageSpamPolicy.ts",
+    "client/src/utils/messageSpamPolicy.test.ts",
+    "client/src/utils/registerSpamMessage.ts",
+    "client/src/utils/registerSpamMessage.test.ts",
+    "client/src/hooks/useSpamVisibility.ts",
+    "client/src/hooks/useSpamVisibility.test.ts",
+    "client/src/hooks/ws/dmEventHandlers.ts",
+    "client/src/hooks/ws/dmEventHandlers.test.ts",
+    "client/src/hooks/ws/channelEventHandlers.ts",
+    "client/src/hooks/ws/channelEventHandlers.spam.test.ts",
+    "client/src/hooks/ws/channelNavigation.test.ts",
+    "client/src/stores/spamDecisionStore.test.ts",
+    "client/src/components/friends/FriendsView.tsx",
+    "client/src/components/friends/FriendsView.test.tsx",
+    "client/src/components/chat/Message.tsx",
+    "client/src/components/chat/SpamPreview.tsx",
+    "client/src/components/chat/SpamPreview.test.tsx",
+    "client/src/components/chat/GroupSpamGate.tsx",
+    "client/src/components/chat/GroupSpamGate.test.tsx",
+    "client/src/components/chat/SpamPendingNotice.tsx",
+    "client/src/i18n/locales/en/chat.json",
+    "client/src/i18n/locales/tr/chat.json",
+    "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json"
+  ],
+  "scope": [
+    "Canonical spam disposition distinguishes allow, definitive filter and pending relationship readiness. In nonfriends mode a suspicious message with an unloaded, failed, foreign-account or stale-auth-generation friend snapshot stays pending. A complete READY empty snapshot confirms a nonfriend. Existing all/off/self/restored behavior remains immediate without a relationship read.",
+    "Pending message bodies, group children, actions and previews are suppressed without creating a spam inbox record. UI labels pending as a check rather than claiming spam, with explicit retry after failure. Classification remains the existing deterministic client-side rule classifier; decrypted content is not sent to the server.",
+    "One shared per-account/auth-generation friend-list read is bounded to fifteen seconds. Concurrent message decisions join it; failures do not create automatic fetch loops. Explicit retry or canonical readiness changes allow reevaluation. Source, account, mode and revision checks are repeated after asynchronous work.",
+    "Incoming channel and DM notifications wait for the bounded relationship decision. Confirmed friends retain normal content cues; unresolved failure keeps a generic nonbody arrival and unread indication without TTS, full preview or automatic selected-conversation read. Existing muting rules remain.",
+    "FriendsView shows loading/error/retry honestly, retains only matching-account rows on failed refresh, hides foreign rows, and shows an empty-friends result only for a complete READY snapshot. Retry clicks are deduplicated.",
+    "Canonical shouldSuppressMessagePreview returns true for both filter and pending. P11 overlay preview/reply callers are integrated by the separate P11 owner and are not included in this staging path list."
+  ],
+  "verification": {
+    "focused": {
+      "result": "passed",
+      "files": 14,
+      "tests": 147,
+      "coverage": "Policy pending/ready/error/dedup/timeout/auth/source/mode; registration metadata and supersession; pending hook retry; actual channel/DM notification handling; FriendsView status and retry; preview/group keyboard suppression; existing friend/media and P11 integration regression tests."
+    },
+    "full_run_regression_fixtures": {
+      "result": "passed",
+      "files": 4,
+      "tests": 43,
+      "coverage": "channelNavigation mock exposes the real message cache contract; spamDecisionStore establishes current READY nonfriend provenance for definitive-filter assertions and asserts pending plus suppression after logout. Actual channel/DM notification suites included."
+    },
+    "static": {
+      "typescript": "npx.cmd tsc -b --pretty false passed",
+      "lint": "Scoped ESLint passed",
+      "diff_check": "git diff --check passed for owned changes"
+    },
+    "combined_full_client": {
+      "result": "passed",
+      "files": 356,
+      "tests": 3465,
+      "log": "C:/Users/PARS/AppData/Local/Temp/hichat-spam-notification-final-20261025.log",
+      "note": "Final integrated run after all four fixture corrections; zero failed tests. Does not establish browser/device acceptance."
+    }
+  },
+  "remaining": [
+    "No real browser, physical device, multi-client, screen-reader or production acceptance was performed for this slice.",
+    "No full P3 completion or classifier accuracy acceptance is claimed. Existing deterministic spam rules and broader sensitive-media acceptance requirements remain separate.",
+    "No commit, push, deployment or Windows publication was performed by this subagent. Root owns integrated validation and delivery."
+  ]
+}

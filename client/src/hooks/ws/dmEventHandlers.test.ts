@@ -66,6 +66,7 @@ import { showNotification } from "../../utils/notifications";
 import { markDMRead } from "../../api/dm";
 import { decryptDMMessage, popSentPlaintext,popEditPlaintext } from "../../crypto/dmEncryption";
 import { speakIncomingMessage } from "../../utils/textToSpeech";
+import { getAuthGeneration } from "../../api/client";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 import { useFriendStore } from "../../stores/friendStore";
 import {useComposerDraftStore} from "../../stores/composerDraftStore";
@@ -108,7 +109,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useComposerDraftStore.getState().reset();
   usePreferencesStore.setState({ data: {} });
-  useFriendStore.setState({ friends: [] });
+  useFriendStore.setState({ friends: [], ownerId: "me", authGeneration: getAuthGeneration(), friendsStatus: "ready" });
   dmStoreState.selectedDMId = null;
   dmStoreState.channels = [{ id: "dm-1", is_muted: false }];
   dmStoreState.dmUnreadCounts = {};
@@ -298,4 +299,25 @@ describe("handleDMEvent — dm_read", () => {
     });
     expect(markDMRead).not.toHaveBeenCalled();
   });
+});
+
+it("delays suspicious content cues until friendship is complete, then notifies a real friend",async()=>{
+ useFriendStore.setState({friendsStatus:"loading"});
+ const pending=handleDMEvent(createMsg({id:"friend-pending",content:"https://trusted.test@evil.test"}));
+ await Promise.resolve();expect(showNotification).not.toHaveBeenCalled();expect(speakIncomingMessage).not.toHaveBeenCalled();
+ useFriendStore.setState({friendsStatus:"ready",friends:[{user_id:makeDMMessage().user_id} as never]});
+ await pending;
+ expect(showNotification).toHaveBeenCalledTimes(1);expect(speakIncomingMessage).toHaveBeenCalledTimes(1);
+});
+it("preserves unread with a generic nonbody cue on failed relationship read",async()=>{
+ useFriendStore.setState({friendsStatus:"idle",fetchFriends:vi.fn(async()=>{useFriendStore.setState({friendsStatus:"error"});})});
+ await handleDMEvent(createMsg({id:"failed-relation",content:"https://trusted.test@evil.test"}));
+ expect(dmStoreState.incrementDMUnread).toHaveBeenCalledWith("dm-1");expect(speakIncomingMessage).not.toHaveBeenCalled();
+ expect(showNotification).toHaveBeenCalledTimes(1);expect(vi.mocked(showNotification).mock.calls[0][0].body).not.toContain("evil.test");
+});
+
+it("does not auto-read or speak a pending message in the selected DM",async()=>{
+ dmStoreState.selectedDMId="dm-1";useFriendStore.setState({friendsStatus:"idle",fetchFriends:vi.fn(async()=>{useFriendStore.setState({friendsStatus:"error"});})});
+ await handleDMEvent(createMsg({id:"pending-open",content:"https://trusted.test@evil.test"}));
+ expect(dmStoreState.incrementDMUnread).toHaveBeenCalledWith("dm-1");expect(markDMRead).not.toHaveBeenCalled();expect(speakIncomingMessage).not.toHaveBeenCalled();expect(showNotification).not.toHaveBeenCalled();
 });

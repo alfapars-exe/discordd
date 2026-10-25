@@ -19,6 +19,7 @@ import { useSavedStore } from "../../stores/savedStore";
 import { useSpamVisibility } from "../../hooks/useSpamVisibility";
 import UnclassifiedMediaGate from "./UnclassifiedMediaGate";
 import MessageBodyMediaGate from "./MessageBodyMediaGate";
+import SpamPendingNotice from "./SpamPendingNotice";
 import SpamPreview from "./SpamPreview";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
@@ -368,7 +369,7 @@ function Message({
       delete: t("deleteMessage"),
       "copy-id": t("copyId"),
     },
-    hasContent: Boolean(message.content) && !spam.hidden && (!isIgnored || showIgnoredContent) && !hasDecryptionError,
+    hasContent: Boolean(message.content) && !spam.hidden && !spam.pending && (!isIgnored || showIgnoredContent) && !hasDecryptionError,
     isOwner,
     isSaved,
     isPinned,
@@ -384,7 +385,7 @@ function Message({
     onThread: () => setThreadOpen(true),
     onCopy: () => { if (message.content) void copyToClipboard(message.content).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))); },
     onSpeak: () => {
-      if (spam.hidden || (isIgnored && !showIgnoredContent) || hasDecryptionError) return;
+      if (spam.hidden || spam.pending || (isIgnored && !showIgnoredContent) || hasDecryptionError) return;
       if (!speakMessage(displayName, message.content)) useToastStore.getState().addToast("error", t("common:shortcutSpeechUnavailable"));
     },
     onCopyLink: () => { void handleCopyLink(); },
@@ -398,7 +399,7 @@ function Message({
     onCopyID: () => { void copyToClipboard(message.id).catch(() => useToastStore.getState().addToast("error",t("common:shortcutCopyFailed"))); },
   }), [applicationActions, canManageMessages, cosmeticScope, developerMode, handleCopyLink,
     handleDelete, handleMarkUnread, handlePinToggle, handleReply, handleToggleSave, invokeApplicationAction,
-    isOwner, isPinned, isSaved, message.content, message.id, mode, startEdit, t, tSaved, spam.hidden, isIgnored, showIgnoredContent, hasDecryptionError, displayName, threadActionsAllowed]);
+    isOwner, isPinned, isSaved, message.content, message.id, mode, startEdit, t, tSaved, spam.hidden,spam.pending, isIgnored, showIgnoredContent, hasDecryptionError, displayName, threadActionsAllowed]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -449,7 +450,7 @@ function Message({
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget || useShortcutCaptureStore.getState().active) return;
         if (event.ctrlKey && event.code === "KeyC" && window.getSelection()?.toString()) return;
-        runMessageShortcut(event.nativeEvent, messageActions, spam.hidden || (isIgnored && !showIgnoredContent) || hasDecryptionError, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
+        runMessageShortcut(event.nativeEvent, messageActions, spam.hidden || spam.pending || (isIgnored && !showIgnoredContent) || hasDecryptionError, useShortcutBindingsStore.getState().bindings, () => focusMessageComposer(event.currentTarget));
       }}
       {...(isMobile ? longPressHandlers : {})}
       onContextMenu={isMobile ? longPressHandlers.onContextMenu : handleContextMenu}
@@ -571,7 +572,7 @@ function Message({
                 </span>
               )}
             </div>
-          ) : spam.hidden ? (
+          ) : spam.pending ? <SpamPendingNotice failed={spam.pendingError} retry={spam.retryRelationship}/> : spam.hidden ? (
             <div className="msg-text msg-ignored" role="note">
               <span>{t("spamHidden")}</span>
               <span>{spam.reasons.map((reason) => t(`spamReason.${reason}`)).join(" · ")}</span>
@@ -606,9 +607,9 @@ function Message({
             </div>
           )}
 
-          {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageAttachments message={message} />}
+          {!spam.hidden && !spam.pending && (!isIgnored || showIgnoredContent) && <MessageAttachments message={message} />}
 
-          {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageReactions
+          {!spam.hidden && !spam.pending && (!isIgnored || showIgnoredContent) && <MessageReactions
             message={message}
             sourceKind={mode}
             sourceChannelId={channelId}

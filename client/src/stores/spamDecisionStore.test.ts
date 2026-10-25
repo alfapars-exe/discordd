@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { useSpamDecisionStore } from "./spamDecisionStore";
 import { useAuthStore } from "./authStore";
-import { isMessageFilteredAsSpam } from "../utils/messageSpamPolicy";
+import { isMessageFilteredAsSpam, getMessageSpamDisposition, shouldSuppressMessagePreview } from "../utils/messageSpamPolicy";
 import { usePreferencesStore } from "./preferencesStore";
 import { useFriendStore } from "./friendStore";
 import type { User } from "../types";
 import { listSpamDecisions } from "../api/spam";
-import { clearTokens } from "../api/client";
+import { clearTokens, getAuthGeneration } from "../api/client";
 vi.mock("../api/spam", () => ({ listSpamDecisions: vi.fn() }));
 beforeEach(() => {
  vi.clearAllMocks();
@@ -59,11 +59,13 @@ it("isolates account and source decision keys", () => {
 it("applies restored decisions only to matching account, source and message revision", () => {
  useAuthStore.setState({ user: { id: "one" } as User });
  const userId = "one";
+ useFriendStore.setState({ ownerId:userId, authGeneration:getAuthGeneration(), friendsStatus:"ready", friends:[] });
  const message = {id:"m",user_id:"sender",content:"https://a.test@b.test",edited_at:null};
  useSpamDecisionStore.getState().apply({user_id:userId,source_kind:"dm",message_id:"m",revision:"original",status:"restored"});
  expect(isMessageFilteredAsSpam(message,"dm")).toBe(false);
  expect(isMessageFilteredAsSpam(message,"channel")).toBe(true);
  expect(isMessageFilteredAsSpam({...message,edited_at:"edited"},"dm")).toBe(true);
  useAuthStore.setState({ user: null });
- expect(isMessageFilteredAsSpam(message,"dm")).toBe(true);
+ expect(getMessageSpamDisposition(message,"dm")).toBe("pending");
+ expect(shouldSuppressMessagePreview(message,"dm")).toBe(true);
 });

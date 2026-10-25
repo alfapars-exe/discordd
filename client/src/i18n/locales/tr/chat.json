@@ -164,14 +164,12 @@
   "threadSource": "Kaynak mesaja git",
   "threadActive": "Etkin",
   "messageTooLong": "Mesaj en fazla {{max}} karakter olmalı",
-
   "gif": "GIF",
   "gifSearch": "GIF Ara",
   "gifTrending": "Trend",
   "gifNoResults": "GIF bulunamadı",
   "gifLoading": "GIF'ler yükleniyor...",
   "gifUnavailable": "GIF arama kullanılamıyor",
-
   "imagePreview": "Görsel önizleme",
   "lightboxOpenOriginal": "Orijinali aç",
   "lightboxDownload": "İndir",
@@ -183,7 +181,6 @@
   "lightboxResetZoom": "Yakınlaştırmayı sıfırla",
   "lightboxPrevious": "Önceki görsel",
   "lightboxNext": "Sonraki görsel",
-
   "jumpToMention": "Bahsedilene git",
   "ignoredMessage": "Yoksayılan bir kullanıcının mesajı gizlendi.",
   "showIgnoredMessage": "Mesajı göster",
@@ -196,5 +193,9 @@
   "groupPinUpdateFailed": "Sabitleme güncellenemedi. Mesaj korundu.",
   "groupPinsRetry": "Tekrar dene",
   "gameMessageOrigin": "Oyun uygulaması",
-  "gameMessageOriginHint": "Gönderildiğinde kaydedilen oyun uygulaması kimliği: {{id}}. Yayıncı doğrulaması değildir."
+  "gameMessageOriginHint": "Gönderildiğinde kaydedilen oyun uygulaması kimliği: {{id}}. Yayıncı doğrulaması değildir.",
+  "spamFilterPending": "Mesaj filtreleri kontrol ediliyor.",
+  "spamFilterPendingError": "Arkadaşlık durumu kontrol edilemedi. Mesaj içeriği gizli tutuluyor; spam olarak işaretlenmedi.",
+  "spamFilterRetry": "Yeniden kontrol et",
+  "spamPendingNotification": "Yeni mesaj var. Mesaj filtreleri kontrol edilirken içerik gizli tutuluyor."
 }
