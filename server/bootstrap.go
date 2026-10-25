@@ -26,6 +26,8 @@ var bootLogger = logx.Component("boot")
 // failures log a warning but don't abort startup, since the rest of the
 // server still works without the music bot.
 func logMusicBotDeps() {
+	// TEMPORARY: remove this hook after the Space connectivity investigation.
+	startMusicNetworkProbe()
 	if out, err := exec.Command("yt-dlp", "--version").Output(); err != nil {
 		bootLogger.Warn("yt-dlp not available — music bot will fail", "err", pkg.ErrText(err))
 	} else {
