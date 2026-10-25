@@ -70,6 +70,15 @@ describe("destination browser history", () => {
     useGroupDMStore.setState({ authGeneration: 1, groups: [{ id: "g1", name: "Not ours", members: [{ id: "other" }] }] as never });
     expect(destinationFromPath("/channels/group/g1")).toEqual(HOME_DESTINATION);
   });
+
+  it("falls back only after the owned group list confirms the deep link is unavailable", async () => {
+    useGroupDMStore.setState({ groups: [], groupsReady: false });
+    render(<MemoryRouter initialEntries={["/channels/group/deleted"]}><Harness /></MemoryRouter>);
+    expect(screen.getByTestId("path")).toHaveTextContent("/channels/group/deleted");
+    act(() => useGroupDMStore.setState({ groupsReady: true }));
+    await waitFor(() => expect(screen.getByTestId("path")).toHaveTextContent("/channels/@me/friends"));
+    expect(useUIStore.getState().destination).toEqual(HOME_DESTINATION);
+  });
   it("pushes internal navigation and restores the preceding conversation on Back", async () => {
     render(<MemoryRouter initialEntries={["/channels/@me/friends"]}><Harness /></MemoryRouter>);
     act(() => useUIStore.getState().navigate({ type: "dm", channelId: "alice", label: "Alice" }));

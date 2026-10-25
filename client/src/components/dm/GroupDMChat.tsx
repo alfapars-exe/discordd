@@ -5,6 +5,7 @@ import { useFocusComposerOnTyping } from "../../hooks/useFocusComposerOnTyping";
 import { useIsTouch } from "../../hooks/useMediaQuery";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
+import { useE2EEStore } from "../../stores/e2eeStore";
 import { useFriendStore } from "../../stores/friendStore";
 import { useGroupDMStore,type GroupUploadRecovery } from "../../stores/groupDMStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -58,6 +59,11 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   const restoreBlocked=useGroupDMStore(state=>state.restoreBlocked?.includes(groupId));
   const retryingUploads=recoveries.some(item=>item.retrying);
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const historyAuthGeneration = useAuthStore(() => getAuthGeneration());
+  const cryptoReady = useE2EEStore((state) => state.initStatus === "ready");
+  const localDeviceId = useE2EEStore((state) => state.localDeviceId);
+  const groupsReady = useGroupDMStore((state) => state.groupsReady);
+  const historyGroupEpoch = group?.key_epoch;
   const friends = useFriendStore((state) => state.friends);
   const draftKey=composerKey(currentUserId,"group",groupId);
   const composer=useComposerDraftStore(state=>state.drafts[draftKey]??EMPTY_DRAFT);
@@ -225,6 +231,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
   useEffect(()=>{if(editingId)composerInput.current?.focus()},[editingId,draftKey]);
 
   useEffect(() => {
+    if (!currentUserId || historyGroupEpoch === undefined || !groupsReady || !cryptoReady || !localDeviceId) return;
     let active=true;manualUnread.current=false;
     const owner=useAuthStore.getState().user;
     void useGroupDMStore.getState().fetchMessages(groupId).then(fetched=>{
@@ -233,7 +240,7 @@ export default function GroupDMChat({ groupId }: { groupId: string }) {
       void useGroupDMStore.getState().markRead(groupId,latest?.id);
     });
     return()=>{active=false};
-  }, [groupId]);
+  }, [groupId, currentUserId, historyAuthGeneration, historyGroupEpoch, groupsReady, cryptoReady, localDeviceId]);
   useEffect(()=>{
     if(!scrollTarget)return;
     const clear=()=>useGroupDMStore.getState().clearScrollTarget(scrollTarget.request);

@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import GroupDMChat from "./GroupDMChat";
 import { useGroupDMStore } from "../../stores/groupDMStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useE2EEStore } from "../../stores/e2eeStore";
 import type { GroupDM, GroupDMMessage } from "../../types/groupDM";
 import { reportUser } from "../../api/report";
 import type { ReactNode } from "react";
@@ -56,9 +57,20 @@ beforeEach(() => {
   useShortcutCaptureStore.setState({ active: false });
   useUIStore.setState({ destination: { type: "group-dm", channelId: "group", label: "Test group" } as never });
   useAuthStore.setState({ user: { id: "me" } as NonNullable<ReturnType<typeof useAuthStore.getState>["user"]> });
+  useE2EEStore.setState({ initStatus: "ready", localDeviceId: "test-device" });
   const group: GroupDM = { id: "group", name: "Test group", owner_id: "me", members: [], icon_url: null, key_epoch: 1, call_room_key: "room", unread_count: 0, created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z" };
   useGroupDMStore.setState({ groups: [group], messages: { group: [message("own", "me"), message("other-message", "other")] },hasMoreAfterByGroup:{},scrollTarget:null, error: null,uploadRecoveries:{},pendingSends:{},groupsReady:true,restoreStatus:"ready",restoreBlocked:[],restoredQueue:{}, fetchMessages: vi.fn(async () => true),jumpToPresent:vi.fn(), markRead: vi.fn(async () => {}),markUnread:vi.fn(async()=>true) });
 });
+it("loads group history when account crypto becomes ready after the route mounts", async () => {
+  const fetchMessages = vi.fn(async () => true);
+  useGroupDMStore.setState({ fetchMessages });
+  useE2EEStore.setState({ initStatus: "initializing", localDeviceId: null });
+  render(<GroupDMChat groupId="group" />);
+  expect(fetchMessages).not.toHaveBeenCalled();
+  act(() => useE2EEStore.setState({ initStatus: "ready", localDeviceId: "loaded-device" }));
+  await waitFor(() => expect(fetchMessages).toHaveBeenCalledExactlyOnceWith("group"));
+});
+
 it("inserts an emoji at the current selection while preserving files and reply", () => {
   const key = composerKey("me", "group", "group"), file = new File(["keep"], "keep.txt");
   useComposerDraftStore.getState().patch(key, { content: "hello", files: [file], groupReplyToId: "reply" });
