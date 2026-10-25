@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-25",
+  "scope": "P11 accepted incoming group-message attention cues and explicit OS exact-source navigation",
+  "status": "implemented_focused_verified_physical_acceptance_pending",
+  "owned_paths": [
+    "client/src/hooks/ws/dmEventHandlers.ts",
+    "client/src/hooks/ws/groupMessageCues.test.ts",
+    "client/src/hooks/useOpenAtMessage.ts",
+    "client/src/utils/groupMessageNavigation.ts",
+    "implementation/verification/p11-group-message-cues-2026-10-25.json"
+  ],
+  "behavior": [
+    "Single cue owner is accepted group_dm_message_create receipt; notification_create metadata dispatcher unchanged. Rejected/duplicate/stale receipt never cues.",
+    "Account/generation/device/membership epoch/source-version fences rechecked before and after async canonical spam policy. Blocked/ignored/muted/DND/offline/invisible sources suppress all attention cues.",
+    "Only rendered visible successfully decrypted allowed source can mark foreground group read or speak via existing TTS preference wrapper. Pending classification, failed decrypt and detached history never speak or claim read.",
+    "All OS bodies generic localized metadata; no decrypted body copied into delayed notification options. Existing OS permission/delay/coalescing and sound/taskbar preferences reused.",
+    "Selected but background group does not auto-read; foreground current-channel sound remains separately preferred. Source watermark suppresses late already-read background cues.",
+    "Delayed OS eligibility rechecks privacy/auth/device/epoch/deletion/read/focus. Explicit delivered click survives wrapper focus, fresh-checks authoritative group membership and reuses shared exact main-chat fetch-around/scroll navigation.",
+    "Shared navigation preserves hook API and single main chat; it does not import or change composer drafts/files or auto-send."
+  ],
+  "verification": [
+    {
+      "kind": "focused Vitest",
+      "command": "vitest run src/hooks/ws/groupMessageCues.test.ts src/hooks/ws/dmEventHandlers.test.ts src/hooks/useOpenAtMessage.test.ts src/utils/overlayNotificationReply.test.ts",
+      "result": "4 files,101 tests PASS"
+    },
+    {
+      "kind": "scoped ESLint",
+      "result": "PASS clean for all4 owned source/test paths"
+    },
+    {
+      "kind": "app TypeScript",
+      "command": "tsc --noEmit -p tsconfig.app.json",
+      "result": "PASS"
+    },
+    {
+      "kind": "staging",
+      "result": "Exact owned paths only; foreign audio/UserBar/CSP/release source excluded; no push"
+    }
+  ],
+  "remaining": [
+    "Physical Windows/web notification permission, real delayed OS delivery/click, speaker audibility/TTS and two-client encrypted group acceptance still require runtime acceptance.",
+    "Parent coordinates combined full client/build/self-scan after concurrent source freezes.",
+    "This receipt supersedes prior client group141 remaining group OS/sound implementation gap; no whole P11 acceptance or production delivery claim."
+  ]
+}
