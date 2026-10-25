@@ -15,6 +15,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -148,7 +149,7 @@ func TestAuditLogRepo_Pagination(t *testing.T) {
 			e := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberKick)
 			ids[i] = e.ID
 			if _, err := db.Conn.Exec(
-				`UPDATE audit_logs SET created_at = datetime('2026-01-01 00:00:0'||?) WHERE id = ?`, i, e.ID,
+				`UPDATE audit_logs SET created_at = ? WHERE id = ?`, fmt.Sprintf("2026-01-01 00:00:%02d", i), e.ID,
 			); err != nil {
 				t.Fatalf("stamp created_at: %v", err)
 			}
@@ -200,7 +201,7 @@ func TestAuditLogRepo_Pagination(t *testing.T) {
 			e := newAuditLog(t, ctx, repo, auditServer, models.AuditEventMemberKick)
 			ids[i] = e.ID
 			if _, err := db.Conn.Exec(
-				`UPDATE audit_logs SET created_at = datetime('2026-01-01 00:00:0'||?) WHERE id = ?`, i, e.ID,
+				`UPDATE audit_logs SET created_at = ? WHERE id = ?`, fmt.Sprintf("2026-01-01 00:00:%02d", i), e.ID,
 			); err != nil {
 				t.Fatalf("stamp created_at: %v", err)
 			}

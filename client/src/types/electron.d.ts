@@ -296,7 +296,7 @@ interface ElectronAPI {
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
-  onMaximizedChange: (cb: (isMaximized: boolean) => void) => void;
+  onMaximizedChange: (cb: (isMaximized: boolean) => void) => (() => void);
   removeMaximizedListener: () => void;
 
   /** Windows taskbar overlay badge. count=0 removes badge. */
@@ -307,10 +307,10 @@ interface ElectronAPI {
   /** Clipboard write via main process IPC — always works */
   writeClipboard: (text: string) => Promise<void>;
 
-  onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => void;
-  onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => void;
-  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => void;
-  onUpdateError: (cb: (message: string) => void) => void;
+  onUpdateAvailable: (cb: (info: ElectronUpdateInfo) => void) => (() => void);
+  onUpdateProgress: (cb: (progress: ElectronDownloadProgress) => void) => (() => void);
+  onUpdateDownloaded: (cb: (info: ElectronUpdateInfo) => void) => (() => void);
+  onUpdateError: (cb: (message: string) => void) => (() => void);
 }
 
 declare global {

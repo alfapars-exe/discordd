@@ -13,6 +13,19 @@ import type {
   RegisteredGamesSnapshot as ElectronRegisteredGamesSnapshot,
 } from "./registered-games";
 
+// Keep runtime helpers inside this file: sandboxed preloads cannot require
+// arbitrary local modules. Each disposer owns only its registered listener.
+function subscribeIPC<T>(channel: string, callback: (value: T) => void): () => void {
+  let active = true;
+  const listener = (_event: unknown, value: T) => { if (active) callback(value); };
+  ipcRenderer.on(channel, listener);
+  return () => {
+    if (!active) return;
+    active = false;
+    ipcRenderer.removeListener(channel, listener);
+  };
+}
+
 contextBridge.exposeInMainWorld("electronAPI", {
   syncGameJoinContext: (context: GameJoinContext | null): Promise<GameJoinContextAck> => ipcRenderer.invoke("sync-game-join-context", context),
   launchCS2GameJoin: (request: CS2JoinRequest): Promise<CS2JoinStatus> => ipcRenderer.invoke("launch-cs2-game-join", request),
@@ -433,9 +446,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   closeWindow: (): Promise<void> => ipcRenderer.invoke("close-window"),
 
   /** Listen for maximize/unmaximize changes (icon toggle) */
-  onMaximizedChange: (cb: (isMaximized: boolean) => void): void => {
-    ipcRenderer.on("window-maximized-change", (_e, val) => cb(val));
-  },
+  onMaximizedChange: (cb: (isMaximized: boolean) => void): (() => void) =>
+    subscribeIPC("window-maximized-change", cb),
 
   /** Remove maximize listener (on component unmount) */
   removeMaximizedListener: (): void => {
@@ -460,22 +472,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ─── Event listeners (main → renderer) ───
 
   /** Update available */
-  onUpdateAvailable: (cb: (info: unknown) => void): void => {
-    ipcRenderer.on("update-available", (_e, info) => cb(info));
-  },
+  onUpdateAvailable: (cb: (info: unknown) => void): (() => void) =>
+    subscribeIPC("update-available", cb),
 
   /** Download progress */
-  onUpdateProgress: (cb: (progress: unknown) => void): void => {
-    ipcRenderer.on("update-progress", (_e, progress) => cb(progress));
-  },
+  onUpdateProgress: (cb: (progress: unknown) => void): (() => void) =>
+    subscribeIPC("update-progress", cb),
 
   /** Download completed — info carries `{ version, releaseNotes?, ... }` */
-  onUpdateDownloaded: (cb: (info: { version: string }) => void): void => {
-    ipcRenderer.on("update-downloaded", (_e, info) => cb(info));
-  },
+  onUpdateDownloaded: (cb: (info: { version: string }) => void): (() => void) =>
+    subscribeIPC("update-downloaded", cb),
 
   /** Update error */
-  onUpdateError: (cb: (message: string) => void): void => {
-    ipcRenderer.on("update-error", (_e, message) => cb(message));
-  },
+  onUpdateError: (cb: (message: string) => void): (() => void) =>
+    subscribeIPC("update-error", cb),
 });

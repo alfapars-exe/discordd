@@ -26,6 +26,14 @@ function snapshot(position: VoiceOverlaySnapshot["position"], patch: Partial<Voi
 }
 
 describe("VoiceOverlayContent", () => {
+  it("shows all five names at middle left when only two members are speaking", () => {
+    const participants = Array.from({ length: 5 }, (_, i) => ({ ...participant(`member-${i}`, i < 2), muted: i === 4 }));
+    const view = render(<VoiceOverlayContent snapshot={snapshot("center-left", { participants })} />);
+    expect(view.container.querySelector(".voice-overlay-root")).toHaveAttribute("data-position", "center-left");
+    expect(view.container.querySelectorAll(".voice-overlay-row")).toHaveLength(5);
+    participants.forEach(p => expect(screen.getByText(p.name)).toBeVisible());
+    expect(view.container.querySelector(".voice-overlay-widget")).toHaveStyle({ transformOrigin: "center left" });
+  });
   it("renders real projected activity independently from voice and an honest empty state", () => {
     const source = snapshot("top-left", { participants: [], voiceOverlayMaxParticipants: 0, voiceOverlayActivity: true, activities: [{ userId: "friend", label: "Friend", gameName: "Example Game" }] });
     const view = render(<VoiceOverlayContent snapshot={source} />);

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/pkg"
@@ -74,7 +75,10 @@ type statusRecorder struct {
 	http.ResponseWriter
 	status int
 	bytes  int
+	ctx    context.Context
 }
+
+func (r *statusRecorder) LogContext() context.Context { return r.ctx }
 
 func (r *statusRecorder) WriteHeader(code int) {
 	if r.status == 0 {
@@ -99,7 +103,7 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // stays at Info so abuse and failures remain visible, and the HTTPStatsSink
 // counters see every request regardless of level.
 func accessLogLevel(path string, status int) slog.Level {
-	if path == "/api/client-log" && status == http.StatusNoContent {
+	if status < 400 && (path == "/api/client-log" || path == "/api/version" || path == "/api/health" || path == "/api/ready" || strings.HasSuffix(path, "/music/state")) {
 		return slog.LevelDebug
 	}
 	return slog.LevelInfo
@@ -165,19 +169,41 @@ func RequestLogger(logger *slog.Logger, sink HTTPStatsSink) func(http.Handler) h
 			// to an endpoint without pulling the whole *http.Request into ctx.
 			ctx = pkg.WithRequestInfo(ctx, r.Method, r.URL.Path)
 
-			rec := &statusRecorder{ResponseWriter: w}
+			ctx = pkg.WithRequestLogState(ctx)
+			rec := &statusRecorder{ResponseWriter: w, ctx: ctx}
 			start := time.Now()
-			next.ServeHTTP(rec, r.WithContext(ctx))
+			request := r.WithContext(ctx)
+			next.ServeHTTP(rec, request)
 			if rec.status == 0 {
 				rec.status = http.StatusOK
+				if ctx.Err() != nil {
+					rec.status = 499
+				} // observation only; never send a synthetic response
 			}
 			duration := time.Since(start)
 
-			if sink != nil {
+			route := request.Pattern
+			if route == "" {
+				route = "unmatched"
+			}
+			if combined, ok := sink.(interface {
+				ObserveRequest(string, int, time.Duration)
+			}); ok {
+				combined.ObserveRequest(route, rec.status, duration)
+			} else if sink != nil {
 				sink.Observe(rec.status, duration)
 			}
 
-			logger.LogAttrs(ctx, accessLogLevel(r.URL.Path, rec.status), "http request",
+			if rec.status >= 500 && !pkg.RequestErrorReported(ctx) {
+				pkg.DiagnosticError(ctx, rec.status, "HTTP_UNREPORTED", "internal", nil, slog.String("route", route), slog.Int64("duration_ms", duration.Milliseconds()))
+			}
+			level := accessLogLevel(r.URL.Path, rec.status)
+			if duration > 2*time.Second && level < slog.LevelInfo {
+				level = slog.LevelInfo
+			}
+			logger.LogAttrs(ctx, level, "http request",
+				slog.String("event_kind", "http_access"),
+				slog.String("route", route),
 				slog.String("request_id", reqID),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),

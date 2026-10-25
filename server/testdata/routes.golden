@@ -202,6 +202,7 @@ DELETE /api/admin/users/{id}/ban
 DELETE /api/admin/users/{id}
 PATCH /api/admin/users/{id}/platform-admin
 GET /api/admin/logs
+GET /api/admin/logs/health
 DELETE /api/admin/logs
 POST /api/livekit/webhook
 GET /api/stats

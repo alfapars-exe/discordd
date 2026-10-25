@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -64,13 +65,22 @@ func (h *AdminHandler) ListAppLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := models.AppLogFilter{
-		Level:    q.Get("level"),
-		Category: q.Get("category"),
-		Search:   q.Get("search"),
-		Limit:    limit,
-		Offset:   offset,
+		Level:     q.Get("level"),
+		Category:  q.Get("category"),
+		Search:    q.Get("search"),
+		RequestID: q.Get("request_id"), EventCode: q.Get("event_code"), Component: q.Get("component"), From: q.Get("from"), To: q.Get("to"),
+		Limit:  limit,
+		Offset: offset,
 	}
 
+	for _, v := range []string{filter.From, filter.To} {
+		if v != "" {
+			if _, err := time.Parse(time.RFC3339Nano, v); err != nil {
+				pkg.ErrorWithMessage(w, http.StatusBadRequest, "invalid log date; use RFC3339")
+				return
+			}
+		}
+	}
 	logs, total, err := h.appLogService.List(r.Context(), filter)
 	if err != nil {
 		pkg.Error(w, err)
@@ -81,6 +91,15 @@ func (h *AdminHandler) ListAppLogs(w http.ResponseWriter, r *http.Request) {
 		"logs":  logs,
 		"total": total,
 	})
+}
+
+// AppLogHealth reports memory-only sink health even if log storage is unavailable.
+func (h *AdminHandler) AppLogHealth(w http.ResponseWriter, r *http.Request) {
+	if health, ok := h.appLogService.(interface{ Health() models.AppLogHealth }); ok {
+		pkg.JSON(w, http.StatusOK, health.Health())
+		return
+	}
+	pkg.JSON(w, http.StatusOK, models.AppLogHealth{RetentionDays: 7})
 }
 
 // ClearAppLogs -- DELETE /api/admin/logs

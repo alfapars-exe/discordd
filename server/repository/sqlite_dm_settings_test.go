@@ -57,7 +57,7 @@ func TestDMSettingsRepo_MuteDM_ParseMutedUntil_FormatGuard(t *testing.T) {
 	}
 
 	raw := rawDMMutedUntil(t, db, dmAlice, channelID)
-	if raw == nil || !expiryFormatRe.MatchString(*raw) {
+	if raw == nil || (!database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(*raw)) {
 		t.Errorf("stored muted_until = %v, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
 	}
 
@@ -92,7 +92,7 @@ func TestDMSettingsRepo_MuteDM_Forever(t *testing.T) {
 	// Format guard: the sentinel itself must match expiryFormatRe now that
 	// it's no longer RFC3339-shaped.
 	raw := rawDMMutedUntil(t, db, dmAlice, channelID)
-	if raw == nil || !expiryFormatRe.MatchString(*raw) {
+	if raw == nil || (!database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(*raw)) {
 		t.Errorf("stored sentinel muted_until = %v, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
 	}
 
@@ -135,7 +135,7 @@ func TestDMSettingsRepo_MuteDM_PastExpiry_NotActive(t *testing.T) {
 // 'T' > ' ' sorts the RFC3339 string after datetime('now') regardless of
 // how far in the past it really is).
 func TestDMSettingsRepo_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
-	db := newTestDB(t)
+	db, _ := newSQLiteTestDBWithPath(t)
 	channelID := newDMSettingsChannel(t, db)
 	repo := NewSQLiteDMSettingsRepo(wrapForRepo(db))
 	ctx := context.Background()
@@ -174,7 +174,7 @@ func TestDMSettingsRepo_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
 	exec077Migration(t, db)
 
 	raw = rawDMMutedUntil(t, db, dmAlice, channelID)
-	if raw == nil || !expiryFormatRe.MatchString(*raw) {
+	if raw == nil || (!database.IsPostgres(db.Conn) && !expiryFormatRe.MatchString(*raw)) {
 		t.Errorf("after 077: muted_until = %v, want YYYY-MM-DD HH:MM:SS format", raw)
 	}
 

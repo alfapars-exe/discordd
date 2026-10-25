@@ -54,7 +54,7 @@ export type VoiceOverlaySnapshot = {
   speakingOpacity: number;
   idleOpacity: number;
   scale: number;
-  position: "top-left" | "bottom-left" | "top-right" | "bottom-right";
+  position: "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
   speakingOnly: boolean;
   voiceOverlayAvatarSize: "small" | "large";
   voiceOverlayNameDisplay: "always" | "speaking" | "never";
@@ -287,7 +287,7 @@ export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly 
   if (!snapshot.enabled || (snapshot.voiceOverlayMaxParticipants === 0 && !showActions && !showActivity && !showNotifications && !showChat && !showGameNotices)) return null;
   const participants = snapshot.participants.filter((participant) => !snapshot.speakingOnly || participant.speaking)
     .slice(0, Math.max(0, Math.min(25, Math.floor(snapshot.voiceOverlayMaxParticipants))));
-  const transformOrigin = `${snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
+  const transformOrigin = `${snapshot.position === "center-left" ? "center" : snapshot.position.startsWith("top") ? "top" : "bottom"} ${snapshot.position.endsWith("left") ? "left" : "right"}`;
   const scaleFactor = snapshot.scale / 100;
   const maxWidthVw = viewportWidth > 0 ? Math.min(100, Math.max(0, ((viewportWidth - 16) / scaleFactor / viewportWidth) * 100)) : 100;
   const toolbar = showActions && <VoiceOverlayToolbar key={snapshot.voiceActionSession} snapshot={snapshot} />;

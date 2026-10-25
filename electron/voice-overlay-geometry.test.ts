@@ -214,7 +214,27 @@ test("opt-in media-only HUD reserves passive bounded space without participant/a
  const off=calculateVoiceOverlayGeometry({...source,voiceOverlayVideo:false},{x:0,y:0,width:1200,height:800})!;assert.equal(off.mediaHeight,0);assert.equal(off.shouldShow,false);
 });
 
+test("middle-left shows all five members including silent and muted users", () => {
+  const participants = snapshot().participants.slice(0, 5).map((p, i) => ({ ...p, speaking: i < 2, muted: i === 4 }));
+  for (const scale of [75, 100, 150]) {
+    const area = { x: -1920, y: 100, width: 1920, height: 1080 };
+    const geometry = calculateVoiceOverlayGeometry(snapshot({ position: "center-left", participants, scale }), area)!;
+    assert.equal(geometry.visibleParticipants, 5);
+    assert.equal(geometry.x, area.x + 24);
+    assert.ok(Math.abs(geometry.y + geometry.height / 2 - (area.y + area.height / 2)) <= 0.5);
+  }
+});
 
+test("optional game panels cannot reduce a five-person roster to two rows", () => {
+  const source = snapshot({ voiceOverlayMode: "game", position: "center-left",
+    participants: snapshot().participants.slice(0, 5), voiceOverlayVideo: true,
+    voiceOverlayChat: true, chatStatus: "ready", chatMessages: Array.from({ length: 5 }, (_, i) => ({ id: String(i), author: "Friend", text: "Hello" })),
+    voiceOverlayActivity: true, activities: [], voiceOverlayNotifications: true, notificationStatus: "ready", notifications: [],
+  });
+  const geometry = calculateVoiceOverlayGeometry(source, { x: 0, y: 0, width: 1280, height: 720 })!;
+  assert.equal(geometry.visibleParticipants, 5);
+  assert.ok(geometry.height <= 720 - 48);
+});
 
 test("transient game notices use only spare room without shrinking voice or media", () => {
   const notices = Array.from({ length: 3 }, (_, i) => ({ noticeId: `12345678-1234-4234-8234-${String(i).padStart(12, "0")}`, label: "Friend", gameName: "CS2", kind: "game_activity" as const, expiresAt: Date.now() + 10000 }));

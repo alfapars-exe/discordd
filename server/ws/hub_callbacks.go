@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/argeinfina/hichat/models"
+	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── Callback Type Definitions ───
@@ -145,6 +146,9 @@ func (h *Hub) SetAppLogger(logger AppLogger) {
 // sites (out of scope for P3.8's request_id addition — see AppLogService.Log's
 // doc comment).
 func (h *Hub) logEvent(level models.LogLevel, category models.LogCategory, userID *string, message string, metadata map[string]string) {
+	if level != models.LogLevelInfo && logx.EmitAppEvent(context.Background(), hubLogger, string(level), string(category), userID, nil, message, metadata) {
+		return
+	}
 	if h.appLogger != nil {
 		h.appLogger.Log(context.Background(), level, category, userID, nil, message, metadata)
 	}

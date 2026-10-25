@@ -113,7 +113,7 @@ function VoiceSettings() {
     try {
       if (await resetOverlayLayout() !== true) throw new Error("reset failed");
       const current = useVoiceStore.getState();
-      if (current.voiceOverlayPosition === startPosition) setOverlayPosition("bottom-left");
+      if (current.voiceOverlayPosition === startPosition) setOverlayPosition("center-left");
       if (current.voiceOverlayScale === startScale) setOverlayScale(100);
       if (overlayResetMountedRef.current) setOverlayResetResult("success");
     } catch {
@@ -442,7 +442,7 @@ function VoiceSettings() {
             <VolumeSlider value={overlayScale} max={150} onChange={setOverlayScale} ariaLabel={t("voiceOverlayScale", { defaultValue: "HUD ölçeği" })} />
             <label className="vs-label">{t("voiceOverlayPosition", { defaultValue: "Konum" })}
               <select className="vs-select" value={overlayPosition} onChange={(e) => setOverlayPosition(e.target.value as typeof overlayPosition)}>
-                <option value="top-left">{t("voiceOverlayTopLeft", { defaultValue: "Sol üst" })}</option><option value="bottom-left">{t("voiceOverlayBottomLeft", { defaultValue: "Sol alt" })}</option><option value="top-right">{t("voiceOverlayTopRight", { defaultValue: "Sağ üst" })}</option><option value="bottom-right">{t("voiceOverlayBottomRight", { defaultValue: "Sağ alt" })}</option>
+                <option value="center-left">{t("voiceOverlayCenterLeft", { defaultValue: "Sol orta" })}</option><option value="top-left">{t("voiceOverlayTopLeft", { defaultValue: "Sol üst" })}</option><option value="bottom-left">{t("voiceOverlayBottomLeft", { defaultValue: "Sol alt" })}</option><option value="top-right">{t("voiceOverlayTopRight", { defaultValue: "Sağ üst" })}</option><option value="bottom-right">{t("voiceOverlayBottomRight", { defaultValue: "Sağ alt" })}</option>
               </select>
             </label>
             <div className="vs-toggle-row"><div><div className="vs-label">{t("voiceOverlaySpeakingOnly", { defaultValue: "Yalnızca konuşanları göster" })}</div></div><label className="vs-switch"><input type="checkbox" checked={overlaySpeakingOnly} onChange={(e) => setOverlaySpeakingOnly(e.target.checked)} /><span className="vs-switch-slider" /></label></div>

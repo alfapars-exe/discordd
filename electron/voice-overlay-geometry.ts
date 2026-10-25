@@ -78,33 +78,39 @@ export function calculateVoiceOverlayGeometry(
   const maxWidth = Math.max(1, Math.floor(workArea.width - marginX * 2));
   const maxHeight = Math.max(1, Math.floor(workArea.height - marginY * 2));
 
-  const goLiveHeight = snapshot.voiceOverlayMode === "game" && snapshot.voiceOverlayGoLive === true && snapshot.goLiveEligible === true && maxWidth >= 196 && maxHeight >= 192 ? 64 : 0;
-  const welcomeHeight = snapshot.voiceOverlayWelcome === true && maxWidth >= 196 && maxHeight - goLiveHeight >= 128 ? 32 : 0;
-  const mediaAvailable = maxHeight - welcomeHeight - goLiveHeight - ROOT_PADDING * 2;
-  const mediaHeight = (snapshot.voiceOverlayVideo || snapshot.voiceOverlayStreams) && maxWidth >= 196 && mediaAvailable >= 120 ? Math.min(320, mediaAvailable) : 0;
-  const contentMaxHeight = maxHeight - welcomeHeight - goLiveHeight - mediaHeight;
   const scale = snapshot.scale / 100;
   const rowHeight = snapshot.voiceOverlayAvatarSize === "large" ? LARGE_ROW_HEIGHT : SMALL_ROW_HEIGHT;
-  const minimumUsableWidth = Math.ceil(WIDGET_MIN_WIDTH * scale + ROOT_PADDING * 2);
-  const hasUsableWidth = maxWidth >= minimumUsableWidth;
   const matchingParticipants = snapshot.participants.filter((participant) => !snapshot.speakingOnly || participant.speaking);
   const requestedCount = Math.min(matchingParticipants.length, snapshot.voiceOverlayMaxParticipants);
+  // Keep a normal five-person game call visible before optional panels claim
+  // the available height. Physical window limits still bound the final roster.
+  const reservedCount = snapshot.voiceOverlayMode === "game" ? Math.min(5, requestedCount) : 0;
+  const reservedVoiceHeight = Math.min(Math.max(0, maxHeight - ROOT_PADDING * 2),
+    reservedCount > 0 ? (reservedCount * rowHeight + (reservedCount - 1) * ROW_GAP) * scale : 0);
+  const auxiliaryMaxHeight = maxHeight - reservedVoiceHeight;
+  const goLiveHeight = snapshot.voiceOverlayMode === "game" && snapshot.voiceOverlayGoLive === true && snapshot.goLiveEligible === true && maxWidth >= 196 && auxiliaryMaxHeight >= 192 ? 64 : 0;
+  const welcomeHeight = snapshot.voiceOverlayWelcome === true && maxWidth >= 196 && auxiliaryMaxHeight - goLiveHeight >= 128 ? 32 : 0;
+  const mediaAvailable = auxiliaryMaxHeight - welcomeHeight - goLiveHeight - ROOT_PADDING * 2;
+  const mediaHeight = (snapshot.voiceOverlayVideo || snapshot.voiceOverlayStreams) && maxWidth >= 196 && mediaAvailable >= 120 ? Math.min(320, mediaAvailable) : 0;
+  const contentMaxHeight = maxHeight - welcomeHeight - goLiveHeight - mediaHeight;
+  const minimumUsableWidth = Math.ceil(WIDGET_MIN_WIDTH * scale + ROOT_PADDING * 2);
+  const hasUsableWidth = maxWidth >= minimumUsableWidth;
   const actionsHeight = snapshot.voiceOverlayQuickActions && snapshot.voiceActionSession && maxWidth >= 112 && contentMaxHeight >= 64 ? 48 : 0;
   const notificationRequestedRows = snapshot.notificationStatus === "ready"
     ? Math.max(1, Math.min(3, snapshot.notifications?.length ?? 0))
     : 1;
-  const notificationCapacity = Math.floor((contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - 20) / NOTIFICATION_ROW_HEIGHT);
+  const notificationCapacity = Math.floor((contentMaxHeight - reservedVoiceHeight - ROOT_PADDING * 2 - actionsHeight - 20) / NOTIFICATION_ROW_HEIGHT);
   const notificationRows = snapshot.voiceOverlayNotifications && maxWidth >= 196 && notificationCapacity >= 1
     ? Math.min(notificationRequestedRows, notificationCapacity)
     : 0;
   const notificationHeight = notificationRows > 0 ? 20 + notificationRows * NOTIFICATION_ROW_HEIGHT : 0;
   const activityCandidate = snapshot.voiceOverlayActivity && maxWidth >= 196;
-  const activityMinimum = activityCandidate && contentMaxHeight >= ROOT_PADDING * 2 + actionsHeight + notificationHeight + 60 ? 60 : 0;
+  const activityMinimum = activityCandidate && contentMaxHeight - reservedVoiceHeight >= ROOT_PADDING * 2 + actionsHeight + notificationHeight + 60 ? 60 : 0;
   const chatCandidate = snapshot.voiceOverlayChat === true && snapshot.chatStatus !== undefined && maxWidth >= 196;
   const requestedChatRows = snapshot.chatStatus === "ready"
     ? Math.max(1, Math.min(5, snapshot.chatMessages?.length ?? 0))
     : 1;
-  const chatCapacity = Math.floor((contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - 20) / CHAT_ROW_HEIGHT);
+  const chatCapacity = Math.floor((contentMaxHeight - reservedVoiceHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - 20) / CHAT_ROW_HEIGHT);
   const chatRows = chatCandidate ? Math.min(requestedChatRows, Math.max(0, chatCapacity)) : 0;
   const chatHeight = chatRows > 0 ? 20 + chatRows * CHAT_ROW_HEIGHT : 0;
   const contentHeightAvailable = Math.max(0, contentMaxHeight - ROOT_PADDING * 2 - actionsHeight - notificationHeight - activityMinimum - chatHeight);
@@ -136,7 +142,9 @@ export function calculateVoiceOverlayGeometry(
   const requestedX = snapshot.position.endsWith("right")
     ? workArea.x + workArea.width - width - marginX
     : workArea.x + marginX;
-  const requestedY = snapshot.position.startsWith("bottom")
+  const requestedY = snapshot.position === "center-left"
+    ? workArea.y + (workArea.height - height) / 2
+    : snapshot.position.startsWith("bottom")
     ? workArea.y + workArea.height - height - marginY
     : workArea.y + marginY;
 

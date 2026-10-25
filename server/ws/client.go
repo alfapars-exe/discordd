@@ -153,9 +153,7 @@ func (c *Client) logUnexpectedClose(err error) {
 		websocket.CloseServiceRestart) {
 		level = models.LogLevelWarn
 	}
-	if level == models.LogLevelWarn {
-		dispatchLogger.Warn("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
-	} else {
+	if level == models.LogLevelInfo {
 		dispatchLogger.Info("unexpected websocket close", "user_id", c.userID, "err", pkg.ErrText(err))
 	}
 	c.hub.logEvent(level, models.LogCategoryWS, &c.userID,

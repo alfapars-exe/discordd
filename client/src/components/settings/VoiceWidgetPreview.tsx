@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import "../../styles/voice-overlay.css";
 
-type VoiceWidgetPosition = "top-left" | "bottom-left" | "top-right" | "bottom-right";
+type VoiceWidgetPosition = "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
 type Props = {
   enabled: boolean;
   mode: "desktop" | "game";
@@ -26,7 +26,7 @@ export default function VoiceWidgetPreview(props: Props) {
   const participants = SAMPLE_PARTICIPANTS
     .filter((participant) => !props.speakingOnly || participant.speaking)
     .slice(0, Math.max(0, Math.min(25, Math.floor(props.maxParticipants))));
-  const transformOrigin = `${props.position.startsWith("top") ? "top" : "bottom"} ${props.position.endsWith("left") ? "left" : "right"}`;
+  const transformOrigin = `${props.position === "center-left" ? "center" : props.position.startsWith("top") ? "top" : "bottom"} ${props.position.endsWith("left") ? "left" : "right"}`;
 
   return <section className="voice-widget-preview" aria-labelledby="voice-widget-preview-title">
     <div className="voice-widget-preview-heading">

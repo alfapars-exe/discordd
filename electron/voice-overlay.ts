@@ -661,7 +661,7 @@ export function resetVoiceOverlayLayout(): boolean {
   layoutPoint = null;
   layoutSaveFailed = false;
   lockVoiceOverlay();
-  if (latest) updateVoiceOverlay({ ...latest, position: "bottom-left", scale: 100 }, latestArea ?? undefined, layoutContext);
+  if (latest) updateVoiceOverlay({ ...latest, position: "center-left", scale: 100 }, latestArea ?? undefined, layoutContext);
   return true;
 }
 

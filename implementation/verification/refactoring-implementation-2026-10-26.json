@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-10-25T21:53:37.628645+00:00",
+  "scope": "First refactoring foundation batch; RF01-RF30 are not all complete",
+  "source_groups": {
+    "baseline": {
+      "report": "implementation/verification/refactoring-frozen-baseline-2026-10-26.json",
+      "head": "81217d75e8eec317aebd589e893186556512d03c",
+      "manifest_sha256": "ddd55a8472198bae6461e8c811ba54b7c2aeaa8062bcfe63bb26d3f07d954389",
+      "source_stable": true,
+      "success": true
+    },
+    "postgres": {
+      "report": "implementation/verification/refactoring-frozen-postgres-2026-10-26.json",
+      "head": "81217d75e8eec317aebd589e893186556512d03c",
+      "manifest_sha256": "ddd55a8472198bae6461e8c811ba54b7c2aeaa8062bcfe63bb26d3f07d954389",
+      "source_stable": true,
+      "success": true
+    },
+    "electron": {
+      "report": "implementation/verification/refactoring-frozen-electron-2026-10-26.json",
+      "head": "81217d75e8eec317aebd589e893186556512d03c",
+      "manifest_sha256": "566707fa2883b4a84e24a068c6aa8a791237132211ff810132066ba6b9a8c7e4",
+      "source_stable": true,
+      "success": true
+    }
+  },
+  "client_tests": {
+    "passed": 4219,
+    "failed": 0,
+    "skipped": 0
+  },
+  "go_test_events": {
+    "pass": 3534,
+    "fail": 0,
+    "skip": 15
+  },
+  "go_skipped_tests": [
+    "TestPostgresImportPreservesDataAndRejectsReuse",
+    "TestOpenPostgresInlinePEMReconnect",
+    "TestGameGrantPostgresSendRevokeSerialization",
+    "TestAccountAssetCleanupRefusesSymlink",
+    "TestPostgresRetirementBlocksWaitingPersonalWrite",
+    "TestPostgresPendingDMAwaitsBlockCommit",
+    "TestGroupAdmissionPostgresSerializesConcurrentUnfriendThroughCommit",
+    "TestMusicFFmpegSmoke",
+    "TestMusicYouTubeLiveKitSmoke",
+    "TestMusicYouTubeSearchLiveAcceptance",
+    "TestOnlineFriendNotificationPostgresLockConflictRollsBackAndRechecks",
+    "TestPostgresServerEventDeliverySerializesEligibilityChanges",
+    "TestStreamStartPostgresAuthorizationLocksBlockWritersUntilRollback",
+    "TestStreamStartPostgresLockConflictRollsBackDecisionAndRetryRechecks",
+    "TestStreamStartPostgresUserAndLifecycleGuardsFailFast"
+  ],
+  "postgres": {
+    "packages": [
+      "database",
+      "repository"
+    ],
+    "status": "passed",
+    "required_test_skips": 0,
+    "image": "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc"
+  },
+  "postgres_tls": {
+    "status": "passed",
+    "scenario": "isolated PostgreSQL certificate authentication; two distinct pool connections after inline PEM cleanup",
+    "toolchain": "go1.27.0 windows/amd64"
+  },
+  "electron_latest": {
+    "passed": 256,
+    "failed": 0,
+    "skipped": 1,
+    "skip_reason": "Host cannot create a real symlink",
+    "scope": "Includes restored no_sources/handler_error/sourceKind diagnostics after general snapshot"
+  },
+  "e2e": {
+    "passed": 5,
+    "failed": 0,
+    "scope": "Chromium, real Go, isolated SQLite, Vite dev server"
+  },
+  "build": "passed",
+  "lint": "passed",
+  "bot_test_and_vet": "passed",
+  "coverage": {
+    "client": {
+      "lines": {
+        "total": 35479,
+        "covered": 22321,
+        "skipped": 0,
+        "pct": 62.91
+      },
+      "statements": {
+        "total": 48458,
+        "covered": 30336,
+        "skipped": 0,
+        "pct": 62.6
+      },
+      "functions": {
+        "total": 11452,
+        "covered": 6474,
+        "skipped": 0,
+        "pct": 56.53
+      },
+      "branches": {
+        "total": 36937,
+        "covered": 22468,
+        "skipped": 0,
+        "pct": 60.82
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "go": "total:\t\t\t\t\t\t\t\t\t\t\t(statements)\t\t\t\t\t58.3%",
+    "new_output_routing": {
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    }
+  },
+  "self_scan": {
+    "blocking_matches": 0,
+    "review_queue_rows": 357,
+    "review_queue_is_not_validated_vulnerability_count": true,
+    "log": "artifacts/refactoring/self-scan-final-2026-10-26.log",
+    "exact_source_manifest_tests": 6
+  },
+  "security_review_record_update": {
+    "path": "server/repository/postgres_testdb_test.go",
+    "unchanged_reviewed_line": true,
+    "file_fingerprint_refreshed_after_fixture_additions": true,
+    "new_broad_suppression": false
+  },
+  "product_acceptance": {
+    "complete": false,
+    "pending_behaviors": 248,
+    "automatic_status_changes": false
+  },
+  "limitations": [
+    "GitHub Actions configuration added; remote workflow not executed",
+    "Local Go race detector unavailable because CGO_ENABLED=0; Linux CI race gates retained",
+    "Physical Windows audio/overlay/installer and mobile device acceptance remain open",
+    "General and latest Electron checks have explicitly different source manifests",
+    "Frozen dependencies reused installed workspace dependencies; no install/update in copies"
+  ],
+  "cleanup": {
+    "frozen_source_copies": "removed by tested finally cleanup",
+    "postgres_fixture": "removed including anonymous volumes"
+  }
+}

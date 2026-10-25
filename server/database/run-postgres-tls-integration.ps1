@@ -57,7 +57,7 @@ hostssl all all ::/0 cert
 '@ -replace "`r`n", "`n"
     Write-Utf8NoBom (Join-Path $tempDir "pg_hba.conf") $hba
     $dockerfile = @'
-FROM postgres:18-alpine
+FROM postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
 RUN mkdir /tls && chown postgres:postgres /tls
 COPY --chown=postgres:postgres --chmod=0644 server.crt /tls/server.crt
 COPY --chown=postgres:postgres --chmod=0644 ca.crt /tls/ca.crt

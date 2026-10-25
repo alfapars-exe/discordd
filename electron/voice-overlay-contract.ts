@@ -1,4 +1,4 @@
-export type VoiceOverlayPosition = "top-left" | "bottom-left" | "top-right" | "bottom-right";
+export type VoiceOverlayPosition = "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
 export type VoiceOverlayAvatarSize = "small" | "large";
 export type VoiceOverlayNameDisplay = "always" | "speaking" | "never";
 export type VoiceOverlayNotificationCategory = "mention" | "reply" | "friend_request" | "dm_request" | "system" | "message";
@@ -72,7 +72,7 @@ const MAX_OVERLAY_CHAT_MESSAGES = 5;
 const NOTIFICATION_CATEGORIES = new Set<VoiceOverlayNotificationCategory>(["mention", "reply", "friend_request", "dm_request", "system", "message"]);
 const NOTIFICATION_STATUSES = new Set<VoiceOverlayNotificationStatus>(["loading", "ready", "unavailable"]);
 const CHAT_STATUSES = new Set<VoiceOverlayChatStatus>(["ready", "unavailable"]);
-const POSITIONS = new Set<VoiceOverlayPosition>(["top-left", "bottom-left", "top-right", "bottom-right"]);
+const POSITIONS = new Set<VoiceOverlayPosition>(["top-left", "center-left", "bottom-left", "top-right", "bottom-right"]);
 const AVATAR_SIZES = new Set<VoiceOverlayAvatarSize>(["small", "large"]);
 const NAME_DISPLAY_MODES = new Set<VoiceOverlayNameDisplay>(["always", "speaking", "never"]);
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;

@@ -1,44 +1,35 @@
-// Welcome bot — first-party DX proof for the Hichat bot gateway.
-//
-// It connects to the read-only bot gateway (GET /api/bot/gateway), listens for
-// the member_join op, and posts a welcome message into a configured channel via
-// the same REST message-create endpoint a human client uses. Authentication is
-// the bot's "hb_" bearer token in the Authorization header — for both the WS
-// dial and the REST POST.
+// Welcome bot demonstrates the bot gateway and server-scoped message API.
 package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// event is the gateway wire envelope: {"op":"...","d":<data>,"seq":N,"server_id":"..."}.
-// The server's ws.Event marshals the joining member into `d`, and the SERVER ID
-// lives at the envelope top level (BroadcastToServer injects it) — it is NOT a
-// field inside `d`. We capture both so a welcome can be scoped to the right
-// server even though the member payload alone doesn't name one.
 type event struct {
 	Op       string          `json:"op"`
 	Data     json.RawMessage `json:"d"`
 	ServerID string          `json:"server_id"`
 }
 
-// memberJoin mirrors the server's models.MemberWithRoles payload sent as `d`
-// for the member_join op. The joining user's id is the JSON field "id" (NOT
-// "user_id"), and the human-facing name is "display_name" with "username" as a
-// fallback. There is deliberately no "server_id" here — see event.ServerID.
 type memberJoin struct {
 	ID          string  `json:"id"`
 	Username    string  `json:"username"`
 	DisplayName *string `json:"display_name"`
 }
 
-// name returns the friendliest available label for the joining user.
 func (m memberJoin) name() string {
 	if m.DisplayName != nil && *m.DisplayName != "" {
 		return *m.DisplayName
@@ -46,67 +37,126 @@ func (m memberJoin) name() string {
 	return m.Username
 }
 
+type botConfig struct {
+	base    string
+	gateway string
+	token   string
+	server  string
+	channel string
+}
+
+func parseConfig(base, token, server, channel string) (botConfig, error) {
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return botConfig{}, fmt.Errorf("HICHAT_BASE must be an HTTP(S) base URL without credentials, query or fragment")
+	}
+	if token == "" || server == "" || channel == "" {
+		return botConfig{}, fmt.Errorf("BOT_TOKEN, WELCOME_SERVER and WELCOME_CHANNEL are required")
+	}
+	gateway := *parsed
+	if parsed.Scheme == "https" {
+		gateway.Scheme = "wss"
+	} else {
+		gateway.Scheme = "ws"
+	}
+	gateway.Path = strings.TrimRight(gateway.Path, "/") + "/api/bot/gateway"
+	return botConfig{base: strings.TrimRight(parsed.String(), "/"), gateway: gateway.String(), token: token, server: server, channel: channel}, nil
+}
+
 func main() {
-	base := os.Getenv("HICHAT_BASE")     // e.g. http://localhost:8080
-	token := os.Getenv("BOT_TOKEN")      // hb_...
-	channel := os.Getenv("WELCOME_CHANNEL")
-	server := os.Getenv("WELCOME_SERVER") // message route is server-scoped
-	if base == "" || token == "" || channel == "" || server == "" {
-		log.Fatal("set HICHAT_BASE, BOT_TOKEN, WELCOME_CHANNEL, WELCOME_SERVER")
-	}
-
-	wsURL := "ws" + base[len("http"):] + "/api/bot/gateway"
-	hdr := http.Header{"Authorization": {"Bearer " + token}}
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, hdr)
+	config, err := parseConfig(os.Getenv("HICHAT_BASE"), os.Getenv("BOT_TOKEN"), os.Getenv("WELCOME_SERVER"), os.Getenv("WELCOME_CHANNEL"))
 	if err != nil {
-		log.Fatalf("dial %s: %v", wsURL, err)
+		log.Fatal(err)
 	}
-	defer conn.Close()
-	log.Printf("welcome-bot connected to %s", wsURL)
-
-	for {
-		var ev event
-		if err := conn.ReadJSON(&ev); err != nil {
-			log.Fatalf("read: %v", err)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	client := &http.Client{Timeout: 10 * time.Second}
+	dialer := *websocket.DefaultDialer
+	dialer.HandshakeTimeout = 10 * time.Second
+	delay := time.Second
+	for ctx.Err() == nil {
+		err = runGateway(ctx, config, &dialer, client)
+		if ctx.Err() != nil {
+			break
 		}
-		if ev.Op != "member_join" {
-			continue
+		log.Printf("gateway disconnected; retrying after %s: %v", delay, err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
 		}
-
-		// Only greet joins on the server we post into. The gateway may stream
-		// member_join for any server the bot belongs to, but this bot writes to
-		// a single configured WELCOME_CHANNEL on WELCOME_SERVER.
-		if ev.ServerID != "" && ev.ServerID != server {
-			continue
+		if delay < 30*time.Second {
+			delay *= 2
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
 		}
-
-		var mj memberJoin
-		if err := json.Unmarshal(ev.Data, &mj); err != nil {
-			log.Printf("skip member_join: bad payload: %v", err)
-			continue
-		}
-
-		postMessage(base, token, server, channel, "Aramiza hos geldin, @"+mj.name()+"!")
 	}
 }
 
-// postMessage posts to the server-scoped message-create endpoint with the bot
-// token — the exact REST route and "content" body field a human client uses:
-//
-//	POST /api/servers/{serverId}/channels/{channelId}/messages
-//	{"content": "..."}
-func postMessage(base, token, serverID, channelID, text string) {
-	body, _ := json.Marshal(map[string]string{"content": text})
-	url := base + "/api/servers/" + serverID + "/channels/" + channelID + "/messages"
-	req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
+func runGateway(ctx context.Context, config botConfig, dialer *websocket.Dialer, client *http.Client) error {
+	connection, response, err := dialer.DialContext(ctx, config.gateway, http.Header{"Authorization": {"Bearer " + config.token}})
 	if err != nil {
-		log.Printf("post welcome: %v", err)
-		return
+		if response != nil {
+			response.Body.Close()
+		}
+		return fmt.Errorf("gateway connection failed: %w", err)
 	}
-	resp.Body.Close()
-	log.Printf("welcome posted to channel %s (status %d)", channelID, resp.StatusCode)
+	defer connection.Close()
+	connection.SetReadLimit(64 * 1024)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			connection.Close()
+		case <-done:
+		}
+	}()
+	for {
+		var incoming event
+		if err := connection.ReadJSON(&incoming); err != nil {
+			return err
+		}
+		if incoming.Op != "member_join" || (incoming.ServerID != "" && incoming.ServerID != config.server) {
+			continue
+		}
+		var member memberJoin
+		if json.Unmarshal(incoming.Data, &member) != nil || member.ID == "" || member.name() == "" {
+			continue
+		}
+		if err := postMessage(ctx, client, config, "Aramiza hos geldin, @"+member.name()+"!"); err != nil {
+			log.Printf("welcome could not be posted: %v", err)
+		} else {
+			log.Print("welcome posted")
+		}
+	}
+}
+
+func postMessage(ctx context.Context, client *http.Client, config botConfig, text string) error {
+	destination, err := url.JoinPath(config.base, "api/servers", url.PathEscape(config.server), "channels", url.PathEscape(config.channel), "messages")
+	if err != nil {
+		return fmt.Errorf("invalid message endpoint")
+	}
+	body, err := json.Marshal(map[string]string{"content": text})
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, destination, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("invalid message request")
+	}
+	request.Header.Set("Authorization", "Bearer "+config.token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("message request failed: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("message endpoint returned HTTP %d", response.StatusCode)
+	}
+	return nil
 }

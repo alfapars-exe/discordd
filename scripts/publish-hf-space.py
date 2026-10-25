@@ -43,19 +43,23 @@ def main():
     local = {path: Path(path) for path in paths if managed(path)}
     remote = {entry.path: entry for entry in api.list_repo_tree(repo, repo_type="space", revision=current, recursive=True) if hasattr(entry, "blob_id") and managed(entry.path)}
     additions = []
+    source_files = []
     for name, path in sorted(local.items()):
         if path.is_symlink():
             raise SystemExit("Symlink source refused; nothing published")
         data = path.read_bytes()
-        if data.startswith(b"version https://git-lfs.github.com/spec/v1\n"):
+        if data.splitlines()[:1] == [b"version https://git-lfs.github.com/spec/v1"]:
             raise SystemExit("Unmaterialized LFS pointer; checkout LFS before publishing")
+        source_files.append({"path": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
         entry = remote.get(name)
         lfs = getattr(entry, "lfs", None)
         same = bool(entry and ((lfs and hashlib.sha256(data).hexdigest() == lfs.sha256) or (not lfs and hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest() == entry.blob_id)))
         if not same:
-            additions.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=path))
+            # Bind the operation to the bytes that were reviewed. A later
+            # filesystem edit cannot change the content sent by this command.
+            additions.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=data))
     removals = sorted(set(remote) - set(local))
-    plan = {"source_commit": source, "space_parent": current, "add_or_update": [op.path_in_repo for op in additions], "remove_managed_source": removals, "hub_may_update_lfs_metadata": True}
+    plan = {"manifest_version": 2, "source_commit": source, "source_files": source_files, "space_parent": current, "add_or_update": [op.path_in_repo for op in additions], "remove_managed_source": removals, "hub_may_update_lfs_metadata": True}
     plan_hash = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
     print(json.dumps(plan, indent=2))
     print(json.dumps({"plan_sha256": plan_hash}))

@@ -311,13 +311,14 @@ const runtimeTelemetryPurgeEveryNTicks = 24
 // nil telemetryRepo or httpStats degrades gracefully (skips the insert /
 // reports zero HTTP stats respectively) rather than panicking, so a test or
 // a future stripped-down boot path isn't forced to wire them.
-func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duration, telemetryRepo repository.RuntimeTelemetryRepository, httpStats *httpStatsAggregator, retentionDays int) func() {
+func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duration, telemetryRepo repository.RuntimeTelemetryRepository, httpStats *httpStatsAggregator, retentionDays int, appHealth ...func() models.AppLogHealth) func() {
 	stop := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		logger := logx.Component("metrics")
 		tick := 0
+		previousDB := db.Conn.Stats()
 		for {
 			select {
 			case <-stop:
@@ -331,11 +332,29 @@ func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duratio
 				wsStats := hub.Stats()
 				var httpRequests, http5xx, httpMaxLatencyMs int64
 				var httpAvgLatencyMs float64
+				routes := map[string]any{}
 				if httpStats != nil {
-					httpRequests, http5xx, httpMaxLatencyMs, httpAvgLatencyMs = httpStats.snapshotAndReset()
+					httpRequests, http5xx, httpMaxLatencyMs, httpAvgLatencyMs, routes = httpStats.snapshotWindow()
 				}
 
+				logHealth := models.AppLogHealth{}
+				if len(appHealth) > 0 && appHealth[0] != nil {
+					logHealth = appHealth[0]()
+				}
+				diagnostics, _ := json.Marshal(map[string]any{
+					"db_max_open": s.MaxOpenConnections, "db_wait_count_delta": max(int64(0), s.WaitCount-previousDB.WaitCount), "db_wait_duration_ms_delta": max(int64(0), (s.WaitDuration - previousDB.WaitDuration).Milliseconds()), "http_routes": routes, "app_log": logHealth,
+				})
 				logger.Info("runtime stats",
+					"db_max_open", s.MaxOpenConnections,
+					"db_wait_count_delta", max(int64(0), s.WaitCount-previousDB.WaitCount),
+					"db_wait_duration_ms_delta", max(int64(0), (s.WaitDuration-previousDB.WaitDuration).Milliseconds()),
+					"db_max_idle_closed_delta", max(int64(0), s.MaxIdleClosed-previousDB.MaxIdleClosed),
+					"db_max_lifetime_closed_delta", max(int64(0), s.MaxLifetimeClosed-previousDB.MaxLifetimeClosed),
+					"http_routes", routes,
+					"app_log_error_queue", logHealth.ErrorQueue, "app_log_normal_queue", logHealth.NormalQueue,
+					"app_log_dropped_error", logHealth.DroppedError, "app_log_dropped_warn", logHealth.DroppedWarn, "app_log_dropped_info", logHealth.DroppedInfo,
+					"app_log_write_failures", logHealth.WriteFailures,
+
 					"goroutines", runtime.NumGoroutine(),
 					"heap_alloc_bytes", mem.HeapAlloc,
 					"online_users", len(hub.GetOnlineUserIDs()),
@@ -354,11 +373,14 @@ func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duratio
 					"uptime_seconds", int(time.Since(processStart).Seconds()),
 				)
 
+				previousDB = s
+
 				// Persisted AFTER the slog line above (see doc comment): the log
 				// line is the primary, always-available signal; a DB write
 				// failure here must not block or skip it.
 				if telemetryRepo != nil {
 					row := &models.RuntimeTelemetry{
+						Diagnostics:           string(diagnostics),
 						BucketAt:              now.UTC().Truncate(time.Minute).Format("2006-01-02 15:04:05"),
 						Goroutines:            runtime.NumGoroutine(),
 						HeapAllocBytes:        mem.HeapAlloc,

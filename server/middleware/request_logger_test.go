@@ -239,7 +239,9 @@ func TestRequestLogger_ClientLogTelemetryLogsAtDebug(t *testing.T) {
 	}{
 		{"accepted client-log is debug", "/api/client-log", http.StatusNoContent, "DEBUG"},
 		{"rate-limited client-log stays info", "/api/client-log", http.StatusTooManyRequests, "INFO"},
-		{"other paths stay info", "/api/version", http.StatusNoContent, "INFO"},
+		{"version polling is debug", "/api/version", http.StatusNoContent, "DEBUG"},
+		{"ordinary requests stay info", "/api/friends", http.StatusOK, "INFO"},
+		{"failed polling stays visible", "/api/version", http.StatusBadGateway, "INFO"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

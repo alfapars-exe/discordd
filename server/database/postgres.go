@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -62,8 +63,13 @@ func OpenPostgres(ctx context.Context, dsn string) (*sql.DB, error) {
 	cfg.RuntimeParams["application_name"] = "hichat"
 	cfg.RuntimeParams["timezone"] = "UTC"
 	conn := PostgreSQLPool(cfg)
-	conn.SetMaxOpenConns(4)
-	conn.SetMaxIdleConns(2)
+	maxOpen, maxIdle, limitsErr := postgresPoolLimits()
+	if limitsErr != nil {
+		_ = conn.Close()
+		return nil, limitsErr
+	}
+	conn.SetMaxOpenConns(maxOpen)
+	conn.SetMaxIdleConns(maxIdle)
 	conn.SetConnMaxLifetime(30 * time.Minute)
 	conn.SetConnMaxIdleTime(5 * time.Minute)
 	if err := pingPostgresWithRetry(ctx, conn, waitPostgresRetry); err != nil {
@@ -76,4 +82,26 @@ func OpenPostgres(ctx context.Context, dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("expected PostgreSQL 18, got server_version_num %d", version)
 	}
 	return conn, nil
+}
+
+// Defaults retain the measured production baseline; deployments can tune after
+// comparing pool wait duration and HTTP latency at a known DB capacity.
+func postgresPoolLimits() (int, int, error) {
+	open, idle := 4, 2
+	for _, entry := range []struct {
+		name string
+		dest *int
+	}{{"POSTGRES_MAX_OPEN_CONNS", &open}, {"POSTGRES_MAX_IDLE_CONNS", &idle}} {
+		if raw := os.Getenv(entry.name); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 0 || n > 256 {
+				return 0, 0, fmt.Errorf("invalid %s; expected integer 0..256", entry.name)
+			}
+			*entry.dest = n
+		}
+	}
+	if open < 1 || idle > open {
+		return 0, 0, errors.New("PostgreSQL pool requires max-open >= 1 and max-idle <= max-open")
+	}
+	return open, idle, nil
 }

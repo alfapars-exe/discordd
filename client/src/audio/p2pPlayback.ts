@@ -1,4 +1,5 @@
 import { awaitAudioStep, closeAudioContext } from "./audioOperation";
+import { routeAudioOutput } from "./outputRouting";
 
 export type P2PPlayback = { ready: Promise<{ fallback: boolean }>; stop(): void; setVolume(volume: number): void };
 const gainValue = (value: number) => Number.isFinite(value) ? Math.max(0, Math.min(2, value)) : 0;
@@ -92,7 +93,6 @@ export function playP2PAudio(stream: MediaStream, options: {
     stream.addEventListener("addtrack", refresh); stream.addEventListener("removetrack", refresh); refresh();
     if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
     const device = options.outputDevice === "default" ? "" : options.outputDevice;
-    let fallback = false;
     const route = async (target: string) => {
       for (const element of [audio, decoder]) {
         if (target && typeof element.setSinkId !== "function") throw new DOMException("Custom output unavailable", "NotSupportedError");
@@ -100,12 +100,7 @@ export function playP2PAudio(stream: MediaStream, options: {
         if (!current()) throw new DOMException("Obsolete private output", "AbortError");
       }
     };
-    try { await route(device); }
-    catch (error) {
-      if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
-      if (!device || (error as { name?: string })?.name !== "NotFoundError") throw error;
-      await route(""); fallback = true;
-    }
+    const fallback = await routeAudioOutput(device, route, { defaultSink: "", isCurrent: current });
     if (!current()) throw new DOMException("Obsolete P2P playback", "AbortError");
     routed = true;
     await ensureDecoder();

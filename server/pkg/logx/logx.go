@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/argeinfina/hichat/config"
+	"github.com/argeinfina/hichat/pkg"
 )
 
 // Init configures the global slog logger from cfg, initialises Sentry when a
@@ -38,7 +39,7 @@ func Init(cfg config.LoggingConfig) {
 		handler = newSentryHandler(handler)
 	}
 
-	slog.SetDefault(slog.New(handler))
+	slog.SetDefault(slog.New(&pipelineHandler{next: handler}))
 
 	// Bridge the stdlib log package into slog. We drop stdlib flags because
 	// slog stamps its own timestamp; the original "[component] message" text is
@@ -59,7 +60,9 @@ func Init(cfg config.LoggingConfig) {
 // existing "[component] message" convention in structured form. Prefer this
 // when migrating a hot path off stdlib log.
 func Component(name string) *slog.Logger {
-	return slog.Default().With("component", name)
+	// Resolve the default handler at emission time. Package-level component
+	// loggers are constructed before Init and must not retain the stdlog handler.
+	return slog.New(&forwardHandler{}).With("component", name)
 }
 
 func parseLevel(s string) slog.Level {
@@ -85,6 +88,13 @@ type slogWriter struct {
 
 func (w *slogWriter) Write(p []byte) (int, error) {
 	msg := strings.TrimRight(string(p), "\n")
-	w.logger.LogAttrs(context.Background(), slog.LevelInfo, msg, slog.Bool("via_stdlog", true))
+	level := slog.LevelInfo
+	for prefix, candidate := range map[string]slog.Level{"ERROR ": slog.LevelError, "WARN ": slog.LevelWarn, "DEBUG ": slog.LevelDebug, "INFO ": slog.LevelInfo} {
+		if strings.HasPrefix(msg, prefix) {
+			level, msg = candidate, strings.TrimPrefix(msg, prefix)
+			break
+		}
+	}
+	w.logger.LogAttrs(context.Background(), level, pkg.RedactSecrets(msg), slog.Bool("via_stdlog", true))
 	return len(p), nil
 }

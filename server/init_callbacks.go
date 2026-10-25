@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"log/slog"
+	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
@@ -15,6 +18,31 @@ import (
 // event handling wired below) so they can be filtered separately from the
 // boot-sequence logs in main.go/bootstrap.go/init_services.go.
 var hubLogger = logx.Component("server")
+
+func logOnlineFriendFailure(userID string, err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	level, kind := slog.LevelError, "internal"
+	if errors.Is(err, context.DeadlineExceeded) {
+		level, kind = slog.LevelWarn, "timeout"
+	}
+	attrs := []slog.Attr{slog.String("area", "presence"), slog.String("user_id", userID), slog.String("event_code", "PRESENCE_NOTIFY_FAILED"), slog.String("error_kind", kind), slog.String("err", pkg.ErrText(err))}
+	var summary *services.OnlineFriendNotificationError
+	if errors.As(err, &summary) {
+		attrs = append(attrs, slog.Int("processed", summary.Processed), slog.Int("delivered", summary.Delivered), slog.Int("skipped", summary.Skipped), slog.Int("failed", summary.Failed), slog.Int64("duration_ms", summary.Duration.Milliseconds()))
+	}
+	hubLogger.LogAttrs(context.Background(), level, "online friend notification failed", attrs...)
+}
+
+func notifyOnlineAfterPresence(notifier services.OnlineFriendNotifier, userID string) error {
+	if fresh, ok := notifier.(interface{ NotifyOnlinePresence(string) error }); ok {
+		return fresh.NotifyOnlinePresence(userID)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return notifier.NotifyOnline(ctx, userID)
+}
 
 // registerHubCallbacks wires Hub events to service layer logic.
 //
@@ -284,8 +312,8 @@ func userFirstConnectCallback(hub ws.EventPublisher, userRepo repository.UserRep
 		if !wasReconnect && targetStatus != models.UserStatusOffline &&
 			containsPresenceUser(hub.GetVisibleOnlineUserIDs(), userID) {
 			if notifier := firstOnlineFriendNotifier(onlineFriendNotifiers); notifier != nil {
-				if notifyErr := notifier.NotifyOnline(ctx, userID); notifyErr != nil {
-					hubLogger.Error("failed to notify friends of online presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(notifyErr))
+				if notifyErr := notifyOnlineAfterPresence(notifier, userID); notifyErr != nil {
+					logOnlineFriendFailure(userID, notifyErr)
 				}
 			}
 		}
@@ -515,8 +543,8 @@ func presenceUpdateCallback(hub presenceStatePublisher, userRepo repository.User
 			if st == models.UserStatusOffline {
 				notifier.ObserveOffline(userID)
 			} else if containsPresenceUser(hub.GetVisibleOnlineUserIDs(), userID) {
-				if notifyErr := notifier.NotifyOnline(ctx, userID); notifyErr != nil {
-					hubLogger.Error("failed to notify friends of online presence", "area", "presence", "user_id", userID, "err", pkg.ErrText(notifyErr))
+				if notifyErr := notifyOnlineAfterPresence(notifier, userID); notifyErr != nil {
+					logOnlineFriendFailure(userID, notifyErr)
 				}
 			}
 		}

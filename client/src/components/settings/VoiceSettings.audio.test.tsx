@@ -269,7 +269,7 @@ describe("voice processing settings", () => {
     Object.assign(mocks.state, { voiceOverlayPosition: "top-right", voiceOverlayScale: 140, masterVolume: 62, inputVolume: 80 });
     render(<VoiceSettings />);
     fireEvent.click(screen.getByRole("button", { name: en.voiceOverlayResetLayout }));
-    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("bottom-left"));
+    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("center-left"));
     expect(resetOverlayLayout).toHaveBeenCalledOnce();
     expect(mocks.state.setVoiceOverlayScale).toHaveBeenCalledWith(100);
     expect(mocks.state.setMasterVolume).not.toHaveBeenCalled();
@@ -315,7 +315,7 @@ describe("voice processing settings", () => {
     view.unmount();
     resolveReset(true);
     await Promise.resolve();
-    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("bottom-left"));
+    await waitFor(() => expect(mocks.state.setVoiceOverlayPosition).toHaveBeenCalledWith("center-left"));
     expect(mocks.state.setVoiceOverlayScale).toHaveBeenCalledWith(100);
     delete window.electronAPI;
   });

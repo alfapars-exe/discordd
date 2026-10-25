@@ -47,7 +47,7 @@ export type CameraQuality = "360p" | "720p" | "1080p";
  * useful on weak uplinks or laptop encoders.
  */
 export type CameraFps = 15 | 30;
-export type VoiceOverlayPosition = "top-left" | "bottom-left" | "top-right" | "bottom-right";
+export type VoiceOverlayPosition = "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
 
 /**
  * Microphone profile — picks the whole capture + publish + processor chain.
@@ -280,6 +280,8 @@ const STORAGE_KEY = "mqvi_voice_settings";
  * once. They can toggle it back off and that choice persists.
  */
 const SCREEN_SHARE_AUDIO_MIGRATION_KEY = "mqvi_voice_settings_v2_screenShareAudio";
+const OVERLAY_ROSTER_MIGRATION_KEY = "mqvi_voice_settings_v4_gameRosterCenter";
+const OVERLAY_GAME_MODE_MIGRATION_KEY = "mqvi_voice_settings_v3_overlayGameMode";
 
 /**
  * Engines removed from the picker over time. Persisted settings with one
@@ -325,11 +327,11 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   muteHotkey: "KeyL",
   muteHotkeyGlobal: false,
   voiceOverlayEnabled: true,
-  voiceOverlayMode: "desktop",
+  voiceOverlayMode: "game",
   voiceOverlaySpeakingOpacity: 100,
   voiceOverlayIdleOpacity: 35,
   voiceOverlayScale: 100,
-  voiceOverlayPosition: "bottom-left",
+  voiceOverlayPosition: "center-left",
   voiceOverlayPinned: false,
   voiceOverlayQuickActions: false,
   voiceOverlayClickableActions: false,
@@ -357,7 +359,7 @@ function boundedOverlayNumber(value: number, min: number, max: number, fallback:
 }
 
 function validOverlayPosition(value: unknown): value is VoiceOverlayPosition {
-  return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
+  return value === "center-left" || value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right";
 }
 
 /** Loads voice settings from localStorage with partial merge (new keys get defaults). */
@@ -367,6 +369,8 @@ export function loadSettings(): VoiceSettings {
     if (!raw) {
       // No saved settings — treat as already migrated; mark to skip on first save.
       try { localStorage.setItem(SCREEN_SHARE_AUDIO_MIGRATION_KEY, "1"); } catch { /* ignore */ }
+      try { localStorage.setItem(OVERLAY_GAME_MODE_MIGRATION_KEY, "1"); } catch { /* ignore */ }
+      try { localStorage.setItem(OVERLAY_ROSTER_MIGRATION_KEY, "1"); } catch { /* ignore */ }
       return { ...DEFAULT_SETTINGS };
     }
     // JSON.parse can return any shape — array, primitive, null. Guard
@@ -384,6 +388,25 @@ export function loadSettings(): VoiceSettings {
     if (typeof merged.voiceOverlayEnabled !== "boolean") merged.voiceOverlayEnabled = false;
     if (merged.voiceOverlayMode !== "desktop" && merged.voiceOverlayMode !== "game") {
       merged.voiceOverlayMode = DEFAULT_SETTINGS.voiceOverlayMode;
+    }
+    // Persist the mode before the marker so a restart cannot restore the old
+    // desktop default. Later explicit desktop choices must remain untouched.
+    if (!localStorage.getItem(OVERLAY_GAME_MODE_MIGRATION_KEY)) {
+      merged.voiceOverlayMode = "game";
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, voiceOverlayMode: "game" }));
+        localStorage.setItem(OVERLAY_GAME_MODE_MIGRATION_KEY, "1");
+      } catch { /* Keep game mode in memory and retry migration on next load. */ }
+    }
+    // Upgrade existing layouts once; subsequent explicit choices remain local.
+    if (!localStorage.getItem(OVERLAY_ROSTER_MIGRATION_KEY)) {
+      Object.assign(merged, { voiceOverlayMode: "game", voiceOverlayPosition: "center-left",
+        voiceOverlaySpeakingOnly: false, voiceOverlayMaxParticipants: 25, voiceOverlayNameDisplay: "always" });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, voiceOverlayMode: "game", voiceOverlayPosition: "center-left",
+          voiceOverlaySpeakingOnly: false, voiceOverlayMaxParticipants: 25, voiceOverlayNameDisplay: "always" }));
+        localStorage.setItem(OVERLAY_ROSTER_MIGRATION_KEY, "1");
+      } catch { /* Retry if persistence was unavailable. */ }
     }
     if (typeof merged.voiceOverlaySpeakingOnly !== "boolean") merged.voiceOverlaySpeakingOnly = false;
     if (typeof merged.voiceOverlayPinned !== "boolean") merged.voiceOverlayPinned = DEFAULT_SETTINGS.voiceOverlayPinned;

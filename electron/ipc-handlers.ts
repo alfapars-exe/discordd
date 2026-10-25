@@ -113,7 +113,9 @@ export function registerIpcHandlers(): void {
     allowLoopback: !app.isPackaged, supported: process.platform === "win32",
   });
   app.once("before-quit", () => gameJoin.dispose());
-  const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout.json") });
+  // Start the middle-left layout generation without restoring old bottom-edge
+  // drag offsets. New drag positions remain persistent in this generation.
+  const overlayLayouts = createOverlayLayoutStore({ filePath: path.join(app.getPath("userData"), "overlay-layout-v2.json") });
   configureVoiceOverlayLayout(overlayLayouts);
   ipcMain.handle("reset-overlay-layout", (event) => {
     assertTrustedMainWindowSender(event);

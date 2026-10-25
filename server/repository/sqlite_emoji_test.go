@@ -76,7 +76,11 @@ func TestEmojiRepo_CRUD(t *testing.T) {
 		t.Errorf("GetInServer = %+v", got)
 	}
 	assertRFC3339UTC(t, "GetInServer created_at", got.CreatedAt)
-	if n := countRows(t, db, `SELECT COUNT(*) FROM server_emojis WHERE created_at LIKE '____-__-__ __:__:__'`); n != 1 {
+	storageQuery := `SELECT COUNT(*) FROM server_emojis WHERE created_at LIKE '____-__-__ __:__:__'`
+	if database.IsPostgres(db.Conn) {
+		storageQuery = `SELECT COUNT(*) FROM server_emojis WHERE created_at IS NOT NULL AND pg_typeof(created_at)='timestamptz'::regtype`
+	}
+	if n := countRows(t, db, storageQuery); n != 1 {
 		t.Error("stored created_at is not 'YYYY-MM-DD HH:MM:SS' text")
 	}
 

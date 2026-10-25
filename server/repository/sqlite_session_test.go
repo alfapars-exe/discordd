@@ -180,6 +180,16 @@ func TestSQLiteSession_ExpiresAtFormatGuard(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
+	if database.IsPostgres(db.Conn) {
+		var stored time.Time
+		if err := db.Conn.QueryRow("SELECT expires_at FROM sessions WHERE id = ?", session.ID).Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		if !stored.Equal(session.ExpiresAt.UTC().Truncate(time.Second)) {
+			t.Fatalf("native timestamp changed expiry: %v", stored)
+		}
+		return
+	}
 	raw := rawSessionExpiresAt(t, db, session.ID)
 	if !expiryFormatRe.MatchString(raw) {
 		t.Errorf("stored expires_at = %q, want YYYY-MM-DD HH:MM:SS format (no 'T')", raw)
@@ -214,7 +224,9 @@ func exec077Migration(t testing.TB, db *database.DB) {
 // is idempotent, and that DeleteExpired (previously silently no-op on such
 // rows) now actually deletes it.
 func TestSQLiteSession_Migration077_NormalizesLegacyRFC3339Row(t *testing.T) {
-	db, userRepo, sessionRepo := newSessionRepos(t)
+	db, _ := newSQLiteTestDBWithPath(t)
+	userRepo := NewSQLiteUserRepo(wrapForRepo(db))
+	sessionRepo := NewSQLiteSessionRepo(wrapForRepo(db))
 	ctx := context.Background()
 	userID := seedSessionUser(t, userRepo, "migration077-owner")
 

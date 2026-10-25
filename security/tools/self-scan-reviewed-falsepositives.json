@@ -20,7 +20,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/postgres_testdb_test.go",
-      "file_sha256": "afb73fd09ba3c548ff87dfc045fcfd26cafed7a951ab82853ec60eac0bf89184",
+      "file_sha256": "fe992dba453093bd95bd5758bf22c8281f28e0f71b9362c378f79647b6156e2e",
       "line_sha256": "11c1a8f059dc896554f0c17cc47ee457ef8833dcc548581189e37d7c552d5471",
       "reason": "The exact match is fixed SQL arithmetic, compile-time SQL fragments, or quoted schema identifiers; request-derived values remain bound arguments.",
       "proof_ref": "server/repository/sqlite_group_dm.go:326,343,351;server/database/postgres_import.go:37-78,132-161,239-249;server/repository/postgres_testdb_test.go:22-36"
