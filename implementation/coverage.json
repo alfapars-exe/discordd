@@ -6491,7 +6491,7 @@
       "id": "p9.camera-preview",
       "title": "Camera selection and preview",
       "phase": "P9",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6507,15 +6507,21 @@
       ],
       "code": [
         "client/src/hooks/useCameraPreview.ts",
-        "client/src/components/settings/voice/CameraSection.tsx"
+        "client/src/components/settings/voice/CameraSection.tsx",
+        "client/src/audio/ownedCamera.ts",
+        "client/src/webrtc/p2pCamera.ts",
+        "client/src/hooks/useRoomCamera.ts"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-owned-camera-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.camera-live-switch",
       "title": "Switch camera during call",
       "phase": "P9",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6530,15 +6536,22 @@
         "LiveKit and one-to-one calls switch to selected camera settings; unavailable device falls back with clear feedback."
       ],
       "code": [
-        "client/src/utils/cameraCapture.ts"
+        "client/src/utils/cameraCapture.ts",
+        "client/src/audio/ownedCamera.ts",
+        "client/src/webrtc/p2pCamera.ts",
+        "client/src/hooks/useRoomCamera.ts",
+        "client/src/hooks/useCameraPreview.ts"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-owned-camera-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.camera-cancel",
       "title": "Camera permission cancellation",
       "phase": "P9",
-      "status": "existing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6553,15 +6566,21 @@
         "Late permission resolution after cancel never opens camera or publishes stale track."
       ],
       "code": [
-        "client/src/hooks/useCameraPreview.ts"
+        "client/src/hooks/useCameraPreview.ts",
+        "client/src/audio/ownedCamera.ts",
+        "client/src/webrtc/p2pCamera.ts",
+        "client/src/hooks/useRoomCamera.ts"
       ],
-      "evidence": []
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-owned-camera-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.screenshare",
       "title": "Screen/window sharing",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6575,8 +6594,15 @@
       "acceptance": [
         "Web native picker and Windows picker share selected source with correct stop/reselect and permission handling."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/webrtc/p2pScreenShare.ts",
+        "client/src/components/dm/GroupScreenShareSession.ts",
+        "client/src/hooks/useScreenShareToggle.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-private-screen-quality-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.share-audio",
@@ -6603,7 +6629,7 @@
       "id": "p9.share-quality",
       "title": "Screen-share quality",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6617,8 +6643,15 @@
       "acceptance": [
         "Selected resolution/FPS updates publication and remains stable under reconnect without a payment gate."
       ],
-      "code": [],
-      "evidence": []
+      "code": [
+        "client/src/webrtc/p2pScreenShare.ts",
+        "client/src/components/dm/GroupScreenShareSession.ts",
+        "client/src/hooks/useScreenShareToggle.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p9-camera-share-union-2026-10-25.json",
+        "implementation/verification/p9-private-screen-quality-2026-10-25.json"
+      ]
     },
     {
       "id": "p9.voice-effects",

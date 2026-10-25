@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "source_commit": "ac1c2061",
+  "status": "automated_verified_runtime_acceptance_pending",
+  "scope": "Combined owned camera and private screen quality, including shared video sender serialization",
+  "review": "Exact43-path union staged from two scoped receipts;45 canonical LF source hash records matched; unrelated music, release and asset changes excluded.",
+  "verification": {
+    "client_suite": "394 files,3806 tests PASS,75.97seconds",
+    "client_build": "TypeScript build and Vite PASS,2.46seconds; existing chunk/config warnings remain",
+    "focused": "Camera69 tests PASS; screen/boundary/UserBar52 tests PASS; whole TypeScript and scoped lint PASS",
+    "source_review": "Exact auth/call/Room/admission and late-result guards; raw capture disabled until current commit; silent-ended paths report recoverable failure; same-sender replaceTrack and encoding changes serialized; restore retains ownership until current camera restored."
+  },
+  "prior_failed_run": "Earlier whole suite had8 failures in two old UserBar Room fixtures missing actual event API. Fixtures were adapted without weakening production guards; all8 pass in final full suite. Earlier build/test results were not reused as final proof after restore fixes.",
+  "remaining": [
+    "Physical Windows/web camera/picker/FPS/output, permission changes, rekey and long-call acceptance.",
+    "Private screen sharing currently video-only; supported system-audio integration remains open and is not silently declared complete.",
+    "Initial coupled P2P audio/video capture has shared failure wording; full initial camera-denial UX remains unaccepted.",
+    "No production deployment or installer publication performed by this change."
+  ]
+}
