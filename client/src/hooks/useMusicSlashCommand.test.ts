@@ -49,12 +49,22 @@ describe("music command call ownership", () => {
     expect(fixture.toast).not.toHaveBeenCalled();
   });
 
-  it.each([" ", "\t", "\n"])("recognizes pasted play arguments separated by %j", async (separator) => {
+  it.each([" ", "\t", "\n", "\u00a0"])("recognizes pasted play arguments separated by %j", async (separator) => {
     vi.mocked(playMusic).mockResolvedValue({ success: true, data: { added_tracks: [{}] } as PlayMusicResponse });
     const { result } = renderHook(() => useMusicSlashCommand());
     expect(await result.current(`  /PLAY${separator}https://youtu.be/example  `)).toEqual({ handled: true, outcome: "success" });
     expect(playMusic).toHaveBeenCalledWith("server-A", "voice-A", "https://youtu.be/example");
     expect(fixture.toast).toHaveBeenLastCalledWith("success", "addedToQueue");
+  });
+
+  it("sends a pasted YouTube radio link to the currently connected voice channel", async () => {
+    const url = "https://www.youtube.com/watch?v=0KbRhUtFwkc&list=RD0KbRhUtFwkc&start_radio=1";
+    vi.mocked(playMusic).mockResolvedValue({ success: true, data: { added_tracks: [{}] } as PlayMusicResponse });
+    const { result } = renderHook(() => useMusicSlashCommand());
+
+    expect(await result.current(`/play ${url}\u00a0`)).toEqual({ handled: true, outcome: "success" });
+    expect(playMusic).toHaveBeenCalledExactlyOnceWith("server-A", "voice-A", url);
+    expect(searchMusic).not.toHaveBeenCalled();
   });
 
   it("retains a missing-URL command without an API request", async () => {

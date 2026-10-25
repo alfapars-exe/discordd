@@ -83,6 +83,8 @@ The API supports enqueue, skip, pause, resume, stop and state retrieval under
 - Queue entries are reconstructed as canonical, individual `watch?v=...`
   URLs. Playback never replays an entire playlist for each entry or retains
   an expiring CDN URL from metadata.
+- A video link containing `list=...` or `start_radio=1` plays only that
+  video. Use an explicit `/playlist?list=...` URL to add a whole playlist.
 - Extraction requests at most 201 entries and keeps at most 4 MiB of output.
   A channel queue holds at most 200 waiting tracks; responses list only the
   accepted tracks. Up to four metadata extractions run concurrently.

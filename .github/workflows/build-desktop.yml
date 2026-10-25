@@ -221,7 +221,7 @@ jobs:
       - name: Verify Windows install and upgrade
         if: matrix.platform == 'windows-latest'
         shell: pwsh
-        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.111"
+        run: ./scripts/verify-windows-upgrade.ps1 -CurrentInstaller "${{ github.workspace }}/release/hichat-setup.exe" -PreviousVersion "2.11.112"
 
       # macOS: DMG with code signing + notarization
       # electron-builder reads CSC_LINK/CSC_KEY_PASSWORD for signing.
@@ -281,7 +281,7 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
               --title "HiChat! ${GITHUB_REF_NAME}" \
-              --notes "HiChat desktop update: audio output controls, connection recovery and compatibility fixes." \
+              --notes "HiChat 2.11.113: YouTube video links with radio parameters play the selected song; music timeouts show a network error. Includes the previous microphone startup fixes." \
               || gh release view "$GITHUB_REF_NAME" >/dev/null
           fi
           test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true \
