@@ -1,0 +1,22 @@
+{
+  "scope": "P8 channel/server mark-read shortcut refresh acknowledgement",
+  "status": "implemented_unverified",
+  "changes": [
+    "Unread snapshot refresh returns whether a current authoritative response was applied.",
+    "Channel/server shortcuts no longer suppress refresh failures and report success; failed/rejected refresh is reported as error.",
+    "Stale account/destination refresh results produce no notification; existing unread snapshot revision fences remain."
+  ],
+  "verification": {
+    "focused_client_tests": {
+      "files": 2,
+      "passed": 34,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "scoped_eslint": "passed"
+  },
+  "remaining": [
+    "Real browser and packaged Windows shortcut acceptance.",
+    "The complete p8.chat-shortcuts item is not accepted by this bounded regression."
+  ]
+}

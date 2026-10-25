@@ -5930,7 +5930,9 @@
         "All displayed chat shortcuts invoke working features and preserve active draft on panels/picker navigation."
       ],
       "code": ["client/src/utils/shortcutRegistry.ts", "client/src/utils/conversationCommands.ts", "client/src/utils/oldestUnreadShortcut.ts", "client/src/hooks/useConversationPageShortcut.ts", "client/src/hooks/useFocusComposerOnTyping.ts", "client/src/hooks/useInboxReadTopShortcut.ts", "client/src/components/layout/DestinationView.tsx"],
-      "evidence": ["implementation/verification/p8-actions-2026-10-24.json", "implementation/verification/p8-dm-group-unread-2026-10-24.json", "implementation/verification/p8-voice-text-2026-10-24.json", "implementation/verification/p8-private-read-upload-2026-10-25.json", "implementation/verification/p4-p8-group-expressions-pins-2026-10-25.json"],
+      "evidence": ["implementation/verification/p8-actions-2026-10-24.json", "implementation/verification/p8-dm-group-unread-2026-10-24.json", "implementation/verification/p8-voice-text-2026-10-24.json", "implementation/verification/p8-private-read-upload-2026-10-25.json", "implementation/verification/p4-p8-group-expressions-pins-2026-10-25.json",
+        "implementation/verification/p8-read-shortcut-refresh-2026-10-25.json"
+      ],
       "actions": [
         "Mark server read Shift+Escape",
         "Mark channel read Escape",

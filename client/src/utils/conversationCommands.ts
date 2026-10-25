@@ -102,8 +102,8 @@ async function executeReadShortcut(command: "chat-mark-channel-read" | "chat-mar
     const result = await readStateApi.markAllRead(serverId, { timeoutMs: 15_000, isCurrent });
     if (!isCurrent()) return "stale";
     if (!result.success) return "failed";
-    await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent }).catch(() => undefined);
-    return isCurrent() ? "success" : "stale";
+    const refreshed = await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent });
+    return !isCurrent() ? "stale" : refreshed ? "success" : "failed";
   }
 
   if (destination.type !== "text" && destination.type !== "audit" && destination.type !== "voice") return "unavailable";
@@ -115,8 +115,8 @@ async function executeReadShortcut(command: "chat-mark-channel-read" | "chat-mar
   const result = await readStateApi.markRead(serverId, destination.channelId, latestMessage.id, { timeoutMs: 15_000, isCurrent });
   if (!isCurrent()) return "stale";
   if (!result.success) return "failed";
-  await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent }).catch(() => undefined);
-  return isCurrent() ? "success" : "stale";
+  const refreshed = await useReadStateStore.getState().fetchUnreadCounts(serverId, { timeoutMs: 15_000, isCurrent });
+  return !isCurrent() ? "stale" : refreshed ? "success" : "failed";
 }
 
 async function copyCurrentChannelLink(): Promise<ShortcutActionResult> {
