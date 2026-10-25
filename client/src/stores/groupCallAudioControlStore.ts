@@ -1,6 +1,6 @@
 import {create} from "zustand";
 import {getAuthSessionSnapshot,subscribeAuthGenerationChanges,subscribeAuthOwnerChanges} from "../api/authSessionEvents";
-export type GroupCallAudioControl={nonce:string;accountId:string;generation:number;groupId:string;manualMuted:boolean;effectiveMuted:boolean;blocked:boolean;toggle:()=>void};
+export type GroupCallAudioControl={nonce:string;callSessionNonce?:string;accountId:string;generation:number;groupId:string;manualMuted:boolean;effectiveMuted:boolean;blocked:boolean;toggle:()=>void};
 const current=(control:GroupCallAudioControl)=>{const auth=getAuthSessionSnapshot();return auth.ownerId===control.accountId&&auth.generation===control.generation;};
 /** Ephemeral control routing only; never keeps a call alive after navigation. */
 export const useGroupCallAudioControlStore=create<{control:GroupCallAudioControl|null}>(()=>({control:null}));

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState, useLayoutEffect } from "react";
+import {useMicrophoneCaptureViewStore,latchPrivateCaptureFailure,clearPrivateCaptureFailure,retirePrivateCaptureFailure}from "../../stores/microphoneCaptureViewStore";
+import { useCallback, useMemo, useState, useLayoutEffect, useRef } from "react";
 import { DisconnectButton, LiveKitRoom, TrackToggle } from "@livekit/components-react";
 import { Track, type RoomOptions } from "livekit-client";
 import type { VoiceTokenResponse } from "../../types/voice";
@@ -9,17 +10,21 @@ import GroupDMCallAudio from "./GroupDMCallAudio";
 import { privateCaptureConflict } from "../../audio/privateCallState";
 import { useVoiceStore } from "../../stores/voiceStore";
 import { useP2PCallStore } from "../../stores/p2pCallStore";
-import { bindGroupCallAudioControl, releaseGroupCallAudioControl } from "../../stores/groupCallAudioControlStore";
+import { bindGroupCallAudioControl, releaseGroupCallAudioControl, useGroupCallAudioControlStore } from "../../stores/groupCallAudioControlStore";
 import { useGroupDMStore } from "../../stores/groupDMStore";
 import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 import { useTranslation } from "react-i18next";
 
-export default function GroupDMCall({ credentials, onLeave }: { credentials: VoiceTokenResponse; onLeave: () => void }) {
+export default function GroupDMCall({ credentials, onLeave, callSessionNonce, initialMicrophoneEnabled, isCurrentSession }: { credentials: VoiceTokenResponse; onLeave: () => void; callSessionNonce?:string; initialMicrophoneEnabled?:boolean; isCurrentSession?:()=>boolean }) {
   const { t } = useTranslation("voice");
+  const [captureReady, setCaptureReady] = useState(false);
   const [controlNonce] = useState(() => crypto.randomUUID());
   const [controlOwner] = useState(() => getAuthSessionSnapshot());
+  const captureLogicalNonce = callSessionNonce ?? controlNonce;
+  const captureFailure = useMicrophoneCaptureViewStore(state => state.privateFailure?.nonce === captureLogicalNonce && state.privateFailure.owner === controlOwner.ownerId && state.privateFailure.generation === controlOwner.generation);
+  const setCaptureFailure = useCallback((failed: boolean) => { if (failed && controlOwner.ownerId) latchPrivateCaptureFailure(captureLogicalNonce, controlOwner.ownerId, controlOwner.generation); else if (!failed) clearPrivateCaptureFailure(captureLogicalNonce); }, [captureLogicalNonce, controlOwner]);
   const deafened = useVoiceStore(state => state.isDeafened);
-  const [microphoneEnabled, setMicrophoneEnabled] = useState(() => !useVoiceStore.getState().isMuted);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(() => initialMicrophoneEnabled ?? !useVoiceStore.getState().isMuted);
   const guildCapture = useVoiceStore(state => !!state.currentVoiceChannelId);
   const privateCapture = useP2PCallStore(state => !!state.activeCall);
   const conflict = guildCapture || privateCapture;
@@ -43,29 +48,39 @@ export default function GroupDMCall({ credentials, onLeave }: { credentials: Voi
   const options = useMemo<RoomOptions | undefined>(() => e2eeWorker ? { e2ee: { keyProvider, worker: e2eeWorker }, adaptiveStream: true, dynacast: true } : undefined, [e2eeWorker, keyProvider]);
   const admission = useEncryptedRoomAdmission({ enabled: true, token: credentials.token, scope: encryption.ownerScope, keyScope: encryption.keyScope,
     keyReady: encryption.keyReady && currentMediaEpoch, keyError: encryption.keyError, keyProvider, worker: e2eeWorker,
-    roomOptions: options ?? {}, onError: onEncryptionError, allowRestore: (source) => source !== Track.Source.Microphone });
+    roomOptions: options ?? {}, isCurrentSource: isCurrentSession, onError: onEncryptionError, allowRestore: (source) => source !== Track.Source.Microphone });
+  // A fresh media lease belongs to this actual Room and component mount.
+  // Old SDK callbacks must not disconnect a boundary-retry replacement.
+  const mountedLease=useRef(false),currentRoomLease=useRef(admission.room);
+  useLayoutEffect(()=>{mountedLease.current=true;return()=>{mountedLease.current=false}},[]);
+  useLayoutEffect(()=>{currentRoomLease.current=admission.room;return()=>{currentRoomLease.current=null}},[admission.room]);
+  const room=admission.room;
+  const leaveCurrentRoom=()=>{
+    const control=useGroupCallAudioControlStore.getState().control;
+    if(mountedLease.current&&currentRoomLease.current===room&&control?.nonce===controlNonce&&(!isCurrentSession||isCurrentSession()))onLeave();
+  };
   useLayoutEffect(() => {
     const auth = controlOwner;
     if (!auth.ownerId) return;
-    bindGroupCallAudioControl({ nonce: controlNonce, accountId: auth.ownerId, generation: auth.generation, groupId: credentials.channel_id,
-      manualMuted: !microphoneEnabled, effectiveMuted: !microphoneEnabled || deafened || conflict || !admission.publishReady, blocked: conflict,
-      toggle: () => { if (!privateCaptureConflict()) setMicrophoneEnabled(value => !value); } });
-  }, [controlNonce, controlOwner, credentials.channel_id, microphoneEnabled, deafened, conflict, admission.publishReady]);
-  useLayoutEffect(() => () => releaseGroupCallAudioControl(controlNonce), [controlNonce]);
+    bindGroupCallAudioControl({ nonce: controlNonce, callSessionNonce, accountId: auth.ownerId, generation: auth.generation, groupId: credentials.channel_id,
+      manualMuted: !microphoneEnabled, effectiveMuted: !microphoneEnabled || deafened || conflict || !admission.publishReady || !captureReady, blocked: conflict,
+      toggle: () => { if ((!isCurrentSession||isCurrentSession())&&!privateCaptureConflict()) setMicrophoneEnabled(value => !value); } });
+  }, [controlNonce, controlOwner, callSessionNonce, isCurrentSession, credentials.channel_id, microphoneEnabled, deafened, conflict, admission.publishReady, captureReady]);
+  useLayoutEffect(() => () => { releaseGroupCallAudioControl(controlNonce); if (!callSessionNonce) retirePrivateCaptureFailure(captureLogicalNonce); }, [controlNonce, callSessionNonce, captureLogicalNonce]);
   if (!admission.room || (!admission.connect && !admission.error)) return <section role={admission.error ? "alert" : "status"}>
-    <p>{admission.error ? tE2ee("voiceE2eeError") : t("connecting")}</p><button type="button" onClick={onLeave}>{t("disconnect")}</button>
+    <p>{admission.error ? tE2ee("voiceE2eeError") : t("connecting")}</p><button type="button" onClick={leaveCurrentRoom}>{t("disconnect")}</button>
   </section>;
   return <section className="group-dm-call" aria-label={t("voiceConnected")}>
-    <LiveKitRoom room={admission.room ?? undefined} serverUrl={credentials.url} token={credentials.token} connect={admission.connect} audio={false} video={false} screen={false} onDisconnected={onLeave}>
+    <LiveKitRoom room={admission.room ?? undefined} serverUrl={credentials.url} token={credentials.token} connect={admission.connect} audio={false} video={false} screen={false} onDisconnected={leaveCurrentRoom}>
       {Boolean(admission.error) && <p role="alert">{tE2ee("voiceE2eeError")}</p>}
       {!admission.publishReady && !admission.error && <p role="status">{t("connecting")}</p>}
       <div className="group-dm-call-controls">
         {admission.publishReady && <>
-          <GroupDMCallAudio room={admission.room} microphoneEnabled={microphoneEnabled} onMicrophoneChange={setMicrophoneEnabled} conflict={conflict} />
+          <GroupDMCallAudio room={admission.room} microphoneEnabled={microphoneEnabled} onMicrophoneChange={setMicrophoneEnabled} onCaptureState={setCaptureReady} captureFailure={captureFailure} onCaptureFailure={setCaptureFailure} isCurrentSession={isCurrentSession} conflict={conflict} />
           <TrackToggle source={Track.Source.Camera}>{t("camera")}</TrackToggle>
           <TrackToggle source={Track.Source.ScreenShare}>{t("screenShare")}</TrackToggle>
         </>}
-        <DisconnectButton onClick={onLeave}>{t("disconnect")}</DisconnectButton>
+        <DisconnectButton onClick={leaveCurrentRoom}>{t("disconnect")}</DisconnectButton>
       </div>
     </LiveKitRoom>
   </section>;

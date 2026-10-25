@@ -108,5 +108,8 @@
   "unmuteAfterUndeafen": "Sağırlaştırmayı kapattığında mikrofonu aç",
   "groupCaptureConflict": "Başka bir ses görüşmesi açıkken grup mikrofonu kapalıdır. O görüşmeden ayrıldıktan sonra burada mikrofonu kendin aç.",
   "groupFocusedPTT": "Grupta bas-konuş, klavye odağı bu HiChat penceresindeyken çalışır.",
-  "groupMicrophoneFailed": "Grup mikrofonu başlatılamadı. Giriş cihazını ve izni kontrol edip yeniden dene."
+  "groupMicrophoneFailed": "Grup mikrofonu başlatılamadı. Giriş cihazını ve izni kontrol edip yeniden dene.",
+  "microphoneCaptureStopped": "Mikrofon yakalaması durdu. Kendiliğinden yeniden başlamayacak. Cihazı kontrol edip yeniden dene.",
+  "microphoneCaptureRetry": "Mikrofonu yeniden dene",
+  "microphoneUseDefault": "Varsayılan mikrofonu kullan"
 }

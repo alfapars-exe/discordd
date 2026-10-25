@@ -1,6 +1,8 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, useRef } from "react";
 import type { Room } from "livekit-client";
 import { useTranslation } from "react-i18next";
+import {useGroupCallStore}from "../../stores/groupCallStore";
+import {invalidateCaptureAdmission,captureAdmissionCurrent}from "../../audio/microphoneAdmission";
 import { liveMicrophone, releaseLiveMicrophone } from "../../audio/liveMicrophone";
 import { microphoneSettings, settingsEqual } from "../../audio/microphoneSettings";
 import { privateCaptureConflict } from "../../audio/privateCallState";
@@ -12,29 +14,35 @@ import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOw
 
 /** Mounted only after encrypted admission. Capture is owned by the actual
  * shared processor controller; private mute intent never toggles another call. */
-export default function GroupDMCallAudio({room,microphoneEnabled,onMicrophoneChange,conflict}:{room:Room;microphoneEnabled:boolean;onMicrophoneChange:(enabled:boolean)=>void;conflict:boolean}){
+export default function GroupDMCallAudio({room,microphoneEnabled,onMicrophoneChange,onCaptureState,captureFailure=false,onCaptureFailure,isCurrentSession,conflict}:{room:Room;microphoneEnabled:boolean;onMicrophoneChange:(enabled:boolean)=>void;onCaptureState?:(ready:boolean)=>void;captureFailure?:boolean;onCaptureFailure?:(failed:boolean)=>void;isCurrentSession?:()=>boolean;conflict:boolean}){
  const {t}=useTranslation("voice");
+ const [ownerScope]=useState(()=>JSON.stringify(getAuthSessionSnapshot()));
+ const activeRoom=useRef<Room|null>(null);
+ const sessionCheck=useRef(isCurrentSession);useLayoutEffect(()=>{sessionCheck.current=isCurrentSession;});
  const inputMode=useVoiceStore(state=>state.inputMode);
  const deafened=useVoiceStore(state=>state.isDeafened);
  const [failure,setFailure]=useState(false),[outputStatus,setOutputStatus]=useState("ready"),[retry,setRetry]=useState(0);
  useLayoutEffect(()=>{
+  activeRoom.current=room;
   const participant=room.localParticipant,controller=liveMicrophone(participant,"private");
+  const unsubscribeStatus=controller.subscribe(()=>{const status=controller.getStatus();if(status.phase==="failed"){setFailure(true);onCaptureFailure?.(true);}onCaptureState?.(status.phase==="ready");});
   const auth=JSON.stringify(getAuthSessionSnapshot());let active=true,pressed=false,conflictLatched=privateCaptureConflict();
-  const current=()=>active&&JSON.stringify(getAuthSessionSnapshot())===auth;
+  const current=()=>active&&sessionCheck.current?.()!==false&&JSON.stringify(getAuthSessionSnapshot())===auth;
   const apply=()=>{
    if(!current())return;
    const state=useVoiceStore.getState();
    if(privateCaptureConflict())conflictLatched=true;
-   const enabled=microphoneEnabled&&!conflictLatched&&!privateCaptureConflict()&&!state.isDeafened&&(state.inputMode!=="push_to_talk"||pressed);
+   const enabled=microphoneEnabled&&!captureFailure&&!conflictLatched&&!privateCaptureConflict()&&!state.isDeafened&&(state.inputMode!=="push_to_talk"||pressed);
    void controller.setEnabled(enabled).catch(()=>{if(current())setFailure(true);});
   };
-  const retire=()=>{if(!current()){void controller.setEnabled(false);void releaseLiveMicrophone(participant);}};
+  const retire=()=>{if(!current()){void controller.setEnabled(false);void releaseLiveMicrophone(participant,controller);}};
   const unsubscribeOwner=subscribeAuthOwnerChanges(retire),unsubscribeGeneration=subscribeAuthGenerationChanges(retire);
   const unsubscribeVoice=useVoiceStore.subscribe((state,previous)=>{
    if(!settingsEqual(microphoneSettings(state),microphoneSettings(previous)))void controller.refresh().catch(()=>{if(current())setFailure(true);});
    if(state.isDeafened||privateCaptureConflict()||state.inputMode!==previous.inputMode||state.pttKey!==previous.pttKey)pressed=false;
    if(state.isDeafened!==previous.isDeafened||state.inputMode!==previous.inputMode||state.pttKey!==previous.pttKey||state.currentVoiceChannelId!==previous.currentVoiceChannelId)apply();
   });
+  const unsubscribeSession=useGroupCallStore.subscribe(()=>{if(sessionCheck.current?.()===false){invalidateCaptureAdmission(participant);void controller.setEnabled(false);void releaseLiveMicrophone(participant,controller);}});
   const unsubscribeCall=useP2PCallStore.subscribe(()=>{if(privateCaptureConflict())pressed=false;apply();});
   const editable=(element:Element|null)=>element?.tagName==="INPUT"||element?.tagName==="TEXTAREA"||element?.tagName==="SELECT"||!!(element as HTMLElement|null)?.isContentEditable;
   const down=(event:KeyboardEvent)=>{
@@ -52,15 +60,16 @@ export default function GroupDMCallAudio({room,microphoneEnabled,onMicrophoneCha
   document.addEventListener("keydown",down);document.addEventListener("keyup",up);window.addEventListener("blur",release);
   const unsubscribeCapture=useShortcutCaptureStore.subscribe(state=>{if(state.active)release();});
   apply();
-  return()=>{active=false;unsubscribeOwner();unsubscribeGeneration();unsubscribeVoice();unsubscribeCall();unsubscribeCapture();document.removeEventListener("visibilitychange",visibility);document.removeEventListener("focusin",focus);document.removeEventListener("keydown",down);document.removeEventListener("keyup",up);window.removeEventListener("blur",release);void controller.setEnabled(false);void releaseLiveMicrophone(participant);};
- },[room,microphoneEnabled,retry]);
- useLayoutEffect(()=>privateRoomPlayback(room,setOutputStatus),[room,retry]);
+  return()=>{if(activeRoom.current===room)activeRoom.current=null;active=false;unsubscribeStatus();onCaptureState?.(false);unsubscribeOwner();unsubscribeGeneration();unsubscribeVoice();unsubscribeCall();unsubscribeSession();unsubscribeCapture();document.removeEventListener("visibilitychange",visibility);document.removeEventListener("focusin",focus);document.removeEventListener("keydown",down);document.removeEventListener("keyup",up);window.removeEventListener("blur",release);void controller.setEnabled(false);void releaseLiveMicrophone(participant,controller);};
+ },[room,microphoneEnabled,retry,onCaptureState,captureFailure,onCaptureFailure]);
+ useLayoutEffect(()=>{const stop=privateRoomPlayback(room,setOutputStatus,()=>sessionCheck.current?.()!==false);const unsubscribe=useGroupCallStore.subscribe(()=>{if(sessionCheck.current?.()===false)stop();});return()=>{unsubscribe();stop();};},[room,retry]);
  return <>
   <button type="button" disabled={conflict} aria-pressed={microphoneEnabled&&!deafened&&!conflict} onClick={()=>onMicrophoneChange(!microphoneEnabled)}>{t(microphoneEnabled?"mute":"unmute")}</button>
   {conflict&&<p role="status">{t("groupCaptureConflict")}</p>}
   {inputMode==="push_to_talk"&&<p role="status">{t("groupFocusedPTT")}</p>}
-  {failure&&<p role="alert">{t("groupMicrophoneFailed")}</p>}
+  {(failure||captureFailure)&&<p role="alert">{t("microphoneCaptureStopped")}</p>}
   {outputStatus!=="ready"&&<p role={outputStatus==="failed"?"alert":"status"}>{t(outputStatus==="failed"?"p2pAudioFailed":"p2pAudioFallback")}</p>}
-  {(failure||outputStatus==="failed")&&<button type="button" onClick={()=>{setFailure(false);setRetry(value=>value+1);}}>{t("p2pAudioRetry")}</button>}
+  {(failure||captureFailure)&&<button type="button" onClick={()=>{if(activeRoom.current!==room||!captureAdmissionCurrent(room.localParticipant)||sessionCheck.current?.()===false||JSON.stringify(getAuthSessionSnapshot())!==ownerScope)return;useVoiceStore.getState().setInputDevice("");onCaptureFailure?.(false);setFailure(false);setRetry(value=>value+1);}}>{t("microphoneUseDefault")}</button>}
+  {(failure||captureFailure||outputStatus==="failed")&&<button type="button" onClick={()=>{if(activeRoom.current!==room||!captureAdmissionCurrent(room.localParticipant)||sessionCheck.current?.()===false||JSON.stringify(getAuthSessionSnapshot())!==ownerScope)return;onCaptureFailure?.(false);setFailure(false);setRetry(value=>value+1);}}>{t("p2pAudioRetry")}</button>}
  </>;
 }

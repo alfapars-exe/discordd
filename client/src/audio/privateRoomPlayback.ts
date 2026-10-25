@@ -6,11 +6,11 @@ import { playPrivateAudio, type PrivatePlayback } from "./privatePlayback";
 const bounded = (value:number,max:number) => Number.isFinite(value) ? Math.max(0,Math.min(max,value)) : 0;
 /** One owner for each borrowed remote track. Guild moderation never controls a
  * private call. Graph teardown stops only derived output, never remote media. */
-export function privateRoomPlayback(room:Room, onStatus:(status:"ready"|"fallback"|"failed")=>void) {
+export function privateRoomPlayback(room:Room, onStatus:(status:"ready"|"fallback"|"failed")=>void,isCurrentSource:()=>boolean=()=>true) {
  const auth=getAuthSessionSnapshot(),owner=JSON.stringify(auth);
  let active=true, output=useVoiceStore.getState().outputDevice;
  const players=new Map<RemoteTrack,{peer:string;participant:RemoteParticipant;ownership:{active:boolean};source:Track.Source;status:"ready"|"fallback"|"failed";player:PrivatePlayback}>();
- const current=()=>active&&!!auth.ownerId&&JSON.stringify(getAuthSessionSnapshot())===owner;
+ const current=()=>active&&isCurrentSource()&&!!auth.ownerId&&JSON.stringify(getAuthSessionSnapshot())===owner;
  const volume=(peer:string,source:Track.Source)=>{
   const state=useVoiceStore.getState();
   if(state.isDeafened||state.localMutedUsers[peer])return 0;

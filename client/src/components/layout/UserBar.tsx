@@ -3,6 +3,7 @@
  * Shows mic/deafen/screen/disconnect when in voice, status picker on avatar click.
  */
 
+import {useMicrophoneCaptureViewStore}from "../../stores/microphoneCaptureViewStore";
 import { useGroupCallAudioControlStore, toggleGroupCallMicrophone } from "../../stores/groupCallAudioControlStore";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
@@ -54,7 +55,10 @@ function UserBar({
   const muteBeforeDeafen = useVoiceStore((s) => s.muteBeforeDeafen);
   const groupControl = useGroupCallAudioControlStore(state => state.control);
   const groupOnly = !!groupControl && !currentVoiceChannelId && !activeCall;
-  const displayedMuted = groupOnly ? groupControl.effectiveMuted : isMuted;
+  const captureJoinGeneration = useVoiceStore(state => state._joinGeneration ?? 0);
+  const captureView = useMicrophoneCaptureViewStore(state => state.view);
+  const guildCaptureFailed = captureView?.channelId === currentVoiceChannelId && captureView.joinGeneration === captureJoinGeneration && captureView.failed;
+  const displayedMuted = groupOnly ? groupControl.effectiveMuted : isMuted || guildCaptureFailed;
   const manualMuted = groupOnly ? groupControl.manualMuted : (muteBeforeDeafen ?? true);
   const muteActionLabel = isDeafened ? t(manualMuted ? "unmuteAfterUndeafen" : "muteAfterUndeafen") : t((groupOnly ? groupControl.manualMuted : isMuted) ? "unmute" : "mute");
   const toggleDisplayedMute = groupOnly ? () => toggleGroupCallMicrophone(groupControl.nonce) : onToggleMute;

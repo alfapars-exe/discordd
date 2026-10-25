@@ -20,6 +20,7 @@
  *   - Verbose debug tracing (off by default)      — useLiveKitDebugTracer
  */
 
+import MicrophoneCaptureStatus from "./MicrophoneCaptureStatus";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -185,7 +186,7 @@ function VoiceStateManager() {
     };
   }, [room]);
 
-  return null;
+  return <MicrophoneCaptureStatus participant={localParticipant} />;
 }
 
 export default VoiceStateManager;

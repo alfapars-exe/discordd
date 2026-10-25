@@ -2,17 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { P2PCall } from "../../types";
 import UserBar from "./UserBar";
+import {registerCaptureAdmission}from "../../audio/microphoneAdmission";
+import type {LocalParticipant}from "livekit-client";
 import GroupDMCall from "../dm/GroupDMCall";
 import {useVoiceStore}from "../../stores/voiceStore";
 import {publishAuthOwnerChange,publishAuthGenerationChange}from "../../api/authSessionEvents";
+import {activateMicrophoneCaptureView,useMicrophoneCaptureViewStore}from "../../stores/microphoneCaptureViewStore";
 import {useGroupCallAudioControlStore}from "../../stores/groupCallAudioControlStore";
-const audio=vi.hoisted(()=>({createTrack:vi.fn(),room:null as unknown,tracks:[] as Array<{isMuted:boolean;mute:ReturnType<typeof vi.fn>;unmute:ReturnType<typeof vi.fn>;stop:ReturnType<typeof vi.fn>}>}));
+const audio=vi.hoisted(()=>({sources:[]as EventTarget[],createTrack:vi.fn(),room:null as unknown,tracks:[] as Array<{isMuted:boolean;mute:ReturnType<typeof vi.fn>;unmute:ReturnType<typeof vi.fn>;stop:ReturnType<typeof vi.fn>}>}));
+vi.mock("../../audio/captureOwnedMicrophone",()=>({captureOwnedMicrophone:async(_settings:unknown,current:()=>boolean)=>{const track=await audio.createTrack();if(!current()){track.stop();throw new DOMException("obsolete","AbortError");}const source=Object.assign(new EventTarget(),{readyState:"live",stop:vi.fn()});audio.sources.push(source);return{track,source};}}));
 vi.mock("livekit-client",async(importOriginal)=>({...await importOriginal<typeof import("livekit-client")>(),createLocalAudioTrack:audio.createTrack}));
 vi.mock("../../audio/MicrophoneTrackProcessor",()=>({MicrophoneTrackProcessor:class{processedTrack={enabled:true};update=vi.fn(async()=>{});destroy=vi.fn(async()=>{});cancel=vi.fn();activate=vi.fn();}}));
 vi.mock("../../audio/privateRoomPlayback",()=>({privateRoomPlayback:()=>()=>{}}));
 vi.mock("../../hooks/useE2EEKeyProvider",()=>({useE2EEKeyProvider:()=>({keyProvider:{},e2eeWorker:{},keyReady:true,keyError:null,keyScope:"key",ownerScope:"owner"})}));
 vi.mock("../../hooks/useEncryptedRoomAdmission",()=>({useEncryptedRoomAdmission:()=>({room:audio.room,connect:true,publishReady:true,error:null})}));
-vi.mock("../../stores/groupDMStore",()=>({useGroupDMStore:()=>1}));
+vi.mock("../../stores/groupDMStore",()=>({useGroupDMStore:Object.assign(()=>1,{subscribe:()=>()=>{},getState:()=>({groups:[]})})}));
 vi.mock("@livekit/components-react",()=>({LiveKitRoom:({children}:{children:React.ReactNode})=><>{children}</>,TrackToggle:()=>null,DisconnectButton:()=>null}));
 
 
@@ -49,9 +53,10 @@ vi.mock("../p2p/P2PCallControls", () => ({ default: () => <span>Real P2P control
 const credentials={token:"token",url:"wss://local",channel_id:"group",e2ee_passphrase:"key",e2ee_key_index:1,e2ee_key_epoch:1,e2ee_key_context:"context"};
 const actions={onToggleMute:vi.fn(),onToggleDeafen:()=>useVoiceStore.getState().toggleDeafen(),onToggleScreenShare:vi.fn(),onDisconnect:vi.fn()};
 beforeEach(()=>{
- vi.clearAllMocks();publishAuthOwnerChange("me");publishAuthGenerationChange(10);useGroupCallAudioControlStore.setState({control:null});
- useVoiceStore.setState({currentVoiceChannelId:null,currentVoiceServerId:null,isMuted:false,isDeafened:false,muteBeforeDeafen:null,isServerMuted:true,isServerDeafened:true,inputMode:"voice_activity"});audio.tracks=[];
+ vi.clearAllMocks();publishAuthOwnerChange("me");publishAuthGenerationChange(10);useGroupCallAudioControlStore.setState({control:null});useMicrophoneCaptureViewStore.setState({view:null,privateFailure:null,failedCall:null});
+ useVoiceStore.setState({currentVoiceChannelId:null,currentVoiceServerId:null,isMuted:false,isDeafened:false,muteBeforeDeafen:null,isServerMuted:true,isServerDeafened:true,inputMode:"voice_activity"});audio.tracks=[];audio.sources=[];
  const publications=new Map();audio.room={localParticipant:{trackPublications:publications,getTrackPublication:()=>[...publications.values()][0],publishTrack:vi.fn(async(track:unknown)=>{publications.set("mic",{track});}),unpublishTrack:vi.fn(async(track:unknown)=>{if(publications.get("mic")?.track===track)publications.delete("mic");})}};
+ registerCaptureAdmission((audio.room as {localParticipant:LocalParticipant}).localParticipant,()=>true).open();
  audio.createTrack.mockImplementation(async()=>{const track={isMuted:false,setProcessor:vi.fn(async()=>{}),mute:vi.fn(async()=>{track.isMuted=true;}),unmute:vi.fn(async()=>{track.isMuted=false;}),stop:vi.fn()};audio.tracks.push(track);return track;});
 });
 describe("UserBar actual private group microphone owner",()=>{
@@ -90,6 +95,19 @@ describe("UserBar actual private group microphone owner",()=>{
   act(()=>publishAuthGenerationChange(11));expect(useGroupCallAudioControlStore.getState().control).toBeNull();
   view.rerender(<><UserBar {...actions}/><GroupDMCall credentials={{...credentials,channel_id:"replacement"}} onLeave={vi.fn()}/></>);
   expect(useGroupCallAudioControlStore.getState().control).toBeNull();expect(audio.createTrack).toHaveBeenCalledTimes(1);view.unmount();
+ });
+
+ it("shows actual guild capture failure as effectively muted without overwriting manual intent",()=>{
+  useVoiceStore.setState({currentVoiceChannelId:"guild",isMuted:false});activateMicrophoneCaptureView({nonce:"capture",owner:"me",generation:10,channelId:"guild",joinGeneration:useVoiceStore.getState()._joinGeneration,failed:true});
+  const view=render(<UserBar {...actions}/>);expect(screen.getByRole("button",{name:"mute"})).toHaveAttribute("aria-pressed","true");expect(useVoiceStore.getState().isMuted).toBe(false);view.unmount();
+ });
+
+ it("retains logical group failure across render-boundary remount and retries only after explicit microphone recovery",async()=>{
+  const view=render(<><UserBar {...actions}/><GroupDMCall key="first" callSessionNonce="logical" credentials={credentials} onLeave={vi.fn()}/></>);await waitFor(()=>expect(audio.tracks[0]?.unmute).toHaveBeenCalled());
+  act(()=>audio.sources[0].dispatchEvent(new Event("ended")));await waitFor(()=>expect(useMicrophoneCaptureViewStore.getState().privateFailure?.nonce).toBe("logical"));
+  view.rerender(<><UserBar {...actions}/><GroupDMCall key="boundary-retry" callSessionNonce="logical" credentials={credentials} onLeave={vi.fn()}/></>);
+  expect(audio.createTrack).toHaveBeenCalledOnce();expect(screen.getByText("microphoneCaptureStopped")).toBeTruthy();
+  fireEvent.click(screen.getByText("p2pAudioRetry"));await waitFor(()=>expect(audio.createTrack).toHaveBeenCalledTimes(2));view.unmount();
  });
 
 });

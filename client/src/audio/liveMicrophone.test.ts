@@ -1,16 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {registerCaptureAdmission}from "./microphoneAdmission";
+import {useMicrophoneCaptureViewStore}from "../stores/microphoneCaptureViewStore";
+import {publishAuthOwnerChange,publishAuthGenerationChange}from "../api/authSessionEvents";
 import type { LocalParticipant } from "livekit-client";
 import type { MicrophoneSettings } from "./microphoneSettings";
 import { liveMicrophone, releaseLiveMicrophone } from "./liveMicrophone";
 
 const mock = vi.hoisted(() => ({
-  createTrack: vi.fn(), getState: vi.fn(), processors: [] as Array<{
+  storeListeners:new Set<()=>void>(),sources: [] as EventTarget[], createTrack: vi.fn(), getState: vi.fn(), processors: [] as Array<{
     processedTrack: { enabled: boolean }; update: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn>; activate: ReturnType<typeof vi.fn>;
   }>,
 }));
+vi.mock("./captureOwnedMicrophone",()=>({captureOwnedMicrophone:async(settings:{micProfile:string},current:()=>boolean)=>{
+ const music=settings.micProfile==="muzik";const track=await mock.createTrack({echoCancellation:!music,autoGainControl:!music,noiseSuppression:!music,channelCount:music?2:1});
+ if(!current()){track.stop();throw new DOMException("Obsolete capture","AbortError");}
+ const source=Object.assign(new EventTarget(),{readyState:"live",stop:vi.fn()});mock.sources.push(source);return{track,source};
+}}));
 vi.mock("livekit-client", () => ({ Track: { Source: { Microphone: "microphone" } }, createLocalAudioTrack: mock.createTrack }));
-vi.mock("../stores/voiceStore", () => ({ useVoiceStore: { getState: mock.getState } }));
+vi.mock("../stores/voiceStore", () => ({ useVoiceStore: { getState: mock.getState,subscribe:(fn:()=>void)=>{mock.storeListeners.add(fn);return()=>mock.storeListeners.delete(fn);} } }));
 vi.mock("./MicrophoneTrackProcessor", () => ({
   MicrophoneTrackProcessor: class {
     processedTrack = { enabled: true };
@@ -53,9 +61,10 @@ function harness() {
     unpublishTrack: vi.fn(async (track: { id: number }) => { events.push(`unpublish:${track.id}`); }),
   };
   const sdkParticipant = participant as unknown as LocalParticipant;
-  return { state, events, tracks, participant, sdkParticipant, controller: liveMicrophone(sdkParticipant) };
+  const admission=registerCaptureAdmission(sdkParticipant,()=>true);admission.open();
+  return { state, events, tracks, participant, sdkParticipant, admission, controller: liveMicrophone(sdkParticipant) };
 }
-beforeEach(() => { vi.clearAllMocks(); mock.processors = []; });
+beforeEach(() => { publishAuthOwnerChange("mic-owner");publishAuthGenerationChange(1);vi.clearAllMocks(); mock.processors = [];mock.sources=[];mock.storeListeners.clear();useMicrophoneCaptureViewStore.setState({failedCall:null,privateFailure:null,view:null}); });
 
 describe("live microphone publication ownership", () => {
   it("does not publish before the selected processor is ready", async () => {
@@ -180,4 +189,57 @@ it("retires a private controller's pending GUM result without publishing or unpu
  gate.resolve();await enabling;await disposed;
  expect(lateTrack.stop).toHaveBeenCalledOnce();expect(h.participant.publishTrack).toHaveBeenCalledOnce();expect(h.participant.unpublishTrack).not.toHaveBeenCalledWith(replacement,true);
  await releaseLiveMicrophone(h.sdkParticipant);
+});
+it("silences an ended owned source immediately and latches failure until explicit retry",async()=>{
+ const h=harness();await h.controller.setEnabled(true);expect(h.controller.getStatus().phase).toBe("ready");
+ const source=mock.sources[0]as EventTarget&{readyState:string};source.readyState="ended";source.dispatchEvent(new Event("ended"));
+ expect(mock.processors[0].processedTrack.enabled).toBe(false);expect(h.controller.getStatus()).toEqual({phase:"failed",reason:"source_ended"});
+ await h.controller.setEnabled(true);await h.controller.refresh();expect(mock.createTrack).toHaveBeenCalledOnce();
+ await h.controller.retry(false);expect(mock.createTrack).toHaveBeenCalledOnce();expect(h.controller.getStatus().phase).toBe("idle");
+ await h.controller.setEnabled(true);expect(mock.createTrack).toHaveBeenCalledTimes(2);await releaseLiveMicrophone(h.sdkParticipant);
+});
+it("does not silently retry failed acquisition or fall through to another input device",async()=>{
+ const h=harness();mock.createTrack.mockRejectedValueOnce(new DOMException("device missing","NotFoundError"));
+ await expect(h.controller.setEnabled(true)).rejects.toMatchObject({name:"NotFoundError"});expect(h.controller.getStatus().phase).toBe("failed");
+ await h.controller.refresh();await h.controller.setEnabled(true);expect(mock.createTrack).toHaveBeenCalledOnce();
+ await h.controller.retry(true);expect(mock.createTrack).toHaveBeenCalledTimes(2);expect(h.controller.getStatus().phase).toBe("ready");await releaseLiveMicrophone(h.sdkParticipant);
+});
+it("retires pending raw capture synchronously on auth change and never publishes it into a replacement owner",async()=>{
+ const h=harness();const ready=deferred();mock.createTrack.mockImplementationOnce(async()=>({setProcessor:vi.fn(()=>ready.promise),stop:vi.fn(),mute:vi.fn(async()=>{}),unmute:vi.fn(async()=>{})}));
+ const old=h.controller.setEnabled(true);await flush();const raw=mock.sources[0]as EventTarget&{stop:ReturnType<typeof vi.fn>};expect(raw).toBeTruthy();
+ publishAuthGenerationChange(2);expect(raw.stop).toHaveBeenCalledOnce();expect(mock.processors[0].cancel).toHaveBeenCalled();
+ const replacement=harness();await replacement.controller.setEnabled(true);expect(replacement.participant.publishTrack).toHaveBeenCalledOnce();
+ ready.resolve();await old;expect(h.participant.publishTrack).not.toHaveBeenCalled();expect(replacement.participant.unpublishTrack).not.toHaveBeenCalled();await releaseLiveMicrophone(replacement.sdkParticipant);
+});
+it("does not publish a raw source that ends during slow processor initialization",async()=>{
+ const h=harness();const ready=deferred();mock.createTrack.mockImplementationOnce(async()=>({setProcessor:vi.fn(()=>ready.promise),stop:vi.fn(),mute:vi.fn(async()=>{}),unmute:vi.fn(async()=>{})}));
+ const pending=h.controller.setEnabled(true);await flush();const source=mock.sources[0]as EventTarget&{readyState:string};source.readyState="ended";source.dispatchEvent(new Event("ended"));expect(h.controller.getStatus().phase).toBe("failed");
+ ready.resolve();await pending;expect(h.participant.publishTrack).not.toHaveBeenCalled();expect(h.controller.getStatus().phase).toBe("failed");await releaseLiveMicrophone(h.sdkParticipant);
+});
+
+it("retains guild failure across controller replacement/rekey until explicit microphone retry",async()=>{
+ const h=harness();await releaseLiveMicrophone(h.sdkParticipant);Object.assign(h.state,{currentVoiceChannelId:"guild",_joinGeneration:4});
+ const first=liveMicrophone(h.sdkParticipant);await first.setEnabled(true);const raw=mock.sources[0]as EventTarget&{readyState:string};raw.readyState="ended";raw.dispatchEvent(new Event("ended"));await releaseLiveMicrophone(h.sdkParticipant);
+ const replacement=liveMicrophone(h.sdkParticipant);expect(replacement.getStatus().phase).toBe("failed");await replacement.setEnabled(true);expect(mock.createTrack).toHaveBeenCalledOnce();
+ await replacement.retry(false);expect(mock.createTrack).toHaveBeenCalledOnce();await replacement.setEnabled(true);expect(mock.createTrack).toHaveBeenCalledTimes(2);await releaseLiveMicrophone(h.sdkParticipant);
+});
+it("closes pending raw preparation synchronously on an admission lease change without poisoning the logical call or replacement",async()=>{
+ const h=harness();await releaseLiveMicrophone(h.sdkParticipant);Object.assign(h.state,{currentVoiceChannelId:"guild",_joinGeneration:9});h.controller=liveMicrophone(h.sdkParticipant);const ready=deferred();mock.createTrack.mockImplementationOnce(async()=>({setProcessor:vi.fn(()=>ready.promise),stop:vi.fn(),mute:vi.fn(async()=>{}),unmute:vi.fn(async()=>{})}));
+ const pending=h.controller.setEnabled(true);await flush();const raw=mock.sources[0]as EventTarget&{stop:ReturnType<typeof vi.fn>};h.admission.close();expect(raw.stop).toHaveBeenCalledOnce();expect(useMicrophoneCaptureViewStore.getState().failedCall).toBeNull();
+ const replacementLease=registerCaptureAdmission(h.sdkParticipant,()=>true);replacementLease.open();const replacement=liveMicrophone(h.sdkParticipant);await replacement.setEnabled(true);expect(h.participant.publishTrack).toHaveBeenCalledOnce();
+ h.admission.close();await releaseLiveMicrophone(h.sdkParticipant,h.controller);expect(h.participant.unpublishTrack).not.toHaveBeenCalled();ready.resolve();await pending;expect(h.participant.publishTrack).toHaveBeenCalledOnce();await releaseLiveMicrophone(h.sdkParticipant,replacement);
+});
+it("fails closed for a participant without a current admission lease",async()=>{
+ const h=harness();h.admission.retire();const controller=liveMicrophone(h.sdkParticipant);await controller.setEnabled(true);expect(mock.createTrack).not.toHaveBeenCalled();await releaseLiveMicrophone(h.sdkParticipant);
+});
+
+it("stops known pending raw immediately when guild channel ownership retires before React cleanup",async()=>{
+ const h=harness();await releaseLiveMicrophone(h.sdkParticipant);Object.assign(h.state,{currentVoiceChannelId:"guild",_joinGeneration:12});h.controller=liveMicrophone(h.sdkParticipant);const ready=deferred();mock.createTrack.mockImplementationOnce(async()=>({setProcessor:vi.fn(()=>ready.promise),stop:vi.fn(),mute:vi.fn(async()=>{}),unmute:vi.fn(async()=>{})}));
+ const pending=h.controller.setEnabled(true);await flush();const raw=mock.sources[0]as EventTarget&{stop:ReturnType<typeof vi.fn>};Object.assign(h.state,{currentVoiceChannelId:null});mock.storeListeners.forEach(fn=>fn());expect(raw.stop).toHaveBeenCalledOnce();ready.resolve();await pending;expect(h.participant.publishTrack).not.toHaveBeenCalled();await releaseLiveMicrophone(h.sdkParticipant,h.controller);
+});
+
+it("re-registering an exact participant lease retires old pending raw before opening the replacement",async()=>{
+ const h=harness();const ready=deferred();mock.createTrack.mockImplementationOnce(async()=>({setProcessor:vi.fn(()=>ready.promise),stop:vi.fn(),mute:vi.fn(async()=>{}),unmute:vi.fn(async()=>{})}));
+ const pending=h.controller.setEnabled(true);await flush();const raw=mock.sources[0]as EventTarget&{stop:ReturnType<typeof vi.fn>};const next=registerCaptureAdmission(h.sdkParticipant,()=>true);expect(raw.stop).toHaveBeenCalledOnce();next.open();
+ const replacement=liveMicrophone(h.sdkParticipant);await replacement.setEnabled(true);h.admission.close();h.admission.retire();expect(h.participant.unpublishTrack).not.toHaveBeenCalled();ready.resolve();await pending;expect(h.participant.publishTrack).toHaveBeenCalledOnce();await releaseLiveMicrophone(h.sdkParticipant,replacement);
 });

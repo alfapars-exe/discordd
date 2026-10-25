@@ -52,7 +52,7 @@ export const markGroupDMUnread = (groupId:string,messageId:string,options:GroupD
  const {expectedKeyEpoch,...scope}=options;
  return apiClient<GroupDMReadState>(`/group-dms/${groupId}/unread`,{method:"POST",body:{message_id:messageId,...(expectedKeyEpoch===undefined?{}:{key_epoch:expectedKeyEpoch})},timeoutMs:15_000,...scope});
 };
-export const getGroupDMCallToken = (groupId: string) => apiClient<VoiceTokenResponse>(`/group-dms/${groupId}/call-token`, { method: "POST" });
+export const getGroupDMCallToken = (groupId: string, scope?: GroupDMRequestScope) => apiClient<VoiceTokenResponse>(`/group-dms/${encodeURIComponent(groupId)}/call-token`, { method: "POST", timeoutMs:15_000, ...scope });
 
 export type GroupDMPinRequestScope = GroupDMMembershipRequestScope & { signal?: AbortSignal };
 export const listPinnedGroupDMMessages = (groupId: string, context: GroupDMPinRequestScope = {}) => {

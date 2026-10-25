@@ -1,6 +1,6 @@
 import {act,fireEvent,render,screen,waitFor}from "@testing-library/react";
 import {beforeEach,describe,expect,it,vi}from "vitest";
-const h=vi.hoisted(()=>({controller:{setEnabled:vi.fn(async()=>{}),refresh:vi.fn(async()=>{})},release:vi.fn(),playback:vi.fn(()=>vi.fn())}));
+const h=vi.hoisted(()=>({controller:{subscribe:vi.fn(()=>()=>{}),getStatus:vi.fn(()=>({phase:"idle"})),setEnabled:vi.fn(async()=>{}),refresh:vi.fn(async()=>{})},release:vi.fn(),playback:vi.fn(()=>vi.fn())}));
 vi.mock("../../audio/liveMicrophone",()=>({liveMicrophone:()=>h.controller,releaseLiveMicrophone:h.release}));
 vi.mock("../../audio/privateRoomPlayback",()=>({privateRoomPlayback:h.playback}));
 vi.mock("react-i18next",async(importOriginal)=>({...await importOriginal<typeof import("react-i18next")>(),useTranslation:()=>({t:(key:string)=>key})}));
@@ -9,6 +9,8 @@ import {useVoiceStore}from "../../stores/voiceStore";
 import {useP2PCallStore}from "../../stores/p2pCallStore";
 import {useShortcutCaptureStore}from "../../stores/shortcutCaptureStore";
 import {publishAuthOwnerChange,publishAuthGenerationChange}from "../../api/authSessionEvents";
+import {registerCaptureAdmission,captureAdmissionCurrent}from "../../audio/microphoneAdmission";
+import {useGroupCallStore}from "../../stores/groupCallStore";
 import type{Room}from "livekit-client";
 const room={localParticipant:{}}as Room;
 beforeEach(()=>{vi.restoreAllMocks();vi.clearAllMocks();vi.spyOn(document,"hasFocus").mockReturnValue(true);publishAuthOwnerChange("owner");publishAuthGenerationChange(1);useVoiceStore.setState({isMuted:false,isDeafened:false,isServerMuted:true,isServerDeafened:true,currentVoiceChannelId:null,inputMode:"voice_activity",pttKey:"Space"});useP2PCallStore.setState({activeCall:null});useShortcutCaptureStore.setState({active:false});});
@@ -17,7 +19,7 @@ describe("private group microphone controls",()=>{
   const change=vi.fn();const view=render(<GroupDMCallAudio room={room} microphoneEnabled onMicrophoneChange={change} conflict={false}/>);
   await waitFor(()=>expect(h.controller.setEnabled).toHaveBeenLastCalledWith(true));
   act(()=>useVoiceStore.setState({isDeafened:true}));expect(h.controller.setEnabled).toHaveBeenLastCalledWith(false);
-  fireEvent.click(screen.getByRole("button",{name:"mute"}));expect(change).toHaveBeenCalledWith(false);view.unmount();expect(h.release).toHaveBeenCalledWith(room.localParticipant);
+  fireEvent.click(screen.getByRole("button",{name:"mute"}));expect(change).toHaveBeenCalledWith(false);view.unmount();expect(h.release).toHaveBeenCalledWith(room.localParticipant,h.controller);
  });
  it("closes on another capture owner and keeps explicit disabled intent after that owner leaves",()=>{
   const view=render(<GroupDMCallAudio room={room} microphoneEnabled onMicrophoneChange={vi.fn()} conflict={false}/>);
@@ -39,6 +41,12 @@ describe("private group microphone controls",()=>{
   fireEvent.blur(window);expect(h.controller.setEnabled).toHaveBeenLastCalledWith(false);
   fireEvent.keyDown(document,{code:"Space"});act(()=>useShortcutCaptureStore.setState({active:true}));expect(h.controller.setEnabled).toHaveBeenLastCalledWith(false);
   act(()=>useShortcutCaptureStore.setState({active:false}));fireEvent.keyDown(document,{code:"Space"});act(()=>useVoiceStore.setState({pttKey:"KeyV"}));expect(h.controller.setEnabled).toHaveBeenLastCalledWith(false);
-  act(()=>publishAuthGenerationChange(2));expect(h.release).toHaveBeenCalledWith(room.localParticipant);view.unmount();
+  act(()=>publishAuthGenerationChange(2));expect(h.release).toHaveBeenCalledWith(room.localParticipant,h.controller);view.unmount();
  });
+ it("closes exact microphone admission and owned playback synchronously when persistent session metadata retires",()=>{
+  let current=true;registerCaptureAdmission(room.localParticipant,()=>current).open();const view=render(<GroupDMCallAudio room={room} microphoneEnabled onMicrophoneChange={vi.fn()} conflict={false} isCurrentSession={()=>current}/>);
+  expect(captureAdmissionCurrent(room.localParticipant)).toBe(true);const stop=h.playback.mock.results.at(-1)!.value;
+  act(()=>{current=false;useGroupCallStore.setState({});});expect(captureAdmissionCurrent(room.localParticipant)).toBe(false);expect(h.controller.setEnabled).toHaveBeenLastCalledWith(false);expect(stop).toHaveBeenCalledOnce();view.unmount();
+ });
+
 });

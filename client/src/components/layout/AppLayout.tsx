@@ -48,6 +48,7 @@ import SettingsModal from "../settings/SettingsModal";
 // channel; the brief Suspense fallback during that fetch is hidden behind the
 // existing "Connecting..." UX from useVoice's join flow.
 const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
+import GroupCallProvider from "../dm/GroupCallProvider";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useGameActivity } from "../../hooks/useGameActivity";
 import { useVoice } from "../../hooks/useVoice";
@@ -448,7 +449,7 @@ function AppLayout() {
   // Do not put VoiceProvider inside ShellV2 or key it by the selected conversation.
   if (UI_SHELL_V2) {
     const body = <><ShellV2 sidebarProps={sidebarProps} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />{overlays}</>;
-    return isVoiceSessionActive ? <Suspense fallback={body}><SectionErrorBoundary section="voice"><VoiceProvider>{body}</VoiceProvider></SectionErrorBoundary></Suspense> : body;
+    return <>{isVoiceSessionActive ? <Suspense fallback={body}><SectionErrorBoundary section="voice"><VoiceProvider>{body}</VoiceProvider></SectionErrorBoundary></Suspense> : body}<GroupCallProvider/></>;
   }
 
   // Mobile layout
@@ -476,7 +477,7 @@ function AppLayout() {
       mobileBody
     );
 
-    return mobileContent;
+    return <>{mobileContent}<GroupCallProvider/></>;
   }
 
   // Desktop layout
@@ -521,7 +522,7 @@ function AppLayout() {
     </div>
   );
 
-  return desktopContent;
+  return <>{desktopContent}<GroupCallProvider/></>;
 }
 
 export default AppLayout;

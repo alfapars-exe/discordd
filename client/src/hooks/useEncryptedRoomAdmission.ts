@@ -1,3 +1,4 @@
+import {registerCaptureAdmission}from "../audio/microphoneAdmission";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Room, RoomEvent, ConnectionState, type LocalTrack, type LocalTrackPublication, type RoomOptions, Track } from "livekit-client";
 import type { IndexedVoiceKeyProvider } from "../audio/voiceEncryptionKeys";
@@ -12,12 +13,12 @@ const stopOwnedTrack = (track: LocalTrack | MediaStreamTrack) => {
 type Paused = { media: MediaStreamTrack; enabled: boolean; source: Track.Source };
 type Binding = {
   room: Room; scope: string; active: boolean; admitted: boolean; ready: boolean;
-  keyScope: string; revision: number; error: unknown; paused: Map<LocalTrack, Paused>; pending: Set<LocalTrack | MediaStreamTrack>;
+  keyScope: string; revision: number; error: unknown; paused: Map<LocalTrack, Paused>; pending: Set<LocalTrack | MediaStreamTrack>; captureLease:ReturnType<typeof registerCaptureAdmission>;
 };
 type Options = {
   enabled: boolean; token: string; scope: string; keyScope: string; keyReady: boolean; keyError: unknown;
   keyProvider: IndexedVoiceKeyProvider; worker: Worker | null; roomOptions: RoomOptions;
-  onError: (error: unknown) => void; allowRestore?: (source: Track.Source) => boolean;
+  onError: (error: unknown) => void; isCurrentSource?:()=>boolean; allowRestore?: (source: Track.Source) => boolean;
 };
 
 /** No connection or publisher is admitted until indexed key material and
@@ -45,7 +46,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     try { room = new Room({ ...latest.current.roomOptions, e2ee: { keyProvider, worker } }); }
     catch (error) { queueMicrotask(() => { if (latest.current.enabled && latest.current.scope === scope) { setRoomFailure({ scope, error }); latest.current.onError(error); } }); return; }
     const record: Binding = { room,
-      scope, active: true, admitted: false, ready: false, keyScope: "", revision: 0, error: null, paused: new Map(), pending: new Set() };
+      scope, active: true, admitted: false, ready: false, keyScope: "", revision: 0, error: null, paused: new Map(), pending: new Set(), captureLease:registerCaptureAdmission(room.localParticipant,()=>record.active&&record.ready&&!record.error&&latest.current.keyReady&&latest.current.keyScope===record.keyScope&&JSON.stringify(getAuthSessionSnapshot())===authScope&&latest.current.isCurrentSource?.()!==false) };
     const pause = (publication: LocalTrackPublication) => {
       const track = publication.track;
       if (!track) return;
@@ -53,14 +54,14 @@ export function useEncryptedRoomAdmission(options: Options) {
       if (!record.paused.has(track)) record.paused.set(track, { media, enabled: media.enabled, source: publication.source });
       media.enabled = false;
     };
-    const pauseAll = () => { record.room.localParticipant.trackPublications.forEach(pause); record.pending.forEach(stopOwnedTrack); };
+    const pauseAll = () => { record.captureLease.close();record.room.localParticipant.trackPublications.forEach(pause); record.pending.forEach(stopOwnedTrack); };
     // Unmount cannot cancel SDK getUserMedia. Fence capture completion and
     // publication on this exact Room, including work started before rekey.
     const participant = room.localParticipant;
     const captureVersions = new WeakMap<object, number>();
     const publicationCurrent = (version: number) => record.active && record.ready && !record.error
       && record.revision === version && latest.current.keyReady && latest.current.keyScope === record.keyScope
-      && JSON.stringify(getAuthSessionSnapshot()) === authScope;
+      && JSON.stringify(getAuthSessionSnapshot()) === authScope && latest.current.isCurrentSource?.() !== false;
     const createTracks = participant.createTracks.bind(participant);
     participant.createTracks = async (...args: Parameters<typeof createTracks>) => {
       const version = record.revision;
@@ -111,12 +112,12 @@ export function useEncryptedRoomAdmission(options: Options) {
     record.room.on(RoomEvent.Reconnected, reconnected);
     const retireAuth = () => {
       if (JSON.stringify(getAuthSessionSnapshot()) === authScope) return;
-      record.active = false; record.ready = false; record.revision++; pauseAll(); void record.room.disconnect(); changed((value) => value + 1);
+      record.active = false; record.ready = false; record.revision++; pauseAll();record.captureLease.retire(); void record.room.disconnect(); changed((value) => value + 1);
     };
     const ownerSubscription = subscribeAuthOwnerChanges(retireAuth), generationSubscription = subscribeAuthGenerationChanges(retireAuth);
     queueMicrotask(() => { if (record.active && JSON.stringify(getAuthSessionSnapshot()) === authScope) { setRoomFailure(null); setBinding(record); } });
     return () => {
-      record.active = false; record.ready = false; record.revision++; pauseAll();
+      record.active = false; record.ready = false; record.revision++; pauseAll();record.captureLease.retire();
       ownerSubscription(); generationSubscription();
       record.room.off(RoomEvent.LocalTrackPublished, published);
       record.room.off(RoomEvent.EncryptionError, fatal);
@@ -132,7 +133,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     const record = binding;
     const revision = ++record.revision;
     const authScope = JSON.stringify(getAuthSessionSnapshot());
-    record.ready = false;
+    record.ready = false;record.captureLease.close();
     record.pending.forEach(stopOwnedTrack);
     record.room.localParticipant.trackPublications.forEach((publication) => {
       const track = publication.track;
@@ -149,7 +150,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     let active = true;
     const current = () => active && record.active && record.revision === revision
       && latest.current.scope === scope && latest.current.keyScope === keyScope && latest.current.keyReady
-      && JSON.stringify(getAuthSessionSnapshot()) === authScope && mediaTokenSubject(latest.current.token) === getAuthSessionSnapshot().ownerId;
+      && latest.current.isCurrentSource?.() !== false && JSON.stringify(getAuthSessionSnapshot()) === authScope && mediaTokenSubject(latest.current.token) === getAuthSessionSnapshot().ownerId;
     let timer: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error("Encrypted media admission timed out")), 10_000);
@@ -193,7 +194,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     };
     void Promise.race([enable(), timeout]).then((enabled) => {
       if (!enabled || !current()) return;
-      record.keyScope = keyScope; record.ready = true; record.admitted = true;
+      record.keyScope = keyScope; record.ready = true; record.admitted = true;record.captureLease.open();
       for (const [track, paused] of record.paused) {
         const stillPublished = [...record.room.localParticipant.trackPublications.values()].some((publication) => publication.track === track);
         if (stillPublished && track.mediaStreamTrack === paused.media && paused.media.readyState !== "ended"
@@ -212,7 +213,7 @@ export function useEncryptedRoomAdmission(options: Options) {
   return {
     room: current ? binding.room : null,
     connect: Boolean(current && binding.admitted && !binding.error && !keyError),
-    publishReady: Boolean(current && binding.ready && binding.keyScope === keyScope && keyReady && !keyError && !binding.error),
+    publishReady: Boolean(current && binding.ready && binding.keyScope === keyScope && keyReady && !keyError && !binding.error && options.isCurrentSource?.() !== false),
     error: keyError ?? (roomFailure?.scope === scope ? roomFailure.error : null) ?? (current ? binding.error : null),
   };
 }

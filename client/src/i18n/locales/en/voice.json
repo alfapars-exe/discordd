@@ -108,5 +108,8 @@
   "unmuteAfterUndeafen": "Unmute microphone when you undeafen",
   "groupCaptureConflict": "Group microphone is off while another voice call is active. Leave that call, then explicitly unmute here.",
   "groupFocusedPTT": "Group push-to-talk works while this HiChat window has keyboard focus.",
-  "groupMicrophoneFailed": "Group microphone could not start. Check the input device and permission, then retry."
+  "groupMicrophoneFailed": "Group microphone could not start. Check the input device and permission, then retry.",
+  "microphoneCaptureStopped": "Microphone capture stopped. It will not restart automatically. Check the device and retry.",
+  "microphoneCaptureRetry": "Retry microphone",
+  "microphoneUseDefault": "Use default microphone"
 }

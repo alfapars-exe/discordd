@@ -1,3 +1,4 @@
+import {captureAdmissionCurrent,subscribeCaptureAdmission}from "../audio/microphoneAdmission";
 import { StrictMode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -197,6 +198,14 @@ describe("encrypted room admission", () => {
     const freshOptions={...options(),keyReady:true,scope:"new-room"};const fresh=renderHook(()=>useEncryptedRoomAdmission(freshOptions));await connectAndAdmit(fresh);
     const track={mediaStreamTrack:{enabled:true,readyState:"live"},stop:vi.fn()};finish([track]);await expect(pending).rejects.toThrow("scope changed");
     expect(track.stop).toHaveBeenCalledOnce();expect((fresh.result.current.room as unknown as TestRoom).disconnect).not.toHaveBeenCalled();expect(fresh.result.current.publishReady).toBe(true);fresh.unmount();
+  });
+
+  it("closes the exact raw-capture admission synchronously before key reconfiguration and auth retirement",async()=>{
+    const initial={...options(),keyReady:true};const view=renderHook((props:Options)=>useEncryptedRoomAdmission(props),{initialProps:initial});await connectAndAdmit(view);
+    const participant=view.result.current.room!.localParticipant,closed=vi.fn();const unsubscribe=subscribeCaptureAdmission(participant,closed);expect(captureAdmissionCurrent(participant)).toBe(true);
+    view.rerender({...initial,keyScope:"new-key",keyReady:false});expect(closed).toHaveBeenCalledOnce();expect(captureAdmissionCurrent(participant)).toBe(false);
+    view.rerender({...initial,keyScope:"new-key"});await connectAndAdmit(view);expect(captureAdmissionCurrent(participant)).toBe(true);
+    act(()=>publishAuthGenerationChange(22));expect(captureAdmissionCurrent(participant)).toBe(false);expect(closed.mock.calls.length).toBeGreaterThanOrEqual(2);unsubscribe();view.unmount();
   });
 
 });

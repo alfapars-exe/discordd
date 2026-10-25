@@ -18,7 +18,7 @@ export function useAudioProcessor(room: Room, participant: LocalParticipant, ini
     return () => {
       unsubscribe();
       room.off(RoomEvent.Reconnected, refresh);
-      void releaseLiveMicrophone(participant);
+      void releaseLiveMicrophone(participant,controller);
     };
   }, [room, participant, initialSyncDoneRef]);
 }
