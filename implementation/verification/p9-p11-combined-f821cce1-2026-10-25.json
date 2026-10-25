@@ -1,0 +1,16 @@
+{
+  "status": "automated_gates_verified_runtime_acceptance_open",
+  "source": "Immutable git archives da506e3b (full tests/lint/Electron) and f821cce1 (same source plus Docker contract inclusion and two invalid-byte encoding corrections). Foreign logging/overlay edits and new uncommitted CS2 integration excluded.",
+  "client": "da506e3b:421 files4103 tests allPASS107.15s; session28918 exit0. Initial313acf8e had8 failures from incomplete two old group-audio fixtures; da506e3b adds useTracks and actual selector/store interfaces while preserving microphone assertions.",
+  "build": "f821cce1: actual tsc-b + production Vite PASS1720modules2.51s session38913 exit0. Earlier da506e3b build failed invalid UTF8 b7 in two video labels; f821cce1 corrects these bytes to UTF8. No assertion/test gate disabled.",
+  "electron": "da506e3b actual tsc +218 tests217PASS1existingSKIP0fail896.06ms exit0; excludes uncommitted CS2 native integration.",
+  "lint": "da506e3b full client ESLint exit0:0errors5existingwarnings session80553.",
+  "server": "git diff7feebc54..f821cce1 --server empty; prior exact7fe full Go1.26.10 test ./... gate retained. New uncommitted CS2 backend not covered.",
+  "deployment": "Shared pure media/CS2 contracts now included explicitly in Docker context/COPY and HF managed-source allowlist. Publisher safety tests7PASS; source UTF8 regression added separately60da1fd7,8PASS. ",
+  "remaining": [
+    "Full React/live encrypted Room video to native HUD acceptance remains open; prior native transport probe validates actual decoded synthetic frames only.",
+    "Actual game focus/DPI, physical selected-output/video and CS2 two-client join acceptance remain open.",
+    "No new Windows installer, updater publication or production deployment performed."
+  ],
+  "docker_frontend": "Actual clean f821cce1 Dockerfile frontend target PASS:node26-alpine npm ci then tsc-b/Vite1720modules1.15s; session28022 exit0, localimage hichat-frontend-f821cce1-qa:latest manifest sha256:897a5d8280b86f38ab2fdad1184723e16f54c227ae876e9d89ee7adde752ce2d. This is frontend stage only, not final runtime image."
+}

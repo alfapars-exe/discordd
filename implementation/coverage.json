@@ -7637,7 +7637,7 @@
       "id": "p11.overlay-widgets",
       "title": "Overlay widget enablement",
       "phase": "P11",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R23",
         "R24"
@@ -7650,8 +7650,37 @@
       "acceptance": [
         "All seven toggles add/remove actual live widgets and persist independently."
       ],
-      "code": ["client/src/components/settings/VoiceSettings.tsx", "client/src/components/voice/VoiceOverlayContent.tsx", "client/src/hooks/useOverlayVoiceActions.ts", "client/src/hooks/useOverlayActivity.ts", "client/src/utils/overlayActivity.ts", "client/src/hooks/useOverlayNotifications.ts", "client/src/hooks/useOverlayNotificationActions.ts", "client/src/utils/overlayNotificationAccess.ts", "electron/voice-overlay.ts"],
-      "evidence": ["implementation/verification/p11-overlay-quick-actions-2026-10-25.json", "implementation/verification/p11-overlay-activity-2026-10-25.json", "implementation/verification/p11-overlay-notifications-2026-10-25.json", "implementation/verification/p11-overlay-inbox-action-2026-10-25.json", "implementation/verification/p11-chat-source-isolation-2026-10-25.json", "implementation/verification/p11-overlay-chat-preview-2026-10-25.json", "implementation/verification/p11-overlay-chat-open-action-2026-10-25.json", "implementation/verification/p11-overlay-chat-compose-2026-10-25.json", "implementation/verification/p4-p11-thread-parity-2026-10-25.json", "implementation/verification/p11-overlay-private-chat-2026-10-25.json"],
+      "code": [
+        "client/src/components/settings/VoiceSettings.tsx",
+        "client/src/components/voice/VoiceOverlayContent.tsx",
+        "client/src/hooks/useOverlayVoiceActions.ts",
+        "client/src/hooks/useOverlayActivity.ts",
+        "client/src/utils/overlayActivity.ts",
+        "client/src/hooks/useOverlayNotifications.ts",
+        "client/src/hooks/useOverlayNotificationActions.ts",
+        "client/src/utils/overlayNotificationAccess.ts",
+        "electron/voice-overlay.ts",
+        "client/src/hooks/useOverlayMediaSender.ts",
+        "client/src/components/voice/media/OverlayMediaPanel.tsx",
+        "client/src/video/authorizedVideoSources.ts",
+        "electron/overlay-media-broker.ts"
+      ],
+      "evidence": [
+        "implementation/verification/p11-overlay-quick-actions-2026-10-25.json",
+        "implementation/verification/p11-overlay-activity-2026-10-25.json",
+        "implementation/verification/p11-overlay-notifications-2026-10-25.json",
+        "implementation/verification/p11-overlay-inbox-action-2026-10-25.json",
+        "implementation/verification/p11-chat-source-isolation-2026-10-25.json",
+        "implementation/verification/p11-overlay-chat-preview-2026-10-25.json",
+        "implementation/verification/p11-overlay-chat-open-action-2026-10-25.json",
+        "implementation/verification/p11-overlay-chat-compose-2026-10-25.json",
+        "implementation/verification/p4-p11-thread-parity-2026-10-25.json",
+        "implementation/verification/p11-overlay-private-chat-2026-10-25.json",
+        "implementation/verification/p11-authorized-video-sources-2026-10-25.json",
+        "implementation/verification/p11-overlay-video-renderer-2026-10-25.json",
+        "implementation/verification/p11-overlay-media-electron-2026-10-25.json",
+        "implementation/verification/p9-p11-combined-f821cce1-2026-10-25.json"
+      ],
       "actions": [
         "Voice",
         "Quick actions",
