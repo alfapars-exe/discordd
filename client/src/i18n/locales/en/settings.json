@@ -1449,7 +1449,7 @@
   },
   "linkedGames": {
     "title": "Messaging in connected games",
-    "description": "Manage HiChat game applications you have authorized to message you. This does not permit reading your message history or verify ownership of a profile link.",
+    "description": "Manage HiChat game applications you have authorized to send direct messages to you. This does not permit reading your message history or verify ownership of a profile link. Server and group permissions are managed separately.",
     "empty": "No authorized game applications.",
     "applicationID": "Game application ID to authorize",
     "authorize": "Allow messaging",

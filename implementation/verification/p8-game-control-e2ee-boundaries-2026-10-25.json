@@ -1,0 +1,128 @@
+{
+  "verified_at": "2026-10-25T07:18:17.603578+00:00",
+  "status": "implemented_unverified",
+  "scope": "P8 game-origin direct-message control and encryption boundaries; development test client",
+  "changes": [
+    "Registered game reaction additions and actor-aware pins share transactional recipient grant checks; removal/unpin cleanup remains allowed.",
+    "Only human DM participants may change conversation encryption, including for legacy bots. Own device/prekey APIs and bot WS filters remain unchanged.",
+    "Registered game payloads in E2EE-enabled channels require encrypted version/nonblank ciphertext and no plaintext content. Historical plaintext cannot be falsely converted by edit.",
+    "Channel-before-identity lock ordering protects encryption-flag and grant decisions without inverting request-state locks.",
+    "A separate local-only first-party QA page uses bot in-memory HTTP transport and existing Signal/IndexedDB with bot owner scope. It does not inject hb_ into the human API or widen WS access.",
+    "Two old PostgreSQL DM fixtures were repaired without weakening pagination/FK-off assertions."
+  ],
+  "verification": {
+    "local_http": {
+      "status": "passed",
+      "scope": "actual local HTTP permission/control acceptance; NOT a cryptographic round-trip",
+      "checks": [
+        {
+          "check": "read actual request state",
+          "http": 200
+        },
+        {
+          "check": "read current authorized grant",
+          "http": 200
+        },
+        {
+          "check": "read sole historical control fixture",
+          "http": 200
+        },
+        {
+          "check": "bot cannot disable human encryption",
+          "http": 403
+        },
+        {
+          "check": "bot cannot manage personal grants",
+          "http": 403
+        },
+        {
+          "check": "stale grant write rejected",
+          "http": 409
+        },
+        {
+          "check": "foreign recipient field rejected",
+          "http": 400
+        },
+        {
+          "check": "authorized game plaintext rejected after request acceptance",
+          "http": 400
+        },
+        {
+          "check": "authorized game adds reaction",
+          "http": 200
+        },
+        {
+          "check": "authorized game pins human target",
+          "http": 200
+        },
+        {
+          "check": "human disables messaging",
+          "http": 200
+        },
+        {
+          "check": "disabled game may remove previous reaction",
+          "http": 200
+        },
+        {
+          "check": "disabled game may unpin for cleanup",
+          "http": 200
+        },
+        {
+          "check": "disabled game cannot add another reaction",
+          "http": 403
+        },
+        {
+          "check": "disabled game cannot pin again",
+          "http": 403
+        },
+        {
+          "check": "human revokes permission",
+          "http": 200
+        },
+        {
+          "check": "revoked game cannot send another message",
+          "http": 403
+        },
+        {
+          "check": "other human has no leaked grant",
+          "http": 200
+        },
+        {
+          "check": "rejected sends did not change history",
+          "http": 200
+        },
+        {
+          "check": "human encryption remains enabled and no empty pending request remains",
+          "http": 200
+        }
+      ],
+      "channel_id": "6dcc22d8cb81ad7f",
+      "historical_message_id": "cd8dbc36719ee3ea",
+      "recipient_grants": "still empty for later browser authorization",
+      "initial_probe": "First plaintext denial was403 because channel request was pending. After explicit bot recipient acceptance the encryption guard returned400; assertions were not weakened."
+    },
+    "http_fixture_binary_sha256": "e90592a4d2108ca102b636ad78aa34352f15628789ecf1efa21ae7ca254cf521",
+    "postgres": "PostgreSQL18.6 GameGrant + export/anonymization + all TestDMRepo tests passed12.055s; repaired fixture pair additionally passed2.134s",
+    "sqlite": "Final grant/control/encryption repository/services/handlers passed; repaired fixture pair1.688s",
+    "linux_race": "Affected repository79.007s/services11.347s/handlers2.965s passed; final historical plaintext regression4.909s passed",
+    "go_vet": "passed",
+    "golangci_lint": "2.12.2 underGo1.26.10:0issues, including fix for prior CI ifElseChain diagnostic",
+    "dev_client_unit": "7passed; crypto/transport mocks exercise protocol boundaries only, not real peer decryption",
+    "client_typecheck": "passed",
+    "client_scoped_lint": "passed",
+    "production_client_build": "passed; local QA HTML entry excluded from dist",
+    "self_scan": "zero blocking matches,340review rows;37exact source records; no broad exceptions added"
+  },
+  "remaining": [
+    "Real browser ownership approval for the existing user-owned Ego Space0 is pending. No control was claimed.",
+    "Actual human WS delivery and real Signal peer decryption, reply ratchet and two-client synchronization are not verified.",
+    "Device/prekey public/private migration, revoked credentials, full bot attachment download and remote libSQL/migration recovery acceptance remain open.",
+    "Group/server permissions are separate and are not claimed to be disabled by this direct-message grant.",
+    "No new HF or Windows publication;2.11.111 stays immutable."
+  ],
+  "next": [
+    "Use existing user-owned HiChat browser space only after explicit authorization.",
+    "Use local loopback fixture and the isolated QA bot page to perform real Signal round-trip with human UI.",
+    "Run CI on this final source and address any genuine failures without weakening checks."
+  ]
+}

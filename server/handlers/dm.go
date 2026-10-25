@@ -564,12 +564,16 @@ func (h *DMHandler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 // ToggleE2EE handles PATCH /api/dms/{channelId}/e2ee
-// Enables or disables E2EE on a DM channel. Either participant can toggle.
+// Enables or disables E2EE on a DM channel. Only human participants can toggle.
 func (h *DMHandler) ToggleE2EE(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelId")
 	user, ok := r.Context().Value(UserContextKey).(*models.User)
 	if !ok {
 		pkg.ErrorWithMessage(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if user.IsBot {
+		pkg.Error(w, pkg.ErrForbidden)
 		return
 	}
 

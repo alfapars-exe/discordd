@@ -296,6 +296,11 @@ func (r *sqliteDMRepo) CreateMessage(ctx context.Context, msg *models.DMMessage)
 	if err := r.authorizeGameMessage(ctx, msg); err != nil {
 		return err
 	}
+	if msg.ApplicationID != nil {
+		if err := r.requireGameEncryptedPayload(ctx, msg.UserID, msg.DMChannelID, msg.EncryptionVersion, msg.Content, msg.Ciphertext, nil); err != nil {
+			return err
+		}
+	}
 	// Content can be nil (file-only message)
 	var contentPtr *string
 	if msg.Content != nil && *msg.Content != "" {
@@ -332,6 +337,13 @@ func (r *sqliteDMRepo) UpdateMessage(ctx context.Context, id string, req *models
 }
 
 func (r *sqliteDMRepo) updateMessage(ctx context.Context, id string, req *models.UpdateDMMessageRequest) error {
+	var previous models.DMMessage
+	if err := r.db.QueryRowContext(ctx, `SELECT user_id,dm_channel_id,encryption_version,content FROM dm_messages WHERE id=?`, id).Scan(&previous.UserID, &previous.DMChannelID, &previous.EncryptionVersion, &previous.Content); err != nil {
+		return err
+	}
+	if err := r.requireGameEncryptedPayload(ctx, previous.UserID, previous.DMChannelID, req.EncryptionVersion, &req.Content, req.Ciphertext, &previous); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 
 	var result sql.Result

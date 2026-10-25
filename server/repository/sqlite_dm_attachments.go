@@ -18,6 +18,20 @@ func (r *sqliteDMRepo) CreateAttachment(ctx context.Context, attachment *models.
 }
 
 func (r *sqliteDMRepo) createAttachment(ctx context.Context, attachment *models.DMAttachment) error {
+	var encryptedGame bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dm_messages m JOIN application_game_identities g ON g.bot_user_id=m.user_id
+		JOIN dm_channels c ON c.id=m.dm_channel_id WHERE m.id=? AND c.e2ee_enabled=1)`, attachment.DMMessageID).Scan(&encryptedGame); err != nil {
+		return err
+	}
+	if encryptedGame {
+		var version int
+		if err := r.db.QueryRowContext(ctx, `SELECT encryption_version FROM dm_messages WHERE id=?`, attachment.DMMessageID).Scan(&version); err != nil {
+			return err
+		}
+		if version != 1 || attachment.MimeType == nil || *attachment.MimeType != "application/octet-stream" {
+			return fmt.Errorf("%w: encrypted game attachments require encrypted message metadata and opaque MIME type", pkg.ErrBadRequest)
+		}
+	}
 	id, err := generateID()
 	if err != nil {
 		return fmt.Errorf("failed to create DM attachment: %w", err)

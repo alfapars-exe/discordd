@@ -1449,7 +1449,7 @@
   },
   "linkedGames": {
     "title": "Bağlı oyunlarda mesajlaşma",
-    "description": "Yetkilendirdiğin HiChat oyun uygulamalarının sana mesaj göndermesini yönet. Bu izin mesaj geçmişini okuma veya profil bağlantısının sahipliğini doğrulama izni vermez.",
+    "description": "Yetkilendirdiğin HiChat oyun uygulamalarının sana özel mesaj göndermesini yönet. Bu izin mesaj geçmişini okuma veya profil bağlantısının sahipliğini doğrulama izni vermez. Sunucu ve grup izinleri ayrı yönetilir.",
     "empty": "Yetkilendirilmiş oyun uygulaması yok.",
     "applicationID": "Yetkilendirilecek oyun uygulamasının kimliği",
     "authorize": "Mesajlaşmaya izin ver",

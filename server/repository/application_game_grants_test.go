@@ -262,11 +262,12 @@ func TestGameGrantConcurrentCASOnlyOneWins(t *testing.T) {
 	close(results)
 	success, conflict := 0, 0
 	for err := range results {
-		if err == nil {
+		switch {
+		case err == nil:
 			success++
-		} else if errors.Is(err, pkg.ErrConflict) {
+		case errors.Is(err, pkg.ErrConflict):
 			conflict++
-		} else {
+		default:
 			t.Fatal(err)
 		}
 	}

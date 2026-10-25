@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/database"
@@ -158,7 +159,8 @@ func (r *BotRepository) ChangeGameGrant(ctx context.Context, userID, botID strin
 // The identity lock remains held until the surrounding message transaction ends.
 func (r *sqliteDMRepo) authorizeGameMessage(ctx context.Context, msg *models.DMMessage) error {
 	msg.ApplicationID = nil
-	registered, err := lockGameIdentity(ctx, r.db, msg.UserID)
+	var registered bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM application_game_identities WHERE bot_user_id=?)`, msg.UserID).Scan(&registered)
 	if err != nil {
 		return err
 	}
@@ -167,6 +169,17 @@ func (r *sqliteDMRepo) authorizeGameMessage(ctx context.Context, msg *models.DMM
 	}
 	if _, ok := r.db.(*sql.Tx); !ok {
 		return fmt.Errorf("%w: game messages require a transaction", pkg.ErrForbidden)
+	}
+	// All game content/control writes lock channel before identity. Human
+	// encryption toggles lock this same channel, and first-request transitions
+	// already hold it; a consistent order prevents an identity/channel inversion.
+	if _, err := r.db.ExecContext(ctx, `UPDATE dm_channels SET e2ee_enabled=e2ee_enabled WHERE id=?`, msg.DMChannelID); err != nil {
+		return err
+	}
+	if registered, err = lockGameIdentity(ctx, r.db, msg.UserID); err != nil {
+		return err
+	} else if !registered {
+		return pkg.ErrForbidden
 	}
 	var allowed bool
 	err = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dm_channels c JOIN application_game_grants g
@@ -186,10 +199,34 @@ func (r *sqliteDMRepo) authorizeGameMessage(ctx context.Context, msg *models.DMM
 	return nil
 }
 
+func (r *sqliteDMRepo) requireGameEncryptedPayload(ctx context.Context, senderID, channelID string, version int, content, ciphertext *string, previous *models.DMMessage) error {
+	var required bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM application_game_identities g JOIN dm_channels c ON c.id=? WHERE g.bot_user_id=? AND c.e2ee_enabled=1)`, channelID, senderID).Scan(&required)
+	if err != nil {
+		return err
+	}
+	if required && (version != 1 || (content != nil && *content != "") || ciphertext == nil || strings.TrimSpace(*ciphertext) == "") {
+		return fmt.Errorf("%w: encrypted game conversations require ciphertext without plaintext content", pkg.ErrBadRequest)
+	}
+	// The existing edit API does not convert a stored message's encryption
+	// format. Reject a purported encrypted edit of historical plaintext rather
+	// than leaving the old content/version alongside a newly supplied cipher.
+	if required && previous != nil && (previous.EncryptionVersion != 1 || (previous.Content != nil && *previous.Content != "")) {
+		return fmt.Errorf("%w: historical plaintext game messages cannot be converted by an encrypted edit", pkg.ErrBadRequest)
+	}
+	return nil
+}
+
 // Content edits and attachment completion must not bypass a disabled grant by
 // targeting an already stored message. Preserve its immutable origin marker;
 // authorize against its stored sender, never a caller-supplied application ID.
 func (r *sqliteDMRepo) withGameMessageMutation(ctx context.Context, messageID string, fn func(*sqliteDMRepo) error) error {
+	return r.withGameActorMessageMutation(ctx, messageID, "", fn)
+}
+
+// actorID is explicit for reactions/pins: their actor need not be the original
+// message author. An empty actor selects the stored author for content edits.
+func (r *sqliteDMRepo) withGameActorMessageMutation(ctx context.Context, messageID, actorID string, fn func(*sqliteDMRepo) error) error {
 	apply := func(txRepo *sqliteDMRepo) error {
 		var stored models.DMMessage
 		err := txRepo.db.QueryRowContext(ctx, `SELECT user_id,dm_channel_id FROM dm_messages WHERE id=?`, messageID).Scan(&stored.UserID, &stored.DMChannelID)
@@ -198,6 +235,9 @@ func (r *sqliteDMRepo) withGameMessageMutation(ctx context.Context, messageID st
 		}
 		if err != nil {
 			return err
+		}
+		if actorID != "" {
+			stored.UserID = actorID
 		}
 		if err := txRepo.authorizeGameMessage(ctx, &stored); err != nil {
 			return err

@@ -276,7 +276,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/application_game_grants.go",
-      "file_sha256": "8af0cb99e560e929953dd55edaf24dc3b78fac8f457b836a75172298250f2b6f",
+      "file_sha256": "4e47337cfc73106b3467504bc260688fb6a2b1297100710b817a08db7d7d6b82",
       "line_sha256": "ba47c188649c686f39ec2ae115d61190fe56ec2bfd6122467283dbeb45f594f7",
       "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
       "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
@@ -284,7 +284,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/application_game_grants.go",
-      "file_sha256": "8af0cb99e560e929953dd55edaf24dc3b78fac8f457b836a75172298250f2b6f",
+      "file_sha256": "4e47337cfc73106b3467504bc260688fb6a2b1297100710b817a08db7d7d6b82",
       "line_sha256": "68149bf51d94e29556ddda5f4152c184028e1cb7f004a98d35956ccb3f4b6c24",
       "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
       "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"
@@ -292,7 +292,7 @@
     {
       "rule": "go.sql-concat",
       "path": "server/repository/application_game_grants.go",
-      "file_sha256": "8af0cb99e560e929953dd55edaf24dc3b78fac8f457b836a75172298250f2b6f",
+      "file_sha256": "4e47337cfc73106b3467504bc260688fb6a2b1297100710b817a08db7d7d6b82",
       "line_sha256": "19a2a16e0381fb7de119ef3f5fce83cde13bd624959f056339c19baef0e13ce8",
       "reason": "Reviewed fixed SQL: compile-time SELECT suffixes and numeric revision=revision+1 arithmetic. Recipient/application IDs, enable state, time and expected revision remain bound parameters; there is no request-derived SQL fragment.",
       "proof_ref": "server/repository/application_game_grants.go:54-68,95-153;server/repository/application_game_grants_test.go:TestGameGrantOwnershipRevisionAndIsolation,TestGameGrantConcurrentCASOnlyOneWins"

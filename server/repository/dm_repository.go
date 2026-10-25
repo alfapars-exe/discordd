@@ -48,6 +48,8 @@ type DMRepository interface {
 
 	// Pin operations
 	PinMessage(ctx context.Context, messageID string) error
+	// PinMessageAs binds delivery authorization to the actor, not the author.
+	PinMessageAs(ctx context.Context, actorID, messageID string) error
 	UnpinMessage(ctx context.Context, messageID string) error
 	GetPinnedMessages(ctx context.Context, channelID string) ([]models.DMMessage, error)
 

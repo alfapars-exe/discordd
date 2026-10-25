@@ -28,6 +28,13 @@ func (r *sqliteDMRepo) PinMessage(ctx context.Context, messageID string) error {
 	return nil
 }
 
+func (r *sqliteDMRepo) PinMessageAs(ctx context.Context, actorID, messageID string) error {
+	if actorID == "" {
+		return pkg.ErrBadRequest
+	}
+	return r.withGameActorMessageMutation(ctx, messageID, actorID, func(txRepo *sqliteDMRepo) error { return txRepo.PinMessage(ctx, messageID) })
+}
+
 func (r *sqliteDMRepo) UnpinMessage(ctx context.Context, messageID string) error {
 	result, err := r.db.ExecContext(ctx,
 		"UPDATE dm_messages SET is_pinned = 0 WHERE id = ?", messageID,

@@ -40,5 +40,7 @@
     "Browser/packaged Windows visual, keyboard, two-session synchronization and real E2EE acceptance.",
     "Remote libSQL and additive migration backup/restore acceptance.",
     "No new production or Windows release for this development slice. Published2.11.111 remains unchanged."
-  ]
+  ],
+  "source_checkpoint": "2d2558f5171dade08c9bb947ce783db7c5586c17",
+  "follow_up_evidence": "implementation/verification/p8-game-control-e2ee-boundaries-2026-10-25.json"
 }
