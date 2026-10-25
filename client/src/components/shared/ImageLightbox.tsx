@@ -17,6 +17,7 @@ import { useAuthImageRetry } from "../../hooks/useAuthImageRetry";
 import ForwardMessageModal from "../chat/ForwardMessageModal";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 import { useAuthStore } from "../../stores/authStore";
+import {friendshipSnapshotKey} from "../../utils/relationshipMediaPolicy";
 import { useFriendStore } from "../../stores/friendStore";
 
 function mediaPolicySnapshot(data: Record<string, unknown>): string {
@@ -44,7 +45,7 @@ function ImageLightbox() {
     });
     const unwatchFriends = useFriendStore.subscribe((state, previousState) => {
       const ids = (friends: typeof state.friends) => friends.map((friend) => friend.user_id).sort().join(",");
-      if (ids(state.friends) !== ids(previousState.friends)) close();
+      if (ids(state.friends) !== ids(previousState.friends)||friendshipSnapshotKey(state)!==friendshipSnapshotKey(previousState)) close();
     });
     return () => { unwatchPreferences(); unwatchAccount(); unwatchFriends(); };
   }, [close]);

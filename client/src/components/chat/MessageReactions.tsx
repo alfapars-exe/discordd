@@ -1,16 +1,19 @@
 /** MessageReactions — Renders emoji reaction buttons and add-reaction picker. */
 
-import { useCallback } from "react";
+import { Fragment,useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useEmojiStore } from "../../stores/emojiStore";
 import { parseReactionKey, toReactionKey } from "../../utils/expressionTokens";
+import ReactionMediaGate from "./ReactionMediaGate";
 import CustomEmoji from "../shared/CustomEmoji";
 import EmojiPicker from "../shared/EmojiPicker";
 import type { ChatMessage } from "../../hooks/useChatContext";
 
 type MessageReactionsProps = {
   message: ChatMessage;
+  sourceKind:"channel"|"dm";
+  sourceChannelId:string;
   pickerSource: "bar" | "hover" | null;
   onPickerOpen: () => void;
   onPickerClose: () => void;
@@ -19,6 +22,7 @@ type MessageReactionsProps = {
 
 function MessageReactions({
   message,
+  sourceKind,sourceChannelId,
   pickerSource,
   onPickerOpen,
   onPickerClose,
@@ -41,34 +45,28 @@ function MessageReactions({
   return (
     <div className="msg-reactions">
       {message.reactions?.map((reaction) => {
+        const reactionUsers=Array.isArray(reaction.users)?reaction.users:[];
         const isActive = currentUser
-          ? reaction.users.includes(currentUser.id)
+          ? reactionUsers.includes(currentUser.id)
           : false;
 
-        return (
-          <button
-            key={reaction.emoji}
-            className={`msg-reaction-btn${isActive ? " active" : ""}`}
-            onClick={() => onReaction(reaction.emoji)}
-            title={reaction.users.length.toString()}
-          >
-            <span className="msg-reaction-emoji">
-              {(() => {
-                const parsed = parseReactionKey(reaction.emoji);
-                if (!parsed.custom) return parsed.emoji;
-                return (
-                  <CustomEmoji
-                    id={parsed.id}
-                    name={emojiById[parsed.id]?.name ?? tExpr("unknownEmoji")}
-                    animated={parsed.animated}
-                    size="reaction"
-                  />
-                );
-              })()}
-            </span>
-            <span className="msg-reaction-count">{reaction.count}</span>
-          </button>
-        );
+        const parsed=parseReactionKey(reaction.emoji);
+        const reactionButton=(visible:boolean)=><button
+          className={`msg-reaction-btn${isActive ? " active" : ""}`}
+          onClick={()=>onReaction(reaction.emoji)}
+          title={reactionUsers.length.toString()}
+          aria-pressed={isActive}
+          aria-label={`${parsed.custom?emojiById[parsed.id]?.name??tExpr("unknownEmoji"):parsed.emoji} ${reaction.count}`}
+        >
+          <span className="msg-reaction-emoji">{!parsed.custom?parsed.emoji:visible?
+            <CustomEmoji id={parsed.id} name={emojiById[parsed.id]?.name??tExpr("unknownEmoji")} animated={parsed.animated} size="reaction"/>:
+            <span>{`:${emojiById[parsed.id]?.name??tExpr("unknownEmoji")}:`}</span>}
+          </span>
+          <span className="msg-reaction-count">{reaction.count}</span>
+        </button>;
+        return parsed.custom?<div key={reaction.emoji} className="msg-reaction-media">
+          <ReactionMediaGate reaction={reaction} sourceKind={sourceKind} sourceChannelId={sourceChannelId} messageId={message.id} revision={message.edited_at??"original"} messageAuthorId={message.user_id} render={reactionButton}/>
+        </div>:<Fragment key={reaction.emoji}>{reactionButton(true)}</Fragment>;
       })}
 
       <div className="msg-reaction-add-wrap">

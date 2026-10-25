@@ -13,11 +13,12 @@
     "linux_race": "Go1.26.10 CGO: services126.124s, handlers3.226s, repository106.182s passed",
     "postgres": "Actual disposable PostgreSQL18.6 parity8.839s passed; environment restored and container removed",
     "lint": "Pinned Go1.26.10 golangci-lint: zero issues",
+    "source_ci": "654b6c317f91a60f646f2788ee83169890196722 / run40179663273: all21 jobs passed, including the privacy commit f4cdc695",
     "scenarios": "Slow extraction/deletion, stale repeat, concurrent queue writes, rollback/no observer, blocked observer ordering, old/equal-revision publication ordering, already-canonical replacement, unrelated actors and unknown-field/numeric precision preservation",
     "reviewed_manifest": "Existing account-anonymization file hash refreshed only after reviewing the unchanged exact fixed-SQL arithmetic line; 37-record manifest validates. No broad suppression added."
   },
   "remaining": [
-    "Final-source CI and actual multi-client/device deletion acceptance remain open.",
+    "Actual multi-client/device deletion acceptance remains open; later code changes need their own final-source CI.",
     "Historical raw rows from identities retired before this fix are sanitized on reads and future writes, but have no startup bulk rewrite. Explicit bounded historical at-rest backfill is a separate maintenance gate.",
     "Post-extraction voice/permission revalidation is a separate P10 audit, not claimed by this privacy fix.",
     "No production database, live user account, new installer or production publication was touched."

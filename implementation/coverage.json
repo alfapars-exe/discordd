@@ -2441,7 +2441,7 @@
       "id": "p3.sensitive-sexual",
       "title": "Sensitive sexual media policy",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R04"
       ],
@@ -2454,14 +2454,14 @@
       "acceptance": [
         "Friend DMs, other DMs and server channels each honor selected show/blur/block policy against actual classification results."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/settings/PrivacyConsentSettings.tsx", "server/models/preferences.go", "client/src/utils/mediaVisibility.ts", "client/src/hooks/useLocalMediaAnalysis.ts", "client/src/components/chat/MessageBodyMediaGate.tsx", "client/src/components/chat/ReactionMediaGate.tsx", "client/src/stores/friendStore.ts"],
+      "evidence": ["implementation/verification/p3-local-media-model-runtime-2026-10-24.json", "implementation/verification/p3-local-media-chat-integration-2026-10-24.json", "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"]
     },
     {
       "id": "p3.sensitive-disturbing",
       "title": "Disturbing media policy",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R04"
       ],
@@ -2474,14 +2474,14 @@
       "acceptance": [
         "Switch category and enforce independent show/blur/block rules for the same three message sources."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/settings/PrivacyConsentSettings.tsx", "client/src/media/disturbingModelRuntime.ts", "client/src/media/disturbingPreprocessing.ts", "client/src/media/mediaClassifier.worker.ts", "client/src/components/chat/MessageBodyMediaGate.tsx", "client/src/components/chat/ReactionMediaGate.tsx"],
+      "evidence": ["implementation/verification/p3-vendored-disturbing-runtime-2026-10-24.json", "implementation/verification/p3-disturbing-preprocessing-2026-10-24.json", "implementation/verification/p3-animated-sampling-2026-10-24.json", "implementation/verification/p3-video-sampling-2026-10-24.json", "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"]
     },
     {
       "id": "p3.spam",
       "title": "Spam filters",
       "phase": "P3",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R04"
       ],
@@ -2501,7 +2501,7 @@
       "id": "p3.classifier",
       "title": "Real media and spam classification",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "user-plan"
       ],
@@ -2534,7 +2534,10 @@
         "client/public/media-classifier/v1/provenance.json",
         "client/public/media-classifier/v2/provenance.json",
         "client/src/media/disturbingModelRuntime.ts",
-        "client/src/media/disturbingModelContract.ts"
+        "client/src/media/disturbingModelContract.ts",
+        "client/src/utils/expressionMedia.ts",
+        "client/src/components/chat/MessageBodyMediaGate.tsx",
+        "client/src/components/chat/ReactionMediaGate.tsx"
       ],
       "evidence": [
         "implementation/verification/p3-private-media-labels-2026-10-24.json",
@@ -2547,14 +2550,15 @@
         "implementation/verification/p3-current-runtime-audit-2026-10-24.json",
         "implementation/verification/p3-provenance-repair-2026-10-24.json",
         "implementation/verification/p3-animated-sampling-2026-10-24.json",
-        "implementation/verification/p3-video-sampling-2026-10-24.json"
+        "implementation/verification/p3-video-sampling-2026-10-24.json",
+        "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"
       ]
     },
     {
       "id": "p3.classification-failure",
       "title": "Classification failure states",
       "phase": "P3",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "user-plan"
       ],
@@ -2567,8 +2571,8 @@
       "acceptance": [
         "Pending/error/retry states cannot silently display a blocked item as safe; user-selected visibility behavior stays explicit."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/components/chat/UnclassifiedMediaGate.tsx", "client/src/components/chat/PrivateMediaAnnotation.tsx", "client/src/hooks/useLocalMediaAnalysis.ts", "client/src/media/mediaClassifierClient.ts", "client/src/utils/relationshipMediaPolicy.ts"],
+      "evidence": ["implementation/verification/p3-local-media-chat-integration-2026-10-24.json", "implementation/verification/p3-expression-and-relationship-gates-2026-10-25.json"]
     },
     {
       "id": "p3.server-dm-selector",

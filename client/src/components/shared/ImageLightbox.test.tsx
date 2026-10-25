@@ -9,6 +9,7 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import ImageLightbox from "./ImageLightbox";
 import { useLightboxStore } from "../../stores/lightboxStore";
 import { ensureFreshToken } from "../../api/client";
+import {useFriendStore} from "../../stores/friendStore";
 import { usePreferencesStore } from "../../stores/preferencesStore";
 
 vi.mock("../../api/client", () => ({
@@ -321,4 +322,11 @@ describe("ImageLightbox", () => {
     });
     outside.remove();
   });
+});
+
+it.each(["loading","error"] as const)("closes an existing preview when friendship certainty becomes %s without ID changes",status=>{
+ useFriendStore.setState({ownerId:"owner",authGeneration:1,friendsStatus:"ready",friends:[]});render(<ImageLightbox/>);openRemote();expect(screen.getByRole("dialog")).toBeInTheDocument();act(()=>useFriendStore.setState({friendsStatus:status}));expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+it("closes a preview when friend snapshot account/session provenance changes",()=>{
+ useFriendStore.setState({ownerId:"owner",authGeneration:1,friendsStatus:"ready",friends:[]});render(<ImageLightbox/>);openRemote();act(()=>useFriendStore.setState({authGeneration:2}));expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

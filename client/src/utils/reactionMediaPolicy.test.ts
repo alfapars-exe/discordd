@@ -1,0 +1,8 @@
+import {expect,it} from 'vitest';
+import {reactionMediaScopes,type ReactionActorContext} from './reactionMediaPolicy';
+const base:ReactionActorContext={kind:'group',viewerId:'me',users:['friend'],count:1,friendIds:['friend'],friendsReady:true,participantIds:['me','friend','other'],participantsReady:true};
+it('server reactions always use server policy, including own and incomplete actors',()=>{expect(reactionMediaScopes({...base,kind:'channel',users:[],count:5})).toEqual(['channels']);expect(reactionMediaScopes({...base,kind:'channel',users:['me']})).toEqual(['channels']);});
+it('DM reactions use actual other participant friendship even for self-only reactors',()=>{expect(reactionMediaScopes({...base,kind:'dm',users:['me'],participantIds:['me','friend']})).toEqual(['friendDMs']);expect(reactionMediaScopes({...base,kind:'dm',participantIds:['me','other'],users:['other']})).toEqual(['otherDMs']);});
+it('groups aggregate real reactor contexts and self-only uses conservative conversation context',()=>{expect(reactionMediaScopes({...base,users:['friend','other'],count:2})).toEqual(['friendDMs','otherDMs']);expect(reactionMediaScopes({...base,users:['me']})).toEqual(['friendDMs','otherDMs']);expect(reactionMediaScopes(base)).toEqual(['friendDMs']);});
+it.each([{users:[],count:1},{users:['friend'],count:2},{users:['friend','friend'],count:2},{users:['foreign'],count:1},{participantsReady:false}])('incomplete or unknown actor set includes nonfriend protection: %j',extra=>{expect(reactionMediaScopes({...base,...extra})).toContain('otherDMs');});
+it('unknown friendship certainty uses both scopes even with an apparently matching cached friend row',()=>{expect(reactionMediaScopes({...base,friendsReady:false})).toEqual(['friendDMs','otherDMs']);});

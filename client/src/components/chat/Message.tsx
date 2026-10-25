@@ -18,6 +18,7 @@ import { useE2EEStore } from "../../stores/e2eeStore";
 import { useSavedStore } from "../../stores/savedStore";
 import { useSpamVisibility } from "../../hooks/useSpamVisibility";
 import UnclassifiedMediaGate from "./UnclassifiedMediaGate";
+import MessageBodyMediaGate from "./MessageBodyMediaGate";
 import SpamPreview from "./SpamPreview";
 import type { ChatMessage } from "../../hooks/useChatContext";
 import { copyToClipboard } from "../../utils/constants";
@@ -584,7 +585,9 @@ function Message({
             </div>
           ) : (
             <div className="msg-text">
-              {renderedContent}
+              <MessageBodyMediaGate content={message.content} authorId={message.user_id} messageId={message.id} revision={message.edited_at??"original"} sourceKind={mode} sourceChannelId={channelId}>
+                {renderedContent}
+              </MessageBodyMediaGate>
               {previewUrls.length > 0 && (
                 <div className="msg-link-previews">
                   {previewUrls.map((url) => (
@@ -607,6 +610,8 @@ function Message({
 
           {!spam.hidden && (!isIgnored || showIgnoredContent) && <MessageReactions
             message={message}
+            sourceKind={mode}
+            sourceChannelId={channelId}
             pickerSource={pickerSource}
             onPickerOpen={() => setPickerSource("bar")}
             onPickerClose={() => setPickerSource(null)}
