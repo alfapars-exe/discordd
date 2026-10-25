@@ -20,9 +20,10 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_RELEASE_TOKEN }}
         run: |
           python - <<'PY'
-          import json, os, re
+          import difflib, json, os, re
+          from pathlib import Path
           import httpx
-          from huggingface_hub import HfApi
+          from huggingface_hub import HfApi, hf_hub_download
           def clean(value):
               text = str(value).replace(os.environ['HF_TOKEN'], '[redacted]')
               text = re.sub(r'(?i)\b(?:https?|postgres(?:ql)?|libsql)://\S+', '[url]', text)
@@ -31,6 +32,19 @@ jobs:
           info = HfApi().space_info('infinayazilim/discord')
           raw = info.runtime.raw if info.runtime else {}
           print(json.dumps({'head':info.sha, 'stage':raw.get('stage'), 'runtime_commit':raw.get('sha'), 'error':clean(raw.get('errorMessage','')), 'runtime_fields':sorted(raw)}), flush=True)
+          old = 'b8a626fb9d1a0e1c3531494b46f1c3be8cc4e8ab'
+          failed = '5f05a003d7c5995362a89dea5c94cd9ae0afd11a'
+          for name in ('server/database/postgres.go','server/database/postgres_dialect.go'):
+              texts = [Path(hf_hub_download('infinayazilim/discord', name, repo_type='space', revision=revision)).read_text() for revision in (old, failed)]
+              print('SOURCE_DIFF ' + name, flush=True)
+              for line in list(difflib.unified_diff(texts[0].splitlines(), texts[1].splitlines(), fromfile='working', tofile='failed'))[:250]:
+                  print(clean(line), flush=True)
+          for revision in (old, failed):
+              for name in ('server/go.mod','Dockerfile'):
+                  text = Path(hf_hub_download('infinayazilim/discord', name, repo_type='space', revision=revision)).read_text()
+                  for line in text.splitlines():
+                      if line.startswith('FROM ') or 'github.com/jackc/pgx/' in line:
+                          print('BUILD_PIN ' + revision[:8] + ' ' + clean(line), flush=True)
           for kind in ('build', 'run'):
               print('LOG_KIND ' + kind, flush=True)
               count = 0
