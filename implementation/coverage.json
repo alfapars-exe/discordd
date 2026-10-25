@@ -2495,7 +2495,7 @@
         "All mode routes detected non-self spam from friends and nonfriends into the inbox before hiding; nonfriends mode does so only for nonfriends. Off disables automatic routing and hiding, leaving messages normally visible. Existing inbox decisions remain accessible; restore/dismiss must not delete the underlying message."
       ],
       "code": ["client/src/utils/spamClassification.ts", "client/src/utils/spamClassification.corpus.ts", "client/scripts/spam-classifier-eval.mjs", "client/src/hooks/useSpamVisibility.ts", "server/services/spam_inbox_service.go"],
-      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json"]
+      "evidence": ["implementation/verification/p3-spam-rule-regressions-2026-10-24.json", "implementation/verification/p3-spam-relationship-readiness-2026-10-25.json"]
     },
     {
       "id": "p3.classifier",
@@ -7704,7 +7704,7 @@
       "id": "p11.overlay-message",
       "title": "Overlay message notifications",
       "phase": "P11",
-      "status": "missing",
+      "status": "existing",
       "sources": [
         "R25"
       ],
@@ -7712,12 +7712,12 @@
         "windows"
       ],
       "persistence": "Device overlay notification preferences",
-      "authorization": "Explicit activity consent, server audience and authorized join checks",
+      "authorization": "Partial persisted server mention/reply support: current owner/auth/source, fresh View/Read/Send and thread-parent ACL, block/ignore/mute/spam and crypto-device checks; opaque native action with one-shot confirmation. Complete incoming DM/group dispatch remains pending.",
       "acceptance": [
         "Enabled widget displays actual permitted incoming messages and reply action targets correct conversation."
       ],
-      "code": [],
-      "evidence": []
+      "code": ["client/src/hooks/useOverlayNotificationReply.ts", "client/src/utils/overlayNotificationReply.ts", "client/src/hooks/useOverlayNotifications.ts", "electron/overlay-action-regions.ts", "electron/voice-overlay.ts"],
+      "evidence": ["implementation/verification/p11-overlay-notification-reply-2026-10-25.json"]
     },
     {
       "id": "p11.overlay-welcome",

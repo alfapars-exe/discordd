@@ -41,6 +41,26 @@
     {
       "command": "git diff --check -- server/handlers server/services server/models server/init_handlers.go",
       "result": "PASS, no whitespace errors"
+    },
+    {
+      "kind": "compiled_loopback_http",
+      "source": "c7358562c1dae33dab87e4c22d5100ba0f538117",
+      "result": "14 checks passed on newly built isolated QA server; original fixture secrets/database preserved, online backup integrity ok",
+      "checks": [
+        "readonly no adoption",
+        "unauthenticated/bot/wrong-server/nonvoice denied",
+        "actual voice required for adoption and enqueue",
+        "remote moderator Stop",
+        "exact receipt retry",
+        "payload mismatch conflict",
+        "legacy downgrade and partial metadata rejected",
+        "stale command cannot affect replacement",
+        "server deletion clears head and receipts; integrity ok"
+      ],
+      "limits": [
+        "Control head explicitly seeded for deterministic fixture",
+        "No media extraction/voice join/encrypted playback or WS acceptance"
+      ]
     }
   ],
   "test_evidence": [
@@ -51,8 +71,8 @@
   ],
   "lock_order": "No lifecycle/session locks across extraction or LiveKit dialing. Commit fences use lifecycle stripe then sessionMu then bounded authorization, never bot.mu during the callback. Voice state reads use voice RLock; voice leave/move music cleanup dispatch is asynchronous. Owned cleanup checks exact bot identity and currentTrack/loopRunning before teardown.",
   "remaining": [
-    "Current local QA fixture binary source 2c35c8ef55b687cc9e664dc51e457b81f841aeaf does not contain or validate this access source. Its earlier HTTP results must not be counted for this slice.",
-    "Final committed-source CI, fresh compiled HTTP/WS flows and actual encrypted two-client audible YouTube playback remain pending; no production or external media call was made.",
+    "The isolated QA server now runs compiled source c7358562c1dae33dab87e4c22d5100ba0f538117; earlier 2c35 HTTP results remain separate. The new 14-check run validates HTTP wiring, not actual delayed extraction/connection or audible playback.",
+    "Final committed-source CI and actual encrypted two-client audible YouTube playback remain pending; no production or external media call was made.",
     "Server-side broadcast audience authorization is still pending: music state/error currently broadcast to all server clients. Client voice filtering is not a server permission boundary.",
     "Quiet cleanup reconciliation remains pending when another actor received active=true after LiveKit room assignment and committed a paused queue edit before creator denial. Existing paused-edit test blocks before room assignment and cannot prove that UI reconciliation.",
     "Windows installer/update, production backup/migration/rollback and real device acceptance remain separate gates. No deployment or release was performed."
