@@ -1,6 +1,6 @@
 {
   "date": "2026-10-25",
-  "status": "reproduced_fix_and_runtime_acceptance_pending",
+  "status": "fix_carried_from_hotfix_automated_verified_runtime_acceptance_pending",
   "scope": "LiveKit audio publication context adoption versus owned microphone processor",
   "runtime_evidence": "Frozen two-client diagnostics: published tracks live/enabled/unmuted and GCM enabled, but call pipeline registry unavailable; receiver decoded duration/energy0. Transport stabilizes with local SFU1.9.12; this does not establish working audio.",
   "source_evidence": [
@@ -9,6 +9,13 @@
     "HiChat MicrophoneTrackProcessor assigns an owned context to the track; Room may have undefined context. A focused regression using actual LocalAudioTrack, actual processor and actual pipeline registry reproduces ready state with missing registry when publication faithfully adopts the undefined SDK context.",
     "Simply removing the track context assignment is invalid: installed LocalAudioTrack.setProcessor explicitly requires an audio context before invoking processor.init. This candidate was rejected before production source changes."
   ],
+  "valid_context_reproduction_and_fix": {
+    "cause": "With a normal valid Room context, SDK setAudioContext holds trackChangeLock while awaiting processor.restart. Calling localTrack.setAudioContext(new owned context) inside restart queues another SDK restart, repeating context recreation and graph teardown.",
+    "regression": "Actual SDK LocalAudioTrack + actual processor + actual pipeline registry with bounded fake graph IO: frozen baseline expected3 contexts but created6 after20 microtasks; corrected source creates3 contexts and retains registered pipeline. Duplicate-enable path remains separately covered.",
+    "carried_source": "Four source/test paths match hotfix commit af3a8946ea006dfa660d137a9d70c07207cedca5 byte-for-byte after canonical LF normalization. Only these startup source/test changes are carried; release metadata and unrelated work excluded.",
+    "verification": "SDK/processor/controller3files26tests PASS; TypeScript/scoped ESLint PASS. Same-origin worklet packaging Node test1PASS. Frozen two-client decoded-audio verification is still required.",
+    "correction_to_prior_hypothesis": "Undefined-context teardown is a genuine SDK contract, but normal valid-context restart requeue is the more direct reproduced defect. Constructor context assignment remains required and preserved."
+  },
   "constraints_for_fix": [
     "Respect actual SDK public lifecycle contracts, including publish/re-publish and reconnect.",
     "Never publish unprocessed enabled raw capture as a fallback; preserve current auth, call and encryption admission fences.",

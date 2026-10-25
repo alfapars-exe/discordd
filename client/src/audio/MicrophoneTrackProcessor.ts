@@ -63,7 +63,9 @@ export class MicrophoneTrackProcessor implements TrackProcessor<Track.Kind.Audio
     this.pipeline = undefined;
     this.processedTrack = undefined;
     this.context = this.createContext();
-    this.localTrack.setAudioContext(this.context);
+    // SDK restart holds trackChangeLock. setAudioContext would queue another
+    // restart after this one, recursively rebuilding until stop races it.
+    // Our graph owns its dedicated context independently of the SDK context.
     await this.init(opts);
     // The SDK calls restart while locked and without an AudioContext. Our graph
     // owns its context. Queue persistence without awaiting the same lock.
