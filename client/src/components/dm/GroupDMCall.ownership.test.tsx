@@ -1,3 +1,7 @@
+vi.mock("../../stores/groupCallStore",()=>({useGroupCallStore:{getState:()=>({session:null})}}));
+vi.mock("../../video/GroupRemoteVideos",()=>({default:()=>null}));
+vi.mock("../../video/useAuthorizedRoomVideos",()=>({useAuthorizedRoomVideos:()=>{},manualNativeVideo:()=>false}));
+vi.mock("../../video/videoPresentation",()=>({isPresentedVideoContext:()=>false,subscribeVideoPresentation:()=>()=>{}}));
 vi.mock("./GroupDMCallCamera",()=>({default:()=>null}));
 vi.mock("./GroupScreenShareControl",()=>({default:()=> <button>screenShare</button>}));
 import { act,render } from "@testing-library/react";

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
     voiceOverlayScale: 100, voiceOverlayPosition: "bottom-left", voiceOverlaySpeakingOnly: false,
     voiceOverlayPinned: false,
     voiceOverlayQuickActions: false, voiceOverlayClickableActions: false, voiceOverlayCompatibility: false,
-    voiceOverlayActivity: false,
+    voiceOverlayActivity: false, voiceOverlayVideo:false,voiceOverlayStreams:false,
     voiceOverlayWelcome: false, voiceOverlayGoLive: false,
     voiceOverlayNotifications: false,
     voiceOverlayNotificationActions: false,
@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
     setVoiceOverlayMode: vi.fn(), setVoiceOverlayAvatarSize: vi.fn(), setVoiceOverlayNameDisplay: vi.fn(), setVoiceOverlayMaxParticipants: vi.fn(),
     setVoiceOverlayPinned: vi.fn(), setVoiceOverlayPosition: vi.fn(), setVoiceOverlayScale: vi.fn(),
     setVoiceOverlayQuickActions: vi.fn(), setVoiceOverlayClickableActions: vi.fn(), setVoiceOverlayCompatibility: vi.fn(),
-    setVoiceOverlayActivity: vi.fn(),
+    setVoiceOverlayActivity: vi.fn(),setVoiceOverlayVideo:vi.fn(),setVoiceOverlayStreams:vi.fn(),
     setVoiceOverlayWelcome: vi.fn(), setVoiceOverlayGoLive: vi.fn(),
     setVoiceOverlayNotifications: vi.fn(),
     setVoiceOverlayNotificationActions: vi.fn(),
@@ -309,3 +309,5 @@ describe("voice processing settings", () => {
 });
 
 it("offers actual read-only compatibility without losing stored interaction choices",()=>{const view=render(<VoiceSettings/>);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayCompatibility}));expect(mocks.state.setVoiceOverlayCompatibility).toHaveBeenCalledWith(true);mocks.state.voiceOverlayCompatibility=true;view.rerender(<VoiceSettings/>);for(const label of [en.voiceOverlayPinned,en.voiceOverlayClickableActions,en.voiceOverlayNotificationActions,en.voiceOverlayChatActions,en.voiceOverlayChatCompose])expect(screen.getByRole("checkbox",{name:label})).toBeDisabled();expect(screen.getByRole("status")).toHaveTextContent(en.voiceOverlayCompatibilityActive);expect(en.voiceOverlayCompatibilityDesc).toContain("exclusive-fullscreen");expect(tr.voiceOverlayCompatibilityDesc).toContain("Özel tam ekran");expect(mocks.state.setVoiceOverlayClickableActions).not.toHaveBeenCalled();});
+
+it("offers independent real video/source widgets with truthful current-call descriptions",()=>{render(<VoiceSettings/>);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayVideo}));expect(mocks.state.setVoiceOverlayVideo).toHaveBeenCalledWith(true);fireEvent.click(screen.getByRole("checkbox",{name:en.voiceOverlayStreams}));expect(mocks.state.setVoiceOverlayStreams).toHaveBeenCalledWith(true);expect(screen.getByText(en.voiceOverlayVideoDesc)).toBeInTheDocument();expect(screen.getByText(en.voiceOverlayStreamsDesc)).toBeInTheDocument();expect(en.voiceOverlayStreamsDesc).toContain("already watching");expect(tr.voiceOverlayStreamsDesc).toContain("zaten izlediğin");});

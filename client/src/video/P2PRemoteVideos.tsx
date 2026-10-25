@@ -1,0 +1,4 @@
+import{useEffect,useRef}from "react";
+import{useTranslation}from "react-i18next";
+function Tile({stream,label}:{stream:MediaStream;label:string}){const ref=useRef<HTMLVideoElement>(null);useEffect(()=>{const element=ref.current;if(!element)return;element.srcObject=stream;return()=>{if(element.srcObject===stream)element.srcObject=null}},[stream]);return <video aria-label={label} ref={ref} className="p2p-remote-video" autoPlay playsInline muted/>}
+export default function P2PRemoteVideos({camera,screen,legacy}:{camera:MediaStream|null;screen:MediaStream|null;legacy?:MediaStream|null}){const{t}=useTranslation("voice"),{t:common}=useTranslation("common");return <>{camera&&<Tile stream={camera} label={t("camera")}/>} {screen&&<Tile stream={screen} label={t("screenShare")}/>} {!camera&&!screen&&legacy&&<Tile stream={legacy} label={common("videoCall")}/>}</>}

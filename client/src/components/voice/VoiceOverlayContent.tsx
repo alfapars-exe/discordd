@@ -1,3 +1,4 @@
+import OverlayMediaPanel from "./media/OverlayMediaPanel";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +10,9 @@ export type VoiceOverlaySnapshot = {
   voiceOverlayClickableActions?: boolean;
   voiceOverlayNotificationActions?: boolean;
   voiceOverlayActivity?: boolean;
+  voiceOverlayVideo?: boolean;
+  voiceOverlayStreams?: boolean;
+  mediaHeight?: number;
   voiceOverlayWelcome?: boolean;
   voiceOverlayGoLive?: boolean;
   goLiveEligible?: boolean;
@@ -285,6 +289,7 @@ export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly 
   const notificationRows = snapshot.notificationStatus === "ready" ? Math.max(1, notifications.length) : 1;
   const notificationHeight = showNotifications ? 20 + notificationRows * 32 : 0;
   const actionHeight = showActions ? 48 : 0;
+  const mediaHeight=(snapshot.voiceOverlayVideo===true||snapshot.voiceOverlayStreams===true)&&Number.isFinite(snapshot.mediaHeight)?Math.max(0,Math.min(320,snapshot.mediaHeight??0)):0;
   const goLiveHeight = snapshot.voiceOverlayGoLive === true && snapshot.goLiveEligible === true && snapshot.goLiveHeight === 64 ? 64 : 0;
   const goLive = goLiveHeight && snapshot.goLive && Number.isSafeInteger(snapshot.goLive.id) && snapshot.goLive.id > 0 && Number.isFinite(snapshot.goLive.expiresAt) ? snapshot.goLive : null;
   const welcomeHeight = snapshot.voiceOverlayWelcome === true && snapshot.welcomeHeight === 32 ? 32 : 0;
@@ -303,8 +308,9 @@ export default function VoiceOverlayContent({ snapshot:rawSnapshot, actionsOnly 
   const chatHasRows = snapshot.chatStatus === "ready" && chatMessages.length > 0;
   const chatHeight = showChat ? CHAT_HEADER_HEIGHT + (chatHasRows ? chatMessages.length : 1) * CHAT_ROW_MAX_HEIGHT : 0;
   return <div className="voice-overlay-root" data-position={snapshot.position} data-unlocked={snapshot.unlocked === true} data-actions={showActions}
-    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight }}>
+    style={{ paddingTop: 8 + chatHeight, paddingBottom: 8 + actionHeight + activityHeight + notificationHeight + welcomeHeight + goLiveHeight + mediaHeight }}>
     {toolbar}
+    {snapshot.enabled&&mediaHeight>0&&<OverlayMediaPanel video={snapshot.voiceOverlayVideo===true} streams={snapshot.voiceOverlayStreams===true} height={mediaHeight} bottom={8+actionHeight+activityHeight+notificationHeight+welcomeHeight+goLiveHeight}/>}
     {goLive && <OverlayWelcomeNotice key={`go-live:${goLive.id}`} notice={goLive} bottom={8 + actionHeight + activityHeight + notificationHeight + welcomeHeight} height={64} textKey="overlayGoLiveGuidance" />}
     {welcome && <OverlayWelcomeNotice key={welcome.id} notice={welcome} bottom={8 + actionHeight + activityHeight + notificationHeight} />}
     {showChat && <section className="voice-overlay-chat" aria-label={t("overlayChatTitle")}

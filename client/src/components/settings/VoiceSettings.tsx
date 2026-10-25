@@ -45,6 +45,8 @@ function VoiceSettings() {
   const overlayPinned = useVoiceStore((s) => s.voiceOverlayPinned);
   const overlayQuickActions = useVoiceStore((s) => s.voiceOverlayQuickActions);
   const overlayClickableActions = useVoiceStore((s) => s.voiceOverlayClickableActions);
+  const overlayVideo=useVoiceStore(s=>s.voiceOverlayVideo),overlayStreams=useVoiceStore(s=>s.voiceOverlayStreams);
+  const setOverlayVideo=useVoiceStore(s=>s.setVoiceOverlayVideo),setOverlayStreams=useVoiceStore(s=>s.setVoiceOverlayStreams);
   const overlayGoLive = useVoiceStore(s => s.voiceOverlayGoLive);
   const setOverlayGoLive = useVoiceStore(s => s.setVoiceOverlayGoLive);
   const overlayWelcome = useVoiceStore((s) => s.voiceOverlayWelcome);
@@ -421,6 +423,8 @@ function VoiceSettings() {
           {overlayResetResult === "success" && <p className="vs-desc" role="status">{t("voiceOverlayResetSuccess")}</p>}
         </div>
         <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayWelcome")}</div><div className="vs-desc">{t("voiceOverlayWelcomeDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayWelcome")} checked={overlayWelcome} onChange={(e) => setOverlayWelcome(e.target.checked)} /><span className="vs-switch-slider" /></label></div>
+        <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayVideo")}</div><div className="vs-desc">{t("voiceOverlayVideoDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayVideo")} checked={overlayVideo} onChange={e=>setOverlayVideo(e.target.checked)}/><span className="vs-switch-slider"/></label></div>
+        <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayStreams")}</div><div className="vs-desc">{t("voiceOverlayStreamsDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayStreams")} checked={overlayStreams} onChange={e=>setOverlayStreams(e.target.checked)}/><span className="vs-switch-slider"/></label></div>
         <div className="vs-row"><div><div className="vs-label">{t("voiceOverlayGoLive")}</div><div className="vs-desc">{t("voiceOverlayGoLiveDesc")}</div></div><label className="vs-switch"><input type="checkbox" aria-label={t("voiceOverlayGoLive")} checked={overlayGoLive} onChange={(e) => setOverlayGoLive(e.target.checked)} /><span className="vs-switch-slider" /></label></div>
         {overlayEnabled && (
           <>

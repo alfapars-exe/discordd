@@ -1,3 +1,5 @@
+import {bindAuthorizedVideoSources,type AuthorizedVideoSource}from "../video/authorizedVideoSources";
+import {isPresentedVideoContext,subscribeVideoPresentation}from "../video/videoPresentation";
 import { P2PScreenAudioSession, type P2PScreenAudioStatus } from "../webrtc/p2pScreenAudioSession";
 import { isElectron } from "../utils/constants";
 import { validateP2PDescription } from "../webrtc/p2pMediaProtocol";
@@ -59,6 +61,8 @@ type P2PCallStore = {
   localStream: MediaStream | null;
   /** SDP-authorized remote video only. Audio sources have independent leases. */
   remoteStream: MediaStream | null;
+  remoteCameraStream:MediaStream|null;
+  remoteScreenVideoStream:MediaStream|null;
   remoteMicrophoneStream: MediaStream | null;
   remoteScreenAudioStream: MediaStream | null;
   peerScreenAudioSupported: boolean;
@@ -195,12 +199,27 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     return promise;
   };
   /** Build the callbacks object that webrtc/p2pPeerConnection wires up. */
+  let videoBinding:ReturnType<typeof bindAuthorizedVideoSources>|null=null;let videoPresentationOff:(()=>void)|null=null;
   const pcCallbacks = (call:P2PCall) => {
     const auth=JSON.stringify(getAuthSessionSnapshot());
-    const current=()=>get().activeCall===call&&JSON.stringify(getAuthSessionSnapshot())===auth;
+    let ownedPC:RTCPeerConnection|null=null;
+    const current=()=>get().activeCall===call&&call.status==="active"&&JSON.stringify(getAuthSessionSnapshot())===auth;
+    videoBinding?.release();videoPresentationOff?.();
+    const peer=(call.caller_id===getAuthSessionSnapshot().ownerId?(call.receiver_display_name??call.receiver_username??call.receiver_id):(call.caller_display_name??call.caller_username??call.caller_id));
+    const videoIds=new WeakMap<MediaStreamTrack,string>(),videoSources=new WeakMap<MediaStreamTrack,AuthorizedVideoSource>();
+    const binding=bindAuthorizedVideoSources("p2p",crypto.randomUUID(),peer,current,()=>isPresentedVideoContext(call.id,"p2p"));videoBinding=binding;videoPresentationOff=subscribeVideoPresentation(()=>binding.refresh());
     return {
-      onRemoteMedia:(media:import("../webrtc/p2pMediaController").P2PRemoteMedia)=>{if(current()){if(!media.screenAudioSupported)retireScreenAudio();set({remoteStream:media.video,remoteMicrophoneStream:media.microphone,remoteScreenAudioStream:media.screenAudio,peerScreenAudioSupported:media.screenAudioSupported});}},
-      isCurrent:(pc:RTCPeerConnection)=>current()&&get().peerConnection===pc,
+      onRemoteMedia:(media:import("../webrtc/p2pMediaController").P2PRemoteMedia)=>{if(current()&&ownedPC!==null&&get().peerConnection===ownedPC){if(!media.screenAudioSupported)retireScreenAudio();set({remoteStream:media.video,remoteCameraStream:media.camera??null,remoteScreenVideoStream:media.screenVideo??null,remoteMicrophoneStream:media.microphone,remoteScreenAudioStream:media.screenAudio,peerScreenAudioSupported:media.screenAudioSupported});
+        const pc=get().peerConnection;
+        const sources:AuthorizedVideoSource[]=[];
+        for(const [kind,stream]of [["camera",media.camera],["screen",media.screenVideo]]as const)for(const track of stream?.getVideoTracks()??[]){
+          const sourceCurrent=()=>current()&&get().peerConnection===pc&&!!pc&&pc.connectionState!=="closed"&&track.readyState==="live"&&(kind==="camera"?get().remoteCameraStream:get().remoteScreenVideoStream)?.getVideoTracks().includes(track)===true;
+          let tileId=videoIds.get(track);if(!tileId){tileId=crypto.randomUUID();videoIds.set(track,tileId)}
+          let source=videoSources.get(track);if(!source||source.kind!==kind){source={origin:"p2p",tileId,kind,track,current:sourceCurrent,subscribeScope:changed=>useP2PCallStore.subscribe(changed),addViewport:()=>null};videoSources.set(track,source)}sources.push(source);
+        }
+        binding.update(sources,media.video&&!media.camera&&!media.screenVideo?"legacy-video":undefined);
+      }},
+      isCurrent:(pc:RTCPeerConnection)=>{if(ownedPC===null)ownedPC=pc;return ownedPC===pc&&current()&&get().peerConnection===pc;},
       isCaller:call.caller_id===getAuthSessionSnapshot().ownerId,
       onTerminated:()=>{if(current())get().endCall();},
     };
@@ -211,6 +230,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     incomingCall: null,
     localStream: null,
     remoteStream: null,
+    remoteCameraStream:null,remoteScreenVideoStream:null,
     remoteMicrophoneStream: null,
     remoteScreenAudioStream: null,
     peerScreenAudioSupported: false,
@@ -403,6 +423,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
     },
 
     cleanup: () => {
+      videoBinding?.release();videoBinding=null;videoPresentationOff?.();videoPresentationOff=null;
       const priorCamera=cameraRecord;cameraRecord=null;priorCamera?.owner.dispose();cameraPending=false;
       retireScreen();
       const { localStream, remoteStream, peerConnection, _durationInterval } = get();
@@ -433,6 +454,7 @@ export const useP2PCallStore = create<P2PCallStore>((set, get) => {
         incomingCall: null,
         localStream: null,
         remoteStream: null,
+    remoteCameraStream:null,remoteScreenVideoStream:null,
         remoteMicrophoneStream: null,
         remoteScreenAudioStream: null,
         peerScreenAudioSupported: false,

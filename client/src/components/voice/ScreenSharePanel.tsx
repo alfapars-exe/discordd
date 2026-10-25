@@ -1,3 +1,4 @@
+import AuthorizedVideoTrack from "../../video/AuthorizedVideoTrack";
 /**
  * ScreenSharePanel — Single screen share video panel.
  *
@@ -7,7 +8,7 @@
  */
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { VideoTrack } from "@livekit/components-react";
+
 import type { TrackReferenceOrPlaceholder, TrackReference } from "@livekit/components-react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
@@ -174,7 +175,7 @@ function ScreenSharePanel({ trackRef }: ScreenSharePanelProps) {
           publishing — we just refuse to render it on the publisher's
           own screen. Everyone else still sees the live stream. */}
       {trackRef.publication && !isLocalUser && (
-        <VideoTrack trackRef={trackRef as TrackReference} />
+        <AuthorizedVideoTrack trackRef={trackRef as TrackReference} />
       )}
       {isLocalUser && trackRef.publication && (
         <div className="screen-share-self-pause">

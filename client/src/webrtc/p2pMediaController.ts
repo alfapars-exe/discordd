@@ -1,6 +1,6 @@
 import type { P2PMediaSource, P2PSignalPayload } from "../types/p2p";
 import { parseP2PMediaSDP, validateP2PDescription } from "./p2pMediaProtocol";
-export type P2PRemoteMedia={microphone:MediaStream|null;screenAudio:MediaStream|null;video:MediaStream|null;screenAudioSupported:boolean};
+export type P2PRemoteMedia={microphone:MediaStream|null;screenAudio:MediaStream|null;video:MediaStream|null;camera?:MediaStream|null;screenVideo?:MediaStream|null;screenAudioSupported:boolean};
 type SourceLease={sender:RTCRtpSender;track:MediaStreamTrack;source:P2PMediaSource};
 type SourceWaiter=SourceLease&{current:()=>boolean;promise:Promise<boolean>;finish:(accepted:boolean)=>void};
 type Options={callId:string;polite:boolean;isCaller:boolean;isCurrent:()=>boolean;send:(op:string,data:unknown)=>void;onMedia:(media:P2PRemoteMedia)=>void;onError:(error:unknown)=>void;onDispose?:()=>void};
@@ -114,13 +114,13 @@ export class P2PMediaController {
  }
 
  private publish(supported:boolean){if(!this.current()||this.staging)return;
-  const microphone:MediaStreamTrack[]=[],screenAudio:MediaStreamTrack[]=[],video:MediaStreamTrack[]=[];
+  const microphone:MediaStreamTrack[]=[],screenAudio:MediaStreamTrack[]=[],video:MediaStreamTrack[]=[],camera:MediaStreamTrack[]=[],screenVideo:MediaStreamTrack[]=[];
   for(const [transceiver,{track}]of this.remoteTracks){if(track.readyState==="ended"||this.acceptedReceivers.get(transceiver)!==track)continue;const source=this.sourceMap.get(transceiver.mid??"");
-   if(source==="microphone"&&track.kind==="audio")microphone.push(track);else if(source==="screen-audio"&&track.kind==="audio"&&supported)screenAudio.push(track);else if((source==="camera"||source==="screen-video")&&track.kind==="video")video.push(track);
+   if(source==="microphone"&&track.kind==="audio")microphone.push(track);else if(source==="screen-audio"&&track.kind==="audio"&&supported)screenAudio.push(track);else if((source==="camera"||source==="screen-video")&&track.kind==="video"){video.push(track);if(this.protocol==="v1"){if(source==="camera")camera.push(track);else screenVideo.push(track);}}
   }
   const stream=(old:MediaStream|null,tracks:MediaStreamTrack[])=>!tracks.length?null:old&&old.getTracks().length===tracks.length&&old.getTracks().every((track,index)=>track===tracks[index])?old:new MediaStream(tracks);
-  const next={microphone:stream(this.media.microphone,microphone),screenAudio:stream(this.media.screenAudio,screenAudio),video:stream(this.media.video,video),screenAudioSupported:supported};
-  if(next.microphone!==this.media.microphone||next.screenAudio!==this.media.screenAudio||next.video!==this.media.video||next.screenAudioSupported!==this.media.screenAudioSupported){this.media=next;this.options.onMedia(next)}
+  const next={microphone:stream(this.media.microphone,microphone),screenAudio:stream(this.media.screenAudio,screenAudio),video:stream(this.media.video,video),camera:stream(this.media.camera??null,camera),screenVideo:stream(this.media.screenVideo??null,screenVideo),screenAudioSupported:supported};
+  if(next.microphone!==this.media.microphone||next.screenAudio!==this.media.screenAudio||next.video!==this.media.video||next.camera!==this.media.camera||next.screenVideo!==this.media.screenVideo||next.screenAudioSupported!==this.media.screenAudioSupported){this.media=next;this.options.onMedia(next)}
  }
  dispose(){if(this.retired)return;this.retired=true;this.pendingOffer=null;this.pendingSources=[];this.acknowledged=[];for(const waiter of [...this.waiters])waiter.finish(false);for(const value of this.remoteTracks.values())value.track.removeEventListener("ended",value.ended);this.remoteTracks.clear();this.pendingTracks.clear();this.localSources.clear();this.sourceMap.clear();this.acceptedReceivers.clear();this.media={microphone:null,screenAudio:null,video:null,screenAudioSupported:false};controllers.delete(this.pc);this.options.onDispose?.()}
 }

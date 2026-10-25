@@ -3,7 +3,9 @@ import { parseOverlayMediaEnvelope, type OverlayICECandidate, type OverlayMediaE
 import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 
 export type OverlayMediaFailure = "unsupported" | "invalid" | "scope" | "source" | "timeout" | "transport";
-export type OverlayAuthorizedVideo = { tileId: string; kind: OverlayVideoKind; track: RemoteVideoTrack; current: () => boolean; subscribeScope: (changed: () => void) => () => void };
+type VideoAuthority = { tileId: string; kind: OverlayVideoKind; current: () => boolean; subscribeScope: (changed: () => void) => () => void };
+export type OverlayAuthorizedVideo = VideoAuthority & ({ origin?: "livekit"; track: RemoteVideoTrack } | { origin: "p2p"; track: MediaStreamTrack });
+const sourceRaw = (source: OverlayAuthorizedVideo) => source.origin === "p2p" ? source.track : source.track.mediaStreamTrack;
 export type OverlayReceivedVideo = { tileId: string; kind: OverlayVideoKind; track: MediaStreamTrack };
 type Options = { session: string; revision: number; current: () => boolean; subscribeScope: (changed: () => void) => () => void; send: (envelope: OverlayMediaEnvelope) => void; onError?: (failure: OverlayMediaFailure) => void };
 export type OverlayMediaSenderOptions = Options & { sources: readonly OverlayAuthorizedVideo[] };
@@ -43,7 +45,7 @@ class LocalVideoBridge implements OverlayMediaBridge {
   if (!this.current()) this.close("scope", true);
  }
  private current() { try { const auth = getAuthSessionSnapshot(); return !this.stopped && this.options.current() && (this.role !== "sender" || !!this.auth.ownerId && auth.ownerId === this.auth.ownerId && auth.generation === this.auth.generation); } catch { return false; } }
- private sourceCurrent(owned: OwnedSource) { try { return this.current() && owned.source.current() && owned.source.track.mediaStreamTrack === owned.original && owned.original.readyState === "live" && owned.clone.readyState === "live"; } catch { return false; } }
+ private sourceCurrent(owned: OwnedSource) { try { return this.current() && owned.source.current() && sourceRaw(owned.source) === owned.original && owned.original.readyState === "live" && owned.clone.readyState === "live"; } catch { return false; } }
  private base() { return { protocol: 1 as const, session: this.options.session, revision: this.options.revision }; }
  private send(envelope: OverlayMediaEnvelope) { if (!this.current() || !parseOverlayMediaEnvelope(envelope)) throw new Error("invalid"); this.options.send(envelope); }
  private enqueue(operation: () => Promise<boolean>) { const task = this.serial.catch(() => {}).then(operation); this.serial = task.then(() => {}, () => {}); return task.catch(error => { if (!this.stopped) this.fail(error instanceof BridgeTimeout ? "timeout" : "transport"); return false; }); }
@@ -52,8 +54,8 @@ class LocalVideoBridge implements OverlayMediaBridge {
    if (!this.current() || !this.sources.length || this.sources.length > 4) { this.fail("source"); return false; }
    this.offerId = crypto.randomUUID(); this.localDescriptionId = this.offerId;
    for (const source of this.sources) {
-    if (!this.current() || !(source.track instanceof RemoteVideoTrack) || source.track.isLocal || source.track.source !== (source.kind === "camera" ? Track.Source.Camera : Track.Source.ScreenShare) || !source.current()) { this.fail("source"); return false; }
-    const original = source.track.mediaStreamTrack; if (original.kind !== "video" || original.readyState !== "live") { this.fail("source"); return false; }
+    if (!this.current() || (source.origin !== "p2p" && (!(source.track instanceof RemoteVideoTrack) || source.track.isLocal || source.track.source !== (source.kind === "camera" ? Track.Source.Camera : Track.Source.ScreenShare))) || !source.current()) { this.fail("source"); return false; }
+    const original = sourceRaw(source); if (original.kind !== "video" || original.readyState !== "live") { this.fail("source"); return false; }
     const clone = original.clone(); if (clone === original) { this.fail("source"); return false; } this.clones.add(clone); clone.enabled = false;
     if (clone.kind !== "video" || clone.readyState !== "live") { this.fail("source"); return false; }
     const settings = original.getSettings();
