@@ -18,10 +18,11 @@
     "client/src/i18n/locales/tr/auth.json": "5bf8d20921550913dee0c9425cdc92c2d4f8329c4f03e4dd8750095593d41ee8",
     "client/src/i18n/locales/tr/music.json": "a6ab1814e473fe6a4c2f3e54081fb0820f8c687d811974b41e0ae3810ea50080"
   },
-  "shared_handler_projection_sha256_lf": "83de08611ef15103e4f1b792f2c9781d1e15a5b2ed1efff300c456a591ba806e",
+  "shared_handler_projection_sha256_lf": "9645d29d4e5e02a61b7b2e4cb67afe0eda25e4900b46a32820ab8a50214a13dc",
   "foreign_changes": "server/handlers/music.go logging diagnostics remain uncommitted and excluded. Existing music locale protocol keys retained. Historical version113/workflowprevious112 not copied over newer main safeguards.",
   "remaining": [
     "No production publication or YouTube availability/audio acceptance performed by this port.",
     "Subsequent immutable combined gates required with pendingoverlaynotices."
-  ]
+  ],
+  "staging_note": "Follow-up normalizes the staged handler LF bytes; no foreign logging work included."
 }
