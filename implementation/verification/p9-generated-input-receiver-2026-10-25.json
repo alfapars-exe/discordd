@@ -1,0 +1,15 @@
+{
+  "status": "implemented_unverified",
+  "scope": "Controlled local two-client encrypted group audio, frozen QA9 instrumentation",
+  "sourceBaseline": "9f01982ec3578b0f4ed67668a0e3562b98cfaa1a plus carried microphone startup fixes; excludes newer camera/private-screen work",
+  "testRounds": [148, 149, 150, 151, 152, 153, 154, 155],
+  "sourceProof": {
+    "beforeJoin": "Generator AudioContext running, time advanced from 0.091 to 1.12 seconds; RMS 0.074 to 0.078, nonzero",
+    "publishedSample": "At about 54 seconds, first client RNNoise ready, gate open, input/output approximately -22 dB, encrypted live sender 2187 packets and 330477 bytes"
+  },
+  "receiverObservation": "Second client encrypted live receiver reached 330529 bytes, but decoded sample duration and energy stayed zero and post-receive PCM analyser RMS was zero. Peer audio acceptance FAILED to establish despite actual nonzero sender input.",
+  "additionalObservation": "Second client's own pipeline reported fallback/none despite nonzero generated source. Investigate independently; no root cause asserted.",
+  "samplingCorrection": "Early connected UI can precede publication. Empty tracks and localEncrypted false in early samples do not prove failed encryption or missing capture. Later samples waited for an actual active pipeline.",
+  "cleanup": "Both clients explicitly left calls and stopped generators in round155. No microphone recordings or raw audio retained; no encryption bypass used.",
+  "acceptance": "Physical microphone, audible peer playback and production runtime remain unaccepted. Test fixture instrumentation is not shipped as application functionality."
+}
