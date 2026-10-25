@@ -1,0 +1,83 @@
+{
+  "phase": "P2",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "owned_paths": [
+    "server/repository/music_privacy_backfill.go",
+    "server/repository/music_privacy_backfill_test.go",
+    "server/cmd/backfill-music-privacy/main.go",
+    "server/cmd/backfill-music-privacy/main_test.go",
+    "server/cmd/backfill-music-privacy/README.md",
+    "implementation/verification/p2-personal-music-export-retirement-fence-2026-10-25.json",
+    "implementation/verification/p2-historical-music-privacy-maintenance-2026-10-25.json"
+  ],
+  "scope": [
+    "Explicit historical maintenance only; no startup execution, automatic migration, production call or default apply. Supports an existing local SQLite file or verified-TLS PostgreSQL through the existing OpenPostgres policy; remote libSQL is rejected. CLI never creates or migrates a database.",
+    "Dry-run default emits counts, independent keyset cursors, source digest and credential-free target digest without requester names, URLs, raw queue JSON, export payloads, receipt results or connection secrets. Each table batch is 1-100 rows, each queue at most 201 entries and 2 MiB, and total reviewed payload bytes at most 64 MiB; oversized/corrupt data fails rather than truncating.",
+    "Apply requires a reviewed dry-run plan for identical target/cursors/limit/source and explicit --offline-confirmed acknowledgement after stopping application writes and taking a protected backup. The tool does not independently prove that writes are stopped. Every later batch requires separate review; no auto-loop is provided.",
+    "Batch transaction shares the existing retirement lock, recomputes the source and desired-change fingerprint, checks exact rows and rolls back on mismatch or error. Changed revisions, identity status, payloads or target invalidate the plan.",
+    "Only cached requester names linked to users.deleted_at tombstones become Deleted User. Existing RawMessage-preserving sanitizer retains stable IDs, queue order, media, duplicate entries, unknown fields and exact large numbers. Only queue_json is updated; head/session/revision/repeat/updated_at are preserved.",
+    "Only retired actors operation receipts and retired users export snapshots are removed. Null export payloads use a portable null-safe exact comparison. Live actors records and shared history are untouched."
+  ],
+  "verification": {
+    "native": {
+      "result": "passed",
+      "command": "go test ./cmd/backfill-music-privacy ./repository -run 'TestBackfillCLI|TestMusicPrivacyBackfill' -count=1",
+      "cli_tests": 2,
+      "repository_top_level_tests": 5,
+      "seconds": {
+        "cli": 1.879,
+        "repository": 3.268
+      }
+    },
+    "postgres": {
+      "result": "passed",
+      "database": "postgres:18.6-bookworm",
+      "command": "HICHAT_TEST_POSTGRES_DSN=<process-only disposable fixture> go test ./repository -run '^TestMusicPrivacyBackfill' -count=1",
+      "repository_top_level_tests": 5,
+      "seconds": 4.335,
+      "fixture": "Random password only in process environment; owned uniquely named loopback container, dynamic port, existing native migration/isolation harness. Exact owned container removed and prior environment restored. No credentials printed or saved."
+    },
+    "linux_race": {
+      "result": "passed",
+      "toolchain": "golang:1.26.10-bookworm, CGO_ENABLED=1",
+      "command": "docker run --rm <read-only server bind and cached Go module/build volumes> -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./cmd/backfill-music-privacy ./repository -run 'TestBackfillCLI|TestMusicPrivacyBackfill' -race -count=1 -timeout=4m",
+      "seconds": {
+        "cli": 5.466,
+        "repository": 28.513
+      }
+    },
+    "scenarios": [
+      "Dry-run changes no application rows and reports no private payloads",
+      "Distinct queue/receipt/export keysets and explicit subsequent batches",
+      "Repeated cleanup is idempotent",
+      "Unknown nested JSON and exact large numeric values retained",
+      "Control metadata/timestamps, live actors rows and duplicate media preserved",
+      "Revision, identity and target changes reject stale plans",
+      "Malformed batch cannot partially rewrite or delete records",
+      "Injected second queue update failure rolls back earlier update and deletions",
+      "Held retirement lock prevents acknowledgment until released, including actual pooled PostgreSQL",
+      "Nullable export CAS parity on SQLite and PostgreSQL",
+      "CLI refuses implicit apply, changed reviewed limit, wrong target, missing SQLite file and unsupported remote source"
+    ],
+    "static": {
+      "vet": "go vet ./cmd/backfill-music-privacy ./repository passed",
+      "lint": "GOTOOLCHAIN=go1.26.10 golangci-lint2.12.2 run --config ../.golangci.yml --timeout 3m ./repository/... ./cmd/backfill-music-privacy/...: 0 issues",
+      "format": "gofmt applied",
+      "diff": "owned git diff --check passed"
+    }
+  },
+  "usage": {
+    "documentation": "server/cmd/backfill-music-privacy/README.md",
+    "dry_run": "go run ./cmd/backfill-music-privacy --limit 25 > plan-1.json",
+    "apply": "go run ./cmd/backfill-music-privacy --apply-plan plan-1.json --offline-confirmed > applied-1.json",
+    "next_review": "go run ./cmd/backfill-music-privacy --cursor-plan applied-1.json --limit 25 > plan-2.json",
+    "configuration": "HICHAT_MUSIC_PRIVACY_DATABASE_URL must be supplied through the local process environment; no credentials on command arguments or in reports."
+  },
+  "remaining": [
+    "Historical production at-rest cleanup remains pending explicit operator execution on a protected backup/offline production database. No production counts or completion claim exist.",
+    "PostgreSQL repository behavior was tested against a disposable local database; the CLI verified-TLS opener reuses existing policy. No production TLS/network connection was made for this command.",
+    "External/pre-maintenance backups are not erased by the tool; restoring them restores old private values and remains a separate operational/retention responsibility.",
+    "No broad repository rerun, whole-server CI, browser/device acceptance, commit, push or production publication was performed for this maintenance slice."
+  ]
+}

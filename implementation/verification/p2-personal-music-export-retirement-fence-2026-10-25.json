@@ -42,7 +42,13 @@
     "static": {
       "vet": "go vet ./repository passed",
       "format": "gofmt applied to owned Go files",
-      "diff": "git diff --check passed for owned files"
+      "diff": "git diff --check passed for owned files",
+      "golangci_lint": "Root ran pinned Go1.26.10 golangci-lint2.12.2 ./repository/...:0 issues"
+    },
+    "linux_race": {
+      "result": "passed",
+      "command": "docker run --rm <read-only server bind and cached Go volumes> -e CGO_ENABLED=1 golang:1.26.10-bookworm go test ./repository -run 'Test(SQLiteDataExport|DataExport|SQLiteAccountAnonymization)' -race -count=1 -timeout=4m",
+      "seconds": 37.447
     }
   },
   "limits": [
