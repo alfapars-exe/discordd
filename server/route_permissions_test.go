@@ -155,7 +155,8 @@ var handlerInternalGates = map[string]string{
 	"GET /api/servers/{serverId}/voice/states":        "read-only — membership is the intended view gate",
 
 	// ── Music bot — PermSpeak/PermManageChannels enforced in the handler ──
-	"POST /api/servers/{serverId}/channels/{channelId}/music/play":                  "PermSpeak enforced inside the handler — handlers/music.go:89 (requirePerm at :181)",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/control-session":       "Handler requires human identity, channel/server/type binding, ViewChannel, Speak and current voice membership before explicit protocol adoption",
+	"POST /api/servers/{serverId}/channels/{channelId}/music/play":                  "Handler requires ViewChannel and Speak with current voice membership; guarded command service binds durable session/revision/request identity",
 	"GET /api/servers/{serverId}/channels/{channelId}/music/search":                 "PermSpeak enforced inside the handler before external lookup",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/skip":                  "PermSpeak enforced inside the handler — handlers/music.go:119",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/pause":                 "PermSpeak enforced inside the handler — handlers/music.go:124",
@@ -167,7 +168,7 @@ var handlerInternalGates = map[string]string{
 	"PUT /api/servers/{serverId}/channels/{channelId}/music/repeat":                 "PermSpeak enforced inside the handler",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/seek":                  "PermSpeak enforced inside the handler",
 	"POST /api/servers/{serverId}/channels/{channelId}/music/restore":               "PermSpeak enforced inside the handler",
-	"GET /api/servers/{serverId}/channels/{channelId}/music/state":                  "read-only — membership is the intended view gate",
+	"GET /api/servers/{serverId}/channels/{channelId}/music/state":                  "Read-only handler requires human identity, matching server/voice-channel and ViewChannel; never adopts the control protocol",
 
 	// ── Soundboard (read) ──
 	"GET /api/servers/{serverId}/soundboard/sounds": "read-only — membership is the intended view gate",

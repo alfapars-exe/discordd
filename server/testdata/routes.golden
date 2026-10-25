@@ -283,6 +283,7 @@ GET /api/servers/{serverId}/voice/clips/consent
 POST /api/servers/{serverId}/voice/clips/start
 POST /api/servers/{serverId}/voice/clips/{recordingId}/stop
 POST /api/servers/{serverId}/channels/{channelId}/music/play
+POST /api/servers/{serverId}/channels/{channelId}/music/control-session
 GET /api/servers/{serverId}/channels/{channelId}/music/search
 POST /api/servers/{serverId}/channels/{channelId}/music/skip
 POST /api/servers/{serverId}/channels/{channelId}/music/pause

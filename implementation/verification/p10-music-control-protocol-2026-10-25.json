@@ -19,6 +19,14 @@
     "backend_postgres": "Actual disposable PostgreSQL 18.6 parity passed 9.740s, including all music/cascade families, every-server-table schema guard and FK-on/FK-off account anonymization; no skipped coverage guard",
     "backend_race": "Linux Go1.26.10 CGO race: services 57.319s, handlers 3.205s, repository 82.066s passed",
     "backend_lint": "Pinned Go1.26.10 golangci-lint: zero issues",
+    "route_contract_follow_up": "CI40177037782 exposed missing control-session route golden/declared-handler gate registration. Added the exact route and documented the existing ViewChannel/Speak/current-voice checks, without weakening guards. Route golden/permission/no-duplicate tests then passed locally in 2.919s; new-source CI still required.",
+    "actual_local_http": {
+      "source": "2c35c8ef55b687cc9e664dc51e457b81f841aeaf",
+      "checks_passed": 14,
+      "scope": "Compiled server and owned loopback SQLite: readonly GET does not adopt, unauthenticated/bot/wrong-server/text-channel denial, voice-required adoption and enqueue, moderator Stop rotation, exact retry, changed payload/stale request conflicts, legacy/partial metadata rejection and explicit server cascade cleanup",
+      "limits": "A control head was explicitly seeded as a fixture. No voice join, extractor, playback, encryption or WS round-trip acceptance. No production or external media calls.",
+      "upgrade": "Online SQLite QA backup and upgraded DB integrity checks passed; both new control tables present. This is not a production backup or rollback acceptance."
+    },
     "final_review_follow_up": "HTTP inactive-state database failure returns safe 500, not empty success; native TestMusicControl services4.597s/handlers1.795s and focused Linux race services11.004s/handlers3.126s passed; final pinned lint zero issues",
     "source_self_scan": "0 blocking matches, 344 review rows; reviewed added non-security shuffle randomness and synthetic local cookie/file fixtures. Existing path containment remains SafeJoin-protected. This is not an exhaustive security acceptance."
   },
