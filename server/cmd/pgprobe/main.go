@@ -13,10 +13,24 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := runWithBuildPreflight(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func runWithBuildPreflight() error {
+	if len(os.Args) == 2 && os.Args[1] == "--build-preflight" {
+		enabled, err := prepareBuildPreflight("/run/secrets")
+		if err != nil {
+			return err
+		}
+		if !enabled {
+			fmt.Println("PostgreSQL build preflight skipped: no PostgreSQL build secrets configured")
+			return nil
+		}
+	}
+	return run()
 }
 
 func run() (runErr error) {

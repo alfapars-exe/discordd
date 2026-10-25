@@ -69,7 +69,7 @@ class PublishSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "previously reviewed"):
             self.run_command("--publish", "--reviewed-plan-sha256", "wrong")
         self.api.create_commit.assert_not_called()
-        plan = {"source_commit": "source-commit", "space_parent": "reviewed-parent", "add_or_update": ["server/main.go"], "remove_managed_source": ["server/old.go"]}
+        plan = {"source_commit": "source-commit", "space_parent": "reviewed-parent", "add_or_update": ["server/main.go"], "remove_managed_source": ["server/old.go"], "hub_may_update_lfs_metadata": True}
         digest = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
         self.run_command("--publish", "--reviewed-plan-sha256", digest)
         call = self.api.create_commit.call_args

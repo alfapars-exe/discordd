@@ -66,9 +66,9 @@ func OpenPostgres(ctx context.Context, dsn string) (*sql.DB, error) {
 	conn.SetMaxIdleConns(2)
 	conn.SetConnMaxLifetime(30 * time.Minute)
 	conn.SetConnMaxIdleTime(5 * time.Minute)
-	if err := conn.PingContext(ctx); err != nil {
+	if err := pingPostgresWithRetry(ctx, conn, waitPostgresRetry); err != nil {
 		_ = conn.Close()
-		return nil, errors.New("PostgreSQL connection failed; check TLS, credentials and reachability")
+		return nil, fmt.Errorf("PostgreSQL connection failed (%s); check TLS, credentials and reachability", postgresConnectFailureCode(err))
 	}
 	var version int
 	if err := conn.QueryRowContext(ctx, "SHOW server_version_num").Scan(&version); err != nil || version < 180000 || version >= 190000 {

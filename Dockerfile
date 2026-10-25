@@ -73,7 +73,8 @@ COPY --from=frontend /app/client/dist ./server/static/dist
 # from the --platform flag (linux/amd64, linux/arm64).
 WORKDIR /app/server
 RUN CGO_ENABLED=1 GOOS=linux \
-    go build -trimpath -ldflags="-s -w" -o /out/hichat-server .
+    go build -trimpath -ldflags="-s -w" -o /out/hichat-server . && \
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hichat-pgprobe ./cmd/pgprobe
 
 # YouTube challenge solving requires a JS runtime. Use the official Deno
 # binary image, pinned to a multiarch manifest (amd64 + arm64).
@@ -183,6 +184,16 @@ RUN ffmpeg -hide_banner -loglevel error -f lavfi -i anullsrc=r=48000:cl=stereo \
 
 WORKDIR /app
 COPY --from=backend /out/hichat-server /app/hichat-server
+COPY --from=backend /out/hichat-pgprobe /app/hichat-pgprobe
+# HF exposes existing secrets through ephemeral BuildKit mounts. Validate the
+# actual PostgreSQL TLS endpoint before accepting a new production image. No
+# database writes, secret ARG/ENV layer, or certificate files are retained.
+# Ordinary CI/self-host builds without these mounts explicitly skip this probe.
+RUN --mount=type=secret,id=DATABASE_URL \
+    --mount=type=secret,id=HICHAT_PG_CA_PEM \
+    --mount=type=secret,id=HICHAT_PG_CERT_PEM \
+    --mount=type=secret,id=HICHAT_PG_KEY_PEM \
+    /app/hichat-pgprobe --build-preflight
 
 # HF Spaces Dev Mode requires /app to be owned by uid 1000 so the SSH
 # session (which logs in as that uid) can edit files there. The container's

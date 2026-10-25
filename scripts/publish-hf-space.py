@@ -54,7 +54,7 @@ def main():
         if not same:
             additions.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=path))
     removals = sorted(set(remote) - set(local))
-    plan = {"source_commit": source, "space_parent": current, "add_or_update": [op.path_in_repo for op in additions], "remove_managed_source": removals}
+    plan = {"source_commit": source, "space_parent": current, "add_or_update": [op.path_in_repo for op in additions], "remove_managed_source": removals, "hub_may_update_lfs_metadata": True}
     plan_hash = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
     print(json.dumps(plan, indent=2))
     print(json.dumps({"plan_sha256": plan_hash}))

@@ -67,12 +67,15 @@ jobs:
           if len(expected) != 40 or any(c not in '0123456789abcdef' for c in expected):
               raise SystemExit('Publisher did not return a valid deployment commit')
           previous = None
+          saw_new_build = False
           for attempt in range(60):
-              info = api.space_info(repo)
+              info = api.space_info(repo, expand=['sha', 'runtime'])
               if info.sha != expected:
                   raise SystemExit('Space changed during deployment verification')
               runtime = info.runtime
               state = (runtime.stage, runtime.raw.get('sha')) if runtime else ('PENDING', None)
+              if state[0] in ('BUILDING', 'RUNNING_BUILDING', 'APP_STARTING'):
+                  saw_new_build = True
               if state != previous:
                   print(json.dumps({'stage': state[0], 'runtime_commit': state[1], 'expected_commit': expected}), flush=True)
                   previous = state
@@ -85,7 +88,7 @@ jobs:
                           break
                   except (OSError, ValueError):
                       pass
-              if state[1] == expected and state[0] in ('BUILD_ERROR', 'RUNTIME_ERROR', 'CONFIG_ERROR'):
+              if state[0] in ('BUILD_ERROR', 'RUNTIME_ERROR', 'CONFIG_ERROR') and (saw_new_build or attempt >= 6):
                   raise SystemExit('New Space revision failed to start')
               time.sleep(20)
           else:
