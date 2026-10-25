@@ -51,10 +51,13 @@ jobs:
           test "$(git rev-parse HEAD^)" = "$RESTORE_REVISION"
           python3 - <<'PY'
           import os, subprocess
-          roots = {'Dockerfile','.dockerignore','README.md','package.json','package-lock.json','electron/voice-overlay-contract.ts'}
+          # Hub adds LFS tracking metadata while committing large source assets.
+          roots = {'Dockerfile','.dockerignore','.gitattributes','README.md','package.json','package-lock.json','electron/voice-overlay-contract.ts'}
           names = subprocess.check_output(['git','diff','--name-only','-z',os.environ['RESTORE_REVISION'],os.environ['EXPECTED_HEAD']]).decode().split('\0')
           changed = [name for name in names if name]
-          if not changed or any(name not in roots and not name.startswith(('client/','server/')) for name in changed):
+          unexpected = [name for name in changed if name not in roots and not name.startswith(('client/','server/'))]
+          if not changed or unexpected:
+              print('Unexpected rollback paths:',unexpected)
               raise SystemExit('Refusing rollback: last change is not application-source-only')
           print('Reviewed application-source rollback paths:',len(changed))
           PY
