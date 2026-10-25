@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-25",
+  "scope": "Align local compose LiveKit version with existing deployment installer",
+  "source_change": "docker-compose.yml LiveKit image v1.8.4 to v1.9.12, matching deploy/install.sh",
+  "controlled_test": {
+    "client": "Frozen9f01982e with bounded numeric lifecycle instrumentation; no Vite HMR",
+    "old": "Local v1.8.4 showed SDK reconnecting/reconnected around35/38 and52/55 seconds after page start; key acknowledgement succeeded each time.",
+    "new": "Only SFU image changed to1.9.12. Credentials, explicit advertised loopback address and TCP/UDP ports were retained. Both browser clients joined and retained the same Room/provider/worker without reconnect for approximately186 seconds before explicit leave.",
+    "image_digest": "sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576",
+    "startup": "Loopback HTTP health200; prior container preserved stopped for rollback; no production service modified",
+    "transport": "This supports compatibility in the isolated local setup; it is not a universal network or production stability proof."
+  },
+  "remaining": [
+    "A subsequent bounded stats run has sender/receiver bytes but0 decoded duration and energy. Peer-audible media is not accepted; microphone input and decoded samples still need investigation.",
+    "Two physical devices, key rotation, device removal, camera, screen/system audio and Windows packaged runtime remain separate acceptance gates.",
+    "No production deployment, installer update or dependency vulnerability assessment is claimed."
+  ]
+}

@@ -58,7 +58,7 @@ services:
     # ICE config defaults) and an unattended `docker-compose pull`
     # could silently swap in an incompatible build. Bump this tag
     # deliberately after testing the corresponding client SDK.
-    image: livekit/livekit-server:v1.8.4
+    image: livekit/livekit-server:v1.9.12
     ports:
       - "7880:7880"     # WebSocket signaling
       - "7881:7881"     # WebRTC over TCP
