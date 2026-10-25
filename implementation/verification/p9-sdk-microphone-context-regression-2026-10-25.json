@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-25",
+  "status": "reproduced_fix_and_runtime_acceptance_pending",
+  "scope": "LiveKit audio publication context adoption versus owned microphone processor",
+  "runtime_evidence": "Frozen two-client diagnostics: published tracks live/enabled/unmuted and GCM enabled, but call pipeline registry unavailable; receiver decoded duration/energy0. Transport stabilizes with local SFU1.9.12; this does not establish working audio.",
+  "source_evidence": [
+    "Installed SDK LocalParticipant.publishOrRepublishTrack calls track.setAudioContext(this.audioContext) for a LocalAudioTrack before publication.",
+    "Installed SDK LocalAudioTrack.setAudioContext tears down an attached processor when a changed context becomes undefined.",
+    "HiChat MicrophoneTrackProcessor assigns an owned context to the track; Room may have undefined context. A focused regression using actual LocalAudioTrack, actual processor and actual pipeline registry reproduces ready state with missing registry when publication faithfully adopts the undefined SDK context.",
+    "Simply removing the track context assignment is invalid: installed LocalAudioTrack.setProcessor explicitly requires an audio context before invoking processor.init. This candidate was rejected before production source changes."
+  ],
+  "constraints_for_fix": [
+    "Respect actual SDK public lifecycle contracts, including publish/re-publish and reconnect.",
+    "Never publish unprocessed enabled raw capture as a fallback; preserve current auth, call and encryption admission fences.",
+    "Preserve concurrent audio-startup hotfix changes and test both processor initialization and SDK publication context adoption with real classes.",
+    "After correction, repeat frozen two-client tests and require decoded duration/energy or audible evidence; packet bytes alone do not satisfy acceptance."
+  ]
+}
