@@ -1,6 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({ admission: { room: {} as object | null, connect: true, publishReady: false, error: null as unknown }, room: vi.fn(), toggle: vi.fn(), admissionInput:vi.fn(), epoch:0 }));
+vi.mock("../../stores/voiceStore",()=>{const state={isMuted:false,currentVoiceChannelId:null};return {useVoiceStore:Object.assign((select:(value:unknown)=>unknown)=>select(state),{getState:()=>state,subscribe:()=>()=>{}})};});
+vi.mock("../../stores/p2pCallStore",()=>{const state={activeCall:null};return {useP2PCallStore:Object.assign((select:(value:unknown)=>unknown)=>select(state),{getState:()=>state,subscribe:()=>()=>{}})};});
+vi.mock("./GroupDMCallAudio",()=>({default:()=> <div data-testid="audio"/>,privateCaptureConflict:()=>false}));
 vi.mock("../../hooks/useE2EEKeyProvider", () => ({ useE2EEKeyProvider: () => ({ keyProvider: {}, e2eeWorker: {}, keyReady: true, keyError: null, keyScope: "key", ownerScope: "owner" }) }));
 vi.mock("../../hooks/useEncryptedRoomAdmission", () => ({ useEncryptedRoomAdmission: (input:unknown) => { fixture.admissionInput(input); return fixture.admission; } }));
 vi.mock("../../stores/groupDMStore", () => ({ useGroupDMStore: () => fixture.epoch }));
@@ -20,7 +23,7 @@ describe("group encrypted publication wiring", () => {
   expect(fixture.room.mock.lastCall?.[0]).toMatchObject({ connect:true, audio:false, video:false, screen:false });
   expect(fixture.toggle).not.toHaveBeenCalled(); expect(screen.queryByTestId("audio")).toBeNull();
   fixture.admission.publishReady = true; view.rerender(<GroupDMCall credentials={credentials} onLeave={vi.fn()} />);
-  expect(fixture.toggle).toHaveBeenCalledTimes(3); expect(fixture.toggle.mock.calls[0][0]).toMatchObject({ initialState:true }); expect(screen.getByTestId("audio")).toBeTruthy();
+  expect(fixture.toggle).toHaveBeenCalledTimes(2); expect(screen.getByTestId("audio")).toBeTruthy();
   fixture.admission.publishReady = false; view.rerender(<GroupDMCall credentials={credentials} onLeave={vi.fn()} />);
   expect(screen.queryByText("microphone")).toBeNull(); expect(screen.queryByTestId("audio")).toBeNull();
   expect(fixture.room.mock.lastCall?.[0]).toMatchObject({ audio:false, video:false, screen:false });

@@ -5,9 +5,10 @@ import { microphoneSettings, desiredEngine, type MicrophoneSettings } from "./mi
 import { MicrophoneTrackProcessor } from "./MicrophoneTrackProcessor";
 
 const controllers = new WeakMap<LocalParticipant, LiveMicrophone>();
-export function liveMicrophone(participant: LocalParticipant) {
+export function liveMicrophone(participant: LocalParticipant, scope: "guild" | "private" = "guild") {
   let controller = controllers.get(participant);
-  if (!controller) { controller = new LiveMicrophone(participant); controllers.set(participant, controller); }
+  if (!controller) { controller = new LiveMicrophone(participant, scope); controllers.set(participant, controller); }
+  if (controller.scope !== scope) throw new Error("Microphone controller scope mismatch");
   return controller;
 }
 export function releaseLiveMicrophone(participant: LocalParticipant) {
@@ -27,7 +28,8 @@ class LiveMicrophone {
   private candidate?: MicrophoneTrackProcessor;
   private applied?: MicrophoneSettings;
   private participant: LocalParticipant;
-  constructor(participant: LocalParticipant) { this.participant = participant; }
+  readonly scope: "guild" | "private";
+  constructor(participant: LocalParticipant, scope: "guild" | "private") { this.participant = participant; this.scope = scope; }
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
     // Close output immediately; initialization or a slow device switch must not
@@ -40,7 +42,7 @@ class LiveMicrophone {
   }
   private shouldEnable() {
     const state = useVoiceStore.getState();
-    return this.enabled && !state.isMuted && !state.isDeafened && !state.isServerMuted;
+    return this.enabled && !state.isDeafened && (this.scope === "private" || (!state.isMuted && !state.isServerMuted));
   }
   refresh() {
     const id = ++this.generation;

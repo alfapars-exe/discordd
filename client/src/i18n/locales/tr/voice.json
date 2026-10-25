@@ -105,5 +105,8 @@
   "p2pAudioFallback": "Seçilen hoparlör kullanılamıyor. Arama sesi sistemin varsayılan çıkışını kullanıyor.",
   "p2pAudioRetry": "Arama sesini tekrar dene",
   "muteAfterUndeafen": "Sağırlaştırmayı kapattığında mikrofonu sessiz tut",
-  "unmuteAfterUndeafen": "Sağırlaştırmayı kapattığında mikrofonu aç"
+  "unmuteAfterUndeafen": "Sağırlaştırmayı kapattığında mikrofonu aç",
+  "groupCaptureConflict": "Başka bir ses görüşmesi açıkken grup mikrofonu kapalıdır. O görüşmeden ayrıldıktan sonra burada mikrofonu kendin aç.",
+  "groupFocusedPTT": "Grupta bas-konuş, klavye odağı bu HiChat penceresindeyken çalışır.",
+  "groupMicrophoneFailed": "Grup mikrofonu başlatılamadı. Giriş cihazını ve izni kontrol edip yeniden dene."
 }

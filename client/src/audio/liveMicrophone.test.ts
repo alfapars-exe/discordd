@@ -158,3 +158,26 @@ it("never enables a deafened or server-muted microphone even with an explicit st
  Object.assign(h.state,{isDeafened:false,isServerMuted:true});await h.controller.setEnabled(true);expect(mock.createTrack).not.toHaveBeenCalled();
  await releaseLiveMicrophone(h.sdkParticipant);
 });
+
+it("uses explicit private manual intent and local deafen without importing guild moderation",async()=>{
+ const h=harness();await releaseLiveMicrophone(h.sdkParticipant);
+ Object.assign(h.state,{isMuted:true,isServerMuted:true,isDeafened:false});
+ const controller=liveMicrophone(h.sdkParticipant,"private");await controller.setEnabled(true);
+ expect(h.participant.publishTrack).toHaveBeenCalledOnce();expect(h.tracks[0].unmute).toHaveBeenCalled();
+ Object.assign(h.state,{isDeafened:true});await controller.setEnabled(true);
+ expect(h.tracks[0].mute).toHaveBeenCalled();expect(mock.processors[0].processedTrack.enabled).toBe(false);
+ expect(()=>liveMicrophone(h.sdkParticipant)).toThrow("scope mismatch");
+ await releaseLiveMicrophone(h.sdkParticipant);
+});
+it("retires a private controller's pending GUM result without publishing or unpublishing a replacement owner's track",async()=>{
+ const h=harness();await releaseLiveMicrophone(h.sdkParticipant);
+ const gate=deferred();const lateTrack={setProcessor:vi.fn(),stop:vi.fn()};
+ mock.createTrack.mockImplementationOnce(async()=>{await gate.promise;return lateTrack;});
+ const old=liveMicrophone(h.sdkParticipant,"private");const enabling=old.setEnabled(true);await flush();
+ const disposed=releaseLiveMicrophone(h.sdkParticipant);
+ const fresh=liveMicrophone(h.sdkParticipant,"private");await fresh.setEnabled(true);
+ const replacement=h.tracks[0];expect(h.participant.publishTrack).toHaveBeenCalledWith(replacement,expect.anything());
+ gate.resolve();await enabling;await disposed;
+ expect(lateTrack.stop).toHaveBeenCalledOnce();expect(h.participant.publishTrack).toHaveBeenCalledOnce();expect(h.participant.unpublishTrack).not.toHaveBeenCalledWith(replacement,true);
+ await releaseLiveMicrophone(h.sdkParticipant);
+});

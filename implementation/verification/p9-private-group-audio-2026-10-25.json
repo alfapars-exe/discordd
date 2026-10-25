@@ -1,0 +1,94 @@
+{
+  "phase": "P9",
+  "date": "2026-10-25",
+  "status": "implemented_unverified",
+  "baseline_head": "9529659abc99c26b6bea889d1452ea3aae8b734b",
+  "owned_paths": [
+    "client/src/audio/liveMicrophone.ts",
+    "client/src/audio/liveMicrophone.test.ts",
+    "client/src/audio/privateCallState.ts",
+    "client/src/audio/privatePlayback.ts",
+    "client/src/audio/privateRoomPlayback.ts",
+    "client/src/audio/privateRoomPlayback.test.ts",
+    "client/src/components/dm/GroupDMCall.tsx",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx",
+    "client/src/components/dm/GroupDMCallAudio.tsx",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx",
+    "client/src/components/voice/VoiceProvider.tsx",
+    "client/src/components/voice/VoiceProvider.encryption.test.tsx",
+    "client/src/i18n/locales/en/voice.json",
+    "client/src/i18n/locales/tr/voice.json"
+  ],
+  "source_sha256": {
+    "client/src/audio/liveMicrophone.ts": "27d95495bb5771fd92f340c5a1dc5cb6288a54fac5a0e986ee9b08a23294448c",
+    "client/src/audio/liveMicrophone.test.ts": "b568868d6ffe3e8f43590e9effcf8ff728ee634bbc2ab3c98824d364bd0430fe",
+    "client/src/audio/privateCallState.ts": "dc20270299741854d7402f3c99ecc7a73addfaf92f5abb0414218e321549709f",
+    "client/src/audio/privatePlayback.ts": "b1128ab8fe9bc31292dd32528986bf09872fcf7b4d9077f27e0630f5cee08f38",
+    "client/src/audio/privateRoomPlayback.ts": "86550d40456db6ce64702b2496fe5f4ce6db78ed81d898a7ee97e15330ede111",
+    "client/src/audio/privateRoomPlayback.test.ts": "2e8ecaf348d072e75b2887d0e3255fdab082e0491e01bba60067de576da79f2b",
+    "client/src/components/dm/GroupDMCall.tsx": "e3aab73ee2c1c89a0b1637470ce5f3379232d987c25f6e0ec9fa426b91e95c66",
+    "client/src/components/dm/GroupDMCall.encryption.test.tsx": "1e1b5638f4ab566e632b117e027f631fcc32d728fb91fce2b0341590ecf94214",
+    "client/src/components/dm/GroupDMCallAudio.tsx": "b5e84507e7a5f616bbd0a235149a4252cbf9a257287939b19b17e9af91c7c7d8",
+    "client/src/components/dm/GroupDMCallAudio.test.tsx": "93ba8c59ec3bc370aaab7d4b02900d25359cd6b26b4363e83f27eb8ffbf1ea6e",
+    "client/src/components/dm/GroupDMCall.conflict.test.tsx": "f8017c6c6620508bbd39ae748f465d236bfb71f0f6a63eed65e7c4726cebd568",
+    "client/src/components/voice/VoiceProvider.tsx": "a560c924d42a51512dcaf9fd01e0918aaf88b66bd4509db97f176f1d1e8d1bbc",
+    "client/src/components/voice/VoiceProvider.encryption.test.tsx": "25839327e0162dbd1344da382a107efb4daf07a0b3b755350ac3e5fd306427ea",
+    "client/src/i18n/locales/en/voice.json": "6e2f74da7d3fcd29495972d7a45033506e96df0869cc29536405527bc41c563f",
+    "client/src/i18n/locales/tr/voice.json": "99fca1697435ea6e704ef3a2c84ca2aaeb21e36b4342d0987a856d33b854c5a7"
+  },
+  "contract": [
+    "Group microphone uses the actual shared LiveMicrophone processing/device/profile controller with explicit private policy. Its separate manual intent and local deafen apply; unrelated guild server-mute/deafen and guild manual intent do not remotely toggle private capture. Initial private intent conservatively inherits current manual mute, then stays group-local.",
+    "Raw SDK microphone TrackToggle and duplicate RoomAudioRenderer are removed. Camera/share remain behind existing encrypted admission. SDK automatic audio/video/screen capture remains false.",
+    "Group audio owner mounts only after actual-owner E2EE ACK and authoritative current group epoch. Rekey/auth/room retirement tears down exact old microphone controller and output graphs. Main and group admission never directly re-enable old microphone tracks while controller disposal may be pending.",
+    "Another current guild/P2P call conservatively blocks group capture, without stopping or changing that call. Both synchronous controller latch and parent intent latch prevent auto-unmute if conflict ends, including rapid start/end before React commits. A new explicit group unmute is required. Receiving and camera behavior remain separate.",
+    "Group PTT uses the actual event.code preference (default Space); keyup, blur, hidden document, editable focus, shortcut capture, key change, conflict and auth retire release capture. Hidden/unfocused/typing/composing/repeated/defaultPrevented keydown is denied. No global Electron listeners or shortcut registration are touched.",
+    "Each exact borrowed remote audio track uses existing remote-only playback graph through neutral privatePlayback alias, with selected sink, explicit failure/retry and missing-device fallback, bounded master0..100 times personal0..200, local deafen/local person mute, separate screen-share gain. Guild moderation does not mute private output.",
+    "Output ownership binds auth generation, exact room/remote participant/publication/track and per-graph active token. Output changes close only old derived graphs; old participant events and delayed completion cannot affect replacement owners. Borrowed remote media tracks are never stopped."
+  ],
+  "verification": [
+    {
+      "cwd": "client",
+      "command": "npx vitest run src/components/dm/GroupDMCallAudio.test.tsx src/components/dm/GroupDMCall.conflict.test.tsx src/audio/privateRoomPlayback.test.ts src/audio/liveMicrophone.test.ts src/audio/p2pPlayback.test.ts src/components/dm/GroupDMCall.encryption.test.tsx src/components/voice/VoiceProvider.encryption.test.tsx src/hooks/useEncryptedRoomAdmission.test.tsx",
+      "result": "PASS8 files/39 tests4.07s on final source."
+    },
+    {
+      "cwd": "client",
+      "command": "npx eslint src/audio/liveMicrophone.ts src/audio/liveMicrophone.test.ts src/audio/privateCallState.ts src/audio/privatePlayback.ts src/audio/privateRoomPlayback.ts src/audio/privateRoomPlayback.test.ts src/components/dm/GroupDMCall.tsx src/components/dm/GroupDMCall.encryption.test.tsx src/components/dm/GroupDMCallAudio.tsx src/components/dm/GroupDMCallAudio.test.tsx src/components/dm/GroupDMCall.conflict.test.tsx src/components/voice/VoiceProvider.tsx src/components/voice/VoiceProvider.encryption.test.tsx",
+      "result": "PASS0 errors0 warnings."
+    },
+    {
+      "cwd": "client",
+      "command": "npx tsc -b",
+      "result": "PASS; also part of successful production build."
+    },
+    {
+      "cwd": "client",
+      "command": "npx vitest run",
+      "result": "PASS373 files/3619 tests74.86s; current whole worktree, concurrent foreign device/settings and processing changes prevent claiming immutable commit acceptance."
+    },
+    {
+      "cwd": "client",
+      "command": "npm run build",
+      "result": "PASS1681 modules2.93s; known Vite native-loader/chunk/dynamic-import warnings; current worktree, not installer or clean immutable artifact."
+    }
+  ],
+  "focused_scenarios": [
+    "Actual private shared microphone controller ignores unrelated guild mute but obeys local deafen; scope mismatch fails.",
+    "Late private GUM after retirement is stopped; it cannot publish or unpublish the replacement owner track.",
+    "Actual encrypted admission regression suite retains owner ACK/key/auth/GUM/publication fences.",
+    "Private controller foreground PTT privacy gates and conflict latch require explicit new unmute.",
+    "Selected output routing, master times personal gain, local deafen/person mute, output replacement, auth retirement and exact old-participant rejection.",
+    "Existing real playback graph tests protect sole routed output owner and borrowed-track lifetime."
+  ],
+  "remaining_acceptance": [
+    "Actual two HiChat browser/Windows clients with microphone/speaker, processed capture, PTT, device change/unplug, output fallback and encrypted rekey/reconnect remain open.",
+    "Group background/global Electron PTT is NOT implemented; focused-window limitation is explicit in UI. Scoped global ownership across guild/private calls remains a separate task.",
+    "Group call is still owned by component-local GroupDMChat state; persistent navigation/call ownership is a separate open task.",
+    "Camera and screen-share private device/quality/output parity beyond existing SDK controls is not claimed by this microphone/output slice.",
+    "Multi-participant CPU/AudioContext/output scaling and physical audio quality need real-device measurement; one graph per borrowed remote track is not a performance acceptance claim.",
+    "Foreign dirty MicrophoneTrackProcessor/microphonePipeline/CSP sources were neither edited nor staged. Tests/build used current worktree, so final clean artifact acceptance must be performed by root."
+  ],
+  "production_operations": false,
+  "server_or_schema_changes": false
+}

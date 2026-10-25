@@ -243,7 +243,8 @@ function VoiceProvider({ children }: VoiceProviderProps) {
 
   const allowRestore = useCallback((source: Track.Source) => {
     const current = useVoiceStore.getState();
-    if (source === Track.Source.Microphone) return current.inputMode !== "push_to_talk" && !current.isMuted && !current.isServerMuted && !current.isDeafened && !current.isServerDeafened;
+    // The remounted controller owns reopening; an old async disposal may still be pending.
+    if (source === Track.Source.Microphone) return false;
     if (source === Track.Source.Camera) return current.isCameraEnabled;
     if (source === Track.Source.ScreenShare || source === Track.Source.ScreenShareAudio) return current.isStreaming;
     return false;
